@@ -28,6 +28,7 @@ import { ensureLimit } from "./schema";
 import { assertReadOnly } from "./queryValidator";
 import {
   ensureIdentifierColumn,
+  isAggregateQuery,
   resolveActualColumnCasing,
   resolveActualColumns,
 } from "./queryShape";
@@ -75,6 +76,18 @@ interface QueryExecution {
  * permissions) that a retry can't help. Kept identical to the condition the
  * basic path has always used, so both modes retry on exactly the same errors.
  */
+/**
+ * The query dialect for a destination, for shape checks like isAggregateQuery.
+ * The two log-exporter destinations use CloudWatch Logs Insights; everything
+ * else (DynamoDB PartiQL, Aurora PostgreSQL, S3/Athena Trino) is SQL-shaped.
+ */
+function queryDialect(destinationType: string): "sql" | "logs-insights" {
+  return destinationType === "cloudwatch-logs-exporter" ||
+    destinationType === "lambda-log-exporter"
+    ? "logs-insights"
+    : "sql";
+}
+
 function isRetryableQueryError(msg: string): boolean {
   return (
     msg.includes("MalformedQueryException") ||
@@ -461,13 +474,18 @@ class ExplorerPanel {
 
       let exec: QueryExecution;
       try {
-        // Only inject drill-down/partition columns when the model marked the
-        // result row-level (and it isn't a post-process raw fetch). Otherwise
-        // run the query exactly as written — injecting into an aggregate/
-        // DISTINCT/UNNEST/derived query corrupts it (columns not in scope).
+        // Inject drill-down/partition columns for row-level result sets so
+        // each row can be clicked for its full record. Skip it for aggregate
+        // queries (and post-process raw fetches); ensureIdentifierColumn also
+        // safely bails on DISTINCT/set-operator/derived shapes it can't
+        // rewrite without corrupting. Decided by query shape, not a model
+        // flag, so drill-down is consistent across providers.
         exec = await this.executeQuery(cfg, credentials, generated, {
           injectDrillDown:
-            generated.rowLevel === true && !generated.postProcess,
+            !isAggregateQuery(
+              generated.query,
+              queryDialect(cfg.destinationType),
+            ) && !generated.postProcess,
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -743,7 +761,12 @@ class ExplorerPanel {
         timeRangeMs: (final.lookbackHours ?? 24) * 60 * 60 * 1000,
         suggestedCharts: final.suggestedCharts,
       },
-      { injectDrillDown: final.rowLevel === true },
+      {
+        injectDrillDown: !isAggregateQuery(
+          final.query,
+          queryDialect(cfg.destinationType),
+        ),
+      },
     );
     // The prose reply is the answer; fall back to the explanation so the
     // conversation never shows a bare "here are the results" placeholder.

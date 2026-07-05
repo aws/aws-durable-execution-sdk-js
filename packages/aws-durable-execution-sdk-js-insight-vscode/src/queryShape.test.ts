@@ -73,6 +73,22 @@ describe("ensureIdentifierColumn: aggregate/set-operator bail-out", () => {
     });
   });
 
+  it("does not inject into a SELECT DISTINCT (a unique id would break distinctness)", () => {
+    const query = "SELECT DISTINCT functionName FROM t";
+    const result = ensureIdentifierColumn(query, "executionArn", "sql");
+    expect(result).toEqual({ query });
+  });
+
+  it("does not inject into a SELECT DISTINCT with extra columns", () => {
+    const query = "SELECT DISTINCT status, functionName FROM t ORDER BY status";
+    const result = ensureIdentifierColumn(query, "executionArn", "sql", [
+      "year",
+      "month",
+      "day",
+    ]);
+    expect(result).toEqual({ query });
+  });
+
   it("does not inject into a top-level UNION (would corrupt column counts across branches)", () => {
     const query = "SELECT a FROM t UNION SELECT b FROM t";
     const result = ensureIdentifierColumn(query, "executionArn", "sql");
