@@ -68,11 +68,6 @@ const FINISH_TOOL: Tool = {
               "Optional one sentence explaining what the query does.",
           },
           suggestedCharts: { type: "array", items: { type: "string" } },
-          rowLevel: {
-            type: "boolean",
-            description:
-              "True only if each result row is a single execution the user is browsing (enables per-row drill-down). False for aggregations/DISTINCT/derived results.",
-          },
           lookbackHours: {
             type: "number",
             description:
@@ -142,7 +137,6 @@ export interface AgentFinal {
   explanation: string;
   answer?: string;
   suggestedCharts?: string[];
-  rowLevel?: boolean;
   /** Log-based sources only: the time window (hours) for the final query. */
   lookbackHours?: number;
 }
@@ -244,7 +238,6 @@ export async function runAgentLoop(
         explanation?: string;
         answer?: string;
         suggestedCharts?: string[];
-        rowLevel?: boolean;
         lookbackHours?: number;
       };
       opts.onStep({
@@ -262,7 +255,6 @@ export async function runAgentLoop(
         suggestedCharts: Array.isArray(inp.suggestedCharts)
           ? inp.suggestedCharts
           : undefined,
-        rowLevel: inp.rowLevel === true,
         lookbackHours:
           typeof inp.lookbackHours === "number" && inp.lookbackHours > 0
             ? inp.lookbackHours

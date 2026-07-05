@@ -845,10 +845,12 @@ class ExplorerPanel {
     opts?: { injectDrillDown?: boolean },
   ): Promise<QueryExecution> {
     // Whether to inject the drill-down identifier (and Athena partition)
-    // columns into the query. Basic mode always does (default true). Advanced
-    // mode passes false unless the model flagged the result as row-level, so
+    // columns into the query. Callers pass false for exploration/analytical
+    // queries; the agentic paths decide by query shape (isAggregateQuery), so
     // an analytical query (DISTINCT/UNNEST/aggregate/derived) runs exactly as
     // written instead of being corrupted by columns that aren't in its scope.
+    // ensureIdentifierColumn is itself conservative and bails on shapes it
+    // can't rewrite safely, so injection is a no-op there even if requested.
     const inject = opts?.injectDrillDown ?? true;
     if (cfg.destinationType === "dynamodb") {
       if (!cfg.dynamodbTableName)

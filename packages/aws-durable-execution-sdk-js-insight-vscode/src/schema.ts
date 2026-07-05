@@ -399,13 +399,6 @@ const AGENTIC_NOTE = [
   "follow-up step will read those rows and produce the final answer. Prefer a",
   "normal, complete query whenever the query language CAN express the answer",
   "directly — only use postProcess when it genuinely can't.",
-  "",
-  "Also set rowLevel=true when each result row corresponds to a single",
-  "execution and the user is browsing individual executions (e.g. 'show the",
-  "last 20 failed executions'), so a per-row detail drill-down is offered.",
-  "Leave rowLevel false for aggregations, DISTINCT or derived projections,",
-  "key/field enumeration, UNNEST-based results, or postProcess queries — any",
-  "result where a row is not one execution. When in doubt, leave it false.",
 ].join("\n");
 
 /**
@@ -431,8 +424,8 @@ const AGENT_INSTRUCTION = [
   "  two sentences is enough (the table shows the detail). Only when there is NO",
   "  supporting table (conceptual/metadata questions, e.g. 'which field holds the",
   "  amount?') should `answer` spell out the fields/values itself. Include `query`",
-  "  when a result table supports the answer, plus explanation, suggestedCharts,",
-  "  and rowLevel. This is a CONVERSATION: you may reference earlier turns, and if",
+  "  when a result table supports the answer, plus explanation and",
+  "  suggestedCharts. This is a CONVERSATION: you may reference earlier turns, and if",
   "  a follow-up can be answered from what you already know without a new query,",
   "  call finish with just an `answer` (no query).",
   "- run_javascript: after a run_query, transform or compute over its rows in",

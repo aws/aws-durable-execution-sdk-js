@@ -115,7 +115,7 @@
         "workflowInsight.athenaWorkgroup": {
           "type": "string",
           "default": "",
-          "description": "Athena workgroup to run queries in. Leave empty to use the 'primary' workgroup and set athenaOutputLocation instead."
+          "description": "Athena workgroup to run queries in. Leave empty to use the 'primary' workgroup and set athenaOutputLocation instead. Recommended: configure the workgroup's per-query data-scanned limit (bytes_scanned_cutoff_per_query) — the assistant runs multiple autonomous queries per question (up to workflowInsight.agenticMaxIterations), and this is the only per-query Athena scan-cost guard."
         },
         "workflowInsight.athenaOutputLocation": {
           "type": "string",
@@ -172,7 +172,7 @@
           "default": 8,
           "minimum": 1,
           "maximum": 20,
-          "description": "The maximum number of run→verify→refine rounds the assistant will attempt for one question before stopping. Higher values let it work harder on difficult questions but cost more model/query calls (billable). The loop also stops early if it starts repeating a query it already tried. This is the universal cost/effort guard — it applies to every data source."
+          "description": "The maximum number of run→verify→refine rounds the assistant will attempt for one question before stopping. Higher values let it work harder on difficult questions but cost more model/query calls (billable). The loop also stops early if it starts repeating a query it already tried. This is the universal cost/effort guard — it applies to every data source. NOTE: it bounds the NUMBER of queries, not the data scanned per query. For the S3/Athena destination, also set a per-query scan cap on your Athena workgroup (bytes_scanned_cutoff_per_query) to bound scan cost — the assistant issues model-authored queries autonomously up to this iteration count."
         }
       }
     }
