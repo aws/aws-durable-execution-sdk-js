@@ -189,6 +189,51 @@ describe("runAgentLoop: run_javascript truncation note", () => {
   });
 });
 
+// ─── run_javascript guards (LIMIT note, size cap) ──────────────────────────────
+
+describe("runAgentLoop: run_javascript guards", () => {
+  const oneRow = jest.fn(
+    async (): Promise<AgentQueryResult> => ({
+      columns: ["a"],
+      rows: [["1"]],
+      rowCount: 1,
+    }),
+  );
+
+  it("warns when the source query used a LIMIT (possible partial aggregate)", async () => {
+    mockRunSandboxedJs.mockResolvedValue({ ok: true, value: 42 });
+    mockSend
+      .mockResolvedValueOnce(
+        assistantTurn(
+          toolUse("run_query", { query: "SELECT a FROM t LIMIT 100" }),
+        ),
+      )
+      .mockResolvedValueOnce(
+        assistantTurn(toolUse("run_javascript", { code: "return 1" })),
+      )
+      .mockResolvedValueOnce(assistantTurn(toolUse("finish", { answer: "x" })));
+    await runAgentLoop(baseOpts({ runQuery: oneRow }));
+    expect(lastMessageJson(2)).toContain("LIMIT");
+  });
+
+  it("rejects an oversized return value", async () => {
+    mockRunSandboxedJs.mockResolvedValue({
+      ok: true,
+      value: "x".repeat(25000),
+    });
+    mockSend
+      .mockResolvedValueOnce(
+        assistantTurn(toolUse("run_query", { query: "SELECT a FROM t" })),
+      )
+      .mockResolvedValueOnce(
+        assistantTurn(toolUse("run_javascript", { code: "return 1" })),
+      )
+      .mockResolvedValueOnce(assistantTurn(toolUse("finish", { answer: "x" })));
+    await runAgentLoop(baseOpts({ runQuery: oneRow }));
+    expect(lastMessageJson(2)).toContain("too large");
+  });
+});
+
 // ─── priorTurns → messages alternation ─────────────────────────────────────────
 
 describe("runAgentLoop: priorTurns seeding", () => {

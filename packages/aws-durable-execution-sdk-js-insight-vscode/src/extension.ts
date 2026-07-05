@@ -832,11 +832,6 @@ class ExplorerPanel {
   }
 
   /**
-   * Append a completed exchange to the advanced-mode conversation history, so
-   * the next question continues the session. Trims the history to a bounded
-   * number of recent turns to keep prompt size (and cost) in check.
-   */
-  /**
    * Prefix a question with a compact transcript of the current conversation,
    * so the single-shot verify/refine path (Copilot/local) gets the same
    * follow-up context the Bedrock tool loop gets via priorTurns. Without it, a
@@ -852,6 +847,11 @@ class ExplorerPanel {
     return `Earlier in this conversation:\n${history}\n\nCurrent question: ${question}`;
   }
 
+  /**
+   * Append a completed exchange to the advanced-mode conversation history, so
+   * the next question continues the session. Trims the history to a bounded
+   * number of recent turns to keep prompt size (and cost) in check.
+   */
   private recordTurn(question: string, answer: string): void {
     this.conversation.push({ role: "user", text: question });
     this.conversation.push({ role: "assistant", text: answer });

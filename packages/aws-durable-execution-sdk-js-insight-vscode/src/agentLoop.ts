@@ -17,6 +17,12 @@ import { runSandboxedJs } from "./sandbox";
 // caller via the runQuery callback; this module only drives the Bedrock
 // Converse conversation.
 
+// Max serialized size of a run_javascript return value. The result is
+// JSON-stringified into the toolResult sent back to the model, so a large
+// value would inflate tokens/cost — reject anything bigger and ask for a
+// summary. ~20k chars ≈ a few thousand tokens.
+const JS_RESULT_MAX_CHARS = 20_000;
+
 const RUN_QUERY_TOOL: Tool = {
   toolSpec: {
     name: "run_query",
@@ -210,10 +216,10 @@ export async function runAgentLoop(
   const tried = new Set<string>();
   let lastGoodQuery: string | undefined;
   // The most recent run_query result, so run_javascript can compute over it.
-  // Holds the fuller row set (allRows) and the true total, so JS operates on
-  // more than the model's small display sample.
+  // Holds the fuller row set (allRows), the true total, and the source query
+  // (to warn about a LIMIT), so JS operates on more than the display sample.
   let lastResult:
-    | { columns: string[]; rows: string[][]; totalRows: number }
+    | { columns: string[]; rows: string[][]; totalRows: number; query: string }
     | undefined;
 
   // Handle one run_query tool-use: run it (with oscillation guard), update
@@ -263,6 +269,7 @@ export async function runAgentLoop(
           columns: result.columns,
           rows: result.allRows ?? result.rows,
           totalRows: result.rowCount,
+          query,
         };
       }
     }
@@ -308,20 +315,40 @@ export async function runAgentLoop(
         rows: objectRows,
         columns: lastResult.columns,
       });
-      // If the JS input was capped below the true result size, say so — the
-      // model must not present a partial aggregate (median/sum/etc.) as if it
-      // covered the whole result.
-      const truncated = objectRows.length < lastResult.totalRows;
-      payload = sandbox.ok
-        ? {
+      if (!sandbox.ok) {
+        payload = { error: sandbox.error };
+      } else {
+        const notes: string[] = [];
+        // The JS input was capped below the number of rows loaded.
+        if (objectRows.length < lastResult.totalRows) {
+          notes.push(
+            `Computed over the first ${objectRows.length} of ${lastResult.totalRows} rows loaded; for an exact aggregate over the full result, express it in the query (SQL) instead.`,
+          );
+        }
+        // The source query itself was LIMITed, so the rows loaded may be only
+        // a subset of all matching rows — an aggregate here can be partial even
+        // when nothing was capped above.
+        if (/\blimit\s+\d+/i.test(lastResult.query)) {
+          notes.push(
+            "The source query used a LIMIT, so these rows may be a subset of all matching rows — a total/median/sum computed here can be partial. For a full-set aggregate, remove the LIMIT or aggregate in the query (SQL).",
+          );
+        }
+        // Bound the marshalled result: it's JSON-serialized straight into the
+        // toolResult sent back to the model, so a huge return value would
+        // inflate tokens/cost. Reject oversized results and tell the model to
+        // return a summary instead.
+        const serialized = JSON.stringify(sandbox.value ?? null);
+        if (serialized.length > JS_RESULT_MAX_CHARS) {
+          payload = {
+            error: `The returned value is too large (${serialized.length} characters; limit ${JS_RESULT_MAX_CHARS}). Return a small summary or aggregate, not raw rows.`,
+          };
+        } else {
+          payload = {
             result: sandbox.value,
-            ...(truncated
-              ? {
-                  note: `Computed over the first ${objectRows.length} of ${lastResult.totalRows} rows. For an exact aggregate over the full result, express it in the query (SQL) instead.`,
-                }
-              : {}),
-          }
-        : { error: sandbox.error };
+            ...(notes.length ? { notes } : {}),
+          };
+        }
+      }
     }
     opts.onStep({
       kind: "script",
