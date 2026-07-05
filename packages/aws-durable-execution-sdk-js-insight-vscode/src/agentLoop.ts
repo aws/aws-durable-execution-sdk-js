@@ -84,7 +84,7 @@ const RUN_JAVASCRIPT_TOOL: Tool = {
   toolSpec: {
     name: "run_javascript",
     description:
-      "Transform or compute over the rows returned by your most recent run_query, using JavaScript, when it's awkward to express in the query language (reshaping, custom aggregation, deriving values). The code runs as a function body with `rows` (an array of row objects keyed by column name) and `columns` (array of names) in scope, and must `return` its result. It is sandboxed: no filesystem, network, or host access — pure computation over the provided rows only. Run a query first so there is data to operate on.",
+      "Transform or compute over the rows returned by your most recent run_query, using JavaScript, when it's awkward to express in the query language (reshaping, custom aggregation, deriving values). `rows` holds ALL rows of that result (up to a large cap), not just the small sample shown in the query result — so aggregations cover the full set. The code runs as a function body with `rows` (an array of row objects keyed by column name) and `columns` (array of names) in scope, and must `return` its result. It is sandboxed: no filesystem, network, or host access — pure computation over the provided rows only. Run a query first so there is data to operate on. If the result reports it was truncated, prefer expressing the aggregate in the query (SQL) for an exact answer.",
     inputSchema: {
       json: {
         type: "object",
@@ -109,7 +109,13 @@ const RUN_JAVASCRIPT_TOOL: Tool = {
 /** Result of executing one of the agent's run_query calls. */
 export interface AgentQueryResult {
   columns: string[];
-  rows: string[][]; // a bounded sample, not necessarily all rows
+  rows: string[][]; // a bounded sample shown to the model, not necessarily all rows
+  /**
+   * A fuller row set (up to a large cap) for run_javascript to compute over,
+   * so JS aggregations aren't silently limited to the model's small sample.
+   * Falls back to `rows` when absent.
+   */
+  allRows?: string[][];
   rowCount: number;
   error?: string;
   /** Set by the caller to force the loop to stop (e.g. cost budget reached). */
@@ -199,7 +205,11 @@ export async function runAgentLoop(
   const tried = new Set<string>();
   let lastGoodQuery: string | undefined;
   // The most recent run_query result, so run_javascript can compute over it.
-  let lastResult: { columns: string[]; rows: string[][] } | undefined;
+  // Holds the fuller row set (allRows) and the true total, so JS operates on
+  // more than the model's small display sample.
+  let lastResult:
+    | { columns: string[]; rows: string[][]; totalRows: number }
+    | undefined;
 
   for (let i = 0; i < opts.maxIterations; i++) {
     const response = await client.send(
@@ -293,8 +303,19 @@ export async function runAgentLoop(
           rows: objectRows,
           columns: lastResult.columns,
         });
+        // If the JS input was capped below the true result size, say so — the
+        // model must not present a partial aggregate (median/sum/etc.) as if
+        // it covered the whole result.
+        const truncated = objectRows.length < lastResult.totalRows;
         payload = sandbox.ok
-          ? { result: sandbox.value }
+          ? {
+              result: sandbox.value,
+              ...(truncated
+                ? {
+                    note: `Computed over the first ${objectRows.length} of ${lastResult.totalRows} rows. For an exact aggregate over the full result, express it in the query (SQL) instead.`,
+                  }
+                : {}),
+            }
           : { error: sandbox.error };
       }
       opts.onStep({
@@ -355,7 +376,11 @@ export async function runAgentLoop(
       result = await opts.runQuery(query, lookbackHours);
       if (!result.error) {
         lastGoodQuery = query;
-        lastResult = { columns: result.columns, rows: result.rows };
+        lastResult = {
+          columns: result.columns,
+          rows: result.allRows ?? result.rows,
+          totalRows: result.rowCount,
+        };
       }
     }
 

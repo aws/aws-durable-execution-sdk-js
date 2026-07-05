@@ -89,6 +89,15 @@ function queryDialect(destinationType: string): "sql" | "logs-insights" {
     : "sql";
 }
 
+/**
+ * Max rows handed to run_javascript. The model sees only a small sample, but
+ * JS computes over this fuller set so aggregations aren't silently limited.
+ * Bounded so a huge result can't overwhelm the sandbox/host; when the true
+ * result exceeds it, the JS result reports the truncation so the model can
+ * fall back to a SQL aggregate.
+ */
+const JS_ROW_CAP = 5000;
+
 function isRetryableQueryError(msg: string): boolean {
   return (
     msg.includes("MalformedQueryException") ||
@@ -707,7 +716,10 @@ class ExplorerPanel {
         );
         return {
           columns: exec.columns,
+          // Small sample for the model's context; run_javascript gets the
+          // fuller set (capped) so its aggregations aren't limited to 20 rows.
           rows: exec.rows.slice(0, 20),
+          allRows: exec.rows.slice(0, JS_ROW_CAP),
           rowCount: exec.count ?? exec.rows.length,
         };
       } catch (err) {
