@@ -451,6 +451,7 @@ async function generateViaCopilot(
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
+import * as crypto from "crypto";
 
 const MODEL_DIR = path.join(os.homedir(), ".workflow-insight", "models");
 
@@ -460,6 +461,8 @@ export interface LocalModelPreset {
   label: string;
   filename: string;
   url: string;
+  /** SHA-256 of the file, verified after download (the HF LFS oid). */
+  sha256: string;
   /** Approximate download size, shown in the download status. */
   sizeLabel: string;
 }
@@ -476,21 +479,26 @@ export const LOCAL_MODEL_PRESETS: LocalModelPreset[] = [
     key: "llama-3-groq-8b-tool-use",
     label: "Llama-3-Groq-8B Tool-Use (best tool-calling, ~4.9 GB)",
     filename: "Llama-3-Groq-8B-Tool-Use-Q4_K_M.gguf",
-    url: "https://huggingface.co/bartowski/Llama-3-Groq-8B-Tool-Use-GGUF/resolve/main/Llama-3-Groq-8B-Tool-Use-Q4_K_M.gguf",
+    // Pinned to a specific commit (not a branch head) and checksum-verified so
+    // an upstream change can't be silently downloaded and run natively.
+    url: "https://huggingface.co/bartowski/Llama-3-Groq-8B-Tool-Use-GGUF/resolve/2d49903869805faad16daab2450fcda3487685b8/Llama-3-Groq-8B-Tool-Use-Q4_K_M.gguf",
+    sha256: "83c95e45fe22789641ec281282cdcc93e48ae14f985a05ae6e4849ff56803aa8",
     sizeLabel: "4.9 GB",
   },
   {
     key: "phi-3.5-mini",
     label: "Phi-3.5-mini (smaller, good quality-per-GB, ~2.4 GB)",
     filename: "Phi-3.5-mini-instruct-Q4_K_M.gguf",
-    url: "https://huggingface.co/bartowski/Phi-3.5-mini-instruct-GGUF/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf",
+    url: "https://huggingface.co/bartowski/Phi-3.5-mini-instruct-GGUF/resolve/6d70da17e749a471ccb62ade694486011a75cda3/Phi-3.5-mini-instruct-Q4_K_M.gguf",
+    sha256: "e4165e3a71af97f1b4820da61079826d8752a2088e313af0c7d346796c38eff5",
     sizeLabel: "2.4 GB",
   },
   {
     key: "qwen2.5-coder-3b",
     label: "Qwen2.5-Coder-3B (smallest footprint, ~2.2 GB)",
     filename: "qwen2.5-coder-3b-instruct-q4_k_m.gguf",
-    url: "https://huggingface.co/Qwen/Qwen2.5-Coder-3B-Instruct-GGUF/resolve/main/qwen2.5-coder-3b-instruct-q4_k_m.gguf",
+    url: "https://huggingface.co/Qwen/Qwen2.5-Coder-3B-Instruct-GGUF/resolve/f74adce6aa16316c625447af059dbebe4983757c/qwen2.5-coder-3b-instruct-q4_k_m.gguf",
+    sha256: "724fb256bec1ff062b2f65e4569e871ad2e95ab2a3989723d1769c54294730b7",
     sizeLabel: "2.2 GB",
   },
 ];
@@ -548,10 +556,12 @@ export async function ensureModel(
   let downloaded = 0;
   const total = Number(response.headers.get("content-length") || 0);
 
+  const hash = crypto.createHash("sha256");
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
     fileStream.write(value);
+    hash.update(value);
     downloaded += value.length;
     if (total > 0) {
       const pct = Math.round((downloaded / total) * 100);
@@ -560,6 +570,16 @@ export async function ensureModel(
   }
   fileStream.end();
   await new Promise<void>((resolve) => fileStream.on("finish", resolve));
+
+  // Verify the download against the pinned checksum before it's ever loaded
+  // and run natively. On mismatch, delete the file so a retry re-downloads.
+  const digest = hash.digest("hex");
+  if (digest !== preset.sha256) {
+    fs.rmSync(modelPath, { force: true });
+    throw new Error(
+      `Downloaded model failed checksum verification (expected ${preset.sha256}, got ${digest}). The file was discarded; try again.`,
+    );
+  }
   return modelPath;
 }
 
