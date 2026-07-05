@@ -281,6 +281,151 @@ export async function analyzeResults(opts: AnalyzeOptions): Promise<string> {
   }
 }
 
+// ─── Chart spec generation (Visualize page, free-text prompt) ────────────────
+
+interface ChartSpecOptions {
+  provider: LlmProvider;
+  region: string;
+  credentials: AwsCredentialIdentityProvider;
+  modelId: string;
+  columns: string[];
+  /** Names of the columns that hold numeric values (a hint for value/axis choice). */
+  numericColumns: string[];
+  /** The chart type the user picked from the dropdown, if any (e.g. "stacked-bar"). */
+  chartType?: string;
+  description: string;
+}
+
+/**
+ * Turn a visualization request into a Vega-Lite spec fragment ({mark, encoding}
+ * plus optional styling) over the columns already fetched. The request is
+ * either a chart type the user picked, a free-text description, or both. The
+ * model decides which column maps to each channel and any styling. Only the
+ * column names/types and the request are sent — never the row data. Throws on
+ * model/parse failure so the caller can surface an error instead of rendering a
+ * silently wrong chart.
+ */
+export async function generateChartSpec(
+  opts: ChartSpecOptions,
+): Promise<Record<string, unknown>> {
+  const prompt = buildChartPrompt(opts);
+  const raw = await completeText(opts, prompt);
+  return parseChartSpec(raw);
+}
+
+function buildChartPrompt(opts: ChartSpecOptions): string {
+  const numeric = opts.numericColumns.length
+    ? opts.numericColumns.join(", ")
+    : "(none detected)";
+  const request = [
+    opts.chartType ? `Chart type: ${opts.chartType}.` : "",
+    opts.description ? `Request: ${opts.description}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return [
+    "You configure a Vega-Lite v5 chart for a result table. Map the request onto the AVAILABLE COLUMNS only, choosing the best column for each channel.",
+    "",
+    `Available columns: ${opts.columns.join(", ")}`,
+    `Numeric columns (usable as quantitative values): ${numeric}`,
+    "",
+    `${request}`,
+    "",
+    "Rules:",
+    "- Use ONLY the listed column names, verbatim, in each `field`. Never invent a column.",
+    "- Put the measure/value on a quantitative encoding (usually y, or theta for a pie); put category/axis columns on x, and a second category on color (or xOffset for a grouped bar).",
+    '- Stacked bar: mark "bar", the value on y with "stack":"zero", one category on x, the other on color.',
+    '- Pick a sensible `type` per field: "quantitative" for numbers, "nominal"/"ordinal" for categories, "temporal" for timestamps.',
+    '- You MAY add styling when it improves readability: an axis `scale` (e.g. "zero":true or "domainMin"/"domainMax"), a color `scale` `scheme` (e.g. "tableau10", "category10"), `sort` on an axis, and short axis `title`s. Keep it valid Vega-Lite v5. Do NOT set width, height, data, or config.',
+    "",
+    'Respond with ONLY a JSON object with "mark" and "encoding" (optionally with the styling above), no prose, no data, no $schema. Example:',
+    '{"mark":"bar","encoding":{"x":{"field":"product_category","type":"nominal","title":"Category"},"y":{"field":"record_count","type":"quantitative","stack":"zero","scale":{"zero":true}},"color":{"field":"hour_bucket","type":"nominal","scale":{"scheme":"tableau10"}}}}',
+  ].join("\n");
+}
+
+function parseChartSpec(raw: string): Record<string, unknown> {
+  // Models sometimes wrap JSON in prose or code fences — grab the first object.
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) {
+    throw new Error("The model did not return a chart specification.");
+  }
+  let spec: unknown;
+  try {
+    spec = JSON.parse(match[0]);
+  } catch {
+    throw new Error("The model returned an invalid chart specification.");
+  }
+  if (
+    spec == null ||
+    typeof spec !== "object" ||
+    !("mark" in spec) ||
+    !("encoding" in spec)
+  ) {
+    throw new Error(
+      "The model's chart specification was missing mark/encoding.",
+    );
+  }
+  return spec as Record<string, unknown>;
+}
+
+/**
+ * Single prompt -> text completion across all three providers. Unlike
+ * analyzeResults (which swallows failures into ""), this surfaces errors to the
+ * caller so a failed chart request can be reported instead of hidden.
+ */
+async function completeText(
+  opts: {
+    provider: LlmProvider;
+    region: string;
+    credentials: AwsCredentialIdentityProvider;
+    modelId: string;
+  },
+  prompt: string,
+): Promise<string> {
+  if (opts.provider === "bedrock") {
+    const client = new BedrockRuntimeClient({
+      region: opts.region,
+      credentials: opts.credentials,
+    });
+    const response = await client.send(
+      new ConverseCommand({
+        modelId: opts.modelId,
+        messages: [{ role: "user", content: [{ text: prompt }] }],
+        inferenceConfig: { maxTokens: 1024, temperature: 0 },
+      }),
+    );
+    const blocks: ContentBlock[] = response.output?.message?.content ?? [];
+    return blocks
+      .map((b) => ("text" in b && b.text ? b.text : ""))
+      .join("")
+      .trim();
+  }
+  if (opts.provider === "copilot") {
+    const models = await vscode.lm.selectChatModels({ vendor: "copilot" });
+    if (models.length === 0) {
+      throw new Error("No Copilot chat model is available.");
+    }
+    const response = await models[0].sendRequest(
+      [vscode.LanguageModelChatMessage.User(prompt)],
+      {},
+      new vscode.CancellationTokenSource().token,
+    );
+    let text = "";
+    for await (const chunk of response.text) text += chunk;
+    return text.trim();
+  }
+  // local
+  const { model } = await getLocalModel();
+  const { LlamaChatSession } = await import("node-llama-cpp");
+  const context = await model.createContext();
+  const session = new LlamaChatSession({
+    contextSequence: context.getSequence(),
+  });
+  const text = await session.prompt(prompt);
+  await context.dispose();
+  return text.trim();
+}
+
 interface GenerateOptions {
   provider: LlmProvider;
   region: string;
@@ -298,7 +443,6 @@ interface GenerateOptions {
    */
   agentic?: boolean;
 }
-
 /**
  * Unified LLM interface. Hides the difference between Bedrock (Converse API
  * with tool calling) and VS Code Copilot (Language Model API with text parsing).

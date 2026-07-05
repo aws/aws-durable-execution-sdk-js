@@ -5,6 +5,13 @@ export type OutboundMessage =
   | { type: "newSession" }
   | { type: "saveSettings"; settings: Record<string, string> }
   | { type: "downloadModel"; localModel?: string }
+  | {
+      type: "visualize";
+      columns: string[];
+      numericColumns: string[];
+      chartType?: string;
+      description: string;
+    }
   | { type: "startListening" }
   | { type: "stopListening" }
   | {
@@ -74,6 +81,8 @@ export type InboundMessage =
       hiddenColumns?: string[];
     }
   | { type: "detailResult"; fields: Record<string, string> }
+  | { type: "chartSpec"; spec: Record<string, unknown> }
+  | { type: "chartSpecError"; message: string }
   | {
       /**
        * One completed iteration of the run→verify→refine loop, streamed so

@@ -1,14 +1,16 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Container from "@cloudscape-design/components/container";
 import Header from "@cloudscape-design/components/header";
 import SpaceBetween from "@cloudscape-design/components/space-between";
 import Button from "@cloudscape-design/components/button";
 import FormField from "@cloudscape-design/components/form-field";
 import Input from "@cloudscape-design/components/input";
+import Select, { SelectProps } from "@cloudscape-design/components/select";
 import Box from "@cloudscape-design/components/box";
 import Modal from "@cloudscape-design/components/modal";
 import Table from "@cloudscape-design/components/table";
 import { VegaChart } from "./VegaChart";
+import { postMessage } from "./vscode";
 
 interface Props {
   columns: string[];
@@ -23,6 +25,32 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
   const [spec, setSpec] = useState<Record<string, unknown> | null>(null);
   const [customPrompt, setCustomPrompt] = useState("");
   const [guideOpen, setGuideOpen] = useState(false);
+  const [llmLoading, setLlmLoading] = useState(false);
+  const [llmError, setLlmError] = useState("");
+  const [selectedType, setSelectedType] = useState<SelectProps.Option | null>(
+    null,
+  );
+
+  // The free-text box is answered by the model (see extension host onVisualize).
+  // Listen for its reply here rather than routing through App's handler, so the
+  // feature stays self-contained; App ignores these message types.
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      const msg = event.data;
+      if (msg?.type === "chartSpec") {
+        setSpec(msg.spec);
+        setLlmLoading(false);
+        setLlmError("");
+      } else if (msg?.type === "chartSpecError") {
+        setLlmError(
+          msg.message || "Could not build a chart from that description.",
+        );
+        setLlmLoading(false);
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, []);
 
   const allPresets: { id: PresetType; label: string }[] = [
     { id: "bar", label: "Bar" },
@@ -36,10 +64,18 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
     { id: "boxplot", label: "Box Plot" },
   ];
 
-  // Show only suggested charts if the LLM provided them, otherwise show all
-  const visiblePresets = suggestedCharts && suggestedCharts.length > 0
-    ? allPresets.filter((p) => suggestedCharts.includes(p.id))
-    : allPresets;
+  // All chart types are always offered in the dropdown; the ones the model
+  // suggested for this result are floated to the top and tagged "Recommended"
+  // (previously only the suggested ones were shown, hiding the rest).
+  const recommended = new Set(suggestedCharts ?? []);
+  const chartOptions: SelectProps.Option[] = [
+    ...allPresets.filter((p) => recommended.has(p.id)),
+    ...allPresets.filter((p) => !recommended.has(p.id)),
+  ].map((p) => ({
+    label: p.label,
+    value: p.id,
+    ...(recommended.has(p.id) ? { labelTag: "Recommended" } : {}),
+  }));
 
   // Convert rows to objects with numeric coercion
   const data = useMemo(
@@ -56,137 +92,29 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
     [columns, rows],
   );
 
-  // Guess which columns are numeric vs categorical
+  // Guess which columns are numeric (a hint sent to the model).
   const numericCols = columns.filter((col) => {
     const sample = data.find((d) => d[col] !== "" && d[col] != null);
     return sample && typeof sample[col] === "number";
   });
-  const categoricalCols = columns.filter((col) => !numericCols.includes(col));
 
-  const applyCustom = () => {
-    const desc = customPrompt.toLowerCase();
-    // Detect chart type from description
-    let type: PresetType = "bar";
-    if (desc.includes("heatmap")) type = "heatmap";
-    else if (desc.includes("scatter")) type = "scatter";
-    else if (desc.includes("pie") || desc.includes("donut")) type = "pie";
-    else if (desc.includes("histogram") || desc.includes("distribution")) type = "histogram";
-    else if (desc.includes("area")) type = "area";
-    else if (desc.includes("line") || desc.includes("trend")) type = "line";
-    else if (desc.includes("stacked")) type = "stacked-bar";
-    else if (desc.includes("box")) type = "boxplot";
-
-    // Try to extract field names mentioned in the description
-    const mentionedCols = columns.filter((col) => desc.includes(col.toLowerCase()));
-    if (mentionedCols.length >= 2 && type === "heatmap") {
-      setSpec({
-        mark: "rect",
-        encoding: {
-          x: { field: mentionedCols[0], type: "nominal" },
-          y: { field: mentionedCols[1], type: "nominal" },
-          color: { field: mentionedCols[2] ?? numericCols[0] ?? columns[2], type: "quantitative" },
-        },
-      });
-    } else if (mentionedCols.length >= 1) {
-      // Use mentioned columns in the preset
-      applyPreset(type);
-    } else {
-      applyPreset(type);
-    }
-  };
-
-  const applyPreset = (type: PresetType) => {
-    const xCol = categoricalCols[0] ?? columns[0];
-    const yCol = numericCols[0] ?? columns[1];
-    const colorCol = categoricalCols[1] ?? categoricalCols[0];
-
-    switch (type) {
-      case "bar":
-        setSpec({
-          mark: "bar",
-          encoding: {
-            x: { field: xCol, type: "nominal" },
-            y: { field: yCol, type: "quantitative" },
-            color: colorCol !== xCol ? { field: colorCol, type: "nominal" } : undefined,
-          },
-        });
-        break;
-      case "stacked-bar":
-        setSpec({
-          mark: "bar",
-          encoding: {
-            x: { field: xCol, type: "nominal" },
-            y: { field: yCol, type: "quantitative", stack: "zero" },
-            color: { field: colorCol ?? xCol, type: "nominal" },
-          },
-        });
-        break;
-      case "line":
-        setSpec({
-          mark: { type: "line", point: true },
-          encoding: {
-            x: { field: xCol, type: "nominal" },
-            y: { field: yCol, type: "quantitative" },
-          },
-        });
-        break;
-      case "area":
-        setSpec({
-          mark: { type: "area", opacity: 0.7 },
-          encoding: {
-            x: { field: xCol, type: "nominal" },
-            y: { field: yCol, type: "quantitative" },
-          },
-        });
-        break;
-      case "scatter":
-        setSpec({
-          mark: "point",
-          encoding: {
-            x: { field: numericCols[0] ?? columns[0], type: "quantitative" },
-            y: { field: numericCols[1] ?? numericCols[0] ?? columns[1], type: "quantitative" },
-            color: categoricalCols[0] ? { field: categoricalCols[0], type: "nominal" } : undefined,
-          },
-        });
-        break;
-      case "heatmap":
-        setSpec({
-          mark: "rect",
-          encoding: {
-            x: { field: categoricalCols[0] ?? columns[0], type: "nominal" },
-            y: { field: categoricalCols[1] ?? columns[1], type: "nominal" },
-            color: { field: numericCols[0] ?? columns[2], type: "quantitative" },
-          },
-        });
-        break;
-      case "histogram":
-        setSpec({
-          mark: "bar",
-          encoding: {
-            x: { field: numericCols[0] ?? columns[0], bin: true, type: "quantitative" },
-            y: { aggregate: "count", type: "quantitative" },
-          },
-        });
-        break;
-      case "pie":
-        setSpec({
-          mark: { type: "arc", innerRadius: 30 },
-          encoding: {
-            theta: { field: yCol, type: "quantitative" },
-            color: { field: xCol, type: "nominal" },
-          },
-        });
-        break;
-      case "boxplot":
-        setSpec({
-          mark: "boxplot",
-          encoding: {
-            x: { field: categoricalCols[0] ?? columns[0], type: "nominal" },
-            y: { field: numericCols[0] ?? columns[1], type: "quantitative" },
-          },
-        });
-        break;
-    }
+  // Both the chart-type dropdown and the free-text box are answered by the
+  // model: given the columns (and which are numeric) plus the request, it
+  // decides the field for each channel and any styling (axis scale/min, color
+  // scheme, sort). Row data is never sent. A dropdown pick sends chartType; the
+  // text box sends a description; either or both may be present.
+  const requestSpec = (req: { chartType?: string; description?: string }) => {
+    const description = req.description?.trim() ?? "";
+    if (!req.chartType && !description) return;
+    setLlmLoading(true);
+    setLlmError("");
+    postMessage({
+      type: "visualize",
+      columns,
+      numericColumns: numericCols,
+      chartType: req.chartType,
+      description,
+    });
   };
 
   return (
@@ -205,26 +133,60 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
             )}
           </Box>
 
-          <SpaceBetween direction="horizontal" size="s">
-            {visiblePresets.map((p) => (
-              <Button key={p.id} onClick={() => applyPreset(p.id)}>{p.label}</Button>
-            ))}
-            <Button variant="icon" iconName="status-info" onClick={() => setGuideOpen(true)} />
-          </SpaceBetween>
+          <FormField
+            label="Chart type"
+            description="Pick a type and the model builds the chart — choosing the fields and styling for these columns. Types tagged “Recommended” fit best."
+          >
+            <SpaceBetween direction="horizontal" size="s">
+              <Select
+                selectedOption={selectedType}
+                onChange={({ detail }) => {
+                  setSelectedType(detail.selectedOption);
+                  requestSpec({ chartType: detail.selectedOption.value });
+                }}
+                options={chartOptions}
+                placeholder="Choose a chart type"
+                disabled={llmLoading}
+                expandToViewport
+              />
+              <Button
+                variant="icon"
+                iconName="status-info"
+                onClick={() => setGuideOpen(true)}
+              />
+            </SpaceBetween>
+          </FormField>
 
-          <FormField label="Or describe how to visualize" description="e.g. 'heatmap with customerName on x and productCategory on y'">
+          <FormField
+            label="Or describe how to visualize"
+            description="Uses the model to map your request onto the fetched columns — e.g. 'record_count as data, product_category and hour_bucket as axis, stacked bar'."
+            errorText={llmError || undefined}
+          >
             <Input
               value={customPrompt}
               onChange={({ detail }) => setCustomPrompt(detail.value)}
+              onKeyDown={({ detail }) => {
+                if (detail.key === "Enter")
+                  requestSpec({ description: customPrompt });
+              }}
               placeholder="stacked bar chart colored by status"
             />
           </FormField>
-          <Button onClick={() => applyCustom()} disabled={!customPrompt.trim()}>
+          <Button
+            onClick={() => requestSpec({ description: customPrompt })}
+            disabled={!customPrompt.trim() || llmLoading}
+            loading={llmLoading}
+          >
             Visualize
           </Button>
         </SpaceBetween>
       </Container>
 
+      {llmLoading && (
+        <Box color="text-status-info" fontSize="body-s">
+          Generating chart…
+        </Box>
+      )}
       {spec && <VegaChart spec={spec} data={data} />}
 
       <Modal
@@ -234,7 +196,7 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
         size="large"
       >
         <SpaceBetween size="m">
-          <Box>Choose a preset or describe what you want in the text field. The chart renders instantly from the data already fetched — no additional query.</Box>
+          <Box>Pick a chart type or describe what you want in the text field — either way the model maps your request onto the result columns and picks sensible fields and styling. No new data query is run; the chart is built from the rows already fetched.</Box>
 
           <Table
             columnDefinitions={[
