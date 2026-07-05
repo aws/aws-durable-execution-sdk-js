@@ -4,6 +4,7 @@ import {
   type ContentBlock,
   type Message,
   type Tool,
+  type ToolUseBlock,
 } from "@aws-sdk/client-bedrock-runtime";
 import type { AwsCredentialIdentityProvider } from "@aws-sdk/types";
 import { buildSystemPrompt } from "./schema";
@@ -218,6 +219,141 @@ export async function runAgentLoop(
     | { columns: string[]; rows: string[][]; totalRows: number }
     | undefined;
 
+  // Handle one run_query tool-use: run it (with oscillation guard), update
+  // state + emit a step, and return the payload for its toolResult.
+  const handleRunQuery = async (
+    tu: ToolUseBlock,
+  ): Promise<{ payload: unknown; stop?: boolean; stopReason?: string }> => {
+    const inp = (tu.input ?? {}) as {
+      query?: string;
+      purpose?: string;
+      lookbackHours?: number;
+    };
+    const query = (inp.query ?? "").trim();
+    const purpose = typeof inp.purpose === "string" ? inp.purpose : undefined;
+    const lookbackHours =
+      typeof inp.lookbackHours === "number" && inp.lookbackHours > 0
+        ? inp.lookbackHours
+        : undefined;
+    const norm = query.replace(/\s+/g, " ").toLowerCase();
+
+    let result: AgentQueryResult;
+    if (!query) {
+      result = {
+        columns: [],
+        rows: [],
+        rowCount: 0,
+        error: "Empty query. Provide a query, or call finish.",
+      };
+    } else if (tried.has(norm)) {
+      // Oscillation guard. This tool loop lets the model recover: feed back an
+      // error tool-result and let it choose a different query or finish (costs
+      // one iteration). That differs deliberately from the verify/refine loop
+      // (extension.ts onGenerateAgentic), which BREAKS on a repeat — there the
+      // model just regenerates the same single-shot query, so continuing is
+      // pointless; here the model has agency to change course.
+      result = {
+        columns: [],
+        rows: [],
+        rowCount: 0,
+        error:
+          "You already ran this exact query and its result is above. Try a different query or call finish.",
+      };
+    } else {
+      tried.add(norm);
+      result = await opts.runQuery(query, lookbackHours);
+      if (!result.error) {
+        lastGoodQuery = query;
+        lastResult = {
+          columns: result.columns,
+          rows: result.allRows ?? result.rows,
+          totalRows: result.rowCount,
+        };
+      }
+    }
+
+    opts.onStep({
+      kind: result.error ? "error" : "query",
+      query,
+      purpose,
+      rowCount: result.error ? undefined : result.rowCount,
+      detail: result.error ?? purpose,
+    });
+
+    return {
+      payload: result.error
+        ? { error: result.error }
+        : {
+            columns: result.columns,
+            rowCount: result.rowCount,
+            sampleRows: result.rows,
+          },
+      stop: result.stop,
+      stopReason: result.stopReason,
+    };
+  };
+
+  // Handle one run_javascript tool-use: run the code over the full result set
+  // in the sandbox, emit a step, and return the payload for its toolResult.
+  const handleRunJs = async (tu: ToolUseBlock): Promise<unknown> => {
+    const jinp = (tu.input ?? {}) as { code?: string; purpose?: string };
+    const code = (jinp.code ?? "").trim();
+    const jsPurpose =
+      typeof jinp.purpose === "string" ? jinp.purpose : undefined;
+    let payload: unknown;
+    if (!code) {
+      payload = { error: "No code provided." };
+    } else if (!lastResult) {
+      payload = { error: "No data yet — run a query with run_query first." };
+    } else {
+      const objectRows = lastResult.rows.map((r) => {
+        const obj: Record<string, string> = {};
+        lastResult!.columns.forEach((c, idx) => {
+          obj[c] = r[idx] ?? "";
+        });
+        return obj;
+      });
+      const sandbox = await runSandboxedJs(code, {
+        rows: objectRows,
+        columns: lastResult.columns,
+      });
+      // If the JS input was capped below the true result size, say so — the
+      // model must not present a partial aggregate (median/sum/etc.) as if it
+      // covered the whole result.
+      const truncated = objectRows.length < lastResult.totalRows;
+      payload = sandbox.ok
+        ? {
+            result: sandbox.value,
+            ...(truncated
+              ? {
+                  note: `Computed over the first ${objectRows.length} of ${lastResult.totalRows} rows. For an exact aggregate over the full result, express it in the query (SQL) instead.`,
+                }
+              : {}),
+          }
+        : { error: sandbox.error };
+    }
+    opts.onStep({
+      kind: "script",
+      query: code,
+      purpose: jsPurpose,
+      detail:
+        payload && typeof payload === "object" && "error" in payload
+          ? String((payload as { error: unknown }).error)
+          : jsPurpose,
+    });
+    return payload;
+  };
+
+  const toolResultBlock = (
+    tu: ToolUseBlock,
+    payload: unknown,
+  ): ContentBlock => ({
+    toolResult: {
+      toolUseId: tu.toolUseId,
+      content: [{ text: JSON.stringify(payload) }],
+    },
+  });
+
   for (let i = 0; i < opts.maxIterations; i++) {
     const response = await client.send(
       new ConverseCommand({
@@ -238,9 +374,11 @@ export async function runAgentLoop(
     messages.push(message);
 
     const blocks: ContentBlock[] = message.content ?? [];
-    const toolUse = blocks.find((b) => "toolUse" in b && b.toolUse)?.toolUse;
+    const toolUses = blocks
+      .map((b) => ("toolUse" in b ? b.toolUse : undefined))
+      .filter((t): t is ToolUseBlock => !!t);
 
-    if (!toolUse) {
+    if (toolUses.length === 0) {
       // No tool call — treat any prose as a final answer, else stop.
       const text = blocks
         .map((b) => ("text" in b && b.text ? b.text : ""))
@@ -252,8 +390,12 @@ export async function runAgentLoop(
       break;
     }
 
-    if (toolUse.name === "finish") {
-      const inp = (toolUse.input ?? {}) as {
+    // If the model called finish, honor it and return. Any parallel tool calls
+    // in the same turn don't need answering — we're not sending another
+    // Converse request, so their toolResults aren't required.
+    const finishUse = toolUses.find((t) => t.name === "finish");
+    if (finishUse) {
+      const inp = (finishUse.input ?? {}) as {
         query?: string;
         explanation?: string;
         answer?: string;
@@ -286,152 +428,25 @@ export async function runAgentLoop(
       };
     }
 
-    if (toolUse.name === "run_javascript") {
-      const jinp = (toolUse.input ?? {}) as {
-        code?: string;
-        purpose?: string;
-      };
-      const code = (jinp.code ?? "").trim();
-      const jsPurpose =
-        typeof jinp.purpose === "string" ? jinp.purpose : undefined;
-      let payload: unknown;
-      if (!code) {
-        payload = { error: "No code provided." };
-      } else if (!lastResult) {
-        payload = {
-          error: "No data yet — run a query with run_query first.",
-        };
+    // Otherwise run EVERY tool-use block and answer with one toolResult per
+    // toolUseId. Bedrock Converse requires a matching toolResult for each
+    // toolUseId in the next user message, so a parallel/multi tool-use turn
+    // must be answered in full or the next request fails validation.
+    const toolResults: ContentBlock[] = [];
+    let stopReason: string | undefined;
+    for (const tu of toolUses) {
+      if (tu.name === "run_javascript") {
+        toolResults.push(toolResultBlock(tu, await handleRunJs(tu)));
       } else {
-        const objectRows = lastResult.rows.map((r) => {
-          const obj: Record<string, string> = {};
-          lastResult!.columns.forEach((c, idx) => {
-            obj[c] = r[idx] ?? "";
-          });
-          return obj;
-        });
-        const sandbox = await runSandboxedJs(code, {
-          rows: objectRows,
-          columns: lastResult.columns,
-        });
-        // If the JS input was capped below the true result size, say so — the
-        // model must not present a partial aggregate (median/sum/etc.) as if
-        // it covered the whole result.
-        const truncated = objectRows.length < lastResult.totalRows;
-        payload = sandbox.ok
-          ? {
-              result: sandbox.value,
-              ...(truncated
-                ? {
-                    note: `Computed over the first ${objectRows.length} of ${lastResult.totalRows} rows. For an exact aggregate over the full result, express it in the query (SQL) instead.`,
-                  }
-                : {}),
-            }
-          : { error: sandbox.error };
-      }
-      opts.onStep({
-        kind: "script",
-        query: code,
-        purpose: jsPurpose,
-        detail:
-          payload && typeof payload === "object" && "error" in payload
-            ? String((payload as { error: unknown }).error)
-            : jsPurpose,
-      });
-      messages.push({
-        role: "user",
-        content: [
-          {
-            toolResult: {
-              toolUseId: toolUse.toolUseId,
-              content: [{ text: JSON.stringify(payload) }],
-            },
-          },
-        ],
-      });
-      continue;
-    }
-
-    // run_query
-    const inp = (toolUse.input ?? {}) as {
-      query?: string;
-      purpose?: string;
-      lookbackHours?: number;
-    };
-    const query = (inp.query ?? "").trim();
-    const purpose = typeof inp.purpose === "string" ? inp.purpose : undefined;
-    const lookbackHours =
-      typeof inp.lookbackHours === "number" && inp.lookbackHours > 0
-        ? inp.lookbackHours
-        : undefined;
-    const norm = query.replace(/\s+/g, " ").toLowerCase();
-
-    let result: AgentQueryResult;
-    if (!query) {
-      result = {
-        columns: [],
-        rows: [],
-        rowCount: 0,
-        error: "Empty query. Provide a query, or call finish.",
-      };
-    } else if (tried.has(norm)) {
-      // Oscillation guard. This tool loop lets the model recover: feed back an
-      // error tool-result and let it choose a different query or finish
-      // (costs one iteration). That differs deliberately from the verify/refine
-      // loop (extension.ts onGenerateAgentic), which BREAKS on a repeat — there
-      // the model just regenerates the same single-shot query, so continuing is
-      // pointless; here the model has agency to change course.
-      result = {
-        columns: [],
-        rows: [],
-        rowCount: 0,
-        error:
-          "You already ran this exact query and its result is above. Try a different query or call finish.",
-      };
-    } else {
-      tried.add(norm);
-      result = await opts.runQuery(query, lookbackHours);
-      if (!result.error) {
-        lastGoodQuery = query;
-        lastResult = {
-          columns: result.columns,
-          rows: result.allRows ?? result.rows,
-          totalRows: result.rowCount,
-        };
+        const { payload, stop, stopReason: sr } = await handleRunQuery(tu);
+        toolResults.push(toolResultBlock(tu, payload));
+        if (stop) stopReason = sr ?? "Stopped: budget reached.";
       }
     }
+    messages.push({ role: "user", content: toolResults });
 
-    opts.onStep({
-      kind: result.error ? "error" : "query",
-      query,
-      purpose,
-      rowCount: result.error ? undefined : result.rowCount,
-      detail: result.error ?? purpose,
-    });
-
-    const payload = result.error
-      ? { error: result.error }
-      : {
-          columns: result.columns,
-          rowCount: result.rowCount,
-          sampleRows: result.rows,
-        };
-    messages.push({
-      role: "user",
-      content: [
-        {
-          toolResult: {
-            toolUseId: toolUse.toolUseId,
-            content: [{ text: JSON.stringify(payload) }],
-          },
-        },
-      ],
-    });
-
-    if (result.stop) {
-      opts.onStep({
-        kind: "note",
-        detail: result.stopReason ?? "Stopped: budget reached.",
-      });
+    if (stopReason !== undefined) {
+      opts.onStep({ kind: "note", detail: stopReason });
       break;
     }
   }
