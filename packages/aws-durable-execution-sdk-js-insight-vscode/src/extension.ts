@@ -658,7 +658,9 @@ class ExplorerPanel {
    * columns/rows each time — then calls finish with the query that answers the
    * question. Exploration queries run WITHOUT drill-down injection (read-only,
    * exactly as written); only the final query gets the normal drill-down
-   * treatment for presentation. A cumulative Athena scan budget bounds cost.
+   * treatment for presentation. If the finish query was already run during
+   * exploration, its result is reused (see queryCache) so the scan isn't
+   * billed twice; the number of queries is bounded by agenticMaxIterations.
    */
   private async onGenerateAgenticToolLoop(
     q: string,
@@ -675,6 +677,14 @@ class ExplorerPanel {
             : undefined;
 
     let iteration = 0;
+    // Per-question cache of raw query results (keyed by executed query text),
+    // shared by the exploration run_query calls and the final presentation
+    // run — so the finish query, already scanned during exploration, isn't
+    // scanned again for presentation when the SQL is identical.
+    const queryCache = new Map<
+      string,
+      { columns: string[]; rows: string[][] }
+    >();
 
     // Each run_query the model issues: run it read-only, no drill-down
     // injection, return a bounded sample. lookbackHours (log-based sources
@@ -693,7 +703,7 @@ class ExplorerPanel {
             explanation: "",
             timeRangeMs: (lookbackHours ?? 24) * 60 * 60 * 1000,
           },
-          { injectDrillDown: false },
+          { injectDrillDown: false, queryCache },
         );
         return {
           columns: exec.columns,
@@ -785,6 +795,7 @@ class ExplorerPanel {
           final.query,
           queryDialect(cfg.destinationType),
         ),
+        queryCache,
       },
     );
     // The prose reply is the answer; fall back to the explanation so the
@@ -842,7 +853,20 @@ class ExplorerPanel {
     cfg: ReturnType<typeof readConfig>,
     credentials: ReturnType<typeof resolveCredentials>,
     generated: GeneratedQuery,
-    opts?: { injectDrillDown?: boolean },
+    opts?: {
+      injectDrillDown?: boolean;
+      /**
+       * Per-question cache of raw query results keyed by the exact executed
+       * query string. Lets the tool loop reuse a result it already scanned
+       * during exploration instead of re-running the same SQL for
+       * presentation — avoids double-billing the scan (esp. Athena). A cache
+       * hit only happens when the executed query text is identical, i.e. when
+       * drill-down injection added nothing; otherwise the SQL differs and we
+       * (correctly) run it. Not used for the time-windowed CloudWatch path,
+       * whose result depends on the wall-clock window, not just the query.
+       */
+      queryCache?: Map<string, { columns: string[]; rows: string[][] }>;
+    },
   ): Promise<QueryExecution> {
     // Whether to inject the drill-down identifier (and Athena partition)
     // columns into the query. Callers pass false for exploration/analytical
@@ -852,6 +876,19 @@ class ExplorerPanel {
     // ensureIdentifierColumn is itself conservative and bails on shapes it
     // can't rewrite safely, so injection is a no-op there even if requested.
     const inject = opts?.injectDrillDown ?? true;
+    const queryCache = opts?.queryCache;
+    // Run a query unless its exact text was already run this question, in
+    // which case reuse the cached result (no second scan).
+    const runOnce = async <T extends { columns: string[]; rows: string[][] }>(
+      key: string,
+      run: () => Promise<T>,
+    ): Promise<T> => {
+      const hit = queryCache?.get(key);
+      if (hit) return hit as T;
+      const res = await run();
+      queryCache?.set(key, res);
+      return res;
+    };
     if (cfg.destinationType === "dynamodb") {
       if (!cfg.dynamodbTableName)
         throw new Error("No DynamoDB table configured.");
@@ -863,12 +900,14 @@ class ExplorerPanel {
             idColumn: undefined,
             injectedColumns: [] as string[],
           };
-      const table = await runDynamoDBQuery({
-        region: cfg.region,
-        credentials,
-        tableName: cfg.dynamodbTableName,
-        statement: query,
-      });
+      const table = await runOnce(query, () =>
+        runDynamoDBQuery({
+          region: cfg.region,
+          credentials,
+          tableName: cfg.dynamodbTableName,
+          statement: query,
+        }),
+      );
       return {
         ...table,
         explanation: generated.explanation,
@@ -889,14 +928,16 @@ class ExplorerPanel {
             idColumn: undefined,
             injectedColumns: [] as string[],
           };
-      const table = await runAuroraQuery({
-        region: cfg.region,
-        credentials,
-        resourceArn: cfg.auroraResourceArn,
-        secretArn: cfg.auroraSecretArn,
-        database: cfg.auroraDatabase,
-        sql: query,
-      });
+      const table = await runOnce(query, () =>
+        runAuroraQuery({
+          region: cfg.region,
+          credentials,
+          resourceArn: cfg.auroraResourceArn,
+          secretArn: cfg.auroraSecretArn,
+          database: cfg.auroraDatabase,
+          sql: query,
+        }),
+      );
       return {
         ...table,
         explanation: generated.explanation,
@@ -926,14 +967,16 @@ class ExplorerPanel {
             idColumn: undefined,
             injectedColumns: [] as string[],
           };
-      const table = await runAthenaQuery({
-        region: cfg.region,
-        credentials,
-        database: cfg.athenaDatabase,
-        workgroup: cfg.athenaWorkgroup || undefined,
-        outputLocation: cfg.athenaOutputLocation || undefined,
-        query,
-      });
+      const table = await runOnce(query, () =>
+        runAthenaQuery({
+          region: cfg.region,
+          credentials,
+          database: cfg.athenaDatabase,
+          workgroup: cfg.athenaWorkgroup || undefined,
+          outputLocation: cfg.athenaOutputLocation || undefined,
+          query,
+        }),
+      );
       return {
         ...table,
         explanation: generated.explanation,
