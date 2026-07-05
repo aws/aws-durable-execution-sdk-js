@@ -364,6 +364,12 @@ export async function runAgentLoop(
         error: "Empty query. Provide a query, or call finish.",
       };
     } else if (tried.has(norm)) {
+      // Oscillation guard. This tool loop lets the model recover: feed back an
+      // error tool-result and let it choose a different query or finish
+      // (costs one iteration). That differs deliberately from the verify/refine
+      // loop (extension.ts onGenerateAgentic), which BREAKS on a repeat — there
+      // the model just regenerates the same single-shot query, so continuing is
+      // pointless; here the model has agency to change course.
       result = {
         columns: [],
         rows: [],

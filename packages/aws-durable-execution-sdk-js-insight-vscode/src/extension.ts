@@ -473,6 +473,12 @@ class ExplorerPanel {
     for (let iter = 1; iter <= MAX_ITERATIONS; iter++) {
       const norm = normalizeQuery(generated.query);
       if (tried.has(norm)) {
+        // Oscillation guard. This single-shot verify/refine loop BREAKS on a
+        // repeat: the model regenerated the same query, so further refine
+        // rounds would just repeat it. (The Bedrock tool loop instead feeds an
+        // error back and lets the model pick a different query or finish — see
+        // agentLoop.ts — because there the model has tool-driven agency to
+        // change course rather than re-emitting one query.)
         this.post({
           type: "agentStep",
           iteration: iter,
