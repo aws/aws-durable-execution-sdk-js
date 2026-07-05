@@ -524,7 +524,9 @@ class ExplorerPanel {
             region: cfg.region,
             credentials,
             modelId: cfg.bedrockModelId,
-            question: `${q}\n\nThe previous query failed with this error: ${msg}${columnNotFoundHint(msg)}\nPlease fix the query.`,
+            question: this.withConversationContext(
+              `${q}\n\nThe previous query failed with this error: ${msg}${columnNotFoundHint(msg)}\nPlease fix the query.`,
+            ),
             destinationType: cfg.destinationType,
             tableName,
             agentic: true,
@@ -639,7 +641,9 @@ class ExplorerPanel {
         region: cfg.region,
         credentials,
         modelId: cfg.bedrockModelId,
-        question: `${q}\n\nA previous attempt ran this query:\n${exec.finalQuery}\n\nIt returned ${rowCount} row(s), but that did not adequately answer the question because: ${verdict.reason}${suggestion}\nPlease produce an improved query.`,
+        question: this.withConversationContext(
+          `${q}\n\nA previous attempt ran this query:\n${exec.finalQuery}\n\nIt returned ${rowCount} row(s), but that did not adequately answer the question because: ${verdict.reason}${suggestion}\nPlease produce an improved query.`,
+        ),
         destinationType: cfg.destinationType,
         tableName,
         agentic: true,
