@@ -70,12 +70,6 @@ interface QueryExecution {
 }
 
 /**
- * Whether a query-execution error is worth asking the model to fix (a
- * malformed/invalid query) versus a hard failure (missing config, no
- * permissions) that a retry can't help. Destination-agnostic, so every
- * provider path retries on exactly the same class of errors.
- */
-/**
  * The query dialect for a destination, for shape checks like isAggregateQuery.
  * The two log-exporter destinations use CloudWatch Logs Insights; everything
  * else (DynamoDB PartiQL, Aurora PostgreSQL, S3/Athena Trino) is SQL-shaped.
@@ -96,6 +90,12 @@ function queryDialect(destinationType: string): "sql" | "logs-insights" {
  */
 const JS_ROW_CAP = 5000;
 
+/**
+ * Whether a query-execution error is worth asking the model to fix (a
+ * malformed/invalid query) versus a hard failure (missing config, no
+ * permissions) that a retry can't help. Destination-agnostic, so every
+ * provider path retries on exactly the same class of errors.
+ */
 function isRetryableQueryError(msg: string): boolean {
   return (
     msg.includes("MalformedQueryException") ||
