@@ -122,8 +122,12 @@ export function buildAnalysisPrompt(opts: {
     .join("\n");
   const lines: string[] = [
     "Answer the user's question using ONLY the data in the rows below. Do not",
-    "invent values that are not present. Be concise and direct; if the answer",
-    "is a list, output a plain list with no surrounding prose.",
+    "invent values that are not present. These rows are ALSO shown to the user",
+    "as a table, so do NOT repeat them row-by-row — give a concise",
+    "natural-language summary or the specific value/insight the question asks",
+    "for (counts, ranges, notable patterns, the computed result). For a plain",
+    "'show/list records' request, one or two sentences (how many, the time span,",
+    "anything notable) is enough — the table shows the detail.",
     "",
     `Question: ${opts.question}`,
   ];

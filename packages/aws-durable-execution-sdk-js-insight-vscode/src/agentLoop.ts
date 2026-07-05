@@ -55,7 +55,7 @@ const FINISH_TOOL: Tool = {
           answer: {
             type: "string",
             description:
-              "REQUIRED. The natural-language reply to the user, standing on its own — describe/list the fields or structure, name the relevant columns, or state the numbers. Do NOT rely on a table to convey the answer; the table (if any) only supports this text.",
+              "REQUIRED. A concise natural-language reply to the user. If you also return a `query`, its result rows are shown to the user in a TABLE below your reply — do NOT restate or list those rows; summarize them (how many, notable ranges/patterns) or give the specific insight asked for. One or two sentences is plenty for a 'show/list records' request. Only when there is NO supporting table (conceptual/metadata questions, e.g. 'which field holds the amount?') should the answer spell out the fields/values itself.",
           },
           query: {
             type: "string",
