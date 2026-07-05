@@ -246,7 +246,11 @@ export async function runAgentLoop(
         detail: inp.explanation,
       });
       return {
-        query: (inp.query ?? lastGoodQuery ?? "").trim(),
+        // Respect a deliberately-omitted query: the finish spec tells the
+        // model to leave `query` out for conceptual/metadata answers so NO
+        // table is shown. Falling back to lastGoodQuery here would resurrect
+        // an unrelated exploration query and render a misleading table.
+        query: (inp.query ?? "").trim(),
         explanation: (inp.explanation ?? "").trim(),
         answer:
           typeof inp.answer === "string" && inp.answer.trim()
