@@ -415,6 +415,7 @@ export function App() {
                   loading={loading}
                   status={status}
                   error={error}
+                  compact
                 />
               </>
             )}
