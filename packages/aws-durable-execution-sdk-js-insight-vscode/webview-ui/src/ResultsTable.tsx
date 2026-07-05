@@ -64,9 +64,9 @@ interface Props {
   onDetailDismiss?: () => void;
   /** Called right before a "fetchDetail" message is posted, so the caller can set loading state. */
   onDetailFetchStart?: () => void;
+  /** Rows shown per page. Defaults to 25; the conversation view uses a small value to keep each table short. */
+  pageSize?: number;
 }
-
-const PAGE_SIZE = 25;
 
 export function ResultsTable({
   columns,
@@ -80,6 +80,7 @@ export function ResultsTable({
   detailLoading,
   onDetailDismiss,
   onDetailFetchStart,
+  pageSize = 25,
 }: Props) {
   const [currentPage, setCurrentPage] = useState(1);
   const [detailItem, setDetailItem] = useState<Record<string, string> | null>(null);
@@ -130,8 +131,8 @@ export function ResultsTable({
     return obj;
   });
 
-  const totalPages = Math.ceil(items.length / PAGE_SIZE);
-  const pagedItems = items.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const totalPages = Math.ceil(items.length / pageSize);
+  const pagedItems = items.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const selectItem = (item: Record<string, string> | null) => {
     setSelectedItems(item ? [item] : []);

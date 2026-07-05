@@ -345,6 +345,7 @@ export function App() {
                                     detailLoading={detailLoading}
                                     onDetailFetchStart={() => setDetailLoading(true)}
                                     onDetailDismiss={() => setDetailFields(null)}
+                                    pageSize={5}
                                   />
                                   <Button
                                     onClick={() => {
