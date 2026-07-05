@@ -13,7 +13,6 @@ export interface AthenaQueryResult {
   columns: string[];
   rows: string[][];
   count: number;
-  dataScannedBytes?: number;
 }
 
 const POLL_INTERVAL_MS = 1000;
@@ -69,14 +68,12 @@ export async function runAthenaQuery(opts: {
   }
 
   const deadline = Date.now() + (opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
-  let dataScannedBytes: number | undefined;
 
   for (;;) {
     const { QueryExecution } = await client.send(
       new GetQueryExecutionCommand({ QueryExecutionId }),
     );
     const state = QueryExecution?.Status?.State;
-    dataScannedBytes = QueryExecution?.Statistics?.DataScannedInBytes;
 
     if (state === "SUCCEEDED") break;
     if (state === "FAILED" || state === "CANCELLED") {
@@ -90,14 +87,13 @@ export async function runAthenaQuery(opts: {
     await delay(POLL_INTERVAL_MS);
   }
 
-  return paginateResults(client, QueryExecutionId, dataScannedBytes);
+  return paginateResults(client, QueryExecutionId);
 }
 
 /** Page through GetQueryResults and normalize into columns/rows. */
 async function paginateResults(
   client: AthenaClient,
   queryExecutionId: string,
-  dataScannedBytes: number | undefined,
 ): Promise<AthenaQueryResult> {
   let columns: string[] | undefined;
   const rows: string[][] = [];
@@ -133,7 +129,6 @@ async function paginateResults(
     columns: columns ?? [],
     rows,
     count: rows.length,
-    dataScannedBytes,
   };
 }
 

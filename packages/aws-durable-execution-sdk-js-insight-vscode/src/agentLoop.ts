@@ -119,9 +119,6 @@ export interface AgentQueryResult {
   allRows?: string[][];
   rowCount: number;
   error?: string;
-  /** Set by the caller to force the loop to stop (e.g. cost budget reached). */
-  stop?: boolean;
-  stopReason?: string;
 }
 
 export type RunQueryFn = (
@@ -221,9 +218,7 @@ export async function runAgentLoop(
 
   // Handle one run_query tool-use: run it (with oscillation guard), update
   // state + emit a step, and return the payload for its toolResult.
-  const handleRunQuery = async (
-    tu: ToolUseBlock,
-  ): Promise<{ payload: unknown; stop?: boolean; stopReason?: string }> => {
+  const handleRunQuery = async (tu: ToolUseBlock): Promise<unknown> => {
     const inp = (tu.input ?? {}) as {
       query?: string;
       purpose?: string;
@@ -280,17 +275,13 @@ export async function runAgentLoop(
       detail: result.error ?? purpose,
     });
 
-    return {
-      payload: result.error
-        ? { error: result.error }
-        : {
-            columns: result.columns,
-            rowCount: result.rowCount,
-            sampleRows: result.rows,
-          },
-      stop: result.stop,
-      stopReason: result.stopReason,
-    };
+    return result.error
+      ? { error: result.error }
+      : {
+          columns: result.columns,
+          rowCount: result.rowCount,
+          sampleRows: result.rows,
+        };
   };
 
   // Handle one run_javascript tool-use: run the code over the full result set
@@ -433,22 +424,14 @@ export async function runAgentLoop(
     // toolUseId in the next user message, so a parallel/multi tool-use turn
     // must be answered in full or the next request fails validation.
     const toolResults: ContentBlock[] = [];
-    let stopReason: string | undefined;
     for (const tu of toolUses) {
-      if (tu.name === "run_javascript") {
-        toolResults.push(toolResultBlock(tu, await handleRunJs(tu)));
-      } else {
-        const { payload, stop, stopReason: sr } = await handleRunQuery(tu);
-        toolResults.push(toolResultBlock(tu, payload));
-        if (stop) stopReason = sr ?? "Stopped: budget reached.";
-      }
+      const payload =
+        tu.name === "run_javascript"
+          ? await handleRunJs(tu)
+          : await handleRunQuery(tu);
+      toolResults.push(toolResultBlock(tu, payload));
     }
     messages.push({ role: "user", content: toolResults });
-
-    if (stopReason !== undefined) {
-      opts.onStep({ kind: "note", detail: stopReason });
-      break;
-    }
   }
 
   // Ran out of iterations / stopped without an explicit finish. Fall back to

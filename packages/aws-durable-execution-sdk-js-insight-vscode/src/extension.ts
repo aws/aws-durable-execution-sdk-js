@@ -67,8 +67,6 @@ interface QueryExecution {
   idColumn?: string;
   partitionColumns?: { year?: string; month?: string; day?: string };
   hiddenColumns?: string[];
-  /** Athena only: bytes scanned by this query (for the agentic cost guard). */
-  dataScannedBytes?: number;
 }
 
 /**
