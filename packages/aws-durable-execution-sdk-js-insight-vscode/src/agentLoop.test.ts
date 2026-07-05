@@ -336,3 +336,66 @@ describe("runAgentLoop: query budget", () => {
     expect(mockSend).toHaveBeenCalledTimes(1); // second turn never requested
   });
 });
+
+// ─── run_javascript typed rows ─────────────────────────────────────────────────
+
+describe("runAgentLoop: typed run_javascript rows", () => {
+  it("coerces numeric columns to numbers before handing rows to the sandbox", async () => {
+    mockRunSandboxedJs.mockResolvedValue({ ok: true, value: 15 });
+    mockSend
+      .mockResolvedValueOnce(
+        assistantTurn(toolUse("run_query", { query: "SELECT amount FROM t" })),
+      )
+      .mockResolvedValueOnce(
+        assistantTurn(
+          toolUse("run_javascript", {
+            code: "return rows.reduce((a, r) => a + r.amount, 0)",
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(assistantTurn(toolUse("finish", { answer: "x" })));
+    const runQuery = jest.fn(
+      async (): Promise<AgentQueryResult> => ({
+        columns: ["amount", "name"],
+        rows: [
+          ["10", "a"],
+          ["5", "b"],
+        ],
+        rowCount: 2,
+        numericColumns: [true, false],
+      }),
+    );
+    await runAgentLoop(baseOpts({ runQuery }));
+    // The sandbox must receive real numbers for the numeric column and strings
+    // for the rest — otherwise a + r.amount would concatenate ("105").
+    const data = mockRunSandboxedJs.mock.calls[0][1] as {
+      rows: Array<Record<string, unknown>>;
+    };
+    expect(data.rows[0]).toEqual({ amount: 10, name: "a" });
+    expect(data.rows[1]).toEqual({ amount: 5, name: "b" });
+  });
+
+  it("leaves all cells as strings when no numericColumns are provided", async () => {
+    mockRunSandboxedJs.mockResolvedValue({ ok: true, value: 0 });
+    mockSend
+      .mockResolvedValueOnce(
+        assistantTurn(toolUse("run_query", { query: "SELECT amount FROM t" })),
+      )
+      .mockResolvedValueOnce(
+        assistantTurn(toolUse("run_javascript", { code: "return 1" })),
+      )
+      .mockResolvedValueOnce(assistantTurn(toolUse("finish", { answer: "x" })));
+    const runQuery = jest.fn(
+      async (): Promise<AgentQueryResult> => ({
+        columns: ["amount"],
+        rows: [["10"]],
+        rowCount: 1,
+      }),
+    );
+    await runAgentLoop(baseOpts({ runQuery }));
+    const data = mockRunSandboxedJs.mock.calls[0][1] as {
+      rows: Array<Record<string, unknown>>;
+    };
+    expect(data.rows[0]).toEqual({ amount: "10" });
+  });
+});

@@ -63,6 +63,8 @@ interface QueryExecution {
   count?: number;
   /** True if the result was capped at MAX_SQL_ROWS (more rows exist than returned). */
   truncated?: boolean;
+  /** Per-column numeric-type flag (aligned with `columns`), for typed run_javascript input. */
+  numericColumns?: boolean[];
   explanation?: string;
   suggestedCharts?: string[];
   finalQuery: string;
@@ -756,6 +758,7 @@ class ExplorerPanel {
           allRows: exec.rows.slice(0, JS_ROW_CAP),
           rowCount: exec.count ?? exec.rows.length,
           truncated: exec.truncated,
+          numericColumns: exec.numericColumns,
         };
       } catch (err) {
         return {

@@ -13,8 +13,24 @@ export interface AthenaQueryResult {
   columns: string[];
   rows: string[][];
   count: number;
+  /**
+   * Per-column flag (aligned with `columns`) for whether Athena declared the
+   * column a numeric type. Athena returns every value as a string, so this
+   * lets consumers (e.g. the run_javascript sandbox) coerce numeric columns
+   * back to numbers for arithmetic without guessing from the value text.
+   */
+  numericColumns: boolean[];
   /** True if pagination stopped at the row cap (result has more rows than returned). */
   truncated: boolean;
+}
+
+// Athena/Trino numeric column types (ColumnInfo.Type). Everything else
+// (varchar, char, string, timestamp, date, boolean, array, map, row, json,
+// varbinary) is left as a string.
+const NUMERIC_ATHENA_TYPE =
+  /^(tinyint|smallint|integer|int|bigint|real|double|float|decimal|numeric)\b/i;
+function isNumericAthenaType(type?: string): boolean {
+  return type != null && NUMERIC_ATHENA_TYPE.test(type.trim());
 }
 
 const POLL_INTERVAL_MS = 1000;
@@ -113,6 +129,7 @@ async function paginateResults(
   maxRows?: number,
 ): Promise<AthenaQueryResult> {
   let columns: string[] | undefined;
+  let numericColumns: boolean[] = [];
   const rows: string[][] = [];
   let nextToken: string | undefined;
   let isFirstPage = true;
@@ -127,9 +144,9 @@ async function paginateResults(
     );
 
     if (!columns) {
-      columns = (result.ResultSet?.ResultSetMetadata?.ColumnInfo ?? []).map(
-        (c: ColumnInfo) => c.Name ?? "?",
-      );
+      const info = result.ResultSet?.ResultSetMetadata?.ColumnInfo ?? [];
+      columns = info.map((c: ColumnInfo) => c.Name ?? "?");
+      numericColumns = info.map((c: ColumnInfo) => isNumericAthenaType(c.Type));
     }
 
     const resultRows: Row[] = result.ResultSet?.Rows ?? [];
@@ -152,6 +169,7 @@ async function paginateResults(
     columns: columns ?? [],
     rows,
     count: rows.length,
+    numericColumns,
     truncated,
   };
 }

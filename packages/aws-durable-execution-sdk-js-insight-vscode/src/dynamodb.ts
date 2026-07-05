@@ -9,6 +9,8 @@ export interface DynamoDBQueryResult {
   columns: string[];
   rows: string[][];
   count: number;
+  /** Per-column numeric flag (aligned with `columns`) — see AthenaQueryResult.numericColumns. */
+  numericColumns: boolean[];
 }
 
 /**
@@ -34,7 +36,7 @@ export async function runDynamoDBQuery(opts: {
   const items = (result.Items ?? []).map((item) => unmarshall(item));
 
   if (items.length === 0) {
-    return { columns: [], rows: [], count: 0 };
+    return { columns: [], rows: [], count: 0, numericColumns: [] };
   }
 
   // Collect all unique keys across all items as columns
@@ -69,7 +71,21 @@ export async function runDynamoDBQuery(opts: {
     }),
   );
 
-  return { columns, rows, count: items.length };
+  // A column is numeric only if every present value in it is a JS number
+  // (unmarshall returns numbers for DynamoDB N attributes) — so the display
+  // rows above keep the string form, but run_javascript can coerce these back.
+  const numericColumns = columns.map((col) => {
+    let sawNumber = false;
+    for (const item of items) {
+      const val = item[col];
+      if (val == null) continue;
+      if (typeof val === "number") sawNumber = true;
+      else return false;
+    }
+    return sawNumber;
+  });
+
+  return { columns, rows, count: items.length, numericColumns };
 }
 
 /**

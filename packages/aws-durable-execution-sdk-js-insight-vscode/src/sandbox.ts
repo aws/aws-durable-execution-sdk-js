@@ -43,7 +43,7 @@ export interface SandboxResult {
 
 export async function runSandboxedJs(
   code: string,
-  data: { rows: Array<Record<string, string>>; columns: string[] },
+  data: { rows: Array<Record<string, unknown>>; columns: string[] },
   opts?: { timeoutMs?: number; memoryBytes?: number },
 ): Promise<SandboxResult> {
   const timeoutMs = opts?.timeoutMs ?? 3000;

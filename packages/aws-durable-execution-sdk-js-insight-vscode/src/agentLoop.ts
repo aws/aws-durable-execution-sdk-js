@@ -91,7 +91,7 @@ const RUN_JAVASCRIPT_TOOL: Tool = {
   toolSpec: {
     name: "run_javascript",
     description:
-      "Transform or compute over the rows returned by your most recent run_query, using JavaScript, when it's awkward to express in the query language (reshaping, custom aggregation, deriving values). `rows` holds ALL rows of that result (up to a large cap), not just the small sample shown in the query result — so aggregations cover the full set. The code runs as a function body with `rows` (an array of row objects keyed by column name) and `columns` (array of names) in scope, and must `return` its result. It is sandboxed: no filesystem, network, or host access — pure computation over the provided rows only. Run a query first so there is data to operate on. If the result reports it was truncated, prefer expressing the aggregate in the query (SQL) for an exact answer.",
+      "Transform or compute over the rows returned by your most recent run_query, using JavaScript, when it's awkward to express in the query language (reshaping, custom aggregation, deriving values). `rows` holds ALL rows of that result (up to a large cap), not just the small sample shown in the query result — so aggregations cover the full set. The code runs as a function body with `rows` (an array of row objects keyed by column name) and `columns` (array of names) in scope, and must `return` its result. Cell values are typed by the source: numeric columns are JavaScript numbers (so `rows.reduce((a, r) => a + r.durationMs, 0)` sums correctly), everything else is a string — if unsure, wrap with Number() before arithmetic. It is sandboxed: no filesystem, network, or host access — pure computation over the provided rows only. Run a query first so there is data to operate on. If the result reports it was truncated, prefer expressing the aggregate in the query (SQL) for an exact answer.",
     inputSchema: {
       json: {
         type: "object",
@@ -124,6 +124,12 @@ export interface AgentQueryResult {
    */
   allRows?: string[][];
   rowCount: number;
+  /**
+   * Per-column numeric-type flag (aligned with `columns`). Result cells arrive
+   * as strings; this lets run_javascript coerce numeric columns back to real
+   * numbers so the model's arithmetic works instead of string-concatenating.
+   */
+  numericColumns?: boolean[];
   /**
    * True if the result was capped at the host row limit — `rowCount` is then a
    * floor (the real result has more rows), not the exact total.
@@ -229,7 +235,13 @@ export async function runAgentLoop(
   // Holds the fuller row set (allRows), the true total, and the source query
   // (to warn about a LIMIT), so JS operates on more than the display sample.
   let lastResult:
-    | { columns: string[]; rows: string[][]; totalRows: number; query: string }
+    | {
+        columns: string[];
+        rows: string[][];
+        totalRows: number;
+        query: string;
+        numericColumns?: boolean[];
+      }
     | undefined;
 
   // Handle one run_query tool-use: run it (with oscillation guard), update
@@ -281,6 +293,7 @@ export async function runAgentLoop(
           rows: result.allRows ?? result.rows,
           totalRows: result.rowCount,
           query,
+          numericColumns: result.numericColumns,
         };
       }
     }
@@ -320,10 +333,20 @@ export async function runAgentLoop(
     } else if (!lastResult) {
       payload = { error: "No data yet — run a query with run_query first." };
     } else {
+      const numericColumns = lastResult.numericColumns;
       const objectRows = lastResult.rows.map((r) => {
-        const obj: Record<string, string> = {};
+        const obj: Record<string, unknown> = {};
         lastResult!.columns.forEach((c, idx) => {
-          obj[c] = r[idx] ?? "";
+          const raw = r[idx];
+          if (numericColumns?.[idx] && raw != null && raw !== "") {
+            // The source declared this column numeric; give the sandbox a real
+            // number so arithmetic (sum/avg) works instead of string concat.
+            // Fall back to the raw string if it somehow doesn't parse.
+            const n = Number(raw);
+            obj[c] = Number.isNaN(n) ? raw : n;
+          } else {
+            obj[c] = raw ?? "";
+          }
         });
         return obj;
       });

@@ -14,14 +14,21 @@ jest.mock("@aws-sdk/client-glue", () => ({
 import { runAthenaQuery } from "./athena";
 
 /** Build a GetQueryResults page. The first page carries the header row. */
-function page(dataRows: string[][], withHeader: boolean, nextToken?: string) {
+function page(
+  dataRows: string[][],
+  withHeader: boolean,
+  nextToken?: string,
+  columnType = "varchar",
+) {
   const rows = dataRows.map((r) => ({
     Data: r.map((v) => ({ VarCharValue: v })),
   }));
   return {
     ResultSet: {
       Rows: withHeader ? [{ Data: [{ VarCharValue: "col1" }] }, ...rows] : rows,
-      ResultSetMetadata: { ColumnInfo: [{ Name: "col1" }] },
+      ResultSetMetadata: {
+        ColumnInfo: [{ Name: "col1", Type: columnType }],
+      },
     },
     NextToken: nextToken,
   };
@@ -86,5 +93,25 @@ describe("runAthenaQuery: row cap", () => {
     const res = await runAthenaQuery(base);
     expect(res.count).toBe(5);
     expect(res.truncated).toBe(false);
+  });
+});
+
+describe("runAthenaQuery: numeric column detection", () => {
+  it("flags a bigint column as numeric", async () => {
+    wireClient([page([["1"], ["2"]], true, undefined, "bigint")]);
+    const res = await runAthenaQuery(base);
+    expect(res.numericColumns).toEqual([true]);
+  });
+
+  it("does not flag a varchar column as numeric", async () => {
+    wireClient([page([["a"]], true, undefined, "varchar")]);
+    const res = await runAthenaQuery(base);
+    expect(res.numericColumns).toEqual([false]);
+  });
+
+  it("does not flag a timestamp column as numeric", async () => {
+    wireClient([page([["2026-01-01"]], true, undefined, "timestamp")]);
+    const res = await runAthenaQuery(base);
+    expect(res.numericColumns).toEqual([false]);
   });
 });
