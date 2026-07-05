@@ -195,6 +195,13 @@ export async function runAgentLoop(
     tableName: opts.tableName,
     toolMode: "agent",
   });
+  // priorTurns MUST be a strictly alternating user,assistant,… sequence ending
+  // with an assistant turn, so that appending the new user question below
+  // yields the user/assistant alternation Bedrock Converse requires (it rejects
+  // consecutive same-role messages). recordTurn() upholds this: it always
+  // pushes a user+assistant pair and slices to an even MAX_TURNS. If you change
+  // how turns are recorded, preserve that invariant or this Converse call will
+  // start failing.
   const messages: Message[] = [
     ...(opts.priorTurns ?? []).map((t) => ({
       role: t.role,
