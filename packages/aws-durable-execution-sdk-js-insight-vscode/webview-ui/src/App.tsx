@@ -62,7 +62,6 @@ export function App() {
   const [modelDownloaded, setModelDownloaded] = useState(false);
   const [downloadPercent, setDownloadPercent] = useState(0);
   const [page, setPage] = useState<Page>("data");
-  const [explanation, setExplanation] = useState("");
   const [sqsMessages, setSqsMessages] = useState<SqsMessageRow[]>([]);
   const [sqsListening, setSqsListening] = useState(false);
   const [detailFields, setDetailFields] = useState<Record<string, string> | null>(null);
@@ -102,9 +101,8 @@ export function App() {
           hiddenColumns: msg.hiddenColumns,
           explanation: msg.explanation ?? "",
         };
-        // Top-level results still drive basic mode and the Visualize page.
+        // Top-level results still drive the Visualize page.
         setResults(payload);
-        setExplanation(msg.explanation ?? "");
         setStatus("");
         setLoading(false);
         // Advanced mode: attach this table (and the steps that produced it) to
@@ -170,7 +168,6 @@ export function App() {
         setChat([]);
         setResults(null);
         setAgentSteps([]);
-        setExplanation("");
         setDetailFields(null);
         break;
       case "error":
@@ -228,7 +225,6 @@ export function App() {
     setResults(null);
     setAgentSteps([]);
     stepsRef.current = [];
-    setExplanation("");
     setDetailFields(null);
     setError("");
     answeredRef.current = false;
@@ -252,13 +248,11 @@ export function App() {
           variant="h1"
           actions={
             <SpaceBetween direction="horizontal" size="xs">
-              {settings.agenticMode === "advanced" &&
-                settings.destinationType !== "sqs" &&
-                chat.length > 0 && (
-                  <Button iconName="add-plus" onClick={handleNewSession}>
-                    New session
-                  </Button>
-                )}
+              {settings.destinationType !== "sqs" && chat.length > 0 && (
+                <Button iconName="add-plus" onClick={handleNewSession}>
+                  New session
+                </Button>
+              )}
               <Button iconName="settings" variant="icon" onClick={() => setSettingsOpen(true)} />
             </SpaceBetween>
           }
@@ -300,40 +294,7 @@ export function App() {
           </>
         ) : (
           <>
-            {page === "data" && settings.agenticMode !== "advanced" && (
-              <>
-                <QueryPanel
-                  onAsk={handleAsk}
-                  loading={loading}
-                  status={status}
-                  error={error}
-                />
-
-                <AgentTranscript steps={agentSteps} running={loading} />
-
-                {results && (
-                  <SpaceBetween size="m">
-                    <ResultsTable
-                      columns={results.columns}
-                      rows={results.rows}
-                      explanation={explanation}
-                      idColumn={results.idColumn}
-                      partitionColumns={results.partitionColumns}
-                      hiddenColumns={results.hiddenColumns}
-                      detailFields={detailFields}
-                      detailLoading={detailLoading}
-                      onDetailFetchStart={() => setDetailLoading(true)}
-                      onDetailDismiss={() => setDetailFields(null)}
-                    />
-                    <Button variant="primary" onClick={() => setPage("visualize")}>
-                      Visualize →
-                    </Button>
-                  </SpaceBetween>
-                )}
-              </>
-            )}
-
-            {page === "data" && settings.agenticMode === "advanced" && (
+            {page === "data" && (
               <>
                 {chat.length > 0 && (
                   <Container header={<Header variant="h3">Conversation</Header>}>
@@ -388,7 +349,6 @@ export function App() {
                                   <Button
                                     onClick={() => {
                                       setResults(turn.results!);
-                                      setExplanation(turn.results!.explanation ?? "");
                                       setPage("visualize");
                                     }}
                                   >
@@ -415,7 +375,6 @@ export function App() {
                   loading={loading}
                   status={status}
                   error={error}
-                  compact
                 />
               </>
             )}

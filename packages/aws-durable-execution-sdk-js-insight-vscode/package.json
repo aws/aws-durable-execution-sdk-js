@@ -152,31 +152,18 @@
           "default": "us.anthropic.claude-sonnet-4-20250514-v1:0",
           "description": "Amazon Bedrock model id (or inference profile id) used to convert English to a Logs Insights query."
         },
-        "workflowInsight.agenticMode": {
-          "type": "string",
-          "default": "basic",
-          "enum": [
-            "basic",
-            "advanced"
-          ],
-          "enumDescriptions": [
-            "Basic — generate one query, run it, and retry only if the query itself errors. Fastest and cheapest.",
-            "Advanced (agentic) — after a query runs, the model judges whether the results actually answer your question and refines the query if not, iterating a few times. Slower and uses more model/query calls (billable), best for exploratory questions. Bedrock recommended."
-          ],
-          "description": "How autonomously the assistant works to answer a question. 'advanced' adds a result-verification loop on top of 'basic'."
-        },
         "workflowInsight.agenticMaxIterations": {
           "type": "number",
           "default": 8,
           "minimum": 1,
           "maximum": 20,
-          "description": "Advanced mode only: the maximum number of run→verify→refine rounds the assistant will attempt for one question before stopping. Higher values let it work harder on difficult questions but cost more model/query calls (billable). The loop also stops early if it starts repeating a query it already tried."
+          "description": "The maximum number of run→verify→refine rounds the assistant will attempt for one question before stopping. Higher values let it work harder on difficult questions but cost more model/query calls (billable). The loop also stops early if it starts repeating a query it already tried."
         },
         "workflowInsight.agenticMaxScannedMB": {
           "type": "number",
           "default": 2048,
           "minimum": 1,
-          "description": "Advanced mode only (Amazon Athena / S3 destination): cumulative Athena data-scanned budget in MB across all queries the assistant runs for one question. When exceeded, the agent stops exploring and returns its best result so far — guards against an autonomous multi-query loop running up Athena scan cost. Ignored for non-Athena destinations."
+          "description": "Amazon Athena / S3 destination only: cumulative Athena data-scanned budget in MB across all queries the assistant runs for one question. When exceeded, the agent stops exploring and returns its best result so far — guards against an autonomous multi-query loop running up Athena scan cost. Ignored for non-Athena destinations."
         }
       }
     }

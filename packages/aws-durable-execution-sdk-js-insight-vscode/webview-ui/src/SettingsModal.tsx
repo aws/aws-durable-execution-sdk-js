@@ -193,38 +193,18 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
             content: (
               <SpaceBetween size="m">
                 <FormField
-                  label="Agentic Mode"
-                  description="Basic runs one query (retrying only on query errors). Advanced adds a loop where the model checks whether the results answer your question and refines the query if not — slower and uses more model/query calls, best for exploratory questions."
+                  label="Max Iterations"
+                  description="Most run→verify→refine rounds for one question (1–20). Higher digs harder on tough questions but costs more model/query calls. The loop also stops early if it repeats a query."
                 >
-                  <Select
-                    selectedOption={
-                      form.agenticMode === "advanced"
-                        ? { value: "advanced", label: "Advanced (agentic — verify & refine)" }
-                        : { value: "basic", label: "Basic (single query + error retry)" }
-                    }
-                    options={[
-                      { value: "basic", label: "Basic (single query + error retry)" },
-                      { value: "advanced", label: "Advanced (agentic — verify & refine)" },
-                    ]}
-                    onChange={({ detail }) => update("agenticMode", detail.selectedOption.value ?? "basic")}
+                  <Input
+                    type="number"
+                    value={form.agenticMaxIterations}
+                    onChange={({ detail }) => update("agenticMaxIterations", detail.value)}
+                    placeholder="8"
                   />
                 </FormField>
 
-                {form.agenticMode === "advanced" && (
-                  <FormField
-                    label="Max Iterations"
-                    description="Most run→verify→refine rounds for one question (1–20). Higher digs harder on tough questions but costs more model/query calls. The loop also stops early if it repeats a query."
-                  >
-                    <Input
-                      type="number"
-                      value={form.agenticMaxIterations}
-                      onChange={({ detail }) => update("agenticMaxIterations", detail.value)}
-                      placeholder="8"
-                    />
-                  </FormField>
-                )}
-
-                {form.agenticMode === "advanced" && form.destinationType === "s3" && (
+                {form.destinationType === "s3" && (
                   <FormField
                     label="Athena Scan Budget (MB)"
                     description="Cumulative Athena data-scanned budget across all queries the assistant runs for one question. It stops exploring once this is exceeded, to bound cost."

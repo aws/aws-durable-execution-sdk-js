@@ -139,7 +139,6 @@ export interface Settings {
   llmProvider: string;
   awsProfile: string;
   bedrockModelId: string;
-  agenticMode: string;
   agenticMaxIterations: string;
   agenticMaxScannedMB: string;
 }
@@ -163,7 +162,6 @@ export const DEFAULT_SETTINGS: Settings = {
   llmProvider: "bedrock",
   awsProfile: "",
   bedrockModelId: "us.anthropic.claude-sonnet-4-20250514-v1:0",
-  agenticMode: "basic",
   agenticMaxIterations: "8",
   agenticMaxScannedMB: "2048",
 };

@@ -217,7 +217,6 @@ class ExplorerPanel {
         llmProvider: cfg.llmProvider,
         awsProfile: cfg.awsProfile ?? "",
         bedrockModelId: cfg.bedrockModelId,
-        agenticMode: cfg.agenticMode,
         agenticMaxIterations: String(cfg.agenticMaxIterations),
         agenticMaxScannedMB: String(cfg.agenticMaxScannedMB),
       },
@@ -397,70 +396,18 @@ class ExplorerPanel {
             ? cfg.athenaTable
             : undefined;
 
-    // "advanced" (agentic) mode adds a result-verification/refine loop on top
-    // of the basic flow. Basic mode is unchanged — same single generation,
-    // same run, same error-only retry.
-    if (cfg.agenticMode === "advanced") {
-      return await this.onGenerateAgentic(q, cfg, credentials, tableName);
-    }
-
-    this.post({ type: "status", text: "Generating query..." });
-    let generated = await generateQuery({
-      provider: cfg.llmProvider,
-      region: cfg.region,
-      credentials,
-      modelId: cfg.bedrockModelId,
-      question: q,
-      destinationType: cfg.destinationType,
-      tableName,
-    });
-    console.log(
-      "[insight] LLM response:",
-      JSON.stringify({
-        query: generated.query.substring(0, 80),
-        suggestedCharts: generated.suggestedCharts,
-      }),
-    );
-
-    for (let attempt = 0; attempt < 3; attempt++) {
-      this.post({
-        type: "status",
-        text: attempt === 0 ? "Running query..." : `Retrying (${attempt}/2)...`,
-      });
-      try {
-        const exec = await this.executeQuery(cfg, credentials, generated);
-        this.post({ type: "results", ...exec });
-        return;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (isRetryableQueryError(msg) && attempt < 2) {
-          this.post({
-            type: "status",
-            text: "Query failed, asking Bedrock to fix...",
-          });
-          generated = await generateQuery({
-            provider: cfg.llmProvider,
-            region: cfg.region,
-            credentials,
-            modelId: cfg.bedrockModelId,
-            question: `${q}\n\nThe previous query failed with this error: ${msg}${columnNotFoundHint(msg)}\nPlease fix the query.`,
-            destinationType: cfg.destinationType,
-            tableName,
-          });
-          continue;
-        }
-        throw err;
-      }
-    }
+    // The assistant always works agentically. The dispatch inside picks the
+    // Bedrock multi-step tool loop or the verify/refine loop by provider.
+    return await this.onGenerateAgentic(q, cfg, credentials, tableName);
   }
 
   /**
-   * Advanced ("agentic") generation: run the query, then ask the model whether
-   * the results actually answer the question; if not, refine the query and try
-   * again, up to a small cap. Emits "agentStep" transcript messages so the
-   * webview can show the loop's progress. Read-only enforcement, identifier
-   * injection, and partition pruning are identical to basic mode (both go
-   * through executeQuery). Only reached when agenticMode === "advanced".
+   * Agentic generation: run the query, then ask the model whether the results
+   * actually answer the question; if not, refine the query and try again, up
+   * to a small cap. Emits "agentStep" transcript messages so the webview can
+   * show the loop's progress. Read-only enforcement, identifier injection, and
+   * partition pruning all go through executeQuery. Dispatches to the Bedrock
+   * multi-step tool loop when available.
    */
   private async onGenerateAgentic(
     q: string,
