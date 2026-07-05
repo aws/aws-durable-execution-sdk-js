@@ -10,6 +10,22 @@
  *   query operations by name via a JSONB/JSONPath predicate on the array.
  */
 
+/**
+ * The record destination a query targets. This is the single source of truth
+ * for the union (schema.ts is vscode-free, so config/llm/agentLoop can all
+ * import it without pulling in the VS Code API). "sqs" isn't independently
+ * queryable — it falls through to the logs-insights prompt like the log
+ * exporters — but it's included so callers can pass InsightConfig's value
+ * without a cast.
+ */
+export type DestinationType =
+  | "cloudwatch-logs-exporter"
+  | "lambda-log-exporter"
+  | "dynamodb"
+  | "aurora"
+  | "sqs"
+  | "s3";
+
 // ─── DIRECT (CloudWatchLogsExporter) ─────────────────────────────────────────
 
 const RECORD_SCHEMA_DIRECT = `Each log event is a raw JSON WorkflowInsightRecord with fields at the top level:
@@ -447,12 +463,7 @@ const AGENT_INSTRUCTION = [
 ].join("\n");
 
 export function buildSystemPrompt(
-  destinationType:
-    | "cloudwatch-logs-exporter"
-    | "lambda-log-exporter"
-    | "dynamodb"
-    | "aurora"
-    | "s3",
+  destinationType: DestinationType,
   options?: {
     tableName?: string;
     agentic?: boolean;

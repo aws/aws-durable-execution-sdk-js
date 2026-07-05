@@ -1,17 +1,12 @@
 import * as vscode from "vscode";
 import { fromIni, fromNodeProviderChain } from "@aws-sdk/credential-providers";
 import type { AwsCredentialIdentityProvider } from "@aws-sdk/types";
+import type { DestinationType } from "./schema";
 
 export interface InsightConfig {
   region: string;
   logGroupNames: string[];
-  destinationType:
-    | "cloudwatch-logs-exporter"
-    | "lambda-log-exporter"
-    | "dynamodb"
-    | "aurora"
-    | "sqs"
-    | "s3";
+  destinationType: DestinationType;
   dynamodbTableName: string;
   auroraResourceArn: string;
   auroraSecretArn: string;

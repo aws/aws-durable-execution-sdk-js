@@ -52,7 +52,7 @@ function baseOpts(overrides: Record<string, unknown> = {}) {
     credentials: {} as never,
     modelId: "model",
     question: "the question",
-    destinationType: "s3",
+    destinationType: "s3" as const,
     tableName: "workflow_insight",
     maxIterations: 8,
     onStep: jest.fn(),

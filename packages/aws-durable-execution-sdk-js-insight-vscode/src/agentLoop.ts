@@ -7,7 +7,7 @@ import {
   type ToolUseBlock,
 } from "@aws-sdk/client-bedrock-runtime";
 import type { AwsCredentialIdentityProvider } from "@aws-sdk/types";
-import { buildSystemPrompt } from "./schema";
+import { buildSystemPrompt, type DestinationType } from "./schema";
 import { runSandboxedJs } from "./sandbox";
 
 // ─── Multi-turn agent loop (advanced mode, Bedrock, SQL destinations) ─────────
@@ -162,7 +162,7 @@ interface AgentLoopOptions {
   credentials: AwsCredentialIdentityProvider;
   modelId: string;
   question: string;
-  destinationType: string;
+  destinationType: DestinationType;
   tableName?: string;
   runQuery: RunQueryFn;
   onStep: (event: AgentStepEvent) => void;
@@ -195,7 +195,7 @@ export async function runAgentLoop(
     region: opts.region,
     credentials: opts.credentials,
   });
-  const system = buildSystemPrompt(opts.destinationType as never, {
+  const system = buildSystemPrompt(opts.destinationType, {
     tableName: opts.tableName,
     toolMode: "agent",
   });

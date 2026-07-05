@@ -6,7 +6,7 @@ import {
   type Tool,
 } from "@aws-sdk/client-bedrock-runtime";
 import type { AwsCredentialIdentityProvider } from "@aws-sdk/types";
-import { buildSystemPrompt } from "./schema";
+import { buildSystemPrompt, type DestinationType } from "./schema";
 import {
   parseVerdict,
   buildVerifyInstruction,
@@ -287,7 +287,7 @@ interface GenerateOptions {
   credentials: AwsCredentialIdentityProvider;
   modelId: string;
   question: string;
-  destinationType: string;
+  destinationType: DestinationType;
   tableName?: string;
   onStatus?: (text: string) => void;
   /**
@@ -324,7 +324,7 @@ async function generateViaBedrock(
     region: opts.region,
     credentials: opts.credentials,
   });
-  const systemPrompt = buildSystemPrompt(opts.destinationType as any, {
+  const systemPrompt = buildSystemPrompt(opts.destinationType, {
     tableName: opts.tableName,
     agentic: opts.agentic,
   });
@@ -394,7 +394,7 @@ async function generateViaCopilot(
   }
 
   const model = models[0];
-  const systemPrompt = buildSystemPrompt(opts.destinationType as any, {
+  const systemPrompt = buildSystemPrompt(opts.destinationType, {
     tableName: opts.tableName,
     agentic: opts.agentic,
   });
@@ -631,7 +631,7 @@ async function generateViaLocal(
     contextSequence: context.getSequence(),
   });
 
-  const systemPrompt = buildSystemPrompt(opts.destinationType as any, {
+  const systemPrompt = buildSystemPrompt(opts.destinationType, {
     tableName: opts.tableName,
     agentic: opts.agentic,
   });
