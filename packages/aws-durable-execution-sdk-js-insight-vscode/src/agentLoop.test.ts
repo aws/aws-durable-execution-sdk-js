@@ -283,3 +283,29 @@ describe("runAgentLoop: parallel tool use", () => {
     expect(ids).toEqual(["t1", "t2"]);
   });
 });
+
+// ─── query budget (bounds parallel tool calls) ─────────────────────────────────
+
+describe("runAgentLoop: query budget", () => {
+  it("stops once the query budget is reached, even within one parallel turn", async () => {
+    // One turn emits two parallel run_query blocks; with maxIterations=2 the
+    // budget is hit after that turn, so no further Converse turn is requested.
+    mockSend
+      .mockResolvedValueOnce(
+        assistantTurn(
+          toolUse("run_query", { query: "Q1" }, "t1"),
+          toolUse("run_query", { query: "Q2" }, "t2"),
+        ),
+      )
+      .mockResolvedValueOnce(
+        assistantTurn(toolUse("run_query", { query: "Q3" }, "t3")),
+      );
+    const opts = baseOpts({
+      maxIterations: 2,
+      runQuery: jest.fn(async () => OK_RESULT),
+    });
+    await runAgentLoop(opts);
+    expect(opts.runQuery).toHaveBeenCalledTimes(2);
+    expect(mockSend).toHaveBeenCalledTimes(1); // second turn never requested
+  });
+});

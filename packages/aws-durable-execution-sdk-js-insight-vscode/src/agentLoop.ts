@@ -215,6 +215,11 @@ export async function runAgentLoop(
   ];
   const tried = new Set<string>();
   let lastGoodQuery: string | undefined;
+  // Number of queries actually executed (not counting oscillation-blocked
+  // repeats). A single Converse turn can emit several parallel run_query
+  // blocks, so we bound QUERIES — the Athena-billing-relevant unit — by
+  // maxIterations, not just Converse turns.
+  let queriesRun = 0;
   // The most recent run_query result, so run_javascript can compute over it.
   // Holds the fuller row set (allRows), the true total, and the source query
   // (to warn about a LIMIT), so JS operates on more than the display sample.
@@ -262,6 +267,7 @@ export async function runAgentLoop(
       };
     } else {
       tried.add(norm);
+      queriesRun += 1;
       result = await opts.runQuery(query, lookbackHours);
       if (!result.error) {
         lastGoodQuery = query;
@@ -459,6 +465,17 @@ export async function runAgentLoop(
       toolResults.push(toolResultBlock(tu, payload));
     }
     messages.push({ role: "user", content: toolResults });
+
+    // Bound total queries (not just Converse turns): a turn with several
+    // parallel run_query blocks could otherwise run more Athena scans than the
+    // configured cap.
+    if (queriesRun >= opts.maxIterations) {
+      opts.onStep({
+        kind: "note",
+        detail: `Reached the query budget (${opts.maxIterations}); stopping and answering from what was gathered.`,
+      });
+      break;
+    }
   }
 
   // Ran out of iterations / stopped without an explicit finish. Fall back to

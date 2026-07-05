@@ -172,7 +172,7 @@
           "default": 8,
           "minimum": 1,
           "maximum": 20,
-          "description": "The maximum number of run→verify→refine rounds the assistant will attempt for one question before stopping. Higher values let it work harder on difficult questions but cost more model/query calls (billable). The loop also stops early if it starts repeating a query it already tried. This is the universal cost/effort guard — it applies to every data source. NOTE: it bounds the NUMBER of queries, not the data scanned per query. For the S3/Athena destination, also set a per-query scan cap on your Athena workgroup (bytes_scanned_cutoff_per_query) to bound scan cost — the assistant issues model-authored queries autonomously up to this iteration count."
+          "description": "The maximum number of queries the assistant will run for one question before stopping — one per verify/refine round, or per agent-loop query with parallel tool calls counted individually. Higher values let it work harder on difficult questions but cost more model/query calls (billable). The loop also stops early if it starts repeating a query it already tried. This is the universal cost/effort guard — it applies to every data source. NOTE: it bounds the NUMBER of queries, not the data scanned per query. For the S3/Athena destination, also set a per-query scan cap on your Athena workgroup (bytes_scanned_cutoff_per_query) to bound scan cost."
         }
       }
     }
