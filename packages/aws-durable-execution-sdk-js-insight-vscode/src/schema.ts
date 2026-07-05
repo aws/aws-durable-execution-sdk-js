@@ -322,7 +322,7 @@ Rules:
 - json_extract_scalar(col, '$.path') returns a scalar string; json_extract(col, '$.path') returns JSON — cast as needed, e.g. CAST(json_extract_scalar(...) AS double).
 - Every path segment passed to json_extract_scalar/json_extract on input or output MUST be lowercase (the SerDe lowercases JSON keys on read) — e.g. '$.claimtype' not '$.claimType'.
 - A field that lives inside input/output (e.g. claimType, decision, amount) is NEVER a bare column — it does not exist as a plain identifier anywhere in this table, including in GROUP BY, ORDER BY, and WHERE. Referencing it bare (e.g. "GROUP BY claimType" or "GROUP BY claim_type") fails with COLUMN_NOT_FOUND. Always wrap it in json_extract_scalar(input, '$.path') / json_extract_scalar(output, '$.path') — and repeat that full expression everywhere it's used (SELECT, GROUP BY, ORDER BY, WHERE), not just an alias, since GROUP BY/ORDER BY must reference the actual computed expression.
-- Prefer filtering on the year/month/day partition columns when the question implies a time range, to avoid scanning the whole bucket (cost + speed).
+- COST — Athena bills by BYTES SCANNED and this table is partitioned by year/month/day. Do NOT let exploration scans hit the whole bucket: constrain EXPLORATION / sampling queries (shape discovery, key enumeration, quick LIMIT peeks) to a recent partition — add WHERE year = '<latest>' AND month = '<latest>' [AND day = '<latest>'] — so they scan one small slice. If you don't know the latest partition, find it first with a cheap query on the partition columns only (e.g. SELECT year, month, day FROM TABLE_NAME GROUP BY year, month, day ORDER BY year DESC, month DESC, day DESC LIMIT 1 — partition columns are metadata, so this scans almost nothing), then filter subsequent exploration to it. A shape sample does not need all-time data. Reserve an unpartitioned / all-time scan for the FINAL answer query, and only when the question genuinely needs full coverage. When the question implies a specific time range, filter year/month/day to match it.
 - There is NO json_keys function in Athena/Trino. To list/enumerate the top-level KEYS of an input or output JSON object, parse it to a map and take its keys: map_keys(CAST(json_parse(input) AS MAP(VARCHAR, JSON))). This returns an array<varchar>; UNNEST it to get one key per row. Enumerated keys come back lowercased (same SerDe behavior as values).
 - SELECT DISTINCT has a Trino constraint: every ORDER BY expression MUST also appear in the SELECT list (otherwise EXPRESSION_NOT_IN_DISTINCT). For a "distinct values" question, either drop the ORDER BY, or order by a column you're already selecting. To apply a row limit BEFORE de-duplicating (e.g. "distinct keys across the last 10 executions"), put the LIMIT/ORDER BY in a subquery and de-duplicate in the outer query.
 - String comparisons use single quotes: WHERE status = 'SUCCEEDED'
@@ -415,6 +415,12 @@ const AGENT_INSTRUCTION = [
   "  JSON-valued fields like input/output — using the techniques for THIS",
   "  query language described above. NEVER guess a field/key name; verify it",
   "  exists first, then build the query that uses it.",
+  "  Keep exploration cheap: when the data source is partitioned or",
+  "  time-windowed, constrain sampling / shape-discovery queries to a recent",
+  "  slice (e.g. the latest partition or a short lookback) instead of scanning",
+  "  everything — a shape sample doesn't need all-time data. Reserve a full /",
+  "  all-time scan for the final query, and only when the question truly needs",
+  "  complete coverage.",
   "- finish: call this once you can answer the user. ALWAYS include `answer`: a",
   "  conversational, natural-language reply that directly addresses the question.",
   "  When you also return a `query`, its result rows are shown to the user in a",
