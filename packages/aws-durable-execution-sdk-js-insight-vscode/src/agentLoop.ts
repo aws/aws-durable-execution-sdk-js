@@ -220,7 +220,10 @@ export async function runAgentLoop(
         toolConfig: {
           tools: [RUN_QUERY_TOOL, RUN_JAVASCRIPT_TOOL, FINISH_TOOL],
         },
-        inferenceConfig: { maxTokens: 1024, temperature: 0 },
+        // Generous cap: a finish call can carry answer + a multi-line query +
+        // explanation + suggestedCharts, plus run_javascript can emit a chunk
+        // of code — 1024 could truncate those mid-tool-call.
+        inferenceConfig: { maxTokens: 4096, temperature: 0 },
       }),
     );
     const message = response.output?.message;
