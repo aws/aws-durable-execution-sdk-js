@@ -143,7 +143,7 @@
           "enumDescriptions": [
             "Amazon Bedrock (Converse API) — requires AWS credentials and model access",
             "GitHub Copilot (VS Code Language Model API) — requires Copilot subscription",
-            "Local LLM (Qwen2.5-Coder-3B) — runs offline, downloads model on first use (~2.2 GB)"
+            "Local LLM — runs offline, downloads the model on first use. Model is configurable via workflowInsight.localModel (default: Llama-3-Groq-8B Tool-Use, ~4.9 GB)."
           ],
           "description": "Which LLM to use for converting questions to queries."
         },
