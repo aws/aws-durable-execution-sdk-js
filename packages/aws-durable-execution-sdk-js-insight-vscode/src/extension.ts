@@ -218,7 +218,6 @@ class ExplorerPanel {
         awsProfile: cfg.awsProfile ?? "",
         bedrockModelId: cfg.bedrockModelId,
         agenticMaxIterations: String(cfg.agenticMaxIterations),
-        agenticMaxScannedMB: String(cfg.agenticMaxScannedMB),
       },
       modelDownloaded: isModelDownloaded(),
     });
@@ -238,9 +237,6 @@ class ExplorerPanel {
       if (key === "sqsDeleteAfterRead") {
         coerced = value === "true";
       } else if (key === "agenticMaxIterations") {
-        const n = Number(value);
-        coerced = Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
-      } else if (key === "agenticMaxScannedMB") {
         const n = Number(value);
         coerced = Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
       } else {
@@ -641,14 +637,12 @@ class ExplorerPanel {
             ? cfg.athenaTable
             : undefined;
 
-    const maxScannedBytes = cfg.agenticMaxScannedMB * 1024 * 1024;
-    let scannedBytes = 0;
     let iteration = 0;
 
     // Each run_query the model issues: run it read-only, no drill-down
     // injection, return a bounded sample. lookbackHours (log-based sources
-    // only) sets the search window. Enforce the cumulative Athena scan budget
-    // so an autonomous loop can't run up cost.
+    // only) sets the search window. The number of queries is bounded by
+    // agenticMaxIterations (the universal, source-agnostic cost/effort guard).
     const runQuery = async (
       query: string,
       lookbackHours?: number,
@@ -664,18 +658,10 @@ class ExplorerPanel {
           },
           { injectDrillDown: false },
         );
-        if (typeof exec.dataScannedBytes === "number") {
-          scannedBytes += exec.dataScannedBytes;
-        }
-        const overBudget = scannedBytes > maxScannedBytes;
         return {
           columns: exec.columns,
           rows: exec.rows.slice(0, 20),
           rowCount: exec.count ?? exec.rows.length,
-          stop: overBudget,
-          stopReason: overBudget
-            ? `Athena scan budget of ${cfg.agenticMaxScannedMB} MB reached; stopping.`
-            : undefined,
         };
       } catch (err) {
         return {
@@ -740,7 +726,7 @@ class ExplorerPanel {
       this.post({
         type: "error",
         message:
-          "The assistant couldn't arrive at a query that answers this question. Try rephrasing, or raise workflowInsight.agenticMaxIterations / agenticMaxScannedMB.",
+          "The assistant couldn't arrive at a query that answers this question. Try rephrasing, or raise workflowInsight.agenticMaxIterations.",
       });
       return;
     }
