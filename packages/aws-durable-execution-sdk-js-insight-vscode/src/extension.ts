@@ -7,6 +7,7 @@ import {
   analyzeResults,
   isModelDownloaded,
   ensureModel,
+  setLocalModel,
   type GeneratedQuery,
 } from "./llm";
 import {
@@ -38,7 +39,7 @@ type InboundMessage =
   | { type: "generate"; question: string }
   | { type: "newSession" }
   | { type: "saveSettings"; settings: Record<string, string> }
-  | { type: "downloadModel" }
+  | { type: "downloadModel"; localModel?: string }
   | { type: "exportChart"; format: "svg" | "png"; content: string }
   | { type: "startListening" }
   | { type: "stopListening" }
@@ -183,7 +184,7 @@ class ExplorerPanel {
         case "saveSettings":
           return await this.onSaveSettings(msg.settings);
         case "downloadModel":
-          return await this.onDownloadModel();
+          return await this.onDownloadModel(msg.localModel);
         case "exportChart":
           return await this.onExportChart(msg.format, msg.content);
         case "startListening":
@@ -209,6 +210,9 @@ class ExplorerPanel {
 
   private sendConfig(): void {
     const cfg = readConfig();
+    // Reflect the selected local model so isModelDownloaded() below (and any
+    // local generation) targets the right file.
+    setLocalModel(cfg.localModel);
     this.post({
       type: "config",
       settings: {
@@ -230,6 +234,7 @@ class ExplorerPanel {
         llmProvider: cfg.llmProvider,
         awsProfile: cfg.awsProfile ?? "",
         bedrockModelId: cfg.bedrockModelId,
+        localModel: cfg.localModel,
         agenticMaxIterations: String(cfg.agenticMaxIterations),
       },
       modelDownloaded: isModelDownloaded(),
@@ -314,7 +319,10 @@ class ExplorerPanel {
     }
   }
 
-  private async onDownloadModel(): Promise<void> {
+  private async onDownloadModel(localModel?: string): Promise<void> {
+    // Download the model the user picked in settings (may not be saved yet),
+    // falling back to the saved selection.
+    setLocalModel(localModel ?? readConfig().localModel);
     if (isModelDownloaded()) {
       this.post({ type: "downloadProgress", percent: 100, done: true });
       return;
@@ -395,6 +403,7 @@ class ExplorerPanel {
       return;
     }
     const cfg = readConfig();
+    setLocalModel(cfg.localModel);
     const credentials = resolveCredentials(cfg.awsProfile);
     const tableName =
       cfg.destinationType === "dynamodb"

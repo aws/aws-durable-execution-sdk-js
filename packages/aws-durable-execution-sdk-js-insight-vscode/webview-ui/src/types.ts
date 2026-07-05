@@ -4,7 +4,7 @@ export type OutboundMessage =
   | { type: "generate"; question: string }
   | { type: "newSession" }
   | { type: "saveSettings"; settings: Record<string, string> }
-  | { type: "downloadModel" }
+  | { type: "downloadModel"; localModel?: string }
   | { type: "startListening" }
   | { type: "stopListening" }
   | {
@@ -139,6 +139,7 @@ export interface Settings {
   llmProvider: string;
   awsProfile: string;
   bedrockModelId: string;
+  localModel: string;
   agenticMaxIterations: string;
 }
 
@@ -161,5 +162,6 @@ export const DEFAULT_SETTINGS: Settings = {
   llmProvider: "bedrock",
   awsProfile: "",
   bedrockModelId: "us.anthropic.claude-sonnet-4-20250514-v1:0",
+  localModel: "llama-3-groq-8b-tool-use",
   agenticMaxIterations: "8",
 };

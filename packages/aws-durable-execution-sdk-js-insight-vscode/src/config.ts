@@ -27,6 +27,7 @@ export interface InsightConfig {
   llmProvider: "bedrock" | "copilot" | "local";
   awsProfile?: string;
   bedrockModelId: string;
+  localModel: string;
   agenticMaxIterations: number;
 }
 
@@ -83,6 +84,8 @@ export function readConfig(): InsightConfig {
   const bedrockModelId =
     (c.get<string>("bedrockModelId") || "").trim() ||
     "us.anthropic.claude-sonnet-4-20250514-v1:0";
+  const localModel =
+    (c.get<string>("localModel") || "").trim() || "llama-3-groq-8b-tool-use";
   const rawMaxIter = c.get<number>("agenticMaxIterations");
   const agenticMaxIterations =
     typeof rawMaxIter === "number" && Number.isFinite(rawMaxIter)
@@ -108,6 +111,7 @@ export function readConfig(): InsightConfig {
     llmProvider,
     awsProfile,
     bedrockModelId,
+    localModel,
     agenticMaxIterations,
   };
 }

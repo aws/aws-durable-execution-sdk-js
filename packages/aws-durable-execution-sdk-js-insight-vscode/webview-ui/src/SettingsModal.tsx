@@ -30,6 +30,26 @@ const DEST_OPTIONS: SelectProps.Option[] = [
   { value: "sqs", label: "Amazon SQS (live view)" },
 ];
 
+// Mirrors LOCAL_MODEL_PRESETS in src/llm.ts (the webview can't import from the
+// extension host). Keep the values in sync.
+const LOCAL_MODEL_OPTIONS: SelectProps.Option[] = [
+  {
+    value: "llama-3-groq-8b-tool-use",
+    label: "Llama-3-Groq-8B Tool-Use",
+    description: "Best tool-calling (BFCL ~89%) · ~4.9 GB · needs ~6 GB RAM",
+  },
+  {
+    value: "phi-3.5-mini",
+    label: "Phi-3.5-mini",
+    description: "Smaller, strong quality-per-GB · ~2.4 GB",
+  },
+  {
+    value: "qwen2.5-coder-3b",
+    label: "Qwen2.5-Coder-3B",
+    description: "Smallest/fastest, weakest at tool use · ~2.2 GB",
+  },
+];
+
 export function SettingsModal({ visible, settings, modelDownloaded, downloadPercent, onDismiss, onSave }: Props) {
   const [form, setForm] = useState<Settings>(settings);
   const [downloading, setDownloading] = useState(false);
@@ -45,7 +65,7 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
 
   const handleDownload = () => {
     setDownloading(true);
-    postMessage({ type: "downloadModel" });
+    postMessage({ type: "downloadModel", localModel: form.localModel });
   };
 
   const dest = form.destinationType;
@@ -216,7 +236,7 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
                     options={[
                       { value: "bedrock", label: "Amazon Bedrock" },
                       { value: "copilot", label: "GitHub Copilot (VS Code built-in)" },
-                      { value: "local", label: "Local LLM (offline, ~2.2 GB download)" },
+                      { value: "local", label: "Local LLM (offline, on-device)" },
                     ]}
                     onChange={({ detail }) => update("llmProvider", detail.selectedOption.value ?? "bedrock")}
                   />
@@ -236,18 +256,39 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
 
                 {form.llmProvider === "local" && (
                   <SpaceBetween size="s">
+                    <FormField
+                      label="Local Model"
+                      description="Larger models answer better (especially multi-step tool use) but download bigger and need more RAM. Changing this may require a new download."
+                    >
+                      <Select
+                        selectedOption={
+                          LOCAL_MODEL_OPTIONS.find(
+                            (o) => o.value === form.localModel,
+                          ) ?? LOCAL_MODEL_OPTIONS[0]
+                        }
+                        options={LOCAL_MODEL_OPTIONS}
+                        onChange={({ detail }) => {
+                          setDownloading(false);
+                          update(
+                            "localModel",
+                            detail.selectedOption.value ?? "llama-3-groq-8b-tool-use",
+                          );
+                        }}
+                      />
+                    </FormField>
+
                     {modelDownloaded ? (
                       <Box color="text-status-success">✓ Model downloaded and ready.</Box>
                     ) : downloading ? (
                       <ProgressBar
                         value={downloadPercent}
-                        label="Downloading Qwen2.5-Coder-3B (~2.2 GB)"
-                        description="This happens once. The model is stored locally for offline use."
+                        label="Downloading model…"
+                        description="This happens once per model. Stored locally for offline use."
                       />
                     ) : (
                       <SpaceBetween size="xs">
                         <Box color="text-body-secondary">
-                          Runs Qwen2.5-Coder-3B locally. Fully offline after download (~2.2 GB). No API keys needed.
+                          Runs fully offline after a one-time download. No API keys needed.
                         </Box>
                         <Button onClick={handleDownload}>Download Model</Button>
                       </SpaceBetween>

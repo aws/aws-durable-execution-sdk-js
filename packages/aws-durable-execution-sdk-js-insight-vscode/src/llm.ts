@@ -469,26 +469,92 @@ import * as fs from "fs";
 import * as os from "os";
 
 const MODEL_DIR = path.join(os.homedir(), ".workflow-insight", "models");
-const MODEL_FILENAME = "qwen2.5-coder-3b-instruct-q4_k_m.gguf";
-const MODEL_URL =
-  "https://huggingface.co/Qwen/Qwen2.5-Coder-3B-Instruct-GGUF/resolve/main/qwen2.5-coder-3b-instruct-q4_k_m.gguf";
 
+export interface LocalModelPreset {
+  key: string;
+  /** Short human label for the settings dropdown. */
+  label: string;
+  filename: string;
+  url: string;
+  /** Approximate download size, shown in the download status. */
+  sizeLabel: string;
+}
+
+/**
+ * Selectable local models, ordered best-first. The default is the highest
+ * Berkeley Function-Calling Leaderboard (BFCL) score that still runs on a
+ * typical single-GPU / laptop: Llama-3-Groq-8B-Tool-Use (~89% BFCL). The 70B
+ * variant tops BFCL (~90.8%) but is ~40 GB and needs ~48 GB RAM, so it's not a
+ * sane default. See https://gorilla.eecs.berkeley.edu/leaderboard.html
+ */
+export const LOCAL_MODEL_PRESETS: LocalModelPreset[] = [
+  {
+    key: "llama-3-groq-8b-tool-use",
+    label: "Llama-3-Groq-8B Tool-Use (best tool-calling, ~4.9 GB)",
+    filename: "Llama-3-Groq-8B-Tool-Use-Q4_K_M.gguf",
+    url: "https://huggingface.co/bartowski/Llama-3-Groq-8B-Tool-Use-GGUF/resolve/main/Llama-3-Groq-8B-Tool-Use-Q4_K_M.gguf",
+    sizeLabel: "4.9 GB",
+  },
+  {
+    key: "phi-3.5-mini",
+    label: "Phi-3.5-mini (smaller, good quality-per-GB, ~2.4 GB)",
+    filename: "Phi-3.5-mini-instruct-Q4_K_M.gguf",
+    url: "https://huggingface.co/bartowski/Phi-3.5-mini-instruct-GGUF/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf",
+    sizeLabel: "2.4 GB",
+  },
+  {
+    key: "qwen2.5-coder-3b",
+    label: "Qwen2.5-Coder-3B (smallest footprint, ~2.2 GB)",
+    filename: "qwen2.5-coder-3b-instruct-q4_k_m.gguf",
+    url: "https://huggingface.co/Qwen/Qwen2.5-Coder-3B-Instruct-GGUF/resolve/main/qwen2.5-coder-3b-instruct-q4_k_m.gguf",
+    sizeLabel: "2.2 GB",
+  },
+];
+
+export const DEFAULT_LOCAL_MODEL_KEY = LOCAL_MODEL_PRESETS[0].key;
+
+let currentModelKey = DEFAULT_LOCAL_MODEL_KEY;
 let localModelInstance: any = null;
 
+function resolveLocalModel(): LocalModelPreset {
+  return (
+    LOCAL_MODEL_PRESETS.find((m) => m.key === currentModelKey) ??
+    LOCAL_MODEL_PRESETS[0]
+  );
+}
+
+/**
+ * Select which local model preset subsequent local calls use. Unknown keys
+ * fall back to the default. Switching drops the cached instance so the next
+ * call loads the newly-selected model.
+ */
+export function setLocalModel(key: string | undefined): void {
+  const next =
+    LOCAL_MODEL_PRESETS.find((m) => m.key === key)?.key ??
+    DEFAULT_LOCAL_MODEL_KEY;
+  if (next !== currentModelKey) {
+    currentModelKey = next;
+    localModelInstance = null;
+  }
+}
+
 export function isModelDownloaded(): boolean {
-  return fs.existsSync(path.join(MODEL_DIR, MODEL_FILENAME));
+  return fs.existsSync(path.join(MODEL_DIR, resolveLocalModel().filename));
 }
 
 export async function ensureModel(
   statusCallback?: (text: string) => void,
 ): Promise<string> {
-  const modelPath = path.join(MODEL_DIR, MODEL_FILENAME);
+  const preset = resolveLocalModel();
+  const modelPath = path.join(MODEL_DIR, preset.filename);
   if (fs.existsSync(modelPath)) return modelPath;
 
   fs.mkdirSync(MODEL_DIR, { recursive: true });
-  statusCallback?.("Downloading local model (2.2 GB, one time)...");
+  statusCallback?.(
+    `Downloading ${preset.label.replace(/\s*\(.*\)$/, "")} (${preset.sizeLabel}, one time)...`,
+  );
 
-  const response = await fetch(MODEL_URL);
+  const response = await fetch(preset.url);
   if (!response.ok || !response.body) {
     throw new Error(`Failed to download model: ${response.status}`);
   }

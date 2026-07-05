@@ -152,6 +152,21 @@
           "default": "us.anthropic.claude-sonnet-4-20250514-v1:0",
           "description": "Amazon Bedrock model id (or inference profile id) used to convert English to a Logs Insights query."
         },
+        "workflowInsight.localModel": {
+          "type": "string",
+          "default": "llama-3-groq-8b-tool-use",
+          "enum": [
+            "llama-3-groq-8b-tool-use",
+            "phi-3.5-mini",
+            "qwen2.5-coder-3b"
+          ],
+          "enumDescriptions": [
+            "Llama-3-Groq-8B Tool-Use — best tool-calling accuracy (~89% on the Berkeley Function-Calling Leaderboard), ~4.9 GB download, needs ~6 GB RAM. Recommended default.",
+            "Phi-3.5-mini — smaller with strong quality-per-GB, ~2.4 GB download. Good when memory is tight.",
+            "Qwen2.5-Coder-3B — smallest footprint, ~2.2 GB. Fastest/lightest, weakest at multi-step tool use."
+          ],
+          "description": "Which local model to download and run when LLM Provider is 'local'. Only used for the local provider; ignored for Bedrock/Copilot."
+        },
         "workflowInsight.agenticMaxIterations": {
           "type": "number",
           "default": 8,
