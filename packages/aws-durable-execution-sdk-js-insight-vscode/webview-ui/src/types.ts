@@ -69,9 +69,8 @@ export type InboundMessage =
   | { type: "detailResult"; fields: Record<string, string> }
   | {
       /**
-       * Advanced (agentic) mode only: one completed iteration of the
-       * run→verify→refine loop, streamed so the webview can show the
-       * assistant's progress. Basic mode never emits these.
+       * One completed iteration of the run→verify→refine loop, streamed so
+       * the webview can show the assistant's progress.
        */
       type: "agentStep";
       iteration: number;
@@ -88,9 +87,9 @@ export type InboundMessage =
     }
   | {
       /**
-       * Advanced mode: the final natural-language answer synthesized by the
-       * post-processing (analyze) step from a query's raw rows. Shown above
-       * the results table. Basic mode never emits this.
+       * The final natural-language answer for a turn (from the tool loop's
+       * finish, or the verify/refine path's analyze step). Shown above the
+       * results table.
        */
       type: "agentAnswer";
       text: string;

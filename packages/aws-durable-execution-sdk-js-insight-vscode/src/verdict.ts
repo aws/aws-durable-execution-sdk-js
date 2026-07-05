@@ -6,8 +6,9 @@
 
 /**
  * The model's verdict on whether a query's results actually answer the
- * user's question. Used only in "advanced" (agentic) mode — basic mode never
- * calls the judge and its behavior is unchanged.
+ * user's question. Used by the verify/refine provider path (Copilot/local) to
+ * decide whether to accept the results or refine the query. (The Bedrock path
+ * drives that decision through its own multi-step tool loop instead.)
  */
 export interface ResultVerdict {
   satisfied: boolean;

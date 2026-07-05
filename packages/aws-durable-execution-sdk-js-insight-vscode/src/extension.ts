@@ -74,8 +74,8 @@ interface QueryExecution {
 /**
  * Whether a query-execution error is worth asking the model to fix (a
  * malformed/invalid query) versus a hard failure (missing config, no
- * permissions) that a retry can't help. Kept identical to the condition the
- * basic path has always used, so both modes retry on exactly the same errors.
+ * permissions) that a retry can't help. Destination-agnostic, so every
+ * provider path retries on exactly the same class of errors.
  */
 /**
  * The query dialect for a destination, for shape checks like isAggregateQuery.
@@ -844,9 +844,10 @@ class ExplorerPanel {
   /**
    * Run a single generated query against the configured destination and return
    * the normalized results payload (the body of a "results" message, minus the
-   * type). Shared by basic and advanced modes so there is exactly one place
-   * that enforces read-only access, injects the identifier/partition columns,
-   * and runs the per-destination query engine. Throws on execution errors
+   * type). Shared by both provider paths (the Bedrock tool loop and the
+   * verify/refine loop) so there is exactly one place that enforces read-only
+   * access, injects the identifier/partition columns, and runs the
+   * per-destination query engine. Throws on execution errors
    * (the caller decides whether to retry).
    */
   private async executeQuery(

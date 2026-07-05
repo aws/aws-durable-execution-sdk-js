@@ -26,9 +26,8 @@ const OUTCOME_STATUS: Record<
 };
 
 /**
- * Advanced (agentic) mode progress view: shows each run→verify→refine
- * iteration the assistant went through. Rendered only when steps exist, so it
- * never appears in basic mode.
+ * Agentic progress view: shows each run→verify→refine iteration the assistant
+ * went through. Rendered only when steps exist.
  */
 export function AgentTranscript({ steps, running }: Props) {
   if (steps.length === 0) return null;

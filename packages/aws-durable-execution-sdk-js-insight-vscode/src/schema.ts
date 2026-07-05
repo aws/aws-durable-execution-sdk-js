@@ -453,9 +453,10 @@ export function buildSystemPrompt(
     toolMode?: "emit" | "agent";
   },
 ): string {
-  // Advanced (agentic) mode only: tells the model it may defer awkward
-  // computations to a post-processing step by returning raw data. Appended to
-  // every destination's prompt; empty in basic mode, so basic is unchanged.
+  // The post-process affordance: tells the model it may defer awkward
+  // computations to a follow-up step by returning raw data. Appended to every
+  // destination's prompt when the caller enables it (the assistant always does
+  // today); omitted otherwise.
   const agenticNote = options?.agentic ? ["", AGENTIC_NOTE] : [];
   // The closing instruction depends on how the model returns its work: the
   // single-shot emit_query tool (default) or the multi-turn run_query/finish

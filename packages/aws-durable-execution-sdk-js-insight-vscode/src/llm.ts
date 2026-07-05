@@ -20,9 +20,9 @@ export interface GeneratedQuery {
   timeRangeMs: number;
   suggestedCharts?: string[];
   /**
-   * Advanced (agentic) mode only: the model set this when it chose to return
-   * raw rows for a follow-up post-processing step to interpret, rather than
-   * expressing the whole answer in the query language. Ignored in basic mode.
+   * Set when the model chose to return raw rows for a follow-up
+   * post-processing step to interpret, rather than expressing the whole
+   * answer in the query language.
    */
   postProcess?: boolean;
   /** What the post-processing step should extract from the raw rows. */
@@ -291,9 +291,10 @@ interface GenerateOptions {
   tableName?: string;
   onStatus?: (text: string) => void;
   /**
-   * Advanced (agentic) mode: when true, the system prompt tells the model it
-   * may return raw data + set postProcess=true for a follow-up analysis step.
-   * Basic mode leaves this false, so its prompt/behavior are unchanged.
+   * When true, the system prompt tells the model it may return raw data +
+   * set postProcess=true for a follow-up analysis step. The assistant always
+   * enables this today; when false the prompt omits that post-processing
+   * guidance.
    */
   agentic?: boolean;
 }
