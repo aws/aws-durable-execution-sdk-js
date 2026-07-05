@@ -1,6 +1,16 @@
 import { newQuickJSWASMModuleFromVariant } from "quickjs-emscripten-core";
 import releaseVariant from "@jitl/quickjs-singlefile-cjs-release-sync";
 
+// The WASM module is expensive to instantiate but stateless and reusable, so
+// build it once (lazily) and share it. Per-call isolation is unaffected: each
+// runSandboxedJs still creates its own runtime + context from this module.
+let modulePromise:
+  | ReturnType<typeof newQuickJSWASMModuleFromVariant>
+  | undefined;
+function getQuickJSModule() {
+  return (modulePromise ??= newQuickJSWASMModuleFromVariant(releaseVariant));
+}
+
 /**
  * Runs untrusted (LLM-generated) JavaScript in a QuickJS WebAssembly VM with
  * NO access to the host: no `require`, no `process`, no filesystem, no network,
@@ -28,7 +38,7 @@ export async function runSandboxedJs(
   const timeoutMs = opts?.timeoutMs ?? 3000;
   const memoryBytes = opts?.memoryBytes ?? 64 * 1024 * 1024;
 
-  const QuickJS = await newQuickJSWASMModuleFromVariant(releaseVariant);
+  const QuickJS = await getQuickJSModule();
   const runtime = QuickJS.newRuntime();
   runtime.setMemoryLimit(memoryBytes);
   const deadline = Date.now() + timeoutMs;
