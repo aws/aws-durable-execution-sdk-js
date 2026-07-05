@@ -46,10 +46,16 @@ export async function runSandboxedJs(
 
   const vm = runtime.newContext();
   try {
-    // Inject the data as plain JSON — no host references bridged in.
-    const setup = `globalThis.rows = ${JSON.stringify(
-      data.rows,
-    )}; globalThis.columns = ${JSON.stringify(data.columns)};`;
+    // Inject the data as a parsed-JSON string literal rather than
+    // interpolating it as object/array literal syntax. The data is confined to
+    // a single string token that JSON.parse turns back into the value, so it
+    // can never be part of the code grammar — more robust than relying on
+    // "JSON is a subset of JS literals". (No host references are bridged in.)
+    const rowsJson = JSON.stringify(data.rows);
+    const columnsJson = JSON.stringify(data.columns);
+    const setup = `globalThis.rows = JSON.parse(${JSON.stringify(
+      rowsJson,
+    )}); globalThis.columns = JSON.parse(${JSON.stringify(columnsJson)});`;
     const setupRes = vm.evalCode(setup);
     if (setupRes.error) {
       setupRes.error.dispose();
