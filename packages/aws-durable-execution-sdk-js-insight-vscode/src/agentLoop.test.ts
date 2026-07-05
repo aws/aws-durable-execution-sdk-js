@@ -284,6 +284,33 @@ describe("runAgentLoop: parallel tool use", () => {
   });
 });
 
+// ─── parallel tool ordering (run_query before run_javascript) ──────────────────
+
+describe("runAgentLoop: parallel tool ordering", () => {
+  it("runs run_query before run_javascript even when JS is listed first", async () => {
+    mockRunSandboxedJs.mockResolvedValue({ ok: true, value: 99 });
+    mockSend
+      .mockResolvedValueOnce(
+        assistantTurn(
+          toolUse("run_javascript", { code: "return rows.length" }, "tjs"),
+          toolUse("run_query", { query: "SELECT a FROM t" }, "tq"),
+        ),
+      )
+      .mockResolvedValueOnce(assistantTurn(toolUse("finish", { answer: "x" })));
+    await runAgentLoop(baseOpts({ runQuery: jest.fn(async () => OK_RESULT) }));
+    // The JS block ran after the query, so it computed a result rather than
+    // hitting the "no data yet" path. The toolResult text is itself JSON.
+    const msgs = messagesOf(1);
+    const results = msgs[msgs.length - 1].content as Array<{
+      toolResult?: { toolUseId?: string; content?: Array<{ text?: string }> };
+    }>;
+    const jsBlock = results.find((c) => c.toolResult?.toolUseId === "tjs");
+    const parsed = JSON.parse(jsBlock?.toolResult?.content?.[0]?.text ?? "{}");
+    expect(parsed.result).toBe(99);
+    expect(parsed.error).toBeUndefined();
+  });
+});
+
 // ─── query budget (bounds parallel tool calls) ─────────────────────────────────
 
 describe("runAgentLoop: query budget", () => {

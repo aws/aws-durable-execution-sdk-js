@@ -8,7 +8,18 @@ let modulePromise:
   | ReturnType<typeof newQuickJSWASMModuleFromVariant>
   | undefined;
 function getQuickJSModule() {
-  return (modulePromise ??= newQuickJSWASMModuleFromVariant(releaseVariant));
+  // Cache the successful instantiation, but if it rejects, clear the cache so
+  // a later call can retry rather than being stuck with a permanently-rejected
+  // promise.
+  if (!modulePromise) {
+    modulePromise = newQuickJSWASMModuleFromVariant(releaseVariant).catch(
+      (err) => {
+        modulePromise = undefined;
+        throw err;
+      },
+    );
+  }
+  return modulePromise;
 }
 
 /**

@@ -457,7 +457,17 @@ export async function runAgentLoop(
     // toolUseId in the next user message, so a parallel/multi tool-use turn
     // must be answered in full or the next request fails validation.
     const toolResults: ContentBlock[] = [];
-    for (const tu of toolUses) {
+    // Execute run_query blocks before run_javascript within the same turn:
+    // handleRunJs computes over lastResult, which handleRunQuery populates, so
+    // a parallel turn that ordered a JS block ahead of its query would
+    // otherwise see stale/absent data. Array.sort is stable, so blocks of the
+    // same kind keep their original order.
+    const ordered = [...toolUses].sort(
+      (a, b) =>
+        (a.name === "run_javascript" ? 1 : 0) -
+        (b.name === "run_javascript" ? 1 : 0),
+    );
+    for (const tu of ordered) {
       const payload =
         tu.name === "run_javascript"
           ? await handleRunJs(tu)

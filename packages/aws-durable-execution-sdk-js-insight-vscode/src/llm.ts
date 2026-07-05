@@ -531,6 +531,9 @@ export function setLocalModel(key: string | undefined): void {
 }
 
 export function isModelDownloaded(): boolean {
+  // The final path only exists after a checksum-verified, atomic rename (see
+  // ensureModel), so its presence means a complete, valid model — interrupted
+  // downloads live at <filename>.partial and don't count.
   return fs.existsSync(path.join(MODEL_DIR, resolveLocalModel().filename));
 }
 
@@ -551,35 +554,57 @@ export async function ensureModel(
     throw new Error(`Failed to download model: ${response.status}`);
   }
 
-  const fileStream = fs.createWriteStream(modelPath);
+  // Download to a temp path and only rename to the final name after the
+  // checksum passes. An interrupted download (network drop, host killed) then
+  // leaves a .partial file that is never mistaken for a complete model.
+  const partialPath = `${modelPath}.partial`;
+  const fileStream = fs.createWriteStream(partialPath);
   const reader = response.body.getReader();
   let downloaded = 0;
   const total = Number(response.headers.get("content-length") || 0);
 
   const hash = crypto.createHash("sha256");
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    fileStream.write(value);
-    hash.update(value);
-    downloaded += value.length;
-    if (total > 0) {
-      const pct = Math.round((downloaded / total) * 100);
-      statusCallback?.(`Downloading model... ${pct}%`);
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      // Respect backpressure: when the write buffer is full, wait for it to
+      // drain before queueing more so this multi-GB download can't balloon
+      // memory faster than it flushes to disk.
+      if (!fileStream.write(value)) {
+        await new Promise<void>((resolve) => fileStream.once("drain", resolve));
+      }
+      hash.update(value);
+      downloaded += value.length;
+      if (total > 0) {
+        const pct = Math.round((downloaded / total) * 100);
+        statusCallback?.(`Downloading model... ${pct}%`);
+      }
     }
+    fileStream.end();
+    await new Promise<void>((resolve, reject) => {
+      fileStream.on("finish", resolve);
+      fileStream.on("error", reject);
+    });
+  } catch (err) {
+    fileStream.destroy();
+    fs.rmSync(partialPath, { force: true });
+    throw err;
   }
-  fileStream.end();
-  await new Promise<void>((resolve) => fileStream.on("finish", resolve));
 
-  // Verify the download against the pinned checksum before it's ever loaded
-  // and run natively. On mismatch, delete the file so a retry re-downloads.
+  // Verify against the pinned checksum before the file is ever loaded and run
+  // natively. On mismatch, discard the partial so a retry re-downloads.
   const digest = hash.digest("hex");
   if (digest !== preset.sha256) {
-    fs.rmSync(modelPath, { force: true });
+    fs.rmSync(partialPath, { force: true });
     throw new Error(
       `Downloaded model failed checksum verification (expected ${preset.sha256}, got ${digest}). The file was discarded; try again.`,
     );
   }
+  // Atomically promote the verified file. Only now does modelPath exist, so
+  // fs.existsSync (here and in isModelDownloaded) implies a complete, verified
+  // model.
+  fs.renameSync(partialPath, modelPath);
   return modelPath;
 }
 
