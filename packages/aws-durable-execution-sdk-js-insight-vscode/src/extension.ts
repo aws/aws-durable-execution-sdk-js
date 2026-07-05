@@ -673,11 +673,11 @@ class ExplorerPanel {
    * agent loop. The model uses run_query to discover the data's shape (e.g.
    * which keys exist in input/output) and compute candidates — seeing real
    * columns/rows each time — then calls finish with the query that answers the
-   * question. Exploration queries run WITHOUT drill-down injection (read-only,
-   * exactly as written); only the final query gets the normal drill-down
-   * treatment for presentation. If the finish query was already run during
-   * exploration, its result is reused (see queryCache) so the scan isn't
-   * billed twice; the number of queries is bounded by agenticMaxIterations.
+   * question. Exploration and the final presentation run use the SAME
+   * query-shape drill-down injection, so when the model finishes with a query
+   * it already explored, the executed SQL is identical and the result is
+   * reused from queryCache instead of being scanned (billed) a second time.
+   * The number of queries is bounded by agenticMaxIterations.
    */
   private async onGenerateAgenticToolLoop(
     q: string,
@@ -703,10 +703,13 @@ class ExplorerPanel {
       { columns: string[]; rows: string[][] }
     >();
 
-    // Each run_query the model issues: run it read-only, no drill-down
-    // injection, return a bounded sample. lookbackHours (log-based sources
-    // only) sets the search window. The number of queries is bounded by
-    // agenticMaxIterations (the universal, source-agnostic cost/effort guard).
+    // Each run_query the model issues: run it read-only and return a bounded
+    // sample. Injection uses the SAME query-shape decision as the final
+    // presentation run, so when the model finishes with a query it already
+    // explored, the executed SQL is identical and the queryCache hits — no
+    // second Athena scan (see the final executeQuery call below). lookbackHours
+    // (log-based sources only) sets the search window. The number of queries
+    // is bounded by agenticMaxIterations.
     const runQuery = async (
       query: string,
       lookbackHours?: number,
@@ -720,7 +723,13 @@ class ExplorerPanel {
             explanation: "",
             timeRangeMs: (lookbackHours ?? 24) * 60 * 60 * 1000,
           },
-          { injectDrillDown: false, queryCache },
+          {
+            injectDrillDown: !isAggregateQuery(
+              query,
+              queryDialect(cfg.destinationType),
+            ),
+            queryCache,
+          },
         );
         return {
           columns: exec.columns,
