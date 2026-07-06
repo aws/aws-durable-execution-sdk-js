@@ -3,15 +3,16 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
-import { createOtelTestSetup } from "../shared/otel-test-setup";
+import { createDualModeOtelSetup } from "../shared/otel-test-setup";
 
-const { plugin, getSerializedSpans } = createOtelTestSetup();
+const { plugin, getSerializedSpans } = createDualModeOtelSetup();
 
 export const config: ExampleConfig = {
   name: "OTel Combined",
-  durableConfig: null,
   localOnly: true,
 };
+
+export { getSerializedSpans };
 
 export const handler = withDurableExecution(
   async (_event: any, context: DurableContext) => {
@@ -66,6 +67,7 @@ export const handler = withDurableExecution(
       mapItemCount: mapResults.getResults().length,
       complete: true,
       spans: getSerializedSpans(),
+      xRayHeader: process.env._X_AMZN_TRACE_ID,
     };
   },
   { plugins: [plugin] },

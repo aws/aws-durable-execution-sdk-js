@@ -1272,6 +1272,39 @@ Resources:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+      Tracing: Active
+      Layers:
+        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
+    Metadata:
+      SkipBuild: "True"
+  OtelCallback:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: OTelCallback-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: otel-callback.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+      Tracing: Active
+      Layers:
+        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
     Metadata:
       SkipBuild: "True"
   OtelChildContext:
@@ -1297,6 +1330,126 @@ Resources:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+      Tracing: Active
+      Layers:
+        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
+    Metadata:
+      SkipBuild: "True"
+  OtelInvoke:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: OTelInvoke-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: otel-invoke.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+      Tracing: Active
+      Layers:
+        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
+    Metadata:
+      SkipBuild: "True"
+  OtelRetrySteps:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: OTelRetrySteps-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: otel-retry-steps.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+      Tracing: Active
+      Layers:
+        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
+    Metadata:
+      SkipBuild: "True"
+  OtelWaitAndResume:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: OTelWaitandResume-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: otel-wait-and-resume.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+      Tracing: Active
+      Layers:
+        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
+    Metadata:
+      SkipBuild: "True"
+  OtelWaitForCondition:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: OTelWaitforCondition-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: otel-wait-for-condition.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+      Tracing: Active
+      Layers:
+        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
     Metadata:
       SkipBuild: "True"
   OtelXrayE2e:
@@ -2034,6 +2187,56 @@ Resources:
       FunctionName: RuninChildContextwithSerdes-22x-NodeJS-Local
       CodeUri: ./dist
       Handler: run-in-child-context-serdes.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  RunInChildContextSerdesLargePayload:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: RuninChildContextwithSerdes-LargePayload-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: run-in-child-context-serdes-large-payload.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+    Metadata:
+      SkipBuild: "True"
+  RunInChildContextSerdesVirtual:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: RuninChildContextwithSerdes-Virtual-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: run-in-child-context-serdes-virtual.handler
       Runtime: nodejs22.x
       Architectures:
         - x86_64

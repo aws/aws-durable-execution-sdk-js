@@ -80,8 +80,8 @@ function createFunctionResource(
     functionResource.Properties.Policies = config.policies;
   }
 
-  // Add ADOT layer and Active Tracing for otel-xray-e2e function
-  if (catalog.handler && catalog.handler.includes("otel-xray-e2e")) {
+  // Add ADOT layer and Active Tracing for all otel functions
+  if (catalog.handler && catalog.handler.includes("otel-")) {
     functionResource.Properties.Tracing = "Active";
     functionResource.Properties.Layers = [ADOT_LAYER_ARN];
     functionResource.Properties.Environment.Variables.AWS_LAMBDA_EXEC_WRAPPER =

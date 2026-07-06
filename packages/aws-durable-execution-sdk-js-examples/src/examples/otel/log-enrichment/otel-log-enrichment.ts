@@ -3,31 +3,45 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
-import { createOtelTestSetup } from "../shared/otel-test-setup";
+import {
+  createDualModeOtelSetup,
+  createOtelTestSetup,
+  isAdotEnvironment,
+} from "../shared/otel-test-setup";
 
-const { plugin, exporter, provider, getSerializedSpans } =
-  createOtelTestSetup();
+// Log enrichment requires provider.register() for AsyncLocalStorage context propagation.
+// In cloud mode with ADOT, this is handled by the ADOT layer. In local mode, we register manually.
+const localSetup = !isAdotEnvironment() ? createOtelTestSetup() : undefined;
+if (localSetup) {
+  localSetup.provider.register();
+}
 
-// Register the provider so that context propagation (AsyncLocalStorage) is active.
-// This enables enrichLogContext to find the active span and inject traceId/spanId into logs.
-provider.register();
+const dualSetup = createDualModeOtelSetup();
+// In local mode, use the registered provider's plugin for log enrichment to work
+const plugin = localSetup ? localSetup.plugin : dualSetup.plugin;
 
 export const config: ExampleConfig = {
   name: "OTel Log Enrichment",
-  durableConfig: null,
+  excludeRuntimes: ["24.x"],
   localOnly: true,
 };
 
-/**
- * Reset the span exporter. Call this before running the handler
- * to get a clean set of spans for the test.
- */
+export function getSerializedSpans() {
+  return localSetup
+    ? localSetup.getSerializedSpans()
+    : dualSetup.getSerializedSpans();
+}
+
 export function resetExporter(): void {
-  exporter.reset();
+  if (localSetup) {
+    localSetup.reset();
+  } else {
+    dualSetup.resetExporter();
+  }
 }
 
 export const handler = withDurableExecution(
-  async (event: any, context: DurableContext) => {
+  async (_event: any, context: DurableContext) => {
     const step1Result = await context.step("log-step-1", async () => {
       context.logger.info("Executing log step 1");
       return "step-1-done";
@@ -38,7 +52,12 @@ export const handler = withDurableExecution(
       return "step-2-done";
     });
 
-    return { step1Result, step2Result, spans: getSerializedSpans() };
+    return {
+      step1Result,
+      step2Result,
+      spans: getSerializedSpans(),
+      xRayHeader: process.env._X_AMZN_TRACE_ID,
+    };
   },
   { plugins: [plugin] },
 );

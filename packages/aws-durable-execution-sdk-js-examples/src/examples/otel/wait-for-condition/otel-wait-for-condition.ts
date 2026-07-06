@@ -5,23 +5,16 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
-import { createOtelTestSetup } from "../shared/otel-test-setup";
+import { createDualModeOtelSetup } from "../shared/otel-test-setup";
 
-const { plugin, exporter, getSerializedSpans } = createOtelTestSetup();
+const { plugin, getSerializedSpans, resetExporter } = createDualModeOtelSetup();
 
 export const config: ExampleConfig = {
   name: "OTel Wait for Condition",
-  durableConfig: null,
-  localOnly: true,
+  excludeRuntimes: ["24.x"],
 };
 
-/**
- * Reset the span exporter. Call this before running the handler
- * to get a clean set of spans for the test.
- */
-export function resetExporter(): void {
-  exporter.reset();
-}
+export { getSerializedSpans, resetExporter };
 
 interface WaitForConditionEvent {
   mode?: "immediate" | "normal" | "exhausted";
@@ -44,28 +37,47 @@ export const handler = withDurableExecution(
           initialState: { counter: 3 },
         },
       );
-      return { finalState, mode, spans: getSerializedSpans() };
+      return {
+        finalState,
+        mode,
+        spans: getSerializedSpans(),
+        xRayHeader: process.env._X_AMZN_TRACE_ID,
+      };
     }
 
     if (mode === "exhausted") {
       // Condition never met, exhausts maxAttempts (5)
-      const finalState = await context.waitForCondition(
-        async (state: { counter: number }) => {
-          return { counter: state.counter + 1 };
-        },
-        {
-          waitStrategy: createWaitStrategy<{ counter: number }>({
-            maxAttempts: 5,
-            initialDelay: { seconds: 1 },
-            maxDelay: { seconds: 1 },
-            backoffRate: 1,
-            jitter: JitterStrategy.NONE,
-            shouldContinuePolling: () => true,
-          }),
-          initialState: { counter: 0 },
-        },
-      );
-      return { finalState, mode, spans: getSerializedSpans() };
+      let exhaustedError: unknown;
+      try {
+        await context.waitForCondition(
+          async (state: { counter: number }) => {
+            return { counter: state.counter + 1 };
+          },
+          {
+            waitStrategy: createWaitStrategy<{ counter: number }>({
+              maxAttempts: 5,
+              initialDelay: { seconds: 1 },
+              maxDelay: { seconds: 1 },
+              backoffRate: 1,
+              jitter: JitterStrategy.NONE,
+              shouldContinuePolling: () => true,
+            }),
+            initialState: { counter: 0 },
+          },
+        );
+      } catch (error) {
+        exhaustedError = error;
+      }
+      return {
+        failed: true,
+        errorMessage:
+          exhaustedError instanceof Error
+            ? exhaustedError.message
+            : String(exhaustedError),
+        mode,
+        spans: getSerializedSpans(),
+        xRayHeader: process.env._X_AMZN_TRACE_ID,
+      };
     }
 
     // Normal mode: polls 3 times
@@ -84,7 +96,12 @@ export const handler = withDurableExecution(
       },
     );
 
-    return { finalState, mode, spans: getSerializedSpans() };
+    return {
+      finalState,
+      mode,
+      spans: getSerializedSpans(),
+      xRayHeader: process.env._X_AMZN_TRACE_ID,
+    };
   },
   { plugins: [plugin] },
 );

@@ -1,16 +1,19 @@
 import {
   DurableContext,
   withDurableExecution,
+  createRetryStrategy,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
-import { createOtelTestSetup } from "../shared/otel-test-setup";
+import { createDualModeOtelSetup } from "../shared/otel-test-setup";
 
-const { plugin, getSerializedSpans } = createOtelTestSetup();
+const { plugin, getSerializedSpans } = createDualModeOtelSetup();
 
 export const config: ExampleConfig = {
   name: "OTel Retry Steps",
-  localOnly: true,
+  excludeRuntimes: ["24.x"],
 };
+
+export { getSerializedSpans };
 
 export const handler = withDurableExecution(
   async (_event: any, context: DurableContext) => {
@@ -24,12 +27,11 @@ export const handler = withDurableExecution(
           throw new Error("always fails");
         },
         {
-          retryStrategy: (_error: Error, attemptsMade: number) => {
-            if (attemptsMade < 3) {
-              return { shouldRetry: true, delay: { seconds: 1 } };
-            }
-            return { shouldRetry: false };
-          },
+          retryStrategy: createRetryStrategy({
+            maxAttempts: 3,
+            initialDelay: { seconds: 1 },
+            backoffRate: 1,
+          }),
         },
       );
     } catch (error) {
@@ -41,6 +43,7 @@ export const handler = withDurableExecution(
       errorMessage:
         stepError instanceof Error ? stepError.message : String(stepError),
       spans: getSerializedSpans(),
+      xRayHeader: process.env._X_AMZN_TRACE_ID,
     };
   },
   { plugins: [plugin] },
