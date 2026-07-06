@@ -9,6 +9,7 @@ import {
   DynamoDBExporter,
   AuroraExporter,
   SQSExporter,
+  S3Exporter,
 } from "@aws/durable-execution-sdk-js-insight";
 
 /**
@@ -54,6 +55,14 @@ const exporters = [
     ? [
         new SQSExporter({
           queueUrl: process.env.INSIGHT_SQS_QUEUE_URL,
+          region: process.env.AWS_REGION,
+        }),
+      ]
+    : []),
+  ...(process.env.INSIGHT_S3_BUCKET
+    ? [
+        new S3Exporter({
+          bucket: process.env.INSIGHT_S3_BUCKET,
           region: process.env.AWS_REGION,
         }),
       ]

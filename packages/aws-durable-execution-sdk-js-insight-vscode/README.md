@@ -20,6 +20,7 @@ The extension supports multiple destinations — each with its own query engine:
 | **CloudWatch Logs** (LambdaLogExporter)      | Logs Insights | Default exporter, no infra needed       |
 | **DynamoDB**                                 | PartiQL       | Fast lookups by execution               |
 | **Aurora PostgreSQL**                        | SQL           | Complex queries, GROUP BY, aggregations |
+| **S3** (S3Exporter)                          | Athena SQL    | Analytics at scale, long-term retention |
 
 ## Installation
 
@@ -76,6 +77,43 @@ Click the **⚙** button and fill in your settings. The form shows only the fiel
 | Aurora Database    | `postgres`                      |
 | Aurora Table       | `workflow_insight`              |
 
+#### S3 + Athena
+
+Records land in S3 via `S3Exporter` as one JSON object per execution, Hive-partitioned
+by date (`year=YYYY/month=MM/day=DD/`). The Explorer queries them through Amazon
+Athena.
+
+| Field                 | Value                                                                               |
+| --------------------- | ----------------------------------------------------------------------------------- |
+| Region                | `us-east-1`                                                                         |
+| Destination Type      | S3 + Athena                                                                         |
+| Glue Database         | The Glue/Athena database to hold the table (e.g. `default`)                         |
+| Glue Table            | `workflow_insight` (or your preferred name)                                         |
+| S3 Location           | The bucket + prefix `S3Exporter` writes to, e.g. `s3://my-bucket/workflow-insight/` |
+| Athena Workgroup      | Optional — leave empty to use `primary` and set Query Result Location instead       |
+| Query Result Location | S3 path for Athena's query output, e.g. `s3://my-bucket/athena-results/`            |
+
+On **Save**, the Explorer checks whether the Glue table already exists. If not, it
+auto-creates it with `CREATE EXTERNAL TABLE`, using
+[partition projection](https://docs.aws.amazon.com/athena/latest/ug/partition-projection.html)
+so Athena computes valid year/month/day partitions (and their S3 locations)
+directly from the table properties instead of listing them from the Glue
+Catalog — today's data is queryable the moment `S3Exporter` writes it, with no
+`MSCK REPAIR TABLE` or crawler run, and no re-discovery step needed as more days
+accumulate.
+
+Because the canonical `operations` array (not `operationsByName`) is what
+`S3Exporter` writes, per-operation questions are answered with `UNNEST` rather than
+a map lookup (see the query dialect the model is given).
+
+> **⚠️ Athena cost:** the assistant works agentically and may issue several
+> model-authored queries per question (bounded by `workflowInsight.agenticMaxIterations`,
+> default 8). That cap limits the _number_ of queries, not the data scanned per
+> query — Athena bills per byte scanned. To bound per-query scan cost, set a
+> [per-query data-usage limit](https://docs.aws.amazon.com/athena/latest/ug/workgroups-setting-control-limits-cloudwatch.html)
+> (`bytes_scanned_cutoff_per_query`) on your Athena **workgroup**. This is the
+> only per-query scan-cost guard once the query runs.
+
 #### Amazon SQS (live view)
 
 SQS has no query engine, so this destination doesn't use the "Ask" pipeline at
@@ -106,42 +144,59 @@ us.anthropic.claude-sonnet-4-20250514-v1:0
 
 Type a question and click **Ask**. Examples:
 
-| Question                                                | Works best with              |
-| ------------------------------------------------------- | ---------------------------- |
-| "show me the last 50 records"                           | Any destination              |
-| "count executions by status"                            | Any destination              |
-| "show failed executions from the last hour"             | Any destination              |
-| "average duration of successful executions"             | Aurora, CloudWatch           |
-| "failure rate percentage"                               | Aurora                       |
-| "average duration grouped by function"                  | Aurora                       |
-| "show executions longer than 5 seconds"                 | Any destination              |
-| "find execution with name abc123"                       | DynamoDB, Aurora             |
-| "executions where operation convert_data took under 5s" | CloudWatch, DynamoDB, Aurora |
-| "executions where the charge operation failed"          | CloudWatch, DynamoDB, Aurora |
+| Question                                                | Works best with                         |
+| ------------------------------------------------------- | --------------------------------------- |
+| "show me the last 50 records"                           | Any destination                         |
+| "count executions by status"                            | Any destination                         |
+| "show failed executions from the last hour"             | Any destination                         |
+| "average duration of successful executions"             | Aurora, S3+Athena, CloudWatch           |
+| "failure rate percentage"                               | Aurora                                  |
+| "average duration grouped by function"                  | Aurora                                  |
+| "show executions longer than 5 seconds"                 | Any destination                         |
+| "find execution with name abc123"                       | DynamoDB, Aurora                        |
+| "executions where operation convert_data took under 5s" | CloudWatch, DynamoDB, Aurora, S3+Athena |
+| "executions where the charge operation failed"          | CloudWatch, DynamoDB, Aurora, S3+Athena |
 
 > Per-operation-name questions use the `operationsByName` index (CloudWatch
-> direct + DynamoDB) or a JSONB query over the operations array (Aurora). With
-> the `LambdaLogExporter` (nested logs) these are best-effort — the
-> `CloudWatchLogsExporter` gives the most reliable per-operation queries.
+> direct + DynamoDB), a JSONB query over the operations array (Aurora), or
+> `UNNEST(operations)` (S3 + Athena). With the `LambdaLogExporter` (nested
+> logs) these are best-effort — the `CloudWatchLogsExporter` gives the most
+> reliable per-operation queries.
+
+For row-level results (not aggregates like "count by status"), the Explorer
+adds a hidden identifier column to the generated query if it's missing, and
+selecting a row fetches and shows the _full_ record — including
+`operations`, `input`, `output`, and `error` — even if the question's answer
+only needed a couple of columns (e.g. "show me the last 10 executions" only
+returns 4 columns, but you can still click a row to see everything else).
+Aggregate results have no single execution a row corresponds to, so no
+identifier is added and rows aren't clickable for those.
 
 ## Settings Reference
 
 All settings are under the `workflowInsight.*` namespace.
 
-| Setting              | Description                                                   | Required     |
-| -------------------- | ------------------------------------------------------------- | ------------ |
-| `region`             | AWS region                                                    | Yes          |
-| `destinationType`    | Where your data lives (see above)                             | Yes          |
-| `logGroupName`       | CloudWatch log group name(s), comma-separated                 | For CW Logs  |
-| `dynamodbTableName`  | DynamoDB table name                                           | For DynamoDB |
-| `auroraResourceArn`  | Aurora cluster ARN                                            | For Aurora   |
-| `auroraSecretArn`    | Secrets Manager secret ARN                                    | For Aurora   |
-| `auroraDatabase`     | Database name                                                 | For Aurora   |
-| `auroraTable`        | Table name                                                    | For Aurora   |
-| `sqsQueueUrl`        | SQS queue URL to listen to                                    | For SQS      |
-| `sqsDeleteAfterRead` | Delete messages after displaying (default `false`; peek-only) | No           |
-| `awsProfile`         | Named AWS profile (empty = default chain)                     | No           |
-| `bedrockModelId`     | Bedrock model/inference profile for NL→query                  | Yes          |
+| Setting                | Description                                                        | Required     |
+| ---------------------- | ------------------------------------------------------------------ | ------------ |
+| `region`               | AWS region                                                         | Yes          |
+| `destinationType`      | Where your data lives (see above)                                  | Yes          |
+| `logGroupName`         | CloudWatch log group name(s), comma-separated                      | For CW Logs  |
+| `dynamodbTableName`    | DynamoDB table name                                                | For DynamoDB |
+| `auroraResourceArn`    | Aurora cluster ARN                                                 | For Aurora   |
+| `auroraSecretArn`      | Secrets Manager secret ARN                                         | For Aurora   |
+| `auroraDatabase`       | Database name                                                      | For Aurora   |
+| `auroraTable`          | Table name                                                         | For Aurora   |
+| `athenaDatabase`       | Glue/Athena database name                                          | For S3       |
+| `athenaTable`          | Glue table name                                                    | For S3       |
+| `athenaWorkgroup`      | Athena workgroup (empty = `primary`)                               | No           |
+| `athenaOutputLocation` | S3 location for Athena query results                               | For S3\*     |
+| `athenaS3Location`     | S3 location `S3Exporter` writes to (used to auto-create the table) | For S3       |
+| `sqsQueueUrl`          | SQS queue URL to listen to                                         | For SQS      |
+| `sqsDeleteAfterRead`   | Delete messages after displaying (default `false`; peek-only)      | No           |
+| `awsProfile`           | Named AWS profile (empty = default chain)                          | No           |
+| `bedrockModelId`       | Bedrock model/inference profile for NL→query                       | Yes          |
+
+\* Unless the chosen `athenaWorkgroup` already has its own output location configured.
 
 ## Authentication
 
@@ -163,13 +218,14 @@ No credentials are stored by the extension.
 
 Depending on your destination:
 
-| Destination     | Permissions needed                                                                 |
-| --------------- | ---------------------------------------------------------------------------------- |
-| CloudWatch Logs | `logs:StartQuery`, `logs:GetQueryResults`                                          |
-| DynamoDB        | `dynamodb:PartiQLSelect` (or `dynamodb:Scan` + `dynamodb:Query`)                   |
-| Aurora          | `rds-data:ExecuteStatement`, `secretsmanager:GetSecretValue`                       |
-| SQS             | `sqs:ReceiveMessage` (plus `sqs:DeleteMessage` if `sqsDeleteAfterRead` is enabled) |
-| Bedrock (all)   | `bedrock:InvokeModel` on your model/inference profile                              |
+| Destination     | Permissions needed                                                                                                                                                                                                                       |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CloudWatch Logs | `logs:StartQuery`, `logs:GetQueryResults`                                                                                                                                                                                                |
+| DynamoDB        | `dynamodb:PartiQLSelect` (or `dynamodb:Scan` + `dynamodb:Query`)                                                                                                                                                                         |
+| Aurora          | `rds-data:ExecuteStatement`, `secretsmanager:GetSecretValue`                                                                                                                                                                             |
+| S3 + Athena     | `athena:StartQueryExecution`, `athena:GetQueryExecution`, `athena:GetQueryResults`, `glue:GetTable`, `glue:CreateTable`, `glue:GetPartitions`, `glue:BatchCreatePartition`, `s3:GetObject`, `s3:PutObject` on the data + results buckets |
+| SQS             | `sqs:ReceiveMessage` (plus `sqs:DeleteMessage` if `sqsDeleteAfterRead` is enabled)                                                                                                                                                       |
+| Bedrock (all)   | `bedrock:InvokeModel` on your model/inference profile                                                                                                                                                                                    |
 
 ## How Queries Are Generated
 
@@ -188,11 +244,10 @@ If the generated query fails, the extension automatically sends the error back t
 - **"No log group / table configured"** — Click ⚙ and fill in the missing field
 - **Access denied** — Check IAM permissions and credential expiry
 
-## Supported Destinations (future)
+## Future Work
 
-The extension currently supports CloudWatch Logs, DynamoDB, and Aurora. Future versions will add:
+The extension currently supports CloudWatch Logs, DynamoDB, Aurora, and S3 + Athena. Future versions will add:
 
-- Amazon S3 + Athena (SQL over Parquet/JSON in S3)
 - Query history and saved queries
 - CSV export
 - Local LLM option (no Bedrock required)
