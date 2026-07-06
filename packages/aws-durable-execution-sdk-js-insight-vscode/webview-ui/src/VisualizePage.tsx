@@ -40,6 +40,12 @@ const ALL_PRESETS: { id: PresetType; label: string }[] = [
 // call can't wedge the UI (the host normally always replies).
 const REQUEST_TIMEOUT_MS = 60_000;
 
+// A cell counts as numeric only if it's non-blank after trimming and parses as
+// a finite number — so a whitespace-only cell isn't silently coerced to 0.
+function isNumericString(v: string): boolean {
+  return v.trim() !== "" && Number.isFinite(Number(v));
+}
+
 export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props) {
   const [spec, setSpec] = useState<Record<string, unknown> | null>(null);
   const [customPrompt, setCustomPrompt] = useState("");
@@ -110,30 +116,39 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
     }));
   }, [suggestedCharts]);
 
-  // Convert rows to objects with numeric coercion
+  // Convert rows to objects, coercing genuinely-numeric cells to numbers
+  // (whitespace-only stays a string rather than becoming 0).
   const data = useMemo(
     () =>
       rows.map((row) => {
         const obj: Record<string, unknown> = {};
         columns.forEach((col, i) => {
           const val = row[i] ?? "";
-          const num = Number(val);
-          obj[col] = val !== "" && !isNaN(num) ? num : val;
+          obj[col] = isNumericString(val) ? Number(val) : val;
         });
         return obj;
       }),
     [columns, rows],
   );
 
-  // Guess which columns are numeric (a hint sent to the model).
-  const numericCols = useMemo(
-    () =>
-      columns.filter((col) => {
-        const sample = data.find((d) => d[col] !== "" && d[col] != null);
-        return sample && typeof sample[col] === "number";
-      }),
-    [columns, data],
-  );
+  // Guess which columns are numeric (an advisory hint sent to the model).
+  // Classify off a bounded sample by majority rather than a single value, so a
+  // stray non-numeric first cell doesn't mislabel an otherwise-numeric column.
+  const numericCols = useMemo(() => {
+    const SAMPLE = 50;
+    return columns.filter((_, i) => {
+      let numeric = 0;
+      let total = 0;
+      for (const row of rows) {
+        const v = row[i] ?? "";
+        if (v.trim() === "") continue;
+        total++;
+        if (isNumericString(v)) numeric++;
+        if (total >= SAMPLE) break;
+      }
+      return total > 0 && numeric / total > 0.5;
+    });
+  }, [columns, rows]);
 
   // Both the chart-type dropdown and the free-text box are answered by the
   // model: given the columns (and which are numeric) plus the request, it

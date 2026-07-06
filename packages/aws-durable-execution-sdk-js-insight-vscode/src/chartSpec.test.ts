@@ -130,6 +130,12 @@ describe("parseChartSpec", () => {
     expect(parseChartSpec(raw, COLS).title).toBe("Counts");
   });
 
+  it("rejects a malformed (array) title", () => {
+    const raw =
+      '{"mark":"bar","title":[1,2],"encoding":{"x":{"field":"hour_bucket"},"y":{"field":"record_count"}}}';
+    expect(() => parseChartSpec(raw, COLS)).toThrow(/malformed title/i);
+  });
+
   it("validates fields inside array channels (tooltip)", () => {
     const raw =
       '{"mark":"bar","encoding":{"x":{"field":"hour_bucket"},"tooltip":[{"field":"record_count"},{"field":"nope"}]}}';

@@ -118,6 +118,19 @@ export function parseChartSpec(
     );
   }
 
+  // If a title is present, it must be a string or a plain object (Vega-Lite
+  // TitleParams). No external-resource vector, but validate the shape so the
+  // allowlist genuinely covers every top-level key it permits.
+  if ("title" in spec) {
+    const title = (spec as { title?: unknown }).title;
+    const okTitle =
+      typeof title === "string" ||
+      (title != null && typeof title === "object" && !Array.isArray(title));
+    if (!okTitle) {
+      throw new Error("The model's chart had a malformed title.");
+    }
+  }
+
   // The encoding must be a plain object (map of channels); a string/array/null
   // would otherwise fall through to the "no columns" error with a misleading
   // message.
