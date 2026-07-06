@@ -209,10 +209,11 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
                 selectedOption={selectedType}
                 onChange={({ detail }) => {
                   setSelectedType(detail.selectedOption);
-                  requestSpec({
-                    chartType: detail.selectedOption.value,
-                    description: customPrompt,
-                  });
+                  // A dropdown pick is a self-contained request: send only the
+                  // chosen type (the model picks the fields), not whatever text
+                  // happens to be left in the free-text box. The text box is
+                  // its own explicit "Visualize" action.
+                  requestSpec({ chartType: detail.selectedOption.value });
                 }}
                 options={chartOptions}
                 placeholder="Choose a chart type"

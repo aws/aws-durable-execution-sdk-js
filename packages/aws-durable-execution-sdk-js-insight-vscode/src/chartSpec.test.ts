@@ -111,6 +111,15 @@ describe("parseChartSpec", () => {
     expect(() => parseChartSpec(raw, COLS)).toThrow(/dynamic expression/i);
   });
 
+  it("rejects a dynamic expr in an object mark or title too", () => {
+    const inMark =
+      '{"mark":{"type":"bar","x":{"expr":"now()"}},"encoding":{"x":{"field":"hour_bucket"},"y":{"field":"record_count"}}}';
+    expect(() => parseChartSpec(inMark, COLS)).toThrow(/dynamic expression/i);
+    const inTitle =
+      '{"mark":"bar","title":{"text":{"expr":"foo"}},"encoding":{"x":{"field":"hour_bucket"},"y":{"field":"record_count"}}}';
+    expect(() => parseChartSpec(inTitle, COLS)).toThrow(/dynamic expression/i);
+  });
+
   it("rejects disallowed top-level keys (data/transform/etc.)", () => {
     const withData =
       '{"mark":"bar","encoding":{"x":{"field":"hour_bucket"}},"data":{"url":"http://evil/x.json"}}';

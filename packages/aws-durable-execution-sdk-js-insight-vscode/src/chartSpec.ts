@@ -143,25 +143,25 @@ export function parseChartSpec(
     throw new Error("The model's chart had a malformed encoding.");
   }
 
+  // Reject dynamic expressions anywhere in the spec (defense-in-depth beyond
+  // Vega's sandboxed evaluator): the chart should be static over the fetched
+  // rows. Scans the WHOLE spec — including an object mark/title, not just
+  // encoding — so the guard matches its "static chart" intent.
+  const dynamicKeys = new Set<string>();
+  collectDynamicKeys(spec, (k) => dynamicKeys.add(k));
+  if (dynamicKeys.size > 0) {
+    throw new Error(
+      `The model's chart used disallowed dynamic expression(s) (${[...dynamicKeys].join(", ")}).`,
+    );
+  }
+
   // Collect every field reference anywhere under encoding (nested included) and
   // validate them. A chart that references no column at all (e.g. an empty
   // encoding, or only datum/value channels) isn't a usable visualization of the
   // result, so reject that too.
   const valid = new Set(validColumns);
   const fields: string[] = [];
-  const dynamicKeys = new Set<string>();
-  collectFieldRefs(
-    encoding,
-    (f) => fields.push(f),
-    (k) => dynamicKeys.add(k),
-  );
-  // Reject dynamic expressions in the encoding (defense-in-depth beyond Vega's
-  // sandboxed evaluator): the chart should be static over the fetched rows.
-  if (dynamicKeys.size > 0) {
-    throw new Error(
-      `The model's chart used disallowed dynamic expression(s) (${[...dynamicKeys].join(", ")}) in its encoding.`,
-    );
-  }
+  collectFieldRefs(encoding, (f) => fields.push(f));
   if (fields.length === 0) {
     throw new Error(
       "The model's chart did not reference any column (empty or field-less encoding).",
@@ -207,22 +207,32 @@ const ALLOWED_MARKS = new Set([
 function collectFieldRefs(
   node: unknown,
   onField: (field: string) => void,
-  onDisallowedKey: (key: string) => void,
 ): void {
   if (Array.isArray(node)) {
-    for (const item of node) collectFieldRefs(item, onField, onDisallowedKey);
+    for (const item of node) collectFieldRefs(item, onField);
     return;
   }
   if (node && typeof node === "object") {
     for (const [key, value] of Object.entries(node)) {
-      if (key === "expr" || key === "signal") {
-        onDisallowedKey(key);
-      }
       if (key === "field" && typeof value === "string") {
         onField(value);
       } else {
-        collectFieldRefs(value, onField, onDisallowedKey);
+        collectFieldRefs(value, onField);
       }
+    }
+  }
+}
+
+/** Walk any node and invoke `onKey` for every `expr`/`signal` key (dynamic bindings). */
+function collectDynamicKeys(node: unknown, onKey: (key: string) => void): void {
+  if (Array.isArray(node)) {
+    for (const item of node) collectDynamicKeys(item, onKey);
+    return;
+  }
+  if (node && typeof node === "object") {
+    for (const [key, value] of Object.entries(node)) {
+      if (key === "expr" || key === "signal") onKey(key);
+      collectDynamicKeys(value, onKey);
     }
   }
 }
