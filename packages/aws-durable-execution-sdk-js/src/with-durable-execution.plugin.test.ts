@@ -88,6 +88,7 @@ describe("plugin hooks", () => {
       isFirstInvocation: true,
       executionInput: expect.anything(),
       operations: expect.any(Object),
+      updatedOperations: expect.any(Object),
     });
   });
 
@@ -109,6 +110,7 @@ describe("plugin hooks", () => {
       isFirstInvocation: false,
       executionInput: expect.anything(),
       operations: expect.any(Object),
+      updatedOperations: expect.any(Object),
     });
   });
 

@@ -149,7 +149,7 @@ export interface InvocationInfo extends InvocationBaseInfo {
  *
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
-export interface InvocationEndInfo extends InvocationInfo {
+export interface InvocationEndInfo extends InvocationBaseInfo {
   status: PluginInvocationStatus;
   executionResult?: unknown;
   executionError?: Error;
