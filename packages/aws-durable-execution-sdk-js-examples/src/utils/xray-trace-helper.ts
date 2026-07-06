@@ -263,26 +263,41 @@ export function assertSpanAttributes(
       continue;
     }
 
-    // Check metadata (nested: metadata[namespace][key])
+    // Check metadata (flat: metadata[key] or nested: metadata[namespace][key])
     let foundInMetadata = false;
     if (segment.metadata) {
-      for (const namespace of Object.keys(segment.metadata)) {
-        const namespaceData = segment.metadata[namespace];
-        if (typeof namespaceData !== "object" || namespaceData === null) {
-          mismatches.push(`metadata is not an object or is null`);
-          continue;
+      // First check if key exists directly at the top level (flat metadata)
+      if (key in segment.metadata) {
+        const actualValue = segment.metadata[key];
+        if (JSON.stringify(actualValue) === JSON.stringify(expectedValue)) {
+          foundInMetadata = true;
+        } else {
+          mismatches.push(
+            `Attribute "${key}" on span "${spanName}": expected ${JSON.stringify(expectedValue)}, got ${JSON.stringify(actualValue)}`,
+          );
+          foundInMetadata = true; // Found but mismatched
         }
-        if (key in namespaceData) {
-          const actualValue = namespaceData[key];
-          if (JSON.stringify(actualValue) === JSON.stringify(expectedValue)) {
-            foundInMetadata = true;
-            break;
-          } else {
-            mismatches.push(
-              `Attribute "${key}" on span "${spanName}": expected ${JSON.stringify(expectedValue)}, got ${JSON.stringify(actualValue)}`,
-            );
-            foundInMetadata = true; // Found but mismatched
-            break;
+      }
+
+      // Then check nested namespaces (metadata[namespace][key])
+      if (!foundInMetadata) {
+        for (const namespace of Object.keys(segment.metadata)) {
+          const namespaceData = segment.metadata[namespace];
+          if (typeof namespaceData !== "object" || namespaceData === null) {
+            continue;
+          }
+          if (key in namespaceData) {
+            const actualValue = namespaceData[key];
+            if (JSON.stringify(actualValue) === JSON.stringify(expectedValue)) {
+              foundInMetadata = true;
+              break;
+            } else {
+              mismatches.push(
+                `Attribute "${key}" on span "${spanName}": expected ${JSON.stringify(expectedValue)}, got ${JSON.stringify(actualValue)}`,
+              );
+              foundInMetadata = true; // Found but mismatched
+              break;
+            }
           }
         }
       }
