@@ -72,19 +72,15 @@ export function parseChartSpec(
   const valid = new Set(validColumns);
   const bad = new Set<string>();
   const encoding = (spec as { encoding?: unknown }).encoding;
-  if (encoding && typeof encoding === "object") {
-    for (const channel of Object.values(encoding as Record<string, unknown>)) {
-      // A channel is usually one definition object, but some (tooltip, detail)
-      // can be an array of them. Channels without a `field` (an aggregate
-      // "count", a datum/value) are legitimate and simply have nothing to check.
-      for (const def of Array.isArray(channel) ? channel : [channel]) {
-        const field = (def as { field?: unknown } | null)?.field;
-        if (typeof field === "string" && !valid.has(field)) {
-          bad.add(field);
-        }
-      }
-    }
-  }
+  // Collect every `field` reference anywhere under encoding — not just each
+  // channel's top-level field, but nested ones too (e.g. sort: {field: ...},
+  // which the prompt explicitly encourages, or condition: {field: ...}). A
+  // hallucinated field in any of them would otherwise pass and render a broken
+  // chart. Channels/definitions without a `field` (aggregate "count", datum,
+  // value) simply contribute nothing.
+  collectFieldRefs(encoding, (field) => {
+    if (!valid.has(field)) bad.add(field);
+  });
   if (bad.size > 0) {
     throw new Error(
       `The model's chart referenced unknown column(s): ${[...bad].join(", ")}. ` +
@@ -92,4 +88,29 @@ export function parseChartSpec(
     );
   }
   return spec as Record<string, unknown>;
+}
+
+/**
+ * Walk an encoding subtree and invoke `onField` for every string-valued `field`
+ * property found at any depth (channel definitions, arrays like tooltip, and
+ * nested defs such as sort/condition). A `field` whose value isn't a string
+ * (e.g. a repeat reference) is left for Vega-Lite to handle.
+ */
+function collectFieldRefs(
+  node: unknown,
+  onField: (field: string) => void,
+): void {
+  if (Array.isArray(node)) {
+    for (const item of node) collectFieldRefs(item, onField);
+    return;
+  }
+  if (node && typeof node === "object") {
+    for (const [key, value] of Object.entries(node)) {
+      if (key === "field" && typeof value === "string") {
+        onField(value);
+      } else {
+        collectFieldRefs(value, onField);
+      }
+    }
+  }
 }

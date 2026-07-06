@@ -192,11 +192,14 @@ export async function verifyResult(
     const session = new LlamaChatSession({
       contextSequence: context.getSequence(),
     });
-    const text = await session.prompt(
-      `${instruction}\n\nRespond with ONLY JSON: {"satisfied": true|false, "reason": "...", "suggestion": "..."}`,
-    );
-    await context.dispose();
-    return parseVerdict(text);
+    try {
+      const text = await session.prompt(
+        `${instruction}\n\nRespond with ONLY JSON: {"satisfied": true|false, "reason": "...", "suggestion": "..."}`,
+      );
+      return parseVerdict(text);
+    } finally {
+      await context.dispose();
+    }
   } catch {
     // Never let a judge failure hide results or wedge the loop.
     return {
@@ -271,7 +274,9 @@ export async function generateChartSpec(
   opts: ChartSpecOptions,
 ): Promise<Record<string, unknown>> {
   const prompt = buildChartPrompt(opts);
-  const raw = await completeText(opts, prompt);
+  // A styled spec (several channels + scales + titles) is still small, but give
+  // headroom beyond the default so it can't truncate into invalid JSON.
+  const raw = await completeText(opts, prompt, 2048);
   return parseChartSpec(raw, opts.columns);
 }
 
@@ -361,9 +366,14 @@ async function completeText(
   const session = new LlamaChatSession({
     contextSequence: context.getSequence(),
   });
-  const text = await session.prompt(prompt);
-  await context.dispose();
-  return text.trim();
+  // finally: callers (e.g. generateChartSpec) let prompt() errors propagate, so
+  // dispose the llama context even on throw to avoid leaking it.
+  try {
+    const text = await session.prompt(prompt);
+    return text.trim();
+  } finally {
+    await context.dispose();
+  }
 }
 
 interface GenerateOptions {
@@ -722,8 +732,13 @@ async function generateViaLocal(
 
   const prompt = `${systemPrompt}\n\nRespond with ONLY a JSON object: {"query": "...", "explanation": "...", "timeRangeMs": ..., "suggestedCharts": ["...", "..."]}\nFor suggestedCharts pick 2-4 from: bar, stacked-bar, line, area, scatter, heatmap, histogram, pie, boxplot.\nOmit timeRangeMs if not mentioned (default 24h).\n\nUser question: ${opts.question}`;
 
-  const response = await session.prompt(prompt);
-  await context.dispose();
+  let response: string;
+  try {
+    response = await session.prompt(prompt);
+  } finally {
+    // Dispose even if prompt() throws (the error propagates to the caller).
+    await context.dispose();
+  }
 
   const jsonMatch = response.match(/\{[\s\S]*"query"[\s\S]*\}/);
   if (!jsonMatch) {

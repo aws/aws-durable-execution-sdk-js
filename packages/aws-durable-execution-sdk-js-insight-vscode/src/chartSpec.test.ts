@@ -77,6 +77,20 @@ describe("parseChartSpec", () => {
     );
   });
 
+  it("validates nested field references (sort.field)", () => {
+    const raw =
+      '{"mark":"bar","encoding":{"x":{"field":"product_category","sort":{"field":"nope","op":"sum"}},"y":{"field":"record_count"}}}';
+    expect(() => parseChartSpec(raw, COLS)).toThrow(
+      /unknown column\(s\): nope/,
+    );
+  });
+
+  it("accepts a valid nested sort field", () => {
+    const raw =
+      '{"mark":"bar","encoding":{"x":{"field":"product_category","sort":{"field":"record_count","op":"sum"}},"y":{"field":"record_count"}}}';
+    expect(() => parseChartSpec(raw, COLS)).not.toThrow();
+  });
+
   it("parses a spec even with trailing prose after the object", () => {
     const raw = `${bar("hour_bucket")}\nThat should work!`;
     expect(parseChartSpec(raw, COLS).mark).toBe("bar");

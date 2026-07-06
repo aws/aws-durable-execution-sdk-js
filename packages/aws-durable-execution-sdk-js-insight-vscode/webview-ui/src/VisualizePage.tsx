@@ -21,6 +21,19 @@ interface Props {
 
 type PresetType = "bar" | "stacked-bar" | "line" | "area" | "scatter" | "heatmap" | "histogram" | "pie" | "boxplot";
 
+// Constant list of every selectable chart type (order = fallback dropdown order).
+const ALL_PRESETS: { id: PresetType; label: string }[] = [
+  { id: "bar", label: "Bar" },
+  { id: "stacked-bar", label: "Stacked Bar" },
+  { id: "line", label: "Line" },
+  { id: "area", label: "Area" },
+  { id: "scatter", label: "Scatter" },
+  { id: "heatmap", label: "Heatmap" },
+  { id: "histogram", label: "Histogram" },
+  { id: "pie", label: "Pie" },
+  { id: "boxplot", label: "Box Plot" },
+];
+
 export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props) {
   const [spec, setSpec] = useState<Record<string, unknown> | null>(null);
   const [customPrompt, setCustomPrompt] = useState("");
@@ -63,30 +76,20 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
     return () => window.removeEventListener("message", handler);
   }, []);
 
-  const allPresets: { id: PresetType; label: string }[] = [
-    { id: "bar", label: "Bar" },
-    { id: "stacked-bar", label: "Stacked Bar" },
-    { id: "line", label: "Line" },
-    { id: "area", label: "Area" },
-    { id: "scatter", label: "Scatter" },
-    { id: "heatmap", label: "Heatmap" },
-    { id: "histogram", label: "Histogram" },
-    { id: "pie", label: "Pie" },
-    { id: "boxplot", label: "Box Plot" },
-  ];
-
   // All chart types are always offered in the dropdown; the ones the model
   // suggested for this result are floated to the top and tagged "Recommended"
   // (previously only the suggested ones were shown, hiding the rest).
-  const recommended = new Set(suggestedCharts ?? []);
-  const chartOptions: SelectProps.Option[] = [
-    ...allPresets.filter((p) => recommended.has(p.id)),
-    ...allPresets.filter((p) => !recommended.has(p.id)),
-  ].map((p) => ({
-    label: p.label,
-    value: p.id,
-    ...(recommended.has(p.id) ? { labelTag: "Recommended" } : {}),
-  }));
+  const chartOptions: SelectProps.Option[] = useMemo(() => {
+    const recommended = new Set(suggestedCharts ?? []);
+    return [
+      ...ALL_PRESETS.filter((p) => recommended.has(p.id)),
+      ...ALL_PRESETS.filter((p) => !recommended.has(p.id)),
+    ].map((p) => ({
+      label: p.label,
+      value: p.id,
+      ...(recommended.has(p.id) ? { labelTag: "Recommended" } : {}),
+    }));
+  }, [suggestedCharts]);
 
   // Convert rows to objects with numeric coercion
   const data = useMemo(
@@ -104,10 +107,14 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
   );
 
   // Guess which columns are numeric (a hint sent to the model).
-  const numericCols = columns.filter((col) => {
-    const sample = data.find((d) => d[col] !== "" && d[col] != null);
-    return sample && typeof sample[col] === "number";
-  });
+  const numericCols = useMemo(
+    () =>
+      columns.filter((col) => {
+        const sample = data.find((d) => d[col] !== "" && d[col] != null);
+        return sample && typeof sample[col] === "number";
+      }),
+    [columns, data],
+  );
 
   // Both the chart-type dropdown and the free-text box are answered by the
   // model: given the columns (and which are numeric) plus the request, it
@@ -239,26 +246,25 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
               { chart: "Histogram", best: "Distribution of a single numeric variable", needs: "1 numeric column" },
               { chart: "Pie / Donut", best: "Proportions of a whole (few categories)", needs: "1 categorical + 1 numeric column" },
               { chart: "Box Plot", best: "Statistical distribution (median, quartiles, outliers)", needs: "1 categorical + 1 numeric column" },
-              { chart: "Tick / Strip", best: "Individual data points along an axis", needs: "1 numeric column (+ optional category)" },
             ]}
             variant="embedded"
           />
 
           <Header variant="h3">Tips</Header>
           <Box variant="p">
-            • Presets auto-detect which columns are numeric (used for values) and which are categorical (used for labels/axes).
+            • Pick a chart type from the dropdown or describe what you want; the model chooses which columns map to each axis/value and adds styling.
           </Box>
           <Box variant="p">
-            • For grouped/stacked bar charts, make sure your query returns at least 2 categorical columns (the second becomes the color).
+            • For grouped/stacked bars, make sure your query returns a second categorical column for the model to use as the color/series.
           </Box>
           <Box variant="p">
-            • Heatmaps need exactly 2 categorical columns + 1 numeric. Query example: "count by customerName and productCategory from input".
+            • Heatmaps work best with 2 categorical columns + 1 numeric. Query example: "count by customerName and productCategory from input".
           </Box>
           <Box variant="p">
             • Charts can be exported as PNG or SVG using the "⋯" menu on the chart.
           </Box>
           <Box variant="p">
-            • If the chart looks wrong, go back and adjust your query to return the right columns.
+            • If the chart looks wrong, refine your description, or go back and adjust your query to return the right columns.
           </Box>
         </SpaceBetween>
       </Modal>
