@@ -268,6 +268,10 @@ export function assertSpanAttributes(
     if (segment.metadata) {
       for (const namespace of Object.keys(segment.metadata)) {
         const namespaceData = segment.metadata[namespace];
+        if (typeof namespaceData !== "object" || namespaceData === null) {
+          mismatches.push(`metadata is not an object or is null`);
+          continue;
+        }
         if (key in namespaceData) {
           const actualValue = namespaceData[key];
           if (JSON.stringify(actualValue) === JSON.stringify(expectedValue)) {
