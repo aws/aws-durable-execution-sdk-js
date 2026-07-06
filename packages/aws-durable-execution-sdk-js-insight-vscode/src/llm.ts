@@ -404,6 +404,7 @@ interface GenerateOptions {
    */
   agentic?: boolean;
 }
+
 /**
  * Unified LLM interface. Hides the difference between Bedrock (Converse API
  * with tool calling) and VS Code Copilot (Language Model API with text parsing).

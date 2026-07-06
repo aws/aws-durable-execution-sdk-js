@@ -8,6 +8,7 @@ import Input from "@cloudscape-design/components/input";
 import Select, { SelectProps } from "@cloudscape-design/components/select";
 import Box from "@cloudscape-design/components/box";
 import Alert from "@cloudscape-design/components/alert";
+import StatusIndicator from "@cloudscape-design/components/status-indicator";
 import Modal from "@cloudscape-design/components/modal";
 import Table from "@cloudscape-design/components/table";
 import { VegaChart } from "./VegaChart";
@@ -221,7 +222,6 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
               })
             }
             disabled={!customPrompt.trim() || llmLoading}
-            loading={llmLoading}
           >
             Visualize
           </Button>
@@ -235,9 +235,7 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
       </Container>
 
       {llmLoading && (
-        <Box color="text-status-info" fontSize="body-s">
-          Generating chart…
-        </Box>
+        <StatusIndicator type="loading">Generating chart…</StatusIndicator>
       )}
       {spec && <VegaChart spec={spec} data={data} />}
 

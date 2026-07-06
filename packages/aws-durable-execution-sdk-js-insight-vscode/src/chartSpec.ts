@@ -136,7 +136,19 @@ export function parseChartSpec(
   // result, so reject that too.
   const valid = new Set(validColumns);
   const fields: string[] = [];
-  collectFieldRefs(encoding, (f) => fields.push(f));
+  const dynamicKeys = new Set<string>();
+  collectFieldRefs(
+    encoding,
+    (f) => fields.push(f),
+    (k) => dynamicKeys.add(k),
+  );
+  // Reject dynamic expressions in the encoding (defense-in-depth beyond Vega's
+  // sandboxed evaluator): the chart should be static over the fetched rows.
+  if (dynamicKeys.size > 0) {
+    throw new Error(
+      `The model's chart used disallowed dynamic expression(s) (${[...dynamicKeys].join(", ")}) in its encoding.`,
+    );
+  }
   if (fields.length === 0) {
     throw new Error(
       "The model's chart did not reference any column (empty or field-less encoding).",
@@ -175,23 +187,28 @@ const ALLOWED_MARKS = new Set([
 /**
  * Walk an encoding subtree and invoke `onField` for every string-valued `field`
  * property found at any depth (channel definitions, arrays like tooltip, and
- * nested defs such as sort/condition). A `field` whose value isn't a string
- * (e.g. a repeat reference) is left for Vega-Lite to handle.
+ * nested defs such as sort/condition), and `onDisallowedKey` for any `expr`/
+ * `signal` key. A `field` whose value isn't a string (e.g. a repeat reference)
+ * is left for Vega-Lite to handle.
  */
 function collectFieldRefs(
   node: unknown,
   onField: (field: string) => void,
+  onDisallowedKey: (key: string) => void,
 ): void {
   if (Array.isArray(node)) {
-    for (const item of node) collectFieldRefs(item, onField);
+    for (const item of node) collectFieldRefs(item, onField, onDisallowedKey);
     return;
   }
   if (node && typeof node === "object") {
     for (const [key, value] of Object.entries(node)) {
+      if (key === "expr" || key === "signal") {
+        onDisallowedKey(key);
+      }
       if (key === "field" && typeof value === "string") {
         onField(value);
       } else {
-        collectFieldRefs(value, onField);
+        collectFieldRefs(value, onField, onDisallowedKey);
       }
     }
   }

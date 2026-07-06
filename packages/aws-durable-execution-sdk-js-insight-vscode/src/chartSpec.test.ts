@@ -105,6 +105,12 @@ describe("parseChartSpec", () => {
     ).toThrow(/malformed encoding/i);
   });
 
+  it("rejects a dynamic expr/signal in the encoding", () => {
+    const raw =
+      '{"mark":"bar","encoding":{"x":{"field":"hour_bucket"},"y":{"value":{"expr":"width"}}}}';
+    expect(() => parseChartSpec(raw, COLS)).toThrow(/dynamic expression/i);
+  });
+
   it("rejects disallowed top-level keys (data/transform/etc.)", () => {
     const withData =
       '{"mark":"bar","encoding":{"x":{"field":"hour_bucket"}},"data":{"url":"http://evil/x.json"}}';
