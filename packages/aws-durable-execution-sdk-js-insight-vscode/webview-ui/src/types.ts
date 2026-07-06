@@ -5,6 +5,9 @@ export type OutboundMessage =
   | { type: "newSession" }
   | { type: "saveSettings"; settings: Record<string, string> }
   | { type: "downloadModel"; localModel?: string }
+  // NOTE: keep this `visualize` shape in sync with the InboundMessage union in
+  // src/extension.ts (host and webview message types are, as existing debt,
+  // declared separately in each project's own `src`).
   | {
       type: "visualize";
       columns: string[];

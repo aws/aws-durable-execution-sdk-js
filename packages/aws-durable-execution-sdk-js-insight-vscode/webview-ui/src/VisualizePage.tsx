@@ -7,6 +7,7 @@ import FormField from "@cloudscape-design/components/form-field";
 import Input from "@cloudscape-design/components/input";
 import Select, { SelectProps } from "@cloudscape-design/components/select";
 import Box from "@cloudscape-design/components/box";
+import Alert from "@cloudscape-design/components/alert";
 import Modal from "@cloudscape-design/components/modal";
 import Table from "@cloudscape-design/components/table";
 import { VegaChart } from "./VegaChart";
@@ -67,10 +68,13 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
           msg.message || "Could not build a chart from that description.",
         );
         setLlmLoading(false);
-        // Clear the selection so re-picking the same type re-fires onChange
-        // (Cloudscape Select only fires when the selection changes).
-        setSelectedType(null);
       }
+      // Reset the dropdown selection after every reply (success or error).
+      // Cloudscape Select only fires onChange when the value changes, so
+      // leaving it set would make re-picking the same type a silent no-op;
+      // clearing it lets the user re-generate the same chart type. The chart
+      // itself stays rendered below.
+      setSelectedType(null);
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
@@ -184,7 +188,6 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
           <FormField
             label="Or describe how to visualize"
             description="Uses the model to map your request onto the fetched columns — e.g. 'record_count as data, product_category and hour_bucket as axis, stacked bar'."
-            errorText={llmError || undefined}
           >
             <Input
               value={customPrompt}
@@ -211,6 +214,12 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
           >
             Visualize
           </Button>
+
+          {llmError && (
+            <Alert type="error" header="Couldn't build the chart">
+              {llmError}
+            </Alert>
+          )}
         </SpaceBetween>
       </Container>
 

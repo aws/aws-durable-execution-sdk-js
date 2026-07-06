@@ -42,6 +42,9 @@ type InboundMessage =
   | { type: "saveSettings"; settings: Record<string, string> }
   | { type: "downloadModel"; localModel?: string }
   | { type: "exportChart"; format: "svg" | "png"; content: string }
+  // NOTE: keep this `visualize` shape in sync with OutboundMessage in
+  // webview-ui/src/types.ts (host and webview message types are declared
+  // separately in each project's own `src`).
   | {
       type: "visualize";
       columns: string[];
