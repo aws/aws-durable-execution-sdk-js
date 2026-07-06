@@ -41,6 +41,7 @@ function makeInvocationInfo(
     isFirstInvocation: true,
     executionInput: {},
     operations: {},
+    updatedOperations: {},
     ...overrides,
   };
 }
@@ -54,6 +55,7 @@ function makeInvocationEndInfo(
     isFirstInvocation: true,
     executionInput: {}, // required by InvocationInfo (parent type)
     operations: {},
+    updatedOperations: {},
     status: "SUCCEEDED" as any,
     executionResult: undefined,
     executionError: undefined,

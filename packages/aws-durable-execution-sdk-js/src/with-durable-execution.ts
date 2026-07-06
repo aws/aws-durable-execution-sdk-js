@@ -32,6 +32,7 @@ import { toOperationInfoMap } from "./utils/operation/operation";
 import {
   DurableInstrumentationPlugin,
   InvocationInfo,
+  OperationInfo,
   PluginInvocationStatus,
 } from "./types/plugin";
 
@@ -75,13 +76,23 @@ async function runHandler<
     initialExecutionEvent?.ExecutionDetails?.InputPayload ?? "{}",
   );
 
+  const allOperations = toOperationInfoMap(executionContext._stepData);
+  const updatedOperationIds = event.UpdatedOperationIds ?? [];
+  const updatedOperations: Record<string, OperationInfo> = {};
+  for (const id of updatedOperationIds) {
+    if (allOperations[id]) {
+      updatedOperations[id] = allOperations[id];
+    }
+  }
+
   const invocationInfo: InvocationInfo = {
     requestId: executionContext.requestId,
     executionArn: executionContext.durableExecutionArn,
     isFirstInvocation:
       durableExecutionMode === DurableExecutionMode.ExecutionMode,
     executionInput: customerHandlerEvent,
-    operations: toOperationInfoMap(executionContext._stepData),
+    operations: allOperations,
+    updatedOperations,
   };
   await plugin.onInvocationStart?.(invocationInfo);
 
