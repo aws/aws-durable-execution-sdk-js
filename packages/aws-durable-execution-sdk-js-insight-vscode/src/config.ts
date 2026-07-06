@@ -1,16 +1,12 @@
 import * as vscode from "vscode";
 import { fromIni, fromNodeProviderChain } from "@aws-sdk/credential-providers";
 import type { AwsCredentialIdentityProvider } from "@aws-sdk/types";
+import type { DestinationType } from "./schema";
 
 export interface InsightConfig {
   region: string;
   logGroupNames: string[];
-  destinationType:
-    | "cloudwatch-logs-exporter"
-    | "lambda-log-exporter"
-    | "dynamodb"
-    | "aurora"
-    | "sqs";
+  destinationType: DestinationType;
   dynamodbTableName: string;
   auroraResourceArn: string;
   auroraSecretArn: string;
@@ -18,9 +14,16 @@ export interface InsightConfig {
   auroraTable: string;
   sqsQueueUrl: string;
   sqsDeleteAfterRead: boolean;
+  athenaDatabase: string;
+  athenaTable: string;
+  athenaWorkgroup: string;
+  athenaOutputLocation: string;
+  athenaS3Location: string;
   llmProvider: "bedrock" | "copilot" | "local";
   awsProfile?: string;
   bedrockModelId: string;
+  localModel: string;
+  agenticMaxIterations: number;
 }
 
 const SECTION = "workflowInsight";
@@ -46,7 +49,9 @@ export function readConfig(): InsightConfig {
           ? ("aurora" as const)
           : raw === "sqs"
             ? ("sqs" as const)
-            : ("cloudwatch-logs-exporter" as const);
+            : raw === "s3"
+              ? ("s3" as const)
+              : ("cloudwatch-logs-exporter" as const);
   const dynamodbTableName = (c.get<string>("dynamodbTableName") || "").trim();
   const auroraResourceArn = (c.get<string>("auroraResourceArn") || "").trim();
   const auroraSecretArn = (c.get<string>("auroraSecretArn") || "").trim();
@@ -56,6 +61,14 @@ export function readConfig(): InsightConfig {
     (c.get<string>("auroraTable") || "").trim() || "workflow_insight";
   const sqsQueueUrl = (c.get<string>("sqsQueueUrl") || "").trim();
   const sqsDeleteAfterRead = c.get<boolean>("sqsDeleteAfterRead") ?? false;
+  const athenaDatabase = (c.get<string>("athenaDatabase") || "").trim();
+  const athenaTable =
+    (c.get<string>("athenaTable") || "").trim() || "workflow_insight";
+  const athenaWorkgroup = (c.get<string>("athenaWorkgroup") || "").trim();
+  const athenaOutputLocation = (
+    c.get<string>("athenaOutputLocation") || ""
+  ).trim();
+  const athenaS3Location = (c.get<string>("athenaS3Location") || "").trim();
   const llmProvider =
     (c.get<string>("llmProvider") || "").trim() === "copilot"
       ? ("copilot" as const)
@@ -66,6 +79,13 @@ export function readConfig(): InsightConfig {
   const bedrockModelId =
     (c.get<string>("bedrockModelId") || "").trim() ||
     "us.anthropic.claude-sonnet-4-20250514-v1:0";
+  const localModel =
+    (c.get<string>("localModel") || "").trim() || "llama-3-groq-8b-tool-use";
+  const rawMaxIter = c.get<number>("agenticMaxIterations");
+  const agenticMaxIterations =
+    typeof rawMaxIter === "number" && Number.isFinite(rawMaxIter)
+      ? Math.min(20, Math.max(1, Math.floor(rawMaxIter)))
+      : 8;
 
   return {
     region,
@@ -78,9 +98,16 @@ export function readConfig(): InsightConfig {
     auroraTable,
     sqsQueueUrl,
     sqsDeleteAfterRead,
+    athenaDatabase,
+    athenaTable,
+    athenaWorkgroup,
+    athenaOutputLocation,
+    athenaS3Location,
     llmProvider,
     awsProfile,
     bedrockModelId,
+    localModel,
+    agenticMaxIterations,
   };
 }
 

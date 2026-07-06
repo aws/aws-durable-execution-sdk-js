@@ -62,10 +62,10 @@ const ADOT_LAYER_ARNS: Record<string, string> = {
 };
 
 /**
- * Checks if the handler corresponds to the otel-xray-e2e function.
+ * Checks if the handler corresponds to an otel function that needs ADOT.
  */
-function isOtelXRayE2E(handler: string): boolean {
-  return handler.includes("otel-xray-e2e");
+function isOtelFunction(handler: string): boolean {
+  return handler.includes("otel-");
 }
 
 // Types
@@ -353,7 +353,7 @@ async function createFunction(
   let tracingConfig: { Mode: "Active" | "PassThrough" } | undefined;
   let layers: string[] | undefined;
 
-  if (isOtelXRayE2E(exampleConfig.handler)) {
+  if (isOtelFunction(exampleConfig.handler)) {
     const adotArn = ADOT_LAYER_ARNS[env.AWS_REGION];
     if (!adotArn) {
       console.error(
@@ -458,7 +458,7 @@ async function updateFunction(
           ? { AWS_ENDPOINT_URL_LAMBDA: env.LAMBDA_ENDPOINT }
           : undefined;
 
-        if (isOtelXRayE2E(exampleConfig.handler)) {
+        if (isOtelFunction(exampleConfig.handler)) {
           vars = {
             ...vars,
             AWS_LAMBDA_EXEC_WRAPPER: "/opt/otel-instrument",
@@ -480,7 +480,7 @@ async function updateFunction(
     TenancyConfig: exampleConfig.handler.includes("tenant-target")
       ? { TenantIsolationMode: "PER_TENANT" }
       : undefined,
-    ...(isOtelXRayE2E(exampleConfig.handler)
+    ...(isOtelFunction(exampleConfig.handler)
       ? {
           TracingConfig: { Mode: "Active" as const },
           Layers: (() => {

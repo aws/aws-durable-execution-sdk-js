@@ -4,6 +4,7 @@ import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as rds from "aws-cdk-lib/aws-rds";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as s3 from "aws-cdk-lib/aws-s3";
+import * as glue from "aws-cdk-lib/aws-glue";
 import * as opensearch from "aws-cdk-lib/aws-opensearchservice";
 import * as firehose from "aws-cdk-lib/aws-kinesisfirehose";
 import * as sqs from "aws-cdk-lib/aws-sqs";
@@ -222,8 +223,9 @@ export class InsightDestinationsStack extends cdk.Stack {
     }
 
     // --- S3 ---
+    let insightBucket: s3.Bucket | undefined;
     if (config.destinations.s3.enabled) {
-      const bucket = new s3.Bucket(this, "InsightBucket", {
+      insightBucket = new s3.Bucket(this, "InsightBucket", {
         bucketName: config.destinations.s3.bucketName,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
         autoDeleteObjects: true,
@@ -232,9 +234,125 @@ export class InsightDestinationsStack extends cdk.Stack {
       policyStatements.push(
         new iam.PolicyStatement({
           actions: ["s3:PutObject"],
-          resources: [`${bucket.bucketArn}/*`],
+          resources: [`${insightBucket.bucketArn}/*`],
         }),
       );
+
+      new cdk.CfnOutput(this, "InsightBucketName", {
+        value: insightBucket.bucketName,
+      });
+
+      // Pre-provision the Glue database/table so the workflow-insight-vscode
+      // extension's Athena+S3 destination is queryable immediately after
+      // `cdk deploy` — no manual `CREATE DATABASE`/`CREATE TABLE` step, and no
+      // dependency on the extension's own best-effort auto-create-on-save
+      // (which can only create the *table*, not the database — it assumes
+      // the database already exists, since a customer typically already has
+      // one). Column/partitioning shape mirrors S3Exporter's exact output
+      // (see packages/aws-durable-execution-sdk-js-insight-vscode/src/athena.ts
+      // buildCreateTableDdl, which customers use for their own buckets).
+      const glueDatabase = new glue.CfnDatabase(this, "InsightGlueDatabase", {
+        catalogId: this.account,
+        databaseInput: {
+          name: config.destinations.s3.glueDatabaseName,
+        },
+      });
+
+      const glueTable = new glue.CfnTable(this, "InsightGlueTable", {
+        catalogId: this.account,
+        databaseName: config.destinations.s3.glueDatabaseName,
+        tableInput: {
+          name: config.destinations.s3.glueTableName,
+          tableType: "EXTERNAL_TABLE",
+          // Partition projection (see the matching properties in
+          // aws-durable-execution-sdk-js-insight-vscode/src/athena.ts's
+          // buildCreateTableDdl, which customers use for their own buckets)
+          // — Athena computes valid year/month/day partitions and their S3
+          // locations from these properties instead of calling Glue's
+          // GetPartitions, so today's partition is queryable the moment
+          // S3Exporter writes today's first record, with no MSCK REPAIR
+          // TABLE / partition-discovery step needed (and none possible —
+          // Athena disallows ADD PARTITION/MSCK REPAIR on a
+          // projection-enabled table).
+          parameters: {
+            has_encrypted_data: "false",
+            "projection.enabled": "true",
+            "projection.year.type": "integer",
+            "projection.year.range": "2024,2030",
+            "projection.month.type": "integer",
+            "projection.month.range": "1,12",
+            "projection.month.digits": "2",
+            "projection.day.type": "integer",
+            "projection.day.range": "1,31",
+            "projection.day.digits": "2",
+            "storage.location.template": `${insightBucket.s3UrlForObject(
+              "workflow-insight/",
+            )}year=\${year}/month=\${month}/day=\${day}`,
+          },
+          partitionKeys: [
+            { name: "year", type: "string" },
+            { name: "month", type: "string" },
+            { name: "day", type: "string" },
+          ],
+          storageDescriptor: {
+            location: insightBucket.s3UrlForObject("workflow-insight/"),
+            inputFormat: "org.apache.hadoop.mapred.TextInputFormat",
+            outputFormat:
+              "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat",
+            serdeInfo: {
+              serializationLibrary: "org.openx.data.jsonserde.JsonSerDe",
+              parameters: { "ignore.malformed.json": "true" },
+            },
+            columns: [
+              { name: "recordtype", type: "string" },
+              { name: "schemaversion", type: "string" },
+              { name: "emittedat", type: "string" },
+              { name: "executionarn", type: "string" },
+              { name: "executionname", type: "string" },
+              { name: "functionname", type: "string" },
+              { name: "functionqualifier", type: "string" },
+              { name: "region", type: "string" },
+              { name: "accountid", type: "string" },
+              { name: "status", type: "string" },
+              { name: "starttime", type: "string" },
+              { name: "endtime", type: "string" },
+              { name: "durationms", type: "bigint" },
+              { name: "input", type: "string" },
+              { name: "output", type: "string" },
+              {
+                name: "error",
+                type: "struct<name:string,message:string>",
+              },
+              {
+                name: "operations",
+                // Written lowercase (subtype, parentid, durationms, ...)
+                // to match the same struct in
+                // aws-durable-execution-sdk-js-insight-vscode/src/athena.ts's
+                // buildCreateTableDdl exactly — Hive/Glue identifiers are
+                // case-insensitive and get folded to lowercase regardless of
+                // how they're written here, so this was never functionally
+                // different from the WorkflowInsightRecord's own camelCase
+                // field names, but keeping both DDL definitions in the same
+                // casing avoids them drifting into visually different text
+                // describing an identical schema.
+                type: "array<struct<id:string,name:string,type:string,subtype:string,parentid:string,status:string,starttime:string,endtime:string,durationms:bigint,attempt:int,error:struct<name:string,message:string>,result:string,truncated:boolean>>",
+              },
+              { name: "truncated", type: "boolean" },
+              { name: "droppedoperations", type: "int" },
+              { name: "droppedinput", type: "boolean" },
+              { name: "droppedoutput", type: "boolean" },
+            ],
+          },
+        },
+      });
+      glueTable.addDependency(glueDatabase);
+
+      new cdk.CfnOutput(this, "InsightGlueDatabaseName", {
+        value: config.destinations.s3.glueDatabaseName,
+      });
+      new cdk.CfnOutput(this, "InsightGlueTableName", {
+        value: config.destinations.s3.glueTableName,
+      });
     }
 
     // --- Redshift Serverless ---
@@ -526,6 +644,9 @@ export class InsightDestinationsStack extends cdk.Stack {
       }
       if (config.destinations.sqs.enabled && sqsQueue) {
         envVars.INSIGHT_SQS_QUEUE_URL = sqsQueue.queueUrl;
+      }
+      if (config.destinations.s3.enabled && insightBucket) {
+        envVars.INSIGHT_S3_BUCKET = insightBucket.bucketName;
       }
 
       const exampleFn = new lambdaNode.NodejsFunction(

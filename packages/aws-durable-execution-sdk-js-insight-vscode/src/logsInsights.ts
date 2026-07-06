@@ -110,3 +110,109 @@ function normalize(
     recordsScanned: statistics?.recordsScanned,
   };
 }
+
+/**
+ * Fetch a single full record by executionArn, for the row-detail
+ * drill-down. Logs Insights has no point-lookup API — this runs an ordinary
+ * (but narrowly filtered) query over a generous lookback window, since a
+ * click can target a record from any time range the original query covered.
+ * Slower than the other destinations' point lookups (a fresh Logs Insights
+ * query, not a cheap keyed read), but still just a few seconds.
+ *
+ * Handles both destination formats this module's queries can target:
+ * "direct" (CloudWatchLogsExporter, raw JSON fields) and "nested"
+ * (LambdaLogExporter, JSON string in a `message` field) — tries a
+ * field-based match first, then a message-substring match.
+ */
+export async function fetchLogsInsightsRecord(opts: {
+  region: string;
+  credentials: AwsCredentialIdentityProvider;
+  logGroupNames: string[];
+  executionArn: string;
+  lookbackMs?: number;
+}): Promise<Record<string, string> | undefined> {
+  // Escape for embedding in a double-quoted Logs Insights string literal.
+  // See escapeQuotedString for why the order (backslashes before quotes)
+  // matters — CodeQL flags the naive quote-only escape as incomplete.
+  const escaped = escapeQuotedString(opts.executionArn);
+  const endTimeMs = Date.now();
+  const startTimeMs = endTimeMs - (opts.lookbackMs ?? 7 * 24 * 60 * 60 * 1000);
+
+  // Try the "direct" shape first: executionArn is a top-level field.
+  const direct = await runLogsInsightsQuery({
+    region: opts.region,
+    credentials: opts.credentials,
+    logGroupNames: opts.logGroupNames,
+    queryString: `filter executionArn = "${escaped}" | fields @message | sort @timestamp desc | limit 1`,
+    startTimeMs,
+    endTimeMs,
+  }).catch(() => undefined);
+
+  const directMessage = direct?.rows[0]?.[direct.columns.indexOf("@message")];
+  if (directMessage) {
+    const parsed = tryParseRecord(directMessage);
+    if (parsed) return parsed;
+  }
+
+  // Fall back to the "nested" shape: executionArn is inside a JSON string in
+  // the `message` field (LambdaLogExporter's envelope).
+  const nested = await runLogsInsightsQuery({
+    region: opts.region,
+    credentials: opts.credentials,
+    logGroupNames: opts.logGroupNames,
+    queryString: `filter message like /${escapeRegex(opts.executionArn)}/ | fields @message | sort @timestamp desc | limit 1`,
+    startTimeMs,
+    endTimeMs,
+  }).catch(() => undefined);
+
+  const nestedMessage = nested?.rows[0]?.[nested.columns.indexOf("@message")];
+  if (nestedMessage) {
+    // The envelope's `message` field is itself a JSON-serialized
+    // WorkflowInsightRecord string, one level deeper than @message here.
+    const outer = tryParseRecord(nestedMessage);
+    if (outer && typeof outer.message === "string") {
+      const inner = tryParseRecord(outer.message);
+      if (inner) return inner;
+    }
+    if (outer) return outer;
+  }
+
+  return undefined;
+}
+
+function tryParseRecord(raw: string): Record<string, string> | undefined {
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return undefined;
+    const record: Record<string, string> = {};
+    for (const [key, val] of Object.entries(
+      parsed as Record<string, unknown>,
+    )) {
+      if (val == null) continue;
+      record[key] = typeof val === "object" ? JSON.stringify(val) : String(val);
+    }
+    return record;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Escape a string for safe embedding inside a double-quoted CloudWatch Logs
+ * Insights string literal (e.g. `filter field = "<here>"`).
+ *
+ * Order is critical: backslashes are escaped FIRST, then double quotes. If
+ * quotes were escaped first, the backslash added in front of each quote
+ * would then be doubled by the backslash pass, corrupting the output; and
+ * escaping only quotes (the naive approach CodeQL flags as "incomplete
+ * string escaping") leaves any backslash already in the input unescaped —
+ * a trailing `\` would escape the closing quote and let the value break out
+ * of the string literal.
+ */
+export function escapeQuotedString(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+export function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}

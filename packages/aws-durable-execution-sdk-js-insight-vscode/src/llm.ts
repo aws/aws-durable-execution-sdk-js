@@ -6,13 +6,28 @@ import {
   type Tool,
 } from "@aws-sdk/client-bedrock-runtime";
 import type { AwsCredentialIdentityProvider } from "@aws-sdk/types";
-import { buildSystemPrompt } from "./schema";
+import { buildSystemPrompt, type DestinationType } from "./schema";
+import { parseChartSpec } from "./chartSpec";
+import {
+  parseVerdict,
+  buildVerifyInstruction,
+  buildAnalysisPrompt,
+  type ResultVerdict,
+} from "./verdict";
 
 export interface GeneratedQuery {
   query: string;
   explanation: string;
   timeRangeMs: number;
   suggestedCharts?: string[];
+  /**
+   * Set when the model chose to return raw rows for a follow-up
+   * post-processing step to interpret, rather than expressing the whole
+   * answer in the query language.
+   */
+  postProcess?: boolean;
+  /** What the post-processing step should extract from the raw rows. */
+  postProcessGoal?: string;
 }
 
 const DEFAULT_TIME_RANGE_MS = 86_400_000;
@@ -41,6 +56,16 @@ const EMIT_QUERY_TOOL: Tool = {
             description:
               "List of chart types suitable for visualizing this query's results. Values: bar, stacked-bar, line, area, scatter, heatmap, histogram, pie, boxplot. Pick 2-4 most appropriate based on the data shape (e.g., aggregation with GROUP BY → bar/pie; time series → line/area; two numeric columns → scatter; distribution → histogram/boxplot).",
           },
+          postProcess: {
+            type: "boolean",
+            description:
+              "Set true ONLY when the question can't be answered cleanly in the query language and is better served by returning the raw relevant column(s) for the relevant rows and letting a follow-up step read them to produce the answer. When true, `query` should just fetch that raw data (e.g. SELECT input FROM t ORDER BY ... LIMIT n). Leave false/omitted for normal queries that already produce the answer.",
+          },
+          postProcessGoal: {
+            type: "string",
+            description:
+              "When postProcess is true: a short description of what to extract or compute from the returned rows (e.g. 'the distinct set of top-level keys across all input JSON objects').",
+          },
         },
         required: ["query", "explanation"],
       },
@@ -50,15 +75,334 @@ const EMIT_QUERY_TOOL: Tool = {
 
 export type LlmProvider = "bedrock" | "copilot" | "local";
 
+// ─── Result verification (agentic / "advanced" mode) ─────────────────────────
+
+const JUDGE_TOOL: Tool = {
+  toolSpec: {
+    name: "judge_result",
+    description:
+      "Decide whether the query results answer the user's question, and if not, suggest how to fix the query.",
+    inputSchema: {
+      json: {
+        type: "object",
+        properties: {
+          satisfied: {
+            type: "boolean",
+            description:
+              "true if the results genuinely answer the question. An empty result set can still be a correct answer (e.g. 'no failures today') — only mark unsatisfied if the query looks like it targets the wrong field/shape/filter.",
+          },
+          reason: {
+            type: "string",
+            description: "One sentence explaining the verdict.",
+          },
+          suggestion: {
+            type: "string",
+            description:
+              "If not satisfied, a concrete change to the query that would better answer the question.",
+          },
+        },
+        required: ["satisfied", "reason"],
+      },
+    },
+  },
+};
+
+interface VerifyOptions {
+  provider: LlmProvider;
+  region: string;
+  credentials: AwsCredentialIdentityProvider;
+  modelId: string;
+  question: string;
+  query: string;
+  columns: string[];
+  rowCount: number;
+  sampleRows: string[][];
+}
+
+/**
+ * Ask the model whether a query's results answer the user's question.
+ * Advanced-mode only. Any failure resolves to "satisfied" so verification can
+ * never block a legitimate result from being shown.
+ */
+export async function verifyResult(
+  opts: VerifyOptions,
+): Promise<ResultVerdict> {
+  const instruction = buildVerifyInstruction(opts);
+  try {
+    if (opts.provider === "bedrock") {
+      const client = new BedrockRuntimeClient({
+        region: opts.region,
+        credentials: opts.credentials,
+      });
+      const response = await client.send(
+        new ConverseCommand({
+          modelId: opts.modelId,
+          messages: [{ role: "user", content: [{ text: instruction }] }],
+          toolConfig: {
+            tools: [JUDGE_TOOL],
+            toolChoice: { tool: { name: "judge_result" } },
+          },
+          inferenceConfig: { maxTokens: 4096, temperature: 0 },
+        }),
+      );
+      const blocks: ContentBlock[] = response.output?.message?.content ?? [];
+      const toolUse = blocks.find((b) => "toolUse" in b && b.toolUse)?.toolUse;
+      const input = toolUse?.input as
+        | { satisfied?: unknown; reason?: unknown; suggestion?: unknown }
+        | undefined;
+      if (input && typeof input.satisfied === "boolean") {
+        return {
+          satisfied: input.satisfied,
+          reason:
+            typeof input.reason === "string" && input.reason.trim()
+              ? input.reason.trim()
+              : "No reason provided.",
+          suggestion:
+            typeof input.suggestion === "string" && input.suggestion.trim()
+              ? input.suggestion.trim()
+              : undefined,
+        };
+      }
+      return { satisfied: true, reason: "No verdict returned; accepting." };
+    }
+
+    if (opts.provider === "copilot") {
+      const models = await vscode.lm.selectChatModels({ vendor: "copilot" });
+      if (models.length === 0) {
+        return { satisfied: true, reason: "No judge model available." };
+      }
+      const cts = new vscode.CancellationTokenSource();
+      try {
+        const response = await models[0].sendRequest(
+          [
+            vscode.LanguageModelChatMessage.User(
+              `${instruction}\n\nRespond with ONLY JSON: {"satisfied": true|false, "reason": "...", "suggestion": "..."}`,
+            ),
+          ],
+          {},
+          cts.token,
+        );
+        let text = "";
+        for await (const chunk of response.text) text += chunk;
+        return parseVerdict(text);
+      } finally {
+        cts.dispose();
+      }
+    }
+
+    // local
+    const { model } = await getLocalModel();
+    const { LlamaChatSession } = await import("node-llama-cpp");
+    const context = await model.createContext();
+    const session = new LlamaChatSession({
+      contextSequence: context.getSequence(),
+    });
+    try {
+      const text = await session.prompt(
+        `${instruction}\n\nRespond with ONLY JSON: {"satisfied": true|false, "reason": "...", "suggestion": "..."}`,
+      );
+      return parseVerdict(text);
+    } finally {
+      await context.dispose();
+    }
+  } catch {
+    // Never let a judge failure hide results or wedge the loop.
+    return {
+      satisfied: true,
+      reason: "Verification failed; accepting the results as-is.",
+    };
+  }
+}
+
+// ─── Result post-processing / analysis (agentic "advanced" mode) ─────────────
+
+interface AnalyzeOptions {
+  provider: LlmProvider;
+  region: string;
+  credentials: AwsCredentialIdentityProvider;
+  modelId: string;
+  question: string;
+  goal?: string;
+  columns: string[];
+  rows: string[][];
+}
+
+/**
+ * Answer the user's question directly from the rows a query returned, instead
+ * of expressing everything in the query language (advanced mode's
+ * post-processing step — used when generateQuery set postProcess=true, e.g.
+ * "list the distinct keys across these JSON inputs"). Returns the answer text,
+ * or "" on any failure so the caller can just fall back to showing the table.
+ * Only a bounded sample of rows is sent (see buildAnalysisPrompt).
+ */
+export async function analyzeResults(opts: AnalyzeOptions): Promise<string> {
+  const prompt = buildAnalysisPrompt({
+    question: opts.question,
+    goal: opts.goal,
+    columns: opts.columns,
+    rows: opts.rows,
+  });
+  try {
+    // Analysis prose can be long, so allow the larger token budget.
+    return await completeText(opts, prompt, 4096);
+  } catch {
+    // Never let an analysis failure hide the results; fall back to the table.
+    return "";
+  }
+}
+
+// ─── Chart spec generation (Visualize page, free-text prompt) ────────────────
+
+interface ChartSpecOptions {
+  provider: LlmProvider;
+  region: string;
+  credentials: AwsCredentialIdentityProvider;
+  modelId: string;
+  columns: string[];
+  /** Names of the columns that hold numeric values (a hint for value/axis choice). */
+  numericColumns: string[];
+  /** The chart type the user picked from the dropdown, if any (e.g. "stacked-bar"). */
+  chartType?: string;
+  description: string;
+}
+
+/**
+ * Turn a visualization request into a Vega-Lite spec fragment ({mark, encoding}
+ * plus optional styling) over the columns already fetched. The request is
+ * either a chart type the user picked, a free-text description, or both. The
+ * model decides which column maps to each channel and any styling. Only the
+ * column names/types and the request are sent — never the row data. Throws on
+ * model/parse failure so the caller can surface an error instead of rendering a
+ * silently wrong chart.
+ */
+export async function generateChartSpec(
+  opts: ChartSpecOptions,
+): Promise<Record<string, unknown>> {
+  const prompt = buildChartPrompt(opts);
+  // A styled spec (several channels + scales + titles) is still small, but give
+  // headroom beyond the default on the Bedrock/local paths so it doesn't
+  // truncate into invalid JSON (the Copilot path uses its own default).
+  const raw = await completeText(opts, prompt, 2048);
+  return parseChartSpec(raw, opts.columns);
+}
+
+function buildChartPrompt(opts: ChartSpecOptions): string {
+  const numeric = opts.numericColumns.length
+    ? opts.numericColumns.join(", ")
+    : "(none detected)";
+  const request = [
+    opts.chartType ? `Chart type: ${opts.chartType}.` : "",
+    opts.description ? `Request: ${opts.description}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return [
+    "You configure a Vega-Lite v5 chart for a result table. Map the request onto the AVAILABLE COLUMNS only, choosing the best column for each channel.",
+    "",
+    `Available columns: ${opts.columns.join(", ")}`,
+    `Numeric columns (usable as quantitative values): ${numeric}`,
+    "",
+    `${request}`,
+    "",
+    "Rules:",
+    "- Use ONLY the listed column names, verbatim, in each `field`. Never invent a column.",
+    "- Put the measure/value on a quantitative encoding (usually y, or theta for a pie); put category/axis columns on x, and a second category on color (or xOffset for a grouped bar).",
+    '- Stacked bar: mark "bar", the value on y with "stack":"zero", one category on x, the other on color.',
+    '- Pick a sensible `type` per field: "quantitative" for numbers, "nominal"/"ordinal" for categories, "temporal" for timestamps.',
+    '- You MAY add styling when it improves readability: an axis `scale` (e.g. "zero":true or "domainMin"/"domainMax"), a color `scale` `scheme` (e.g. "tableau10", "category10"), `sort` on an axis, and short axis `title`s. Keep it valid Vega-Lite v5. Do NOT set width, height, data, or config.',
+    "",
+    'Respond with ONLY a JSON object with "mark" and "encoding" (optionally with the styling above), no prose, no data, no $schema. Example:',
+    '{"mark":"bar","encoding":{"x":{"field":"product_category","type":"nominal","title":"Category"},"y":{"field":"record_count","type":"quantitative","stack":"zero","scale":{"zero":true}},"color":{"field":"hour_bucket","type":"nominal","scale":{"scheme":"tableau10"}}}}',
+  ].join("\n");
+}
+
+/**
+ * Single prompt -> text completion across all three providers, used by both
+ * analyzeResults and generateChartSpec. Surfaces errors to the caller (callers
+ * that prefer a soft failure wrap it in their own try/catch). `maxTokens`
+ * bounds the Bedrock and local (node-llama-cpp) responses; the Copilot path
+ * has no simple per-request token knob and uses the model's own default.
+ */
+async function completeText(
+  opts: {
+    provider: LlmProvider;
+    region: string;
+    credentials: AwsCredentialIdentityProvider;
+    modelId: string;
+  },
+  prompt: string,
+  maxTokens = 1024,
+): Promise<string> {
+  if (opts.provider === "bedrock") {
+    const client = new BedrockRuntimeClient({
+      region: opts.region,
+      credentials: opts.credentials,
+    });
+    const response = await client.send(
+      new ConverseCommand({
+        modelId: opts.modelId,
+        messages: [{ role: "user", content: [{ text: prompt }] }],
+        inferenceConfig: { maxTokens, temperature: 0 },
+      }),
+    );
+    const blocks: ContentBlock[] = response.output?.message?.content ?? [];
+    return blocks
+      .map((b) => ("text" in b && b.text ? b.text : ""))
+      .join("")
+      .trim();
+  }
+  if (opts.provider === "copilot") {
+    const models = await vscode.lm.selectChatModels({ vendor: "copilot" });
+    if (models.length === 0) {
+      throw new Error("No Copilot chat model is available.");
+    }
+    const cts = new vscode.CancellationTokenSource();
+    try {
+      const response = await models[0].sendRequest(
+        [vscode.LanguageModelChatMessage.User(prompt)],
+        {},
+        cts.token,
+      );
+      let text = "";
+      for await (const chunk of response.text) text += chunk;
+      return text.trim();
+    } finally {
+      cts.dispose();
+    }
+  }
+  // local
+  const { model } = await getLocalModel();
+  const { LlamaChatSession } = await import("node-llama-cpp");
+  const context = await model.createContext();
+  const session = new LlamaChatSession({
+    contextSequence: context.getSequence(),
+  });
+  // finally: callers (e.g. generateChartSpec) let prompt() errors propagate, so
+  // dispose the llama context even on throw to avoid leaking it.
+  try {
+    const text = await session.prompt(prompt, { maxTokens });
+    return text.trim();
+  } finally {
+    await context.dispose();
+  }
+}
+
 interface GenerateOptions {
   provider: LlmProvider;
   region: string;
   credentials: AwsCredentialIdentityProvider;
   modelId: string;
   question: string;
-  destinationType: string;
+  destinationType: DestinationType;
   tableName?: string;
   onStatus?: (text: string) => void;
+  /**
+   * When true, the system prompt tells the model it may return raw data +
+   * set postProcess=true for a follow-up analysis step. The assistant always
+   * enables this today; when false the prompt omits that post-processing
+   * guidance.
+   */
+  agentic?: boolean;
 }
 
 /**
@@ -86,8 +430,9 @@ async function generateViaBedrock(
     region: opts.region,
     credentials: opts.credentials,
   });
-  const systemPrompt = buildSystemPrompt(opts.destinationType as any, {
+  const systemPrompt = buildSystemPrompt(opts.destinationType, {
     tableName: opts.tableName,
+    agentic: opts.agentic,
   });
 
   const response = await client.send(
@@ -99,7 +444,7 @@ async function generateViaBedrock(
         tools: [EMIT_QUERY_TOOL],
         toolChoice: { tool: { name: "emit_query" } },
       },
-      inferenceConfig: { maxTokens: 1024, temperature: 0 },
+      inferenceConfig: { maxTokens: 4096, temperature: 0 },
     }),
   );
 
@@ -111,6 +456,8 @@ async function generateViaBedrock(
         explanation?: string;
         timeRangeMs?: number;
         suggestedCharts?: string[];
+        postProcess?: boolean;
+        postProcessGoal?: string;
       }
     | undefined;
 
@@ -125,6 +472,11 @@ async function generateViaBedrock(
     explanation: (input.explanation ?? "").trim(),
     timeRangeMs: input.timeRangeMs ?? DEFAULT_TIME_RANGE_MS,
     suggestedCharts: input.suggestedCharts,
+    postProcess: input.postProcess === true,
+    postProcessGoal:
+      typeof input.postProcessGoal === "string"
+        ? input.postProcessGoal.trim()
+        : undefined,
   };
 }
 
@@ -148,8 +500,9 @@ async function generateViaCopilot(
   }
 
   const model = models[0];
-  const systemPrompt = buildSystemPrompt(opts.destinationType as any, {
+  const systemPrompt = buildSystemPrompt(opts.destinationType, {
     tableName: opts.tableName,
+    agentic: opts.agentic,
   });
 
   const messages = [
@@ -159,16 +512,16 @@ async function generateViaCopilot(
     vscode.LanguageModelChatMessage.User(opts.question),
   ];
 
-  const response = await model.sendRequest(
-    messages,
-    {},
-    new vscode.CancellationTokenSource().token,
-  );
-
+  const cts = new vscode.CancellationTokenSource();
   // Collect the streamed response
   let text = "";
-  for await (const chunk of response.text) {
-    text += chunk;
+  try {
+    const response = await model.sendRequest(messages, {}, cts.token);
+    for await (const chunk of response.text) {
+      text += chunk;
+    }
+  } finally {
+    cts.dispose();
   }
 
   // Parse JSON from the response (handle potential markdown wrapping)
@@ -204,49 +557,160 @@ async function generateViaCopilot(
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
+import * as crypto from "crypto";
 
 const MODEL_DIR = path.join(os.homedir(), ".workflow-insight", "models");
-const MODEL_FILENAME = "qwen2.5-coder-3b-instruct-q4_k_m.gguf";
-const MODEL_URL =
-  "https://huggingface.co/Qwen/Qwen2.5-Coder-3B-Instruct-GGUF/resolve/main/qwen2.5-coder-3b-instruct-q4_k_m.gguf";
 
+export interface LocalModelPreset {
+  key: string;
+  /** Short human label for the settings dropdown. */
+  label: string;
+  filename: string;
+  url: string;
+  /** SHA-256 of the file, verified after download (the HF LFS oid). */
+  sha256: string;
+  /** Approximate download size, shown in the download status. */
+  sizeLabel: string;
+}
+
+/**
+ * Selectable local models, ordered best-first. The default is the highest
+ * Berkeley Function-Calling Leaderboard (BFCL) score that still runs on a
+ * typical single-GPU / laptop: Llama-3-Groq-8B-Tool-Use (~89% BFCL). The 70B
+ * variant tops BFCL (~90.8%) but is ~40 GB and needs ~48 GB RAM, so it's not a
+ * sane default. See https://gorilla.eecs.berkeley.edu/leaderboard.html
+ */
+export const LOCAL_MODEL_PRESETS: LocalModelPreset[] = [
+  {
+    key: "llama-3-groq-8b-tool-use",
+    label: "Llama-3-Groq-8B Tool-Use (best tool-calling, ~4.9 GB)",
+    filename: "Llama-3-Groq-8B-Tool-Use-Q4_K_M.gguf",
+    // Pinned to a specific commit (not a branch head) and checksum-verified so
+    // an upstream change can't be silently downloaded and run natively.
+    url: "https://huggingface.co/bartowski/Llama-3-Groq-8B-Tool-Use-GGUF/resolve/2d49903869805faad16daab2450fcda3487685b8/Llama-3-Groq-8B-Tool-Use-Q4_K_M.gguf",
+    sha256: "83c95e45fe22789641ec281282cdcc93e48ae14f985a05ae6e4849ff56803aa8",
+    sizeLabel: "4.9 GB",
+  },
+  {
+    key: "phi-3.5-mini",
+    label: "Phi-3.5-mini (smaller, good quality-per-GB, ~2.4 GB)",
+    filename: "Phi-3.5-mini-instruct-Q4_K_M.gguf",
+    url: "https://huggingface.co/bartowski/Phi-3.5-mini-instruct-GGUF/resolve/6d70da17e749a471ccb62ade694486011a75cda3/Phi-3.5-mini-instruct-Q4_K_M.gguf",
+    sha256: "e4165e3a71af97f1b4820da61079826d8752a2088e313af0c7d346796c38eff5",
+    sizeLabel: "2.4 GB",
+  },
+  {
+    key: "qwen2.5-coder-3b",
+    label: "Qwen2.5-Coder-3B (smallest footprint, ~2.2 GB)",
+    filename: "qwen2.5-coder-3b-instruct-q4_k_m.gguf",
+    url: "https://huggingface.co/Qwen/Qwen2.5-Coder-3B-Instruct-GGUF/resolve/f74adce6aa16316c625447af059dbebe4983757c/qwen2.5-coder-3b-instruct-q4_k_m.gguf",
+    sha256: "724fb256bec1ff062b2f65e4569e871ad2e95ab2a3989723d1769c54294730b7",
+    sizeLabel: "2.2 GB",
+  },
+];
+
+export const DEFAULT_LOCAL_MODEL_KEY = LOCAL_MODEL_PRESETS[0].key;
+
+let currentModelKey = DEFAULT_LOCAL_MODEL_KEY;
 let localModelInstance: any = null;
 
+function resolveLocalModel(): LocalModelPreset {
+  return (
+    LOCAL_MODEL_PRESETS.find((m) => m.key === currentModelKey) ??
+    LOCAL_MODEL_PRESETS[0]
+  );
+}
+
+/**
+ * Select which local model preset subsequent local calls use. Unknown keys
+ * fall back to the default. Switching drops the cached instance so the next
+ * call loads the newly-selected model.
+ */
+export function setLocalModel(key: string | undefined): void {
+  const next =
+    LOCAL_MODEL_PRESETS.find((m) => m.key === key)?.key ??
+    DEFAULT_LOCAL_MODEL_KEY;
+  if (next !== currentModelKey) {
+    currentModelKey = next;
+    localModelInstance = null;
+  }
+}
+
 export function isModelDownloaded(): boolean {
-  return fs.existsSync(path.join(MODEL_DIR, MODEL_FILENAME));
+  // The final path only exists after a checksum-verified, atomic rename (see
+  // ensureModel), so its presence means a complete, valid model — interrupted
+  // downloads live at <filename>.partial and don't count.
+  return fs.existsSync(path.join(MODEL_DIR, resolveLocalModel().filename));
 }
 
 export async function ensureModel(
   statusCallback?: (text: string) => void,
 ): Promise<string> {
-  const modelPath = path.join(MODEL_DIR, MODEL_FILENAME);
+  const preset = resolveLocalModel();
+  const modelPath = path.join(MODEL_DIR, preset.filename);
   if (fs.existsSync(modelPath)) return modelPath;
 
   fs.mkdirSync(MODEL_DIR, { recursive: true });
-  statusCallback?.("Downloading local model (2.2 GB, one time)...");
+  statusCallback?.(
+    `Downloading ${preset.label.replace(/\s*\(.*\)$/, "")} (${preset.sizeLabel}, one time)...`,
+  );
 
-  const response = await fetch(MODEL_URL);
+  const response = await fetch(preset.url);
   if (!response.ok || !response.body) {
     throw new Error(`Failed to download model: ${response.status}`);
   }
 
-  const fileStream = fs.createWriteStream(modelPath);
+  // Download to a temp path and only rename to the final name after the
+  // checksum passes. An interrupted download (network drop, host killed) then
+  // leaves a .partial file that is never mistaken for a complete model.
+  const partialPath = `${modelPath}.partial`;
+  const fileStream = fs.createWriteStream(partialPath);
   const reader = response.body.getReader();
   let downloaded = 0;
   const total = Number(response.headers.get("content-length") || 0);
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    fileStream.write(value);
-    downloaded += value.length;
-    if (total > 0) {
-      const pct = Math.round((downloaded / total) * 100);
-      statusCallback?.(`Downloading model... ${pct}%`);
+  const hash = crypto.createHash("sha256");
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      // Respect backpressure: when the write buffer is full, wait for it to
+      // drain before queueing more so this multi-GB download can't balloon
+      // memory faster than it flushes to disk.
+      if (!fileStream.write(value)) {
+        await new Promise<void>((resolve) => fileStream.once("drain", resolve));
+      }
+      hash.update(value);
+      downloaded += value.length;
+      if (total > 0) {
+        const pct = Math.round((downloaded / total) * 100);
+        statusCallback?.(`Downloading model... ${pct}%`);
+      }
     }
+    fileStream.end();
+    await new Promise<void>((resolve, reject) => {
+      fileStream.on("finish", resolve);
+      fileStream.on("error", reject);
+    });
+  } catch (err) {
+    fileStream.destroy();
+    fs.rmSync(partialPath, { force: true });
+    throw err;
   }
-  fileStream.end();
-  await new Promise<void>((resolve) => fileStream.on("finish", resolve));
+
+  // Verify against the pinned checksum before the file is ever loaded and run
+  // natively. On mismatch, discard the partial so a retry re-downloads.
+  const digest = hash.digest("hex");
+  if (digest !== preset.sha256) {
+    fs.rmSync(partialPath, { force: true });
+    throw new Error(
+      `Downloaded model failed checksum verification (expected ${preset.sha256}, got ${digest}). The file was discarded; try again.`,
+    );
+  }
+  // Atomically promote the verified file. Only now does modelPath exist, so
+  // fs.existsSync (here and in isModelDownloaded) implies a complete, verified
+  // model.
+  fs.renameSync(partialPath, modelPath);
   return modelPath;
 }
 
@@ -273,14 +737,20 @@ async function generateViaLocal(
     contextSequence: context.getSequence(),
   });
 
-  const systemPrompt = buildSystemPrompt(opts.destinationType as any, {
+  const systemPrompt = buildSystemPrompt(opts.destinationType, {
     tableName: opts.tableName,
+    agentic: opts.agentic,
   });
 
   const prompt = `${systemPrompt}\n\nRespond with ONLY a JSON object: {"query": "...", "explanation": "...", "timeRangeMs": ..., "suggestedCharts": ["...", "..."]}\nFor suggestedCharts pick 2-4 from: bar, stacked-bar, line, area, scatter, heatmap, histogram, pie, boxplot.\nOmit timeRangeMs if not mentioned (default 24h).\n\nUser question: ${opts.question}`;
 
-  const response = await session.prompt(prompt);
-  await context.dispose();
+  let response: string;
+  try {
+    response = await session.prompt(prompt);
+  } finally {
+    // Dispose even if prompt() throws (the error propagates to the caller).
+    await context.dispose();
+  }
 
   const jsonMatch = response.match(/\{[\s\S]*"query"[\s\S]*\}/);
   if (!jsonMatch) {

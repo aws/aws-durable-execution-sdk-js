@@ -194,6 +194,61 @@ describe("Default Logger", () => {
         );
       });
 
+      it("should include operationName field when provided", () => {
+        const logger = createDefaultLogger();
+        const mockDurableLogData: DurableLogData = {
+          requestId: "mock-request-id",
+          executionArn: "test-arn",
+          operationId: "abc123",
+          operationName: "fetch-user",
+        };
+
+        logger.configureDurableLoggingContext?.({
+          getDurableLogData: () => mockDurableLogData,
+        });
+
+        logger.log?.(DurableLogLevel.INFO, "named operation message");
+
+        expect(mockConsole.info).toHaveBeenCalledWith(
+          JSON.stringify({
+            requestId: "mock-request-id",
+            timestamp: "2025-11-21T18:33:33.938Z",
+            level: "INFO",
+            executionArn: "test-arn",
+            operationId: "abc123",
+            operationName: "fetch-user",
+            message: "named operation message",
+          }),
+        );
+      });
+
+      it("should omit operationName when undefined", () => {
+        const logger = createDefaultLogger();
+        const mockDurableLogData: DurableLogData = {
+          requestId: "mock-request-id",
+          executionArn: "test-arn",
+          operationId: "abc123",
+          operationName: undefined,
+        };
+
+        logger.configureDurableLoggingContext?.({
+          getDurableLogData: () => mockDurableLogData,
+        });
+
+        logger.log?.(DurableLogLevel.INFO, "test message");
+
+        expect(mockConsole.info).toHaveBeenCalledWith(
+          JSON.stringify({
+            requestId: "mock-request-id",
+            timestamp: "2025-11-21T18:33:33.938Z",
+            level: "INFO",
+            executionArn: "test-arn",
+            operationId: "abc123",
+            message: "test message",
+          }),
+        );
+      });
+
       it("should omit operationId and attempt when undefined", () => {
         const logger = createDefaultLogger();
         const mockDurableLogData: DurableLogData = {
