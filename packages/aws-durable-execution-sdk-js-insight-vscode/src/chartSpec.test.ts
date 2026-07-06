@@ -87,6 +87,24 @@ describe("parseChartSpec", () => {
     );
   });
 
+  it("rejects an unsupported mark (image with a url)", () => {
+    const raw =
+      '{"mark":{"type":"image","url":"http://evil/x.png"},"encoding":{"x":{"field":"hour_bucket"},"y":{"field":"record_count"}}}';
+    expect(() => parseChartSpec(raw, COLS)).toThrow(/unsupported mark/i);
+  });
+
+  it("accepts an object mark with a known type", () => {
+    const raw =
+      '{"mark":{"type":"bar","tooltip":true},"encoding":{"x":{"field":"hour_bucket"},"y":{"field":"record_count"}}}';
+    expect(() => parseChartSpec(raw, COLS)).not.toThrow();
+  });
+
+  it("reports a malformed (non-object) encoding clearly", () => {
+    expect(() =>
+      parseChartSpec('{"mark":"bar","encoding":"oops"}', COLS),
+    ).toThrow(/malformed encoding/i);
+  });
+
   it("rejects disallowed top-level keys (data/transform/etc.)", () => {
     const withData =
       '{"mark":"bar","encoding":{"x":{"field":"hour_bucket"}},"data":{"url":"http://evil/x.json"}}';

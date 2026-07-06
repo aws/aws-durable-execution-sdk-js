@@ -48,6 +48,13 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
   // request, so a slow response can't clobber a newer one (Bedrock latency
   // varies, and requests can overlap).
   const reqIdRef = useRef(0);
+  // The chart type of the currently-rendered chart (from a dropdown pick), so a
+  // follow-up free-text refinement can keep it even after selectedType is reset
+  // below. Undefined after a pure free-text render (the model chose the type).
+  const [renderedChartType, setRenderedChartType] = useState<
+    string | undefined
+  >(undefined);
+  const pendingChartTypeRef = useRef<string | undefined>(undefined);
 
   // Both the chart-type dropdown and the free-text box are answered by the
   // model (see extension host onVisualize). Listen for its reply here rather
@@ -63,6 +70,9 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
         setSpec(msg.spec);
         setLlmLoading(false);
         setLlmError("");
+        // Remember the type that produced the rendered chart so a follow-up
+        // free-text refinement keeps it (see requestSpec).
+        setRenderedChartType(pendingChartTypeRef.current);
       } else {
         setLlmError(
           msg.message || "Could not build a chart from that description.",
@@ -130,6 +140,7 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
     const description = req.description?.trim() ?? "";
     if (!req.chartType && !description) return;
     const requestId = ++reqIdRef.current;
+    pendingChartTypeRef.current = req.chartType;
     setLlmLoading(true);
     setLlmError("");
     postMessage({
@@ -195,7 +206,7 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
               onKeyDown={({ detail }) => {
                 if (detail.key === "Enter" && !llmLoading)
                   requestSpec({
-                    chartType: selectedType?.value,
+                    chartType: selectedType?.value ?? renderedChartType,
                     description: customPrompt,
                   });
               }}
@@ -205,7 +216,7 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
           <Button
             onClick={() =>
               requestSpec({
-                chartType: selectedType?.value,
+                chartType: selectedType?.value ?? renderedChartType,
                 description: customPrompt,
               })
             }

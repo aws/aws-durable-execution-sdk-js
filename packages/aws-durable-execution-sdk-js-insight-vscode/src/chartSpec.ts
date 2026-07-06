@@ -99,15 +99,44 @@ export function parseChartSpec(
     );
   }
 
+  // Validate the mark itself, not just its presence: Vega-Lite allows an object
+  // mark like {"type":"image","url":"…"} that would pull an external resource,
+  // so restrict it to a known rendering mark (given as a string or {type: …}).
+  // (The webview CSP also blocks that, but the validator shouldn't rely solely
+  // on it to be "the single source of usable chart".)
+  const mark = (spec as { mark?: unknown }).mark;
+  const markType =
+    typeof mark === "string"
+      ? mark
+      : mark && typeof mark === "object"
+        ? (mark as { type?: unknown }).type
+        : undefined;
+  if (typeof markType !== "string" || !ALLOWED_MARKS.has(markType)) {
+    throw new Error(
+      `The model's chart used an unsupported mark (${JSON.stringify(mark)}). ` +
+        `Allowed marks: ${[...ALLOWED_MARKS].join(", ")}.`,
+    );
+  }
+
+  // The encoding must be a plain object (map of channels); a string/array/null
+  // would otherwise fall through to the "no columns" error with a misleading
+  // message.
+  const encoding = (spec as { encoding?: unknown }).encoding;
+  if (
+    encoding == null ||
+    typeof encoding !== "object" ||
+    Array.isArray(encoding)
+  ) {
+    throw new Error("The model's chart had a malformed encoding.");
+  }
+
   // Collect every field reference anywhere under encoding (nested included) and
   // validate them. A chart that references no column at all (e.g. an empty
   // encoding, or only datum/value channels) isn't a usable visualization of the
   // result, so reject that too.
   const valid = new Set(validColumns);
   const fields: string[] = [];
-  collectFieldRefs((spec as { encoding?: unknown }).encoding, (f) =>
-    fields.push(f),
-  );
+  collectFieldRefs(encoding, (f) => fields.push(f));
   if (fields.length === 0) {
     throw new Error(
       "The model's chart did not reference any column (empty or field-less encoding).",
@@ -122,6 +151,26 @@ export function parseChartSpec(
   }
   return spec as Record<string, unknown>;
 }
+
+// Known Vega-Lite rendering marks the Visualize page can produce. Excludes
+// "image" and "geoshape", which reference external URLs.
+const ALLOWED_MARKS = new Set([
+  "bar",
+  "line",
+  "area",
+  "point",
+  "circle",
+  "square",
+  "tick",
+  "rect",
+  "arc",
+  "rule",
+  "text",
+  "trail",
+  "boxplot",
+  "errorbar",
+  "errorband",
+]);
 
 /**
  * Walk an encoding subtree and invoke `onField` for every string-valued `field`
