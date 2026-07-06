@@ -8,6 +8,7 @@ interface ContextInfo {
   parentId?: string;
   attempt?: number;
   durableExecutionMode?: DurableExecutionMode;
+  operationName?: string;
 }
 
 const asyncLocalStorage = new AsyncLocalStorage<ContextInfo>();
@@ -22,9 +23,10 @@ export const runWithContext = <T>(
   fn: () => T,
   attempt?: number,
   durableExecutionMode?: DurableExecutionMode,
+  operationName?: string,
 ): T => {
   return asyncLocalStorage.run(
-    { contextId, parentId, attempt, durableExecutionMode },
+    { contextId, parentId, attempt, durableExecutionMode, operationName },
     fn,
   );
 };

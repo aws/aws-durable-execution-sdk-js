@@ -257,8 +257,13 @@ export const handleCompletedChildContext = async <
       entityId, // parentId
     );
 
-    const replayedResult = await runWithContext(entityId, entityId, () =>
-      fn(durableChildContext),
+    const replayedResult = await runWithContext(
+      entityId,
+      entityId,
+      () => fn(durableChildContext),
+      undefined,
+      undefined,
+      stepName,
     );
 
     // Large payloads re-execute the child function on replay, so apply the
@@ -384,6 +389,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         : childContextFn,
       undefined,
       childReplayMode,
+      name,
     )) as T;
 
     // Serialize the result for consistency
