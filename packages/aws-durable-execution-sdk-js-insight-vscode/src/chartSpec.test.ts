@@ -61,12 +61,39 @@ describe("parseChartSpec", () => {
     );
   });
 
-  it("allows channels with no field (aggregate count, datum)", () => {
+  it("allows a bare aggregate channel as long as some channel has a field", () => {
     const raw =
       '{"mark":"bar","encoding":{"x":{"field":"hour_bucket"},"y":{"aggregate":"count","type":"quantitative"}}}';
     expect(() => parseChartSpec(raw, COLS)).not.toThrow();
-    const withDatum = '{"mark":"rule","encoding":{"y":{"datum":100}}}';
-    expect(() => parseChartSpec(withDatum, COLS)).not.toThrow();
+  });
+
+  it("rejects an encoding that references no column", () => {
+    expect(() => parseChartSpec('{"mark":"bar","encoding":{}}', COLS)).toThrow(
+      /did not reference any column/i,
+    );
+    const datumOnly = '{"mark":"rule","encoding":{"y":{"datum":100}}}';
+    expect(() => parseChartSpec(datumOnly, COLS)).toThrow(
+      /did not reference any column/i,
+    );
+  });
+
+  it("rejects disallowed top-level keys (data/transform/etc.)", () => {
+    const withData =
+      '{"mark":"bar","encoding":{"x":{"field":"hour_bucket"}},"data":{"url":"http://evil/x.json"}}';
+    expect(() => parseChartSpec(withData, COLS)).toThrow(
+      /disallowed top-level keys: data/,
+    );
+    const withTransform =
+      '{"mark":"bar","encoding":{"x":{"field":"hour_bucket"}},"transform":[{"lookup":"x"}]}';
+    expect(() => parseChartSpec(withTransform, COLS)).toThrow(
+      /disallowed top-level keys: transform/,
+    );
+  });
+
+  it("allows an optional top-level title", () => {
+    const raw =
+      '{"mark":"bar","title":"Counts","encoding":{"x":{"field":"hour_bucket"},"y":{"field":"record_count"}}}';
+    expect(parseChartSpec(raw, COLS).title).toBe("Counts");
   });
 
   it("validates fields inside array channels (tooltip)", () => {

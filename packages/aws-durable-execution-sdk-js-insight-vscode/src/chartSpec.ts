@@ -69,21 +69,38 @@ export function parseChartSpec(
     );
   }
 
-  const valid = new Set(validColumns);
-  const bad = new Set<string>();
-  const encoding = (spec as { encoding?: unknown }).encoding;
-  // Collect every `field` reference anywhere under encoding — not just each
-  // channel's top-level field, but nested ones too (e.g. sort: {field: ...},
-  // which the prompt explicitly encourages, or condition: {field: ...}). A
-  // hallucinated field in any of them would otherwise pass and render a broken
-  // chart. Channels/definitions without a `field` (aggregate "count", datum,
-  // value) simply contribute nothing.
-  collectFieldRefs(encoding, (field) => {
-    if (!valid.has(field)) bad.add(field);
-  });
-  if (bad.size > 0) {
+  // Allowlist top-level keys. The chart is rendered over data the host injects,
+  // so the model must not carry its own data/config/width/height — nor a
+  // `transform`/`datasets`/`params` (a Vega-Lite transform can even fetch a
+  // remote data.url). Rejecting anything outside the allowed set makes the "no
+  // data" rule enforced rather than merely requested by the prompt.
+  const ALLOWED_TOP_LEVEL = new Set(["mark", "encoding", "title"]);
+  const disallowed = Object.keys(spec).filter((k) => !ALLOWED_TOP_LEVEL.has(k));
+  if (disallowed.length > 0) {
     throw new Error(
-      `The model's chart referenced unknown column(s): ${[...bad].join(", ")}. ` +
+      `The model's chart set disallowed top-level keys: ${disallowed.join(", ")}. ` +
+        `Only mark, encoding, and title are allowed.`,
+    );
+  }
+
+  // Collect every field reference anywhere under encoding (nested included) and
+  // validate them. A chart that references no column at all (e.g. an empty
+  // encoding, or only datum/value channels) isn't a usable visualization of the
+  // result, so reject that too.
+  const valid = new Set(validColumns);
+  const fields: string[] = [];
+  collectFieldRefs((spec as { encoding?: unknown }).encoding, (f) =>
+    fields.push(f),
+  );
+  if (fields.length === 0) {
+    throw new Error(
+      "The model's chart did not reference any column (empty or field-less encoding).",
+    );
+  }
+  const bad = [...new Set(fields.filter((f) => !valid.has(f)))];
+  if (bad.length > 0) {
+    throw new Error(
+      `The model's chart referenced unknown column(s): ${bad.join(", ")}. ` +
         `Available columns: ${validColumns.join(", ")}.`,
     );
   }

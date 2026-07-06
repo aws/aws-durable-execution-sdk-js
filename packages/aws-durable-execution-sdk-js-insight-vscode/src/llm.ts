@@ -171,18 +171,23 @@ export async function verifyResult(
       if (models.length === 0) {
         return { satisfied: true, reason: "No judge model available." };
       }
-      const response = await models[0].sendRequest(
-        [
-          vscode.LanguageModelChatMessage.User(
-            `${instruction}\n\nRespond with ONLY JSON: {"satisfied": true|false, "reason": "...", "suggestion": "..."}`,
-          ),
-        ],
-        {},
-        new vscode.CancellationTokenSource().token,
-      );
-      let text = "";
-      for await (const chunk of response.text) text += chunk;
-      return parseVerdict(text);
+      const cts = new vscode.CancellationTokenSource();
+      try {
+        const response = await models[0].sendRequest(
+          [
+            vscode.LanguageModelChatMessage.User(
+              `${instruction}\n\nRespond with ONLY JSON: {"satisfied": true|false, "reason": "...", "suggestion": "..."}`,
+            ),
+          ],
+          {},
+          cts.token,
+        );
+        let text = "";
+        for await (const chunk of response.text) text += chunk;
+        return parseVerdict(text);
+      } finally {
+        cts.dispose();
+      }
     }
 
     // local
@@ -350,14 +355,19 @@ async function completeText(
     if (models.length === 0) {
       throw new Error("No Copilot chat model is available.");
     }
-    const response = await models[0].sendRequest(
-      [vscode.LanguageModelChatMessage.User(prompt)],
-      {},
-      new vscode.CancellationTokenSource().token,
-    );
-    let text = "";
-    for await (const chunk of response.text) text += chunk;
-    return text.trim();
+    const cts = new vscode.CancellationTokenSource();
+    try {
+      const response = await models[0].sendRequest(
+        [vscode.LanguageModelChatMessage.User(prompt)],
+        {},
+        cts.token,
+      );
+      let text = "";
+      for await (const chunk of response.text) text += chunk;
+      return text.trim();
+    } finally {
+      cts.dispose();
+    }
   }
   // local
   const { model } = await getLocalModel();
@@ -500,16 +510,16 @@ async function generateViaCopilot(
     vscode.LanguageModelChatMessage.User(opts.question),
   ];
 
-  const response = await model.sendRequest(
-    messages,
-    {},
-    new vscode.CancellationTokenSource().token,
-  );
-
+  const cts = new vscode.CancellationTokenSource();
   // Collect the streamed response
   let text = "";
-  for await (const chunk of response.text) {
-    text += chunk;
+  try {
+    const response = await model.sendRequest(messages, {}, cts.token);
+    for await (const chunk of response.text) {
+      text += chunk;
+    }
+  } finally {
+    cts.dispose();
   }
 
   // Parse JSON from the response (handle potential markdown wrapping)
