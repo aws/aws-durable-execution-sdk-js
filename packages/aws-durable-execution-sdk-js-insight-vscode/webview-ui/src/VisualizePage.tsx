@@ -36,6 +36,10 @@ const ALL_PRESETS: { id: PresetType; label: string }[] = [
   { id: "boxplot", label: "Box Plot" },
 ];
 
+// Give up on an in-flight visualize request after this long so a hung model
+// call can't wedge the UI (the host normally always replies).
+const REQUEST_TIMEOUT_MS = 60_000;
+
 export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props) {
   const [spec, setSpec] = useState<Record<string, unknown> | null>(null);
   const [customPrompt, setCustomPrompt] = useState("");
@@ -49,13 +53,9 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
   // request, so a slow response can't clobber a newer one (Bedrock latency
   // varies, and requests can overlap).
   const reqIdRef = useRef(0);
-  // The chart type of the currently-rendered chart (from a dropdown pick), so a
-  // follow-up free-text refinement can keep it even after selectedType is reset
-  // below. Undefined after a pure free-text render (the model chose the type).
-  const [renderedChartType, setRenderedChartType] = useState<
-    string | undefined
-  >(undefined);
-  const pendingChartTypeRef = useRef<string | undefined>(undefined);
+  // Clears loading if the host never replies (e.g. a hung/stalled model call)
+  // so the UI can't wedge with the Select/Button/Enter all disabled.
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Both the chart-type dropdown and the free-text box are answered by the
   // model (see extension host onVisualize). Listen for its reply here rather
@@ -67,13 +67,14 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
       if (msg?.type !== "chartSpec" && msg?.type !== "chartSpecError") return;
       // Ignore stale replies from a superseded request.
       if (msg.requestId !== reqIdRef.current) return;
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
       if (msg.type === "chartSpec") {
         setSpec(msg.spec);
         setLlmLoading(false);
         setLlmError("");
-        // Remember the type that produced the rendered chart so a follow-up
-        // free-text refinement keeps it (see requestSpec).
-        setRenderedChartType(pendingChartTypeRef.current);
       } else {
         setLlmError(
           msg.message || "Could not build a chart from that description.",
@@ -88,7 +89,10 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
       setSelectedType(null);
     };
     window.addEventListener("message", handler);
-    return () => window.removeEventListener("message", handler);
+    return () => {
+      window.removeEventListener("message", handler);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
   }, []);
 
   // All chart types are always offered in the dropdown; the ones the model
@@ -135,15 +139,23 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
   // model: given the columns (and which are numeric) plus the request, it
   // decides the field for each channel and any styling (axis scale/min, color
   // scheme, sort). Row data is never sent. A dropdown pick sends chartType; the
-  // text box sends a description; both are sent together when both are present
-  // (e.g. picking a type while text is typed, or refining a typed request).
+  // text box sends its description (letting the model choose the type from the
+  // words); both are sent together when a type is picked while text is typed.
   const requestSpec = (req: { chartType?: string; description?: string }) => {
     const description = req.description?.trim() ?? "";
     if (!req.chartType && !description) return;
     const requestId = ++reqIdRef.current;
-    pendingChartTypeRef.current = req.chartType;
     setLlmLoading(true);
     setLlmError("");
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      // Only fire if this is still the in-flight request (no reply arrived).
+      if (reqIdRef.current !== requestId) return;
+      timeoutRef.current = null;
+      setLlmLoading(false);
+      setSelectedType(null);
+      setLlmError("The chart request timed out. Please try again.");
+    }, REQUEST_TIMEOUT_MS);
     postMessage({
       type: "visualize",
       columns,
@@ -207,7 +219,7 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
               onKeyDown={({ detail }) => {
                 if (detail.key === "Enter" && !llmLoading)
                   requestSpec({
-                    chartType: selectedType?.value ?? renderedChartType,
+                    chartType: selectedType?.value,
                     description: customPrompt,
                   });
               }}
@@ -217,7 +229,7 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
           <Button
             onClick={() =>
               requestSpec({
-                chartType: selectedType?.value ?? renderedChartType,
+                chartType: selectedType?.value,
                 description: customPrompt,
               })
             }
