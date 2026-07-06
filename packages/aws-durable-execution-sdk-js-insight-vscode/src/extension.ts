@@ -5,6 +5,7 @@ import {
   generateQuery,
   verifyResult,
   analyzeResults,
+  generateChartSpec,
   isModelDownloaded,
   ensureModel,
   setLocalModel,
@@ -41,6 +42,17 @@ type InboundMessage =
   | { type: "saveSettings"; settings: Record<string, string> }
   | { type: "downloadModel"; localModel?: string }
   | { type: "exportChart"; format: "svg" | "png"; content: string }
+  // NOTE: keep this `visualize` shape in sync with OutboundMessage in
+  // webview-ui/src/types.ts (host and webview message types are declared
+  // separately in each project's own `src`).
+  | {
+      type: "visualize";
+      columns: string[];
+      numericColumns: string[];
+      chartType?: string;
+      description: string;
+      requestId: number;
+    }
   | { type: "startListening" }
   | { type: "stopListening" }
   | {
@@ -213,6 +225,8 @@ class ExplorerPanel {
           return await this.onDownloadModel(msg.localModel);
         case "exportChart":
           return await this.onExportChart(msg.format, msg.content);
+        case "visualize":
+          return await this.onVisualize(msg);
         case "startListening":
           return this.onStartListening();
         case "stopListening":
@@ -380,6 +394,42 @@ class ExplorerPanel {
       await vscode.workspace.fs.writeFile(uri, Buffer.from(base64, "base64"));
     }
     vscode.window.showInformationMessage(`Chart saved to ${uri.fsPath}`);
+  }
+
+  /**
+   * Free-text "describe how to visualize" on the Visualize page: ask the model
+   * to map the request onto the fetched columns and return a Vega-Lite spec.
+   * Only column names/types + the description are sent, never the row data.
+   */
+  private async onVisualize(msg: {
+    columns: string[];
+    numericColumns: string[];
+    chartType?: string;
+    description: string;
+    requestId: number;
+  }): Promise<void> {
+    const cfg = readConfig();
+    setLocalModel(cfg.localModel);
+    const credentials = resolveCredentials(cfg.awsProfile);
+    try {
+      const spec = await generateChartSpec({
+        provider: cfg.llmProvider,
+        region: cfg.region,
+        credentials,
+        modelId: cfg.bedrockModelId,
+        columns: msg.columns,
+        numericColumns: msg.numericColumns,
+        chartType: msg.chartType,
+        description: msg.description,
+      });
+      this.post({ type: "chartSpec", spec, requestId: msg.requestId });
+    } catch (err) {
+      this.post({
+        type: "chartSpecError",
+        message: err instanceof Error ? err.message : String(err),
+        requestId: msg.requestId,
+      });
+    }
   }
 
   private onStartListening(): void {
