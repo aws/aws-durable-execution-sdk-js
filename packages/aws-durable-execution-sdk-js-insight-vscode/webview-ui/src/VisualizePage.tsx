@@ -151,6 +151,9 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
     timeoutRef.current = setTimeout(() => {
       // Only fire if this is still the in-flight request (no reply arrived).
       if (reqIdRef.current !== requestId) return;
+      // Advance the id so a reply that lands after the timeout is treated as
+      // stale and ignored (rather than popping a chart in over the error).
+      reqIdRef.current++;
       timeoutRef.current = null;
       setLlmLoading(false);
       setSelectedType(null);
@@ -218,21 +221,13 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
               onChange={({ detail }) => setCustomPrompt(detail.value)}
               onKeyDown={({ detail }) => {
                 if (detail.key === "Enter" && !llmLoading)
-                  requestSpec({
-                    chartType: selectedType?.value,
-                    description: customPrompt,
-                  });
+                  requestSpec({ description: customPrompt });
               }}
               placeholder="stacked bar chart colored by status"
             />
           </FormField>
           <Button
-            onClick={() =>
-              requestSpec({
-                chartType: selectedType?.value,
-                description: customPrompt,
-              })
-            }
+            onClick={() => requestSpec({ description: customPrompt })}
             disabled={!customPrompt.trim() || llmLoading}
           >
             Visualize
