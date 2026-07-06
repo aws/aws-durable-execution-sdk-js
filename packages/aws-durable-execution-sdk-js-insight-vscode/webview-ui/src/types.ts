@@ -11,6 +11,7 @@ export type OutboundMessage =
       numericColumns: string[];
       chartType?: string;
       description: string;
+      requestId: number;
     }
   | { type: "startListening" }
   | { type: "stopListening" }
@@ -81,8 +82,8 @@ export type InboundMessage =
       hiddenColumns?: string[];
     }
   | { type: "detailResult"; fields: Record<string, string> }
-  | { type: "chartSpec"; spec: Record<string, unknown> }
-  | { type: "chartSpecError"; message: string }
+  | { type: "chartSpec"; spec: Record<string, unknown>; requestId: number }
+  | { type: "chartSpecError"; message: string; requestId: number }
   | {
       /**
        * One completed iteration of the run→verify→refine loop, streamed so

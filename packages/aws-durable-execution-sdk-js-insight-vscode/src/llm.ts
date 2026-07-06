@@ -7,6 +7,7 @@ import {
 } from "@aws-sdk/client-bedrock-runtime";
 import type { AwsCredentialIdentityProvider } from "@aws-sdk/types";
 import { buildSystemPrompt, type DestinationType } from "./schema";
+import { parseChartSpec } from "./chartSpec";
 import {
   parseVerdict,
   buildVerifyInstruction,
@@ -302,60 +303,6 @@ function buildChartPrompt(opts: ChartSpecOptions): string {
     'Respond with ONLY a JSON object with "mark" and "encoding" (optionally with the styling above), no prose, no data, no $schema. Example:',
     '{"mark":"bar","encoding":{"x":{"field":"product_category","type":"nominal","title":"Category"},"y":{"field":"record_count","type":"quantitative","stack":"zero","scale":{"zero":true}},"color":{"field":"hour_bucket","type":"nominal","scale":{"scheme":"tableau10"}}}}',
   ].join("\n");
-}
-
-function parseChartSpec(
-  raw: string,
-  validColumns: string[],
-): Record<string, unknown> {
-  // Models sometimes wrap JSON in prose or code fences — grab the first object.
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) {
-    throw new Error("The model did not return a chart specification.");
-  }
-  let spec: unknown;
-  try {
-    spec = JSON.parse(match[0]);
-  } catch {
-    throw new Error("The model returned an invalid chart specification.");
-  }
-  if (
-    spec == null ||
-    typeof spec !== "object" ||
-    !("mark" in spec) ||
-    !("encoding" in spec)
-  ) {
-    throw new Error(
-      "The model's chart specification was missing mark/encoding.",
-    );
-  }
-  // Every field an encoding channel references must be a real result column.
-  // A hallucinated or misspelled field name is otherwise valid JSON and would
-  // render a blank/broken chart with no error — the exact failure this feature
-  // exists to prevent — so reject it here. Channels without a `field` (e.g. an
-  // aggregate "count", a datum/value) are fine and skipped.
-  const valid = new Set(validColumns);
-  const bad = new Set<string>();
-  const encoding = (spec as { encoding?: unknown }).encoding;
-  if (encoding && typeof encoding === "object") {
-    for (const channel of Object.values(encoding as Record<string, unknown>)) {
-      // A channel is usually one definition object, but some (tooltip, detail)
-      // can be an array of them.
-      for (const def of Array.isArray(channel) ? channel : [channel]) {
-        const field = (def as { field?: unknown } | null)?.field;
-        if (typeof field === "string" && !valid.has(field)) {
-          bad.add(field);
-        }
-      }
-    }
-  }
-  if (bad.size > 0) {
-    throw new Error(
-      `The model's chart referenced unknown column(s): ${[...bad].join(", ")}. ` +
-        `Available columns: ${validColumns.join(", ")}.`,
-    );
-  }
-  return spec as Record<string, unknown>;
 }
 
 /**

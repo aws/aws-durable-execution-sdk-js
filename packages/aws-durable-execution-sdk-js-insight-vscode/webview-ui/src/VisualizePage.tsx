@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import Container from "@cloudscape-design/components/container";
 import Header from "@cloudscape-design/components/header";
 import SpaceBetween from "@cloudscape-design/components/space-between";
@@ -30,22 +30,33 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
   const [selectedType, setSelectedType] = useState<SelectProps.Option | null>(
     null,
   );
+  // Monotonic id per request; a reply is applied only if it matches the latest
+  // request, so a slow response can't clobber a newer one (Bedrock latency
+  // varies, and requests can overlap).
+  const reqIdRef = useRef(0);
 
-  // The free-text box is answered by the model (see extension host onVisualize).
-  // Listen for its reply here rather than routing through App's handler, so the
-  // feature stays self-contained; App ignores these message types.
+  // Both the chart-type dropdown and the free-text box are answered by the
+  // model (see extension host onVisualize). Listen for its reply here rather
+  // than routing through App's handler, so the feature stays self-contained;
+  // App ignores these message types.
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       const msg = event.data;
-      if (msg?.type === "chartSpec") {
+      if (msg?.type !== "chartSpec" && msg?.type !== "chartSpecError") return;
+      // Ignore stale replies from a superseded request.
+      if (msg.requestId !== reqIdRef.current) return;
+      if (msg.type === "chartSpec") {
         setSpec(msg.spec);
         setLlmLoading(false);
         setLlmError("");
-      } else if (msg?.type === "chartSpecError") {
+      } else {
         setLlmError(
           msg.message || "Could not build a chart from that description.",
         );
         setLlmLoading(false);
+        // Clear the selection so re-picking the same type re-fires onChange
+        // (Cloudscape Select only fires when the selection changes).
+        setSelectedType(null);
       }
     };
     window.addEventListener("message", handler);
@@ -102,10 +113,12 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
   // model: given the columns (and which are numeric) plus the request, it
   // decides the field for each channel and any styling (axis scale/min, color
   // scheme, sort). Row data is never sent. A dropdown pick sends chartType; the
-  // text box sends a description; either or both may be present.
+  // text box sends a description; both are sent together when both are present
+  // (e.g. picking a type while text is typed, or refining a typed request).
   const requestSpec = (req: { chartType?: string; description?: string }) => {
     const description = req.description?.trim() ?? "";
     if (!req.chartType && !description) return;
+    const requestId = ++reqIdRef.current;
     setLlmLoading(true);
     setLlmError("");
     postMessage({
@@ -114,6 +127,7 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
       numericColumns: numericCols,
       chartType: req.chartType,
       description,
+      requestId,
     });
   };
 
@@ -142,7 +156,10 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
                 selectedOption={selectedType}
                 onChange={({ detail }) => {
                   setSelectedType(detail.selectedOption);
-                  requestSpec({ chartType: detail.selectedOption.value });
+                  requestSpec({
+                    chartType: detail.selectedOption.value,
+                    description: customPrompt,
+                  });
                 }}
                 options={chartOptions}
                 placeholder="Choose a chart type"
@@ -166,14 +183,22 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
               value={customPrompt}
               onChange={({ detail }) => setCustomPrompt(detail.value)}
               onKeyDown={({ detail }) => {
-                if (detail.key === "Enter")
-                  requestSpec({ description: customPrompt });
+                if (detail.key === "Enter" && !llmLoading)
+                  requestSpec({
+                    chartType: selectedType?.value,
+                    description: customPrompt,
+                  });
               }}
               placeholder="stacked bar chart colored by status"
             />
           </FormField>
           <Button
-            onClick={() => requestSpec({ description: customPrompt })}
+            onClick={() =>
+              requestSpec({
+                chartType: selectedType?.value,
+                description: customPrompt,
+              })
+            }
             disabled={!customPrompt.trim() || llmLoading}
             loading={llmLoading}
           >

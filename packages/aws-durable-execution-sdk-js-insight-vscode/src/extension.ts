@@ -48,6 +48,7 @@ type InboundMessage =
       numericColumns: string[];
       chartType?: string;
       description: string;
+      requestId: number;
     }
   | { type: "startListening" }
   | { type: "stopListening" }
@@ -402,6 +403,7 @@ class ExplorerPanel {
     numericColumns: string[];
     chartType?: string;
     description: string;
+    requestId: number;
   }): Promise<void> {
     const cfg = readConfig();
     setLocalModel(cfg.localModel);
@@ -417,11 +419,12 @@ class ExplorerPanel {
         chartType: msg.chartType,
         description: msg.description,
       });
-      this.post({ type: "chartSpec", spec });
+      this.post({ type: "chartSpec", spec, requestId: msg.requestId });
     } catch (err) {
       this.post({
         type: "chartSpecError",
         message: err instanceof Error ? err.message : String(err),
+        requestId: msg.requestId,
       });
     }
   }
