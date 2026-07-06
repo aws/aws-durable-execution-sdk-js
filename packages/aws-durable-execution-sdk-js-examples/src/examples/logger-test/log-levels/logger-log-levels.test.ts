@@ -51,6 +51,7 @@ createTests({
             executionArn: expect.any(String),
             ...(hasOperationId && {
               operationId: expect.any(String),
+              operationName: expect.any(String),
             }),
             ...(attemptCount && {
               attempt: attemptCount,
@@ -165,6 +166,7 @@ createTests({
               level: "ERROR",
               executionArn: expect.any(String),
               operationId: expect.any(String),
+              operationName: expect.any(String),
               message: expect.stringMatching(
                 /^Error from child context with Error object: Error: Child context error/,
               ),
@@ -206,6 +208,7 @@ createTests({
               level: "ERROR",
               executionArn: expect.any(String),
               operationId: expect.any(String),
+              operationName: expect.any(String),
               message: {
                 errorType: "Error",
                 errorMessage: "Step context direct error",
@@ -233,6 +236,7 @@ createTests({
               level: "ERROR",
               executionArn: expect.any(String),
               operationId: expect.any(String),
+              operationName: expect.any(String),
               message: expect.stringMatching(
                 /^Multiple errors in step: Error: First step error/,
               ),
