@@ -332,6 +332,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
               : stepFn,
             currentAttempt,
             DurableExecutionMode.ExecutionMode,
+            name,
           )) as T;
 
           const serializedResult = await safeSerialize(

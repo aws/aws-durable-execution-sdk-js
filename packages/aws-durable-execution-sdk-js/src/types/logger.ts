@@ -9,6 +9,7 @@ export interface DurableLogData {
   executionArn: string;
   tenantId?: string;
   operationId?: string;
+  operationName?: string;
   attempt?: number;
   // We aren't attaching any additional properties, but this is
   // added for type-compatibility with popular loggers like powertools

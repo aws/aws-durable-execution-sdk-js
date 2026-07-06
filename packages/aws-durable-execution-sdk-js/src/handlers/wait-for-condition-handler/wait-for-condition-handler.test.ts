@@ -352,6 +352,7 @@ describe("WaitForCondition Handler", () => {
         expect.any(Function),
         1, // currentAttempt should be 1 on first execution
         expect.any(String), // DurableExecutionMode.ExecutionMode
+        undefined, // operationName (no name configured in test)
       );
       expect(waitStrategy).toHaveBeenCalledWith("result", 1);
     });
@@ -400,6 +401,7 @@ describe("WaitForCondition Handler", () => {
         expect.any(Function),
         3, // currentAttempt should be Attempt + 1 = 2 + 1 = 3
         expect.any(String),
+        undefined, // operationName (no name configured in test)
       );
       expect(waitStrategy).toHaveBeenCalledWith("result", 3);
     });
@@ -481,6 +483,7 @@ describe("WaitForCondition Handler", () => {
         expect.any(Function),
         1,
         expect.any(String),
+        undefined, // operationName (no name configured in test)
       );
       expect(mockRunWithContext).toHaveBeenNthCalledWith(
         2,
@@ -489,6 +492,7 @@ describe("WaitForCondition Handler", () => {
         expect.any(Function),
         2,
         expect.any(String),
+        undefined, // operationName (no name configured in test)
       );
       expect(mockRunWithContext).toHaveBeenNthCalledWith(
         3,
@@ -497,6 +501,7 @@ describe("WaitForCondition Handler", () => {
         expect.any(Function),
         3,
         expect.any(String),
+        undefined, // operationName (no name configured in test)
       );
     });
   });
