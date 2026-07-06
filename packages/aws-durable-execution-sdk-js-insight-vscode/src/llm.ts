@@ -234,49 +234,10 @@ export async function analyzeResults(opts: AnalyzeOptions): Promise<string> {
     rows: opts.rows,
   });
   try {
-    if (opts.provider === "bedrock") {
-      const client = new BedrockRuntimeClient({
-        region: opts.region,
-        credentials: opts.credentials,
-      });
-      const response = await client.send(
-        new ConverseCommand({
-          modelId: opts.modelId,
-          messages: [{ role: "user", content: [{ text: prompt }] }],
-          inferenceConfig: { maxTokens: 4096, temperature: 0 },
-        }),
-      );
-      const blocks: ContentBlock[] = response.output?.message?.content ?? [];
-      return blocks
-        .map((b) => ("text" in b && b.text ? b.text : ""))
-        .join("")
-        .trim();
-    }
-
-    if (opts.provider === "copilot") {
-      const models = await vscode.lm.selectChatModels({ vendor: "copilot" });
-      if (models.length === 0) return "";
-      const response = await models[0].sendRequest(
-        [vscode.LanguageModelChatMessage.User(prompt)],
-        {},
-        new vscode.CancellationTokenSource().token,
-      );
-      let text = "";
-      for await (const chunk of response.text) text += chunk;
-      return text.trim();
-    }
-
-    // local
-    const { model } = await getLocalModel();
-    const { LlamaChatSession } = await import("node-llama-cpp");
-    const context = await model.createContext();
-    const session = new LlamaChatSession({
-      contextSequence: context.getSequence(),
-    });
-    const text = await session.prompt(prompt);
-    await context.dispose();
-    return text.trim();
+    // Analysis prose can be long, so allow the larger token budget.
+    return await completeText(opts, prompt, 4096);
   } catch {
+    // Never let an analysis failure hide the results; fall back to the table.
     return "";
   }
 }
@@ -310,7 +271,7 @@ export async function generateChartSpec(
 ): Promise<Record<string, unknown>> {
   const prompt = buildChartPrompt(opts);
   const raw = await completeText(opts, prompt);
-  return parseChartSpec(raw);
+  return parseChartSpec(raw, opts.columns);
 }
 
 function buildChartPrompt(opts: ChartSpecOptions): string {
@@ -343,7 +304,10 @@ function buildChartPrompt(opts: ChartSpecOptions): string {
   ].join("\n");
 }
 
-function parseChartSpec(raw: string): Record<string, unknown> {
+function parseChartSpec(
+  raw: string,
+  validColumns: string[],
+): Record<string, unknown> {
   // Models sometimes wrap JSON in prose or code fences — grab the first object.
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) {
@@ -365,13 +329,41 @@ function parseChartSpec(raw: string): Record<string, unknown> {
       "The model's chart specification was missing mark/encoding.",
     );
   }
+  // Every field an encoding channel references must be a real result column.
+  // A hallucinated or misspelled field name is otherwise valid JSON and would
+  // render a blank/broken chart with no error — the exact failure this feature
+  // exists to prevent — so reject it here. Channels without a `field` (e.g. an
+  // aggregate "count", a datum/value) are fine and skipped.
+  const valid = new Set(validColumns);
+  const bad = new Set<string>();
+  const encoding = (spec as { encoding?: unknown }).encoding;
+  if (encoding && typeof encoding === "object") {
+    for (const channel of Object.values(encoding as Record<string, unknown>)) {
+      // A channel is usually one definition object, but some (tooltip, detail)
+      // can be an array of them.
+      for (const def of Array.isArray(channel) ? channel : [channel]) {
+        const field = (def as { field?: unknown } | null)?.field;
+        if (typeof field === "string" && !valid.has(field)) {
+          bad.add(field);
+        }
+      }
+    }
+  }
+  if (bad.size > 0) {
+    throw new Error(
+      `The model's chart referenced unknown column(s): ${[...bad].join(", ")}. ` +
+        `Available columns: ${validColumns.join(", ")}.`,
+    );
+  }
   return spec as Record<string, unknown>;
 }
 
 /**
- * Single prompt -> text completion across all three providers. Unlike
- * analyzeResults (which swallows failures into ""), this surfaces errors to the
- * caller so a failed chart request can be reported instead of hidden.
+ * Single prompt -> text completion across all three providers, used by both
+ * analyzeResults and generateChartSpec. Surfaces errors to the caller (callers
+ * that prefer a soft failure wrap it in their own try/catch). `maxTokens`
+ * bounds the Bedrock response; the Copilot/local paths don't take an explicit
+ * limit here.
  */
 async function completeText(
   opts: {
@@ -381,6 +373,7 @@ async function completeText(
     modelId: string;
   },
   prompt: string,
+  maxTokens = 1024,
 ): Promise<string> {
   if (opts.provider === "bedrock") {
     const client = new BedrockRuntimeClient({
@@ -391,7 +384,7 @@ async function completeText(
       new ConverseCommand({
         modelId: opts.modelId,
         messages: [{ role: "user", content: [{ text: prompt }] }],
-        inferenceConfig: { maxTokens: 1024, temperature: 0 },
+        inferenceConfig: { maxTokens, temperature: 0 },
       }),
     );
     const blocks: ContentBlock[] = response.output?.message?.content ?? [];
