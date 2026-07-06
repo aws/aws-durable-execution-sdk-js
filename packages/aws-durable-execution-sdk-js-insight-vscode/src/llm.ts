@@ -280,7 +280,8 @@ export async function generateChartSpec(
 ): Promise<Record<string, unknown>> {
   const prompt = buildChartPrompt(opts);
   // A styled spec (several channels + scales + titles) is still small, but give
-  // headroom beyond the default so it can't truncate into invalid JSON.
+  // headroom beyond the default on the Bedrock/local paths so it doesn't
+  // truncate into invalid JSON (the Copilot path uses its own default).
   const raw = await completeText(opts, prompt, 2048);
   return parseChartSpec(raw, opts.columns);
 }
@@ -319,8 +320,8 @@ function buildChartPrompt(opts: ChartSpecOptions): string {
  * Single prompt -> text completion across all three providers, used by both
  * analyzeResults and generateChartSpec. Surfaces errors to the caller (callers
  * that prefer a soft failure wrap it in their own try/catch). `maxTokens`
- * bounds the Bedrock response; the Copilot/local paths don't take an explicit
- * limit here.
+ * bounds the Bedrock and local (node-llama-cpp) responses; the Copilot path
+ * has no simple per-request token knob and uses the model's own default.
  */
 async function completeText(
   opts: {
@@ -379,7 +380,7 @@ async function completeText(
   // finally: callers (e.g. generateChartSpec) let prompt() errors propagate, so
   // dispose the llama context even on throw to avoid leaking it.
   try {
-    const text = await session.prompt(prompt);
+    const text = await session.prompt(prompt, { maxTokens });
     return text.trim();
   } finally {
     await context.dispose();

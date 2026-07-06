@@ -22,6 +22,10 @@ describe("extractJsonObject", () => {
       'Here is your spec:\n```json\n{"mark":"bar","encoding":{}}\n```';
     expect(extractJsonObject(raw)).toBe('{"mark":"bar","encoding":{}}');
   });
+
+  it("skips a balanced-but-unparseable candidate and returns the next valid one", () => {
+    expect(extractJsonObject('use {value} then {"a":1}')).toBe('{"a":1}');
+  });
 });
 
 describe("parseChartSpec", () => {
@@ -40,10 +44,16 @@ describe("parseChartSpec", () => {
     );
   });
 
-  it("throws on invalid JSON", () => {
+  it("throws when no parseable JSON object is present", () => {
     expect(() => parseChartSpec('{"mark":"bar", encoding:}', COLS)).toThrow(
-      /invalid/i,
+      /did not return a valid/i,
     );
+  });
+
+  it("finds the valid spec even when earlier prose contains a brace", () => {
+    const raw =
+      'Use the {value} here: {"mark":"bar","encoding":{"x":{"field":"hour_bucket"},"y":{"field":"record_count"}}}';
+    expect(parseChartSpec(raw, COLS).mark).toBe("bar");
   });
 
   it("throws when mark or encoding is missing", () => {

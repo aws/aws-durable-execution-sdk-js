@@ -6,15 +6,36 @@
  */
 
 /**
- * Extract the first brace-balanced JSON object from `raw`. Unlike a greedy
- * `/\{[\s\S]*\}/`, this stops at the matching close brace, so trailing prose
- * that happens to contain a brace (e.g. "…hope this helps :}") doesn't make the
- * capture over-read. Brace counting ignores braces inside string literals.
- * Returns null if there is no balanced object.
+ * Extract the first brace-balanced JSON object from `raw` that actually parses.
+ * Unlike a greedy `/\{[\s\S]*\}/`, each candidate stops at its matching close
+ * brace (ignoring braces inside string literals), so trailing prose with a
+ * brace (e.g. "…hope this helps :}") doesn't make the capture over-read. If a
+ * candidate isn't valid JSON — e.g. leading prose like "use {value}: {...}"
+ * whose first balanced object is `{value}` — it advances to the next `{` and
+ * retries, so a valid spec that follows junk is still found. Returns null if no
+ * balanced, parseable object exists.
  */
 export function extractJsonObject(raw: string): string | null {
-  const start = raw.indexOf("{");
-  if (start === -1) return null;
+  for (
+    let start = raw.indexOf("{");
+    start !== -1;
+    start = raw.indexOf("{", start + 1)
+  ) {
+    const candidate = balancedObjectAt(raw, start);
+    if (candidate !== null) {
+      try {
+        JSON.parse(candidate);
+        return candidate;
+      } catch {
+        // Balanced but not valid JSON (e.g. `{value}`) — try the next brace.
+      }
+    }
+  }
+  return null;
+}
+
+/** The brace-balanced substring starting at `start` (a `{`), or null if never closed. */
+function balancedObjectAt(raw: string, start: number): string | null {
   let depth = 0;
   let inString = false;
   let escaped = false;
@@ -38,11 +59,11 @@ export function extractJsonObject(raw: string): string | null {
 
 /**
  * Parse the model's response into a Vega-Lite spec fragment and validate it.
- * Throws (with a human-readable message) if there is no JSON object, it doesn't
- * parse, it's missing mark/encoding, or any encoding channel references a
- * `field` that isn't one of `validColumns` — a hallucinated or misspelled
- * field is otherwise valid JSON and would render a blank/broken chart with no
- * error, the exact failure this feature exists to prevent.
+ * Throws (with a human-readable message) if there is no parseable JSON object,
+ * it's missing mark/encoding, sets a disallowed top-level key, or any encoding
+ * channel references a `field` that isn't one of `validColumns` — a
+ * hallucinated or misspelled field is otherwise valid JSON and would render a
+ * blank/broken chart with no error, the exact failure this feature prevents.
  */
 export function parseChartSpec(
   raw: string,
@@ -50,14 +71,9 @@ export function parseChartSpec(
 ): Record<string, unknown> {
   const json = extractJsonObject(raw);
   if (!json) {
-    throw new Error("The model did not return a chart specification.");
+    throw new Error("The model did not return a valid chart specification.");
   }
-  let spec: unknown;
-  try {
-    spec = JSON.parse(json);
-  } catch {
-    throw new Error("The model returned an invalid chart specification.");
-  }
+  const spec: unknown = JSON.parse(json); // extractJsonObject guarantees this parses
   if (
     spec == null ||
     typeof spec !== "object" ||
@@ -78,7 +94,7 @@ export function parseChartSpec(
   const disallowed = Object.keys(spec).filter((k) => !ALLOWED_TOP_LEVEL.has(k));
   if (disallowed.length > 0) {
     throw new Error(
-      `The model's chart set disallowed top-level keys: ${disallowed.join(", ")}. ` +
+      `The model's chart spec included disallowed top-level keys: ${disallowed.join(", ")}. ` +
         `Only mark, encoding, and title are allowed.`,
     );
   }
