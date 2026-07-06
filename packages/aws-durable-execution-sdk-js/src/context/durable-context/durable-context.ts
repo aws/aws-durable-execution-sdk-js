@@ -157,6 +157,14 @@ export class DurableContextImpl<
               : hashId(activeContext.contextId),
         };
 
+        if (
+          activeContext &&
+          activeContext.contextId !== "root" &&
+          activeContext.operationName !== undefined
+        ) {
+          result.operationName = activeContext.operationName;
+        }
+
         if (activeContext?.attempt !== undefined) {
           result.attempt = activeContext.attempt;
         }

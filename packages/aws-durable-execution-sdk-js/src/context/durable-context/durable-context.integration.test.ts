@@ -140,6 +140,61 @@ describe("DurableContext Integration Tests", () => {
         );
       });
 
+      it("should include operationName when provided in active context", () => {
+        const { context, executionContext } = createTestDurableContext({
+          durableExecutionMode: DurableExecutionMode.ExecutionMode,
+        });
+
+        const loggingContext = context.getDurableLoggingContext();
+
+        runWithContext(
+          "1",
+          undefined,
+          () => {
+            const logData = loggingContext.getDurableLogData();
+
+            expect(logData).toEqual({
+              executionArn: executionContext.durableExecutionArn,
+              requestId: executionContext.requestId,
+              tenantId: executionContext.tenantId,
+              operationId: hashId("1"),
+              operationName: "fetch-user",
+              attempt: 2,
+            });
+          },
+          2, // attempt number
+          DurableExecutionMode.ExecutionMode,
+          "fetch-user", // operation name
+        );
+      });
+
+      it("should not include operationName in root context", () => {
+        const { context, executionContext } = createTestDurableContext({
+          durableExecutionMode: DurableExecutionMode.ExecutionMode,
+        });
+
+        const loggingContext = context.getDurableLoggingContext();
+
+        runWithContext(
+          "root",
+          undefined,
+          () => {
+            const logData = loggingContext.getDurableLogData();
+
+            expect(logData).toEqual({
+              executionArn: executionContext.durableExecutionArn,
+              requestId: executionContext.requestId,
+              tenantId: executionContext.tenantId,
+              operationId: undefined,
+            });
+            expect(logData.operationName).toBeUndefined();
+          },
+          undefined,
+          DurableExecutionMode.ExecutionMode,
+          "root-op", // operation name should be ignored for root
+        );
+      });
+
       it("should work without active context", () => {
         const { context, executionContext } = createTestDurableContext({
           durableExecutionMode: DurableExecutionMode.ExecutionMode,

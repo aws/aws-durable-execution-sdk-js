@@ -895,6 +895,7 @@ describe("runWithContext Integration", () => {
       expect.any(Function), // The wrapped child function
       undefined, // No attempt number for child contexts
       DurableExecutionMode.ExecutionMode,
+      "test-child", // operationName (child context name)
     );
   });
 
@@ -941,6 +942,9 @@ describe("runWithContext Integration", () => {
       "child-context-id",
       "child-context-id", // parentId becomes entityId in ReplayChildren mode
       expect.any(Function), // The wrapped child function
+      undefined, // no attempt number
+      undefined, // no explicit replay mode override
+      "test-child", // operationName (child context name)
     );
   });
 
@@ -1011,6 +1015,9 @@ describe("runWithContext Integration", () => {
       "child-context-id", // stepId = entityId
       "child-context-id", // parentId = entityId (not the original parentId)
       expect.any(Function),
+      undefined, // no attempt number
+      undefined, // no explicit replay mode override
+      "test-child", // operationName (child context name)
     );
   });
 
@@ -1025,6 +1032,7 @@ describe("runWithContext Integration", () => {
       expect.any(Function),
       undefined,
       DurableExecutionMode.ExecutionMode,
+      "test-child-1", // operationName (child context name)
     );
 
     // Reset and test with STARTED status (should still be ExecutionMode)
@@ -1044,6 +1052,7 @@ describe("runWithContext Integration", () => {
       expect.any(Function),
       undefined,
       DurableExecutionMode.ExecutionMode,
+      "test-child-2", // operationName (child context name)
     );
   });
 

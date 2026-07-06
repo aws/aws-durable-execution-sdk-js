@@ -7,6 +7,7 @@ import {
 } from "@aws-sdk/client-bedrock-runtime";
 import type { AwsCredentialIdentityProvider } from "@aws-sdk/types";
 import { buildSystemPrompt, type DestinationType } from "./schema";
+import { parseChartSpec } from "./chartSpec";
 import {
   parseVerdict,
   buildVerifyInstruction,
@@ -170,18 +171,23 @@ export async function verifyResult(
       if (models.length === 0) {
         return { satisfied: true, reason: "No judge model available." };
       }
-      const response = await models[0].sendRequest(
-        [
-          vscode.LanguageModelChatMessage.User(
-            `${instruction}\n\nRespond with ONLY JSON: {"satisfied": true|false, "reason": "...", "suggestion": "..."}`,
-          ),
-        ],
-        {},
-        new vscode.CancellationTokenSource().token,
-      );
-      let text = "";
-      for await (const chunk of response.text) text += chunk;
-      return parseVerdict(text);
+      const cts = new vscode.CancellationTokenSource();
+      try {
+        const response = await models[0].sendRequest(
+          [
+            vscode.LanguageModelChatMessage.User(
+              `${instruction}\n\nRespond with ONLY JSON: {"satisfied": true|false, "reason": "...", "suggestion": "..."}`,
+            ),
+          ],
+          {},
+          cts.token,
+        );
+        let text = "";
+        for await (const chunk of response.text) text += chunk;
+        return parseVerdict(text);
+      } finally {
+        cts.dispose();
+      }
     }
 
     // local
@@ -191,11 +197,14 @@ export async function verifyResult(
     const session = new LlamaChatSession({
       contextSequence: context.getSequence(),
     });
-    const text = await session.prompt(
-      `${instruction}\n\nRespond with ONLY JSON: {"satisfied": true|false, "reason": "...", "suggestion": "..."}`,
-    );
-    await context.dispose();
-    return parseVerdict(text);
+    try {
+      const text = await session.prompt(
+        `${instruction}\n\nRespond with ONLY JSON: {"satisfied": true|false, "reason": "...", "suggestion": "..."}`,
+      );
+      return parseVerdict(text);
+    } finally {
+      await context.dispose();
+    }
   } catch {
     // Never let a judge failure hide results or wedge the loop.
     return {
@@ -234,50 +243,147 @@ export async function analyzeResults(opts: AnalyzeOptions): Promise<string> {
     rows: opts.rows,
   });
   try {
-    if (opts.provider === "bedrock") {
-      const client = new BedrockRuntimeClient({
-        region: opts.region,
-        credentials: opts.credentials,
-      });
-      const response = await client.send(
-        new ConverseCommand({
-          modelId: opts.modelId,
-          messages: [{ role: "user", content: [{ text: prompt }] }],
-          inferenceConfig: { maxTokens: 4096, temperature: 0 },
-        }),
-      );
-      const blocks: ContentBlock[] = response.output?.message?.content ?? [];
-      return blocks
-        .map((b) => ("text" in b && b.text ? b.text : ""))
-        .join("")
-        .trim();
-    }
+    // Analysis prose can be long, so allow the larger token budget.
+    return await completeText(opts, prompt, 4096);
+  } catch {
+    // Never let an analysis failure hide the results; fall back to the table.
+    return "";
+  }
+}
 
-    if (opts.provider === "copilot") {
-      const models = await vscode.lm.selectChatModels({ vendor: "copilot" });
-      if (models.length === 0) return "";
+// ─── Chart spec generation (Visualize page, free-text prompt) ────────────────
+
+interface ChartSpecOptions {
+  provider: LlmProvider;
+  region: string;
+  credentials: AwsCredentialIdentityProvider;
+  modelId: string;
+  columns: string[];
+  /** Names of the columns that hold numeric values (a hint for value/axis choice). */
+  numericColumns: string[];
+  /** The chart type the user picked from the dropdown, if any (e.g. "stacked-bar"). */
+  chartType?: string;
+  description: string;
+}
+
+/**
+ * Turn a visualization request into a Vega-Lite spec fragment ({mark, encoding}
+ * plus optional styling) over the columns already fetched. The request is
+ * either a chart type the user picked, a free-text description, or both. The
+ * model decides which column maps to each channel and any styling. Only the
+ * column names/types and the request are sent — never the row data. Throws on
+ * model/parse failure so the caller can surface an error instead of rendering a
+ * silently wrong chart.
+ */
+export async function generateChartSpec(
+  opts: ChartSpecOptions,
+): Promise<Record<string, unknown>> {
+  const prompt = buildChartPrompt(opts);
+  // A styled spec (several channels + scales + titles) is still small, but give
+  // headroom beyond the default on the Bedrock/local paths so it doesn't
+  // truncate into invalid JSON (the Copilot path uses its own default).
+  const raw = await completeText(opts, prompt, 2048);
+  return parseChartSpec(raw, opts.columns);
+}
+
+function buildChartPrompt(opts: ChartSpecOptions): string {
+  const numeric = opts.numericColumns.length
+    ? opts.numericColumns.join(", ")
+    : "(none detected)";
+  const request = [
+    opts.chartType ? `Chart type: ${opts.chartType}.` : "",
+    opts.description ? `Request: ${opts.description}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return [
+    "You configure a Vega-Lite v5 chart for a result table. Map the request onto the AVAILABLE COLUMNS only, choosing the best column for each channel.",
+    "",
+    `Available columns: ${opts.columns.join(", ")}`,
+    `Numeric columns (usable as quantitative values): ${numeric}`,
+    "",
+    `${request}`,
+    "",
+    "Rules:",
+    "- Use ONLY the listed column names, verbatim, in each `field`. Never invent a column.",
+    "- Put the measure/value on a quantitative encoding (usually y, or theta for a pie); put category/axis columns on x, and a second category on color (or xOffset for a grouped bar).",
+    '- Stacked bar: mark "bar", the value on y with "stack":"zero", one category on x, the other on color.',
+    '- Pick a sensible `type` per field: "quantitative" for numbers, "nominal"/"ordinal" for categories, "temporal" for timestamps.',
+    '- You MAY add styling when it improves readability: an axis `scale` (e.g. "zero":true or "domainMin"/"domainMax"), a color `scale` `scheme` (e.g. "tableau10", "category10"), `sort` on an axis, and short axis `title`s. Keep it valid Vega-Lite v5. Do NOT set width, height, data, or config.',
+    "",
+    'Respond with ONLY a JSON object with "mark" and "encoding" (optionally with the styling above), no prose, no data, no $schema. Example:',
+    '{"mark":"bar","encoding":{"x":{"field":"product_category","type":"nominal","title":"Category"},"y":{"field":"record_count","type":"quantitative","stack":"zero","scale":{"zero":true}},"color":{"field":"hour_bucket","type":"nominal","scale":{"scheme":"tableau10"}}}}',
+  ].join("\n");
+}
+
+/**
+ * Single prompt -> text completion across all three providers, used by both
+ * analyzeResults and generateChartSpec. Surfaces errors to the caller (callers
+ * that prefer a soft failure wrap it in their own try/catch). `maxTokens`
+ * bounds the Bedrock and local (node-llama-cpp) responses; the Copilot path
+ * has no simple per-request token knob and uses the model's own default.
+ */
+async function completeText(
+  opts: {
+    provider: LlmProvider;
+    region: string;
+    credentials: AwsCredentialIdentityProvider;
+    modelId: string;
+  },
+  prompt: string,
+  maxTokens = 1024,
+): Promise<string> {
+  if (opts.provider === "bedrock") {
+    const client = new BedrockRuntimeClient({
+      region: opts.region,
+      credentials: opts.credentials,
+    });
+    const response = await client.send(
+      new ConverseCommand({
+        modelId: opts.modelId,
+        messages: [{ role: "user", content: [{ text: prompt }] }],
+        inferenceConfig: { maxTokens, temperature: 0 },
+      }),
+    );
+    const blocks: ContentBlock[] = response.output?.message?.content ?? [];
+    return blocks
+      .map((b) => ("text" in b && b.text ? b.text : ""))
+      .join("")
+      .trim();
+  }
+  if (opts.provider === "copilot") {
+    const models = await vscode.lm.selectChatModels({ vendor: "copilot" });
+    if (models.length === 0) {
+      throw new Error("No Copilot chat model is available.");
+    }
+    const cts = new vscode.CancellationTokenSource();
+    try {
       const response = await models[0].sendRequest(
         [vscode.LanguageModelChatMessage.User(prompt)],
         {},
-        new vscode.CancellationTokenSource().token,
+        cts.token,
       );
       let text = "";
       for await (const chunk of response.text) text += chunk;
       return text.trim();
+    } finally {
+      cts.dispose();
     }
-
-    // local
-    const { model } = await getLocalModel();
-    const { LlamaChatSession } = await import("node-llama-cpp");
-    const context = await model.createContext();
-    const session = new LlamaChatSession({
-      contextSequence: context.getSequence(),
-    });
-    const text = await session.prompt(prompt);
-    await context.dispose();
+  }
+  // local
+  const { model } = await getLocalModel();
+  const { LlamaChatSession } = await import("node-llama-cpp");
+  const context = await model.createContext();
+  const session = new LlamaChatSession({
+    contextSequence: context.getSequence(),
+  });
+  // finally: callers (e.g. generateChartSpec) let prompt() errors propagate, so
+  // dispose the llama context even on throw to avoid leaking it.
+  try {
+    const text = await session.prompt(prompt, { maxTokens });
     return text.trim();
-  } catch {
-    return "";
+  } finally {
+    await context.dispose();
   }
 }
 
@@ -406,16 +512,16 @@ async function generateViaCopilot(
     vscode.LanguageModelChatMessage.User(opts.question),
   ];
 
-  const response = await model.sendRequest(
-    messages,
-    {},
-    new vscode.CancellationTokenSource().token,
-  );
-
+  const cts = new vscode.CancellationTokenSource();
   // Collect the streamed response
   let text = "";
-  for await (const chunk of response.text) {
-    text += chunk;
+  try {
+    const response = await model.sendRequest(messages, {}, cts.token);
+    for await (const chunk of response.text) {
+      text += chunk;
+    }
+  } finally {
+    cts.dispose();
   }
 
   // Parse JSON from the response (handle potential markdown wrapping)
@@ -638,8 +744,13 @@ async function generateViaLocal(
 
   const prompt = `${systemPrompt}\n\nRespond with ONLY a JSON object: {"query": "...", "explanation": "...", "timeRangeMs": ..., "suggestedCharts": ["...", "..."]}\nFor suggestedCharts pick 2-4 from: bar, stacked-bar, line, area, scatter, heatmap, histogram, pie, boxplot.\nOmit timeRangeMs if not mentioned (default 24h).\n\nUser question: ${opts.question}`;
 
-  const response = await session.prompt(prompt);
-  await context.dispose();
+  let response: string;
+  try {
+    response = await session.prompt(prompt);
+  } finally {
+    // Dispose even if prompt() throws (the error propagates to the caller).
+    await context.dispose();
+  }
 
   const jsonMatch = response.match(/\{[\s\S]*"query"[\s\S]*\}/);
   if (!jsonMatch) {

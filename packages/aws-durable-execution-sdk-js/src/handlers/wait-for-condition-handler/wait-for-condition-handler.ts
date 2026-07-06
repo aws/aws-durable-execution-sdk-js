@@ -260,6 +260,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
               : checkFunc,
             currentAttempt,
             DurableExecutionMode.ExecutionMode,
+            name,
           )) as T;
 
           const serializedState = await safeSerialize(

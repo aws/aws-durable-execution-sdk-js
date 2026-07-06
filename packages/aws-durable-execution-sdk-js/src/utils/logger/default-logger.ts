@@ -119,6 +119,10 @@ function formatDurableLogData(
     result.operationId = logData.operationId;
   }
 
+  if (logData.operationName !== undefined) {
+    result.operationName = logData.operationName;
+  }
+
   if (logData.attempt !== undefined) {
     result.attempt = logData.attempt;
   }
