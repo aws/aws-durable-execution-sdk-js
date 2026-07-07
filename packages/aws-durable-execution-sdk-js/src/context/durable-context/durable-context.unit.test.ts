@@ -219,6 +219,56 @@ describe("DurableContext", () => {
       expect(executionContext.getStepData).toHaveBeenCalled();
     });
 
+    it("should stay in ReplayMode when the next op is a virtual context whose child is checkpointed", () => {
+      // Virtual contexts are not checkpointed themselves, but their first child
+      // is (under `${nextStepId}-1`). Replay must not end prematurely (#578).
+      const executionContext = createMockExecutionContext({
+        getStepData: jest.fn((id: string) =>
+          id === "1-1"
+            ? ({ Id: "1-1", Status: OperationStatus.SUCCEEDED } as any)
+            : undefined,
+        ),
+      });
+
+      const context = createDurableContext(
+        executionContext,
+        mockContext,
+        DurableExecutionMode.ReplayMode,
+        mockLogger,
+        undefined,
+        mockDurableExecution,
+      ) as any;
+
+      context.checkAndUpdateReplayMode();
+
+      expect(context.durableExecutionMode).toBe(
+        DurableExecutionMode.ReplayMode,
+      );
+      expect(executionContext.getStepData).toHaveBeenCalledWith("1");
+      expect(executionContext.getStepData).toHaveBeenCalledWith("1-1");
+    });
+
+    it("should switch to ExecutionMode when neither the next op nor its first child is checkpointed", () => {
+      const executionContext = createMockExecutionContext({
+        getStepData: jest.fn().mockReturnValue(undefined),
+      });
+
+      const context = createDurableContext(
+        executionContext,
+        mockContext,
+        DurableExecutionMode.ReplayMode,
+        mockLogger,
+        undefined,
+        mockDurableExecution,
+      ) as any;
+
+      context.checkAndUpdateReplayMode();
+
+      expect(context.durableExecutionMode).toBe(
+        DurableExecutionMode.ExecutionMode,
+      );
+    });
+
     it("should switch mode when step is unfinished", async () => {
       const executionContext = createMockExecutionContext({
         getStepData: jest
