@@ -1,0 +1,24 @@
+# Reference: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      # Produces conventional-commit PR titles like "chore(deps): bump ..."
+      # to satisfy .github/workflows/lintcommit.js. "include: scope" makes
+      # Dependabot append the (deps) / (deps-dev) scope automatically.
+      prefix: "chore"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    groups:
+      # Group all GitHub Actions updates into a single PR to reduce noise.
+      # xref: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file#groups
+      actions-deps:
+        patterns:
+          - "*"
