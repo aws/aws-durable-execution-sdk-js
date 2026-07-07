@@ -121,7 +121,8 @@ export const createParallelHandler = <Logger extends DurableLogger>(
         maxConcurrency: config?.maxConcurrency,
         topLevelSubType: OperationSubType.PARALLEL,
         iterationSubType: OperationSubType.PARALLEL_BRANCH,
-        summaryGenerator: createParallelSummaryGenerator(),
+        summaryGenerator:
+          config?.summaryGenerator ?? createParallelSummaryGenerator(),
         completionConfig: config?.completionConfig,
         serdes: config?.serdes,
         itemSerdes: config?.itemSerdes,

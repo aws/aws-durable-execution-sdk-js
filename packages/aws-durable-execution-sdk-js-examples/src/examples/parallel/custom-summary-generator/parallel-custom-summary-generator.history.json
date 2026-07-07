@@ -1,0 +1,204 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "e53dde61-d8e2-47e2-873b-eab7401d5baa",
+    "EventTimestamp": "2026-07-07T19:44:39.817Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"branchPayloadSize\":10}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "Parallel",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "parallel-large",
+    "EventTimestamp": "2026-07-07T19:44:39.824Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "ParallelBranch",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "parallel-branch-0",
+    "EventTimestamp": "2026-07-07T19:44:39.824Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "ParallelBranch",
+    "EventId": 4,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "parallel-branch-1",
+    "EventTimestamp": "2026-07-07T19:44:39.824Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "ParallelBranch",
+    "EventId": 5,
+    "Id": "13cee27a2bd93915",
+    "Name": "parallel-branch-2",
+    "EventTimestamp": "2026-07-07T19:44:39.824Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "2f221a18eb863803",
+    "Name": "branch-0",
+    "EventTimestamp": "2026-07-07T19:44:39.824Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "6151f5ab282d90e4",
+    "Name": "branch-1",
+    "EventTimestamp": "2026-07-07T19:44:39.824Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "b425e0c75591aa8f",
+    "Name": "branch-2",
+    "EventTimestamp": "2026-07-07T19:44:39.824Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 9,
+    "Id": "2f221a18eb863803",
+    "Name": "branch-0",
+    "EventTimestamp": "2026-07-07T19:44:39.824Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"aaaaaaaaaa\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 10,
+    "Id": "6151f5ab282d90e4",
+    "Name": "branch-1",
+    "EventTimestamp": "2026-07-07T19:44:39.824Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"bbbbbbbbbb\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 11,
+    "Id": "b425e0c75591aa8f",
+    "Name": "branch-2",
+    "EventTimestamp": "2026-07-07T19:44:39.824Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"cccccccccc\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "ParallelBranch",
+    "EventId": 12,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "parallel-branch-0",
+    "EventTimestamp": "2026-07-07T19:44:39.826Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"aaaaaaaaaa\""
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "ParallelBranch",
+    "EventId": 13,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "parallel-branch-1",
+    "EventTimestamp": "2026-07-07T19:44:39.826Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"bbbbbbbbbb\""
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "ParallelBranch",
+    "EventId": 14,
+    "Id": "13cee27a2bd93915",
+    "Name": "parallel-branch-2",
+    "EventTimestamp": "2026-07-07T19:44:39.826Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"cccccccccc\""
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "Parallel",
+    "EventId": 15,
+    "Id": "c4ca4238a0b92382",
+    "Name": "parallel-large",
+    "EventTimestamp": "2026-07-07T19:44:39.826Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"all\":[{\"result\":\"aaaaaaaaaa\",\"index\":0,\"status\":\"SUCCEEDED\"},{\"result\":\"bbbbbbbbbb\",\"index\":1,\"status\":\"SUCCEEDED\"},{\"result\":\"cccccccccc\",\"index\":2,\"status\":\"SUCCEEDED\"}],\"completionReason\":\"ALL_COMPLETED\"}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 16,
+    "EventTimestamp": "2026-07-07T19:44:39.826Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-07-07T19:44:39.817Z",
+      "EndTimestamp": "2026-07-07T19:44:39.826Z",
+      "Error": {},
+      "RequestId": "a85c5484-f72d-46c3-9892-595eb9aff473"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 17,
+    "Id": "e53dde61-d8e2-47e2-873b-eab7401d5baa",
+    "EventTimestamp": "2026-07-07T19:44:39.826Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"totalCount\":3,\"successCount\":3,\"resultLengths\":[10,10,10]}"
+      }
+    }
+  }
+]

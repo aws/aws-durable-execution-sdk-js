@@ -372,4 +372,51 @@ describe("Parallel Handler", () => {
       );
     });
   });
+
+  describe("summaryGenerator", () => {
+    it("should forward a user-provided summaryGenerator", async () => {
+      const branch1: ParallelFunc<string, DurableLogger> = jest
+        .fn()
+        .mockResolvedValue("result1");
+      const branches = [branch1];
+      const customSummaryGenerator = jest.fn(() => "custom-summary");
+
+      mockExecuteConcurrently.mockResolvedValue(
+        new MockBatchResult([
+          { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
+        ]) as any,
+      );
+
+      await parallelHandler("test-name", branches, {
+        summaryGenerator: customSummaryGenerator,
+      });
+
+      expect(mockExecuteConcurrently).toHaveBeenCalledWith(
+        "test-name",
+        expect.any(Array),
+        expect.any(Function),
+        expect.objectContaining({
+          summaryGenerator: customSummaryGenerator,
+        }),
+      );
+    });
+
+    it("should fall back to the default generator when none is provided", async () => {
+      const branch1: ParallelFunc<string, DurableLogger> = jest
+        .fn()
+        .mockResolvedValue("result1");
+      const branches = [branch1];
+
+      mockExecuteConcurrently.mockResolvedValue(
+        new MockBatchResult([
+          { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
+        ]) as any,
+      );
+
+      await parallelHandler("test-name", branches);
+
+      const forwardedConfig = mockExecuteConcurrently.mock.calls[0][3];
+      expect(typeof forwardedConfig.summaryGenerator).toBe("function");
+    });
+  });
 });

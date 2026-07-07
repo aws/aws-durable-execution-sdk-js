@@ -150,6 +150,14 @@ export interface MapConfig<TItem, TResult> {
   /** Configuration for completion behavior */
   completionConfig?: CompletionConfig;
   /**
+   * Function to generate a summary string from the batch result.
+   *
+   * The summary is used as the checkpointed payload when the serialized batch
+   * result exceeds the checkpoint size limit (ReplayChildren mode). When
+   * omitted, a default map summary generator is used.
+   */
+  summaryGenerator?: (result: BatchResult<TResult>) => string;
+  /**
    * Nesting type for map iterations (default: NestingType.NESTED)
    * - NESTED: Create full child contexts with checkpointing
    * - FLAT: Use virtual contexts to skip checkpointing and reduce costs by ~30%
@@ -191,6 +199,14 @@ export interface ParallelConfig<TResult> {
   itemSerdes?: Serdes<TResult>;
   /** Configuration for completion behavior */
   completionConfig?: CompletionConfig;
+  /**
+   * Function to generate a summary string from the batch result.
+   *
+   * The summary is used as the checkpointed payload when the serialized batch
+   * result exceeds the checkpoint size limit (ReplayChildren mode). When
+   * omitted, a default parallel summary generator is used.
+   */
+  summaryGenerator?: (result: BatchResult<TResult>) => string;
   /**
    * Nesting type for parallel branches (default: NestingType.NESTED)
    * - NESTED: Create full child contexts with checkpointing
