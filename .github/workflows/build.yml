@@ -22,7 +22,7 @@ jobs:
     # Note: To re-run `lint-commits` after fixing the PR title, close-and-reopen the PR.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Use Node.js 22.x
         uses: actions/setup-node@v6
         with:
@@ -36,7 +36,7 @@ jobs:
     needs: lint-commits
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Use Node.js 22.x
         uses: actions/setup-node@v6
         with:
@@ -47,7 +47,7 @@ jobs:
       - name: Build project
         run: npm run build
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: built-artifacts
           path: |
@@ -103,7 +103,7 @@ jobs:
           echo "✅ External PR - Integration tests skipped for security"
           echo "Maintainer: Add 'safe-to-merge' label and use squash & merge"
       - name: Check for bypass label
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             // Fetch current labels via API (event payload has stale data)
