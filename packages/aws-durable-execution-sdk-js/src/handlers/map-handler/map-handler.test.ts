@@ -422,4 +422,51 @@ describe("Map Handler", () => {
       });
     });
   });
+
+  describe("summaryGenerator", () => {
+    it("should forward a user-provided summaryGenerator", async () => {
+      const items = ["item1"];
+      const mapFunc: MapFunc<string, string, DurableLogger> = jest
+        .fn()
+        .mockResolvedValue("result");
+      const customSummaryGenerator = jest.fn(() => "custom-summary");
+
+      mockExecuteConcurrently.mockResolvedValue(
+        new MockBatchResult([
+          { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
+        ]) as any,
+      );
+
+      await mapHandler("test-map", items, mapFunc, {
+        summaryGenerator: customSummaryGenerator,
+      });
+
+      expect(mockExecuteConcurrently).toHaveBeenCalledWith(
+        "test-map",
+        expect.any(Array),
+        expect.any(Function),
+        expect.objectContaining({
+          summaryGenerator: customSummaryGenerator,
+        }),
+      );
+    });
+
+    it("should fall back to the default generator when none is provided", async () => {
+      const items = ["item1"];
+      const mapFunc: MapFunc<string, string, DurableLogger> = jest
+        .fn()
+        .mockResolvedValue("result");
+
+      mockExecuteConcurrently.mockResolvedValue(
+        new MockBatchResult([
+          { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
+        ]) as any,
+      );
+
+      await mapHandler("test-map", items, mapFunc);
+
+      const forwardedConfig = mockExecuteConcurrently.mock.calls[0][3];
+      expect(typeof forwardedConfig.summaryGenerator).toBe("function");
+    });
+  });
 });
