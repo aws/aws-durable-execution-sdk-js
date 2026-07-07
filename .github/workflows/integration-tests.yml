@@ -19,7 +19,7 @@ jobs:
       id-token: write # Required for AWS credentials
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -30,14 +30,14 @@ jobs:
       - name: Get AWS Credentials
         id: credentials
         if: github.actor != 'nektos/act'
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: "${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME }}"
           role-session-name: githubIntegrationTest
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: built-artifacts
           path: .
@@ -63,7 +63,7 @@ jobs:
       id-token: write # Required for AWS credentials
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -74,14 +74,14 @@ jobs:
       - name: Get AWS Credentials
         id: credentials
         if: github.actor != 'nektos/act'
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: "${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME }}"
           role-session-name: githubIntegrationTest
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: built-artifacts
           path: .
