@@ -31,6 +31,7 @@ import { createPluginRunner } from "./utils/plugin/plugin-runner";
 import { toOperationInfoMap } from "./utils/operation/operation";
 import {
   DurableInstrumentationPlugin,
+  InvocationBaseInfo,
   InvocationInfo,
   OperationInfo,
   PluginInvocationStatus,
@@ -85,13 +86,17 @@ async function runHandler<
     }
   }
 
-  const invocationInfo: InvocationInfo = {
+  const invocationBaseInfo: InvocationBaseInfo = {
     requestId: executionContext.requestId,
     executionArn: executionContext.durableExecutionArn,
-    isFirstInvocation:
-      durableExecutionMode === DurableExecutionMode.ExecutionMode,
     executionInput: customerHandlerEvent,
     operations: allOperations,
+  };
+
+  const invocationInfo: InvocationInfo = {
+    ...invocationBaseInfo,
+    isFirstInvocation:
+      durableExecutionMode === DurableExecutionMode.ExecutionMode,
     updatedOperations,
   };
   await plugin.onInvocationStart?.(invocationInfo);
@@ -206,7 +211,7 @@ async function runHandler<
             ),
           };
           await plugin.onInvocationEnd?.({
-            ...invocationInfo,
+            ...invocationBaseInfo,
             status: PluginInvocationStatus.FAILED,
             executionInput: customerHandlerEvent,
             executionError: result.error || new Error(result.message),
@@ -220,7 +225,7 @@ async function runHandler<
           log("🛑", "Returning termination response");
 
           await plugin.onInvocationEnd?.({
-            ...invocationInfo,
+            ...invocationBaseInfo,
             status: PluginInvocationStatus.PENDING,
             executionInput: customerHandlerEvent,
             executionResult: undefined,
@@ -275,7 +280,7 @@ async function runHandler<
             }
 
             await plugin.onInvocationEnd?.({
-              ...invocationInfo,
+              ...invocationBaseInfo,
               status: PluginInvocationStatus.SUCCEEDED,
               executionInput: customerHandlerEvent,
               executionResult: result,
@@ -309,7 +314,7 @@ async function runHandler<
         }
 
         await plugin.onInvocationEnd?.({
-          ...invocationInfo,
+          ...invocationBaseInfo,
           status: PluginInvocationStatus.SUCCEEDED,
           executionInput: customerHandlerEvent,
           executionResult: result,
@@ -331,7 +336,7 @@ async function runHandler<
             "Unrecoverable invocation error - terminating Lambda execution",
           );
           await plugin.onInvocationEnd?.({
-            ...invocationInfo,
+            ...invocationBaseInfo,
             status: PluginInvocationStatus.RETRYING,
             executionInput: customerHandlerEvent,
             executionError: error,
@@ -354,7 +359,7 @@ async function runHandler<
         }
 
         await plugin.onInvocationEnd?.({
-          ...invocationInfo,
+          ...invocationBaseInfo,
           status: PluginInvocationStatus.FAILED,
           executionInput: customerHandlerEvent,
           executionError:

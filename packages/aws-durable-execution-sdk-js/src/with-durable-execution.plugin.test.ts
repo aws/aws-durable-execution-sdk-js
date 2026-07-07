@@ -125,7 +125,6 @@ describe("plugin hooks", () => {
       expect.objectContaining({
         requestId: "req-123",
         executionArn: "arn:test",
-        isFirstInvocation: true,
         status: PluginInvocationStatus.SUCCEEDED,
         executionResult: result,
         executionError: undefined,
@@ -146,7 +145,6 @@ describe("plugin hooks", () => {
       expect.objectContaining({
         requestId: "req-123",
         executionArn: "arn:test",
-        isFirstInvocation: true,
         status: PluginInvocationStatus.FAILED,
         executionError: error,
         executionResult: undefined,
