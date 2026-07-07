@@ -119,6 +119,8 @@ export interface AttemptEndInfo extends AttemptInfo {
 export interface InvocationBaseInfo {
   requestId: string;
   executionArn: string;
+  executionInput: unknown;
+  operations: Record<string, OperationInfo>;
 }
 
 /**
@@ -129,8 +131,16 @@ export interface InvocationBaseInfo {
  */
 export interface InvocationInfo extends InvocationBaseInfo {
   isFirstInvocation: boolean;
-  executionInput: unknown;
-  operations: Record<string, OperationInfo>;
+  /**
+   * Operations that were updated externally between the previous invocation and this one
+   * (e.g., a wait timer expired, a callback was received, or a chained invoke completed).
+   *
+   * This is a subset of `operations` containing only those whose status changed since the
+   * last checkpoint. On the first invocation this will be an empty record.
+   *
+   * Populated from the `UpdatedOperationIds` field in the durable Lambda invocation input.
+   */
+  updatedOperations: Record<string, OperationInfo>;
 }
 
 /**
@@ -139,11 +149,10 @@ export interface InvocationInfo extends InvocationBaseInfo {
  *
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
-export interface InvocationEndInfo extends InvocationInfo {
+export interface InvocationEndInfo extends InvocationBaseInfo {
   status: PluginInvocationStatus;
   executionResult?: unknown;
   executionError?: Error;
-  operations: Record<string, OperationInfo>;
 }
 
 /**
@@ -151,7 +160,8 @@ export interface InvocationEndInfo extends InvocationInfo {
  *
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
-export interface OperationChangeInfo extends InvocationBaseInfo {
+export interface OperationChangeInfo {
+  executionArn: string;
   updatedOperations: Record<string, OperationInfo>;
   operations: Record<string, OperationInfo>;
 }
