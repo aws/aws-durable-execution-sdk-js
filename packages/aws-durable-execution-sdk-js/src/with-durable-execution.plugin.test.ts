@@ -88,6 +88,7 @@ describe("plugin hooks", () => {
       isFirstInvocation: true,
       executionInput: expect.anything(),
       operations: expect.any(Object),
+      updatedOperations: expect.any(Object),
     });
   });
 
@@ -109,6 +110,7 @@ describe("plugin hooks", () => {
       isFirstInvocation: false,
       executionInput: expect.anything(),
       operations: expect.any(Object),
+      updatedOperations: expect.any(Object),
     });
   });
 
@@ -123,7 +125,6 @@ describe("plugin hooks", () => {
       expect.objectContaining({
         requestId: "req-123",
         executionArn: "arn:test",
-        isFirstInvocation: true,
         status: PluginInvocationStatus.SUCCEEDED,
         executionResult: result,
         executionError: undefined,
@@ -144,7 +145,6 @@ describe("plugin hooks", () => {
       expect.objectContaining({
         requestId: "req-123",
         executionArn: "arn:test",
-        isFirstInvocation: true,
         status: PluginInvocationStatus.FAILED,
         executionError: error,
         executionResult: undefined,

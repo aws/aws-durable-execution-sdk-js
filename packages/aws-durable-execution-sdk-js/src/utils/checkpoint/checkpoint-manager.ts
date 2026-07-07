@@ -453,7 +453,6 @@ export class CheckpointManager implements Checkpoint {
       this.plugin.onOperationChange
     ) {
       await this.plugin.onOperationChange({
-        requestId: this.requestId,
         executionArn: this.durableExecutionArn,
         updatedOperations: toOperationInfoMap(updatedOperations),
         operations: toOperationInfoMap(this.stepData),

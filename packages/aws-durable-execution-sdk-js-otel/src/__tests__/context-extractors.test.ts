@@ -11,6 +11,7 @@ const baseInfo: InvocationInfo = {
   isFirstInvocation: true,
   executionInput: {},
   operations: {},
+  updatedOperations: {},
 };
 
 describe("xRayContextExtractor", () => {
