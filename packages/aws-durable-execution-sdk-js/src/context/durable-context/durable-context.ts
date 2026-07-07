@@ -252,7 +252,16 @@ export class DurableContextImpl<
     if (this.durableExecutionMode === DurableExecutionMode.ReplayMode) {
       const nextStepId = this.getNextStepId();
       const nextStepData = this._executionContext.getStepData(nextStepId);
-      if (!nextStepData) {
+      // A virtual context (runInChildContext with virtualContext: true) is not
+      // checkpointed itself, so getStepData(nextStepId) returns undefined even
+      // though replay should continue. Its first child operation IS
+      // checkpointed under `${nextStepId}-1`, so probe that before concluding
+      // replay has finished. Without this check, replay mode is prematurely
+      // switched to execution mode after a virtual context (issue #578).
+      const hasCheckpointedChild =
+        !nextStepData &&
+        this._executionContext.getStepData(`${nextStepId}-1`) !== undefined;
+      if (!nextStepData && !hasCheckpointedChild) {
         this.durableExecutionMode = DurableExecutionMode.ExecutionMode;
       }
     }
