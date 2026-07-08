@@ -87,7 +87,8 @@ export const createMapHandler = <Logger extends DurableLogger>(
         maxConcurrency: config?.maxConcurrency,
         topLevelSubType: OperationSubType.MAP,
         iterationSubType: OperationSubType.MAP_ITERATION,
-        summaryGenerator: createMapSummaryGenerator(),
+        summaryGenerator:
+          config?.summaryGenerator ?? createMapSummaryGenerator(),
         completionConfig: config?.completionConfig,
         serdes: config?.serdes,
         itemSerdes: config?.itemSerdes,

@@ -298,19 +298,48 @@ class IntegrationTestRunner {
   }
 
   // Run Jest integration tests
-  async runJestTests(/** @type {string | undefined} */ testPattern) {
+  async runJestTests(
+    /** @type {string | undefined} */ testPattern,
+    /** @type {{ capacityProviderOnly?: boolean }} */ options = {},
+  ) {
+    const { capacityProviderOnly = false } = options;
     log.info("Running Jest integration tests...");
 
     const examplesDir = CONFIG.EXAMPLES_PACKAGE_PATH;
 
-    // For Jest integration tests, exclude capacity provider functions since they weren't deployed
-    const functionsWithQualifier = Object.fromEntries(
-      Object.entries(
-        this.getFunctionNameMap({ capacityProviderOnly: false }),
-      ).map(([key, { functionName, qualifier }]) => {
-        return [key, `${functionName}:${qualifier}`];
-      }),
-    );
+    /** @type {Record<string, string>} */
+    let functionsWithQualifier;
+
+    if (capacityProviderOnly) {
+      // The capacity provider workflow only deploys the -CapacityProvider
+      // variants of examples that opt in via capacityProviderConfig. Key those
+      // by the example base name (which the test harness resolves) and point
+      // them at the deployed capacity provider function.
+      //
+      // Examples without a capacityProviderConfig are intentionally omitted so
+      // the harness skips them. Otherwise this job would invoke the regular
+      // functions (which it never deploys — they are owned by the parallel
+      // integration-tests workflow), causing a cross-workflow race that
+      // surfaced as a flaky ResourceNotFoundException.
+      functionsWithQualifier = Object.fromEntries(
+        Object.entries(
+          this.getFunctionNameMap({ capacityProviderOnly: true }),
+        ).map(([key, { functionName, qualifier }]) => {
+          const baseKey = key.endsWith(CAPACITY_PROVIDER_FUNCTION_SUFFIX)
+            ? key.slice(0, -CAPACITY_PROVIDER_FUNCTION_SUFFIX.length)
+            : key;
+          return [baseKey, `${functionName}:${qualifier}`];
+        }),
+      );
+    } else {
+      functionsWithQualifier = Object.fromEntries(
+        Object.entries(
+          this.getFunctionNameMap({ capacityProviderOnly: false }),
+        ).map(([key, { functionName, qualifier }]) => {
+          return [key, `${functionName}:${qualifier}`];
+        }),
+      );
+    }
 
     // Set additional environment variables
     const env = {
@@ -429,7 +458,7 @@ class IntegrationTestRunner {
     }
 
     if (!deployOnly) {
-      await this.runJestTests(testPattern);
+      await this.runJestTests(testPattern, { capacityProviderOnly });
     }
 
     log.success("Integration test completed successfully!");

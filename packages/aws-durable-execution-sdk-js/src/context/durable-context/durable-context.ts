@@ -232,7 +232,13 @@ export class DurableContextImpl<
       : `${this._stepCounter}`;
   }
 
-  private getNextStepId(): string {
+  /**
+   * Returns the step ID that the next {@link createStepId} call will mint,
+   * WITHOUT advancing the counter. At operation boundaries (before the current
+   * operation has claimed its ID) this is the ID of the current pending
+   * operation — the one about to run.
+   */
+  private peekStepId(): string {
     const nextCounter = this._stepCounter + 1;
     return this._stepPrefix
       ? `${this._stepPrefix}-${nextCounter}`
@@ -250,9 +256,19 @@ export class DurableContextImpl<
 
   private checkAndUpdateReplayMode(): void {
     if (this.durableExecutionMode === DurableExecutionMode.ReplayMode) {
-      const nextStepId = this.getNextStepId();
-      const nextStepData = this._executionContext.getStepData(nextStepId);
-      if (!nextStepData) {
+      const pendingStepId = this.peekStepId();
+      const pendingStepData = this._executionContext.getStepData(pendingStepId);
+      // A virtual context (runInChildContext with virtualContext: true) is not
+      // checkpointed itself, so getStepData(pendingStepId) returns undefined
+      // even though replay should continue. Its first child operation IS
+      // checkpointed under `${pendingStepId}-1`, so probe that before
+      // concluding replay has finished. Without this check, replay mode is
+      // prematurely switched to execution mode after a virtual context (issue
+      // #578).
+      const hasCheckpointedChild =
+        !pendingStepData &&
+        this._executionContext.getStepData(`${pendingStepId}-1`) !== undefined;
+      if (!pendingStepData && !hasCheckpointedChild) {
         this.durableExecutionMode = DurableExecutionMode.ExecutionMode;
       }
     }
@@ -261,8 +277,8 @@ export class DurableContextImpl<
   private captureExecutionState(): boolean {
     const wasInReplayMode =
       this.durableExecutionMode === DurableExecutionMode.ReplayMode;
-    const nextStepId = this.getNextStepId();
-    const stepData = this._executionContext.getStepData(nextStepId);
+    const pendingStepId = this.peekStepId();
+    const stepData = this._executionContext.getStepData(pendingStepId);
     const wasNotFinished = !!(
       stepData &&
       stepData.Status !== OperationStatus.SUCCEEDED &&
@@ -275,12 +291,12 @@ export class DurableContextImpl<
     if (
       this.durableExecutionMode === DurableExecutionMode.ReplaySucceededContext
     ) {
-      const nextStepId = this.getNextStepId();
-      const nextStepData = this._executionContext.getStepData(nextStepId);
+      const pendingStepId = this.peekStepId();
+      const pendingStepData = this._executionContext.getStepData(pendingStepId);
       if (
-        nextStepData &&
-        nextStepData.Status !== OperationStatus.SUCCEEDED &&
-        nextStepData.Status !== OperationStatus.FAILED
+        pendingStepData &&
+        pendingStepData.Status !== OperationStatus.SUCCEEDED &&
+        pendingStepData.Status !== OperationStatus.FAILED
       ) {
         return new Promise<never>(() => {}); // Non-resolving promise
       }
@@ -510,7 +526,7 @@ export class DurableContextImpl<
     return this.withDurableModeManagement(() => {
       const waitForCallbackHandler = createWaitForCallbackHandler(
         this._executionContext,
-        this.getNextStepId.bind(this),
+        this.peekStepId.bind(this),
         this.runInChildContext.bind(this),
         // Only pass the getter when the user has explicitly configured a custom
         // deserializer. The default is createPassThroughSerdes() which matches
