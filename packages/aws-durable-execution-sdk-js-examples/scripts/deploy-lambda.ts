@@ -73,7 +73,7 @@ interface EnvironmentVariables {
   AWS_ACCOUNT_ID: string;
   AWS_REGION: string;
   CAPACITY_PROVIDER_ARN: string;
-  LAMBDA_EXECUTION_ROLE_ARN: string;
+  LAMBDA_EXECUTION_ROLE_ARN?: string;
   GITHUB_ACTIONS?: string;
   GITHUB_ENV?: string;
   LAMBDA_ENDPOINT?: string;
@@ -122,11 +122,7 @@ function parseArgs(): {
 
 function loadEnvironmentVariables(): EnvironmentVariables {
   // Validate required environment variables
-  const requiredVars = [
-    "AWS_ACCOUNT_ID",
-    "AWS_REGION",
-    "LAMBDA_EXECUTION_ROLE_ARN",
-  ];
+  const requiredVars = ["AWS_ACCOUNT_ID", "AWS_REGION"];
   const missingVars = requiredVars.filter((varName) => !process.env[varName]);
 
   if (missingVars.length > 0) {
@@ -140,7 +136,7 @@ function loadEnvironmentVariables(): EnvironmentVariables {
     AWS_ACCOUNT_ID: process.env.AWS_ACCOUNT_ID!,
     AWS_REGION: process.env.AWS_REGION!,
     CAPACITY_PROVIDER_ARN: process.env.CAPACITY_PROVIDER_ARN!,
-    LAMBDA_EXECUTION_ROLE_ARN: process.env.LAMBDA_EXECUTION_ROLE_ARN!,
+    LAMBDA_EXECUTION_ROLE_ARN: process.env.LAMBDA_EXECUTION_ROLE_ARN,
     LAMBDA_ENDPOINT: process.env.LAMBDA_ENDPOINT,
     GITHUB_ACTIONS: process.env.GITHUB_ACTIONS,
     GITHUB_ENV: process.env.GITHUB_ENV,
@@ -193,6 +189,13 @@ function mapRuntimeToEnum(runtimeString?: string): Runtime {
       console.error("Available runtimes: 20x, 22x, 24x");
       process.exit(1);
   }
+}
+
+function getLambdaExecutionRoleArn(env: EnvironmentVariables): string {
+  return (
+    env.LAMBDA_EXECUTION_ROLE_ARN ||
+    `arn:aws:iam::${env.AWS_ACCOUNT_ID}:role/DurableFunctionsIntegrationTestRole`
+  );
 }
 
 // Lambda operations
@@ -326,7 +329,7 @@ async function createFunction(
   //   and related CloudWatch permissions needed by the ADOT layer to export spans to X-Ray).
   // - The test runner role must have `xray:GetTraceSummaries` and `xray:BatchGetTraces`
   //   permissions to query X-Ray traces in the e2e assertion tests.
-  const roleArn = env.LAMBDA_EXECUTION_ROLE_ARN;
+  const roleArn = getLambdaExecutionRoleArn(env);
 
   const logGroupName = `/aws/lambda/${functionName}`;
   const cwlClient = new CloudWatchLogsClient();
@@ -457,7 +460,7 @@ async function updateFunction(
   const updateEnvParams: UpdateFunctionConfigurationCommandInput = {
     FunctionName: functionName,
     Runtime: runtime,
-    Role: env.LAMBDA_EXECUTION_ROLE_ARN,
+    Role: getLambdaExecutionRoleArn(env),
     Timeout: exampleConfig.lambdaTimeoutSeconds ?? 60,
     Environment: {
       Variables: (() => {
