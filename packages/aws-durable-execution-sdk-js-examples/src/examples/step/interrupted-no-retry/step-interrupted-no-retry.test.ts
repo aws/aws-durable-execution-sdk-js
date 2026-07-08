@@ -27,13 +27,15 @@ if (!isIntegrationTest) {
     string
   >;
   const functionName = functionNames[TEST_NAME];
-  if (!functionName) {
-    throw new Error(
-      `Function name ${TEST_NAME} not found in FUNCTION_NAME_MAP`,
-    );
-  }
 
-  describe(`${TEST_NAME} (cloud)`, () => {
+  // Skip (rather than throw) when this example is not deployed for the current
+  // job. The capacity-provider-only job only deploys examples that opt in via
+  // `capacityProviderConfig`; this example does not, so it is legitimately
+  // absent from FUNCTION_NAME_MAP there. Throwing would fail the whole job.
+  // This mirrors the shared `createTests` helper (see utils/test-helper.ts).
+  const describeCloud = functionName ? describe : describe.skip;
+
+  describeCloud(`${TEST_NAME} (cloud)`, () => {
     const runner = new CloudDurableTestRunner({
       client: new LambdaClient({ endpoint: process.env.LAMBDA_ENDPOINT }),
       functionName,
