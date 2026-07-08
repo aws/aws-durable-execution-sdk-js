@@ -5,7 +5,7 @@ const ruleTester = new RuleTester({
   parser: require.resolve("@typescript-eslint/parser"),
 } as any);
 
-describe("no-non-deterministic-outside-step integration tests", () => {
+describe("no-non-deterministic-outside-step composed tests", () => {
   ruleTester.run(
     "no-non-deterministic-outside-step",
     noNonDeterministicOutsideStep,

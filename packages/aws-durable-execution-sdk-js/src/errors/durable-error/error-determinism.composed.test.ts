@@ -7,7 +7,7 @@ import {
 } from "./durable-error";
 import { ErrorObject } from "@aws-sdk/client-lambda";
 
-describe("Error Determinism Integration Tests", () => {
+describe("Error Determinism Composed Tests", () => {
   describe("Step Error Determinism", () => {
     it("should preserve instanceof behavior across serialization/deserialization", () => {
       class MyCustomError extends Error {
