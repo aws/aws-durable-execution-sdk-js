@@ -20,7 +20,7 @@ import {
 } from "../../errors/durable-error/durable-error";
 export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
-  getNextStepId: () => string,
+  peekStepId: () => string,
   runInChildContext: DurableContext<Logger>["runInChildContext"],
   getDefaultCallbackDeserializer?: () => AnySerdesDeserializer,
 ) => {
@@ -134,7 +134,7 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
         return await callbackPromise;
       };
 
-      const stepId = getNextStepId();
+      const stepId = peekStepId();
       return {
         result: await runInChildContext(name, childFunction, {
           subType: OperationSubType.WAIT_FOR_CALLBACK,
