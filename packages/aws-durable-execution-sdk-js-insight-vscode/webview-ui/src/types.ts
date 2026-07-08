@@ -1,10 +1,33 @@
+/** Query execution mode chosen in the composer. */
+export type QueryMode = "query" | "ask" | "agent";
+
+/** A saved query the user can re-run from the composer. */
+export interface Favorite {
+  id: string;
+  label: string;
+  query: string;
+  destinationType: string;
+}
+
 /** Messages from webview → extension host */
 export type OutboundMessage =
   | { type: "ready" }
-  | { type: "generate"; question: string }
+  | { type: "generate"; question: string; mode: QueryMode }
+  | { type: "setMode"; mode: QueryMode }
   | { type: "newSession" }
   | { type: "saveSettings"; settings: Record<string, string> }
   | { type: "downloadModel"; localModel?: string }
+  // Save the result table to a file (host shows a save dialog). The webview
+  // builds the CSV/JSON text; the host just writes it.
+  | {
+      type: "exportData";
+      format: "csv" | "json";
+      content: string;
+      filename: string;
+    }
+  // Save a query to favorites (host prompts for a name and persists it).
+  | { type: "saveFavorite"; query: string; destinationType: string }
+  | { type: "deleteFavorite"; id: string }
   // NOTE: keep this `visualize` shape in sync with the InboundMessage union in
   // src/extension.ts (host and webview message types are, as existing debt,
   // declared separately in each project's own `src`).
@@ -119,7 +142,8 @@ export type InboundMessage =
   | { type: "settingsSaved" }
   | { type: "downloadProgress"; percent: number; done: boolean }
   | { type: "sqsStatus"; listening: boolean }
-  | { type: "sqsMessages"; messages: SqsMessageRow[] };
+  | { type: "sqsMessages"; messages: SqsMessageRow[] }
+  | { type: "favorites"; favorites: Favorite[] };
 
 /**
  * One completed iteration of the advanced (agentic) run→verify→refine loop,
@@ -160,6 +184,7 @@ export interface Settings {
   bedrockModelId: string;
   localModel: string;
   agenticMaxIterations: string;
+  queryMode: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -183,4 +208,5 @@ export const DEFAULT_SETTINGS: Settings = {
   bedrockModelId: "us.anthropic.claude-sonnet-4-20250514-v1:0",
   localModel: "llama-3-groq-8b-tool-use",
   agenticMaxIterations: "8",
+  queryMode: "agent",
 };

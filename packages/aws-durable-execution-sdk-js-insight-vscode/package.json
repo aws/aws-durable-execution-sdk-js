@@ -173,6 +173,21 @@
           "minimum": 1,
           "maximum": 20,
           "description": "The maximum number of queries the assistant will run for one question before stopping — one per verify/refine round, or per agent-loop query with parallel tool calls counted individually. Higher values let it work harder on difficult questions but cost more model/query calls (billable). The loop also stops early if it starts repeating a query it already tried. This is the universal cost/effort guard — it applies to every data source. NOTE: it bounds the NUMBER of queries, not the data scanned per query. For the S3/Athena destination, also set a per-query scan cap on your Athena workgroup (bytes_scanned_cutoff_per_query) to bound scan cost."
+        },
+        "workflowInsight.queryMode": {
+          "type": "string",
+          "enum": [
+            "query",
+            "ask",
+            "agent"
+          ],
+          "enumDescriptions": [
+            "Query: run the text you type verbatim as a read-only query (no LLM).",
+            "Ask: turn a plain-English question into one query and run it (no agent loop).",
+            "Agent: let the assistant explore across multiple queries to answer."
+          ],
+          "default": "agent",
+          "description": "Default mode used by the Explorer composer's Send button. Remembered across sessions; you can switch it per-question from the Send dropdown."
         }
       }
     }

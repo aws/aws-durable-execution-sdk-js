@@ -1,6 +1,7 @@
 import Table from "@cloudscape-design/components/table";
 import Box from "@cloudscape-design/components/box";
 import Header from "@cloudscape-design/components/header";
+import ButtonDropdown from "@cloudscape-design/components/button-dropdown";
 import Pagination from "@cloudscape-design/components/pagination";
 import Spinner from "@cloudscape-design/components/spinner";
 import Modal from "@cloudscape-design/components/modal";
@@ -66,6 +67,14 @@ interface Props {
   onDetailFetchStart?: () => void;
   /** Rows shown per page. Defaults to 25; the conversation view uses a small value to keep each table short. */
   pageSize?: number;
+  /**
+   * The query that produced this result (finalQuery from the host). Enables
+   * the "Save query in favorites" action. Omit for result sets with no
+   * single query behind them (e.g. the SQS live view).
+   */
+  query?: string;
+  /** Destination this result came from, stored alongside a saved favorite. */
+  destinationType?: string;
 }
 
 export function ResultsTable({
@@ -81,6 +90,8 @@ export function ResultsTable({
   onDetailDismiss,
   onDetailFetchStart,
   pageSize = 25,
+  query,
+  destinationType,
 }: Props) {
   const [currentPage, setCurrentPage] = useState(1);
   const [detailItem, setDetailItem] = useState<Record<string, string> | null>(null);
@@ -168,12 +179,76 @@ export function ResultsTable({
     ? detailItem != null && (detailLoading || detailFields != null)
     : detailItem != null;
 
+  // Build CSV over the FULL result (all columns, all rows — not the paged/
+  // hidden view), quoting fields that contain commas, quotes, or newlines.
+  const toCsv = (): string => {
+    const esc = (v: string) =>
+      /[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+    const head = columns.map(esc).join(",");
+    const body = rows.map((r) => r.map((c) => esc(c ?? "")).join(",")).join("\n");
+    return `${head}\n${body}`;
+  };
+
+  // Build JSON as an array of {column: value} objects over the full result.
+  const toJson = (): string => {
+    const objs = rows.map((r) => {
+      const o: Record<string, string> = {};
+      columns.forEach((c, i) => {
+        o[c] = r[i] ?? "";
+      });
+      return o;
+    });
+    return JSON.stringify(objs, null, 2);
+  };
+
+  const onAction = (id: string) => {
+    if (id === "csv") {
+      postMessage({
+        type: "exportData",
+        format: "csv",
+        content: toCsv(),
+        filename: "workflow-insight-results.csv",
+      });
+    } else if (id === "json") {
+      postMessage({
+        type: "exportData",
+        format: "json",
+        content: toJson(),
+        filename: "workflow-insight-results.json",
+      });
+    } else if (id === "favorite" && query) {
+      postMessage({
+        type: "saveFavorite",
+        query,
+        destinationType: destinationType ?? "",
+      });
+    }
+  };
+
   return (
     <>
       <Table
         header={
           <Header
             counter={`(${items.length})`}
+            actions={
+              <ButtonDropdown
+                variant="normal"
+                items={[
+                  { id: "csv", text: "Export as CSV" },
+                  { id: "json", text: "Export as JSON" },
+                  {
+                    id: "favorite",
+                    text: "Save query in favorites",
+                    disabled: !query,
+                    disabledReason: "No query is associated with this result.",
+                  },
+                ]}
+                onItemClick={({ detail }) => onAction(detail.id)}
+              >
+                Actions
+              </ButtonDropdown>
+            }
             description={
               hasDetail
                 ? [explanation, "Select a row to see all fields."].filter(Boolean).join(" — ")

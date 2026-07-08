@@ -24,6 +24,7 @@ export interface InsightConfig {
   bedrockModelId: string;
   localModel: string;
   agenticMaxIterations: number;
+  queryMode: "query" | "ask" | "agent";
 }
 
 const SECTION = "workflowInsight";
@@ -86,6 +87,9 @@ export function readConfig(): InsightConfig {
     typeof rawMaxIter === "number" && Number.isFinite(rawMaxIter)
       ? Math.min(20, Math.max(1, Math.floor(rawMaxIter)))
       : 8;
+  const rawMode = (c.get<string>("queryMode") || "").trim();
+  const queryMode =
+    rawMode === "query" || rawMode === "ask" ? rawMode : ("agent" as const);
 
   return {
     region,
@@ -108,6 +112,7 @@ export function readConfig(): InsightConfig {
     bedrockModelId,
     localModel,
     agenticMaxIterations,
+    queryMode,
   };
 }
 

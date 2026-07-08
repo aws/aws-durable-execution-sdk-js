@@ -13,10 +13,30 @@ import { VisualizePage } from "./VisualizePage";
 import { SettingsModal } from "./SettingsModal";
 import { AgentTranscript } from "./AgentTranscript";
 import { SqsLiveView, toTable as sqsToTable, MAX_DISPLAYED_MESSAGES } from "./SqsLiveView";
-import type { InboundMessage, Settings, SqsMessageRow, AgentStep } from "./types";
+import type { InboundMessage, Settings, SqsMessageRow, AgentStep, QueryMode, Favorite } from "./types";
 import { DEFAULT_SETTINGS } from "./types";
 
 applyMode(Mode.Dark);
+
+/**
+ * A simple, ready-to-run starter query for the current destination, used to
+ * prefill the composer in "query" mode so the user has a working example to
+ * edit instead of a blank box.
+ */
+function starterQueryFor(s: Settings): string {
+  switch (s.destinationType) {
+    case "dynamodb":
+      // PartiQL requires the table name double-quoted.
+      return `SELECT * FROM "${s.dynamodbTableName || "your-table"}" LIMIT 50`;
+    case "aurora":
+      return `SELECT * FROM ${s.auroraTable || "workflow_insight"} LIMIT 50`;
+    case "s3":
+      return `SELECT * FROM ${s.athenaTable || "workflow_insight"} LIMIT 50`;
+    default:
+      // CloudWatch Logs Insights dialect.
+      return "fields @timestamp, executionArn, status | sort @timestamp desc | limit 50";
+  }
+}
 
 type Page = "data" | "visualize";
 
@@ -29,6 +49,7 @@ interface ResultsPayload {
   hiddenColumns?: string[];
   explanation?: string;
   truncated?: boolean;
+  finalQuery?: string;
 }
 
 /**
@@ -48,6 +69,11 @@ type ChatTurn =
 
 export function App() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  // Active query mode (query / ask / agent). Seeded from the persisted
+  // workflowInsight.queryMode setting when config arrives, so it's remembered
+  // across sessions; changing it in the composer persists it back.
+  const [mode, setMode] = useState<QueryMode>("agent");
+  const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [results, setResults] = useState<{
@@ -82,6 +108,8 @@ export function App() {
     switch (msg.type) {
       case "config":
         setSettings(msg.settings);
+        if (msg.settings.queryMode === "query" || msg.settings.queryMode === "ask" || msg.settings.queryMode === "agent")
+          setMode(msg.settings.queryMode);
         if (msg.modelDownloaded !== undefined) setModelDownloaded(msg.modelDownloaded);
         break;
       case "status":
@@ -102,6 +130,7 @@ export function App() {
           hiddenColumns: msg.hiddenColumns,
           explanation: msg.explanation ?? "",
           truncated: msg.truncated,
+          finalQuery: msg.finalQuery,
         };
         // Top-level results still drive the Visualize page.
         setResults(payload);
@@ -192,8 +221,7 @@ export function App() {
         break;
       case "sqsStatus":
         setSqsListening(msg.listening);
-        break;
-      case "sqsMessages":
+        break;      case "sqsMessages":
         setSqsMessages((prev) => {
           // De-dupe by messageId: in peek-only mode (sqsDeleteAfterRead=false)
           // the same message can be re-delivered after its visibility timeout.
@@ -209,6 +237,9 @@ export function App() {
             : combined;
         });
         break;
+      case "favorites":
+        setFavorites(msg.favorites);
+        break;
     }
   }, []);
 
@@ -218,7 +249,7 @@ export function App() {
     return () => window.removeEventListener("message", handleMessage);
   }, [handleMessage]);
 
-  const handleAsk = (question: string) => {
+  const runQuestion = (question: string, useMode: QueryMode) => {
     setLoading(true);
     setError("");
     setResults(null);
@@ -228,7 +259,23 @@ export function App() {
     // Keep the chat history (this is a conversation); append the new question.
     setChat((prev) => [...prev, { role: "user", text: question }]);
     answeredRef.current = false;
-    postMessage({ type: "generate", question });
+    postMessage({ type: "generate", question, mode: useMode });
+  };
+
+  const handleAsk = (question: string) => runQuestion(question, mode);
+
+  // Run a saved favorite: favorites are raw queries, so switch to "query" mode
+  // (persisting it) and run the query verbatim.
+  const handleRunFavorite = (query: string) => {
+    setMode("query");
+    postMessage({ type: "setMode", mode: "query" });
+    runQuestion(query, "query");
+  };
+
+  // Change the active mode and persist it as the default for next time.
+  const handleModeChange = (m: QueryMode) => {
+    setMode(m);
+    postMessage({ type: "setMode", mode: m });
   };
 
   const handleNewSession = () => {
@@ -377,6 +424,8 @@ export function App() {
                                     }}
                                     onDetailDismiss={() => setDetailFields(null)}
                                     pageSize={5}
+                                    query={turn.results.finalQuery}
+                                    destinationType={settings.destinationType}
                                   />
                                   <Button
                                     onClick={() => {
@@ -404,6 +453,13 @@ export function App() {
                     continues the conversation above. */}
                 <QueryPanel
                   onAsk={handleAsk}
+                  mode={mode}
+                  onModeChange={handleModeChange}
+                  starterQuery={starterQueryFor(settings)}
+                  favorites={favorites.filter(
+                    (f) => f.destinationType === settings.destinationType,
+                  )}
+                  onRunFavorite={handleRunFavorite}
                   loading={loading}
                   status={status}
                   error={error}
