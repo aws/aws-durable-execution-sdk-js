@@ -4,7 +4,7 @@ import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
-describe("DurableContext Integration Tests", () => {
+describe("DurableContext Composed Tests", () => {
   it("should handle replay mode and skip operations correctly", async () => {
     // Create context in replay mode with existing operations
     const existingOperations = [

@@ -5,7 +5,7 @@ const ruleTester = new RuleTester({
   parser: require.resolve("@typescript-eslint/parser"),
 } as any);
 
-describe("no-closure-in-durable-operations integration tests", () => {
+describe("no-closure-in-durable-operations composed tests", () => {
   ruleTester.run(
     "no-closure-in-durable-operations",
     noClosureInDurableOperations,
