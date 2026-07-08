@@ -59,6 +59,24 @@ export interface BatchItem<TResult> {
 }
 
 /**
+ * Reason why a batch operation (map, parallel, or concurrent execution)
+ * completed.
+ *
+ * - `ALL_COMPLETED`: every item finished.
+ * - `MIN_SUCCESSFUL_REACHED`: {@link CompletionConfig.minSuccessful} was reached.
+ * - `FAILURE_TOLERANCE_EXCEEDED`: a failure threshold was exceeded.
+ * - `CUSTOM_COMPLETION`: a custom {@link CompletionConfig.shouldComplete}
+ *   predicate signalled completion before all items finished.
+ *
+ * @public
+ */
+export type CompletionReason =
+  | "ALL_COMPLETED"
+  | "MIN_SUCCESSFUL_REACHED"
+  | "FAILURE_TOLERANCE_EXCEEDED"
+  | "CUSTOM_COMPLETION";
+
+/**
  * Result of a batch operation (map, parallel, or concurrent execution)
  *
  * @public
@@ -75,10 +93,7 @@ export interface BatchResult<TResult> {
   /** Overall status of the batch (SUCCEEDED if no failures, FAILED otherwise) */
   status: BatchItemStatus.SUCCEEDED | BatchItemStatus.FAILED;
   /** Reason why the batch completed */
-  completionReason:
-    | "ALL_COMPLETED"
-    | "MIN_SUCCESSFUL_REACHED"
-    | "FAILURE_TOLERANCE_EXCEEDED";
+  completionReason: CompletionReason;
   /** Whether any item in the batch failed */
   hasFailure: boolean;
   /** Throws the first error if any item failed */
@@ -115,6 +130,72 @@ export interface CompletionConfig {
   toleratedFailureCount?: number;
   /** Maximum percentage of failures tolerated (0-100) */
   toleratedFailurePercentage?: number;
+  /**
+   * Custom completion predicate evaluated as items finish.
+   *
+   * When provided, it takes FULL precedence: `minSuccessful`,
+   * `toleratedFailureCount`, and `toleratedFailurePercentage` are ignored.
+   * Return `true` to complete the batch now (stop starting and awaiting any
+   * remaining items), or `false` to keep going. A batch always completes once
+   * every item has finished, regardless of the predicate.
+   *
+   * The predicate MUST be deterministic and depend only on the provided
+   * {@link CompletionStatus}. It runs during live execution and its effect
+   * (how many items ran) is what gets checkpointed, so replay stays
+   * consistent. The same race-condition caveat as the threshold fields
+   * applies: when several items finish at once the batch may end with slightly
+   * more completed items than the predicate first observed.
+   *
+   * The per-item statuses in {@link CompletionStatus.items} are ordered by the
+   * item's original index (definition order), so `items[0]` is always the
+   * first item/branch, `items[1]` the second, and so on — even when items
+   * finish out of order and even when they have no `name`. This makes
+   * quorum/dependency-style rules expressible, e.g. "complete when branch 0
+   * succeeds OR branches 1 and 2 both succeed".
+   *
+   * When this predicate ends the batch before all items finish, the resulting
+   * {@link BatchResult.completionReason} is `CUSTOM_COMPLETION`.
+   */
+  shouldComplete?: (status: CompletionStatus) => boolean;
+}
+
+/**
+ * Snapshot of a single item/branch at the moment
+ * {@link CompletionConfig.shouldComplete} is evaluated.
+ *
+ * @public
+ */
+export interface CompletionItemStatus {
+  /** Index of the item/branch in the original array (definition order) */
+  index: number;
+  /** Optional custom name of the item/branch, when one was provided */
+  name?: string;
+  /**
+   * Current status of the item/branch, or `undefined` if it has not started
+   * yet (possible when `maxConcurrency` limits how many run at once).
+   */
+  status?: BatchItemStatus;
+}
+
+/**
+ * Progress passed to {@link CompletionConfig.shouldComplete}.
+ *
+ * @public
+ */
+export interface CompletionStatus {
+  /** Number of items that have completed successfully so far */
+  successCount: number;
+  /** Number of items that have failed so far */
+  failureCount: number;
+  /** Number of items that have completed so far (successCount + failureCount) */
+  completedCount: number;
+  /** Total number of items in the batch */
+  totalCount: number;
+  /**
+   * Per-item/branch status snapshot, ordered by original index so that
+   * `items[i]` is always the item/branch defined at position `i`.
+   */
+  items: readonly CompletionItemStatus[];
 }
 
 /**

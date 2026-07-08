@@ -33,6 +33,9 @@ export {
   BatchItemStatus,
   BatchResult,
   CompletionConfig,
+  CompletionReason,
+  CompletionStatus,
+  CompletionItemStatus,
   RetryDecision,
   NestingType,
 } from "./types";
