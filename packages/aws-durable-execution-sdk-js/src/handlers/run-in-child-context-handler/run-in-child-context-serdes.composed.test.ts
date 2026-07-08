@@ -22,7 +22,7 @@ import { Serdes, SerdesContext } from "../../utils/serdes/serdes";
 jest.mock("../../termination-manager/termination-manager");
 
 /**
- * Integration tests for child context ser/des round-trip behavior.
+ * Composed tests for child context ser/des round-trip behavior.
  *
  * These tests use a real DurableContext with mocked checkpoint to verify that
  * runInChildContext applies the serialize/deserialize round-trip on first execution,

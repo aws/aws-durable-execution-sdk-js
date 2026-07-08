@@ -120,8 +120,8 @@ If you want to validate execution history, create a history file:
 
 The `createTests` helper automatically runs tests with:
 
-- **LocalDurableTestRunner** for unit tests (default)
-- **CloudDurableTestRunner** for integration tests (when `NODE_ENV=integration`)
+- **LocalDurableTestRunner** for integration tests locally (default)
+- **CloudDurableTestRunner** for integration tests against real Lambda (when `NODE_ENV=integration`)
 
 ### 5. Run Local Tests
 

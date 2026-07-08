@@ -1,7 +1,7 @@
 import { createTestDurableContext } from "../../testing/create-test-durable-context";
 import { BatchItemStatus, DurableLogger, DurableContext } from "../../types";
 
-describe("ConcurrentExecutionHandler Integration Tests", () => {
+describe("ConcurrentExecutionHandler Composed Tests", () => {
   it("should execute items concurrently with real DurableContext", async () => {
     const { context } = createTestDurableContext();
 

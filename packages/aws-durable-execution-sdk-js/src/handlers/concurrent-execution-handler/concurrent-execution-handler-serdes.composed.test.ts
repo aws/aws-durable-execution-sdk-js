@@ -3,7 +3,7 @@ import { CallbackError } from "../../errors/durable-error/durable-error";
 import { createBatchResultSerdes } from "./batch-result";
 
 /**
- * Integration tests for map/parallel error type preservation through
+ * Composed tests for map/parallel error type preservation through
  * the createBatchResultSerdes serialize/deserialize round-trip.
  *
  * Verifies that error cause chains (type + message) survive the
