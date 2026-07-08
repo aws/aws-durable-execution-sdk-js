@@ -221,7 +221,7 @@ describe("DurableContext", () => {
 
     it("should stay in ReplayMode when the next op is a virtual context whose child is checkpointed", () => {
       // Virtual contexts are not checkpointed themselves, but their first child
-      // is (under `${nextStepId}-1`). Replay must not end prematurely (#578).
+      // is (under `${pendingStepId}-1`). Replay must not end prematurely (#578).
       const executionContext = createMockExecutionContext({
         getStepData: jest.fn((id: string) =>
           id === "1-1"
