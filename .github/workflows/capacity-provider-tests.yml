@@ -48,7 +48,7 @@ jobs:
           GITHUB_EVENT_NUMBER: ${{ github.event.number }}
           AWS_ACCOUNT_ID: ${{ secrets.TEST_ACCOUNT_ID }}
           LAMBDA_EXECUTION_ROLE_ARN: ${{ secrets.TEST_LAMBDA_EXECUTION_ROLE_ARN }}
-          CAPACITY_PROVIDER_ARN: ${{ secrets.CAPACITY_PROVIDER_ARN }}
+          CAPACITY_PROVIDER_ARN: ${{ secrets.TEST_CAPACITY_PROVIDER_ARN }}
         run: node .github/workflows/scripts/integration-test/integration-test.js --deploy-only --capacity-provider-only --runtime ${{ inputs.node-version }}
 
   test-capacity-provider:

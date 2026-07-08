@@ -102,10 +102,11 @@ The automated testing pipeline is defined in [`.github/workflows/build.yml`](./.
 
 The integration tests are orchestrated by the [integration test workflow](.github/workflows/integration-tests.yml). The workflow requires the following secrets:
 
-- `ACTIONS_INTEGRATION_ROLE_NAME` - Used for assuming the role to our AWS account used for testing functions
+- `TEST_ROLE_ARN` - Used for assuming the role to our AWS account used for testing functions
 - `LAMBDA_ENDPOINT` - Used to set a custom Lambda endpoint
-- `AWS_ACCOUNT_ID` - The AWS account ID that we use for testing functions
-- `CAPACITY_PROVIDER_ARN` - The capacity provider ARN we use for testing functions that use Lambda Managed Instances
+- `TEST_ACCOUNT_ID` - The AWS account ID that we use for testing functions
+- `TEST_LAMBDA_EXECUTION_ROLE_ARN` - The Lambda execution role ARN used by deployed test functions
+- `TEST_CAPACITY_PROVIDER_ARN` - The capacity provider ARN we use for testing functions that use Lambda Managed Instances
 
 And one variable: `AWS_REGION` - The AWS region used for testing functions.
 
