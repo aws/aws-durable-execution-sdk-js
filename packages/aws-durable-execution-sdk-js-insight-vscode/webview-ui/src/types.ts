@@ -195,6 +195,10 @@ export interface Settings {
  * Version of the AI-usage disclosure. Bump this whenever the notice wording
  * changes so previously-consented users are re-prompted.
  * LEGAL: wording is pending review by the Legal team (see tracked ticket).
+ *
+ * Currently "2": "1" was the initial gate (features + generic data notice);
+ * "2" added the per-provider data-flow breakdown, so early adopters on "1"
+ * re-accept the fuller disclosure.
  */
 export const AI_DISCLOSURE_VERSION = "2";
 

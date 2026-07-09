@@ -13,8 +13,19 @@ import { VisualizePage } from "./VisualizePage";
 import { SettingsModal } from "./SettingsModal";
 import { AiConsentModal } from "./AiConsentModal";
 import { AgentTranscript } from "./AgentTranscript";
-import { SqsLiveView, toTable as sqsToTable, MAX_DISPLAYED_MESSAGES } from "./SqsLiveView";
-import type { InboundMessage, Settings, SqsMessageRow, AgentStep, QueryMode, Favorite } from "./types";
+import {
+  SqsLiveView,
+  toTable as sqsToTable,
+  MAX_DISPLAYED_MESSAGES,
+} from "./SqsLiveView";
+import type {
+  InboundMessage,
+  Settings,
+  SqsMessageRow,
+  AgentStep,
+  QueryMode,
+  Favorite,
+} from "./types";
 import { DEFAULT_SETTINGS, AI_DISCLOSURE_VERSION } from "./types";
 
 applyMode(Mode.Dark);
@@ -99,7 +110,10 @@ export function App() {
   const [page, setPage] = useState<Page>("data");
   const [sqsMessages, setSqsMessages] = useState<SqsMessageRow[]>([]);
   const [sqsListening, setSqsListening] = useState(false);
-  const [detailFields, setDetailFields] = useState<Record<string, string> | null>(null);
+  const [detailFields, setDetailFields] = useState<Record<
+    string,
+    string
+  > | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([]);
   const [chat, setChat] = useState<ChatTurn[]>([]);
@@ -116,9 +130,14 @@ export function App() {
     switch (msg.type) {
       case "config":
         setSettings(msg.settings);
-        if (msg.settings.queryMode === "query" || msg.settings.queryMode === "ask" || msg.settings.queryMode === "agent")
+        if (
+          msg.settings.queryMode === "query" ||
+          msg.settings.queryMode === "ask" ||
+          msg.settings.queryMode === "agent"
+        )
           setMode(msg.settings.queryMode);
-        if (msg.modelDownloaded !== undefined) setModelDownloaded(msg.modelDownloaded);
+        if (msg.modelDownloaded !== undefined)
+          setModelDownloaded(msg.modelDownloaded);
         break;
       case "status":
         setStatus(msg.text);
@@ -229,7 +248,8 @@ export function App() {
         break;
       case "sqsStatus":
         setSqsListening(msg.listening);
-        break;      case "sqsMessages":
+        break;
+      case "sqsMessages":
         setSqsMessages((prev) => {
           // De-dupe by messageId: in peek-only mode (sqsDeleteAfterRead=false)
           // the same message can be re-delivered after its visibility timeout.
@@ -310,11 +330,11 @@ export function App() {
     setConsentOpen(false);
   };
 
-  // Run a saved favorite: favorites are raw queries, so switch to "query" mode
-  // (persisting it) and run the query verbatim.
+  // Run a saved favorite: favorites are raw queries, so run them verbatim in
+  // "query" mode regardless of the current mode. We deliberately do NOT change
+  // or persist the composer's default mode — re-running a favorite shouldn't
+  // silently flip the user's chosen default for future sessions.
   const handleRunFavorite = (query: string) => {
-    setMode("query");
-    postMessage({ type: "setMode", mode: "query" });
     runQuestion(query, "query");
   };
 
@@ -359,11 +379,18 @@ export function App() {
                   New session
                 </Button>
               )}
-              <Button iconName="settings" variant="icon" onClick={() => setSettingsOpen(true)} />
+              <Button
+                iconName="settings"
+                variant="icon"
+                onClick={() => setSettingsOpen(true)}
+              />
             </SpaceBetween>
           }
           description={
-            settings.logGroupName || settings.dynamodbTableName || settings.auroraTable || settings.sqsQueueUrl
+            settings.logGroupName ||
+            settings.dynamodbTableName ||
+            settings.auroraTable ||
+            settings.sqsQueueUrl
               ? `${settings.region} · ${settings.destinationType}`
               : "Click ⚙ to configure"
           }
@@ -404,7 +431,9 @@ export function App() {
             {page === "data" && (
               <>
                 {chat.length > 0 && (
-                  <Container header={<Header variant="h3">Conversation</Header>}>
+                  <Container
+                    header={<Header variant="h3">Conversation</Header>}
+                  >
                     <SpaceBetween size="l">
                       {chat.map((turn, i) =>
                         turn.role === "user" ? (
@@ -416,7 +445,9 @@ export function App() {
                             >
                               You
                             </Box>
-                            <div style={{ whiteSpace: "pre-wrap" }}>{turn.text}</div>
+                            <div style={{ whiteSpace: "pre-wrap" }}>
+                              {turn.text}
+                            </div>
                           </Box>
                         ) : (
                           <Box key={i}>
@@ -427,14 +458,19 @@ export function App() {
                             >
                               Assistant
                             </Box>
-                            <div style={{ whiteSpace: "pre-wrap" }}>{turn.text}</div>
+                            <div style={{ whiteSpace: "pre-wrap" }}>
+                              {turn.text}
+                            </div>
                             {turn.steps && turn.steps.length > 0 && (
                               <Box padding={{ top: "xs" }}>
                                 <ExpandableSection
                                   headerText="Agent steps"
                                   variant="footer"
                                 >
-                                  <AgentTranscript steps={turn.steps} running={false} />
+                                  <AgentTranscript
+                                    steps={turn.steps}
+                                    running={false}
+                                  />
                                 </ExpandableSection>
                               </Box>
                             )}
@@ -458,7 +494,9 @@ export function App() {
                                     rows={turn.results.rows}
                                     explanation={turn.results.explanation}
                                     idColumn={turn.results.idColumn}
-                                    partitionColumns={turn.results.partitionColumns}
+                                    partitionColumns={
+                                      turn.results.partitionColumns
+                                    }
                                     hiddenColumns={turn.results.hiddenColumns}
                                     detailFields={detailFields}
                                     detailLoading={detailLoading}
@@ -469,7 +507,9 @@ export function App() {
                                       setDetailFields(null);
                                       setDetailLoading(true);
                                     }}
-                                    onDetailDismiss={() => setDetailFields(null)}
+                                    onDetailDismiss={() =>
+                                      setDetailFields(null)
+                                    }
                                     pageSize={5}
                                     query={turn.results.finalQuery}
                                     destinationType={settings.destinationType}
@@ -494,7 +534,9 @@ export function App() {
 
                 {/* Live progress for the in-flight turn; it folds into the turn
                     above once the turn completes (steps move onto the turn). */}
-                {loading && <AgentTranscript steps={agentSteps} running={loading} />}
+                {loading && (
+                  <AgentTranscript steps={agentSteps} running={loading} />
+                )}
 
                 {/* Composer anchored at the bottom, chat-style, so a follow-up
                     continues the conversation above. */}

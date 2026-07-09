@@ -27,7 +27,16 @@ interface Props {
   gate?: (action: () => void) => void;
 }
 
-type PresetType = "bar" | "stacked-bar" | "line" | "area" | "scatter" | "heatmap" | "histogram" | "pie" | "boxplot";
+type PresetType =
+  | "bar"
+  | "stacked-bar"
+  | "line"
+  | "area"
+  | "scatter"
+  | "heatmap"
+  | "histogram"
+  | "pie"
+  | "boxplot";
 
 // Constant list of every selectable chart type (order = fallback dropdown order).
 const ALL_PRESETS: { id: PresetType; label: string }[] = [
@@ -52,7 +61,13 @@ function isNumericString(v: string): boolean {
   return v.trim() !== "" && Number.isFinite(Number(v));
 }
 
-export function VisualizePage({ columns, rows, suggestedCharts, onBack, gate }: Props) {
+export function VisualizePage({
+  columns,
+  rows,
+  suggestedCharts,
+  onBack,
+  gate,
+}: Props) {
   const [spec, setSpec] = useState<Record<string, unknown> | null>(null);
   const [customPrompt, setCustomPrompt] = useState("");
   const [guideOpen, setGuideOpen] = useState(false);
@@ -169,26 +184,26 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack, gate }: 
       const requestId = ++reqIdRef.current;
       setLlmLoading(true);
       setLlmError("");
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      // Only fire if this is still the in-flight request (no reply arrived).
-      if (reqIdRef.current !== requestId) return;
-      // Advance the id so a reply that lands after the timeout is treated as
-      // stale and ignored (rather than popping a chart in over the error).
-      reqIdRef.current++;
-      timeoutRef.current = null;
-      setLlmLoading(false);
-      setSelectedType(null);
-      setLlmError("The chart request timed out. Please try again.");
-    }, REQUEST_TIMEOUT_MS);
-    postMessage({
-      type: "visualize",
-      columns,
-      numericColumns: numericCols,
-      chartType: req.chartType,
-      description,
-      requestId,
-    });
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(() => {
+        // Only fire if this is still the in-flight request (no reply arrived).
+        if (reqIdRef.current !== requestId) return;
+        // Advance the id so a reply that lands after the timeout is treated as
+        // stale and ignored (rather than popping a chart in over the error).
+        reqIdRef.current++;
+        timeoutRef.current = null;
+        setLlmLoading(false);
+        setSelectedType(null);
+        setLlmError("The chart request timed out. Please try again.");
+      }, REQUEST_TIMEOUT_MS);
+      postMessage({
+        type: "visualize",
+        columns,
+        numericColumns: numericCols,
+        chartType: req.chartType,
+        description,
+        requestId,
+      });
     };
     if (gate) gate(run);
     else run();
@@ -196,17 +211,25 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack, gate }: 
 
   return (
     <SpaceBetween size="l">
-      <Button variant="link" onClick={onBack}>← Back to data</Button>
+      <Button variant="link" onClick={onBack}>
+        ← Back to data
+      </Button>
 
       <Container header={<Header variant="h2">Visualize</Header>}>
         <SpaceBetween size="m">
           <Box>
             <strong>Columns:</strong> {columns.join(", ")} ({rows.length} rows)
             {suggestedCharts && suggestedCharts.length > 0 && (
-              <span> · <strong>Suggested:</strong> {suggestedCharts.join(", ")}</span>
+              <span>
+                {" "}
+                · <strong>Suggested:</strong> {suggestedCharts.join(", ")}
+              </span>
             )}
             {(!suggestedCharts || suggestedCharts.length === 0) && (
-              <span> · <em>(no chart suggestions from LLM — showing all)</em></span>
+              <span>
+                {" "}
+                · <em>(no chart suggestions from LLM — showing all)</em>
+              </span>
             )}
           </Box>
 
@@ -279,43 +302,97 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack, gate }: 
         size="large"
       >
         <SpaceBetween size="m">
-          <Box>Pick a chart type or describe what you want in the text field — either way the model maps your request onto the result columns and picks sensible fields and styling. No new data query is run; the chart is built from the rows already fetched.</Box>
+          <Box>
+            Pick a chart type or describe what you want in the text field —
+            either way the model maps your request onto the result columns and
+            picks sensible fields and styling. No new data query is run; the
+            chart is built from the rows already fetched.
+          </Box>
 
           <Table
             columnDefinitions={[
-              { id: "chart", header: "Chart Type", cell: (item) => <strong>{item.chart}</strong> },
+              {
+                id: "chart",
+                header: "Chart Type",
+                cell: (item) => <strong>{item.chart}</strong>,
+              },
               { id: "best", header: "Best For", cell: (item) => item.best },
-              { id: "needs", header: "Data Needed", cell: (item) => item.needs },
+              {
+                id: "needs",
+                header: "Data Needed",
+                cell: (item) => item.needs,
+              },
             ]}
             items={[
-              { chart: "Bar Chart", best: "Comparing values across categories (e.g., count by status)", needs: "1 categorical + 1 numeric column" },
-              { chart: "Stacked Bar", best: "Composition within categories (e.g., status breakdown per customer)", needs: "2 categorical + 1 numeric column" },
-              { chart: "Line Chart", best: "Trends over time or ordered sequences", needs: "1 ordered/time column + 1 numeric column" },
-              { chart: "Area Chart", best: "Trends with volume emphasis (filled area under line)", needs: "1 ordered/time column + 1 numeric column" },
-              { chart: "Scatter Plot", best: "Relationship between two numeric variables", needs: "2 numeric columns" },
-              { chart: "Heatmap", best: "Two-dimensional comparisons (e.g., customer × category)", needs: "2 categorical + 1 numeric column" },
-              { chart: "Histogram", best: "Distribution of a single numeric variable", needs: "1 numeric column" },
-              { chart: "Pie / Donut", best: "Proportions of a whole (few categories)", needs: "1 categorical + 1 numeric column" },
-              { chart: "Box Plot", best: "Statistical distribution (median, quartiles, outliers)", needs: "1 categorical + 1 numeric column" },
+              {
+                chart: "Bar Chart",
+                best: "Comparing values across categories (e.g., count by status)",
+                needs: "1 categorical + 1 numeric column",
+              },
+              {
+                chart: "Stacked Bar",
+                best: "Composition within categories (e.g., status breakdown per customer)",
+                needs: "2 categorical + 1 numeric column",
+              },
+              {
+                chart: "Line Chart",
+                best: "Trends over time or ordered sequences",
+                needs: "1 ordered/time column + 1 numeric column",
+              },
+              {
+                chart: "Area Chart",
+                best: "Trends with volume emphasis (filled area under line)",
+                needs: "1 ordered/time column + 1 numeric column",
+              },
+              {
+                chart: "Scatter Plot",
+                best: "Relationship between two numeric variables",
+                needs: "2 numeric columns",
+              },
+              {
+                chart: "Heatmap",
+                best: "Two-dimensional comparisons (e.g., customer × category)",
+                needs: "2 categorical + 1 numeric column",
+              },
+              {
+                chart: "Histogram",
+                best: "Distribution of a single numeric variable",
+                needs: "1 numeric column",
+              },
+              {
+                chart: "Pie / Donut",
+                best: "Proportions of a whole (few categories)",
+                needs: "1 categorical + 1 numeric column",
+              },
+              {
+                chart: "Box Plot",
+                best: "Statistical distribution (median, quartiles, outliers)",
+                needs: "1 categorical + 1 numeric column",
+              },
             ]}
             variant="embedded"
           />
 
           <Header variant="h3">Tips</Header>
           <Box variant="p">
-            • Pick a chart type from the dropdown or describe what you want; the model chooses which columns map to each axis/value and adds styling.
+            • Pick a chart type from the dropdown or describe what you want; the
+            model chooses which columns map to each axis/value and adds styling.
           </Box>
           <Box variant="p">
-            • For grouped/stacked bars, make sure your query returns a second categorical column for the model to use as the color/series.
+            • For grouped/stacked bars, make sure your query returns a second
+            categorical column for the model to use as the color/series.
           </Box>
           <Box variant="p">
-            • Heatmaps work best with 2 categorical columns + 1 numeric. Query example: "count by customerName and productCategory from input".
+            • Heatmaps work best with 2 categorical columns + 1 numeric. Query
+            example: "count by customerName and productCategory from input".
           </Box>
           <Box variant="p">
-            • Charts can be exported as PNG or SVG using the "⋯" menu on the chart.
+            • Charts can be exported as PNG or SVG using the "⋯" menu on the
+            chart.
           </Box>
           <Box variant="p">
-            • If the chart looks wrong, refine your description, or go back and adjust your query to return the right columns.
+            • If the chart looks wrong, refine your description, or go back and
+            adjust your query to return the right columns.
           </Box>
         </SpaceBetween>
       </Modal>
