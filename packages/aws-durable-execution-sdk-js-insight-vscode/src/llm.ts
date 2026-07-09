@@ -8,6 +8,7 @@ import {
 import type { AwsCredentialIdentityProvider } from "@aws-sdk/types";
 import { buildSystemPrompt, type DestinationType } from "./schema";
 import { parseChartSpec } from "./chartSpec";
+import { parseLocalServerQueryResponse } from "./localServerParse";
 import {
   parseVerdict,
   buildVerifyInstruction,
@@ -84,6 +85,10 @@ export type LlmProvider = "bedrock" | "copilot" | "local" | "local-server";
 
 const DEFAULT_LOCAL_SERVER_URL = "http://localhost:11434/v1";
 const DEFAULT_LOCAL_SERVER_MODEL = "llama3.1";
+// Give up on a local-server request after this long so a hung or very slow
+// server can't wedge a request forever (Bedrock/Visualize paths are similarly
+// bounded). Local models can be slow on first load, so this is generous.
+const LOCAL_SERVER_TIMEOUT_MS = 120_000;
 let localServerUrl = DEFAULT_LOCAL_SERVER_URL;
 let localServerModel = DEFAULT_LOCAL_SERVER_MODEL;
 
@@ -108,24 +113,41 @@ export function setLocalServer(
 async function completeViaLocalServer(
   prompt: string,
   maxTokens: number,
+  opts?: { jsonMode?: boolean },
 ): Promise<string> {
+  // Bound the request with an abort timeout so a hung server can't hang forever.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), LOCAL_SERVER_TIMEOUT_MS);
   let res: Response;
   try {
     res = await fetch(`${localServerUrl}/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
       body: JSON.stringify({
         model: localServerModel,
         messages: [{ role: "user", content: prompt }],
         temperature: 0,
         max_tokens: maxTokens,
         stream: false,
+        // Ask OpenAI-compatible servers (Ollama, LM Studio) to constrain output
+        // to a JSON object so we don't have to scrape JSON out of prose.
+        ...(opts?.jsonMode ? { response_format: { type: "json_object" } } : {}),
       }),
     });
   } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(
+        `The local model server at ${localServerUrl} did not respond within ${Math.round(
+          LOCAL_SERVER_TIMEOUT_MS / 1000,
+        )}s. It may be overloaded or still loading the model.`,
+      );
+    }
     throw new Error(
       `Could not reach the local model server at ${localServerUrl}. Is it running? (${err instanceof Error ? err.message : String(err)})`,
     );
+  } finally {
+    clearTimeout(timer);
   }
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
@@ -508,27 +530,13 @@ async function generateViaLocalServer(
     agentic: opts.agentic,
   });
   const prompt = `${systemPrompt}\n\nRespond with ONLY a JSON object: {"query": "...", "explanation": "...", "timeRangeMs": ..., "suggestedCharts": ["...", "..."]}\nFor suggestedCharts pick 2-4 from: bar, stacked-bar, line, area, scatter, heatmap, histogram, pie, boxplot.\nOmit timeRangeMs if not mentioned (default 24h).\n\nUser question: ${opts.question}`;
-  const response = await completeViaLocalServer(prompt, 2048);
-  const jsonMatch = response.match(/\{[\s\S]*"query"[\s\S]*\}/);
-  if (!jsonMatch) {
-    throw new Error(
-      "The local model server did not return a valid query. Try rephrasing your question.",
-    );
-  }
-  const parsed = JSON.parse(jsonMatch[0]) as {
-    query?: string;
-    explanation?: string;
-    timeRangeMs?: number;
-    suggestedCharts?: string[];
-  };
-  if (!parsed.query) {
-    throw new Error(
-      "The local model server returned an empty query. Try rephrasing your question.",
-    );
-  }
+  const response = await completeViaLocalServer(prompt, 2048, {
+    jsonMode: true,
+  });
+  const parsed = parseLocalServerQueryResponse(response);
   return {
-    query: parsed.query.trim(),
-    explanation: (parsed.explanation ?? "").trim(),
+    query: parsed.query,
+    explanation: parsed.explanation,
     timeRangeMs: parsed.timeRangeMs ?? DEFAULT_TIME_RANGE_MS,
     suggestedCharts: parsed.suggestedCharts,
   };
