@@ -84,8 +84,11 @@ function createFunctionResource(
   if (catalog.handler && catalog.handler.includes("otel-")) {
     functionResource.Properties.Tracing = "Active";
     functionResource.Properties.Layers = [ADOT_LAYER_ARN];
-    functionResource.Properties.Environment.Variables.AWS_LAMBDA_EXEC_WRAPPER =
-      "/opt/otel-instrument";
+    // Only set exec wrapper for non-standalone otel functions
+    if (!catalog.handler.includes("otel-standalone")) {
+      functionResource.Properties.Environment.Variables.AWS_LAMBDA_EXEC_WRAPPER =
+        "/opt/otel-instrument";
+    }
   }
 
   return functionResource;

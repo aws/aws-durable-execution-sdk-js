@@ -62,9 +62,19 @@ const ADOT_LAYER_ARNS: Record<string, string> = {
 };
 
 /**
- * Checks if the handler corresponds to an otel function that needs ADOT.
+ * Checks if the handler corresponds to an otel function that needs ADOT
+ * auto-instrumentation (AWS_LAMBDA_EXEC_WRAPPER). Standalone plugin functions
+ * use the ADOT layer for its collector only — no exec wrapper needed.
  */
 function isOtelFunction(handler: string): boolean {
+  return handler.includes("otel-") && !handler.includes("otel-standalone");
+}
+
+/**
+ * Checks if the handler needs the ADOT layer and Active Tracing (both regular
+ * otel and standalone otel functions do).
+ */
+function needsAdotLayer(handler: string): boolean {
   return handler.includes("otel-");
 }
 
@@ -359,7 +369,7 @@ async function createFunction(
   let tracingConfig: { Mode: "Active" | "PassThrough" } | undefined;
   let layers: string[] | undefined;
 
-  if (isOtelFunction(exampleConfig.handler)) {
+  if (needsAdotLayer(exampleConfig.handler)) {
     const adotArn = ADOT_LAYER_ARNS[env.AWS_REGION];
     if (!adotArn) {
       console.error(
@@ -370,10 +380,12 @@ async function createFunction(
     }
     tracingConfig = { Mode: "Active" };
     layers = [adotArn];
-    envVars = {
-      ...envVars,
-      AWS_LAMBDA_EXEC_WRAPPER: "/opt/otel-instrument",
-    };
+    if (isOtelFunction(exampleConfig.handler)) {
+      envVars = {
+        ...envVars,
+        AWS_LAMBDA_EXEC_WRAPPER: "/opt/otel-instrument",
+      };
+    }
   }
 
   const createParams: CreateFunctionCommandInput = {
@@ -487,7 +499,7 @@ async function updateFunction(
     TenancyConfig: exampleConfig.handler.includes("tenant-target")
       ? { TenantIsolationMode: "PER_TENANT" }
       : undefined,
-    ...(isOtelFunction(exampleConfig.handler)
+    ...(needsAdotLayer(exampleConfig.handler)
       ? {
           TracingConfig: { Mode: "Active" as const },
           Layers: (() => {
