@@ -243,40 +243,13 @@ export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
       ? [{ context: this.invocationSpan.spanContext() }]
       : [];
 
-    let span: Span | undefined;
-
-    if (!info.isReplay) {
-      // Non-replay: use deterministic span ID
-      this.idGenerator.setNextSpanId(deterministicSpanId);
-      span = this.tracer.startSpan(
-        spanName,
-        { attributes, startTime: info.startTimestamp, links },
-        parentContext,
-      );
-    } else if (info.type === "CONTEXT" || info.type === "STEP") {
-      // Replay CONTEXT/STEP: use random span ID, add Link to deterministic span
-      const traceId =
-        this.invocationSpan?.spanContext().traceId ??
-        this.idGenerator.generateTraceId();
-      span = this.tracer.startSpan(
-        spanName,
-        {
-          attributes,
-          startTime: info.startTimestamp,
-          links: [
-            ...links,
-            {
-              context: {
-                traceId,
-                spanId: deterministicSpanId,
-                traceFlags: 1,
-              },
-            },
-          ],
-        },
-        parentContext,
-      );
-    }
+    // Always use deterministic span ID regardless of replay status
+    this.idGenerator.setNextSpanId(deterministicSpanId);
+    const span = this.tracer.startSpan(
+      spanName,
+      { attributes, startTime: info.startTimestamp, links },
+      parentContext,
+    );
 
     if (span) {
       this.spanMap.set(info.id, span);
@@ -343,17 +316,6 @@ export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onOperationEnd(info: OperationEndInfo): Promise<void> {
-    // Skip span creation for replayed WAIT/INVOKE/CHAINED_INVOKE/CALLBACK
-    if (
-      info.isReplay &&
-      (info.type === "WAIT" ||
-        info.type === "INVOKE" ||
-        info.type === "CHAINED_INVOKE" ||
-        info.type === "CALLBACK")
-    ) {
-      return;
-    }
-
     const deterministicSpanId = deriveSpanIdFromOperationId(
       info.id,
       this.executionArn,
@@ -373,7 +335,7 @@ export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
 
       span.end(info.endTimestamp);
       this.spanMap.delete(info.id);
-    } else if (!info.isReplay) {
+    } else {
       // Cross-invocation: create span with deterministic ID, export immediately
       const spanName = info.name ?? info.type;
 
