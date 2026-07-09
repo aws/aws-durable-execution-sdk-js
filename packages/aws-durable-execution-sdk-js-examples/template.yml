@@ -1481,6 +1481,36 @@ Resources:
         - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
     Metadata:
       SkipBuild: "True"
+  OtelStandaloneXrayE2e:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: OTelStandaloneXRayE2E-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: otel-standalone-xray-e2e.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      DurableConfig:
+        ExecutionTimeout: 120
+        RetentionPeriodInDays: 7
+      Environment:
+        Variables:
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+      Tracing: Active
+      Layers:
+        # ADOT layer for collector extension only — AWS_LAMBDA_EXEC_WRAPPER is NOT set
+        # so auto-instrumentation is disabled. StandaloneOtelPlugin handles instrumentation.
+        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
+    Metadata:
+      SkipBuild: "True"
   ParallelBasic:
     Type: AWS::Serverless::Function
     Properties:

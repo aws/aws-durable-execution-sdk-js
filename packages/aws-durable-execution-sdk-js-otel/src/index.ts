@@ -10,7 +10,12 @@ export {
   deriveTraceIdFromXRayRoot,
   deriveTraceIdFromArn,
   deriveSpanIdFromOperationId,
+  deriveWorkflowSpanId,
 } from "./deterministic-id-generator";
+
+// Standalone Plugin
+export { StandaloneOtelPlugin } from "./standalone-plugin";
+export type { StandaloneOtelPluginConfig } from "./standalone-plugin-config";
 
 // Context Extractors
 export {

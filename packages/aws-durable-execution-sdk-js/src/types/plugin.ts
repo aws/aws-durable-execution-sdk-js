@@ -132,6 +132,13 @@ export interface InvocationBaseInfo {
 export interface InvocationInfo extends InvocationBaseInfo {
   isFirstInvocation: boolean;
   /**
+   * The timestamp when the durable execution was first started (i.e., when the
+   * first invocation began). This value is consistent across all invocations of
+   * the same execution, sourced from the execution operation's start timestamp
+   * in the checkpoint data.
+   */
+  executionStartTimestamp?: Date;
+  /**
    * Operations that were updated externally between the previous invocation and this one
    * (e.g., a wait timer expired, a callback was received, or a chained invoke completed).
    *

@@ -3,6 +3,7 @@ import {
   deriveTraceIdFromXRayRoot,
   deriveTraceIdFromArn,
   deriveSpanIdFromOperationId,
+  deriveWorkflowSpanId,
 } from "../deterministic-id-generator";
 import * as fc from "fast-check";
 
@@ -278,5 +279,49 @@ describe("Bug Condition Exploration - Property-Based Tests", () => {
         },
       ),
     );
+  });
+});
+
+describe("deriveWorkflowSpanId", () => {
+  const TEST_ARN =
+    "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-123";
+
+  it("produces a 16-char lowercase hex string", () => {
+    const result = deriveWorkflowSpanId(TEST_ARN);
+    expect(result).toMatch(/^[0-9a-f]{16}$/);
+  });
+
+  it("is deterministic (same input always produces same output)", () => {
+    const result1 = deriveWorkflowSpanId(TEST_ARN);
+    const result2 = deriveWorkflowSpanId(TEST_ARN);
+    expect(result1).toBe(result2);
+  });
+
+  it("produces different results for different ARNs", () => {
+    const arn1 =
+      "arn:aws:lambda:us-east-1:123456789012:function:func-a:$LATEST:exec-1";
+    const arn2 =
+      "arn:aws:lambda:us-east-1:123456789012:function:func-b:$LATEST:exec-2";
+    const result1 = deriveWorkflowSpanId(arn1);
+    const result2 = deriveWorkflowSpanId(arn2);
+    expect(result1).not.toBe(result2);
+  });
+
+  it("throws an Error for an empty string", () => {
+    expect(() => deriveWorkflowSpanId("")).toThrow(
+      "Execution ARN must be non-empty",
+    );
+  });
+
+  it("never returns all-zeros", () => {
+    const result = deriveWorkflowSpanId(TEST_ARN);
+    expect(result).not.toBe("0000000000000000");
+  });
+
+  it("produces a different result from deriveSpanIdFromOperationId for the same ARN input", () => {
+    // The "workflow:" salt should differentiate it from deriveSpanIdFromOperationId
+    const workflowSpanId = deriveWorkflowSpanId(TEST_ARN);
+    const opSpanId = deriveSpanIdFromOperationId(TEST_ARN, TEST_ARN);
+    expect(workflowSpanId).not.toBe(opSpanId);
   });
 });

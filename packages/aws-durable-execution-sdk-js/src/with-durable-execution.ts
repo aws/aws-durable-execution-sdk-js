@@ -97,6 +97,9 @@ async function runHandler<
     ...invocationBaseInfo,
     isFirstInvocation:
       durableExecutionMode === DurableExecutionMode.ExecutionMode,
+    executionStartTimestamp: initialExecutionEvent?.StartTimestamp
+      ? new Date(initialExecutionEvent.StartTimestamp)
+      : undefined,
     updatedOperations,
   };
   await plugin.onInvocationStart?.(invocationInfo);

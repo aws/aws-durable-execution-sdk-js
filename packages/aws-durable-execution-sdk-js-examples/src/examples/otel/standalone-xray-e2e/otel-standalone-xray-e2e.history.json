@@ -1,0 +1,128 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "24d105de-b113-4fad-8c3c-229633f9c639",
+    "EventTimestamp": "2026-07-09T20:34:12.933Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "fetch-data",
+    "EventTimestamp": "2026-07-09T20:34:12.940Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "fetch-data",
+    "EventTimestamp": "2026-07-09T20:34:12.940Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"data-value\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "process-data",
+    "EventTimestamp": "2026-07-09T20:34:12.943Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "process-data",
+    "EventTimestamp": "2026-07-09T20:34:12.943Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"processed-data-value\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "RunInChildContext",
+    "EventId": 6,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "child-operations",
+    "EventTimestamp": "2026-07-09T20:34:12.946Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "c9e6e7b69f98f516",
+    "Name": "inner-step",
+    "EventTimestamp": "2026-07-09T20:34:12.946Z",
+    "ParentId": "eccbc87e4b5ce2fe",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "c9e6e7b69f98f516",
+    "Name": "inner-step",
+    "EventTimestamp": "2026-07-09T20:34:12.946Z",
+    "ParentId": "eccbc87e4b5ce2fe",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"inner-value\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "RunInChildContext",
+    "EventId": 9,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "child-operations",
+    "EventTimestamp": "2026-07-09T20:34:12.949Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"inner-value\""
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 10,
+    "EventTimestamp": "2026-07-09T20:34:12.951Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-07-09T20:34:12.933Z",
+      "EndTimestamp": "2026-07-09T20:34:12.950Z",
+      "Error": {},
+      "RequestId": "b9d60468-1c5f-4130-9ad6-0d6b3a73798d"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 11,
+    "Id": "24d105de-b113-4fad-8c3c-229633f9c639",
+    "EventTimestamp": "2026-07-09T20:34:12.951Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"result\":{\"step1\":\"data-value\",\"step2\":\"processed-data-value\",\"childResult\":\"inner-value\"}}"
+      }
+    }
+  }
+]
