@@ -5,18 +5,21 @@ on:
     types: [closed]
     branches:
       - main
+  schedule:
+    - cron: "17 8 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read # This is required for actions/checkout
 
-# Concurrency group for build.yml. This will cancel the cleanup workflow if a new build
-# for the same branch starts
+# Serialize duplicate cleanup workflows for the same closed PR.
 concurrency:
-  group: ${{ github.head_ref || github.ref_name || github.run_id }}
-  cancel-in-progress: true
+  group: cleanup-pr-${{ github.event.pull_request.number || github.event.number || github.head_ref || github.ref_name || github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   build:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -45,6 +48,7 @@ jobs:
             package-lock.json
 
   cleanup-integration-tests:
+    if: github.event_name == 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -52,9 +56,9 @@ jobs:
       id-token: write
 
     concurrency:
-      # Concurrency group for integration-test.yml. This will cancel the cleanup if integration tests start for the same branch.
-      group: ${{ github.head_ref || github.ref_name || github.run_id }}-${{ matrix.node-version }}-integ
-      cancel-in-progress: true
+      # Match integration-tests.yml so cleanup and deploy/test cannot touch the same PR/runtime stack at once.
+      group: pr-${{ github.event.pull_request.number || github.event.number || github.head_ref || github.ref_name || github.run_id }}-${{ matrix.node-version }}-integ
+      cancel-in-progress: false
 
     strategy:
       max-parallel: 1
@@ -89,10 +93,54 @@ jobs:
           role-session-name: githubIntegrationTest
           aws-region: ${{ vars.AWS_REGION }}
 
-      - name: Cleanup Lambda functions and log groups
+      - name: Setup SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      - name: Cleanup SAM stack
         env:
           LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
           GITHUB_EVENT_NAME: "pull_request"
           GITHUB_EVENT_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           node .github/workflows/scripts/integration-test/integration-test.js --cleanup-only --runtime ${{ matrix.node-version }}
+
+  cleanup-old-pr-testing-stacks:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        node-version: ["22.x", "24.x"]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24.x"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Get AWS Credentials for stack cleanup
+        id: credentials
+        if: github.actor != 'nektos/act'
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: "${{ secrets.TEST_ROLE_ARN }}"
+          role-session-name: githubIntegrationTestCleanup
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Setup SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      - name: Cleanup old PR testing stacks
+        run: |
+          node .github/workflows/scripts/integration-test/integration-test.js --cleanup-old-pr-stacks --older-than-days 7 --runtime ${{ matrix.node-version }}

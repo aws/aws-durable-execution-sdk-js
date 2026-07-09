@@ -1,12 +1,11 @@
 // @ts-check
 
 import { execSync } from "child_process";
-import { appendFileSync } from "fs";
+import { appendFileSync, mkdirSync, writeFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { ArgumentParser } from "argparse";
 
-import examplesCatalog from "@aws/durable-execution-sdk-js-examples/catalog";
 import {
   LambdaClient,
   DeleteFunctionCommand,
@@ -50,6 +49,12 @@ const log = {
 const CONFIG = {
   AWS_REGION: process.env.AWS_REGION || "us-east-1",
   LAMBDA_ENDPOINT: process.env.LAMBDA_ENDPOINT,
+  TEST_ACCOUNT_ID: process.env.TEST_ACCOUNT_ID ?? process.env.AWS_ACCOUNT_ID,
+  TEST_CAPACITY_PROVIDER_ARN:
+    process.env.TEST_CAPACITY_PROVIDER_ARN ?? process.env.CAPACITY_PROVIDER_ARN,
+  TEST_LAMBDA_EXECUTION_ROLE_ARN:
+    process.env.TEST_LAMBDA_EXECUTION_ROLE_ARN ??
+    process.env.LAMBDA_EXECUTION_ROLE_ARN,
   PROJECT_ROOT: join(__dirname, "../../../.."),
   // Package directory paths
   SDK_PACKAGE_PATH: join(
@@ -64,6 +69,10 @@ const CONFIG = {
 
 const CAPACITY_PROVIDER_FUNCTION_SUFFIX = "-capacity-provider";
 
+function shellQuote(/** @type {string} */ value) {
+  return `'${String(value).replace(/'/g, "'\\''")}'`;
+}
+
 class IntegrationTestRunner {
   /**
    * @param {Object} options
@@ -76,6 +85,8 @@ class IntegrationTestRunner {
     this.isGitHubActions = !!process.env.GITHUB_ACTIONS;
     /** @type {import('@aws-sdk/client-lambda').LambdaClient | null} */
     this.lambdaClient = null;
+    /** @type {import('@aws/durable-execution-sdk-js-examples/catalog').default | null} */
+    this.examplesCatalog = null;
 
     // Set up cleanup handler
     if (this.cleanupOnExit) {
@@ -135,9 +146,92 @@ class IntegrationTestRunner {
     return { output: result };
   }
 
+  /**
+   * @param {string} command
+   * @param {Object} options
+   * @param {boolean} [options.silent]
+   * @param {string} [options.cwd]
+   * @param {Object} [options.env]
+   * @param {number} [maxAttempts]
+   */
+  async execCommandWithRetry(command, options = {}, maxAttempts = 5) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return this.execCommand(command, options);
+      } catch (error) {
+        if (attempt === maxAttempts) {
+          throw error;
+        }
+
+        const delayMs = Math.min(15000 * attempt, 60000);
+        log.warning(
+          `Command failed; retrying attempt ${attempt + 1}/${maxAttempts} in ${delayMs}ms`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+
+    throw new Error("Max command retry attempts exceeded");
+  }
+
+  getRuntimeId() {
+    return this.runtime.replace(/[^A-Za-z0-9]/g, "");
+  }
+
+  getLegacyTestSecretEnv() {
+    return Object.fromEntries(
+      Object.entries({
+        AWS_ACCOUNT_ID: CONFIG.TEST_ACCOUNT_ID,
+        CAPACITY_PROVIDER_ARN: CONFIG.TEST_CAPACITY_PROVIDER_ARN,
+        LAMBDA_EXECUTION_ROLE_ARN: CONFIG.TEST_LAMBDA_EXECUTION_ROLE_ARN,
+      }).filter(([, value]) => value !== undefined),
+    );
+  }
+
+  getSamStackName() {
+    const runtimeId = this.getRuntimeId().toLowerCase();
+    if (
+      this.isGitHubActions &&
+      process.env.GITHUB_EVENT_NAME === "pull_request"
+    ) {
+      if (!process.env.GITHUB_EVENT_NUMBER) {
+        throw new Error(
+          "Could not find GITHUB_EVENT_NUMBER environment variable",
+        );
+      }
+      return `aws-durable-execution-sdk-js-integ-${runtimeId}-pr-${process.env.GITHUB_EVENT_NUMBER}`;
+    }
+    return `aws-durable-execution-sdk-js-integ-${runtimeId}`;
+  }
+
+  samStackExists() {
+    const stackName = this.getSamStackName();
+    try {
+      this.execCommand(
+        `aws cloudformation describe-stacks --stack-name ${shellQuote(stackName)} --region ${shellQuote(CONFIG.AWS_REGION)}`,
+        { silent: true },
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async getExamplesCatalog() {
+    if (!this.examplesCatalog) {
+      const imported = await import(
+        "@aws/durable-execution-sdk-js-examples/catalog"
+      );
+      this.examplesCatalog = imported.default;
+    }
+
+    return this.examplesCatalog;
+  }
+
   // Get integration examples from catalog
-  getIntegrationExamples() {
+  async getIntegrationExamples() {
     log.info("Getting integration examples...");
+    const examplesCatalog = await this.getExamplesCatalog();
     return examplesCatalog.filter(
       (example) =>
         !example.localOnly &&
@@ -153,8 +247,8 @@ class IntegrationTestRunner {
    * @param {{ capacityProviderOnly: boolean }} options
    * @returns
    */
-  getFunctionNameMap(options) {
-    const examples = this.getIntegrationExamples();
+  async getFunctionNameMap(options) {
+    const examples = await this.getIntegrationExamples();
     /** @type {Record<string, {functionName: string, qualifier: string}>} */
     const functionNameMap = {};
 
@@ -220,16 +314,37 @@ class IntegrationTestRunner {
 
     log.info("Deploying Lambda functions...");
 
-    if (!process.env.AWS_ACCOUNT_ID) {
-      throw new Error("Missing required AWS_ACCOUNT_ID for deployment");
+    if (!CONFIG.TEST_ACCOUNT_ID) {
+      throw new Error("Missing required TEST_ACCOUNT_ID for deployment");
     }
 
-    const examples = this.getIntegrationExamples();
+    const examples = await this.getIntegrationExamples();
     const examplesDir = CONFIG.EXAMPLES_PACKAGE_PATH;
 
-    const functionNameMap = this.getFunctionNameMap({
+    const functionNameMap = await this.getFunctionNameMap({
       capacityProviderOnly: capacityProviderOnly,
     });
+
+    if (!capacityProviderOnly) {
+      if (testPattern) {
+        throw new Error("SAM deployment does not support --test-pattern");
+      }
+
+      await this.deployFunctionsWithSam(functionNameMap);
+
+      if (this.isGitHubActions) {
+        if (!process.env.GITHUB_OUTPUT) {
+          throw new Error("Could not find GITHUB_OUTPUT environment variable");
+        }
+        appendFileSync(
+          process.env.GITHUB_OUTPUT,
+          `function-name-map=${JSON.stringify(functionNameMap)}`,
+        );
+      }
+
+      log.success("Function deployment completed");
+      return;
+    }
 
     for (const example of examples) {
       const exampleHandler = example.handler;
@@ -251,21 +366,6 @@ class IntegrationTestRunner {
         cwd: examplesDir,
       });
 
-      // Deploy regular function (unless capacityProviderOnly is true)
-      if (!capacityProviderOnly) {
-        const regularFunctionName = functionNameMap[handlerFile].functionName;
-        log.info(
-          `Deploying regular function: ${regularFunctionName} (handler: ${handlerFile})`,
-        );
-
-        let regularDeployCommand = `npm run deploy -- "${handlerFile}" '${regularFunctionName}' --runtime ${this.runtime}`;
-        this.execCommand(regularDeployCommand, {
-          cwd: examplesDir,
-        });
-        log.success(`Deployed regular function: ${regularFunctionName}`);
-      }
-
-      // Deploy capacity provider function (only if capacityProviderOnly is true)
       if (capacityProviderOnly && example.capacityProviderConfig) {
         const capacityProviderKey = `${handlerFile}-capacity-provider`;
         const capacityProviderFunctionName =
@@ -277,6 +377,7 @@ class IntegrationTestRunner {
         let capacityDeployCommand = `npm run deploy -- "${handlerFile}" '${capacityProviderFunctionName}' --runtime ${this.runtime} --use-capacity-provider`;
         this.execCommand(capacityDeployCommand, {
           cwd: examplesDir,
+          env: this.getLegacyTestSecretEnv(),
         });
         log.success(
           `Deployed capacity provider function: ${capacityProviderFunctionName}`,
@@ -295,6 +396,74 @@ class IntegrationTestRunner {
     }
 
     log.success("Function deployment completed");
+  }
+
+  /**
+   * @param {Record<string, {functionName: string, qualifier: string}>} functionNameMap
+   */
+  async deployFunctionsWithSam(functionNameMap) {
+    const examplesDir = CONFIG.EXAMPLES_PACKAGE_PATH;
+    const stackName = this.getSamStackName();
+    const samDir = join(examplesDir, ".aws-sam");
+    const functionNameMapPath = join(
+      samDir,
+      `function-name-map-${this.getRuntimeId()}.json`,
+    );
+    const templatePath = join(
+      samDir,
+      `integration-template-${this.getRuntimeId()}.yml`,
+    );
+
+    mkdirSync(samDir, { recursive: true });
+    writeFileSync(functionNameMapPath, JSON.stringify(functionNameMap), "utf8");
+
+    this.execCommand("npm run generate-examples", { cwd: examplesDir });
+
+    const templateArgs = [
+      "npm run generate-sam-template --",
+      `--runtime ${shellQuote(this.runtime)}`,
+      `--aws-region ${shellQuote(CONFIG.AWS_REGION)}`,
+      "--code-uri ../dist",
+      `--function-name-map-file ${shellQuote(functionNameMapPath)}`,
+      `--output-template-file ${shellQuote(templatePath)}`,
+    ];
+
+    if (CONFIG.TEST_LAMBDA_EXECUTION_ROLE_ARN) {
+      templateArgs.push(
+        `--lambda-execution-role-arn ${shellQuote(CONFIG.TEST_LAMBDA_EXECUTION_ROLE_ARN)}`,
+      );
+    }
+
+    if (CONFIG.LAMBDA_ENDPOINT) {
+      templateArgs.push(
+        `--lambda-endpoint ${shellQuote(CONFIG.LAMBDA_ENDPOINT)}`,
+      );
+    }
+
+    this.execCommand(templateArgs.join(" "), { cwd: examplesDir });
+
+    if (!this.samStackExists()) {
+      log.info(
+        `SAM stack ${stackName} does not exist; deleting legacy Lambda deployments before first stack create`,
+      );
+      await this.cleanupLambdaFunctions(functionNameMap);
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+    }
+
+    const deployCommand = [
+      "sam deploy",
+      `--template-file ${shellQuote(templatePath)}`,
+      `--stack-name ${shellQuote(stackName)}`,
+      `--region ${shellQuote(CONFIG.AWS_REGION)}`,
+      "--resolve-s3",
+      "--no-confirm-changeset",
+      "--no-fail-on-empty-changeset",
+      "--capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM",
+    ].join(" ");
+
+    log.info(`Deploying SAM stack: ${stackName}`);
+    await this.execCommandWithRetry(deployCommand, { cwd: examplesDir });
+    log.success(`Deployed SAM stack: ${stackName}`);
   }
 
   // Run Jest integration tests
@@ -323,7 +492,7 @@ class IntegrationTestRunner {
       // surfaced as a flaky ResourceNotFoundException.
       functionsWithQualifier = Object.fromEntries(
         Object.entries(
-          this.getFunctionNameMap({ capacityProviderOnly: true }),
+          await this.getFunctionNameMap({ capacityProviderOnly: true }),
         ).map(([key, { functionName, qualifier }]) => {
           const baseKey = key.endsWith(CAPACITY_PROVIDER_FUNCTION_SUFFIX)
             ? key.slice(0, -CAPACITY_PROVIDER_FUNCTION_SUFFIX.length)
@@ -334,7 +503,7 @@ class IntegrationTestRunner {
     } else {
       functionsWithQualifier = Object.fromEntries(
         Object.entries(
-          this.getFunctionNameMap({ capacityProviderOnly: false }),
+          await this.getFunctionNameMap({ capacityProviderOnly: false }),
         ).map(([key, { functionName, qualifier }]) => {
           return [key, `${functionName}:${qualifier}`];
         }),
@@ -369,7 +538,7 @@ class IntegrationTestRunner {
    * @returns
    */
   async cleanup(capacityProviderOnly) {
-    const functionNameMap = this.getFunctionNameMap({
+    const functionNameMap = await this.getFunctionNameMap({
       capacityProviderOnly: capacityProviderOnly,
     });
 
@@ -380,6 +549,29 @@ class IntegrationTestRunner {
 
     log.info("Cleaning up deployed functions and logs...");
 
+    if (!capacityProviderOnly) {
+      const stackName = this.getSamStackName();
+      if (this.samStackExists()) {
+        log.info(`Deleting SAM stack: ${stackName}`);
+        this.execCommand(
+          `sam delete --stack-name ${shellQuote(stackName)} --region ${shellQuote(CONFIG.AWS_REGION)} --no-prompts`,
+        );
+        log.success(`Deleted SAM stack: ${stackName}`);
+        return;
+      }
+
+      log.warning(
+        `SAM stack ${stackName} was not found; falling back to legacy Lambda cleanup`,
+      );
+    }
+
+    await this.cleanupLambdaFunctions(functionNameMap);
+  }
+
+  /**
+   * @param {Record<string, {functionName: string, qualifier: string}>} functionNameMap
+   */
+  async cleanupLambdaFunctions(functionNameMap) {
     // Initialize Lambda client for cleanup
     const lambdaClient = this.initializeLambdaClient();
 
@@ -395,14 +587,14 @@ class IntegrationTestRunner {
 
       try {
         await lambdaClient.send(deleteCommand);
+        log.success(`Deleted function: ${functionName}`);
       } catch (error) {
         if (error instanceof ResourceNotFoundExceptionLambda) {
           log.warning(`Function not found: ${functionName}`);
-          continue;
+        } else {
+          throw error;
         }
-        throw error;
       }
-      log.success(`Deleted function: ${functionName}`);
 
       const logGroupName = `/aws/lambda/${functionName}`;
       try {
@@ -424,10 +616,76 @@ class IntegrationTestRunner {
   }
 
   /**
+   * Delete PR integration test SAM stacks older than the supplied age.
+   *
+   * @param {number} olderThanDays
+   */
+  async cleanupOldPRTestingStacks(olderThanDays) {
+    const stackNamePrefix = `aws-durable-execution-sdk-js-integ-${this.getRuntimeId().toLowerCase()}-pr-`;
+    const cutoffMs = Date.now() - olderThanDays * 24 * 60 * 60 * 1000;
+    const deletableStatuses = [
+      "CREATE_COMPLETE",
+      "CREATE_FAILED",
+      "DELETE_FAILED",
+      "IMPORT_COMPLETE",
+      "IMPORT_ROLLBACK_COMPLETE",
+      "ROLLBACK_COMPLETE",
+      "UPDATE_COMPLETE",
+      "UPDATE_ROLLBACK_COMPLETE",
+      "UPDATE_ROLLBACK_FAILED",
+    ];
+
+    log.info(
+      `Looking for ${stackNamePrefix}* stacks older than ${olderThanDays} days`,
+    );
+
+    const { output } = this.execCommand(
+      [
+        "aws cloudformation list-stacks",
+        `--region ${shellQuote(CONFIG.AWS_REGION)}`,
+        `--stack-status-filter ${deletableStatuses.join(" ")}`,
+        "--output json",
+      ].join(" "),
+      { silent: true },
+    );
+    const response = JSON.parse(output);
+    const stacks = response.StackSummaries ?? [];
+
+    const oldPRStacks = stacks.filter((/** @type {any} */ stack) => {
+      if (!stack.StackName?.startsWith(stackNamePrefix)) {
+        return false;
+      }
+
+      const lastTouchedAt = Date.parse(
+        stack.LastUpdatedTime ?? stack.CreationTime,
+      );
+      return !Number.isNaN(lastTouchedAt) && lastTouchedAt < cutoffMs;
+    });
+
+    if (oldPRStacks.length === 0) {
+      log.success("No old PR testing stacks found");
+      return;
+    }
+
+    for (const stack of oldPRStacks) {
+      const lastTouchedTime = stack.LastUpdatedTime ?? stack.CreationTime;
+      log.info(
+        `Deleting old PR testing stack: ${stack.StackName} (${lastTouchedTime})`,
+      );
+      this.execCommand(
+        `sam delete --stack-name ${shellQuote(stack.StackName)} --region ${shellQuote(CONFIG.AWS_REGION)} --no-prompts`,
+      );
+      log.success(`Deleted old PR testing stack: ${stack.StackName}`);
+    }
+  }
+
+  /**
    * @param {Object} options
    * @param {boolean} [options.deployOnly]
    * @param {boolean} [options.testOnly]
    * @param {boolean} [options.cleanupOnly]
+   * @param {boolean} [options.cleanupOldPRStacks]
+   * @param {number} [options.olderThanDays]
    * @param {string} [options.testPattern]
    * @param {boolean} [options.capacityProviderOnly]
    */
@@ -436,6 +694,8 @@ class IntegrationTestRunner {
       deployOnly = false,
       testOnly = false,
       cleanupOnly = false,
+      cleanupOldPRStacks = false,
+      olderThanDays = 7,
       testPattern,
       capacityProviderOnly = false,
     } = options;
@@ -448,6 +708,11 @@ class IntegrationTestRunner {
 
     if (cleanupOnly) {
       await this.cleanup(capacityProviderOnly);
+      return;
+    }
+
+    if (cleanupOldPRStacks) {
+      await this.cleanupOldPRTestingStacks(olderThanDays);
       return;
     }
 
@@ -476,8 +741,11 @@ async function main() {
   const parser = new ArgumentParser({
     description: "Integration test runner for Lambda Durable Functions SDK",
     epilog: `Environment Variables:
-  AWS_REGION      AWS region (default: us-east-1)
-  LAMBDA_ENDPOINT Custom Lambda endpoint URL`,
+  AWS_REGION                     AWS region (default: us-east-1)
+  LAMBDA_ENDPOINT                Custom Lambda endpoint URL
+  TEST_ACCOUNT_ID                Test account ID for deployment
+  TEST_LAMBDA_EXECUTION_ROLE_ARN Lambda execution role ARN for tests
+  TEST_CAPACITY_PROVIDER_ARN     Capacity provider ARN for capacity-provider tests`,
   });
 
   // Add mutually exclusive group for operation modes
@@ -498,6 +766,11 @@ async function main() {
     help: "Only cleanup existing functions",
   });
 
+  group.add_argument("--cleanup-old-pr-stacks", {
+    action: "store_true",
+    help: "Only cleanup PR testing stacks older than --older-than-days",
+  });
+
   // Add test pattern argument
   parser.add_argument("--test-pattern", {
     help: "Optional test pattern to filter specific tests (used with --test-only)",
@@ -516,6 +789,11 @@ async function main() {
     required: true,
   });
 
+  parser.add_argument("--older-than-days", {
+    help: "Age threshold in days for --cleanup-old-pr-stacks",
+    default: 7,
+  });
+
   // Parse command line arguments
   const args = parser.parse_args();
 
@@ -525,10 +803,19 @@ async function main() {
     deployOnly: args.deploy_only || false,
     testOnly: args.test_only || false,
     cleanupOnly: args.cleanup_only || false,
+    cleanupOldPRStacks: args.cleanup_old_pr_stacks || false,
+    olderThanDays: Number.parseInt(args.older_than_days, 10),
     testPattern: args.test_pattern,
     capacityProviderOnly: args.capacity_provider_only,
     runtime: args.runtime,
   };
+
+  if (
+    options.cleanupOldPRStacks &&
+    (!Number.isFinite(options.olderThanDays) || options.olderThanDays < 1)
+  ) {
+    throw new Error("--older-than-days must be a positive integer");
+  }
 
   // Disable cleanup on exit for deploy-only and test-only modes
   if (options.deployOnly || options.testOnly) {

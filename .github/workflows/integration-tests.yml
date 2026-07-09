@@ -7,10 +7,10 @@ on:
         required: true
         type: string
 
-# Cancel when pull request is updated for this node version
+# Serialize updates to this PR/runtime stack.
 concurrency:
-  group: ${{ github.head_ref || github.ref_name || github.run_id }}-${{ inputs.node-version }}-integ
-  cancel-in-progress: true
+  group: pr-${{ github.event.pull_request.number || github.event.number || github.head_ref || github.ref_name || github.run_id }}-${{ inputs.node-version }}-integ
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -36,6 +36,9 @@ jobs:
           role-session-name: githubIntegrationTest
           aws-region: ${{ vars.AWS_REGION }}
 
+      - name: Setup SAM CLI
+        uses: aws-actions/setup-sam@v2
+
       - name: Download build artifacts
         uses: actions/download-artifact@v8
         with:
@@ -45,14 +48,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Deploy functions
+      - name: Deploy functions with SAM
         id: deploy-functions
         env:
           LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_EVENT_NUMBER: ${{ github.event.number }}
-          AWS_ACCOUNT_ID: ${{ secrets.TEST_ACCOUNT_ID }}
-          LAMBDA_EXECUTION_ROLE_ARN: ${{ secrets.TEST_LAMBDA_EXECUTION_ROLE_ARN }}
+          TEST_ACCOUNT_ID: ${{ secrets.TEST_ACCOUNT_ID }}
+          TEST_LAMBDA_EXECUTION_ROLE_ARN: ${{ secrets.TEST_LAMBDA_EXECUTION_ROLE_ARN }}
         run: node .github/workflows/scripts/integration-test/integration-test.js --deploy-only --runtime ${{ inputs.node-version }}
 
   jest-integration-test:

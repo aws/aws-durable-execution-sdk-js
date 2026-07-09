@@ -138,10 +138,9 @@ When you push to GitHub, the integration test workflow (`.github/workflows/integ
 1. **Setup Stage**:
    - Build all packages
    - Generate the examples catalog from the config
-   - For each example:
-     - Package the function code
-     - Deploy/update Lambda function using `scripts/deploy-lambda.ts`
-     - Function name format: `YourExampleName-TypeScript` (or with `-PR-{number}` suffix for PRs)
+   - Generate a SAM template for the selected Node.js runtime
+   - Deploy/update the integration-test SAM stack
+   - Function name format: `YourExampleName-22x-NodeJS` (or with `-PR-{number}` suffix for PRs)
 
 2. **Test Stage**:
    - Run `npm run test:integration` in examples package
@@ -149,7 +148,8 @@ When you push to GitHub, the integration test workflow (`.github/workflows/integ
    - Function names are passed via `FUNCTION_NAME_MAP` environment variable
 
 3. **Cleanup Stage**:
-   - Delete all deployed Lambda functions
+   - Delete the PR's SAM stack after the PR closes
+   - A daily scheduled cleanup deletes PR testing stacks older than 7 days
 
 ### Run Integration Tests Locally
 
