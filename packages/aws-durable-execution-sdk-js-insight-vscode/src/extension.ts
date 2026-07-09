@@ -85,6 +85,16 @@ type InboundMessage =
  */
 type QueryMode = "query" | "ask" | "agent";
 
+/**
+ * Current AI-usage disclosure version the user must have accepted before any
+ * LLM-backed action runs. Kept in sync with AI_DISCLOSURE_VERSION in
+ * webview-ui/src/types.ts — bump both together when the disclosure wording
+ * changes so consented users are re-prompted. The webview gates the UI; the
+ * host re-checks (defense in depth) so a replayed/malformed message can't
+ * bypass the disclosure.
+ */
+const REQUIRED_AI_DISCLOSURE_VERSION = "2";
+
 /** A saved query (kept in sync with Favorite in webview-ui/src/types.ts). */
 interface Favorite {
   id: string;
@@ -516,6 +526,18 @@ class ExplorerPanel {
     requestId: number;
   }): Promise<void> {
     const cfg = readConfig();
+    // Visualize builds the chart spec with the LLM — enforce consent host-side
+    // too (defense in depth); reply as a chartSpecError so the webview clears
+    // its loading state.
+    if (!this.hasAiConsent(cfg)) {
+      this.post({
+        type: "chartSpecError",
+        message:
+          "AI features require accepting the AI-usage disclosure first. Please try again and accept the notice.",
+        requestId: msg.requestId,
+      });
+      return;
+    }
     setLocalModel(cfg.localModel);
     setLocalServer(cfg.localServerUrl, cfg.localServerModel);
     const credentials = resolveCredentials(cfg.awsProfile);
@@ -606,6 +628,17 @@ class ExplorerPanel {
     if (mode === "query") {
       return await this.onRunRawQuery(q, cfg, credentials);
     }
+    // ask/agent use the LLM — enforce the AI-usage consent host-side too, so a
+    // replayed or malformed "generate" message can't bypass the disclosure the
+    // webview shows. query mode above is intentionally exempt (no LLM).
+    if (!this.hasAiConsent(cfg)) {
+      this.post({
+        type: "error",
+        message:
+          "AI features require accepting the AI-usage disclosure first. Please try again and accept the notice.",
+      });
+      return;
+    }
     if (mode === "ask") {
       return await this.onGenerateSingleShot(q, cfg, credentials, tableName);
     }
@@ -695,6 +728,16 @@ class ExplorerPanel {
         version,
         vscode.ConfigurationTarget.Global,
       );
+  }
+
+  /**
+   * Host-side AI-usage consent check (defense in depth). The webview gates AI
+   * actions behind the disclosure modal, but we re-verify here so a replayed or
+   * malformed message can't reach the LLM without accepted consent. Returns
+   * true when the stored acceptance matches the current disclosure version.
+   */
+  private hasAiConsent(cfg: { aiDisclosureAcceptedVersion: string }): boolean {
+    return cfg.aiDisclosureAcceptedVersion === REQUIRED_AI_DISCLOSURE_VERSION;
   }
 
   /**
