@@ -10,6 +10,7 @@ import {
   isModelDownloaded,
   ensureModel,
   setLocalModel,
+  setLocalServer,
   type GeneratedQuery,
 } from "./llm";
 import {
@@ -298,6 +299,7 @@ class ExplorerPanel {
     // Reflect the selected local model so isModelDownloaded() below (and any
     // local generation) targets the right file.
     setLocalModel(cfg.localModel);
+    setLocalServer(cfg.localServerUrl, cfg.localServerModel);
     this.post({
       type: "config",
       settings: {
@@ -320,6 +322,8 @@ class ExplorerPanel {
         awsProfile: cfg.awsProfile ?? "",
         bedrockModelId: cfg.bedrockModelId,
         localModel: cfg.localModel,
+        localServerUrl: cfg.localServerUrl,
+        localServerModel: cfg.localServerModel,
         agenticMaxIterations: String(cfg.agenticMaxIterations),
         queryMode: cfg.queryMode,
       },
@@ -509,6 +513,7 @@ class ExplorerPanel {
   }): Promise<void> {
     const cfg = readConfig();
     setLocalModel(cfg.localModel);
+    setLocalServer(cfg.localServerUrl, cfg.localServerModel);
     const credentials = resolveCredentials(cfg.awsProfile);
     try {
       const spec = await generateChartSpec({
@@ -579,6 +584,7 @@ class ExplorerPanel {
     }
     const cfg = readConfig();
     setLocalModel(cfg.localModel);
+    setLocalServer(cfg.localServerUrl, cfg.localServerModel);
     const credentials = resolveCredentials(cfg.awsProfile);
     const tableName =
       cfg.destinationType === "dynamodb"

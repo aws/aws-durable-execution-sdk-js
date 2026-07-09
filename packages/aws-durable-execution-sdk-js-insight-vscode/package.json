@@ -138,12 +138,14 @@
           "enum": [
             "bedrock",
             "copilot",
+            "local-server",
             "local"
           ],
           "enumDescriptions": [
             "Amazon Bedrock (Converse API) — requires AWS credentials and model access",
             "GitHub Copilot (VS Code Language Model API) — requires Copilot subscription",
-            "Local LLM — runs offline, downloads the model on first use. Model is configurable via workflowInsight.localModel (default: Llama-3-Groq-8B Tool-Use, ~4.9 GB)."
+            "Local server — an OpenAI-compatible endpoint you run yourself (Ollama, LM Studio, llama.cpp). Configure via workflowInsight.localServerUrl and workflowInsight.localServerModel.",
+            "Local LLM — runs offline, downloads the model on first use. Model is configurable via workflowInsight.localModel (default: Llama-3-Groq-8B Tool-Use, ~4.9 GB). Not available in the packaged .vsix."
           ],
           "description": "Which LLM to use for converting questions to queries."
         },
@@ -151,6 +153,16 @@
           "type": "string",
           "default": "us.anthropic.claude-sonnet-4-20250514-v1:0",
           "description": "Amazon Bedrock model id (or inference profile id) used to convert English to a Logs Insights query."
+        },
+        "workflowInsight.localServerUrl": {
+          "type": "string",
+          "default": "http://localhost:11434/v1",
+          "description": "Base URL of the OpenAI-compatible chat-completions API for the 'local-server' provider (e.g. Ollama at http://localhost:11434/v1). '/chat/completions' is appended."
+        },
+        "workflowInsight.localServerModel": {
+          "type": "string",
+          "default": "llama3.1",
+          "description": "Model name the local server should use for the 'local-server' provider (e.g. 'llama3.1' for Ollama). Pull/load it in your server first."
         },
         "workflowInsight.localModel": {
           "type": "string",

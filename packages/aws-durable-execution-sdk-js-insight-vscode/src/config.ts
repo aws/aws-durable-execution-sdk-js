@@ -19,10 +19,12 @@ export interface InsightConfig {
   athenaWorkgroup: string;
   athenaOutputLocation: string;
   athenaS3Location: string;
-  llmProvider: "bedrock" | "copilot" | "local";
+  llmProvider: "bedrock" | "copilot" | "local" | "local-server";
   awsProfile?: string;
   bedrockModelId: string;
   localModel: string;
+  localServerUrl: string;
+  localServerModel: string;
   agenticMaxIterations: number;
   queryMode: "query" | "ask" | "agent";
 }
@@ -70,18 +72,26 @@ export function readConfig(): InsightConfig {
     c.get<string>("athenaOutputLocation") || ""
   ).trim();
   const athenaS3Location = (c.get<string>("athenaS3Location") || "").trim();
+  const llmProviderRaw = (c.get<string>("llmProvider") || "").trim();
   const llmProvider =
-    (c.get<string>("llmProvider") || "").trim() === "copilot"
+    llmProviderRaw === "copilot"
       ? ("copilot" as const)
-      : (c.get<string>("llmProvider") || "").trim() === "local"
+      : llmProviderRaw === "local"
         ? ("local" as const)
-        : ("bedrock" as const);
+        : llmProviderRaw === "local-server"
+          ? ("local-server" as const)
+          : ("bedrock" as const);
   const awsProfile = (c.get<string>("awsProfile") || "").trim() || undefined;
   const bedrockModelId =
     (c.get<string>("bedrockModelId") || "").trim() ||
     "us.anthropic.claude-sonnet-4-20250514-v1:0";
   const localModel =
     (c.get<string>("localModel") || "").trim() || "llama-3-groq-8b-tool-use";
+  const localServerUrl =
+    (c.get<string>("localServerUrl") || "").trim() ||
+    "http://localhost:11434/v1";
+  const localServerModel =
+    (c.get<string>("localServerModel") || "").trim() || "llama3.1";
   const rawMaxIter = c.get<number>("agenticMaxIterations");
   const agenticMaxIterations =
     typeof rawMaxIter === "number" && Number.isFinite(rawMaxIter)
@@ -111,6 +121,8 @@ export function readConfig(): InsightConfig {
     awsProfile,
     bedrockModelId,
     localModel,
+    localServerUrl,
+    localServerModel,
     agenticMaxIterations,
     queryMode,
   };

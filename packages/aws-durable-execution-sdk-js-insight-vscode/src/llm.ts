@@ -73,7 +73,71 @@ const EMIT_QUERY_TOOL: Tool = {
   },
 };
 
-export type LlmProvider = "bedrock" | "copilot" | "local";
+export type LlmProvider = "bedrock" | "copilot" | "local" | "local-server";
+
+// ─── Local server (OpenAI-compatible: Ollama / LM Studio / llama.cpp) ────────
+//
+// Module-level config (set via setLocalServer, mirroring setLocalModel) so the
+// "local-server" provider talks to a user-run local endpoint instead of an
+// embedded native runtime — no node-llama-cpp, so it works from the packaged
+// vsix on every platform.
+
+const DEFAULT_LOCAL_SERVER_URL = "http://localhost:11434/v1";
+const DEFAULT_LOCAL_SERVER_MODEL = "llama3.1";
+let localServerUrl = DEFAULT_LOCAL_SERVER_URL;
+let localServerModel = DEFAULT_LOCAL_SERVER_MODEL;
+
+/**
+ * Point the "local-server" provider at an OpenAI-compatible chat-completions
+ * endpoint. `url` is the base (e.g. http://localhost:11434/v1); a trailing
+ * slash is trimmed. Empty values fall back to the Ollama defaults.
+ */
+export function setLocalServer(
+  url: string | undefined,
+  model: string | undefined,
+): void {
+  localServerUrl =
+    url && url.trim()
+      ? url.trim().replace(/\/+$/, "")
+      : DEFAULT_LOCAL_SERVER_URL;
+  localServerModel =
+    model && model.trim() ? model.trim() : DEFAULT_LOCAL_SERVER_MODEL;
+}
+
+/** Single prompt -> text via the OpenAI-compatible /chat/completions endpoint. */
+async function completeViaLocalServer(
+  prompt: string,
+  maxTokens: number,
+): Promise<string> {
+  let res: Response;
+  try {
+    res = await fetch(`${localServerUrl}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: localServerModel,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0,
+        max_tokens: maxTokens,
+        stream: false,
+      }),
+    });
+  } catch (err) {
+    throw new Error(
+      `Could not reach the local model server at ${localServerUrl}. Is it running? (${err instanceof Error ? err.message : String(err)})`,
+    );
+  }
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(
+      `Local model server returned ${res.status} ${res.statusText}. ${detail.slice(0, 200)}`,
+    );
+  }
+  const data = (await res.json()) as {
+    choices?: { message?: { content?: string } }[];
+  };
+  return (data.choices?.[0]?.message?.content ?? "").trim();
+}
 
 // ─── Result verification (agentic / "advanced" mode) ─────────────────────────
 
@@ -188,6 +252,14 @@ export async function verifyResult(
       } finally {
         cts.dispose();
       }
+    }
+
+    if (opts.provider === "local-server") {
+      const text = await completeViaLocalServer(
+        `${instruction}\n\nRespond with ONLY JSON: {"satisfied": true|false, "reason": "...", "suggestion": "..."}`,
+        1024,
+      );
+      return parseVerdict(text);
     }
 
     // local
@@ -333,6 +405,9 @@ async function completeText(
   prompt: string,
   maxTokens = 1024,
 ): Promise<string> {
+  if (opts.provider === "local-server") {
+    return completeViaLocalServer(prompt, maxTokens);
+  }
   if (opts.provider === "bedrock") {
     const client = new BedrockRuntimeClient({
       region: opts.region,
@@ -418,7 +493,45 @@ export async function generateQuery(
   if (opts.provider === "local") {
     return generateViaLocal(opts);
   }
+  if (opts.provider === "local-server") {
+    return generateViaLocalServer(opts);
+  }
   return generateViaBedrock(opts);
+}
+
+/** NL->query via an OpenAI-compatible local server (text JSON parsing). */
+async function generateViaLocalServer(
+  opts: GenerateOptions,
+): Promise<GeneratedQuery> {
+  const systemPrompt = buildSystemPrompt(opts.destinationType, {
+    tableName: opts.tableName,
+    agentic: opts.agentic,
+  });
+  const prompt = `${systemPrompt}\n\nRespond with ONLY a JSON object: {"query": "...", "explanation": "...", "timeRangeMs": ..., "suggestedCharts": ["...", "..."]}\nFor suggestedCharts pick 2-4 from: bar, stacked-bar, line, area, scatter, heatmap, histogram, pie, boxplot.\nOmit timeRangeMs if not mentioned (default 24h).\n\nUser question: ${opts.question}`;
+  const response = await completeViaLocalServer(prompt, 2048);
+  const jsonMatch = response.match(/\{[\s\S]*"query"[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error(
+      "The local model server did not return a valid query. Try rephrasing your question.",
+    );
+  }
+  const parsed = JSON.parse(jsonMatch[0]) as {
+    query?: string;
+    explanation?: string;
+    timeRangeMs?: number;
+    suggestedCharts?: string[];
+  };
+  if (!parsed.query) {
+    throw new Error(
+      "The local model server returned an empty query. Try rephrasing your question.",
+    );
+  }
+  return {
+    query: parsed.query.trim(),
+    explanation: (parsed.explanation ?? "").trim(),
+    timeRangeMs: parsed.timeRangeMs ?? DEFAULT_TIME_RANGE_MS,
+    suggestedCharts: parsed.suggestedCharts,
+  };
 }
 
 // ─── Bedrock ─────────────────────────────────────────────────────────────────

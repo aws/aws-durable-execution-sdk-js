@@ -231,11 +231,14 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
                         ? { value: "copilot", label: "GitHub Copilot (VS Code built-in)" }
                         : form.llmProvider === "local"
                           ? { value: "local", label: "Local LLM (offline, ~2.2 GB download)" }
-                          : { value: "bedrock", label: "Amazon Bedrock" }
+                          : form.llmProvider === "local-server"
+                            ? { value: "local-server", label: "Local server (Ollama / OpenAI-compatible)" }
+                            : { value: "bedrock", label: "Amazon Bedrock" }
                     }
                     options={[
                       { value: "bedrock", label: "Amazon Bedrock" },
                       { value: "copilot", label: "GitHub Copilot (VS Code built-in)" },
+                      { value: "local-server", label: "Local server (Ollama / OpenAI-compatible)" },
                       { value: "local", label: "Local LLM (offline, on-device)" },
                     ]}
                     onChange={({ detail }) => update("llmProvider", detail.selectedOption.value ?? "bedrock")}
@@ -252,6 +255,35 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
                   <Box color="text-body-secondary">
                     Uses GitHub Copilot via the VS Code Language Model API. Requires an active Copilot subscription. No additional configuration needed.
                   </Box>
+                )}
+
+                {form.llmProvider === "local-server" && (
+                  <SpaceBetween size="s">
+                    <Box color="text-body-secondary">
+                      Runs against a local OpenAI-compatible server you host — e.g.{" "}
+                      <b>Ollama</b> (<code>ollama serve</code>), LM Studio, or a
+                      llama.cpp server. Start it and pull a model first (e.g.{" "}
+                      <code>ollama pull llama3.1</code>). Nothing is downloaded by
+                      the extension.
+                    </Box>
+                    <FormField
+                      label="Server URL"
+                      description="Base URL of the OpenAI-compatible API (chat/completions is appended)."
+                    >
+                      <Input
+                        value={form.localServerUrl}
+                        onChange={({ detail }) => update("localServerUrl", detail.value)}
+                        placeholder="http://localhost:11434/v1"
+                      />
+                    </FormField>
+                    <FormField label="Model" description="Model name the server should use.">
+                      <Input
+                        value={form.localServerModel}
+                        onChange={({ detail }) => update("localServerModel", detail.value)}
+                        placeholder="llama3.1"
+                      />
+                    </FormField>
+                  </SpaceBetween>
                 )}
 
                 {form.llmProvider === "local" && (

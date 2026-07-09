@@ -183,6 +183,8 @@ export interface Settings {
   awsProfile: string;
   bedrockModelId: string;
   localModel: string;
+  localServerUrl: string;
+  localServerModel: string;
   agenticMaxIterations: string;
   queryMode: string;
 }
@@ -207,6 +209,8 @@ export const DEFAULT_SETTINGS: Settings = {
   awsProfile: "",
   bedrockModelId: "us.anthropic.claude-sonnet-4-20250514-v1:0",
   localModel: "llama-3-groq-8b-tool-use",
+  localServerUrl: "http://localhost:11434/v1",
+  localServerModel: "llama3.1",
   agenticMaxIterations: "8",
   queryMode: "agent",
 };

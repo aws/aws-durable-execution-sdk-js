@@ -25,19 +25,15 @@ The extension supports multiple destinations — each with its own query engine:
 ## Install (Preview Build)
 
 > The extension isn't on the VS Code Marketplace yet. During the preview it's
-> distributed as a packaged **`.vsix`** file kept in this repo — that's how you
-> give a tester/customer access before the public launch: share the `.vsix`
-> (or this link) and have them side-load it. No Marketplace account needed.
+> distributed as a packaged **`.vsix`** attached to a **GitHub Release** — that's
+> how you give a tester/customer access before the public launch: point them at
+> the release and have them side-load it. No Marketplace account needed.
 
-**1. Get the `.vsix`**
+**1. Download the `.vsix`**
 
-Download the latest build from the [`vsix/`](./vsix/) folder in this package:
-
-```
-vsix/aws-durable-execution-sdk-js-insight-vscode-0.1.0-alpha.0.vsix
-```
-
-On GitHub, open that file and click **Download**.
+Grab the latest `aws-durable-execution-sdk-js-insight-vscode-<version>.vsix` from the
+repo's [**Releases**](https://github.com/aws/aws-durable-execution-sdk-js/releases) page
+(look for a `workflow-insight-vscode-*` tag).
 
 **2. Install it into VS Code**
 
@@ -46,21 +42,23 @@ On GitHub, open that file and click **Download**.
 - **From the command line:**
 
   ```bash
-  code --install-extension aws-durable-execution-sdk-js-insight-vscode-0.1.0-alpha.0.vsix
+  code --install-extension aws-durable-execution-sdk-js-insight-vscode-<version>.vsix
   ```
 
 **3. Open the Explorer**
 
 Run **`⇧⌘P`** → **Workflow Insight: Open Explorer**, click **⚙** to set your
-region, destination, and Bedrock model, then ask a question (see
+region, destination, and model provider, then ask a question (see
 [Getting Started](#getting-started)).
 
 > **Updating:** install a newer `.vsix` the same way (VS Code replaces the old
 > version), or uninstall the previous one from the Extensions view first.
 >
-> **Note:** the preview `.vsix` targets the **Bedrock** (default) and **GitHub
-> Copilot** model providers; the on-device local-model option isn't bundled in
-> the packaged build.
+> **Model providers in the `.vsix`:** the packaged build supports **Bedrock**
+> (default), **GitHub Copilot**, and **Local server** (an OpenAI-compatible
+> endpoint you run, e.g. Ollama — see [LLM provider](#3-choose-an-llm-provider)).
+> The bundled offline on-device model (`local`) isn't included in the `.vsix`;
+> use it only when running from source.
 
 ## Build from Source
 
@@ -72,11 +70,15 @@ npm install
 npm run build
 ```
 
-Package a shareable `.vsix` (build + bundle into `vsix/`):
+Package a shareable `.vsix` (build + bundle into `vsix/`, git-ignored):
 
 ```bash
 npm run package   # writes vsix/<name>-<version>.vsix
 ```
+
+Publishing a preview to testers: create a GitHub Release and attach that `.vsix`
+(e.g. `gh release create workflow-insight-vscode-v<version> vsix/*.vsix
+--title "Workflow Insight Explorer <version>" --notes "Preview build"`).
 
 ## Getting Started
 
@@ -183,11 +185,32 @@ is not a substitute for a real consumer if you need exactly-once processing.
 
 ### 3. Configure Bedrock
 
-Set the **Bedrock Model ID** to an inference profile you have access to:
+### 3. Choose an LLM provider
 
-```
-us.anthropic.claude-sonnet-4-20250514-v1:0
-```
+Pick a provider under **⚙ → LLM Provider**:
+
+- **Amazon Bedrock** (default) — set the **Bedrock Model ID** to an inference profile you have access to:
+
+  ```
+  us.anthropic.claude-sonnet-4-20250514-v1:0
+  ```
+
+- **GitHub Copilot** — uses the VS Code Language Model API; requires an active Copilot subscription. No extra config.
+
+- **Local server** — an OpenAI-compatible endpoint you run yourself, so no data leaves your machine and no cloud model access is needed. Works with **Ollama**, **LM Studio**, or a **llama.cpp** server. For Ollama:
+
+  ```bash
+  ollama serve                 # starts the server on http://localhost:11434
+  ollama pull llama3.1         # or any model you want to use
+  ```
+
+  Then set **Server URL** (default `http://localhost:11434/v1`) and **Model** (e.g. `llama3.1`). This is the recommended way to run local models from the packaged `.vsix`.
+
+- **Local LLM (on-device)** — an embedded model downloaded on first use. Only available when running from source (not bundled in the `.vsix`).
+
+> Bedrock is the most capable, especially for the multi-step **agent** mode
+> (it uses Bedrock's tool-use API); Copilot and the local providers run the
+> single-shot **ask** and the verify/refine loop.
 
 ### 4. Ask questions
 
@@ -225,25 +248,29 @@ identifier is added and rows aren't clickable for those.
 
 All settings are under the `workflowInsight.*` namespace.
 
-| Setting                | Description                                                        | Required     |
-| ---------------------- | ------------------------------------------------------------------ | ------------ |
-| `region`               | AWS region                                                         | Yes          |
-| `destinationType`      | Where your data lives (see above)                                  | Yes          |
-| `logGroupName`         | CloudWatch log group name(s), comma-separated                      | For CW Logs  |
-| `dynamodbTableName`    | DynamoDB table name                                                | For DynamoDB |
-| `auroraResourceArn`    | Aurora cluster ARN                                                 | For Aurora   |
-| `auroraSecretArn`      | Secrets Manager secret ARN                                         | For Aurora   |
-| `auroraDatabase`       | Database name                                                      | For Aurora   |
-| `auroraTable`          | Table name                                                         | For Aurora   |
-| `athenaDatabase`       | Glue/Athena database name                                          | For S3       |
-| `athenaTable`          | Glue table name                                                    | For S3       |
-| `athenaWorkgroup`      | Athena workgroup (empty = `primary`)                               | No           |
-| `athenaOutputLocation` | S3 location for Athena query results                               | For S3\*     |
-| `athenaS3Location`     | S3 location `S3Exporter` writes to (used to auto-create the table) | For S3       |
-| `sqsQueueUrl`          | SQS queue URL to listen to                                         | For SQS      |
-| `sqsDeleteAfterRead`   | Delete messages after displaying (default `false`; peek-only)      | No           |
-| `awsProfile`           | Named AWS profile (empty = default chain)                          | No           |
-| `bedrockModelId`       | Bedrock model/inference profile for NL→query                       | Yes          |
+| Setting                | Description                                                        | Required         |
+| ---------------------- | ------------------------------------------------------------------ | ---------------- |
+| `region`               | AWS region                                                         | Yes              |
+| `destinationType`      | Where your data lives (see above)                                  | Yes              |
+| `logGroupName`         | CloudWatch log group name(s), comma-separated                      | For CW Logs      |
+| `dynamodbTableName`    | DynamoDB table name                                                | For DynamoDB     |
+| `auroraResourceArn`    | Aurora cluster ARN                                                 | For Aurora       |
+| `auroraSecretArn`      | Secrets Manager secret ARN                                         | For Aurora       |
+| `auroraDatabase`       | Database name                                                      | For Aurora       |
+| `auroraTable`          | Table name                                                         | For Aurora       |
+| `athenaDatabase`       | Glue/Athena database name                                          | For S3           |
+| `athenaTable`          | Glue table name                                                    | For S3           |
+| `athenaWorkgroup`      | Athena workgroup (empty = `primary`)                               | No               |
+| `athenaOutputLocation` | S3 location for Athena query results                               | For S3\*         |
+| `athenaS3Location`     | S3 location `S3Exporter` writes to (used to auto-create the table) | For S3           |
+| `sqsQueueUrl`          | SQS queue URL to listen to                                         | For SQS          |
+| `sqsDeleteAfterRead`   | Delete messages after displaying (default `false`; peek-only)      | No               |
+| `awsProfile`           | Named AWS profile (empty = default chain)                          | No               |
+| `bedrockModelId`       | Bedrock model/inference profile for NL→query                       | Yes              |
+| `llmProvider`          | `bedrock` (default), `copilot`, `local-server`, or `local`         | No               |
+| `localServerUrl`       | OpenAI-compatible base URL for `local-server` (e.g. Ollama)        | For local-server |
+| `localServerModel`     | Model name the local server should use (e.g. `llama3.1`)           | For local-server |
+| `queryMode`            | Default composer mode: `query`, `ask`, or `agent`                  | No               |
 
 \* Unless the chosen `athenaWorkgroup` already has its own output location configured.
 
