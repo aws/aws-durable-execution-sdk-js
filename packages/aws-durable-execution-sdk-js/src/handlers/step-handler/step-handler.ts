@@ -302,7 +302,10 @@ export const createStepHandler = <Logger extends DurableLogger>(
         try {
           stepData = context.getStepData(stepId);
           const currentAttempt = (stepData?.StepDetails?.Attempt || 0) + 1;
-          const stepContext: StepContext<Logger> = { logger };
+          const stepContext: StepContext<Logger> = {
+            logger,
+            attempt: currentAttempt,
+          };
 
           // Mark operation as EXECUTING
           checkpoint.markOperationState(
