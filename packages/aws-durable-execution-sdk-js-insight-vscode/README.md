@@ -274,6 +274,39 @@ All settings are under the `workflowInsight.*` namespace.
 
 \* Unless the chosen `athenaWorkgroup` already has its own output location configured.
 
+## AI Features & Data Handling
+
+Workflow Insight uses generative AI (a large language model) for some features.
+The first time you use one, an in-app notice explains this and asks for your
+consent; you can review or withdraw it at any time (see below).
+
+- **Features that use AI:** the **Ask** and **Agent** composer modes and the
+  **Visualize** page (query generation, result summaries, chart configuration).
+- **Feature that does not:** **Query** mode runs the query you type directly
+  against your data source and sends **nothing** to any model provider.
+- **What is sent:** your request text and, in some cases, limited portions of
+  your data — result **column names** and a **small sample of result rows**
+  used for summaries or building charts. Full result sets and raw records are
+  not sent.
+- **Consent:** before the first AI use you must accept the disclosure. Your
+  acceptance is stored in `workflowInsight.aiDisclosureAcceptedVersion`; the
+  notice is shown again if it is updated. **Clearing that setting withdraws
+  consent** and re-prompts you. The AI-free **Query** mode works regardless.
+
+**Where your data goes depends on the provider you select** (`workflowInsight.llmProvider`):
+
+| Provider           | Where AI requests + the data above go                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| **Amazon Bedrock** | Amazon Bedrock in your configured AWS account/region; under your AWS agreement + Bedrock terms                           |
+| **GitHub Copilot** | GitHub Copilot via the VS Code Language Model API; under your Copilot subscription terms                                 |
+| **Local server**   | Only the OpenAI-compatible endpoint you run and control (e.g. Ollama on localhost) — no third-party cloud if self-hosted |
+| **On-device**      | Stays entirely on your machine; nothing leaves your computer (source builds only)                                        |
+
+Data you send is subject to the terms and privacy policy of the provider you
+select — review them before sending sensitive data. AI-generated queries and
+answers may be inaccurate or incomplete; review them before relying on the
+results, and only submit content you are authorized to share with the provider.
+
 ## Authentication
 
 The extension uses the **standard AWS credential provider chain**:
