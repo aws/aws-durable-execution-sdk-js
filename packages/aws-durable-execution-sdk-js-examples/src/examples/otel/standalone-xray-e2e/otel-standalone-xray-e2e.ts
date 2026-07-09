@@ -10,15 +10,25 @@ import {
 } from "@opentelemetry/sdk-trace-node";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
 import { ExampleConfig } from "../../../types";
-import { isAdotEnvironment, SerializedSpan } from "../shared/otel-test-setup";
+import { SerializedSpan } from "../shared/otel-test-setup";
+
+/**
+ * Detect whether we're running in Lambda (cloud) vs local test runner.
+ * Unlike other OTel examples that use isAdotEnvironment() (which checks
+ * AWS_LAMBDA_EXEC_WRAPPER), this function intentionally does NOT set that
+ * wrapper — the StandaloneOtelPlugin manages its own TracerProvider.
+ */
+function isCloudEnvironment(): boolean {
+  return process.env.AWS_LAMBDA_FUNCTION_NAME !== undefined;
+}
 
 // Dual-mode setup for StandaloneOtelPlugin:
-// - Cloud: default config (OTLP to ADOT collector at localhost:4318)
+// - Cloud (Lambda): default config (OTLP to ADOT collector at localhost:4318)
 // - Local: InMemorySpanExporter for direct span assertions
 let exporter: InMemorySpanExporter | undefined;
 let plugin: StandaloneOtelPlugin;
 
-if (isAdotEnvironment()) {
+if (isCloudEnvironment()) {
   // Cloud mode: StandaloneOtelPlugin with default OTLP export to ADOT collector
   plugin = new StandaloneOtelPlugin();
 } else {

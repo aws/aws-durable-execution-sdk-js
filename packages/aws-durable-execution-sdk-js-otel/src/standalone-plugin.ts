@@ -197,8 +197,11 @@ export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
         await (
           this.tracerProvider as { forceFlush: () => Promise<void> }
         ).forceFlush();
-      } catch {
-        // Gracefully ignore flush errors
+      } catch (e) {
+        console.error(
+          "[StandaloneOtelPlugin] forceFlush failed:",
+          e instanceof Error ? e.message : e,
+        );
       }
     }
 
