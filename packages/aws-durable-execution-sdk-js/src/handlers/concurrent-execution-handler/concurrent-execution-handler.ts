@@ -8,6 +8,9 @@ import {
   ConcurrentExecutor,
   BatchResult,
   BatchItem,
+  CompletionReason,
+  CompletionStatus,
+  CompletionItemStatus,
   DurablePromise,
   DurableLogger,
   NestingType,
@@ -51,9 +54,26 @@ export class ConcurrencyController<Logger extends DurableLogger> {
     completedCount: number,
     items: ConcurrentExecutionItem<T>[],
     config: ConcurrencyConfig<R>,
-  ): "ALL_COMPLETED" | "MIN_SUCCESSFUL_REACHED" | "FAILURE_TOLERANCE_EXCEEDED" {
+    itemStatuses: readonly CompletionItemStatus[],
+  ): CompletionReason {
     // Check tolerance first, before checking if all completed
     const completion = config.completionConfig;
+
+    // A custom shouldComplete predicate takes full precedence over the
+    // threshold fields. All items finishing always wins, otherwise the
+    // predicate decides whether the batch was completed early.
+    if (completion?.shouldComplete) {
+      if (completedCount === items.length) return "ALL_COMPLETED";
+      return completion.shouldComplete({
+        successCount,
+        failureCount,
+        completedCount,
+        totalCount: items.length,
+        items: itemStatuses,
+      })
+        ? "CUSTOM_COMPLETION"
+        : "ALL_COMPLETED";
+    }
 
     // Handle fail-fast behavior (no completion config or empty completion config)
     if (!completion) {
@@ -277,6 +297,14 @@ export class ConcurrencyController<Logger extends DurableLogger> {
     ).length;
     const failureCount = completedCount - successCount;
 
+    // Per-item snapshot ordered by original index, so shouldComplete can
+    // reason about which specific items/branches finished.
+    const itemStatuses: CompletionItemStatus[] = items.map((item) => ({
+      index: item.index,
+      name: item.name,
+      status: resultItems.find((r) => r.index === item.index)?.status,
+    }));
+
     return new BatchResultImpl(
       resultItems,
       this.getCompletionReason(
@@ -285,6 +313,7 @@ export class ConcurrencyController<Logger extends DurableLogger> {
         completedCount,
         items,
         config,
+        itemStatuses,
       ),
     );
   }
@@ -313,9 +342,33 @@ export class ConcurrencyController<Logger extends DurableLogger> {
     });
 
     return new Promise<BatchResult<R>>((resolve) => {
+      // Snapshot of every item/branch ordered by original index, so a custom
+      // predicate can reason about which specific items finished (not just how
+      // many). Only built when a shouldComplete predicate is configured.
+      const buildItemStatuses = (): CompletionItemStatus[] =>
+        items.map((item) => ({
+          index: item.index,
+          name: item.name,
+          status: resultItems[item.index]?.status,
+        }));
+
+      const buildCompletionStatus = (): CompletionStatus => ({
+        successCount,
+        failureCount,
+        completedCount,
+        totalCount: items.length,
+        items: buildItemStatuses(),
+      });
+
       const shouldContinue = (): boolean => {
         const completion = config.completionConfig;
         if (!completion) return failureCount === 0;
+
+        // A custom predicate fully owns the "keep going?" decision: stop
+        // starting new items as soon as it signals completion.
+        if (completion.shouldComplete) {
+          return !completion.shouldComplete(buildCompletionStatus());
+        }
 
         // Default to fail-fast when no completion criteria are defined
         const hasAnyCompletionCriteria = Object.values(completion).some(
@@ -347,6 +400,12 @@ export class ConcurrencyController<Logger extends DurableLogger> {
         }
 
         const completion = config.completionConfig;
+
+        // A custom predicate takes precedence over minSuccessful.
+        if (completion?.shouldComplete) {
+          return completion.shouldComplete(buildCompletionStatus());
+        }
+
         if (
           completion?.minSuccessful !== undefined &&
           successCount >= completion.minSuccessful
@@ -357,18 +416,14 @@ export class ConcurrencyController<Logger extends DurableLogger> {
         return false;
       };
 
-      const getCompletionReason = (
-        failureCount: number,
-      ):
-        | "ALL_COMPLETED"
-        | "MIN_SUCCESSFUL_REACHED"
-        | "FAILURE_TOLERANCE_EXCEEDED" => {
+      const getCompletionReason = (failureCount: number): CompletionReason => {
         return this.getCompletionReason(
           failureCount,
           successCount,
           completedCount,
           items,
           config,
+          buildItemStatuses(),
         );
       };
 
@@ -483,6 +538,13 @@ export class ConcurrencyController<Logger extends DurableLogger> {
         resolve(new BatchResultImpl([], getCompletionReason(0)));
       } else {
         tryStartNext();
+        // A custom shouldComplete predicate can signal completion before any
+        // item is started (e.g. it returns true at zero progress). In that
+        // case no item will ever call onComplete, so resolve here to avoid
+        // hanging forever.
+        if (activeCount === 0 && completedCount === 0) {
+          resolve(new BatchResultImpl([], getCompletionReason(0)));
+        }
       }
     });
   }

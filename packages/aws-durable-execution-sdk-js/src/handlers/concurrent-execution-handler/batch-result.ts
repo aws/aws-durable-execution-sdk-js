@@ -1,5 +1,10 @@
 import { ErrorObject } from "@aws-sdk/client-lambda";
-import { BatchItemStatus, BatchItem, BatchResult } from "../../types";
+import {
+  BatchItemStatus,
+  BatchItem,
+  BatchResult,
+  CompletionReason,
+} from "../../types";
 import {
   DurableOperationError,
   ChildContextError,
@@ -83,10 +88,7 @@ function reconstructBatchError(errorObject: SerializedBatchError): Error {
 export class BatchResultImpl<R> implements BatchResult<R> {
   constructor(
     public readonly all: Array<BatchItem<R>>,
-    public readonly completionReason:
-      | "ALL_COMPLETED"
-      | "MIN_SUCCESSFUL_REACHED"
-      | "FAILURE_TOLERANCE_EXCEEDED",
+    public readonly completionReason: CompletionReason,
   ) {}
 
   succeeded(): Array<BatchItem<R> & { result: R }> {
@@ -164,10 +166,7 @@ interface SerializedBatchItem {
 
 interface SerializedBatchResult {
   all: SerializedBatchItem[];
-  completionReason:
-    | "ALL_COMPLETED"
-    | "MIN_SUCCESSFUL_REACHED"
-    | "FAILURE_TOLERANCE_EXCEEDED";
+  completionReason: CompletionReason;
 }
 
 /**
