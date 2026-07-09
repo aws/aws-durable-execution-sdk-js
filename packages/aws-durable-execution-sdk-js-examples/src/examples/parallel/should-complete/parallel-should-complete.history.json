@@ -1,0 +1,147 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "4fe733fa-e40d-4cc3-947c-a42bccb35e6c",
+    "EventTimestamp": "2026-07-08T22:36:40.570Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "Parallel",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "quorum-branches",
+    "EventTimestamp": "2026-07-08T22:36:40.677Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "ParallelBranch",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "parallel-branch-0",
+    "EventTimestamp": "2026-07-08T22:36:40.677Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "ParallelBranch",
+    "EventId": 4,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "parallel-branch-1",
+    "EventTimestamp": "2026-07-08T22:36:40.677Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "ParallelBranch",
+    "EventId": 5,
+    "Id": "13cee27a2bd93915",
+    "Name": "parallel-branch-2",
+    "EventTimestamp": "2026-07-08T22:36:40.677Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "ParallelBranch",
+    "EventId": 6,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "parallel-branch-1",
+    "EventTimestamp": "2026-07-08T22:36:40.779Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"Branch B done\""
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "ParallelBranch",
+    "EventId": 7,
+    "Id": "13cee27a2bd93915",
+    "Name": "parallel-branch-2",
+    "EventTimestamp": "2026-07-08T22:36:40.881Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"Branch C done\""
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "Parallel",
+    "EventId": 8,
+    "Id": "c4ca4238a0b92382",
+    "Name": "quorum-branches",
+    "EventTimestamp": "2026-07-08T22:36:40.881Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"all\":[{\"index\":0,\"status\":\"STARTED\"},{\"result\":\"Branch B done\",\"index\":1,\"status\":\"SUCCEEDED\"},{\"result\":\"Branch C done\",\"index\":2,\"status\":\"SUCCEEDED\"}],\"completionReason\":\"CUSTOM_COMPLETION\"}"
+      }
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 9,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2026-07-08T22:36:40.883Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2026-07-08T22:36:41.883Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 10,
+    "EventTimestamp": "2026-07-08T22:36:40.905Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-07-08T22:36:40.570Z",
+      "EndTimestamp": "2026-07-08T22:36:40.905Z",
+      "Error": {},
+      "RequestId": "9d2b90a3-50bf-42dd-8c8b-bc8bf181199b"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 11,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2026-07-08T22:36:41.883Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 12,
+    "EventTimestamp": "2026-07-08T22:36:41.884Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-07-08T22:36:41.883Z",
+      "EndTimestamp": "2026-07-08T22:36:41.884Z",
+      "Error": {},
+      "RequestId": "e69d9212-34e5-40dc-937c-cdfa13afb4c7"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 13,
+    "Id": "4fe733fa-e40d-4cc3-947c-a42bccb35e6c",
+    "EventTimestamp": "2026-07-08T22:36:41.884Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"successCount\":2,\"totalCount\":3,\"completionReason\":\"CUSTOM_COMPLETION\",\"results\":[\"Branch B done\",\"Branch C done\"]}"
+      }
+    }
+  }
+]

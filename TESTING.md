@@ -3,6 +3,8 @@
 ## Table of Contents
 
 - [Overview](#overview)
+  - [Test classification](#test-classification)
+  - [File naming conventions](#file-naming-conventions)
   - [Examples](#examples)
   - [Integration test structure](#integration-test-structure)
 - [Running Tests](#running-tests)
@@ -15,19 +17,45 @@
 
 ## Overview
 
-The AWS Durable Execution SDK is validated to ensure reliability and correctness in three ways:
+The AWS Durable Execution SDK is validated to ensure reliability and correctness in four ways:
 
-| Testing Architecture | Description                             |
-| -------------------- | --------------------------------------- |
-| 🧪 Unit Tests        | Test individual SDK components          |
-| ⚡ Local Integration | Test via the testing SDK's local runner |
-| ☁️ Cloud Integration | Test against the real Lambda service    |
+| Testing Architecture   | Description                                                                  |
+| ---------------------- | ---------------------------------------------------------------------------- |
+| 🧪 Unit Tests          | Test individual SDK components in isolation with mocked dependencies         |
+| 🔗 Composed Tests      | Test multiple internal components wired together, external boundary mocked   |
+| ⚡ Integration (Local) | Full execution path via the testing SDK's `LocalDurableTestRunner`, no mocks |
+| ☁️ Integration (Cloud) | Same tests run against the real Lambda Durable Execution service             |
 
 This approach addresses different aspects of validation and development workflows:
 
 1. Unit Tests - Immediate feedback, isolate component issues
-2. Local Integration - Fast end-to-end validation without any cloud dependencies
-3. Cloud Integration - Validation against the real Durable Execution service
+2. Composed Tests - Validate interactions between internal classes without external dependencies
+3. Integration (Local) - Fast end-to-end validation without any cloud dependencies
+4. Integration (Cloud) - Validation against the real Durable Execution service
+
+### Test classification
+
+| Class               | External services                        | Internal dependencies | Example                          |
+| ------------------- | ---------------------------------------- | --------------------- | -------------------------------- |
+| Unit                | Mocked                                   | Mocked                | `step-handler.test.ts`           |
+| Composed            | Faked (e.g. `InMemoryStorage`) or mocked | Real                  | `checkpoint-composed.test.ts`    |
+| Integration (Local) | `LocalDurableTestRunner` (in-process)    | Real                  | `step-basic.test.ts` (local run) |
+| Integration (Cloud) | Real Lambda service                      | Real                  | `step-basic.test.ts` (cloud run) |
+
+### File naming conventions
+
+| Suffix                  | Class                                                 |
+| ----------------------- | ----------------------------------------------------- |
+| `*.test.ts`             | Unit test                                             |
+| `*.composed.test.ts`    | Composed test                                         |
+| `*.integration.test.ts` | Integration test (local or cloud depending on runner) |
+
+Additional suffixes used for specialized unit test variants:
+
+- `*.plugin.test.ts` — tests for the plugin/hook system
+- `*.timing.test.ts` — timing-related behavior
+- `*.replay.test.ts` — replay-specific behavior
+- `*.two-phase.test.ts` — two-phase commit behavior
 
 ### Examples
 
@@ -52,18 +80,18 @@ npm test
 
 This command executes the following tests:
 
-1. **SDK Unit Tests** (`packages/aws-durable-execution-sdk-js`)
-2. **Testing SDK Unit Tests** (`packages/aws-durable-execution-sdk-js-testing`)
-3. **Examples Local Integration Tests** (`packages/aws-durable-execution-sdk-js-examples`)
-4. **ESLint Plugin Tests** (`packages/aws-durable-execution-sdk-js-eslint-plugin`)
+1. **SDK Unit + Composed Tests** (`packages/aws-durable-execution-sdk-js`)
+2. **Testing SDK Unit + Composed + Integration (Local) Tests** (`packages/aws-durable-execution-sdk-js-testing`)
+3. **Examples Integration (Local) Tests** (`packages/aws-durable-execution-sdk-js-examples`)
+4. **ESLint Plugin Unit + Composed Tests** (`packages/aws-durable-execution-sdk-js-eslint-plugin`)
 
 ### Individual Package Tests
 
 ```bash
-# SDK core unit tests
+# SDK core unit + composed tests
 npm run test -w packages/aws-durable-execution-sdk-js
 
-# Testing SDK unit tests
+# Testing SDK unit + composed + integration (local) tests
 npm run test -w packages/aws-durable-execution-sdk-js-testing
 
 # Examples integration tests (local)
@@ -72,7 +100,7 @@ npm run test -w packages/aws-durable-execution-sdk-js-examples
 
 ### Running Cloud Integration Tests
 
-It is possible to run the cloud integration tests in your personal account following these steps:
+It is possible to run the integration tests against the real Lambda service in your personal account following these steps:
 
 0. Ensure your AWS credentials are available
 1. [Optional] Configure a `.env` file at the top level with `AWS_ACCOUNT_ID`. You can also specify: `AWS_REGION`, `CAPACITY_PROVIDER_ARN`, `LAMBDA_ENDPOINT`

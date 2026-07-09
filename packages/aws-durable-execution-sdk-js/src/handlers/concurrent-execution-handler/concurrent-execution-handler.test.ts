@@ -645,6 +645,231 @@ describe("ConcurrencyController", () => {
       expect(result.startedCount).toBeGreaterThan(0);
     });
 
+    describe("shouldComplete (custom predicate)", () => {
+      it("should stop early when the predicate returns true (CUSTOM_COMPLETION)", async () => {
+        const items = [
+          { id: "item-0", data: "data1", index: 0 },
+          { id: "item-1", data: "data2", index: 1 },
+          { id: "item-2", data: "data3", index: 2 },
+        ];
+        const executor = jest.fn();
+
+        mockParentContext.runInChildContext
+          .mockResolvedValueOnce("result1")
+          .mockImplementation(
+            () => new DurablePromise(() => new Promise(() => {})),
+          ); // Never resolves
+
+        const result = await controller.executeItems(
+          items,
+          executor,
+          mockParentContext,
+          {
+            completionConfig: {
+              shouldComplete: ({ completedCount }) => completedCount >= 1,
+            },
+          },
+        );
+
+        expect(result.successCount).toBe(1);
+        expect(result.completionReason).toBe("CUSTOM_COMPLETION");
+        expect(result.startedCount).toBeGreaterThan(0);
+      });
+
+      it("should take precedence over minSuccessful", async () => {
+        const items = [
+          { id: "item-0", data: "data1", index: 0 },
+          { id: "item-1", data: "data2", index: 1 },
+          { id: "item-2", data: "data3", index: 2 },
+        ];
+        const executor = jest.fn();
+
+        mockParentContext.runInChildContext
+          .mockResolvedValueOnce("result1")
+          .mockResolvedValueOnce("result2")
+          .mockImplementation(
+            () => new DurablePromise(() => new Promise(() => {})),
+          ); // Never resolves
+
+        const result = await controller.executeItems(
+          items,
+          executor,
+          mockParentContext,
+          {
+            // minSuccessful: 1 would normally stop after the first success, but
+            // the predicate takes over and requires two successes.
+            completionConfig: {
+              minSuccessful: 1,
+              shouldComplete: ({ successCount }) => successCount >= 2,
+            },
+          },
+        );
+
+        expect(result.successCount).toBe(2);
+        expect(result.completionReason).toBe("CUSTOM_COMPLETION");
+      });
+
+      it("should take precedence over failure tolerance (thresholds ignored)", async () => {
+        const items = [
+          { id: "item-0", data: "data1", index: 0 },
+          { id: "item-1", data: "data2", index: 1 },
+          { id: "item-2", data: "data3", index: 2 },
+        ];
+        const executor = jest.fn();
+        const error = new ChildContextError("boom");
+
+        // With maxConcurrency 1, toleratedFailureCount: 0 would normally stop
+        // launching after the first failure. The predicate ignores it and lets
+        // every item run.
+        mockParentContext.runInChildContext
+          .mockRejectedValueOnce(error)
+          .mockResolvedValueOnce("result1")
+          .mockResolvedValueOnce("result2");
+
+        const result = await controller.executeItems(
+          items,
+          executor,
+          mockParentContext,
+          {
+            maxConcurrency: 1,
+            completionConfig: {
+              toleratedFailureCount: 0,
+              shouldComplete: () => false,
+            },
+          },
+        );
+
+        expect(result.successCount).toBe(2);
+        expect(result.failureCount).toBe(1);
+        expect(result.completionReason).toBe("ALL_COMPLETED");
+      });
+
+      it("should run all items when the predicate never completes early", async () => {
+        const items = [
+          { id: "item-0", data: "data1", index: 0 },
+          { id: "item-1", data: "data2", index: 1 },
+        ];
+        const executor = jest.fn();
+
+        mockParentContext.runInChildContext
+          .mockResolvedValueOnce("result1")
+          .mockResolvedValueOnce("result2");
+
+        const result = await controller.executeItems(
+          items,
+          executor,
+          mockParentContext,
+          {
+            completionConfig: { shouldComplete: () => false },
+          },
+        );
+
+        expect(result.successCount).toBe(2);
+        expect(result.completionReason).toBe("ALL_COMPLETED");
+      });
+
+      it("should resolve without hanging when the predicate completes before any item starts", async () => {
+        const items = [
+          { id: "item-0", data: "data1", index: 0 },
+          { id: "item-1", data: "data2", index: 1 },
+        ];
+        const executor = jest.fn();
+
+        // Predicate signals completion at zero progress; no item should start.
+        mockParentContext.runInChildContext.mockImplementation(
+          () => new DurablePromise(() => new Promise(() => {})),
+        );
+
+        const result = await controller.executeItems(
+          items,
+          executor,
+          mockParentContext,
+          {
+            completionConfig: { shouldComplete: () => true },
+          },
+        );
+
+        expect(result.all).toHaveLength(0);
+        expect(result.completionReason).toBe("CUSTOM_COMPLETION");
+        expect(mockParentContext.runInChildContext).not.toHaveBeenCalled();
+      });
+
+      it("should complete via per-branch quorum: branches B and C finish (A still running)", async () => {
+        // Rule: complete when branch 0 (A) succeeds OR branches 1 and 2 (B, C)
+        // both succeed. Uses stable index identity, no names needed.
+        const items = [
+          { id: "branch-A", data: "a", index: 0 },
+          { id: "branch-B", data: "b", index: 1 },
+          { id: "branch-C", data: "c", index: 2 },
+        ];
+        const executor = jest.fn();
+
+        // A never resolves; B and C resolve.
+        mockParentContext.runInChildContext
+          .mockImplementationOnce(
+            () => new DurablePromise(() => new Promise(() => {})),
+          )
+          .mockResolvedValueOnce("B")
+          .mockResolvedValueOnce("C");
+
+        const result = await controller.executeItems(
+          items,
+          executor,
+          mockParentContext,
+          {
+            completionConfig: {
+              shouldComplete: ({ items: s }) => {
+                const ok = (i: number) =>
+                  s[i]?.status === BatchItemStatus.SUCCEEDED;
+                return ok(0) || (ok(1) && ok(2));
+              },
+            },
+          },
+        );
+
+        expect(result.successCount).toBe(2);
+        expect(result.completionReason).toBe("CUSTOM_COMPLETION");
+        expect(result.all[0].status).toBe(BatchItemStatus.STARTED); // A
+        expect(result.all[1].status).toBe(BatchItemStatus.SUCCEEDED); // B
+        expect(result.all[2].status).toBe(BatchItemStatus.SUCCEEDED); // C
+      });
+
+      it("should complete via per-branch quorum: branch A finishes first", async () => {
+        const items = [
+          { id: "branch-A", data: "a", index: 0 },
+          { id: "branch-B", data: "b", index: 1 },
+          { id: "branch-C", data: "c", index: 2 },
+        ];
+        const executor = jest.fn();
+
+        // A resolves; B and C never resolve.
+        mockParentContext.runInChildContext
+          .mockResolvedValueOnce("A")
+          .mockImplementation(
+            () => new DurablePromise(() => new Promise(() => {})),
+          );
+
+        const result = await controller.executeItems(
+          items,
+          executor,
+          mockParentContext,
+          {
+            completionConfig: {
+              shouldComplete: ({ items: s }) => {
+                const ok = (i: number) =>
+                  s[i]?.status === BatchItemStatus.SUCCEEDED;
+                return ok(0) || (ok(1) && ok(2));
+              },
+            },
+          },
+        );
+
+        expect(result.successCount).toBe(1);
+        expect(result.completionReason).toBe("CUSTOM_COMPLETION");
+        expect(result.all[0].status).toBe(BatchItemStatus.SUCCEEDED); // A
+      });
+    });
+
     it("should stop on toleratedFailureCount", async () => {
       const items = [
         { id: "item-0", data: "data1", index: 0 },
