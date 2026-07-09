@@ -61,6 +61,35 @@ export function AiConsentModal({ visible, onAccept, onDecline }: Props) {
             model provider.
           </p>
           <p>
+            <b>Where your data goes depends on the model provider you select</b>{" "}
+            in Settings:
+          </p>
+          <ul>
+            <li>
+              <b>Amazon Bedrock</b> — your request and the data described above
+              are sent to Amazon Bedrock in the AWS account and region you
+              configure, and processed under your AWS agreement and Bedrock&rsquo;s
+              service terms. It leaves your machine and goes to AWS.
+            </li>
+            <li>
+              <b>GitHub Copilot</b> — sent to GitHub Copilot through VS
+              Code&rsquo;s Language Model API, under your GitHub Copilot
+              subscription terms and privacy policy. It leaves your machine and
+              goes to GitHub/Microsoft.
+            </li>
+            <li>
+              <b>Local server (Ollama / OpenAI-compatible)</b> — sent to the
+              endpoint you run and control (for example, on your own machine or
+              private network). Nothing is sent to a third-party cloud, provided
+              that endpoint is itself local/self-hosted.
+            </li>
+            <li>
+              <b>On-device model</b> — runs entirely on your computer; your
+              request and data do not leave your machine. (Available only when
+              running the extension from source, not in the packaged build.)
+            </li>
+          </ul>
+          <p>
             Your requests and data are processed by, and subject to the terms
             and privacy policy of, the model provider you select. Review those
             terms to confirm they meet your organization&rsquo;s requirements

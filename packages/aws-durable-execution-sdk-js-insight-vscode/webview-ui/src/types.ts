@@ -196,7 +196,7 @@ export interface Settings {
  * changes so previously-consented users are re-prompted.
  * LEGAL: wording is pending review by the Legal team (see tracked ticket).
  */
-export const AI_DISCLOSURE_VERSION = "1";
+export const AI_DISCLOSURE_VERSION = "2";
 
 export const DEFAULT_SETTINGS: Settings = {
   region: "us-east-1",
