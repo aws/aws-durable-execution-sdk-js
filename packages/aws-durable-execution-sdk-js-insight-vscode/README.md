@@ -22,7 +22,49 @@ The extension supports multiple destinations — each with its own query engine:
 | **Aurora PostgreSQL**                        | SQL           | Complex queries, GROUP BY, aggregations |
 | **S3** (S3Exporter)                          | Athena SQL    | Analytics at scale, long-term retention |
 
-## Installation
+## Install (Preview Build)
+
+> The extension isn't on the VS Code Marketplace yet. During the preview it's
+> distributed as a packaged **`.vsix`** file kept in this repo — that's how you
+> give a tester/customer access before the public launch: share the `.vsix`
+> (or this link) and have them side-load it. No Marketplace account needed.
+
+**1. Get the `.vsix`**
+
+Download the latest build from the [`vsix/`](./vsix/) folder in this package:
+
+```
+vsix/aws-durable-execution-sdk-js-insight-vscode-0.1.0-alpha.0.vsix
+```
+
+On GitHub, open that file and click **Download**.
+
+**2. Install it into VS Code**
+
+- **From the UI:** open the **Extensions** view (`⇧⌘X` / `Ctrl+Shift+X`) → the
+  **⋯** (Views and More Actions) menu → **Install from VSIX…** → pick the file.
+- **From the command line:**
+
+  ```bash
+  code --install-extension aws-durable-execution-sdk-js-insight-vscode-0.1.0-alpha.0.vsix
+  ```
+
+**3. Open the Explorer**
+
+Run **`⇧⌘P`** → **Workflow Insight: Open Explorer**, click **⚙** to set your
+region, destination, and Bedrock model, then ask a question (see
+[Getting Started](#getting-started)).
+
+> **Updating:** install a newer `.vsix` the same way (VS Code replaces the old
+> version), or uninstall the previous one from the Extensions view first.
+>
+> **Note:** the preview `.vsix` targets the **Bedrock** (default) and **GitHub
+> Copilot** model providers; the on-device local-model option isn't bundled in
+> the packaged build.
+
+## Build from Source
+
+For contributors, or to produce your own `.vsix`:
 
 ```bash
 cd packages/aws-durable-execution-sdk-js-insight-vscode
@@ -30,11 +72,18 @@ npm install
 npm run build
 ```
 
+Package a shareable `.vsix` (build + bundle into `vsix/`):
+
+```bash
+npm run package   # writes vsix/<name>-<version>.vsix
+```
+
 ## Getting Started
 
 ### 1. Launch the extension
 
-Open this folder in VS Code and press **F5** to start the Extension Development Host. In the new window, run:
+- **Installed from the `.vsix`:** run **⌘⇧P** (`Ctrl+Shift+P`) → **Workflow Insight: Open Explorer**.
+- **Running from source:** open this folder in VS Code and press **F5** to start the Extension Development Host, then run the same command in the new window.
 
 > **⌘⇧P** → **Workflow Insight: Open Explorer**
 

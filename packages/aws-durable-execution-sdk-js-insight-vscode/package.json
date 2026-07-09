@@ -198,6 +198,7 @@
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
     "test": "jest",
+    "package": "mkdir -p vsix && npx --yes @vscode/vsce@^3 package --no-dependencies --out vsix/",
     "clean": "rm -rf dist media/webview.js media/webview.css"
   },
   "dependencies": {

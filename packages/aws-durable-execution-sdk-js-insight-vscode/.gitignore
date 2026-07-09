@@ -5,3 +5,7 @@ node_modules/
 webview-ui/node_modules/
 *.vsix
 *.tsbuildinfo
+
+# Keep packaged preview builds under vsix/ so they can be shared for testing.
+!vsix/
+!vsix/*.vsix
