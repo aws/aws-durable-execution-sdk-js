@@ -6,6 +6,7 @@ import Button from "@cloudscape-design/components/button";
 import FormField from "@cloudscape-design/components/form-field";
 import Input from "@cloudscape-design/components/input";
 import Checkbox from "@cloudscape-design/components/checkbox";
+import Alert from "@cloudscape-design/components/alert";
 import Select, { type SelectProps } from "@cloudscape-design/components/select";
 import ProgressBar from "@cloudscape-design/components/progress-bar";
 import Tabs from "@cloudscape-design/components/tabs";
@@ -224,7 +225,10 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
                   />
                 </FormField>
 
-                <FormField label="LLM Provider" description="Which model to use for converting questions to queries">
+                <FormField
+                  label="LLM Provider"
+                  description="Model used for the AI features (Ask, Agent, and Visualize) that convert questions to queries and build charts. Query mode uses no AI."
+                >
                   <Select
                     selectedOption={
                       form.llmProvider === "copilot"
@@ -244,6 +248,25 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
                     onChange={({ detail }) => update("llmProvider", detail.selectedOption.value ?? "bedrock")}
                   />
                 </FormField>
+
+                <Alert type="info" header="How your data is used">
+                  When you use <b>Ask</b>, <b>Agent</b>, or <b>Visualize</b>, your
+                  request and limited data (result <b>column names</b> and a{" "}
+                  <b>small sample of rows</b>) are sent to the selected provider;{" "}
+                  <b>Query</b> mode sends nothing.{" "}
+                  {form.llmProvider === "bedrock" &&
+                    "With Amazon Bedrock, that data goes to Amazon Bedrock in your configured AWS account/region, under your AWS agreement and Bedrock terms."}
+                  {form.llmProvider === "copilot" &&
+                    "With GitHub Copilot, that data goes to GitHub/Microsoft via the VS Code Language Model API, under your Copilot subscription terms."}
+                  {form.llmProvider === "local-server" &&
+                    "With a local server, that data goes only to the endpoint you run and control — no third-party cloud if it is self-hosted."}
+                  {form.llmProvider === "local" &&
+                    "The on-device model runs entirely on your machine; your data never leaves your computer."}{" "}
+                  Data you send is subject to that provider's terms and privacy
+                  policy. You consent to this on first use; clear{" "}
+                  <code>workflowInsight.aiDisclosureAcceptedVersion</code> to
+                  withdraw and be re-prompted.
+                </Alert>
 
                 {form.llmProvider === "bedrock" && (
                   <FormField label="Bedrock Model ID" description="Model or inference profile ID">
