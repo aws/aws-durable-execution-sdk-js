@@ -85,6 +85,10 @@ export const handler = withDurableExecution(
     // Exercise multiple operation types for X-Ray verification
     const step1 = await context.step("fetch-data", async () => "data-value");
 
+    // Wait to force a multi-invocation workflow, ensuring the Workflow span
+    // spans across invocations and is only exported on terminal status.
+    await context.wait("short-pause", { seconds: 1 });
+
     const step2 = await context.step(
       "process-data",
       async () => `processed-${step1}`,

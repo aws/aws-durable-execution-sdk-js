@@ -21,6 +21,7 @@ import { xRayContextExtractor } from "./context-extractors";
 import type { ContextExtractor } from "./context-extractors";
 import type { StandaloneOtelPluginConfig } from "./standalone-plugin-config";
 import { createTracerProvider } from "./standalone-plugin-provider";
+import { registerStandaloneInstrumentations } from "./standalone-plugin-instrumentations";
 
 const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
 
@@ -67,6 +68,9 @@ export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
     const { tracerProvider, ownsProvider } = createTracerProvider(config);
     this.tracerProvider = tracerProvider;
     this.ownsProvider = ownsProvider;
+
+    // Register HTTP and AWS SDK instrumentations (skipped when custom provider is supplied)
+    registerStandaloneInstrumentations(this.tracerProvider, config);
 
     this.tracer = this.tracerProvider.getTracer(instrumentationName);
 

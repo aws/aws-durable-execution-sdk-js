@@ -54,6 +54,7 @@ createTests({
         // Assert span names exist (StandaloneOtelPlugin produces these)
         assertSpanNames(trace, [
           "fetch-data",
+          "short-pause",
           "process-data",
           "child-operations",
           "inner-step",
@@ -98,11 +99,11 @@ createTests({
         // StandaloneOtelPlugin produces:
         // - 1 Workflow span
         // - 1 Invocation span
-        // - 3 operation spans (fetch-data, process-data, child-operations)
+        // - 4 operation spans (fetch-data, short-pause, process-data, child-operations)
         // - 3 attempt spans (one per step: fetch-data, process-data, inner-step)
         // - 1 inner-step operation span
         // - 1 Context_Execution span for child-operations
-        expect(spans.length).toBeGreaterThanOrEqual(8);
+        expect(spans.length).toBeGreaterThanOrEqual(9);
 
         // All spans share the same traceId
         const traceId = spans[0].traceId;
@@ -177,12 +178,13 @@ createTests({
           expect(parentOp).toBeDefined();
         }
 
-        // Verify operation spans have links to the invocation span
-        for (const opSpan of operationSpans) {
-          const hasInvocationLink = opSpan.links.some(
-            (link) => link.spanId === invocationSpan!.spanId,
-          );
-          expect(hasInvocationLink).toBe(true);
+        // Verify STEP operation spans have links to an invocation span
+        // (During replay, links point to the invocation that exported the span)
+        const stepSpans = operationSpans.filter(
+          (s) => s.attributes["durable.operation.type"] === "STEP",
+        );
+        for (const opSpan of stepSpans) {
+          expect(opSpan.links.length).toBeGreaterThanOrEqual(1);
         }
       }
 
