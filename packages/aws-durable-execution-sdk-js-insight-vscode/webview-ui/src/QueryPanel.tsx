@@ -25,6 +25,13 @@ const MODE_LABEL: Record<QueryMode, string> = {
   agent: "Agent",
 };
 
+/** Distinct icon per mode: raw query (script), single lookup (search), agentic (gen-ai). */
+const MODE_ICON: Record<QueryMode, "script" | "search" | "gen-ai"> = {
+  query: "script",
+  ask: "search",
+  agent: "gen-ai",
+};
+
 /** One-line description of each mode, shown in the dropdown. */
 const MODE_DESCRIPTION: Record<QueryMode, string> = {
   query: "Run your query as-is against the destination",
@@ -126,7 +133,7 @@ export function QueryPanel({
           variant="primary"
           loading={loading}
           mainAction={{
-            iconName: "send",
+            iconName: MODE_ICON[mode],
             ariaLabel: `Send (${MODE_LABEL[mode]} mode)`,
             onClick: submit,
             disabled: !question.trim() || loading,
@@ -135,7 +142,7 @@ export function QueryPanel({
             id: m,
             text: MODE_LABEL[m],
             description: MODE_DESCRIPTION[m],
-            iconName: m === mode ? "check" : undefined,
+            iconName: MODE_ICON[m],
             disabled: loading,
           }))}
           onItemClick={({ detail }) => onModeChange(detail.id as QueryMode)}
