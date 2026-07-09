@@ -102,6 +102,9 @@ export function QueryPanel({
           />
         </div>
         <ButtonDropdown
+          variant="icon"
+          iconName="star"
+          ariaLabel="Saved queries"
           disabled={loading}
           items={
             favorites.length > 0
@@ -118,14 +121,13 @@ export function QueryPanel({
             const fav = favorites.find((f) => f.id === detail.id);
             if (fav) onRunFavorite(fav.query);
           }}
-        >
-          Favorites
-        </ButtonDropdown>
+        />
         <ButtonDropdown
           variant="primary"
           loading={loading}
           mainAction={{
-            text: `Send · ${MODE_LABEL[mode]}`,
+            iconName: "send",
+            ariaLabel: `Send (${MODE_LABEL[mode]} mode)`,
             onClick: submit,
             disabled: !question.trim() || loading,
           }}
@@ -133,6 +135,7 @@ export function QueryPanel({
             id: m,
             text: MODE_LABEL[m],
             description: MODE_DESCRIPTION[m],
+            iconName: m === mode ? "check" : undefined,
             disabled: loading,
           }))}
           onItemClick={({ detail }) => onModeChange(detail.id as QueryMode)}
