@@ -138,19 +138,31 @@
           "enum": [
             "bedrock",
             "copilot",
+            "local-server",
             "local"
           ],
           "enumDescriptions": [
-            "Amazon Bedrock (Converse API) — requires AWS credentials and model access",
-            "GitHub Copilot (VS Code Language Model API) — requires Copilot subscription",
-            "Local LLM — runs offline, downloads the model on first use. Model is configurable via workflowInsight.localModel (default: Llama-3-Groq-8B Tool-Use, ~4.9 GB)."
+            "Amazon Bedrock (Converse API) — requires AWS credentials and model access. When you use an AI feature (Ask/Agent/Visualize), your request text and limited data (result column names and a small sample of rows) are sent to Amazon Bedrock in the AWS account and region you configure, and processed under your AWS agreement and the Amazon Bedrock service terms.",
+            "GitHub Copilot (VS Code Language Model API) — requires a Copilot subscription. AI requests and the limited data described above are sent to GitHub Copilot via VS Code, and are processed under your GitHub Copilot subscription terms and privacy policy.",
+            "Local server — an OpenAI-compatible endpoint you run yourself (Ollama, LM Studio, llama.cpp). AI requests are sent only to the endpoint you run and control (configured via workflowInsight.localServerUrl); nothing is sent to a third-party cloud, provided that endpoint is local/self-hosted.",
+            "Local LLM (on-device) — runs entirely on your machine; your request and data do not leave your computer. Downloads the model on first use (configurable via workflowInsight.localModel). Not available in the packaged .vsix (source builds only)."
           ],
-          "description": "Which LLM to use for converting questions to queries."
+          "description": "Which LLM provider converts your natural-language questions into queries and builds summaries/charts. Used only by the AI features — the 'ask' and 'agent' modes and the Visualize page. In those features your request text and, in some cases, limited portions of your data (result column names and a small sample of rows) are sent to the provider selected here; the 'query' mode uses no AI and sends nothing to any provider. Data you send is subject to the terms and privacy policy of the selected provider — review them before sending sensitive data. See each option below for where your data goes."
         },
         "workflowInsight.bedrockModelId": {
           "type": "string",
           "default": "us.anthropic.claude-sonnet-4-20250514-v1:0",
-          "description": "Amazon Bedrock model id (or inference profile id) used to convert English to a Logs Insights query."
+          "description": "Amazon Bedrock model id (or inference profile id) used by the AI features when LLM Provider is 'bedrock'. Requests and the limited data described for the AI features are sent to this model in Amazon Bedrock in your configured AWS account and region, and processed under your AWS agreement and the Amazon Bedrock service terms. You are responsible for having access to the model and for the content you submit."
+        },
+        "workflowInsight.localServerUrl": {
+          "type": "string",
+          "default": "http://localhost:11434/v1",
+          "description": "Base URL of the OpenAI-compatible chat-completions API for the 'local-server' provider (e.g. Ollama at http://localhost:11434/v1); '/chat/completions' is appended. AI requests are sent to this endpoint only. Point it at a server you run and control (e.g. localhost or your private network) to keep data off third-party clouds; if you set it to a remote/hosted URL, your requests and data go to that operator under their terms."
+        },
+        "workflowInsight.localServerModel": {
+          "type": "string",
+          "default": "llama3.1",
+          "description": "Model name the local server should use for the 'local-server' provider (e.g. 'llama3.1' for Ollama). Load/pull it in your server first. Your data is handled entirely by that server; no data is sent to this extension's maintainers."
         },
         "workflowInsight.localModel": {
           "type": "string",
@@ -165,7 +177,7 @@
             "Phi-3.5-mini — smaller with strong quality-per-GB, ~2.4 GB download. Good when memory is tight.",
             "Qwen2.5-Coder-3B — smallest footprint, ~2.2 GB. Fastest/lightest, weakest at multi-step tool use."
           ],
-          "description": "Which local model to download and run when LLM Provider is 'local'. Only used for the local provider; ignored for Bedrock/Copilot."
+          "description": "Which local model to download and run when LLM Provider is 'local'. Runs entirely on-device: your request and data are processed locally and do not leave your machine, and no data is sent to any third party or to this extension's maintainers. Only used for the 'local' provider; ignored for Bedrock/Copilot/local-server."
         },
         "workflowInsight.agenticMaxIterations": {
           "type": "number",
@@ -173,6 +185,26 @@
           "minimum": 1,
           "maximum": 20,
           "description": "The maximum number of queries the assistant will run for one question before stopping — one per verify/refine round, or per agent-loop query with parallel tool calls counted individually. Higher values let it work harder on difficult questions but cost more model/query calls (billable). The loop also stops early if it starts repeating a query it already tried. This is the universal cost/effort guard — it applies to every data source. NOTE: it bounds the NUMBER of queries, not the data scanned per query. For the S3/Athena destination, also set a per-query scan cap on your Athena workgroup (bytes_scanned_cutoff_per_query) to bound scan cost."
+        },
+        "workflowInsight.queryMode": {
+          "type": "string",
+          "enum": [
+            "query",
+            "ask",
+            "agent"
+          ],
+          "enumDescriptions": [
+            "Query: run the text you type verbatim as a read-only query (no LLM).",
+            "Ask: turn a plain-English question into one query and run it (no agent loop).",
+            "Agent: let the assistant explore across multiple queries to answer."
+          ],
+          "default": "agent",
+          "description": "Default mode used by the Explorer composer's Send button. Remembered across sessions; you can switch it per-question from the Send dropdown. Note: 'ask' and 'agent' use the configured LLM provider and send data to it (see workflowInsight.llmProvider); 'query' uses no AI and sends nothing to any provider."
+        },
+        "workflowInsight.aiDisclosureAcceptedVersion": {
+          "type": "string",
+          "default": "",
+          "description": "Records the version of the AI-usage disclosure you accepted. Set automatically when you agree to the in-app AI notice before first using an AI feature (Ask/Agent/Visualize); the notice is re-shown when the disclosure is updated. Clearing this value withdraws your consent and re-prompts you before the next AI use. The AI-free 'query' mode remains usable regardless."
         }
       }
     }
@@ -183,6 +215,7 @@
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
     "test": "jest",
+    "package": "mkdir -p vsix && npx --yes @vscode/vsce@^3 package --no-dependencies --out vsix/",
     "clean": "rm -rf dist media/webview.js media/webview.css"
   },
   "dependencies": {

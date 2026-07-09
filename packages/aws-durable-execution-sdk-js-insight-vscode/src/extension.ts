@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
+import { randomUUID } from "crypto";
 import { readConfig, resolveCredentials } from "./config";
 import {
   generateQuery,
@@ -9,6 +10,7 @@ import {
   isModelDownloaded,
   ensureModel,
   setLocalModel,
+  setLocalServer,
   type GeneratedQuery,
 } from "./llm";
 import {
@@ -37,11 +39,21 @@ import {
 
 type InboundMessage =
   | { type: "ready" }
-  | { type: "generate"; question: string }
+  | { type: "generate"; question: string; mode?: QueryMode }
+  | { type: "setMode"; mode: QueryMode }
+  | { type: "setConsent"; version: string }
   | { type: "newSession" }
   | { type: "saveSettings"; settings: Record<string, string> }
   | { type: "downloadModel"; localModel?: string }
   | { type: "exportChart"; format: "svg" | "png"; content: string }
+  | {
+      type: "exportData";
+      format: "csv" | "json";
+      content: string;
+      filename: string;
+    }
+  | { type: "saveFavorite"; query: string; destinationType: string }
+  | { type: "deleteFavorite"; id: string }
   // NOTE: keep this `visualize` shape in sync with OutboundMessage in
   // webview-ui/src/types.ts (host and webview message types are declared
   // separately in each project's own `src`).
@@ -63,6 +75,33 @@ type InboundMessage =
       month?: string;
       day?: string;
     };
+
+/**
+ * Query execution mode chosen in the composer (kept in sync with QueryMode in
+ * webview-ui/src/types.ts):
+ * - "query": run the user's text verbatim as a read-only query (no LLM).
+ * - "ask":   one LLM NL→query translation, run once, present (no agent loop).
+ * - "agent": the full agentic explore→answer loop.
+ */
+type QueryMode = "query" | "ask" | "agent";
+
+/**
+ * Current AI-usage disclosure version the user must have accepted before any
+ * LLM-backed action runs. Kept in sync with AI_DISCLOSURE_VERSION in
+ * webview-ui/src/types.ts — bump both together when the disclosure wording
+ * changes so consented users are re-prompted. The webview gates the UI; the
+ * host re-checks (defense in depth) so a replayed/malformed message can't
+ * bypass the disclosure.
+ */
+const REQUIRED_AI_DISCLOSURE_VERSION = "2";
+
+/** A saved query (kept in sync with Favorite in webview-ui/src/types.ts). */
+interface Favorite {
+  id: string;
+  label: string;
+  query: string;
+  destinationType: string;
+}
 
 /**
  * Normalized results payload: the body of a "results" message minus its
@@ -122,6 +161,13 @@ const JS_ROW_CAP = 5000;
 const MAX_SQL_ROWS = 10000;
 
 /**
+ * Default CloudWatch Logs Insights time window (24h) used for "query" mode,
+ * where the user supplies the raw query but no time range (mirrors the
+ * generator's own default).
+ */
+const DEFAULT_TIME_RANGE_MS = 86_400_000;
+
+/**
  * Whether a query-execution error is worth asking the model to fix (a
  * malformed/invalid query) versus a hard failure (missing config, no
  * permissions) that a retry can't help. Destination-agnostic, so every
@@ -161,7 +207,7 @@ function normalizeQuery(query: string): string {
 export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand("workflowInsight.openExplorer", () => {
-      ExplorerPanel.show(context.extensionUri);
+      ExplorerPanel.show(context.extensionUri, context.globalState);
     }),
   );
 }
@@ -176,7 +222,7 @@ class ExplorerPanel {
   // so follow-up questions continue the session. Cleared on "newSession".
   private conversation: ConversationTurn[] = [];
 
-  static show(extensionUri: vscode.Uri): void {
+  static show(extensionUri: vscode.Uri, globalState: vscode.Memento): void {
     const column = vscode.window.activeTextEditor?.viewColumn;
     if (ExplorerPanel.current) {
       ExplorerPanel.current.panel.reveal(column);
@@ -192,12 +238,13 @@ class ExplorerPanel {
         localResourceRoots: [vscode.Uri.joinPath(extensionUri, "media")],
       },
     );
-    ExplorerPanel.current = new ExplorerPanel(panel, extensionUri);
+    ExplorerPanel.current = new ExplorerPanel(panel, extensionUri, globalState);
   }
 
   private constructor(
     private readonly panel: vscode.WebviewPanel,
     extensionUri: vscode.Uri,
+    private readonly globalState: vscode.Memento,
   ) {
     this.panel.webview.html = this.getHtml(this.panel.webview, extensionUri);
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
@@ -212,9 +259,15 @@ class ExplorerPanel {
     try {
       switch (msg.type) {
         case "ready":
-          return this.sendConfig();
+          this.sendConfig();
+          this.post({ type: "favorites", favorites: this.getFavorites() });
+          return;
         case "generate":
-          return await this.onGenerate(msg.question);
+          return await this.onGenerate(msg.question, msg.mode ?? "agent");
+        case "setMode":
+          return await this.onSetMode(msg.mode);
+        case "setConsent":
+          return await this.onSetConsent(msg.version);
         case "newSession":
           this.conversation = [];
           this.post({ type: "sessionCleared" });
@@ -225,6 +278,12 @@ class ExplorerPanel {
           return await this.onDownloadModel(msg.localModel);
         case "exportChart":
           return await this.onExportChart(msg.format, msg.content);
+        case "exportData":
+          return await this.onExportData(msg.format, msg.content, msg.filename);
+        case "saveFavorite":
+          return await this.onSaveFavorite(msg.query, msg.destinationType);
+        case "deleteFavorite":
+          return await this.onDeleteFavorite(msg.id);
         case "visualize":
           return await this.onVisualize(msg);
         case "startListening":
@@ -253,6 +312,7 @@ class ExplorerPanel {
     // Reflect the selected local model so isModelDownloaded() below (and any
     // local generation) targets the right file.
     setLocalModel(cfg.localModel);
+    setLocalServer(cfg.localServerUrl, cfg.localServerModel);
     this.post({
       type: "config",
       settings: {
@@ -275,7 +335,11 @@ class ExplorerPanel {
         awsProfile: cfg.awsProfile ?? "",
         bedrockModelId: cfg.bedrockModelId,
         localModel: cfg.localModel,
+        localServerUrl: cfg.localServerUrl,
+        localServerModel: cfg.localServerModel,
         agenticMaxIterations: String(cfg.agenticMaxIterations),
+        queryMode: cfg.queryMode,
+        aiDisclosureAcceptedVersion: cfg.aiDisclosureAcceptedVersion,
       },
       modelDownloaded: isModelDownloaded(),
     });
@@ -396,6 +460,59 @@ class ExplorerPanel {
     vscode.window.showInformationMessage(`Chart saved to ${uri.fsPath}`);
   }
 
+  /** Save a result table (CSV/JSON text built by the webview) to a file. */
+  private async onExportData(
+    format: "csv" | "json",
+    content: string,
+    filename: string,
+  ): Promise<void> {
+    const ext = format === "csv" ? "csv" : "json";
+    const uri = await vscode.window.showSaveDialog({
+      filters: { [format.toUpperCase()]: [ext] },
+      defaultUri: vscode.Uri.file(filename || `results.${ext}`),
+    });
+    if (!uri) return;
+    await vscode.workspace.fs.writeFile(uri, Buffer.from(content, "utf-8"));
+    vscode.window.showInformationMessage(`Results saved to ${uri.fsPath}`);
+  }
+
+  private readonly favoritesKey = "workflowInsight.favorites";
+
+  private getFavorites(): Favorite[] {
+    return this.globalState.get<Favorite[]>(this.favoritesKey, []);
+  }
+
+  private async setFavorites(list: Favorite[]): Promise<void> {
+    await this.globalState.update(this.favoritesKey, list);
+    this.post({ type: "favorites", favorites: list });
+  }
+
+  /** Prompt for a name, then persist the query to favorites (globalState). */
+  private async onSaveFavorite(
+    query: string,
+    destinationType: string,
+  ): Promise<void> {
+    const suggested = query.length > 60 ? `${query.slice(0, 57)}...` : query;
+    const label = await vscode.window.showInputBox({
+      prompt: "Name this saved query",
+      value: suggested,
+      validateInput: (v) => (v.trim() ? null : "Enter a name."),
+    });
+    if (label === undefined) return; // cancelled
+    const fav: Favorite = {
+      id: randomUUID(),
+      label: label.trim(),
+      query,
+      destinationType,
+    };
+    await this.setFavorites([...this.getFavorites(), fav]);
+    vscode.window.showInformationMessage(`Saved query "${fav.label}".`);
+  }
+
+  private async onDeleteFavorite(id: string): Promise<void> {
+    await this.setFavorites(this.getFavorites().filter((f) => f.id !== id));
+  }
+
   /**
    * Free-text "describe how to visualize" on the Visualize page: ask the model
    * to map the request onto the fetched columns and return a Vega-Lite spec.
@@ -409,7 +526,20 @@ class ExplorerPanel {
     requestId: number;
   }): Promise<void> {
     const cfg = readConfig();
+    // Visualize builds the chart spec with the LLM — enforce consent host-side
+    // too (defense in depth); reply as a chartSpecError so the webview clears
+    // its loading state.
+    if (!this.hasAiConsent(cfg)) {
+      this.post({
+        type: "chartSpecError",
+        message:
+          "AI features require accepting the AI-usage disclosure first. Please try again and accept the notice.",
+        requestId: msg.requestId,
+      });
+      return;
+    }
     setLocalModel(cfg.localModel);
+    setLocalServer(cfg.localServerUrl, cfg.localServerModel);
     const credentials = resolveCredentials(cfg.awsProfile);
     try {
       const spec = await generateChartSpec({
@@ -472,7 +602,7 @@ class ExplorerPanel {
     this.post({ type: "sqsStatus", listening: false });
   }
 
-  private async onGenerate(question: string): Promise<void> {
+  private async onGenerate(question: string, mode: QueryMode): Promise<void> {
     const q = question.trim();
     if (!q) {
       this.post({ type: "error", message: "Enter a question first." });
@@ -480,6 +610,7 @@ class ExplorerPanel {
     }
     const cfg = readConfig();
     setLocalModel(cfg.localModel);
+    setLocalServer(cfg.localServerUrl, cfg.localServerModel);
     const credentials = resolveCredentials(cfg.awsProfile);
     const tableName =
       cfg.destinationType === "dynamodb"
@@ -490,9 +621,123 @@ class ExplorerPanel {
             ? cfg.athenaTable
             : undefined;
 
-    // The assistant always works agentically. The dispatch inside picks the
-    // Bedrock multi-step tool loop or the verify/refine loop by provider.
+    // Dispatch by the selected mode:
+    //  - query: run the text verbatim (no LLM)
+    //  - ask:   one NL→query translation, run once (no agent loop)
+    //  - agent: the full agentic explore→answer loop
+    if (mode === "query") {
+      return await this.onRunRawQuery(q, cfg, credentials);
+    }
+    // ask/agent use the LLM — enforce the AI-usage consent host-side too, so a
+    // replayed or malformed "generate" message can't bypass the disclosure the
+    // webview shows. query mode above is intentionally exempt (no LLM).
+    if (!this.hasAiConsent(cfg)) {
+      this.post({
+        type: "error",
+        message:
+          "AI features require accepting the AI-usage disclosure first. Please try again and accept the notice.",
+      });
+      return;
+    }
+    if (mode === "ask") {
+      return await this.onGenerateSingleShot(q, cfg, credentials, tableName);
+    }
     return await this.onGenerateAgentic(q, cfg, credentials, tableName);
+  }
+
+  /**
+   * "query" mode: run the user's text verbatim as a read-only query. No LLM is
+   * involved — executeQuery still enforces read-only and caps rows, but the
+   * query is otherwise sent to the destination exactly as typed (no drill-down
+   * injection, no explanation, no verify/refine).
+   */
+  private async onRunRawQuery(
+    q: string,
+    cfg: ReturnType<typeof readConfig>,
+    credentials: ReturnType<typeof resolveCredentials>,
+  ): Promise<void> {
+    this.post({ type: "status", text: "Running query..." });
+    const exec = await this.executeQuery(
+      cfg,
+      credentials,
+      { query: q, explanation: "", timeRangeMs: DEFAULT_TIME_RANGE_MS },
+      { injectDrillDown: false },
+    );
+    // Query mode has no LLM prose, so post an explicit summary — otherwise a
+    // 0-row result (e.g. a query whose language doesn't match the configured
+    // destination) looks like nothing happened.
+    const n = exec.count ?? exec.rows.length;
+    this.post({
+      type: "agentAnswer",
+      text:
+        n > 0
+          ? `Ran your query — returned ${n} row${n === 1 ? "" : "s"}${exec.truncated ? " (capped)" : ""}.`
+          : `Ran your query — 0 rows returned. If you expected data, check that your query matches the configured destination's query language (${cfg.destinationType}).`,
+    });
+    this.post({ type: "results", ...exec });
+  }
+
+  /**
+   * "ask" mode: one LLM NL→query translation, run once, present. No agent
+   * loop, no verify/refine — a single query the model writes for the question.
+   */
+  private async onGenerateSingleShot(
+    q: string,
+    cfg: ReturnType<typeof readConfig>,
+    credentials: ReturnType<typeof resolveCredentials>,
+    tableName: string | undefined,
+  ): Promise<void> {
+    this.post({ type: "status", text: "Generating query..." });
+    const generated = await generateQuery({
+      provider: cfg.llmProvider,
+      region: cfg.region,
+      credentials,
+      modelId: cfg.bedrockModelId,
+      question: this.withConversationContext(q),
+      destinationType: cfg.destinationType,
+      tableName,
+    });
+    this.post({ type: "status", text: "Running query..." });
+    const exec = await this.executeQuery(cfg, credentials, generated);
+    this.post({ type: "results", ...exec });
+    this.recordTurn(
+      q,
+      generated.explanation ||
+        `Returned ${exec.count ?? exec.rows.length} row(s).`,
+    );
+  }
+
+  /** Persist the composer's query mode as the default for next time. */
+  private async onSetMode(mode: QueryMode): Promise<void> {
+    await vscode.workspace
+      .getConfiguration("workflowInsight")
+      .update("queryMode", mode, vscode.ConfigurationTarget.Global);
+  }
+
+  /**
+   * Record the user's acceptance of the AI-usage disclosure (the version of the
+   * notice they agreed to). Stored in settings so it persists and is auditable;
+   * a version bump re-prompts. Gating happens in the webview before any LLM
+   * call, but persisting here keeps the decision durable.
+   */
+  private async onSetConsent(version: string): Promise<void> {
+    await vscode.workspace
+      .getConfiguration("workflowInsight")
+      .update(
+        "aiDisclosureAcceptedVersion",
+        version,
+        vscode.ConfigurationTarget.Global,
+      );
+  }
+
+  /**
+   * Host-side AI-usage consent check (defense in depth). The webview gates AI
+   * actions behind the disclosure modal, but we re-verify here so a replayed or
+   * malformed message can't reach the LLM without accepted consent. Returns
+   * true when the stored acceptance matches the current disclosure version.
+   */
+  private hasAiConsent(cfg: { aiDisclosureAcceptedVersion: string }): boolean {
+    return cfg.aiDisclosureAcceptedVersion === REQUIRED_AI_DISCLOSURE_VERSION;
   }
 
   /**
@@ -763,6 +1008,11 @@ class ExplorerPanel {
             : undefined;
 
     let iteration = 0;
+    // The most recent successful query execution, so a turn that ends with a
+    // prose-only answer (the model explored with run_query, then answered
+    // without a distinct "final" query) still shows the data it fetched —
+    // matching the "every data question shows its table" expectation.
+    let lastExec: QueryExecution | undefined;
     // Per-question cache of raw query results (keyed by executed query text),
     // shared by the exploration run_query calls and the final presentation
     // run — so the finish query, already scanned during exploration, isn't
@@ -800,6 +1050,9 @@ class ExplorerPanel {
             queryCache,
           },
         );
+        // Remember the latest successful, row-bearing execution so a
+        // prose-only finish can still present it (see the answer-only branch).
+        if (exec.rows.length > 0) lastExec = exec;
         return {
           columns: exec.columns,
           // Small sample for the model's context; run_javascript gets the
@@ -863,10 +1116,13 @@ class ExplorerPanel {
 
     if (!final || !final.query) {
       // No usable query. If the model produced any prose, still show it and
-      // record the turn so the conversation continues.
+      // record the turn so the conversation continues. If it explored real
+      // rows on the way to that answer, present the latest of those too so the
+      // turn still shows its data table.
       const proseOnly = final?.answer || final?.explanation;
       if (proseOnly) {
         this.post({ type: "agentAnswer", text: proseOnly });
+        if (lastExec) this.post({ type: "results", ...lastExec });
         this.recordTurn(q, proseOnly);
         return;
       }

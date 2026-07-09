@@ -1,10 +1,34 @@
+/** Query execution mode chosen in the composer. */
+export type QueryMode = "query" | "ask" | "agent";
+
+/** A saved query the user can re-run from the composer. */
+export interface Favorite {
+  id: string;
+  label: string;
+  query: string;
+  destinationType: string;
+}
+
 /** Messages from webview → extension host */
 export type OutboundMessage =
   | { type: "ready" }
-  | { type: "generate"; question: string }
+  | { type: "generate"; question: string; mode: QueryMode }
+  | { type: "setMode"; mode: QueryMode }
+  | { type: "setConsent"; version: string }
   | { type: "newSession" }
   | { type: "saveSettings"; settings: Record<string, string> }
   | { type: "downloadModel"; localModel?: string }
+  // Save the result table to a file (host shows a save dialog). The webview
+  // builds the CSV/JSON text; the host just writes it.
+  | {
+      type: "exportData";
+      format: "csv" | "json";
+      content: string;
+      filename: string;
+    }
+  // Save a query to favorites (host prompts for a name and persists it).
+  | { type: "saveFavorite"; query: string; destinationType: string }
+  | { type: "deleteFavorite"; id: string }
   // NOTE: keep this `visualize` shape in sync with the InboundMessage union in
   // src/extension.ts (host and webview message types are, as existing debt,
   // declared separately in each project's own `src`).
@@ -119,7 +143,8 @@ export type InboundMessage =
   | { type: "settingsSaved" }
   | { type: "downloadProgress"; percent: number; done: boolean }
   | { type: "sqsStatus"; listening: boolean }
-  | { type: "sqsMessages"; messages: SqsMessageRow[] };
+  | { type: "sqsMessages"; messages: SqsMessageRow[] }
+  | { type: "favorites"; favorites: Favorite[] };
 
 /**
  * One completed iteration of the advanced (agentic) run→verify→refine loop,
@@ -159,8 +184,23 @@ export interface Settings {
   awsProfile: string;
   bedrockModelId: string;
   localModel: string;
+  localServerUrl: string;
+  localServerModel: string;
   agenticMaxIterations: string;
+  queryMode: string;
+  aiDisclosureAcceptedVersion: string;
 }
+
+/**
+ * Version of the AI-usage disclosure. Bump this whenever the notice wording
+ * changes so previously-consented users are re-prompted.
+ * LEGAL: wording is pending review by the Legal team (see tracked ticket).
+ *
+ * Currently "2": "1" was the initial gate (features + generic data notice);
+ * "2" added the per-provider data-flow breakdown, so early adopters on "1"
+ * re-accept the fuller disclosure.
+ */
+export const AI_DISCLOSURE_VERSION = "2";
 
 export const DEFAULT_SETTINGS: Settings = {
   region: "us-east-1",
@@ -182,5 +222,9 @@ export const DEFAULT_SETTINGS: Settings = {
   awsProfile: "",
   bedrockModelId: "us.anthropic.claude-sonnet-4-20250514-v1:0",
   localModel: "llama-3-groq-8b-tool-use",
+  localServerUrl: "http://localhost:11434/v1",
+  localServerModel: "llama3.1",
   agenticMaxIterations: "8",
+  queryMode: "agent",
+  aiDisclosureAcceptedVersion: "",
 };

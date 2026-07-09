@@ -8,6 +8,7 @@ import {
 import type { AwsCredentialIdentityProvider } from "@aws-sdk/types";
 import { buildSystemPrompt, type DestinationType } from "./schema";
 import { parseChartSpec } from "./chartSpec";
+import { parseLocalServerQueryResponse } from "./localServerParse";
 import {
   parseVerdict,
   buildVerifyInstruction,
@@ -73,7 +74,92 @@ const EMIT_QUERY_TOOL: Tool = {
   },
 };
 
-export type LlmProvider = "bedrock" | "copilot" | "local";
+export type LlmProvider = "bedrock" | "copilot" | "local" | "local-server";
+
+// ─── Local server (OpenAI-compatible: Ollama / LM Studio / llama.cpp) ────────
+//
+// Module-level config (set via setLocalServer, mirroring setLocalModel) so the
+// "local-server" provider talks to a user-run local endpoint instead of an
+// embedded native runtime — no node-llama-cpp, so it works from the packaged
+// vsix on every platform.
+
+const DEFAULT_LOCAL_SERVER_URL = "http://localhost:11434/v1";
+const DEFAULT_LOCAL_SERVER_MODEL = "llama3.1";
+// Give up on a local-server request after this long so a hung or very slow
+// server can't wedge a request forever (Bedrock/Visualize paths are similarly
+// bounded). Local models can be slow on first load, so this is generous.
+const LOCAL_SERVER_TIMEOUT_MS = 120_000;
+let localServerUrl = DEFAULT_LOCAL_SERVER_URL;
+let localServerModel = DEFAULT_LOCAL_SERVER_MODEL;
+
+/**
+ * Point the "local-server" provider at an OpenAI-compatible chat-completions
+ * endpoint. `url` is the base (e.g. http://localhost:11434/v1); a trailing
+ * slash is trimmed. Empty values fall back to the Ollama defaults.
+ */
+export function setLocalServer(
+  url: string | undefined,
+  model: string | undefined,
+): void {
+  localServerUrl =
+    url && url.trim()
+      ? url.trim().replace(/\/+$/, "")
+      : DEFAULT_LOCAL_SERVER_URL;
+  localServerModel =
+    model && model.trim() ? model.trim() : DEFAULT_LOCAL_SERVER_MODEL;
+}
+
+/** Single prompt -> text via the OpenAI-compatible /chat/completions endpoint. */
+async function completeViaLocalServer(
+  prompt: string,
+  maxTokens: number,
+  opts?: { jsonMode?: boolean },
+): Promise<string> {
+  // Bound the request with an abort timeout so a hung server can't hang forever.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), LOCAL_SERVER_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(`${localServerUrl}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: localServerModel,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0,
+        max_tokens: maxTokens,
+        stream: false,
+        // Ask OpenAI-compatible servers (Ollama, LM Studio) to constrain output
+        // to a JSON object so we don't have to scrape JSON out of prose.
+        ...(opts?.jsonMode ? { response_format: { type: "json_object" } } : {}),
+      }),
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(
+        `The local model server at ${localServerUrl} did not respond within ${Math.round(
+          LOCAL_SERVER_TIMEOUT_MS / 1000,
+        )}s. It may be overloaded or still loading the model.`,
+      );
+    }
+    throw new Error(
+      `Could not reach the local model server at ${localServerUrl}. Is it running? (${err instanceof Error ? err.message : String(err)})`,
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(
+      `Local model server returned ${res.status} ${res.statusText}. ${detail.slice(0, 200)}`,
+    );
+  }
+  const data = (await res.json()) as {
+    choices?: { message?: { content?: string } }[];
+  };
+  return (data.choices?.[0]?.message?.content ?? "").trim();
+}
 
 // ─── Result verification (agentic / "advanced" mode) ─────────────────────────
 
@@ -188,6 +274,14 @@ export async function verifyResult(
       } finally {
         cts.dispose();
       }
+    }
+
+    if (opts.provider === "local-server") {
+      const text = await completeViaLocalServer(
+        `${instruction}\n\nRespond with ONLY JSON: {"satisfied": true|false, "reason": "...", "suggestion": "..."}`,
+        1024,
+      );
+      return parseVerdict(text);
     }
 
     // local
@@ -333,6 +427,9 @@ async function completeText(
   prompt: string,
   maxTokens = 1024,
 ): Promise<string> {
+  if (opts.provider === "local-server") {
+    return completeViaLocalServer(prompt, maxTokens);
+  }
   if (opts.provider === "bedrock") {
     const client = new BedrockRuntimeClient({
       region: opts.region,
@@ -418,7 +515,31 @@ export async function generateQuery(
   if (opts.provider === "local") {
     return generateViaLocal(opts);
   }
+  if (opts.provider === "local-server") {
+    return generateViaLocalServer(opts);
+  }
   return generateViaBedrock(opts);
+}
+
+/** NL->query via an OpenAI-compatible local server (text JSON parsing). */
+async function generateViaLocalServer(
+  opts: GenerateOptions,
+): Promise<GeneratedQuery> {
+  const systemPrompt = buildSystemPrompt(opts.destinationType, {
+    tableName: opts.tableName,
+    agentic: opts.agentic,
+  });
+  const prompt = `${systemPrompt}\n\nRespond with ONLY a JSON object: {"query": "...", "explanation": "...", "timeRangeMs": ..., "suggestedCharts": ["...", "..."]}\nFor suggestedCharts pick 2-4 from: bar, stacked-bar, line, area, scatter, heatmap, histogram, pie, boxplot.\nOmit timeRangeMs if not mentioned (default 24h).\n\nUser question: ${opts.question}`;
+  const response = await completeViaLocalServer(prompt, 2048, {
+    jsonMode: true,
+  });
+  const parsed = parseLocalServerQueryResponse(response);
+  return {
+    query: parsed.query,
+    explanation: parsed.explanation,
+    timeRangeMs: parsed.timeRangeMs ?? DEFAULT_TIME_RANGE_MS,
+    suggestedCharts: parsed.suggestedCharts,
+  };
 }
 
 // ─── Bedrock ─────────────────────────────────────────────────────────────────
