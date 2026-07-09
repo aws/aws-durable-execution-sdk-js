@@ -9,10 +9,9 @@ import { log } from "../../../utils/logger";
 export const config: ExampleConfig = {
   name: "Parallel shouldComplete quorum",
   description:
-    "Parallel execution with a custom shouldComplete predicate expressing a " +
-    "quorum rule: complete when branch A (index 0) succeeds, OR when both " +
-    "branch B (index 1) and branch C (index 2) succeed. Branches are unnamed, " +
-    "so the predicate keys off the stable branch index.",
+    "Parallel with a custom shouldComplete predicate: complete when branch A " +
+    "(index 0) succeeds, or when branches B and C (index 1, 2) both succeed. " +
+    "Keys off the stable branch index since branches are unnamed.",
 };
 
 export const handler = withDurableExecution(
