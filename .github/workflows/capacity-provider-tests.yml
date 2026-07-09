@@ -27,7 +27,7 @@ jobs:
         if: github.actor != 'nektos/act'
         uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: "${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME }}"
+          role-to-assume: "${{ secrets.TEST_ROLE_ARN }}"
           role-session-name: githubIntegrationTest
           aws-region: ${{ vars.AWS_REGION }}
 
@@ -46,8 +46,9 @@ jobs:
           LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_EVENT_NUMBER: ${{ github.event.number }}
-          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-          CAPACITY_PROVIDER_ARN: ${{ secrets.CAPACITY_PROVIDER_ARN }}
+          AWS_ACCOUNT_ID: ${{ secrets.TEST_ACCOUNT_ID }}
+          LAMBDA_EXECUTION_ROLE_ARN: ${{ secrets.TEST_LAMBDA_EXECUTION_ROLE_ARN }}
+          CAPACITY_PROVIDER_ARN: ${{ secrets.TEST_CAPACITY_PROVIDER_ARN }}
         run: node .github/workflows/scripts/integration-test/integration-test.js --deploy-only --capacity-provider-only --runtime ${{ inputs.node-version }}
 
   test-capacity-provider:
@@ -72,7 +73,7 @@ jobs:
         if: github.actor != 'nektos/act'
         uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: "${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME }}"
+          role-to-assume: "${{ secrets.TEST_ROLE_ARN }}"
           role-session-name: githubIntegrationTest
           aws-region: ${{ vars.AWS_REGION }}
 
@@ -116,7 +117,7 @@ jobs:
         if: github.actor != 'nektos/act'
         uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: "${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME }}"
+          role-to-assume: "${{ secrets.TEST_ROLE_ARN }}"
           role-session-name: githubIntegrationTest
           aws-region: ${{ vars.AWS_REGION }}
 

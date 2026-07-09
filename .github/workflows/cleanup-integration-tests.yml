@@ -85,7 +85,7 @@ jobs:
         if: github.actor != 'nektos/act'
         uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: "${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME }}"
+          role-to-assume: "${{ secrets.TEST_ROLE_ARN }}"
           role-session-name: githubIntegrationTest
           aws-region: ${{ vars.AWS_REGION }}
 
