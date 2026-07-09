@@ -11,12 +11,44 @@ import { QueryPanel } from "./QueryPanel";
 import { ResultsTable } from "./ResultsTable";
 import { VisualizePage } from "./VisualizePage";
 import { SettingsModal } from "./SettingsModal";
+import { AiConsentModal } from "./AiConsentModal";
 import { AgentTranscript } from "./AgentTranscript";
-import { SqsLiveView, toTable as sqsToTable, MAX_DISPLAYED_MESSAGES } from "./SqsLiveView";
-import type { InboundMessage, Settings, SqsMessageRow, AgentStep } from "./types";
-import { DEFAULT_SETTINGS } from "./types";
+import {
+  SqsLiveView,
+  toTable as sqsToTable,
+  MAX_DISPLAYED_MESSAGES,
+} from "./SqsLiveView";
+import type {
+  InboundMessage,
+  Settings,
+  SqsMessageRow,
+  AgentStep,
+  QueryMode,
+  Favorite,
+} from "./types";
+import { DEFAULT_SETTINGS, AI_DISCLOSURE_VERSION } from "./types";
 
 applyMode(Mode.Dark);
+
+/**
+ * A simple, ready-to-run starter query for the current destination, used to
+ * prefill the composer in "query" mode so the user has a working example to
+ * edit instead of a blank box.
+ */
+function starterQueryFor(s: Settings): string {
+  switch (s.destinationType) {
+    case "dynamodb":
+      // PartiQL requires the table name double-quoted.
+      return `SELECT * FROM "${s.dynamodbTableName || "your-table"}" LIMIT 50`;
+    case "aurora":
+      return `SELECT * FROM ${s.auroraTable || "workflow_insight"} LIMIT 50`;
+    case "s3":
+      return `SELECT * FROM ${s.athenaTable || "workflow_insight"} LIMIT 50`;
+    default:
+      // CloudWatch Logs Insights dialect.
+      return "fields @timestamp, executionArn, status | sort @timestamp desc | limit 50";
+  }
+}
 
 type Page = "data" | "visualize";
 
@@ -29,6 +61,7 @@ interface ResultsPayload {
   hiddenColumns?: string[];
   explanation?: string;
   truncated?: boolean;
+  finalQuery?: string;
 }
 
 /**
@@ -48,6 +81,11 @@ type ChatTurn =
 
 export function App() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  // Active query mode (query / ask / agent). Seeded from the persisted
+  // workflowInsight.queryMode setting when config arrives, so it's remembered
+  // across sessions; changing it in the composer persists it back.
+  const [mode, setMode] = useState<QueryMode>("agent");
+  const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [results, setResults] = useState<{
@@ -59,13 +97,23 @@ export function App() {
     hiddenColumns?: string[];
   } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // AI-usage consent gate. LLM actions (Ask/Agent/Visualize) are deferred behind
+  // a disclosure modal until the user has accepted the current disclosure
+  // version; the accepted action then runs.
+  const [consentOpen, setConsentOpen] = useState(false);
+  const pendingLlmRef = useRef<null | (() => void)>(null);
+  const consentAccepted =
+    settings.aiDisclosureAcceptedVersion === AI_DISCLOSURE_VERSION;
   const [loading, setLoading] = useState(false);
   const [modelDownloaded, setModelDownloaded] = useState(false);
   const [downloadPercent, setDownloadPercent] = useState(0);
   const [page, setPage] = useState<Page>("data");
   const [sqsMessages, setSqsMessages] = useState<SqsMessageRow[]>([]);
   const [sqsListening, setSqsListening] = useState(false);
-  const [detailFields, setDetailFields] = useState<Record<string, string> | null>(null);
+  const [detailFields, setDetailFields] = useState<Record<
+    string,
+    string
+  > | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([]);
   const [chat, setChat] = useState<ChatTurn[]>([]);
@@ -82,7 +130,14 @@ export function App() {
     switch (msg.type) {
       case "config":
         setSettings(msg.settings);
-        if (msg.modelDownloaded !== undefined) setModelDownloaded(msg.modelDownloaded);
+        if (
+          msg.settings.queryMode === "query" ||
+          msg.settings.queryMode === "ask" ||
+          msg.settings.queryMode === "agent"
+        )
+          setMode(msg.settings.queryMode);
+        if (msg.modelDownloaded !== undefined)
+          setModelDownloaded(msg.modelDownloaded);
         break;
       case "status":
         setStatus(msg.text);
@@ -102,6 +157,7 @@ export function App() {
           hiddenColumns: msg.hiddenColumns,
           explanation: msg.explanation ?? "",
           truncated: msg.truncated,
+          finalQuery: msg.finalQuery,
         };
         // Top-level results still drive the Visualize page.
         setResults(payload);
@@ -209,6 +265,9 @@ export function App() {
             : combined;
         });
         break;
+      case "favorites":
+        setFavorites(msg.favorites);
+        break;
     }
   }, []);
 
@@ -218,7 +277,7 @@ export function App() {
     return () => window.removeEventListener("message", handleMessage);
   }, [handleMessage]);
 
-  const handleAsk = (question: string) => {
+  const runQuestion = (question: string, useMode: QueryMode) => {
     setLoading(true);
     setError("");
     setResults(null);
@@ -228,7 +287,61 @@ export function App() {
     // Keep the chat history (this is a conversation); append the new question.
     setChat((prev) => [...prev, { role: "user", text: question }]);
     answeredRef.current = false;
-    postMessage({ type: "generate", question });
+    postMessage({ type: "generate", question, mode: useMode });
+  };
+
+  const handleAsk = (question: string) => {
+    // Query mode never uses an LLM — run it directly. Ask/Agent do, so gate
+    // them behind the AI-usage consent.
+    if (mode === "query") {
+      runQuestion(question, "query");
+      return;
+    }
+    gateLlm(() => runQuestion(question, mode));
+  };
+
+  // Run an LLM-backed action, first ensuring the AI-usage disclosure has been
+  // accepted; otherwise defer the action and open the consent modal.
+  const gateLlm = (action: () => void) => {
+    if (consentAccepted) {
+      action();
+      return;
+    }
+    pendingLlmRef.current = action;
+    setConsentOpen(true);
+  };
+
+  const acceptConsent = () => {
+    postMessage({ type: "setConsent", version: AI_DISCLOSURE_VERSION });
+    // Optimistically reflect acceptance so the gate opens immediately and the
+    // modal isn't shown again this session (the host persists it too).
+    setSettings((s) => ({
+      ...s,
+      aiDisclosureAcceptedVersion: AI_DISCLOSURE_VERSION,
+    }));
+    setConsentOpen(false);
+    const pending = pendingLlmRef.current;
+    pendingLlmRef.current = null;
+    pending?.();
+  };
+
+  const declineConsent = () => {
+    pendingLlmRef.current = null;
+    setConsentOpen(false);
+  };
+
+  // Run a saved favorite: favorites are raw queries, so run them verbatim in
+  // "query" mode regardless of the current mode. We deliberately do NOT change
+  // or persist the composer's default mode — re-running a favorite shouldn't
+  // silently flip the user's chosen default for future sessions.
+  const handleRunFavorite = (query: string) => {
+    runQuestion(query, "query");
+  };
+
+  // Change the active mode and persist it as the default for next time.
+  const handleModeChange = (m: QueryMode) => {
+    setMode(m);
+    postMessage({ type: "setMode", mode: m });
   };
 
   const handleNewSession = () => {
@@ -266,11 +379,18 @@ export function App() {
                   New session
                 </Button>
               )}
-              <Button iconName="settings" variant="icon" onClick={() => setSettingsOpen(true)} />
+              <Button
+                iconName="settings"
+                variant="icon"
+                onClick={() => setSettingsOpen(true)}
+              />
             </SpaceBetween>
           }
           description={
-            settings.logGroupName || settings.dynamodbTableName || settings.auroraTable || settings.sqsQueueUrl
+            settings.logGroupName ||
+            settings.dynamodbTableName ||
+            settings.auroraTable ||
+            settings.sqsQueueUrl
               ? `${settings.region} · ${settings.destinationType}`
               : "Click ⚙ to configure"
           }
@@ -301,6 +421,7 @@ export function App() {
                     columns={columns}
                     rows={rows}
                     onBack={() => setPage("data")}
+                    gate={gateLlm}
                   />
                 );
               })()}
@@ -310,7 +431,9 @@ export function App() {
             {page === "data" && (
               <>
                 {chat.length > 0 && (
-                  <Container header={<Header variant="h3">Conversation</Header>}>
+                  <Container
+                    header={<Header variant="h3">Conversation</Header>}
+                  >
                     <SpaceBetween size="l">
                       {chat.map((turn, i) =>
                         turn.role === "user" ? (
@@ -322,7 +445,9 @@ export function App() {
                             >
                               You
                             </Box>
-                            <div style={{ whiteSpace: "pre-wrap" }}>{turn.text}</div>
+                            <div style={{ whiteSpace: "pre-wrap" }}>
+                              {turn.text}
+                            </div>
                           </Box>
                         ) : (
                           <Box key={i}>
@@ -333,14 +458,19 @@ export function App() {
                             >
                               Assistant
                             </Box>
-                            <div style={{ whiteSpace: "pre-wrap" }}>{turn.text}</div>
+                            <div style={{ whiteSpace: "pre-wrap" }}>
+                              {turn.text}
+                            </div>
                             {turn.steps && turn.steps.length > 0 && (
                               <Box padding={{ top: "xs" }}>
                                 <ExpandableSection
                                   headerText="Agent steps"
                                   variant="footer"
                                 >
-                                  <AgentTranscript steps={turn.steps} running={false} />
+                                  <AgentTranscript
+                                    steps={turn.steps}
+                                    running={false}
+                                  />
                                 </ExpandableSection>
                               </Box>
                             )}
@@ -364,7 +494,9 @@ export function App() {
                                     rows={turn.results.rows}
                                     explanation={turn.results.explanation}
                                     idColumn={turn.results.idColumn}
-                                    partitionColumns={turn.results.partitionColumns}
+                                    partitionColumns={
+                                      turn.results.partitionColumns
+                                    }
                                     hiddenColumns={turn.results.hiddenColumns}
                                     detailFields={detailFields}
                                     detailLoading={detailLoading}
@@ -375,8 +507,12 @@ export function App() {
                                       setDetailFields(null);
                                       setDetailLoading(true);
                                     }}
-                                    onDetailDismiss={() => setDetailFields(null)}
+                                    onDetailDismiss={() =>
+                                      setDetailFields(null)
+                                    }
                                     pageSize={5}
+                                    query={turn.results.finalQuery}
+                                    destinationType={settings.destinationType}
                                   />
                                   <Button
                                     onClick={() => {
@@ -398,12 +534,21 @@ export function App() {
 
                 {/* Live progress for the in-flight turn; it folds into the turn
                     above once the turn completes (steps move onto the turn). */}
-                {loading && <AgentTranscript steps={agentSteps} running={loading} />}
+                {loading && (
+                  <AgentTranscript steps={agentSteps} running={loading} />
+                )}
 
                 {/* Composer anchored at the bottom, chat-style, so a follow-up
                     continues the conversation above. */}
                 <QueryPanel
                   onAsk={handleAsk}
+                  mode={mode}
+                  onModeChange={handleModeChange}
+                  starterQuery={starterQueryFor(settings)}
+                  favorites={favorites.filter(
+                    (f) => f.destinationType === settings.destinationType,
+                  )}
+                  onRunFavorite={handleRunFavorite}
                   loading={loading}
                   status={status}
                   error={error}
@@ -417,6 +562,7 @@ export function App() {
                 rows={results.rows}
                 suggestedCharts={results.suggestedCharts}
                 onBack={() => setPage("data")}
+                gate={gateLlm}
               />
             )}
           </>
@@ -429,6 +575,12 @@ export function App() {
           downloadPercent={downloadPercent}
           onDismiss={() => setSettingsOpen(false)}
           onSave={handleSave}
+        />
+
+        <AiConsentModal
+          visible={consentOpen}
+          onAccept={acceptConsent}
+          onDecline={declineConsent}
         />
       </SpaceBetween>
     </div>

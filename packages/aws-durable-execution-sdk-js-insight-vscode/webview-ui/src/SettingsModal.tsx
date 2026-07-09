@@ -6,6 +6,7 @@ import Button from "@cloudscape-design/components/button";
 import FormField from "@cloudscape-design/components/form-field";
 import Input from "@cloudscape-design/components/input";
 import Checkbox from "@cloudscape-design/components/checkbox";
+import Alert from "@cloudscape-design/components/alert";
 import Select, { type SelectProps } from "@cloudscape-design/components/select";
 import ProgressBar from "@cloudscape-design/components/progress-bar";
 import Tabs from "@cloudscape-design/components/tabs";
@@ -224,23 +225,48 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
                   />
                 </FormField>
 
-                <FormField label="LLM Provider" description="Which model to use for converting questions to queries">
+                <FormField
+                  label="LLM Provider"
+                  description="Model used for the AI features (Ask, Agent, and Visualize) that convert questions to queries and build charts. Query mode uses no AI."
+                >
                   <Select
                     selectedOption={
                       form.llmProvider === "copilot"
                         ? { value: "copilot", label: "GitHub Copilot (VS Code built-in)" }
                         : form.llmProvider === "local"
                           ? { value: "local", label: "Local LLM (offline, ~2.2 GB download)" }
-                          : { value: "bedrock", label: "Amazon Bedrock" }
+                          : form.llmProvider === "local-server"
+                            ? { value: "local-server", label: "Local server (Ollama / OpenAI-compatible)" }
+                            : { value: "bedrock", label: "Amazon Bedrock" }
                     }
                     options={[
                       { value: "bedrock", label: "Amazon Bedrock" },
                       { value: "copilot", label: "GitHub Copilot (VS Code built-in)" },
+                      { value: "local-server", label: "Local server (Ollama / OpenAI-compatible)" },
                       { value: "local", label: "Local LLM (offline, on-device)" },
                     ]}
                     onChange={({ detail }) => update("llmProvider", detail.selectedOption.value ?? "bedrock")}
                   />
                 </FormField>
+
+                <Alert type="info" header="How your data is used">
+                  When you use <b>Ask</b>, <b>Agent</b>, or <b>Visualize</b>, your
+                  request and limited data (result <b>column names</b> and a{" "}
+                  <b>small sample of rows</b>) are sent to the selected provider;{" "}
+                  <b>Query</b> mode sends nothing.{" "}
+                  {form.llmProvider === "bedrock" &&
+                    "With Amazon Bedrock, that data goes to Amazon Bedrock in your configured AWS account/region, under your AWS agreement and Bedrock terms."}
+                  {form.llmProvider === "copilot" &&
+                    "With GitHub Copilot, that data goes to GitHub/Microsoft via the VS Code Language Model API, under your Copilot subscription terms."}
+                  {form.llmProvider === "local-server" &&
+                    "With a local server, that data goes only to the endpoint you run and control — no third-party cloud if it is self-hosted."}
+                  {form.llmProvider === "local" &&
+                    "The on-device model runs entirely on your machine; your data never leaves your computer."}{" "}
+                  Data you send is subject to that provider's terms and privacy
+                  policy. You consent to this on first use; clear{" "}
+                  <code>workflowInsight.aiDisclosureAcceptedVersion</code> to
+                  withdraw and be re-prompted.
+                </Alert>
 
                 {form.llmProvider === "bedrock" && (
                   <FormField label="Bedrock Model ID" description="Model or inference profile ID">
@@ -252,6 +278,35 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
                   <Box color="text-body-secondary">
                     Uses GitHub Copilot via the VS Code Language Model API. Requires an active Copilot subscription. No additional configuration needed.
                   </Box>
+                )}
+
+                {form.llmProvider === "local-server" && (
+                  <SpaceBetween size="s">
+                    <Box color="text-body-secondary">
+                      Runs against a local OpenAI-compatible server you host — e.g.{" "}
+                      <b>Ollama</b> (<code>ollama serve</code>), LM Studio, or a
+                      llama.cpp server. Start it and pull a model first (e.g.{" "}
+                      <code>ollama pull llama3.1</code>). Nothing is downloaded by
+                      the extension.
+                    </Box>
+                    <FormField
+                      label="Server URL"
+                      description="Base URL of the OpenAI-compatible API (chat/completions is appended)."
+                    >
+                      <Input
+                        value={form.localServerUrl}
+                        onChange={({ detail }) => update("localServerUrl", detail.value)}
+                        placeholder="http://localhost:11434/v1"
+                      />
+                    </FormField>
+                    <FormField label="Model" description="Model name the server should use.">
+                      <Input
+                        value={form.localServerModel}
+                        onChange={({ detail }) => update("localServerModel", detail.value)}
+                        placeholder="llama3.1"
+                      />
+                    </FormField>
+                  </SpaceBetween>
                 )}
 
                 {form.llmProvider === "local" && (
