@@ -14,6 +14,7 @@ export type OutboundMessage =
   | { type: "ready" }
   | { type: "generate"; question: string; mode: QueryMode }
   | { type: "setMode"; mode: QueryMode }
+  | { type: "setConsent"; version: string }
   | { type: "newSession" }
   | { type: "saveSettings"; settings: Record<string, string> }
   | { type: "downloadModel"; localModel?: string }
@@ -187,7 +188,15 @@ export interface Settings {
   localServerModel: string;
   agenticMaxIterations: string;
   queryMode: string;
+  aiDisclosureAcceptedVersion: string;
 }
+
+/**
+ * Version of the AI-usage disclosure. Bump this whenever the notice wording
+ * changes so previously-consented users are re-prompted.
+ * LEGAL: wording is pending review by the Legal team (see tracked ticket).
+ */
+export const AI_DISCLOSURE_VERSION = "1";
 
 export const DEFAULT_SETTINGS: Settings = {
   region: "us-east-1",
@@ -213,4 +222,5 @@ export const DEFAULT_SETTINGS: Settings = {
   localServerModel: "llama3.1",
   agenticMaxIterations: "8",
   queryMode: "agent",
+  aiDisclosureAcceptedVersion: "",
 };

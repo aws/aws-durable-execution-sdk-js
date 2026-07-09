@@ -27,6 +27,7 @@ export interface InsightConfig {
   localServerModel: string;
   agenticMaxIterations: number;
   queryMode: "query" | "ask" | "agent";
+  aiDisclosureAcceptedVersion: string;
 }
 
 const SECTION = "workflowInsight";
@@ -100,6 +101,9 @@ export function readConfig(): InsightConfig {
   const rawMode = (c.get<string>("queryMode") || "").trim();
   const queryMode =
     rawMode === "query" || rawMode === "ask" ? rawMode : ("agent" as const);
+  const aiDisclosureAcceptedVersion = (
+    c.get<string>("aiDisclosureAcceptedVersion") || ""
+  ).trim();
 
   return {
     region,
@@ -125,6 +129,7 @@ export function readConfig(): InsightConfig {
     localServerModel,
     agenticMaxIterations,
     queryMode,
+    aiDisclosureAcceptedVersion,
   };
 }
 

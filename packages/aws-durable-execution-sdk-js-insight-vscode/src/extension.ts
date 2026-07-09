@@ -41,6 +41,7 @@ type InboundMessage =
   | { type: "ready" }
   | { type: "generate"; question: string; mode?: QueryMode }
   | { type: "setMode"; mode: QueryMode }
+  | { type: "setConsent"; version: string }
   | { type: "newSession" }
   | { type: "saveSettings"; settings: Record<string, string> }
   | { type: "downloadModel"; localModel?: string }
@@ -255,6 +256,8 @@ class ExplorerPanel {
           return await this.onGenerate(msg.question, msg.mode ?? "agent");
         case "setMode":
           return await this.onSetMode(msg.mode);
+        case "setConsent":
+          return await this.onSetConsent(msg.version);
         case "newSession":
           this.conversation = [];
           this.post({ type: "sessionCleared" });
@@ -326,6 +329,7 @@ class ExplorerPanel {
         localServerModel: cfg.localServerModel,
         agenticMaxIterations: String(cfg.agenticMaxIterations),
         queryMode: cfg.queryMode,
+        aiDisclosureAcceptedVersion: cfg.aiDisclosureAcceptedVersion,
       },
       modelDownloaded: isModelDownloaded(),
     });
@@ -675,6 +679,22 @@ class ExplorerPanel {
     await vscode.workspace
       .getConfiguration("workflowInsight")
       .update("queryMode", mode, vscode.ConfigurationTarget.Global);
+  }
+
+  /**
+   * Record the user's acceptance of the AI-usage disclosure (the version of the
+   * notice they agreed to). Stored in settings so it persists and is auditable;
+   * a version bump re-prompts. Gating happens in the webview before any LLM
+   * call, but persisting here keeps the decision durable.
+   */
+  private async onSetConsent(version: string): Promise<void> {
+    await vscode.workspace
+      .getConfiguration("workflowInsight")
+      .update(
+        "aiDisclosureAcceptedVersion",
+        version,
+        vscode.ConfigurationTarget.Global,
+      );
   }
 
   /**

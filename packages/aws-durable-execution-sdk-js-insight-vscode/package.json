@@ -200,6 +200,11 @@
           ],
           "default": "agent",
           "description": "Default mode used by the Explorer composer's Send button. Remembered across sessions; you can switch it per-question from the Send dropdown."
+        },
+        "workflowInsight.aiDisclosureAcceptedVersion": {
+          "type": "string",
+          "default": "",
+          "description": "Records the version of the AI-usage disclosure the user accepted. Set automatically when the user agrees to the in-app AI notice before first using an AI feature (Ask/Agent/Visualize). Clear it to be prompted again."
         }
       }
     }

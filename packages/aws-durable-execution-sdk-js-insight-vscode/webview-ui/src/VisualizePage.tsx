@@ -19,6 +19,12 @@ interface Props {
   rows: string[][];
   suggestedCharts?: string[];
   onBack: () => void;
+  /**
+   * Optional gate run before any LLM request (the chart spec is model-built).
+   * Used to enforce the AI-usage consent: if consent isn't given yet, the host
+   * shows the disclosure and only runs the passed action after acceptance.
+   */
+  gate?: (action: () => void) => void;
 }
 
 type PresetType = "bar" | "stacked-bar" | "line" | "area" | "scatter" | "heatmap" | "histogram" | "pie" | "boxplot";
@@ -46,7 +52,7 @@ function isNumericString(v: string): boolean {
   return v.trim() !== "" && Number.isFinite(Number(v));
 }
 
-export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props) {
+export function VisualizePage({ columns, rows, suggestedCharts, onBack, gate }: Props) {
   const [spec, setSpec] = useState<Record<string, unknown> | null>(null);
   const [customPrompt, setCustomPrompt] = useState("");
   const [guideOpen, setGuideOpen] = useState(false);
@@ -159,9 +165,10 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
   const requestSpec = (req: { chartType?: string; description?: string }) => {
     const description = req.description?.trim() ?? "";
     if (!req.chartType && !description) return;
-    const requestId = ++reqIdRef.current;
-    setLlmLoading(true);
-    setLlmError("");
+    const run = () => {
+      const requestId = ++reqIdRef.current;
+      setLlmLoading(true);
+      setLlmError("");
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
       // Only fire if this is still the in-flight request (no reply arrived).
@@ -182,6 +189,9 @@ export function VisualizePage({ columns, rows, suggestedCharts, onBack }: Props)
       description,
       requestId,
     });
+    };
+    if (gate) gate(run);
+    else run();
   };
 
   return (

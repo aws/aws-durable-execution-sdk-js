@@ -11,10 +11,11 @@ import { QueryPanel } from "./QueryPanel";
 import { ResultsTable } from "./ResultsTable";
 import { VisualizePage } from "./VisualizePage";
 import { SettingsModal } from "./SettingsModal";
+import { AiConsentModal } from "./AiConsentModal";
 import { AgentTranscript } from "./AgentTranscript";
 import { SqsLiveView, toTable as sqsToTable, MAX_DISPLAYED_MESSAGES } from "./SqsLiveView";
 import type { InboundMessage, Settings, SqsMessageRow, AgentStep, QueryMode, Favorite } from "./types";
-import { DEFAULT_SETTINGS } from "./types";
+import { DEFAULT_SETTINGS, AI_DISCLOSURE_VERSION } from "./types";
 
 applyMode(Mode.Dark);
 
@@ -85,6 +86,13 @@ export function App() {
     hiddenColumns?: string[];
   } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // AI-usage consent gate. LLM actions (Ask/Agent/Visualize) are deferred behind
+  // a disclosure modal until the user has accepted the current disclosure
+  // version; the accepted action then runs.
+  const [consentOpen, setConsentOpen] = useState(false);
+  const pendingLlmRef = useRef<null | (() => void)>(null);
+  const consentAccepted =
+    settings.aiDisclosureAcceptedVersion === AI_DISCLOSURE_VERSION;
   const [loading, setLoading] = useState(false);
   const [modelDownloaded, setModelDownloaded] = useState(false);
   const [downloadPercent, setDownloadPercent] = useState(0);
@@ -262,7 +270,45 @@ export function App() {
     postMessage({ type: "generate", question, mode: useMode });
   };
 
-  const handleAsk = (question: string) => runQuestion(question, mode);
+  const handleAsk = (question: string) => {
+    // Query mode never uses an LLM — run it directly. Ask/Agent do, so gate
+    // them behind the AI-usage consent.
+    if (mode === "query") {
+      runQuestion(question, "query");
+      return;
+    }
+    gateLlm(() => runQuestion(question, mode));
+  };
+
+  // Run an LLM-backed action, first ensuring the AI-usage disclosure has been
+  // accepted; otherwise defer the action and open the consent modal.
+  const gateLlm = (action: () => void) => {
+    if (consentAccepted) {
+      action();
+      return;
+    }
+    pendingLlmRef.current = action;
+    setConsentOpen(true);
+  };
+
+  const acceptConsent = () => {
+    postMessage({ type: "setConsent", version: AI_DISCLOSURE_VERSION });
+    // Optimistically reflect acceptance so the gate opens immediately and the
+    // modal isn't shown again this session (the host persists it too).
+    setSettings((s) => ({
+      ...s,
+      aiDisclosureAcceptedVersion: AI_DISCLOSURE_VERSION,
+    }));
+    setConsentOpen(false);
+    const pending = pendingLlmRef.current;
+    pendingLlmRef.current = null;
+    pending?.();
+  };
+
+  const declineConsent = () => {
+    pendingLlmRef.current = null;
+    setConsentOpen(false);
+  };
 
   // Run a saved favorite: favorites are raw queries, so switch to "query" mode
   // (persisting it) and run the query verbatim.
@@ -348,6 +394,7 @@ export function App() {
                     columns={columns}
                     rows={rows}
                     onBack={() => setPage("data")}
+                    gate={gateLlm}
                   />
                 );
               })()}
@@ -473,6 +520,7 @@ export function App() {
                 rows={results.rows}
                 suggestedCharts={results.suggestedCharts}
                 onBack={() => setPage("data")}
+                gate={gateLlm}
               />
             )}
           </>
@@ -485,6 +533,12 @@ export function App() {
           downloadPercent={downloadPercent}
           onDismiss={() => setSettingsOpen(false)}
           onSave={handleSave}
+        />
+
+        <AiConsentModal
+          visible={consentOpen}
+          onAccept={acceptConsent}
+          onDecline={declineConsent}
         />
       </SpaceBetween>
     </div>
