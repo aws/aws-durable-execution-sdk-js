@@ -2,6 +2,9 @@ import Table from "@cloudscape-design/components/table";
 import Box from "@cloudscape-design/components/box";
 import Header from "@cloudscape-design/components/header";
 import ButtonDropdown from "@cloudscape-design/components/button-dropdown";
+import ExpandableSection from "@cloudscape-design/components/expandable-section";
+import CopyToClipboard from "@cloudscape-design/components/copy-to-clipboard";
+import SpaceBetween from "@cloudscape-design/components/space-between";
 import Pagination from "@cloudscape-design/components/pagination";
 import Spinner from "@cloudscape-design/components/spinner";
 import Modal from "@cloudscape-design/components/modal";
@@ -222,11 +225,44 @@ export function ResultsTable({
         query,
         destinationType: destinationType ?? "",
       });
+    } else if (id === "copyQuery" && query) {
+      // Webviews expose the async Clipboard API; ignore rejection (e.g. if the
+      // document isn't focused) rather than surfacing a hard error for a copy.
+      void navigator.clipboard?.writeText(query).catch(() => {});
     }
   };
 
   return (
     <>
+      {query ? (
+        <ExpandableSection
+          variant="default"
+          headerText="Query"
+          defaultExpanded={false}
+        >
+          <SpaceBetween size="xs">
+            <CopyToClipboard
+              copyButtonText="Copy query"
+              textToCopy={query}
+              copySuccessText="Query copied"
+              copyErrorText="Failed to copy query"
+              variant="inline"
+            />
+            <Box variant="code">
+              <pre
+                style={{
+                  margin: 0,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                }}
+              >
+                {query}
+              </pre>
+            </Box>
+          </SpaceBetween>
+        </ExpandableSection>
+      ) : null}
+
       <Table
         header={
           <Header
@@ -240,6 +276,12 @@ export function ResultsTable({
                   {
                     id: "favorite",
                     text: "Save query in favorites",
+                    disabled: !query,
+                    disabledReason: "No query is associated with this result.",
+                  },
+                  {
+                    id: "copyQuery",
+                    text: "Copy query",
                     disabled: !query,
                     disabledReason: "No query is associated with this result.",
                   },
