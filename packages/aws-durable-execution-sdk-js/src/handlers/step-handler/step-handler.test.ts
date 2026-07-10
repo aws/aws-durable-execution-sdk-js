@@ -85,6 +85,50 @@ describe("Step Handler", () => {
     expect(stepFn.mock.calls[0][0]).toHaveProperty("logger");
   });
 
+  it("should expose attempt = 1 on the first execution", async () => {
+    const stepHandler = createStepHandler(
+      mockContext,
+      mockCheckpoint,
+      mockParentContext,
+      createStepId,
+      createDefaultLogger(),
+    );
+
+    const stepFn = jest.fn().mockResolvedValue("step-result");
+
+    await stepHandler("test-step", stepFn);
+
+    // Fresh execution: no prior checkpointed attempts -> attempt is 1 (1-based).
+    expect(stepFn.mock.calls[0][0]).toHaveProperty("attempt", 1);
+  });
+
+  it("should expose attempt reflecting prior retries (1-based)", async () => {
+    // Simulate a replay where the step has already been attempted twice
+    // (StepDetails.Attempt counts prior attempts), so the current attempt is 3.
+    const hashedStepId = hashId("step-1");
+    (mockContext as any)._stepData[hashedStepId] = {
+      Id: hashedStepId,
+      StepDetails: { Attempt: 2 },
+    };
+    (mockContext.getStepData as jest.Mock).mockReturnValue(
+      (mockContext as any)._stepData[hashedStepId],
+    );
+
+    const stepHandler = createStepHandler(
+      mockContext,
+      mockCheckpoint,
+      mockParentContext,
+      createStepId,
+      createDefaultLogger(),
+    );
+
+    const stepFn = jest.fn().mockResolvedValue("step-result");
+
+    await stepHandler("test-step", stepFn);
+
+    expect(stepFn.mock.calls[0][0]).toHaveProperty("attempt", 3);
+  });
+
   it("should checkpoint at start and finish with AT_LEAST_ONCE_PER_RETRY semantics", async () => {
     const stepHandler = createStepHandler(
       mockContext,
