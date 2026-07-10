@@ -61,21 +61,40 @@ const ADOT_LAYER_ARNS: Record<string, string> = {
     "arn:aws:lambda:ap-southeast-2:615299751070:layer:AWSOpenTelemetryDistroJs:7",
 };
 
+// OpenTelemetry community collector-only layer for StandaloneOtelPlugin functions.
+// This layer only runs the OTel collector extension (OTLP receiver on localhost:4318 → X-Ray).
+// It does NOT include auto-instrumentation — the StandaloneOtelPlugin handles that.
+// Format: arn:aws:lambda:{region}:184161586896:layer:opentelemetry-collector-amd64-{version}:{layer-version}
+// Source: https://github.com/open-telemetry/opentelemetry-lambda/releases
+const OTEL_COLLECTOR_LAYER_ARN_TEMPLATE =
+  "arn:aws:lambda:${region}:184161586896:layer:opentelemetry-collector-amd64-0_14_0:1";
+
+function getOtelCollectorLayerArn(region: string): string {
+  return OTEL_COLLECTOR_LAYER_ARN_TEMPLATE.replace("${region}", region);
+}
+
 /**
  * Checks if the handler corresponds to an otel function that needs ADOT
  * auto-instrumentation (AWS_LAMBDA_EXEC_WRAPPER). Standalone plugin functions
- * use the ADOT layer for its collector only — no exec wrapper needed.
+ * use a collector-only layer — no exec wrapper needed.
  */
 function isOtelFunction(handler: string): boolean {
   return handler.includes("otel-") && !handler.includes("otel-standalone");
 }
 
 /**
- * Checks if the handler needs the ADOT layer and Active Tracing (both regular
- * otel and standalone otel functions do).
+ * Checks if the handler is a standalone otel function that needs the
+ * collector-only layer (no ADOT auto-instrumentation).
+ */
+function isStandaloneOtelFunction(handler: string): boolean {
+  return handler.includes("otel-standalone");
+}
+
+/**
+ * Checks if the handler needs the ADOT layer (regular otel functions only).
  */
 function needsAdotLayer(handler: string): boolean {
-  return handler.includes("otel-");
+  return handler.includes("otel-") && !handler.includes("otel-standalone");
 }
 
 // Types
@@ -386,6 +405,14 @@ async function createFunction(
         AWS_LAMBDA_EXEC_WRAPPER: "/opt/otel-instrument",
       };
     }
+  } else if (isStandaloneOtelFunction(exampleConfig.handler)) {
+    // StandaloneOtelPlugin: use the OTel community collector-only layer
+    tracingConfig = { Mode: "Active" };
+    layers = [getOtelCollectorLayerArn(env.AWS_REGION)];
+    envVars = {
+      ...envVars,
+      OPENTELEMETRY_COLLECTOR_CONFIG_URI: "/var/task/collector.yaml",
+    };
   }
 
   const createParams: CreateFunctionCommandInput = {
@@ -484,6 +511,13 @@ async function updateFunction(
           };
         }
 
+        if (isStandaloneOtelFunction(exampleConfig.handler)) {
+          vars = {
+            ...vars,
+            OPENTELEMETRY_COLLECTOR_CONFIG_URI: "/var/task/collector.yaml",
+          };
+        }
+
         return vars;
       })(),
     },
@@ -514,7 +548,12 @@ async function updateFunction(
             return [adotArn];
           })(),
         }
-      : {}),
+      : isStandaloneOtelFunction(exampleConfig.handler)
+        ? {
+            TracingConfig: { Mode: "Active" as const },
+            Layers: [getOtelCollectorLayerArn(env.AWS_REGION)],
+          }
+        : {}),
   };
 
   // Check if DurableConfig needs updating

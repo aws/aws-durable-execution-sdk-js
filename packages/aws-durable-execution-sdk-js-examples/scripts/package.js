@@ -47,6 +47,18 @@ try {
   );
 } catch {}
 
+// Copy collector.yaml for standalone otel functions
+if (fileName.includes("otel-standalone")) {
+  const collectorSrc = path.join(
+    __dirname,
+    "../src/examples/otel/standalone-xray-e2e/collector.yaml",
+  );
+  if (fs.existsSync(collectorSrc)) {
+    fs.copyFileSync(collectorSrc, path.join(tempDir, "collector.yaml"));
+    console.log("  Included collector.yaml for StandaloneOtelPlugin");
+  }
+}
+
 // Create zip file with quiet mode to avoid buffer overflow
 const zipFile = `${handlerFile}.zip`;
 execSync(`cd ${tempDir} && zip -q -r ../${zipFile} .`);

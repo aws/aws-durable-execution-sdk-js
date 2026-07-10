@@ -1,0 +1,14 @@
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: "localhost:4318"
+
+exporters:
+  awsxray:
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [awsxray]

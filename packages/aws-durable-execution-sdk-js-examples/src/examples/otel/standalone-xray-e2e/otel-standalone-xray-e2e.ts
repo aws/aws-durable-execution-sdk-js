@@ -92,40 +92,6 @@ export const handler = withDurableExecution(
     // Derive trace ID from X-Ray header for test assertions
     const xRayHeader = process.env._X_AMZN_TRACE_ID;
 
-    // Diagnostic: probe the ADOT collector HTTP endpoint
-    let collectorProbe: { status?: number; error?: string } = {};
-    if (isCloudEnvironment()) {
-      try {
-        const http = await import("http");
-        const probeResult = await new Promise<{
-          status?: number;
-          error?: string;
-        }>((resolve) => {
-          const req = http.request(
-            "http://localhost:4318/v1/traces",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              timeout: 2000,
-            },
-            (res) => {
-              resolve({ status: res.statusCode });
-            },
-          );
-          req.on("error", (err) => resolve({ error: err.message }));
-          req.on("timeout", () => {
-            req.destroy();
-            resolve({ error: "timeout" });
-          });
-          req.write("{}"); // empty payload to test connectivity
-          req.end();
-        });
-        collectorProbe = probeResult;
-      } catch (err: any) {
-        collectorProbe = { error: err.message ?? String(err) };
-      }
-    }
-
     // Exercise multiple operation types for X-Ray verification
     const step1 = await context.step("fetch-data", async () => "data-value");
 
@@ -153,13 +119,6 @@ export const handler = withDurableExecution(
       xRayHeader,
       result: { step1, step2, childResult },
       spans: getSerializedSpans(),
-      debug: {
-        collectorProbe,
-        otlpEndpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
-        otlpTracesEndpoint: process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT,
-        lambdaExecWrapper: process.env.AWS_LAMBDA_EXEC_WRAPPER,
-        isCloud: isCloudEnvironment(),
-      },
     };
   },
   { plugins: [plugin] },
