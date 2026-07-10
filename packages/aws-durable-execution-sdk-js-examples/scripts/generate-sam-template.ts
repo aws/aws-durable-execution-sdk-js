@@ -50,6 +50,7 @@ const DEFAULT_CONFIG = {
   timeout: 60,
   policies: [],
 };
+const INTEGRATION_TEST_LOG_RETENTION_DAYS = 7;
 
 interface FunctionNameConfig {
   functionName: string;
@@ -280,8 +281,7 @@ function generateTemplate(options: TemplateOptions | boolean = {}) {
           Type: "AWS::Logs::LogGroup",
           Properties: {
             LogGroupName: `/aws/lambda/${functionName}`,
-            RetentionInDays:
-              (catalog as any).durableConfig?.RetentionPeriodInDays ?? 7,
+            RetentionInDays: INTEGRATION_TEST_LOG_RETENTION_DAYS,
           },
         };
 

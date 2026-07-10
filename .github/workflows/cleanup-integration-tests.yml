@@ -56,8 +56,8 @@ jobs:
       id-token: write
 
     concurrency:
-      # Match integration-tests.yml so cleanup and deploy/test cannot touch the same PR/runtime stack at once.
-      group: pr-${{ github.event.pull_request.number || github.event.number || github.head_ref || github.ref_name || github.run_id }}-${{ matrix.node-version }}-integ
+      # Legacy cleanup only touches the previous PR-scoped stack name.
+      group: legacy-pr-${{ github.event.pull_request.number || github.event.number || github.head_ref || github.ref_name || github.run_id }}-${{ matrix.node-version }}-integ-cleanup
       cancel-in-progress: false
 
     strategy:
@@ -96,13 +96,13 @@ jobs:
       - name: Setup SAM CLI
         uses: aws-actions/setup-sam@v2
 
-      - name: Cleanup SAM stack
+      - name: Cleanup legacy PR test resources
         env:
           LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
           GITHUB_EVENT_NAME: "pull_request"
           GITHUB_EVENT_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          node .github/workflows/scripts/integration-test/integration-test.js --cleanup-only --runtime ${{ matrix.node-version }}
+          node .github/workflows/scripts/integration-test/integration-test.js --cleanup-legacy-pr-stack --runtime ${{ matrix.node-version }}
 
   cleanup-old-pr-testing-stacks:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

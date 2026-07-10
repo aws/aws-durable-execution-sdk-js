@@ -138,18 +138,18 @@ The integration tests are orchestrated by the [integration test workflow](.githu
 
 And one variable: `AWS_REGION` - The AWS region used for testing functions.
 
-Integration test function deployment, tests, and function cleanup are all orchestrated using the [integration test script](./.github/workflows/scripts/integration-test/integration-test.js).
+Integration test function deployment and tests are orchestrated using the [integration test script](./.github/workflows/scripts/integration-test/integration-test.js).
 
-When a PR is closed, the [cleanup-integration-tests.yml](.github/workflows/cleanup-integration-tests.yml) runs which cleans up the Lambda functions used in the PR.
+The SAM-managed integration test functions are deployed once per runtime and reused across PRs. When a PR is closed, the [cleanup-integration-tests.yml](.github/workflows/cleanup-integration-tests.yml) only removes legacy PR-scoped test resources.
 
 ### Checking function logs
 
-The functions used in the integration tests are kept alive until the PR is closed or merged. This makes it possible to debug functions or function logs in the console.
+The functions used in the integration tests are kept alive for reuse. This makes it possible to debug functions or function logs in the console.
 
 **Function Naming Convention:**
 
-- Functions in main branch: `{ExampleName}-24x-NodeJS`
-- PR Functions: `{ExampleName}-24x-NodeJS-PR-{number}`
+- SAM-managed integration functions: `{ExampleName}-24x-NodeJS`
+- Capacity-provider PR functions: `{ExampleName}-24x-NodeJS-PR-{number}-CapacityProvider`
 - Local Development: `{ExampleName}-24x-NodeJS-Local`
 - Functions deployed to personal account: `${ExampleName}-24x-NodeJS-Local-CapacityProvider`
 

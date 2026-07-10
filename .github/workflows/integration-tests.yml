@@ -7,9 +7,9 @@ on:
         required: true
         type: string
 
-# Serialize updates to this PR/runtime stack.
+# Serialize updates to the shared runtime stack.
 concurrency:
-  group: pr-${{ github.event.pull_request.number || github.event.number || github.head_ref || github.ref_name || github.run_id }}-${{ inputs.node-version }}-integ
+  group: runtime-${{ inputs.node-version }}-integ
   cancel-in-progress: false
 
 jobs:
@@ -53,7 +53,6 @@ jobs:
         env:
           LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
-          GITHUB_EVENT_NUMBER: ${{ github.event.number }}
           TEST_ACCOUNT_ID: ${{ secrets.TEST_ACCOUNT_ID }}
           TEST_LAMBDA_EXECUTION_ROLE_ARN: ${{ secrets.TEST_LAMBDA_EXECUTION_ROLE_ARN }}
         run: node .github/workflows/scripts/integration-test/integration-test.js --deploy-only --runtime ${{ inputs.node-version }}
@@ -98,6 +97,5 @@ jobs:
         env:
           LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
-          GITHUB_EVENT_NUMBER: ${{ github.event.number }}
         run: |
           node .github/workflows/scripts/integration-test/integration-test.js --test-only --runtime ${{ inputs.node-version }}

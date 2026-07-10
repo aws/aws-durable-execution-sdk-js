@@ -139,8 +139,8 @@ When you push to GitHub, the integration test workflow (`.github/workflows/integ
    - Build all packages
    - Generate the examples catalog from the config
    - Generate a SAM template for the selected Node.js runtime
-   - Deploy/update the integration-test SAM stack
-   - Function name format: `YourExampleName-22x-NodeJS` (or with `-PR-{number}` suffix for PRs)
+   - Deploy/update the shared integration-test SAM stack for the selected runtime
+   - Function name format: `YourExampleName-22x-NodeJS`
 
 2. **Test Stage**:
    - Run `npm run test:integration` in examples package
@@ -148,8 +148,8 @@ When you push to GitHub, the integration test workflow (`.github/workflows/integ
    - Function names are passed via `FUNCTION_NAME_MAP` environment variable
 
 3. **Cleanup Stage**:
-   - Delete the PR's SAM stack after the PR closes
-   - A daily scheduled cleanup deletes PR testing stacks older than 7 days
+   - SAM-managed integration test functions remain deployed for reuse by later PRs
+   - A daily scheduled cleanup deletes legacy PR testing stacks older than 7 days
 
 ### Run Integration Tests Locally
 

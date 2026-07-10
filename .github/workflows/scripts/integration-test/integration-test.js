@@ -49,12 +49,9 @@ const log = {
 const CONFIG = {
   AWS_REGION: process.env.AWS_REGION || "us-east-1",
   LAMBDA_ENDPOINT: process.env.LAMBDA_ENDPOINT,
-  TEST_ACCOUNT_ID: process.env.TEST_ACCOUNT_ID ?? process.env.AWS_ACCOUNT_ID,
-  TEST_CAPACITY_PROVIDER_ARN:
-    process.env.TEST_CAPACITY_PROVIDER_ARN ?? process.env.CAPACITY_PROVIDER_ARN,
-  TEST_LAMBDA_EXECUTION_ROLE_ARN:
-    process.env.TEST_LAMBDA_EXECUTION_ROLE_ARN ??
-    process.env.LAMBDA_EXECUTION_ROLE_ARN,
+  TEST_ACCOUNT_ID: process.env.TEST_ACCOUNT_ID,
+  TEST_CAPACITY_PROVIDER_ARN: process.env.TEST_CAPACITY_PROVIDER_ARN,
+  TEST_LAMBDA_EXECUTION_ROLE_ARN: process.env.TEST_LAMBDA_EXECUTION_ROLE_ARN,
   PROJECT_ROOT: join(__dirname, "../../../.."),
   // Package directory paths
   SDK_PACKAGE_PATH: join(
@@ -190,25 +187,25 @@ class IntegrationTestRunner {
 
   getSamStackName() {
     const runtimeId = this.getRuntimeId().toLowerCase();
-    if (
-      this.isGitHubActions &&
-      process.env.GITHUB_EVENT_NAME === "pull_request"
-    ) {
-      if (!process.env.GITHUB_EVENT_NUMBER) {
-        throw new Error(
-          "Could not find GITHUB_EVENT_NUMBER environment variable",
-        );
-      }
-      return `aws-durable-execution-sdk-js-integ-${runtimeId}-pr-${process.env.GITHUB_EVENT_NUMBER}`;
-    }
     return `aws-durable-execution-sdk-js-integ-${runtimeId}`;
   }
 
-  samStackExists() {
-    const stackName = this.getSamStackName();
+  getLegacyPRSamStackName() {
+    if (!process.env.GITHUB_EVENT_NUMBER) {
+      throw new Error("Could not find GITHUB_EVENT_NUMBER environment variable");
+    }
+    const runtimeId = this.getRuntimeId().toLowerCase();
+    return (
+      `aws-durable-execution-sdk-js-integ-${runtimeId}-pr-` +
+      process.env.GITHUB_EVENT_NUMBER
+    );
+  }
+
+  samStackExists(/** @type {string | undefined} */ stackName = undefined) {
+    const resolvedStackName = stackName ?? this.getSamStackName();
     try {
       this.execCommand(
-        `aws cloudformation describe-stacks --stack-name ${shellQuote(stackName)} --region ${shellQuote(CONFIG.AWS_REGION)}`,
+        `aws cloudformation describe-stacks --stack-name ${shellQuote(resolvedStackName)} --region ${shellQuote(CONFIG.AWS_REGION)}`,
         { silent: true },
       );
       return true;
@@ -244,7 +241,7 @@ class IntegrationTestRunner {
 
   /**
    *
-   * @param {{ capacityProviderOnly: boolean }} options
+   * @param {{ capacityProviderOnly: boolean, prScopedFunctionNames?: boolean }} options
    * @returns
    */
   async getFunctionNameMap(options) {
@@ -265,7 +262,10 @@ class IntegrationTestRunner {
         // Functions are named with the runtime first since the log scrubber cleans logs by the NodeJS- suffix
         const baseName =
           exampleName.replace(/\s/g, "") + `-${lambdaRuntime}-NodeJS`;
-        if (process.env.GITHUB_EVENT_NAME === "pull_request") {
+        if (
+          (options.capacityProviderOnly || options.prScopedFunctionNames) &&
+          process.env.GITHUB_EVENT_NAME === "pull_request"
+        ) {
           if (!process.env.GITHUB_EVENT_NUMBER) {
             throw new Error(
               "Could not find GITHUB_EVENT_NUMBER environment variable",
@@ -615,6 +615,29 @@ class IntegrationTestRunner {
     }
   }
 
+  async cleanupLegacyPRTestResources() {
+    const stackName = this.getLegacyPRSamStackName();
+
+    if (this.samStackExists(stackName)) {
+      log.info(`Deleting legacy PR SAM stack: ${stackName}`);
+      this.execCommand(
+        `sam delete --stack-name ${shellQuote(stackName)} --region ${shellQuote(CONFIG.AWS_REGION)} --no-prompts`,
+      );
+      log.success(`Deleted legacy PR SAM stack: ${stackName}`);
+      return;
+    }
+
+    log.warning(
+      `Legacy PR SAM stack ${stackName} was not found; falling back to legacy Lambda cleanup`,
+    );
+    await this.cleanupLambdaFunctions(
+      await this.getFunctionNameMap({
+        capacityProviderOnly: false,
+        prScopedFunctionNames: true,
+      }),
+    );
+  }
+
   /**
    * Delete PR integration test SAM stacks older than the supplied age.
    *
@@ -684,6 +707,7 @@ class IntegrationTestRunner {
    * @param {boolean} [options.deployOnly]
    * @param {boolean} [options.testOnly]
    * @param {boolean} [options.cleanupOnly]
+   * @param {boolean} [options.cleanupLegacyPRStack]
    * @param {boolean} [options.cleanupOldPRStacks]
    * @param {number} [options.olderThanDays]
    * @param {string} [options.testPattern]
@@ -694,6 +718,7 @@ class IntegrationTestRunner {
       deployOnly = false,
       testOnly = false,
       cleanupOnly = false,
+      cleanupLegacyPRStack = false,
       cleanupOldPRStacks = false,
       olderThanDays = 7,
       testPattern,
@@ -708,6 +733,11 @@ class IntegrationTestRunner {
 
     if (cleanupOnly) {
       await this.cleanup(capacityProviderOnly);
+      return;
+    }
+
+    if (cleanupLegacyPRStack) {
+      await this.cleanupLegacyPRTestResources();
       return;
     }
 
@@ -766,6 +796,11 @@ async function main() {
     help: "Only cleanup existing functions",
   });
 
+  group.add_argument("--cleanup-legacy-pr-stack", {
+    action: "store_true",
+    help: "Only cleanup the legacy PR-scoped SAM stack for this runtime",
+  });
+
   group.add_argument("--cleanup-old-pr-stacks", {
     action: "store_true",
     help: "Only cleanup PR testing stacks older than --older-than-days",
@@ -803,6 +838,7 @@ async function main() {
     deployOnly: args.deploy_only || false,
     testOnly: args.test_only || false,
     cleanupOnly: args.cleanup_only || false,
+    cleanupLegacyPRStack: args.cleanup_legacy_pr_stack || false,
     cleanupOldPRStacks: args.cleanup_old_pr_stacks || false,
     olderThanDays: Number.parseInt(args.older_than_days, 10),
     testPattern: args.test_pattern,

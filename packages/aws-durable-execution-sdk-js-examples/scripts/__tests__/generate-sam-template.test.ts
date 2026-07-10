@@ -26,7 +26,8 @@ jest.mock("fs", () => ({
         handler: "steps-with-retry.handler",
         durableConfig: {
           ExecutionTimeout: 60,
-          RetentionPeriodInDays: 7,
+          // Keep this different from log retention to verify they are independent.
+          RetentionPeriodInDays: 30,
         },
       },
     ]),
@@ -93,7 +94,7 @@ describe("generate-sam-template", () => {
     test("uses CI options when provided", () => {
       const resource = createFunctionResource(
         getExamplesCatalogJson()[0],
-        "HelloWorld-24x-NodeJS-PR-123",
+        "HelloWorld-24x-NodeJS",
         {
           codeUri: "../dist",
           lambdaEndpoint: "https://lambda.us-west-2.amazonaws.com",
@@ -104,9 +105,7 @@ describe("generate-sam-template", () => {
       );
 
       expect(resource.Properties.CodeUri).toBe("../dist");
-      expect(resource.Properties.FunctionName).toBe(
-        "HelloWorld-24x-NodeJS-PR-123",
-      );
+      expect(resource.Properties.FunctionName).toBe("HelloWorld-24x-NodeJS");
       expect(resource.Properties.Role).toBe(
         "arn:aws:iam::123456789012:role/test-lambda-role",
       );
@@ -121,7 +120,7 @@ describe("generate-sam-template", () => {
     test("keeps example config with CI function names", () => {
       const resource = createFunctionResource(
         getExamplesCatalogJson()[1],
-        "StepswithRetry-24x-NodeJS-PR-123",
+        "StepswithRetry-24x-NodeJS",
         {
           lambdaExecutionRoleArn:
             "arn:aws:iam::123456789012:role/test-lambda-role",
@@ -165,10 +164,10 @@ describe("generate-sam-template", () => {
         codeUri: "../dist",
         functionNameMap: {
           "hello-world": {
-            functionName: "HelloWorld-24x-NodeJS-PR-123",
+            functionName: "HelloWorld-24x-NodeJS",
           },
           "steps-with-retry": {
-            functionName: "StepswithRetry-24x-NodeJS-PR-123",
+            functionName: "StepswithRetry-24x-NodeJS",
           },
         },
         lambdaExecutionRoleArn:
@@ -178,7 +177,7 @@ describe("generate-sam-template", () => {
 
       expect(template.Resources.DurableFunctionRole).toBeUndefined();
       expect(template.Resources.HelloWorld.Properties.FunctionName).toBe(
-        "HelloWorld-24x-NodeJS-PR-123",
+        "HelloWorld-24x-NodeJS",
       );
       expect(template.Resources.HelloWorld.Properties.CodeUri).toBe("../dist");
       expect(template.Resources.HelloWorld.Properties.Runtime).toBe(
@@ -190,7 +189,7 @@ describe("generate-sam-template", () => {
       expect(template.Resources.HelloWorldLogGroup).toEqual({
         Type: "AWS::Logs::LogGroup",
         Properties: {
-          LogGroupName: "/aws/lambda/HelloWorld-24x-NodeJS-PR-123",
+          LogGroupName: "/aws/lambda/HelloWorld-24x-NodeJS",
           RetentionInDays: 7,
         },
       });
@@ -198,6 +197,10 @@ describe("generate-sam-template", () => {
         256,
       );
       expect(template.Resources.StepsWithRetry.Properties.Timeout).toBe(300);
+      expect(template.Resources.StepsWithRetryLogGroup.Properties).toEqual({
+        LogGroupName: "/aws/lambda/StepswithRetry-24x-NodeJS",
+        RetentionInDays: 7,
+      });
     });
   });
 });
