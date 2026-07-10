@@ -58,9 +58,18 @@ export interface OperationContext<Logger extends DurableLogger> {
  * Context for step operations.
  * @public
  */
-export type StepContext<Logger extends DurableLogger> = OperationContext<
-  DurableContextLogger<Logger>
->;
+export interface StepContext<
+  Logger extends DurableLogger,
+> extends OperationContext<DurableContextLogger<Logger>> {
+  /**
+   * The current attempt number for this step, starting at `1` for the first
+   * execution and incrementing by `1` on each subsequent retry.
+   *
+   * Use this to implement attempt-aware logic, for example selecting a
+   * fallback path once earlier attempts have failed.
+   */
+  attempt: number;
+}
 
 /**
  * Context for waitForCondition operations.

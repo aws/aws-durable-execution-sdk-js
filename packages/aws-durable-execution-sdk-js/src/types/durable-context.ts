@@ -82,7 +82,8 @@ export interface DurableContext<TLogger extends DurableLogger = DurableLogger> {
    * @remarks
    * **IMPORTANT**: `step()` is designed for single atomic operations and cannot be used to group
    * multiple durable operations (like other steps, waits, or child contexts). The step function
-   * receives a simple `StepContext` (for logging only), not a full `DurableContext`.
+   * receives a simple `StepContext` (providing a logger and the current retry `attempt` number),
+   * not a full `DurableContext`.
    *
    * **To group multiple durable operations, use `runInChildContext()` instead:**
    * ```typescript

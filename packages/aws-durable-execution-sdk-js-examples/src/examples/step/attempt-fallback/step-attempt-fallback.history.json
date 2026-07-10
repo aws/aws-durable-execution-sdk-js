@@ -1,0 +1,140 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "2ee0f602-4aa4-4848-8270-f343ca43dadd",
+    "EventTimestamp": "2026-07-09T22:41:29.193Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "place-backorder",
+    "EventTimestamp": "2026-07-09T22:41:29.201Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "place-backorder",
+    "EventTimestamp": "2026-07-09T22:41:29.201Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "supplier-a is out of stock",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2026-07-09T22:41:29.223Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-07-09T22:41:29.192Z",
+      "EndTimestamp": "2026-07-09T22:41:29.223Z",
+      "Error": {},
+      "RequestId": "78c18b0c-8092-415f-8adf-93d47da4befd"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "c4ca4238a0b92382",
+    "Name": "place-backorder",
+    "EventTimestamp": "2026-07-09T22:41:30.205Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "c4ca4238a0b92382",
+    "Name": "place-backorder",
+    "EventTimestamp": "2026-07-09T22:41:30.205Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "supplier-b is out of stock",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 7,
+    "EventTimestamp": "2026-07-09T22:41:30.226Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-07-09T22:41:30.203Z",
+      "EndTimestamp": "2026-07-09T22:41:30.226Z",
+      "Error": {},
+      "RequestId": "08213b9f-0dd0-4139-bde7-a49f687105cc"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "c4ca4238a0b92382",
+    "Name": "place-backorder",
+    "EventTimestamp": "2026-07-09T22:41:31.209Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 9,
+    "Id": "c4ca4238a0b92382",
+    "Name": "place-backorder",
+    "EventTimestamp": "2026-07-09T22:41:31.209Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"supplier\":\"supplier-c\",\"attempt\":3,\"status\":\"backordered\"}"
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 2
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 10,
+    "EventTimestamp": "2026-07-09T22:41:31.210Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-07-09T22:41:31.207Z",
+      "EndTimestamp": "2026-07-09T22:41:31.210Z",
+      "Error": {},
+      "RequestId": "0e7aa631-ee54-4292-a175-1553f1f01b22"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 11,
+    "Id": "2ee0f602-4aa4-4848-8270-f343ca43dadd",
+    "EventTimestamp": "2026-07-09T22:41:31.210Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"supplier\":\"supplier-c\",\"attempt\":3,\"status\":\"backordered\"}"
+      }
+    }
+  }
+]
