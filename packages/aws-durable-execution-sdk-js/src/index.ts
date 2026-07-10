@@ -33,9 +33,15 @@ export {
   BatchItemStatus,
   BatchResult,
   CompletionConfig,
+  ThresholdCompletionConfig,
+  CustomCompletionConfig,
   CompletionReason,
   CompletionStatus,
   CompletionItemStatus,
+  CompletionDecision,
+  CompletionOutcome,
+  completeBatch,
+  continueBatch,
   RetryDecision,
   NestingType,
 } from "./types";
@@ -52,6 +58,7 @@ export {
   ChildContextError,
   WaitForConditionError,
   PromiseCombinatorError,
+  BatchCompletionError,
 } from "./errors/durable-error/durable-error";
 export {
   defaultSerdes,
