@@ -8,9 +8,9 @@ import yaml from "js-yaml";
 const ADOT_LAYER_ARN =
   "arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7";
 
-// OpenTelemetry community collector-only layer for StandaloneOtelPlugin functions
+// OpenTelemetry community layer for StandaloneOtelPlugin functions (us-west-2 default)
 const OTEL_COLLECTOR_LAYER_ARN =
-  "arn:aws:lambda:us-west-2:184161586896:layer:opentelemetry-collector-amd64-0_14_0:1";
+  "arn:aws:lambda:us-west-2:184161586896:layer:opentelemetry-nodejs-0_22_0:1";
 
 // Configuration for different examples that need special settings
 const EXAMPLE_CONFIGS: Record<string, any> = {
@@ -95,7 +95,7 @@ function createFunctionResource(
     } else {
       // StandaloneOtelPlugin: use collector-only layer
       functionResource.Properties.Layers = [OTEL_COLLECTOR_LAYER_ARN];
-      functionResource.Properties.Environment.Variables.OPENTELEMETRY_COLLECTOR_CONFIG_URI =
+      functionResource.Properties.Environment.Variables.OPENTELEMETRY_COLLECTOR_CONFIG_FILE =
         "/var/task/collector.yaml";
     }
   }

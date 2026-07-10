@@ -61,13 +61,13 @@ const ADOT_LAYER_ARNS: Record<string, string> = {
     "arn:aws:lambda:ap-southeast-2:615299751070:layer:AWSOpenTelemetryDistroJs:7",
 };
 
-// OpenTelemetry community collector-only layer for StandaloneOtelPlugin functions.
-// This layer only runs the OTel collector extension (OTLP receiver on localhost:4318 → X-Ray).
-// It does NOT include auto-instrumentation — the StandaloneOtelPlugin handles that.
-// Format: arn:aws:lambda:{region}:184161586896:layer:opentelemetry-collector-amd64-{version}:{layer-version}
+// OpenTelemetry community layer for StandaloneOtelPlugin functions.
+// This layer includes the OTel collector extension (OTLP receiver on localhost:4318 → X-Ray).
+// The StandaloneOtelPlugin handles instrumentation — only the collector component is used.
+// Format: arn:aws:lambda:{region}:184161586896:layer:opentelemetry-nodejs-0_22_0:1
 // Source: https://github.com/open-telemetry/opentelemetry-lambda/releases
 const OTEL_COLLECTOR_LAYER_ARN_TEMPLATE =
-  "arn:aws:lambda:${region}:184161586896:layer:opentelemetry-collector-amd64-0_14_0:1";
+  "arn:aws:lambda:${region}:184161586896:layer:opentelemetry-nodejs-0_22_0:1";
 
 function getOtelCollectorLayerArn(region: string): string {
   return OTEL_COLLECTOR_LAYER_ARN_TEMPLATE.replace("${region}", region);
@@ -411,7 +411,7 @@ async function createFunction(
     layers = [getOtelCollectorLayerArn(env.AWS_REGION)];
     envVars = {
       ...envVars,
-      OPENTELEMETRY_COLLECTOR_CONFIG_URI: "/var/task/collector.yaml",
+      OPENTELEMETRY_COLLECTOR_CONFIG_FILE: "/var/task/collector.yaml",
     };
   }
 
@@ -514,7 +514,7 @@ async function updateFunction(
         if (isStandaloneOtelFunction(exampleConfig.handler)) {
           vars = {
             ...vars,
-            OPENTELEMETRY_COLLECTOR_CONFIG_URI: "/var/task/collector.yaml",
+            OPENTELEMETRY_COLLECTOR_CONFIG_FILE: "/var/task/collector.yaml",
           };
         }
 
