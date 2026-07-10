@@ -46,7 +46,7 @@ export interface StandaloneOtelPluginConfig {
     /**
      * Exporter endpoint URL. Defaults to the value of the
      * `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable, or
-     * `http://localhost:4318/v1/traces` if not set.
+     * `http://localhost:4318` if not set.
      */
     endpoint?: string;
 
