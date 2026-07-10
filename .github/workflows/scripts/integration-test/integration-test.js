@@ -190,17 +190,6 @@ class IntegrationTestRunner {
     return `aws-durable-execution-sdk-js-integ-${runtimeId}`;
   }
 
-  getLegacyPRSamStackName() {
-    if (!process.env.GITHUB_EVENT_NUMBER) {
-      throw new Error("Could not find GITHUB_EVENT_NUMBER environment variable");
-    }
-    const runtimeId = this.getRuntimeId().toLowerCase();
-    return (
-      `aws-durable-execution-sdk-js-integ-${runtimeId}-pr-` +
-      process.env.GITHUB_EVENT_NUMBER
-    );
-  }
-
   samStackExists(/** @type {string | undefined} */ stackName = undefined) {
     const resolvedStackName = stackName ?? this.getSamStackName();
     try {
@@ -241,7 +230,7 @@ class IntegrationTestRunner {
 
   /**
    *
-   * @param {{ capacityProviderOnly: boolean, prScopedFunctionNames?: boolean }} options
+   * @param {{ capacityProviderOnly: boolean }} options
    * @returns
    */
   async getFunctionNameMap(options) {
@@ -263,7 +252,7 @@ class IntegrationTestRunner {
         const baseName =
           exampleName.replace(/\s/g, "") + `-${lambdaRuntime}-NodeJS`;
         if (
-          (options.capacityProviderOnly || options.prScopedFunctionNames) &&
+          options.capacityProviderOnly &&
           process.env.GITHUB_EVENT_NAME === "pull_request"
         ) {
           if (!process.env.GITHUB_EVENT_NUMBER) {
@@ -615,101 +604,11 @@ class IntegrationTestRunner {
     }
   }
 
-  async cleanupLegacyPRTestResources() {
-    const stackName = this.getLegacyPRSamStackName();
-
-    if (this.samStackExists(stackName)) {
-      log.info(`Deleting legacy PR SAM stack: ${stackName}`);
-      this.execCommand(
-        `sam delete --stack-name ${shellQuote(stackName)} --region ${shellQuote(CONFIG.AWS_REGION)} --no-prompts`,
-      );
-      log.success(`Deleted legacy PR SAM stack: ${stackName}`);
-      return;
-    }
-
-    log.warning(
-      `Legacy PR SAM stack ${stackName} was not found; falling back to legacy Lambda cleanup`,
-    );
-    await this.cleanupLambdaFunctions(
-      await this.getFunctionNameMap({
-        capacityProviderOnly: false,
-        prScopedFunctionNames: true,
-      }),
-    );
-  }
-
-  /**
-   * Delete PR integration test SAM stacks older than the supplied age.
-   *
-   * @param {number} olderThanDays
-   */
-  async cleanupOldPRTestingStacks(olderThanDays) {
-    const stackNamePrefix = `aws-durable-execution-sdk-js-integ-${this.getRuntimeId().toLowerCase()}-pr-`;
-    const cutoffMs = Date.now() - olderThanDays * 24 * 60 * 60 * 1000;
-    const deletableStatuses = [
-      "CREATE_COMPLETE",
-      "CREATE_FAILED",
-      "DELETE_FAILED",
-      "IMPORT_COMPLETE",
-      "IMPORT_ROLLBACK_COMPLETE",
-      "ROLLBACK_COMPLETE",
-      "UPDATE_COMPLETE",
-      "UPDATE_ROLLBACK_COMPLETE",
-      "UPDATE_ROLLBACK_FAILED",
-    ];
-
-    log.info(
-      `Looking for ${stackNamePrefix}* stacks older than ${olderThanDays} days`,
-    );
-
-    const { output } = this.execCommand(
-      [
-        "aws cloudformation list-stacks",
-        `--region ${shellQuote(CONFIG.AWS_REGION)}`,
-        `--stack-status-filter ${deletableStatuses.join(" ")}`,
-        "--output json",
-      ].join(" "),
-      { silent: true },
-    );
-    const response = JSON.parse(output);
-    const stacks = response.StackSummaries ?? [];
-
-    const oldPRStacks = stacks.filter((/** @type {any} */ stack) => {
-      if (!stack.StackName?.startsWith(stackNamePrefix)) {
-        return false;
-      }
-
-      const lastTouchedAt = Date.parse(
-        stack.LastUpdatedTime ?? stack.CreationTime,
-      );
-      return !Number.isNaN(lastTouchedAt) && lastTouchedAt < cutoffMs;
-    });
-
-    if (oldPRStacks.length === 0) {
-      log.success("No old PR testing stacks found");
-      return;
-    }
-
-    for (const stack of oldPRStacks) {
-      const lastTouchedTime = stack.LastUpdatedTime ?? stack.CreationTime;
-      log.info(
-        `Deleting old PR testing stack: ${stack.StackName} (${lastTouchedTime})`,
-      );
-      this.execCommand(
-        `sam delete --stack-name ${shellQuote(stack.StackName)} --region ${shellQuote(CONFIG.AWS_REGION)} --no-prompts`,
-      );
-      log.success(`Deleted old PR testing stack: ${stack.StackName}`);
-    }
-  }
-
   /**
    * @param {Object} options
    * @param {boolean} [options.deployOnly]
    * @param {boolean} [options.testOnly]
    * @param {boolean} [options.cleanupOnly]
-   * @param {boolean} [options.cleanupLegacyPRStack]
-   * @param {boolean} [options.cleanupOldPRStacks]
-   * @param {number} [options.olderThanDays]
    * @param {string} [options.testPattern]
    * @param {boolean} [options.capacityProviderOnly]
    */
@@ -718,9 +617,6 @@ class IntegrationTestRunner {
       deployOnly = false,
       testOnly = false,
       cleanupOnly = false,
-      cleanupLegacyPRStack = false,
-      cleanupOldPRStacks = false,
-      olderThanDays = 7,
       testPattern,
       capacityProviderOnly = false,
     } = options;
@@ -733,16 +629,6 @@ class IntegrationTestRunner {
 
     if (cleanupOnly) {
       await this.cleanup(capacityProviderOnly);
-      return;
-    }
-
-    if (cleanupLegacyPRStack) {
-      await this.cleanupLegacyPRTestResources();
-      return;
-    }
-
-    if (cleanupOldPRStacks) {
-      await this.cleanupOldPRTestingStacks(olderThanDays);
       return;
     }
 
@@ -796,16 +682,6 @@ async function main() {
     help: "Only cleanup existing functions",
   });
 
-  group.add_argument("--cleanup-legacy-pr-stack", {
-    action: "store_true",
-    help: "Only cleanup the legacy PR-scoped SAM stack for this runtime",
-  });
-
-  group.add_argument("--cleanup-old-pr-stacks", {
-    action: "store_true",
-    help: "Only cleanup PR testing stacks older than --older-than-days",
-  });
-
   // Add test pattern argument
   parser.add_argument("--test-pattern", {
     help: "Optional test pattern to filter specific tests (used with --test-only)",
@@ -824,11 +700,6 @@ async function main() {
     required: true,
   });
 
-  parser.add_argument("--older-than-days", {
-    help: "Age threshold in days for --cleanup-old-pr-stacks",
-    default: 7,
-  });
-
   // Parse command line arguments
   const args = parser.parse_args();
 
@@ -838,20 +709,10 @@ async function main() {
     deployOnly: args.deploy_only || false,
     testOnly: args.test_only || false,
     cleanupOnly: args.cleanup_only || false,
-    cleanupLegacyPRStack: args.cleanup_legacy_pr_stack || false,
-    cleanupOldPRStacks: args.cleanup_old_pr_stacks || false,
-    olderThanDays: Number.parseInt(args.older_than_days, 10),
     testPattern: args.test_pattern,
     capacityProviderOnly: args.capacity_provider_only,
     runtime: args.runtime,
   };
-
-  if (
-    options.cleanupOldPRStacks &&
-    (!Number.isFinite(options.olderThanDays) || options.olderThanDays < 1)
-  ) {
-    throw new Error("--older-than-days must be a positive integer");
-  }
 
   // Disable cleanup on exit for deploy-only and test-only modes
   if (options.deployOnly || options.testOnly) {

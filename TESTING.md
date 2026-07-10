@@ -140,7 +140,7 @@ And one variable: `AWS_REGION` - The AWS region used for testing functions.
 
 Integration test function deployment and tests are orchestrated using the [integration test script](./.github/workflows/scripts/integration-test/integration-test.js).
 
-The SAM-managed integration test functions are deployed once per runtime and reused across PRs. When a PR is closed, the [cleanup-integration-tests.yml](.github/workflows/cleanup-integration-tests.yml) only removes legacy PR-scoped test resources.
+The SAM-managed integration test functions are deployed once per runtime and reused across PRs.
 
 ### Checking function logs
 

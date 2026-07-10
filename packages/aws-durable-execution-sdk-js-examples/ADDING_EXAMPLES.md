@@ -147,9 +147,8 @@ When you push to GitHub, the integration test workflow (`.github/workflows/integ
    - Tests automatically use `CloudDurableTestRunner` when `NODE_ENV=integration`
    - Function names are passed via `FUNCTION_NAME_MAP` environment variable
 
-3. **Cleanup Stage**:
+3. **Reuse**:
    - SAM-managed integration test functions remain deployed for reuse by later PRs
-   - A daily scheduled cleanup deletes legacy PR testing stacks older than 7 days
 
 ### Run Integration Tests Locally
 
