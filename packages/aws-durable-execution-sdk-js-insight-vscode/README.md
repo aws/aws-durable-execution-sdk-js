@@ -1,16 +1,22 @@
 # Workflow Insight Explorer — VS Code Extension
 
-Query your [Workflow Insight](../aws-durable-execution-sdk-js-insight) data in plain English. Ask a question, get results — no query language knowledge required.
+Query your [Workflow Insight](../aws-durable-execution-sdk-js-insight) data from inside VS Code — in plain English, or with a query you write yourself — get results as a table, and optionally chart them.
 
 ## How It Works
 
+The composer's **Send** button offers three modes (your choice is remembered across sessions):
+
 ```
-Type a question ──► Bedrock converts it to a query ──► Runs against your data ──► Results table
+Query ─► run your query verbatim ──────────────────► Results table
+Ask ───► LLM writes one query ──► runs it ─────────► Results table
+Agent ─► LLM explores: query → refine → answer ────► Results table
 ```
 
-1. You type a question (e.g., "show me failed executions from the last hour")
-2. Amazon Bedrock generates the appropriate query for your destination
-3. The query runs automatically and results render in a table
+- **Query** — you write the query yourself; it runs verbatim against your data source. **No LLM is involved.**
+- **Ask** — you type a question in plain English; the configured LLM translates it into a single query and runs it once.
+- **Agent** — the LLM works agentically, running and refining queries over several steps until it can answer your question.
+
+The LLM used by **Ask** and **Agent** is your choice — **Amazon Bedrock**, **GitHub Copilot**, a **self-hosted local server**, or an **on-device model** (see [Choose an LLM provider](#3-choose-an-llm-provider)). You can also **visualize** any result as a chart, **export** it (CSV/JSON), and **save queries** as favorites.
 
 The extension supports multiple destinations — each with its own query engine:
 
@@ -157,10 +163,12 @@ Because the canonical `operations` array (not `operationsByName`) is what
 `S3Exporter` writes, per-operation questions are answered with `UNNEST` rather than
 a map lookup (see the query dialect the model is given).
 
-> **⚠️ Athena cost:** the assistant works agentically and may issue several
+> **⚠️ Athena cost:** in **Agent** mode the assistant may issue several
 > model-authored queries per question (bounded by `workflowInsight.agenticMaxIterations`,
-> default 8). That cap limits the _number_ of queries, not the data scanned per
-> query — Athena bills per byte scanned. To bound per-query scan cost, set a
+> default 8); **Ask** runs one query (plus an optional verify/refine), and
+> **Query** runs exactly the one you typed. That cap limits the _number_ of
+> queries, not the data scanned per query — Athena bills per byte scanned. To
+> bound per-query scan cost, set a
 > [per-query data-usage limit](https://docs.aws.amazon.com/athena/latest/ug/workgroups-setting-control-limits-cloudwatch.html)
 > (`bytes_scanned_cutoff_per_query`) on your Athena **workgroup**. This is the
 > only per-query scan-cost guard once the query runs.
@@ -182,8 +190,6 @@ Peek-only mode (the default) uses SQS long-polling without deleting messages,
 so the same message can be redelivered after its visibility timeout — the
 Explorer de-duplicates by message ID when displaying, but this also means it
 is not a substitute for a real consumer if you need exactly-once processing.
-
-### 3. Configure Bedrock
 
 ### 3. Choose an LLM provider
 
@@ -212,9 +218,9 @@ Pick a provider under **⚙ → LLM Provider**:
 > (it uses Bedrock's tool-use API); Copilot and the local providers run the
 > single-shot **ask** and the verify/refine loop.
 
-### 4. Ask questions
+### 4. Run a query or ask a question
 
-Type a question and click **Ask**. Examples:
+Pick a mode from the **Send** button's dropdown (**Query**, **Ask**, or **Agent** — see [How It Works](#how-it-works)); the choice is remembered. In **Query** mode you type a query and it runs verbatim; in **Ask**/**Agent** you type a question in plain English. Examples of natural-language questions for Ask/Agent:
 
 | Question                                                | Works best with                         |
 | ------------------------------------------------------- | --------------------------------------- |
@@ -244,33 +250,38 @@ returns 4 columns, but you can still click a row to see everything else).
 Aggregate results have no single execution a row corresponds to, so no
 identifier is added and rows aren't clickable for those.
 
+**Working with a result:** each result table has an **Actions** menu to **export** the full result as CSV or JSON, **save the query** to favorites (re-run it later from the composer's ⭐ picker), and **copy the query**. Expand the **Query** section above the table to see exactly what ran. To chart a result, open **Visualize** — the LLM proposes a chart spec from your columns (this is an AI feature; see below).
+
 ## Settings Reference
 
 All settings are under the `workflowInsight.*` namespace.
 
-| Setting                | Description                                                        | Required         |
-| ---------------------- | ------------------------------------------------------------------ | ---------------- |
-| `region`               | AWS region                                                         | Yes              |
-| `destinationType`      | Where your data lives (see above)                                  | Yes              |
-| `logGroupName`         | CloudWatch log group name(s), comma-separated                      | For CW Logs      |
-| `dynamodbTableName`    | DynamoDB table name                                                | For DynamoDB     |
-| `auroraResourceArn`    | Aurora cluster ARN                                                 | For Aurora       |
-| `auroraSecretArn`      | Secrets Manager secret ARN                                         | For Aurora       |
-| `auroraDatabase`       | Database name                                                      | For Aurora       |
-| `auroraTable`          | Table name                                                         | For Aurora       |
-| `athenaDatabase`       | Glue/Athena database name                                          | For S3           |
-| `athenaTable`          | Glue table name                                                    | For S3           |
-| `athenaWorkgroup`      | Athena workgroup (empty = `primary`)                               | No               |
-| `athenaOutputLocation` | S3 location for Athena query results                               | For S3\*         |
-| `athenaS3Location`     | S3 location `S3Exporter` writes to (used to auto-create the table) | For S3           |
-| `sqsQueueUrl`          | SQS queue URL to listen to                                         | For SQS          |
-| `sqsDeleteAfterRead`   | Delete messages after displaying (default `false`; peek-only)      | No               |
-| `awsProfile`           | Named AWS profile (empty = default chain)                          | No               |
-| `bedrockModelId`       | Bedrock model/inference profile for NL→query                       | Yes              |
-| `llmProvider`          | `bedrock` (default), `copilot`, `local-server`, or `local`         | No               |
-| `localServerUrl`       | OpenAI-compatible base URL for `local-server` (e.g. Ollama)        | For local-server |
-| `localServerModel`     | Model name the local server should use (e.g. `llama3.1`)           | For local-server |
-| `queryMode`            | Default composer mode: `query`, `ask`, or `agent`                  | No               |
+| Setting                       | Description                                                                     | Required         |
+| ----------------------------- | ------------------------------------------------------------------------------- | ---------------- |
+| `region`                      | AWS region                                                                      | Yes              |
+| `destinationType`             | Where your data lives (see above)                                               | Yes              |
+| `logGroupName`                | CloudWatch log group name(s), comma-separated                                   | For CW Logs      |
+| `dynamodbTableName`           | DynamoDB table name                                                             | For DynamoDB     |
+| `auroraResourceArn`           | Aurora cluster ARN                                                              | For Aurora       |
+| `auroraSecretArn`             | Secrets Manager secret ARN                                                      | For Aurora       |
+| `auroraDatabase`              | Database name                                                                   | For Aurora       |
+| `auroraTable`                 | Table name                                                                      | For Aurora       |
+| `athenaDatabase`              | Glue/Athena database name                                                       | For S3           |
+| `athenaTable`                 | Glue table name                                                                 | For S3           |
+| `athenaWorkgroup`             | Athena workgroup (empty = `primary`)                                            | No               |
+| `athenaOutputLocation`        | S3 location for Athena query results                                            | For S3\*         |
+| `athenaS3Location`            | S3 location `S3Exporter` writes to (used to auto-create the table)              | For S3           |
+| `sqsQueueUrl`                 | SQS queue URL to listen to                                                      | For SQS          |
+| `sqsDeleteAfterRead`          | Delete messages after displaying (default `false`; peek-only)                   | No               |
+| `awsProfile`                  | Named AWS profile (empty = default chain)                                       | No               |
+| `bedrockModelId`              | Bedrock model/inference profile for NL→query                                    | For Bedrock      |
+| `llmProvider`                 | `bedrock` (default), `copilot`, `local-server`, or `local`                      | No               |
+| `localServerUrl`              | OpenAI-compatible base URL for `local-server` (e.g. Ollama)                     | For local-server |
+| `localServerModel`            | Model name the local server should use (e.g. `llama3.1`)                        | For local-server |
+| `localModel`                  | On-device model for the `local` provider (source builds only)                   | For local        |
+| `queryMode`                   | Default composer mode: `query`, `ask`, or `agent`                               | No               |
+| `agenticMaxIterations`        | Max queries the agent runs per question (default 8)                             | No               |
+| `aiDisclosureAcceptedVersion` | Records the accepted AI disclosure version (set on consent; clear to re-prompt) | No               |
 
 \* Unless the chosen `athenaWorkgroup` already has its own output location configured.
 
@@ -334,29 +345,32 @@ Depending on your destination:
 | Aurora          | `rds-data:ExecuteStatement`, `secretsmanager:GetSecretValue`                                                                                                                                                                             |
 | S3 + Athena     | `athena:StartQueryExecution`, `athena:GetQueryExecution`, `athena:GetQueryResults`, `glue:GetTable`, `glue:CreateTable`, `glue:GetPartitions`, `glue:BatchCreatePartition`, `s3:GetObject`, `s3:PutObject` on the data + results buckets |
 | SQS             | `sqs:ReceiveMessage` (plus `sqs:DeleteMessage` if `sqsDeleteAfterRead` is enabled)                                                                                                                                                       |
-| Bedrock (all)   | `bedrock:InvokeModel` on your model/inference profile                                                                                                                                                                                    |
+| Bedrock         | `bedrock:InvokeModel` on your model/inference profile — **only** when `llmProvider` is `bedrock` (Copilot, local-server, and on-device need no Bedrock/AWS model permissions)                                                            |
 
 ## How Queries Are Generated
 
-The extension sends your question to Amazon Bedrock along with:
+In **Ask** and **Agent** modes, the extension sends your question to the configured LLM provider (Bedrock, Copilot, local server, or on-device) along with:
 
 1. **The exact record schema** (`WorkflowInsightRecord` fields and types)
-2. **The query dialect** for your destination (Logs Insights / PartiQL / PostgreSQL)
+2. **The query dialect** for your destination (Logs Insights / PartiQL / PostgreSQL / Trino-Athena SQL)
 3. **Few-shot examples** (proven question→query pairs)
 
-If the generated query fails, the extension automatically sends the error back to Bedrock and asks it to fix the query (up to 2 retries).
+If the generated query fails, the extension automatically sends the error back to the model and asks it to fix the query (up to 2 retries). **Query** mode skips all of this — it runs your text verbatim (read-only enforced, row-capped).
 
 ## Error Handling
 
-- **"The model did not return a query"** — Rephrase your question or check Bedrock credentials
-- **Query errors** — The extension auto-retries by feeding the error to Bedrock
+- **"The model did not return a query"** — Rephrase your question, or check your LLM provider setup (Bedrock model access / Copilot subscription / local server reachable)
+- **Query errors** — In Ask/Agent, the extension auto-retries by feeding the error back to the model
 - **"No log group / table configured"** — Click ⚙ and fill in the missing field
 - **Access denied** — Check IAM permissions and credential expiry
 
 ## Future Work
 
-The extension currently supports CloudWatch Logs, DynamoDB, Aurora, and S3 + Athena. Future versions will add:
+The extension supports CloudWatch Logs, DynamoDB, Aurora, and S3 + Athena, three
+query modes (Query/Ask/Agent), four LLM providers (Bedrock, Copilot, local
+server, on-device), result export (CSV/JSON), saved-query favorites, and chart
+visualization. Potential future additions:
 
-- Query history and saved queries
-- CSV export
-- Local LLM option (no Bedrock required)
+- Additional destinations and query engines
+- Richer chart/visualization options
+- Marketplace distribution (currently a preview `.vsix` via GitHub Releases)
