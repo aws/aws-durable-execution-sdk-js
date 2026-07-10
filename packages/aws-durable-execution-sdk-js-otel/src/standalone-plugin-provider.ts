@@ -15,7 +15,7 @@ import {
 } from "@opentelemetry/sdk-trace-node";
 import type { StandaloneOtelPluginConfig } from "./standalone-plugin-config";
 
-const DEFAULT_OTLP_ENDPOINT = "http://localhost:4318";
+const DEFAULT_OTLP_ENDPOINT = "http://localhost:4318/v1/traces";
 
 /**
  * Result of the TracerProvider factory function.
