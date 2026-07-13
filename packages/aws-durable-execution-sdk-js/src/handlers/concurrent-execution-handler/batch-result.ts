@@ -8,6 +8,7 @@ import {
 import {
   DurableOperationError,
   ChildContextError,
+  BatchCompletionError,
 } from "../../errors/durable-error/durable-error";
 import { Serdes, SerdesContext } from "../../utils/serdes/serdes";
 
@@ -113,6 +114,15 @@ export class BatchResultImpl<R> implements BatchResult<R> {
   }
 
   get status(): BatchItemStatus.SUCCEEDED | BatchItemStatus.FAILED {
+    // A custom completion decision is authoritative for the overall outcome,
+    // even when it disagrees with the individual item results (e.g. a quorum
+    // that can no longer be met completes as FAILED with no failed item).
+    if (this.completionReason === "CUSTOM_COMPLETION_FAILED") {
+      return BatchItemStatus.FAILED;
+    }
+    if (this.completionReason === "CUSTOM_COMPLETION_SUCCEEDED") {
+      return BatchItemStatus.SUCCEEDED;
+    }
     return this.hasFailure ? BatchItemStatus.FAILED : BatchItemStatus.SUCCEEDED;
   }
 
@@ -126,6 +136,11 @@ export class BatchResultImpl<R> implements BatchResult<R> {
     )?.error;
     if (firstError) {
       throw firstError;
+    }
+    // The custom completion decision marked the batch as failed even though no
+    // individual item failed (e.g. a required quorum could not be met).
+    if (this.status === BatchItemStatus.FAILED) {
+      throw new BatchCompletionError(this.completionReason);
     }
   }
 

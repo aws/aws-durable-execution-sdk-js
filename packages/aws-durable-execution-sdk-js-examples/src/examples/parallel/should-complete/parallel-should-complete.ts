@@ -1,5 +1,7 @@
 import {
   BatchItemStatus,
+  completeBatch,
+  continueBatch,
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
@@ -48,7 +50,9 @@ export const handler = withDurableExecution(
           shouldComplete: ({ items }) => {
             const ok = (i: number) =>
               items[i]?.status === BatchItemStatus.SUCCEEDED;
-            return ok(0) || (ok(1) && ok(2));
+            return ok(0) || (ok(1) && ok(2))
+              ? completeBatch()
+              : continueBatch();
           },
         },
       },
