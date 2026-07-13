@@ -2,7 +2,7 @@
 
 This directory contains build and automation scripts for the DurableExecutionsTypeScriptExamples package.
 
-## generate-sam-template.js
+## generate-sam-template.ts
 
 Automatically generates the `template.yml` CloudFormation template based on TypeScript files found in `src/examples/`.
 
@@ -18,6 +18,15 @@ Automatically generates the `template.yml` CloudFormation template based on Type
 ```bash
 # Run manually
 npm run generate-sam-template
+
+# Generate the CI template used by integration tests
+npm run generate-sam-template -- \
+  --runtime 24.x \
+  --aws-region us-west-2 \
+  --code-uri ../dist \
+  --lambda-execution-role-arn arn:aws:iam::123456789012:role/example-role \
+  --function-name-map-file .aws-sam/function-name-map-24x.json \
+  --output-template-file .aws-sam/integration-template-24x.yml
 
 # Automatically runs during build (via prebuild hook)
 npm run build
@@ -49,11 +58,12 @@ All Lambda functions get these default settings unless overridden:
 
 - **Memory**: 128 MB
 - **Timeout**: 60 seconds
-- **Runtime**: nodejs22.x
+- **Runtime**: nodejs22.x by default, configurable with `--runtime`
 - **Architecture**: x86_64
 - **Environment Variables**:
-  - `AWS_ENDPOINT_URL_LAMBDA`: `http://host.docker.internal:5000`
-  - `DURABLE_VERBOSE_MODE`: `true`
+  - `AWS_ENDPOINT_URL_LAMBDA`: `http://host.docker.internal:5000` for local templates, or the `--lambda-endpoint` value when provided
+  - `DURABLE_VERBOSE_MODE`: `false`
+  - `DURABLE_EXAMPLES_VERBOSE`: `true`
 
 ### Adding New Examples
 
@@ -69,7 +79,7 @@ When you add a new TypeScript file to `src/examples/`:
 For a file named `my-new-example.ts`:
 
 - **Resource Name**: `MyNewExample`
-- **Function Name**: `MyNewExample-TypeScript`
+- **Function Name**: generated from the example catalog name and runtime
 - **Handler**: `my-new-example.handler`
 
 ### Integration with Build Process
