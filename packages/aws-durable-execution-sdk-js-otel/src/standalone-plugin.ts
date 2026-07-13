@@ -292,23 +292,7 @@ export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
       spanName,
       { attributes },
       parentContext,
-      (executionSpan) => {
-        try {
-          const result = fn();
-          executionSpan.end();
-          return result;
-        } catch (error) {
-          if (error instanceof Error) {
-            executionSpan.setStatus({
-              code: SpanStatusCode.ERROR,
-              message: error.message,
-            });
-            executionSpan.recordException(error);
-          }
-          executionSpan.end();
-          throw error;
-        }
-      },
+      fn,
     );
   }
 
