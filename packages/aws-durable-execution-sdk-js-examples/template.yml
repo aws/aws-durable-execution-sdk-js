@@ -37,18 +37,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ComprehensiveOperations:
@@ -62,18 +62,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ConcurrentCallbackSubmitter:
@@ -87,18 +87,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ConcurrentCallbackWait:
@@ -112,18 +112,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ConcurrentOperations:
@@ -137,18 +137,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ConcurrentWait:
@@ -162,18 +162,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ParentContextInChild:
@@ -187,18 +187,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ParentContextInStep:
@@ -212,18 +212,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ParentContextInWaitCondition:
@@ -237,18 +237,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   CreateCallbackConcurrent:
@@ -262,18 +262,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ErrorInstance:
@@ -287,18 +287,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   CreateCallbackFailures:
@@ -312,18 +312,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   CreateCallbackHeartbeat:
@@ -337,18 +337,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   CreateCallbackMixedOps:
@@ -362,18 +362,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   CreateCallbackSerdes:
@@ -387,18 +387,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   CreateCallback:
@@ -412,18 +412,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   CreateCallbackTimeout:
@@ -437,18 +437,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ErrorDeterminism:
@@ -462,18 +462,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ForceCheckpointingCallback:
@@ -487,18 +487,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ForceCheckpointingInvoke:
@@ -512,18 +512,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ForceCheckpointingMultipleWait:
@@ -537,18 +537,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ForceCheckpointing:
@@ -562,18 +562,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   HandlerError:
@@ -587,18 +587,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   HelloWorld:
@@ -612,18 +612,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   InvokeSimple:
@@ -637,18 +637,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   InvokeTenantId:
@@ -662,18 +662,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   TenantTarget:
@@ -687,18 +687,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 300
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 300
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   LargePayload:
@@ -712,18 +712,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   LoggerAfterCallback:
@@ -737,18 +737,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   LoggerAfterWait:
@@ -762,18 +762,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   LoggerLogLevels:
@@ -787,18 +787,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   PowertoolsLogger:
@@ -812,18 +812,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   SimplePowertoolsLogger:
@@ -837,18 +837,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   MapBasic:
@@ -862,18 +862,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   MapEmpty:
@@ -887,18 +887,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   MapErrorPreservation:
@@ -912,18 +912,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   MapErrorTypePreservationReplay:
@@ -937,18 +937,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   MapFailureThresholdExceededCount:
@@ -962,18 +962,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   MapFailureThresholdExceededPercentage:
@@ -987,18 +987,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   MapHighConcurrencyInvoke:
@@ -1012,18 +1012,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   MapLargeScale:
@@ -1037,18 +1037,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   MapMinSuccessful:
@@ -1062,18 +1062,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   MapToleratedFailureCount:
@@ -1087,18 +1087,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   MapToleratedFailurePercentage:
@@ -1112,18 +1112,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   MapVirtualContext:
@@ -1137,18 +1137,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   MapCompletionConfigIssue:
@@ -1162,18 +1162,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   MultipleWaits:
@@ -1187,18 +1187,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   NoReplayExecution:
@@ -1212,18 +1212,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   NonDurable:
@@ -1237,16 +1237,16 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig: null
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig: null
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   OtelBasicSteps:
@@ -1260,18 +1260,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
       Tracing: Active
       Layers:
@@ -1289,18 +1289,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
       Tracing: Active
       Layers:
@@ -1318,18 +1318,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
       Tracing: Active
       Layers:
@@ -1347,18 +1347,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
       Tracing: Active
       Layers:
@@ -1376,105 +1376,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
-      Role:
-        Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
       DurableConfig:
         ExecutionTimeout: 60
         RetentionPeriodInDays: 7
-      Environment:
-        Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "false"
-          DURABLE_EXAMPLES_VERBOSE: "true"
-          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
-      Tracing: Active
-      Layers:
-        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
-    Metadata:
-      SkipBuild: "True"
-  OtelWaitAndResume:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: OTelWaitandResume-22x-NodeJS-Local
-      CodeUri: ./dist
-      Handler: otel-wait-and-resume.handler
-      Runtime: nodejs22.x
-      Architectures:
-        - x86_64
-      MemorySize: 128
-      Timeout: 60
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
-          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
-      Tracing: Active
-      Layers:
-        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
-    Metadata:
-      SkipBuild: "True"
-  OtelWaitForCondition:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: OTelWaitforCondition-22x-NodeJS-Local
-      CodeUri: ./dist
-      Handler: otel-wait-for-condition.handler
-      Runtime: nodejs22.x
-      Architectures:
-        - x86_64
-      MemorySize: 128
-      Timeout: 60
-      Role:
-        Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
-      Environment:
-        Variables:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "false"
-          DURABLE_EXAMPLES_VERBOSE: "true"
-          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
-      Tracing: Active
-      Layers:
-        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
-    Metadata:
-      SkipBuild: "True"
-  OtelXrayE2e:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: OTelXRayE2E-22x-NodeJS-Local
-      CodeUri: ./dist
-      Handler: otel-xray-e2e.handler
-      Runtime: nodejs22.x
-      Architectures:
-        - x86_64
-      MemorySize: 128
-      Timeout: 60
-      Role:
-        Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
-      DurableConfig:
-        ExecutionTimeout: 120
-        RetentionPeriodInDays: 7
-      Environment:
-        Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          DURABLE_VERBOSE_MODE: "false"
-          DURABLE_EXAMPLES_VERBOSE: "true"
           AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
       Tracing: Active
       Layers:
@@ -1492,22 +1405,108 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 120
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
+      Environment:
+        Variables:
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          OPENTELEMETRY_COLLECTOR_CONFIG_FILE: /var/task/collector.yaml
+      Tracing: Active
+      Layers:
+        - arn:aws:lambda:us-west-2:184161586896:layer:opentelemetry-collector-amd64-0_22_0:1
+    Metadata:
+      SkipBuild: "True"
+  OtelWaitAndResume:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: OTelWaitandResume-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: otel-wait-and-resume.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      Environment:
+        Variables:
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+      Tracing: Active
+      Layers:
+        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
+    Metadata:
+      SkipBuild: "True"
+  OtelWaitForCondition:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: OTelWaitforCondition-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: otel-wait-for-condition.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      Environment:
+        Variables:
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+      Tracing: Active
+      Layers:
+        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
+    Metadata:
+      SkipBuild: "True"
+  OtelXrayE2e:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: OTelXRayE2E-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: otel-xray-e2e.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
       DurableConfig:
         ExecutionTimeout: 120
         RetentionPeriodInDays: 7
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
       Tracing: Active
       Layers:
-        # ADOT layer for collector extension only — AWS_LAMBDA_EXEC_WRAPPER is NOT set
-        # so auto-instrumentation is disabled. StandaloneOtelPlugin handles instrumentation.
         - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
     Metadata:
       SkipBuild: "True"
@@ -1522,18 +1521,43 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
+      Environment:
+        Variables:
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+    Metadata:
+      SkipBuild: "True"
+  ParallelCustomSummaryGenerator:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ParallelCustomSummaryGenerator-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: parallel-custom-summary-generator.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
       DurableConfig:
         ExecutionTimeout: 60
         RetentionPeriodInDays: 7
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ParallelEmpty:
@@ -1547,18 +1571,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ParallelErrorPreservation:
@@ -1572,18 +1596,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ParallelFailureThresholdExceededCount:
@@ -1597,18 +1621,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ParallelFailureThresholdExceededPercentage:
@@ -1622,18 +1646,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ParallelHeterogeneous:
@@ -1647,18 +1671,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ParallelInvoke:
@@ -1672,18 +1696,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ParallelMinSuccessful:
@@ -1697,18 +1721,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ParallelMinSuccessfulCallback:
@@ -1722,18 +1746,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   MinSuccessfulWithPassingThreshold:
@@ -1747,18 +1771,43 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
+      Environment:
+        Variables:
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+    Metadata:
+      SkipBuild: "True"
+  ParallelShouldComplete:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ParallelshouldCompletequorum-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: parallel-should-complete.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
       DurableConfig:
         ExecutionTimeout: 60
         RetentionPeriodInDays: 7
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ParallelToleratedFailureCount:
@@ -1772,18 +1821,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ParallelToleratedFailurePercentage:
@@ -1797,18 +1846,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ParallelVirtualContext:
@@ -1822,18 +1871,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ParallelWait:
@@ -1847,18 +1896,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   PromiseAll:
@@ -1872,18 +1921,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   PromiseAllSettled:
@@ -1897,18 +1946,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   PromiseAllWait:
@@ -1922,18 +1971,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   PromiseAny:
@@ -1947,18 +1996,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   PromiseCombinators:
@@ -1972,18 +2021,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   PromiseRace:
@@ -1997,18 +2046,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   PromiseRaceWait:
@@ -2022,18 +2071,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   PromiseReplay:
@@ -2047,18 +2096,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   PromiseUnhandledRejection:
@@ -2072,18 +2121,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   RetryExhaustion:
@@ -2097,18 +2146,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   RunInChildContext:
@@ -2122,18 +2171,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   RunInChildContextCheckpointSizeLimit:
@@ -2147,18 +2196,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   RunInChildContextErrorDataPropagation:
@@ -2172,18 +2221,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   RunInChildContextLargeData:
@@ -2197,18 +2246,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   RunInChildContextSerdes:
@@ -2222,18 +2271,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   RunInChildContextSerdesLargePayload:
@@ -2247,18 +2296,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   RunInChildContextSerdesVirtual:
@@ -2272,18 +2321,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   VirtualRunInChildContext:
@@ -2297,18 +2346,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   RunInChildContextFailingStep:
@@ -2322,18 +2371,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   SerdeBasic:
@@ -2347,18 +2396,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ConfigureCallbackDeserializer:
@@ -2372,18 +2421,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ConfigureSerdes:
@@ -2397,18 +2446,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   SimpleExecution:
@@ -2422,18 +2471,43 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
+      Environment:
+        Variables:
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+    Metadata:
+      SkipBuild: "True"
+  StepAttemptFallback:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: Stepattempt-basedfallback-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: step-attempt-fallback.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
       DurableConfig:
         ExecutionTimeout: 60
         RetentionPeriodInDays: 7
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   StepBasic:
@@ -2447,18 +2521,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   StepInterruptedNoRetry:
@@ -2472,18 +2546,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 5
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   StepNamed:
@@ -2497,18 +2571,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   StepErrorDeterminism:
@@ -2522,18 +2596,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   StepsWithRetry:
@@ -2545,20 +2619,23 @@ Resources:
       Runtime: nodejs22.x
       Architectures:
         - x86_64
-      MemorySize: 128
-      Timeout: 60
+      MemorySize: 256
+      Timeout: 300
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: TEST
     Metadata:
       SkipBuild: "True"
   StepWithRetry:
@@ -2572,18 +2649,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   UndefinedResults:
@@ -2597,18 +2674,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   Wait:
@@ -2622,18 +2699,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   WaitConfigurable:
@@ -2647,18 +2724,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   WaitNamed:
@@ -2672,18 +2749,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   WaitUnawaited:
@@ -2697,18 +2774,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   WaitForCallbackAnonymous:
@@ -2722,18 +2799,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   WaitForCallback:
@@ -2747,18 +2824,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   WaitForCallbackChildContext:
@@ -2772,18 +2849,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ErrorInstanceFailure:
@@ -2797,18 +2874,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ErrorInstanceSubmitter:
@@ -2822,18 +2899,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   ErrorInstanceTimeout:
@@ -2847,18 +2924,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   WaitForCallbackFailingSubmitter:
@@ -2872,18 +2949,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   WaitForCallbackFailures:
@@ -2897,18 +2974,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   WaitForCallbackHeartbeatSends:
@@ -2922,18 +2999,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   WaitForCallbackMixedOps:
@@ -2947,18 +3024,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   WaitForCallbackMultipleInvocations:
@@ -2972,18 +3049,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   WaitForCallbackNested:
@@ -2997,18 +3074,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   WaitForCallbackQuickCompletion:
@@ -3022,18 +3099,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   WaitForCallbackSerdes:
@@ -3047,18 +3124,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   WaitForCallbackSubmitterFailureCatchable:
@@ -3072,18 +3149,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   WaitForCallbackSubmitterRetrySuccess:
@@ -3097,18 +3174,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   WaitForCallbackTimeout:
@@ -3122,18 +3199,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   WaitForCondition:
@@ -3147,18 +3224,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   WithRetryCallback:
@@ -3172,18 +3249,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   WithRetryInvokeTarget:
@@ -3197,18 +3274,18 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
   WithRetryInvoke:
@@ -3222,17 +3299,17 @@ Resources:
         - x86_64
       MemorySize: 128
       Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
           - DurableFunctionRole
           - Arn
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
       Environment:
         Variables:
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
