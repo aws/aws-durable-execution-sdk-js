@@ -285,6 +285,55 @@ describe("operation detail capture", () => {
   });
 });
 
+describe("operationDetail", () => {
+  // A top-level context and its child (parallel-branch/map-item style).
+  const opsWithChildren = {
+    top: op({ id: "top", name: "reserve-inventory", type: "CONTEXT" }),
+    child: op({
+      id: "child",
+      name: "reserve-item",
+      type: "STEP",
+      parentId: "top",
+    }),
+  };
+
+  it("defaults to top-level (drops children)", async () => {
+    const exporter = new CapturingExporter();
+    const plugin = workflowInsight({ exporters: [exporter] });
+
+    await endAndDrain(plugin, endInfo({ operations: opsWithChildren }));
+
+    const names = exporter.records[0].operations.map((o) => o.name);
+    expect(names).toEqual(["reserve-inventory"]);
+  });
+
+  it("includes children when full-tree", async () => {
+    const exporter = new CapturingExporter();
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      operationDetail: "full-tree",
+    });
+
+    await endAndDrain(plugin, endInfo({ operations: opsWithChildren }));
+
+    const names = exporter.records[0].operations.map((o) => o.name).sort();
+    expect(names).toEqual(["reserve-inventory", "reserve-item"]);
+  });
+
+  it("drops operations with a parentId when top-level", async () => {
+    const exporter = new CapturingExporter();
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      operationDetail: "top-level",
+    });
+
+    await endAndDrain(plugin, endInfo({ operations: opsWithChildren }));
+
+    const names = exporter.records[0].operations.map((o) => o.name);
+    expect(names).toEqual(["reserve-inventory"]);
+  });
+});
+
 describe("status mapping", () => {
   it("maps a suspended (PENDING) execution to RUNNING", async () => {
     const exporter = new CapturingExporter();

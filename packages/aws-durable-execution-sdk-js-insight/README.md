@@ -189,6 +189,9 @@ const insight = workflowInsight({
   // Sampling rate: 0.0–1.0 (default: 1.0 = all executions)
   samplingRate: 1.0,
 
+  // Which operations to include (default: "top-level")
+  operationDetail: "top-level",
+
   // Where to send records (default: [new LambdaLogExporter()])
   exporters: [new LambdaLogExporter()],
 
@@ -214,6 +217,56 @@ samplingRate: 0.1, // Only 10% of executions emit records
 ```
 
 The decision is **per-execution and all-or-nothing**: a sampled-in execution emits all of its records, a sampled-out execution emits none — you never get fragmented partial data. It is **deterministic across replays**: the decision is derived from a hash of the execution ARN, which is stable across replays, so a resumed execution always reaches the same decision. Values outside `[0, 1]` or non-numeric values are clamped/defaulted to `1.0` with a warning.
+
+### `operationDetail`
+
+Controls which operations appear in each record's `operations` array.
+
+| Mode                    | Behavior                                                                             | Use case                                  |
+| ----------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------- |
+| `"top-level"` (default) | Only top-level operations (anything with a `parentId` is dropped)                    | Consistent, resume-independent snapshots  |
+| `"full-tree"`           | Every operation, including children of contexts (parallel branches, map items, etc.) | Full nested detail (see the caveat below) |
+
+`"top-level"` is the default because it produces the **same set of operations regardless of when a record is emitted**, so an execution that suspends and resumes never yields a partially-populated tree.
+
+> **⚠️ `"full-tree"` and suspend/resume:** by default the backend prunes a
+> finished context's children from the state handed to later invocations (a
+> performance optimization). So for an execution that suspends/resumes, a
+> `"full-tree"` record only contains the children of contexts that were still
+> active in the invocation that emitted it — children of already-finished
+> contexts are missing. To keep the full tree across resume, also set
+> `childOperationsDepth` (below).
+
+### `childOperationsDepth` (on `withDurableExecution`)
+
+To make `"full-tree"` complete across suspend/resume, tell the **core SDK** to
+preserve child operations, via `pluginsConfig.childOperationsDepth` on
+`withDurableExecution` (not on the plugin):
+
+```typescript
+export const handler = withDurableExecution(myWorkflow, {
+  plugins: [workflowInsight({ operationDetail: "full-tree", exporters: [...] })],
+  pluginsConfig: {
+    // Children of top-level contexts = 1; their children = 2; whole tree = Infinity.
+    childOperationsDepth: 1,
+  },
+});
+```
+
+| Value         | Preserved across resume                                      |
+| ------------- | ------------------------------------------------------------ |
+| omitted / `0` | Nothing extra (top-level only survives resume) — **default** |
+| `1`           | Direct children of top-level contexts (map items, branches)  |
+| `2`           | Their children too (e.g. steps inside each map item)         |
+| `Infinity`    | The entire tree                                              |
+
+> **⚠️ Cost:** preservation forces the SDK's `ReplayChildren` mode on each
+> preserved context. This keeps its children in the execution state and, on
+> resume, rebuilds the context's result by **replaying** the already-checkpointed
+> children — the context's orchestration code re-runs, but the children are
+> **not** re-executed (no step bodies or side effects run again). The cost is the
+> extra replay pass over each preserved context plus carrying its children in the
+> state, and it grows with the depth you request. Enable only the depth you need.
 
 ### `exporters`
 
