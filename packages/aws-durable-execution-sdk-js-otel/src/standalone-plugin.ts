@@ -52,7 +52,6 @@ export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
   private spanMap: Map<string, Span>;
   private executionArn: string;
   private attemptSpan: Span | undefined;
-  private contextExecutionCount: Map<string, number>;
 
   // Cold start tracking
   private isColdStart: boolean = true;
@@ -80,7 +79,6 @@ export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
     // Initialize per-invocation state
     this.spanMap = new Map();
     this.executionArn = "";
-    this.contextExecutionCount = new Map();
   }
 
   async onInvocationStart(info: InvocationInfo): Promise<void> {
@@ -211,7 +209,6 @@ export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
     this.invocationSpan = undefined;
     this.executionArn = "";
     this.attemptSpan = undefined;
-    this.contextExecutionCount.clear();
   }
 
   async onOperationStart(info: OperationInfo): Promise<void> {
@@ -274,13 +271,10 @@ export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
       return context.with(trace.setSpan(context.active(), operationSpan), fn);
     }
 
-    // CONTEXT type: create Context_Execution_Span
-    // Increment execution counter for this context
-    const currentCount = (this.contextExecutionCount.get(info.id) ?? 0) + 1;
-    this.contextExecutionCount.set(info.id, currentCount);
-
+    // CONTEXT type: create Context_Execution_Span using startActiveSpan
+    // so nested operation spans are automatically children of the execution span
     const baseName = info.name ?? info.type;
-    const spanName = `${baseName} execution ${currentCount}`;
+    const spanName = `${baseName} execution`;
 
     // Parent is the CONTEXT Operation_Span
     const parentContext = operationSpan
@@ -294,32 +288,28 @@ export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
     };
     if (info.name) attributes["durable.operation.name"] = info.name;
 
-    const executionSpan = this.tracer.startSpan(
+    return this.tracer.startActiveSpan(
       spanName,
       { attributes },
       parentContext,
+      (executionSpan) => {
+        try {
+          const result = fn();
+          executionSpan.end();
+          return result;
+        } catch (error) {
+          if (error instanceof Error) {
+            executionSpan.setStatus({
+              code: SpanStatusCode.ERROR,
+              message: error.message,
+            });
+            executionSpan.recordException(error);
+          }
+          executionSpan.end();
+          throw error;
+        }
+      },
     );
-
-    // Set Context_Execution_Span as active context during fn execution
-    try {
-      const result = context.with(
-        trace.setSpan(context.active(), executionSpan),
-        fn,
-      );
-      executionSpan.end();
-      return result;
-    } catch (error) {
-      // Record error on the Context_Execution_Span
-      if (error instanceof Error) {
-        executionSpan.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: error.message,
-        });
-        executionSpan.recordException(error);
-      }
-      executionSpan.end();
-      throw error;
-    }
   }
 
   async onOperationEnd(info: OperationEndInfo): Promise<void> {
