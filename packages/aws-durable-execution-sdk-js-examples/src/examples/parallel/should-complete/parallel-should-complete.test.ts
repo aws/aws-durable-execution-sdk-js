@@ -15,7 +15,7 @@ createTests({
 
       // Branch A is slow; B and C finish first, satisfying the (B AND C) arm.
       expect(result.successCount).toBe(2);
-      expect(result.completionReason).toBe("CUSTOM_COMPLETION");
+      expect(result.completionReason).toBe("CUSTOM_COMPLETION_SUCCEEDED");
       expect(result.results).toHaveLength(2);
       expect(result.totalCount).toBe(3);
 
