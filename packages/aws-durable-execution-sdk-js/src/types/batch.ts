@@ -65,8 +65,12 @@ export interface BatchItem<TResult> {
  * - `ALL_COMPLETED`: every item finished.
  * - `MIN_SUCCESSFUL_REACHED`: {@link CompletionConfig.minSuccessful} was reached.
  * - `FAILURE_TOLERANCE_EXCEEDED`: a failure threshold was exceeded.
- * - `CUSTOM_COMPLETION`: a custom {@link CompletionConfig.shouldComplete}
- *   predicate signalled completion before all items finished.
+ * - `CUSTOM_COMPLETION_SUCCEEDED`: a custom {@link CompletionConfig.shouldComplete}
+ *   predicate signalled completion with a `SUCCEEDED` outcome before all items
+ *   finished.
+ * - `CUSTOM_COMPLETION_FAILED`: a custom {@link CompletionConfig.shouldComplete}
+ *   predicate signalled completion with a `FAILED` outcome before all items
+ *   finished.
  *
  * @public
  */
@@ -74,7 +78,8 @@ export type CompletionReason =
   | "ALL_COMPLETED"
   | "MIN_SUCCESSFUL_REACHED"
   | "FAILURE_TOLERANCE_EXCEEDED"
-  | "CUSTOM_COMPLETION";
+  | "CUSTOM_COMPLETION_SUCCEEDED"
+  | "CUSTOM_COMPLETION_FAILED";
 
 /**
  * Result of a batch operation (map, parallel, or concurrent execution)
@@ -113,7 +118,63 @@ export interface BatchResult<TResult> {
 }
 
 /**
- * Configuration for early completion of map/parallel operations
+ * Outcome of a custom completion decision — whether completing the batch now
+ * represents an overall success or failure.
+ *
+ * This is a decision-level outcome (about the whole batch), distinct from
+ * {@link BatchItemStatus}, which describes an individual item.
+ *
+ * @public
+ */
+export enum CompletionOutcome {
+  SUCCEEDED = "SUCCEEDED",
+  FAILED = "FAILED",
+}
+
+/**
+ * Decision returned by {@link CompletionConfig.shouldComplete}.
+ *
+ * Return {@link continueBatch} to keep going, or {@link completeBatch} to stop
+ * the batch now — declaring whether that completion represents overall success
+ * or failure.
+ *
+ * @public
+ */
+export type CompletionDecision =
+  | {
+      /** Keep starting/awaiting items. */
+      complete: false;
+    }
+  | {
+      /** Complete the batch now, without starting/awaiting remaining items. */
+      complete: true;
+      /**
+       * Whether this completion is an overall success or failure.
+       *
+       * {@link CompletionOutcome.FAILED} marks the whole batch as failed (its
+       * {@link BatchResult.status} is `FAILED` and {@link BatchResult.throwIfError}
+       * throws) even when no individual item failed — for example when a
+       * required quorum can no longer be met. Defaults to
+       * {@link CompletionOutcome.SUCCEEDED}.
+       */
+      outcome?: CompletionOutcome;
+    };
+
+/** Continue the batch. Convenience factory for {@link CompletionDecision}. @public */
+export const continueBatch = (): CompletionDecision => ({ complete: false });
+
+/**
+ * Complete the batch now with the given outcome (default
+ * {@link CompletionOutcome.SUCCEEDED}). Convenience factory for
+ * {@link CompletionDecision}.
+ * @public
+ */
+export const completeBatch = (
+  outcome: CompletionOutcome = CompletionOutcome.SUCCEEDED,
+): CompletionDecision => ({ complete: true, outcome });
+
+/**
+ * Threshold-based completion for map/parallel operations.
  *
  * @remarks
  * **Race Condition Behavior**: When multiple children complete simultaneously,
@@ -123,21 +184,30 @@ export interface BatchResult<TResult> {
  *
  * @public
  */
-export interface CompletionConfig {
+export interface ThresholdCompletionConfig {
   /** Minimum number of successful executions required */
   minSuccessful?: number;
   /** Maximum number of failures tolerated */
   toleratedFailureCount?: number;
   /** Maximum percentage of failures tolerated (0-100) */
   toleratedFailurePercentage?: number;
+  /** Not allowed together with the threshold fields. */
+  shouldComplete?: never;
+}
+
+/**
+ * Custom completion for map/parallel operations, driven by a predicate.
+ *
+ * @public
+ */
+export interface CustomCompletionConfig {
   /**
    * Custom completion predicate evaluated as items finish.
    *
-   * When provided, it takes FULL precedence: `minSuccessful`,
-   * `toleratedFailureCount`, and `toleratedFailurePercentage` are ignored.
-   * Return `true` to complete the batch now (stop starting and awaiting any
-   * remaining items), or `false` to keep going. A batch always completes once
-   * every item has finished, regardless of the predicate.
+   * Return {@link continueBatch}() to keep going, or {@link completeBatch}(outcome)
+   * to stop the batch now (stop starting and awaiting any remaining items). The
+   * batch always completes once every item has finished, regardless of the
+   * predicate.
    *
    * The predicate MUST be deterministic and depend only on the provided
    * {@link CompletionStatus}. It runs during live execution and its effect
@@ -153,11 +223,42 @@ export interface CompletionConfig {
    * quorum/dependency-style rules expressible, e.g. "complete when branch 0
    * succeeds OR branches 1 and 2 both succeed".
    *
-   * When this predicate ends the batch before all items finish, the resulting
-   * {@link BatchResult.completionReason} is `CUSTOM_COMPLETION`.
+   * When the returned decision completes the batch, the resulting
+   * {@link BatchResult.completionReason} is `CUSTOM_COMPLETION_SUCCEEDED` or
+   * `CUSTOM_COMPLETION_FAILED` depending on the decision's `outcome`.
    */
-  shouldComplete?: (status: CompletionStatus) => boolean;
+  shouldComplete: (status: CompletionStatus) => CompletionDecision;
+  /** Not allowed together with a custom predicate. */
+  minSuccessful?: never;
+  /** Not allowed together with a custom predicate. */
+  toleratedFailureCount?: never;
+  /** Not allowed together with a custom predicate. */
+  toleratedFailurePercentage?: never;
 }
+
+/**
+ * Configuration for early completion of map/parallel operations.
+ *
+ * Either threshold-based ({@link ThresholdCompletionConfig}) or a custom
+ * predicate ({@link CustomCompletionConfig}) — the two are mutually exclusive.
+ * Specifying `shouldComplete` together with any of `minSuccessful`,
+ * `toleratedFailureCount`, or `toleratedFailurePercentage` is a compile-time
+ * error.
+ *
+ * @remarks
+ * The mutual exclusivity is enforced only at the type level. There is no
+ * runtime guard, so a plain-JavaScript caller (or TypeScript code that casts
+ * around the union) that passes both is accepted: the handler checks
+ * `shouldComplete` first in all three completion spots (`shouldContinue`,
+ * `isComplete`, `getCompletionReason`), so the predicate wins and the threshold
+ * fields (`minSuccessful`/`toleratedFailureCount`/`toleratedFailurePercentage`)
+ * are silently ignored.
+ *
+ * @public
+ */
+export type CompletionConfig =
+  | ThresholdCompletionConfig
+  | CustomCompletionConfig;
 
 /**
  * Snapshot of a single item/branch at the moment

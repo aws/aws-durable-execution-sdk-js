@@ -138,18 +138,17 @@ When you push to GitHub, the integration test workflow (`.github/workflows/integ
 1. **Setup Stage**:
    - Build all packages
    - Generate the examples catalog from the config
-   - For each example:
-     - Package the function code
-     - Deploy/update Lambda function using `scripts/deploy-lambda.ts`
-     - Function name format: `YourExampleName-TypeScript` (or with `-PR-{number}` suffix for PRs)
+   - Generate a SAM template for the selected Node.js runtime
+   - Deploy/update the shared integration-test SAM stack for the selected runtime
+   - Function name format: `YourExampleName-22x-NodeJS`
 
 2. **Test Stage**:
    - Run `npm run test:integration` in examples package
    - Tests automatically use `CloudDurableTestRunner` when `NODE_ENV=integration`
    - Function names are passed via `FUNCTION_NAME_MAP` environment variable
 
-3. **Cleanup Stage**:
-   - Delete all deployed Lambda functions
+3. **Reuse**:
+   - SAM-managed integration test functions remain deployed for reuse by later PRs
 
 ### Run Integration Tests Locally
 

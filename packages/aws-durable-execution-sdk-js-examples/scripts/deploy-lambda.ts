@@ -34,6 +34,7 @@ import {
 } from "@aws-sdk/client-cloudwatch-logs";
 
 const DEBUG = false;
+const INTEGRATION_TEST_LOG_RETENTION_DAYS = 7;
 
 // ADOT Layer ARN mapping for X-Ray E2E test
 // Format: arn:aws:lambda:${region}:615299751070:layer:AWSOpenTelemetryDistroJs:<version>
@@ -334,6 +335,30 @@ async function getCurrentConfiguration(
   return await lambdaClient.send(command);
 }
 
+async function ensureLogGroupRetention(functionName: string): Promise<void> {
+  const logGroupName = `/aws/lambda/${functionName}`;
+  const cwlClient = new CloudWatchLogsClient();
+  try {
+    console.log(`Ensuring log group ${logGroupName} exists`);
+    await cwlClient.send(
+      new CreateLogGroupCommand({
+        logGroupName,
+      }),
+    );
+  } catch (err) {
+    if (!(err instanceof ResourceAlreadyExistsException)) {
+      throw err;
+    }
+  }
+
+  await cwlClient.send(
+    new PutRetentionPolicyCommand({
+      logGroupName,
+      retentionInDays: INTEGRATION_TEST_LOG_RETENTION_DAYS,
+    }),
+  );
+}
+
 async function createFunction(
   lambdaClient: LambdaClient,
   functionName: string,
@@ -358,26 +383,7 @@ async function createFunction(
   const roleArn = env.LAMBDA_EXECUTION_ROLE_ARN;
 
   const logGroupName = `/aws/lambda/${functionName}`;
-  const cwlClient = new CloudWatchLogsClient();
-  try {
-    console.log(`Creating log group ${logGroupName}`);
-    await cwlClient.send(
-      new CreateLogGroupCommand({
-        logGroupName,
-      }),
-    );
-  } catch (err) {
-    if (!(err instanceof ResourceAlreadyExistsException)) {
-      throw err;
-    }
-  }
-
-  await cwlClient.send(
-    new PutRetentionPolicyCommand({
-      logGroupName,
-      retentionInDays: exampleConfig.durableConfig?.RetentionPeriodInDays ?? 7,
-    }),
-  );
+  await ensureLogGroupRetention(functionName);
 
   // Determine environment variables
   let envVars: Record<string, string> | undefined = env.LAMBDA_ENDPOINT
@@ -470,6 +476,7 @@ async function updateFunction(
   runtime?: Runtime,
 ): Promise<void> {
   console.log(`Deploying function: ${functionName} (updating existing)`);
+  await ensureLogGroupRetention(functionName);
 
   const currentRetention = currentConfig.DurableConfig?.RetentionPeriodInDays;
   const currentTimeout = currentConfig.DurableConfig?.ExecutionTimeout;

@@ -11,6 +11,8 @@ import {
   CompletionReason,
   CompletionStatus,
   CompletionItemStatus,
+  CompletionConfig,
+  CompletionOutcome,
   DurablePromise,
   DurableLogger,
   NestingType,
@@ -24,6 +26,43 @@ import {
 } from "./batch-result";
 import { defaultSerdes, AnySerdes } from "../../utils/serdes/serdes";
 import { ChildContextError } from "../../errors/durable-error/durable-error";
+import { TerminationManager } from "../../termination-manager/termination-manager";
+import { TerminationReason } from "../../termination-manager/types";
+
+/**
+ * Validates that a custom `shouldComplete` predicate is not combined with the
+ * threshold fields (the two completion mechanisms are mutually exclusive). The
+ * public {@link CompletionConfig} type expresses this at compile time; this
+ * guard protects plain-JavaScript callers.
+ *
+ * A configuration error is not retryable, so rather than throwing (which the
+ * durable runtime could treat as a customer error), it terminates the
+ * execution with a validation reason — mirroring how `validateContextUsage`
+ * reports context misuse. Returns `true` when the config is valid, or `false`
+ * when it terminated the execution (the caller must then stop).
+ */
+function validateCompletionConfig(
+  completion: CompletionConfig | undefined,
+  terminationManager: TerminationManager,
+): boolean {
+  if (
+    completion?.shouldComplete !== undefined &&
+    (completion.minSuccessful !== undefined ||
+      completion.toleratedFailureCount !== undefined ||
+      completion.toleratedFailurePercentage !== undefined)
+  ) {
+    const message =
+      "completionConfig.shouldComplete is mutually exclusive with " +
+      "minSuccessful, toleratedFailureCount, and toleratedFailurePercentage";
+    terminationManager.terminate({
+      reason: TerminationReason.CONFIG_VALIDATION_ERROR,
+      message,
+      error: new Error(message),
+    });
+    return false;
+  }
+  return true;
+}
 
 export class ConcurrencyController<Logger extends DurableLogger> {
   constructor(
@@ -59,20 +98,24 @@ export class ConcurrencyController<Logger extends DurableLogger> {
     // Check tolerance first, before checking if all completed
     const completion = config.completionConfig;
 
-    // A custom shouldComplete predicate takes full precedence over the
-    // threshold fields. All items finishing always wins, otherwise the
-    // predicate decides whether the batch was completed early.
+    // A custom shouldComplete predicate owns the completion decision. Its
+    // returned outcome determines whether the early completion is reported as
+    // a success or a failure. If the predicate does not complete the batch,
+    // the batch is ending because every item finished (ALL_COMPLETED).
     if (completion?.shouldComplete) {
-      if (completedCount === items.length) return "ALL_COMPLETED";
-      return completion.shouldComplete({
+      const decision = completion.shouldComplete({
         successCount,
         failureCount,
         completedCount,
         totalCount: items.length,
         items: itemStatuses,
-      })
-        ? "CUSTOM_COMPLETION"
-        : "ALL_COMPLETED";
+      });
+      if (decision.complete) {
+        return decision.outcome === CompletionOutcome.FAILED
+          ? "CUSTOM_COMPLETION_FAILED"
+          : "CUSTOM_COMPLETION_SUCCEEDED";
+      }
+      return "ALL_COMPLETED";
     }
 
     // Handle fail-fast behavior (no completion config or empty completion config)
@@ -367,7 +410,7 @@ export class ConcurrencyController<Logger extends DurableLogger> {
         // A custom predicate fully owns the "keep going?" decision: stop
         // starting new items as soon as it signals completion.
         if (completion.shouldComplete) {
-          return !completion.shouldComplete(buildCompletionStatus());
+          return !completion.shouldComplete(buildCompletionStatus()).complete;
         }
 
         // Default to fail-fast when no completion criteria are defined
@@ -403,7 +446,7 @@ export class ConcurrencyController<Logger extends DurableLogger> {
 
         // A custom predicate takes precedence over minSuccessful.
         if (completion?.shouldComplete) {
-          return completion.shouldComplete(buildCompletionStatus());
+          return completion.shouldComplete(buildCompletionStatus()).complete;
         }
 
         if (
@@ -615,6 +658,18 @@ export const createConcurrentExecutionHandler = <Logger extends DurableLogger>(
         throw new Error(
           `Invalid maxConcurrency: ${config.maxConcurrency}. Must be a positive number or undefined for unlimited concurrency.`,
         );
+      }
+
+      // Mutually-exclusive completion config is a non-retryable configuration
+      // error: terminate the execution rather than throwing. If it terminated,
+      // stop here with a never-resolving promise so we don't proceed.
+      if (
+        !validateCompletionConfig(
+          config?.completionConfig,
+          context.terminationManager,
+        )
+      ) {
+        return new Promise<BatchResult<TResult>>(() => {});
       }
 
       const executeOperation = async (

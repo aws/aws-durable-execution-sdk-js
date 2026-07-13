@@ -26,7 +26,8 @@ jest.mock("fs", () => ({
         handler: "steps-with-retry.handler",
         durableConfig: {
           ExecutionTimeout: 60,
-          RetentionPeriodInDays: 7,
+          // Keep this different from log retention to verify they are independent.
+          RetentionPeriodInDays: 30,
         },
       },
     ]),
@@ -46,8 +47,8 @@ describe("generate-sam-template", () => {
   describe("createFunctionResource", () => {
     test("creates default function resource", () => {
       const resource = createFunctionResource(
-        "hello-world",
         getExamplesCatalogJson()[0],
+        "hello-world",
       );
 
       expect(resource.Type).toBe("AWS::Serverless::Function");
@@ -61,8 +62,8 @@ describe("generate-sam-template", () => {
 
     test("creates function resource with custom config for steps-with-retry", () => {
       const resource = createFunctionResource(
-        "steps-with-retry",
         getExamplesCatalogJson()[1],
+        "steps-with-retry",
       );
 
       expect(resource.Properties.FunctionName).toBe("steps-with-retry");
@@ -78,13 +79,58 @@ describe("generate-sam-template", () => {
     });
 
     test("includes required environment variables", () => {
-      const resource = createFunctionResource("hello-world", {});
+      const resource = createFunctionResource(
+        getExamplesCatalogJson()[0],
+        "hello-world",
+      );
 
       expect(resource.Properties.Environment.Variables).toEqual({
         AWS_ENDPOINT_URL_LAMBDA: "http://host.docker.internal:5000",
         DURABLE_VERBOSE_MODE: "false",
         DURABLE_EXAMPLES_VERBOSE: "true",
       });
+    });
+
+    test("uses CI options when provided", () => {
+      const resource = createFunctionResource(
+        getExamplesCatalogJson()[0],
+        "HelloWorld-24x-NodeJS",
+        {
+          codeUri: "../dist",
+          lambdaEndpoint: "https://lambda.us-west-2.amazonaws.com",
+          lambdaExecutionRoleArn:
+            "arn:aws:iam::123456789012:role/test-lambda-role",
+          runtime: "24.x",
+        },
+      );
+
+      expect(resource.Properties.CodeUri).toBe("../dist");
+      expect(resource.Properties.FunctionName).toBe("HelloWorld-24x-NodeJS");
+      expect(resource.Properties.Role).toBe(
+        "arn:aws:iam::123456789012:role/test-lambda-role",
+      );
+      expect(resource.Properties.Runtime).toBe("nodejs24.x");
+      expect(resource.Properties.Environment.Variables).toEqual({
+        AWS_ENDPOINT_URL_LAMBDA: "https://lambda.us-west-2.amazonaws.com",
+        DURABLE_VERBOSE_MODE: "false",
+        DURABLE_EXAMPLES_VERBOSE: "true",
+      });
+    });
+
+    test("keeps example config with CI function names", () => {
+      const resource = createFunctionResource(
+        getExamplesCatalogJson()[1],
+        "StepswithRetry-24x-NodeJS",
+        {
+          lambdaExecutionRoleArn:
+            "arn:aws:iam::123456789012:role/test-lambda-role",
+          runtime: "24.x",
+        },
+      );
+
+      expect(resource.Properties.MemorySize).toBe(256);
+      expect(resource.Properties.Timeout).toBe(300);
+      expect(resource.Properties.Policies).toBeUndefined();
     });
   });
 
@@ -110,6 +156,50 @@ describe("generate-sam-template", () => {
             "AWS::Serverless::Function",
           );
         }
+      });
+    });
+
+    test("generates CI template with explicit function names and log groups", () => {
+      const template = generateTemplate({
+        codeUri: "../dist",
+        functionNameMap: {
+          "hello-world": {
+            functionName: "HelloWorld-24x-NodeJS",
+          },
+          "steps-with-retry": {
+            functionName: "StepswithRetry-24x-NodeJS",
+          },
+        },
+        lambdaExecutionRoleArn:
+          "arn:aws:iam::123456789012:role/test-lambda-role",
+        runtime: "24.x",
+      });
+
+      expect(template.Resources.DurableFunctionRole).toBeUndefined();
+      expect(template.Resources.HelloWorld.Properties.FunctionName).toBe(
+        "HelloWorld-24x-NodeJS",
+      );
+      expect(template.Resources.HelloWorld.Properties.CodeUri).toBe("../dist");
+      expect(template.Resources.HelloWorld.Properties.Runtime).toBe(
+        "nodejs24.x",
+      );
+      expect(template.Resources.HelloWorld.DependsOn).toBe(
+        "HelloWorldLogGroup",
+      );
+      expect(template.Resources.HelloWorldLogGroup).toEqual({
+        Type: "AWS::Logs::LogGroup",
+        Properties: {
+          LogGroupName: "/aws/lambda/HelloWorld-24x-NodeJS",
+          RetentionInDays: 7,
+        },
+      });
+      expect(template.Resources.StepsWithRetry.Properties.MemorySize).toBe(
+        256,
+      );
+      expect(template.Resources.StepsWithRetry.Properties.Timeout).toBe(300);
+      expect(template.Resources.StepsWithRetryLogGroup.Properties).toEqual({
+        LogGroupName: "/aws/lambda/StepswithRetry-24x-NodeJS",
+        RetentionInDays: 7,
       });
     });
   });
