@@ -1,5 +1,7 @@
 import { ErrorObject } from "@aws-sdk/client-lambda";
 import { STORE_STACK_TRACES } from "../../utils/constants/constants";
+// Type-only import to avoid a runtime circular dependency with types/batch.
+import type { CompletionReason } from "../../types/batch";
 
 /**
  * Base class for all durable operation errors
@@ -248,5 +250,31 @@ export class WaitForConditionError extends DurableOperationError {
 
   constructor(message?: string, cause?: Error, errorData?: string) {
     super(message || "Wait for condition failed", cause, errorData);
+  }
+}
+
+/**
+ * Error thrown by {@link BatchResult.throwIfError} when a map/parallel batch
+ * completed as failed because a custom `shouldComplete` decision returned a
+ * `FAILED` outcome (`CUSTOM_COMPLETION_FAILED`) — even when no individual item
+ * failed (e.g. a required quorum could not be met).
+ * @public
+ */
+export class BatchCompletionError extends DurableOperationError {
+  readonly errorType = "BatchCompletionError";
+
+  constructor(
+    /** The completion reason that caused the batch to be treated as failed. */
+    public readonly completionReason: CompletionReason,
+    message?: string,
+    cause?: Error,
+    errorData?: string,
+  ) {
+    super(
+      message ||
+        `Batch completed as failed by shouldComplete (${completionReason})`,
+      cause,
+      errorData,
+    );
   }
 }

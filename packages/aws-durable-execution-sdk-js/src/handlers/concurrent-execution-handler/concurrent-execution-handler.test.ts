@@ -8,9 +8,15 @@ import {
   BatchItemStatus,
   DurableLogger,
   DurablePromise,
+  completeBatch,
+  continueBatch,
+  CompletionOutcome,
 } from "../../types";
 import { MockBatchResult } from "../../testing/mock-batch-result";
-import { ChildContextError } from "../../errors/durable-error/durable-error";
+import {
+  ChildContextError,
+  BatchCompletionError,
+} from "../../errors/durable-error/durable-error";
 
 describe("Concurrent Execution Handler", () => {
   let mockExecutionContext: jest.Mocked<ExecutionContext>;
@@ -97,6 +103,35 @@ describe("Concurrent Execution Handler", () => {
       await expect(
         concurrentExecutionHandler([], jest.fn(), { maxConcurrency: -1 }),
       ).rejects.toThrow("Invalid maxConcurrency: -1");
+    });
+
+    it("should terminate execution when shouldComplete is combined with threshold fields", async () => {
+      const terminate = jest.fn();
+      (mockExecutionContext as any).terminationManager = { terminate };
+
+      // Cast bypasses the compile-time union to exercise the runtime guard.
+      // The returned promise never resolves (execution is terminated), so we
+      // don't await it — just assert the termination was requested.
+      void concurrentExecutionHandler(
+        [{ id: "item-0", data: "data1", index: 0 }],
+        jest.fn(),
+        {
+          completionConfig: {
+            minSuccessful: 1,
+            shouldComplete: () => completeBatch(),
+          },
+        } as any,
+      );
+
+      // Let the async factory run its synchronous validation.
+      await Promise.resolve();
+
+      expect(terminate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reason: "CONFIG_VALIDATION_ERROR",
+          message: expect.stringMatching(/mutually exclusive/),
+        }),
+      );
     });
   });
 
@@ -646,7 +681,7 @@ describe("ConcurrencyController", () => {
     });
 
     describe("shouldComplete (custom predicate)", () => {
-      it("should stop early when the predicate returns true (CUSTOM_COMPLETION)", async () => {
+      it("should stop early with CUSTOM_COMPLETION_SUCCEEDED when the decision completes", async () => {
         const items = [
           { id: "item-0", data: "data1", index: 0 },
           { id: "item-1", data: "data2", index: 1 },
@@ -666,82 +701,59 @@ describe("ConcurrencyController", () => {
           mockParentContext,
           {
             completionConfig: {
-              shouldComplete: ({ completedCount }) => completedCount >= 1,
+              shouldComplete: ({ completedCount }) =>
+                completedCount >= 1 ? completeBatch() : continueBatch(),
             },
           },
         );
 
         expect(result.successCount).toBe(1);
-        expect(result.completionReason).toBe("CUSTOM_COMPLETION");
+        expect(result.completionReason).toBe("CUSTOM_COMPLETION_SUCCEEDED");
+        expect(result.status).toBe(BatchItemStatus.SUCCEEDED);
         expect(result.startedCount).toBeGreaterThan(0);
       });
 
-      it("should take precedence over minSuccessful", async () => {
+      it("should report CUSTOM_COMPLETION_FAILED and throw when the decision outcome is FAILED", async () => {
         const items = [
           { id: "item-0", data: "data1", index: 0 },
           { id: "item-1", data: "data2", index: 1 },
-          { id: "item-2", data: "data3", index: 2 },
         ];
         const executor = jest.fn();
 
+        // The item succeeds, but the predicate declares the batch failed
+        // (e.g. a required quorum can no longer be met).
         mockParentContext.runInChildContext
           .mockResolvedValueOnce("result1")
-          .mockResolvedValueOnce("result2")
           .mockImplementation(
             () => new DurablePromise(() => new Promise(() => {})),
-          ); // Never resolves
+          );
 
         const result = await controller.executeItems(
           items,
           executor,
           mockParentContext,
           {
-            // minSuccessful: 1 would normally stop after the first success, but
-            // the predicate takes over and requires two successes.
             completionConfig: {
-              minSuccessful: 1,
-              shouldComplete: ({ successCount }) => successCount >= 2,
+              shouldComplete: ({ completedCount }) =>
+                completedCount >= 1
+                  ? completeBatch(CompletionOutcome.FAILED)
+                  : continueBatch(),
             },
           },
         );
 
-        expect(result.successCount).toBe(2);
-        expect(result.completionReason).toBe("CUSTOM_COMPLETION");
-      });
-
-      it("should take precedence over failure tolerance (thresholds ignored)", async () => {
-        const items = [
-          { id: "item-0", data: "data1", index: 0 },
-          { id: "item-1", data: "data2", index: 1 },
-          { id: "item-2", data: "data3", index: 2 },
-        ];
-        const executor = jest.fn();
-        const error = new ChildContextError("boom");
-
-        // With maxConcurrency 1, toleratedFailureCount: 0 would normally stop
-        // launching after the first failure. The predicate ignores it and lets
-        // every item run.
-        mockParentContext.runInChildContext
-          .mockRejectedValueOnce(error)
-          .mockResolvedValueOnce("result1")
-          .mockResolvedValueOnce("result2");
-
-        const result = await controller.executeItems(
-          items,
-          executor,
-          mockParentContext,
-          {
-            maxConcurrency: 1,
-            completionConfig: {
-              toleratedFailureCount: 0,
-              shouldComplete: () => false,
-            },
-          },
-        );
-
-        expect(result.successCount).toBe(2);
-        expect(result.failureCount).toBe(1);
-        expect(result.completionReason).toBe("ALL_COMPLETED");
+        expect(result.completionReason).toBe("CUSTOM_COMPLETION_FAILED");
+        expect(result.status).toBe(BatchItemStatus.FAILED);
+        // No individual item failed, yet the decision marks the batch failed.
+        expect(result.failureCount).toBe(0);
+        expect(() => result.throwIfError()).toThrow(BatchCompletionError);
+        try {
+          result.throwIfError();
+        } catch (e) {
+          expect((e as BatchCompletionError).completionReason).toBe(
+            "CUSTOM_COMPLETION_FAILED",
+          );
+        }
       });
 
       it("should run all items when the predicate never completes early", async () => {
@@ -760,7 +772,7 @@ describe("ConcurrencyController", () => {
           executor,
           mockParentContext,
           {
-            completionConfig: { shouldComplete: () => false },
+            completionConfig: { shouldComplete: () => continueBatch() },
           },
         );
 
@@ -785,12 +797,12 @@ describe("ConcurrencyController", () => {
           executor,
           mockParentContext,
           {
-            completionConfig: { shouldComplete: () => true },
+            completionConfig: { shouldComplete: () => completeBatch() },
           },
         );
 
         expect(result.all).toHaveLength(0);
-        expect(result.completionReason).toBe("CUSTOM_COMPLETION");
+        expect(result.completionReason).toBe("CUSTOM_COMPLETION_SUCCEEDED");
         expect(mockParentContext.runInChildContext).not.toHaveBeenCalled();
       });
 
@@ -821,14 +833,16 @@ describe("ConcurrencyController", () => {
               shouldComplete: ({ items: s }) => {
                 const ok = (i: number) =>
                   s[i]?.status === BatchItemStatus.SUCCEEDED;
-                return ok(0) || (ok(1) && ok(2));
+                return ok(0) || (ok(1) && ok(2))
+                  ? completeBatch()
+                  : continueBatch();
               },
             },
           },
         );
 
         expect(result.successCount).toBe(2);
-        expect(result.completionReason).toBe("CUSTOM_COMPLETION");
+        expect(result.completionReason).toBe("CUSTOM_COMPLETION_SUCCEEDED");
         expect(result.all[0].status).toBe(BatchItemStatus.STARTED); // A
         expect(result.all[1].status).toBe(BatchItemStatus.SUCCEEDED); // B
         expect(result.all[2].status).toBe(BatchItemStatus.SUCCEEDED); // C
@@ -858,14 +872,16 @@ describe("ConcurrencyController", () => {
               shouldComplete: ({ items: s }) => {
                 const ok = (i: number) =>
                   s[i]?.status === BatchItemStatus.SUCCEEDED;
-                return ok(0) || (ok(1) && ok(2));
+                return ok(0) || (ok(1) && ok(2))
+                  ? completeBatch()
+                  : continueBatch();
               },
             },
           },
         );
 
         expect(result.successCount).toBe(1);
-        expect(result.completionReason).toBe("CUSTOM_COMPLETION");
+        expect(result.completionReason).toBe("CUSTOM_COMPLETION_SUCCEEDED");
         expect(result.all[0].status).toBe(BatchItemStatus.SUCCEEDED); // A
       });
     });
