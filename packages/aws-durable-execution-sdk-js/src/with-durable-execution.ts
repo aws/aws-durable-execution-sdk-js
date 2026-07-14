@@ -95,6 +95,7 @@ async function runHandler<
     executionArn: executionContext.durableExecutionArn,
     executionInput: customerHandlerEvent,
     operations: allOperations,
+    executionStartTimestamp: initialExecutionEvent?.StartTimestamp ?? undefined,
   };
 
   const invocationInfo: InvocationInfo = {

@@ -28,6 +28,7 @@ describe("createPluginRunner", () => {
     executionInput: { test: true },
     operations: {},
     updatedOperations: {},
+    executionStartTimestamp: new Date("2024-01-01T00:00:00Z"),
   };
 
   const operationInfo: OperationInfo = {
@@ -723,6 +724,7 @@ describe("createPluginRunner", () => {
       executionResult: { data: "test" },
       executionInput: { event: "input" },
       operations: {},
+      executionStartTimestamp: new Date("2024-01-01T00:00:00Z"),
     };
 
     it.each([
