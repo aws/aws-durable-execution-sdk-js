@@ -229,6 +229,12 @@ interface OperationContentOptions {
   overridesByName: Map<string, OperationOverride>;
   /** Whether to include per-operation error details. */
   includeErrors: boolean;
+  /**
+   * When true, only top-level operations are emitted; any operation with a
+   * `parentId` (parallel branches, map items, nested steps/contexts) is
+   * dropped. Derived from `operationDetail: "top-level"`.
+   */
+  topLevelOnly: boolean;
 }
 
 /**
@@ -299,6 +305,11 @@ function buildOperationRecords(
 
     // Unnamed operations are excluded by default (can't be targeted or keyed).
     if (!op.name) continue;
+
+    // In "top-level" detail mode, drop anything nested under a context
+    // (parallel branches, map items, nested steps/contexts). Top-level
+    // operations have no parentId. This gives a resume-independent snapshot.
+    if (opts.topLevelOnly && op.parentId) continue;
 
     const override = opts.overridesByName.get(op.name);
     if (override?.exclude) continue;
@@ -439,6 +450,11 @@ export function workflowInsight(
   const opContentOptions: OperationContentOptions = {
     overridesByName,
     includeErrors,
+    // Default to top-level: it yields a consistent snapshot regardless of
+    // suspend/resume. "full-tree" is opt-in because, without child preservation
+    // (pluginsConfig.childOperationsDepth), it can silently miss children of
+    // contexts that finished in an earlier invocation.
+    topLevelOnly: config.operationDetail !== "full-tree",
   };
 
   const exporters =

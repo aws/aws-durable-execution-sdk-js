@@ -246,6 +246,118 @@ describe("Run In Child Context Integration Tests", () => {
     ]);
   });
 
+  describe("child operations preservation depth", () => {
+    // Find the SUCCEED checkpoint for a context by name.
+    const succeedFor = (name: string) =>
+      checkpointCalls
+        .map((c) => c.data.Updates[0])
+        .find(
+          (u: { Name?: string; Action?: string }) =>
+            u?.Name === name && u?.Action === OperationAction.SUCCEED,
+        ) as { ContextOptions?: unknown } | undefined;
+
+    const runTopAndNested = async (
+      ctx: DurableContext<DurableLogger>,
+    ): Promise<void> => {
+      await ctx.runInChildContext("top", async (topCtx) => {
+        await topCtx.runInChildContext("nested", async () => "nested-result");
+        return "top-result";
+      });
+      // Let any fire-and-forget SUCCEED checkpoints settle.
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    };
+
+    test("decrements per level: root budget 2 preserves the top level but not the nested one", async () => {
+      // Root budget 2 => top-level context budget 1 (ReplayChildren set),
+      // nested context budget 0 (not set). Mirrors childOperationsDepth = 1.
+      const ctx = createDurableContext(
+        mockExecutionContext,
+        mockParentContext,
+        DurableExecutionMode.ExecutionMode,
+        createDefaultLogger(),
+        undefined,
+        mockDurableExecution,
+        undefined, // parentId
+        2, // preserveChildDepth (root budget)
+      );
+
+      await runTopAndNested(ctx);
+
+      expect(succeedFor("top")?.ContextOptions).toEqual({
+        ReplayChildren: true,
+      });
+      expect(succeedFor("nested")?.ContextOptions).toBeUndefined();
+    });
+
+    test("Infinity preserves every level", async () => {
+      const ctx = createDurableContext(
+        mockExecutionContext,
+        mockParentContext,
+        DurableExecutionMode.ExecutionMode,
+        createDefaultLogger(),
+        undefined,
+        mockDurableExecution,
+        undefined,
+        Infinity,
+      );
+
+      await runTopAndNested(ctx);
+
+      expect(succeedFor("top")?.ContextOptions).toEqual({
+        ReplayChildren: true,
+      });
+      expect(succeedFor("nested")?.ContextOptions).toEqual({
+        ReplayChildren: true,
+      });
+    });
+
+    test("default (no budget) preserves nothing", async () => {
+      // durableContext from beforeEach was created without a preserveChildDepth.
+      await runTopAndNested(durableContext);
+
+      expect(succeedFor("top")?.ContextOptions).toBeUndefined();
+      expect(succeedFor("nested")?.ContextOptions).toBeUndefined();
+    });
+
+    test("virtual (FLAT) contexts do not consume a depth level", async () => {
+      // Root budget 2. A virtual middle context (map/parallel FLAT item) adds
+      // no operation-tree node and re-parents its children onto the root, so it
+      // must NOT consume a budget level. The real "inner" context is therefore
+      // one real level below the root (budget 1) and preserves its children.
+      // (If virtual layers consumed a level, inner would be budget 0 and its
+      // children would NOT be preserved — the off-by-one this guards against.)
+      const ctx = createDurableContext(
+        mockExecutionContext,
+        mockParentContext,
+        DurableExecutionMode.ExecutionMode,
+        createDefaultLogger(),
+        undefined,
+        mockDurableExecution,
+        undefined,
+        2,
+      );
+
+      await ctx.runInChildContext(
+        "virtual-item",
+        async (itemCtx) => {
+          await itemCtx.runInChildContext("inner", async (innerCtx) => {
+            await innerCtx.step("inner-step", async () => "s");
+            return "inner-result";
+          });
+          return "item-result";
+        },
+        { virtualContext: true },
+      );
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // The virtual middle context never checkpoints; the real "inner" one does
+      // and, because the virtual layer was transparent, still has budget >= 1.
+      expect(succeedFor("inner")?.ContextOptions).toEqual({
+        ReplayChildren: true,
+      });
+    });
+  });
+
   test("should support mixed step and child context operations", async () => {
     const operationOrder: string[] = [];
 
