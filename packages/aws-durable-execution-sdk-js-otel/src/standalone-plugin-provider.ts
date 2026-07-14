@@ -1,5 +1,5 @@
 import type { TracerProvider } from "@opentelemetry/api";
-import { propagation } from "@opentelemetry/api";
+import { propagation, trace } from "@opentelemetry/api";
 import {
   CompositePropagator,
   W3CTraceContextPropagator,
@@ -93,11 +93,17 @@ function buildLambdaResource() {
 export function createTracerProvider(
   config?: StandaloneOtelPluginConfig,
 ): ProviderResult {
-  // If a custom provider is supplied, skip all auto-setup.
+  // Priority 1: If a custom provider is supplied, skip all auto-setup.
   if (config?.tracerProvider) {
     return { tracerProvider: config.tracerProvider, ownsProvider: false };
   }
 
+  // Priority 2: Use globally registered default provider
+  if (config?.useDefaultTracerProvider) {
+    return { tracerProvider: trace.getTracerProvider(), ownsProvider: false };
+  }
+
+  // Priority 3: Create internal provider with full auto-setup
   // Resolve the OTLP endpoint
   const endpoint =
     config?.exporterConfig?.endpoint ||

@@ -1,0 +1,162 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "27d883d6-c5e4-4d2e-985d-b15cbc403348",
+    "EventTimestamp": "2026-07-14T00:51:23.110Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "fetch-data",
+    "EventTimestamp": "2026-07-14T00:51:23.121Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "fetch-data",
+    "EventTimestamp": "2026-07-14T00:51:23.121Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"data-value\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "short-pause",
+    "EventTimestamp": "2026-07-14T00:51:23.126Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2026-07-14T00:51:24.126Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2026-07-14T00:51:23.149Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-07-14T00:51:23.110Z",
+      "EndTimestamp": "2026-07-14T00:51:23.149Z",
+      "Error": {},
+      "RequestId": "75eee922-212d-40fb-b1af-eb9aab08e9a6"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 6,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "short-pause",
+    "EventTimestamp": "2026-07-14T00:51:24.134Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "process-data",
+    "EventTimestamp": "2026-07-14T00:51:24.139Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "process-data",
+    "EventTimestamp": "2026-07-14T00:51:24.139Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"processed-data-value\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "RunInChildContext",
+    "EventId": 9,
+    "Id": "a87ff679a2f3e71d",
+    "Name": "child-operations",
+    "EventTimestamp": "2026-07-14T00:51:24.143Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 10,
+    "Id": "74bdefab9757a081",
+    "Name": "inner-step",
+    "EventTimestamp": "2026-07-14T00:51:24.143Z",
+    "ParentId": "a87ff679a2f3e71d",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 11,
+    "Id": "74bdefab9757a081",
+    "Name": "inner-step",
+    "EventTimestamp": "2026-07-14T00:51:24.143Z",
+    "ParentId": "a87ff679a2f3e71d",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"inner-value\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "RunInChildContext",
+    "EventId": 12,
+    "Id": "a87ff679a2f3e71d",
+    "Name": "child-operations",
+    "EventTimestamp": "2026-07-14T00:51:24.146Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"inner-value\""
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 13,
+    "EventTimestamp": "2026-07-14T00:51:24.147Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-07-14T00:51:24.134Z",
+      "EndTimestamp": "2026-07-14T00:51:24.147Z",
+      "Error": {},
+      "RequestId": "4120ca1f-fee9-4640-a2e0-ee1163e901f3"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 14,
+    "Id": "27d883d6-c5e4-4d2e-985d-b15cbc403348",
+    "EventTimestamp": "2026-07-14T00:51:24.147Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"result\":{\"step1\":\"data-value\",\"step2\":\"processed-data-value\",\"childResult\":\"inner-value\"},\"spans\":[{\"name\":\"fetch-data attempt 1\",\"traceId\":\"2bfafeec93f2bc5ce16a2309ce26280e\",\"spanId\":\"50fda3c3b6e9b005\",\"parentSpanId\":\"b024176e14615188\",\"attributes\":{\"durable.execution.arn\":\"24f80fc6-c29c-48db-8d14-a034b34078a4\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"fetch-data\",\"durable.operation.subtype\":\"Step\",\"durable.attempt.outcome\":\"SUCCEEDED\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"fetch-data\",\"traceId\":\"2bfafeec93f2bc5ce16a2309ce26280e\",\"spanId\":\"b024176e14615188\",\"parentSpanId\":\"9b078c57ba361440\",\"attributes\":{\"durable.execution.arn\":\"24f80fc6-c29c-48db-8d14-a034b34078a4\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"fetch-data\",\"durable.operation.subtype\":\"Step\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"short-pause\",\"traceId\":\"2bfafeec93f2bc5ce16a2309ce26280e\",\"spanId\":\"11724d72b6da1124\",\"parentSpanId\":\"9b078c57ba361440\",\"attributes\":{\"durable.execution.arn\":\"24f80fc6-c29c-48db-8d14-a034b34078a4\",\"durable.operation.id\":\"c81e728d9d4c2f63\",\"durable.operation.type\":\"WAIT\",\"durable.operation.name\":\"short-pause\",\"durable.operation.subtype\":\"Wait\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"process-data attempt 1\",\"traceId\":\"2bfafeec93f2bc5ce16a2309ce26280e\",\"spanId\":\"c97889919887f852\",\"parentSpanId\":\"407fd4c28a27e3d8\",\"attributes\":{\"durable.execution.arn\":\"24f80fc6-c29c-48db-8d14-a034b34078a4\",\"durable.operation.id\":\"eccbc87e4b5ce2fe\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"process-data\",\"durable.operation.subtype\":\"Step\",\"durable.attempt.outcome\":\"SUCCEEDED\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"process-data\",\"traceId\":\"2bfafeec93f2bc5ce16a2309ce26280e\",\"spanId\":\"407fd4c28a27e3d8\",\"parentSpanId\":\"9b078c57ba361440\",\"attributes\":{\"durable.execution.arn\":\"24f80fc6-c29c-48db-8d14-a034b34078a4\",\"durable.operation.id\":\"eccbc87e4b5ce2fe\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"process-data\",\"durable.operation.subtype\":\"Step\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"inner-step attempt 1\",\"traceId\":\"2bfafeec93f2bc5ce16a2309ce26280e\",\"spanId\":\"3ba97d38c2343930\",\"parentSpanId\":\"d8d8bbd157b064e4\",\"attributes\":{\"durable.execution.arn\":\"24f80fc6-c29c-48db-8d14-a034b34078a4\",\"durable.operation.id\":\"74bdefab9757a081\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"inner-step\",\"durable.operation.subtype\":\"Step\",\"durable.attempt.outcome\":\"SUCCEEDED\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"inner-step\",\"traceId\":\"2bfafeec93f2bc5ce16a2309ce26280e\",\"spanId\":\"d8d8bbd157b064e4\",\"parentSpanId\":\"859a8fb015c180de\",\"attributes\":{\"durable.execution.arn\":\"24f80fc6-c29c-48db-8d14-a034b34078a4\",\"durable.operation.id\":\"74bdefab9757a081\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"inner-step\",\"durable.operation.subtype\":\"Step\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"child-operations\",\"traceId\":\"2bfafeec93f2bc5ce16a2309ce26280e\",\"spanId\":\"859a8fb015c180de\",\"parentSpanId\":\"9b078c57ba361440\",\"attributes\":{\"durable.execution.arn\":\"24f80fc6-c29c-48db-8d14-a034b34078a4\",\"durable.operation.id\":\"a87ff679a2f3e71d\",\"durable.operation.type\":\"CONTEXT\",\"durable.operation.name\":\"child-operations\",\"durable.operation.subtype\":\"RunInChildContext\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]}]}"
+      }
+    }
+  }
+]

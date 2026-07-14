@@ -62,4 +62,18 @@ export interface StandaloneOtelPluginConfig {
    * propagator (`[AWSXRayPropagator, W3CTraceContextPropagator]`).
    */
   propagators?: TextMapPropagator[];
+
+  /**
+   * When true, the plugin fetches the globally registered TracerProvider
+   * via trace.getTracerProvider() instead of creating its own.
+   *
+   * This skips all auto-setup (exporter, propagators, instrumentations).
+   * The caller is responsible for configuring the global provider.
+   *
+   * Precedence: explicit tracerProvider > useDefaultTracerProvider > auto-created.
+   * If both tracerProvider and useDefaultTracerProvider are set, tracerProvider wins.
+   *
+   * Defaults to false.
+   */
+  useDefaultTracerProvider?: boolean;
 }

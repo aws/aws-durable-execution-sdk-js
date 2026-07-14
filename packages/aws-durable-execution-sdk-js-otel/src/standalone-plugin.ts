@@ -9,8 +9,19 @@ import type {
   OperationChangeInfo,
 } from "@aws/durable-execution-sdk-js";
 import type { DurableExecutionInvocationOutput } from "@aws/durable-execution-sdk-js";
-import type { TracerProvider, Tracer, Span } from "@opentelemetry/api";
-import { context, trace, SpanStatusCode } from "@opentelemetry/api";
+import type {
+  TracerProvider,
+  Tracer,
+  Span,
+  Context,
+  Link,
+} from "@opentelemetry/api";
+import {
+  context,
+  trace,
+  SpanStatusCode,
+  ROOT_CONTEXT,
+} from "@opentelemetry/api";
 import {
   DeterministicIdGenerator,
   deriveTraceIdFromArn,
@@ -53,6 +64,10 @@ export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
   private executionArn: string;
   private attemptSpan: Span | undefined;
 
+  // Default provider mode
+  private readonly useDefaultTracerProvider: boolean;
+  private savedInvocationContext: Context | undefined;
+
   // Cold start tracking
   private isColdStart: boolean = true;
 
@@ -62,6 +77,7 @@ export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
 
     this.idGenerator = new DeterministicIdGenerator();
     this.contextExtractor = config?.contextExtractor ?? xRayContextExtractor;
+    this.useDefaultTracerProvider = config?.useDefaultTracerProvider ?? false;
 
     // Create or accept TracerProvider via the provider factory
     const { tracerProvider, ownsProvider } = createTracerProvider(config);
@@ -103,58 +119,70 @@ export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
     // 5. Set it as the next span ID so the tracer uses it for the Workflow_Span
     this.idGenerator.setNextSpanId(workflowSpanId);
 
-    // 6. Create the Workflow_Span with deterministic ID
-    this.workflowSpan = this.tracer.startSpan("Workflow", {
-      attributes: {
-        "durable.execution.arn": info.executionArn,
-      },
-      startTime: info.executionStartTimestamp ?? new Date(),
-    });
-
-    // 7. Create the Invocation_Span as child of Workflow_Span with Lambda semantic attributes
-    const parentContext = trace.setSpan(context.active(), this.workflowSpan);
-
-    const invocationAttributes: Record<string, string | number | boolean> = {
-      "faas.invocation_id": info.requestId,
-      "faas.coldstart": this.isColdStart,
-      "cloud.provider": "aws",
-      "cloud.platform": "aws_lambda",
-      "durable.execution.arn": info.executionArn,
-    };
-
-    // Set cloud.resource_id from Lambda environment variables
-    const functionName = process.env.AWS_LAMBDA_FUNCTION_NAME;
-    if (functionName) {
-      const region = process.env.AWS_REGION;
-      // Extract account ID from execution ARN (format: arn:aws:states:{region}:{account}:execution:{sm}:{exec})
-      const arnParts = info.executionArn.split(":");
-      const accountId = arnParts.length >= 5 ? arnParts[4] : undefined;
-
-      if (region && accountId) {
-        const version = process.env.AWS_LAMBDA_FUNCTION_VERSION;
-        const resourceId = `arn:aws:lambda:${region}:${accountId}:function:${functionName}${version ? ":" + version : ""}`;
-        invocationAttributes["cloud.resource_id"] = resourceId;
-      } else {
-        invocationAttributes["cloud.resource_id"] = functionName;
-      }
+    // Save ambient invocation context when using default provider
+    if (this.useDefaultTracerProvider) {
+      this.savedInvocationContext = context.active();
     }
 
-    // Set faas.max_memory if available
-    const memorySize = process.env.AWS_LAMBDA_FUNCTION_MEMORY_SIZE;
-    if (memorySize) {
-      const parsed = parseInt(memorySize, 10);
-      if (!isNaN(parsed)) {
-        invocationAttributes["faas.max_memory"] = parsed;
-      }
-    }
-
-    this.invocationSpan = this.tracer.startSpan(
-      "Invocation",
+    // 6. Create the Workflow_Span with deterministic ID (always as root — no parent)
+    this.workflowSpan = this.tracer.startSpan(
+      "Workflow",
       {
-        attributes: invocationAttributes,
+        attributes: {
+          "durable.execution.arn": info.executionArn,
+        },
+        startTime: info.executionStartTimestamp ?? new Date(),
       },
-      parentContext,
+      ROOT_CONTEXT,
     );
+
+    // Create Invocation_Span ONLY when NOT using default provider
+    if (!this.useDefaultTracerProvider) {
+      // 7. Create the Invocation_Span as child of Workflow_Span with Lambda semantic attributes
+      const parentContext = trace.setSpan(context.active(), this.workflowSpan);
+
+      const invocationAttributes: Record<string, string | number | boolean> = {
+        "faas.invocation_id": info.requestId,
+        "faas.coldstart": this.isColdStart,
+        "cloud.provider": "aws",
+        "cloud.platform": "aws_lambda",
+        "durable.execution.arn": info.executionArn,
+      };
+
+      // Set cloud.resource_id from Lambda environment variables
+      const functionName = process.env.AWS_LAMBDA_FUNCTION_NAME;
+      if (functionName) {
+        const region = process.env.AWS_REGION;
+        // Extract account ID from execution ARN (format: arn:aws:states:{region}:{account}:execution:{sm}:{exec})
+        const arnParts = info.executionArn.split(":");
+        const accountId = arnParts.length >= 5 ? arnParts[4] : undefined;
+
+        if (region && accountId) {
+          const version = process.env.AWS_LAMBDA_FUNCTION_VERSION;
+          const resourceId = `arn:aws:lambda:${region}:${accountId}:function:${functionName}${version ? ":" + version : ""}`;
+          invocationAttributes["cloud.resource_id"] = resourceId;
+        } else {
+          invocationAttributes["cloud.resource_id"] = functionName;
+        }
+      }
+
+      // Set faas.max_memory if available
+      const memorySize = process.env.AWS_LAMBDA_FUNCTION_MEMORY_SIZE;
+      if (memorySize) {
+        const parsed = parseInt(memorySize, 10);
+        if (!isNaN(parsed)) {
+          invocationAttributes["faas.max_memory"] = parsed;
+        }
+      }
+
+      this.invocationSpan = this.tracer.startSpan(
+        "Invocation",
+        {
+          attributes: invocationAttributes,
+        },
+        parentContext,
+      );
+    }
 
     // Mark cold start as false after the first invocation
     this.isColdStart = false;
@@ -189,8 +217,8 @@ export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
 
     // 3. Discard open Operation_Spans without ending (they won't be exported)
 
-    // 4. Flush TracerProvider when we own it
-    if (this.ownsProvider && "forceFlush" in this.tracerProvider) {
+    // 4. Always flush TracerProvider at invocation boundaries
+    if ("forceFlush" in this.tracerProvider) {
       try {
         await (
           this.tracerProvider as { forceFlush: () => Promise<void> }
@@ -207,8 +235,28 @@ export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
     this.spanMap.clear();
     this.workflowSpan = undefined;
     this.invocationSpan = undefined;
+    this.savedInvocationContext = undefined;
     this.executionArn = "";
     this.attemptSpan = undefined;
+  }
+
+  /**
+   * Builds span links to the invocation span for child spans.
+   *
+   * In default-provider mode, links to the ambient invocation span captured
+   * from the active context. Otherwise, links to the explicit Invocation_Span.
+   */
+  private buildInvocationLinks(): Link[] {
+    if (this.useDefaultTracerProvider && this.savedInvocationContext) {
+      const invocationSpan = trace.getSpan(this.savedInvocationContext);
+      if (invocationSpan) {
+        return [{ context: invocationSpan.spanContext() }];
+      }
+    }
+    if (this.invocationSpan) {
+      return [{ context: this.invocationSpan.spanContext() }];
+    }
+    return [];
   }
 
   async onOperationStart(info: OperationInfo): Promise<void> {
@@ -242,10 +290,7 @@ export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
       attributes["durable.operation.subtype"] = info.subType;
     }
 
-    // Build span link to Invocation_Span
-    const links = this.invocationSpan
-      ? [{ context: this.invocationSpan.spanContext() }]
-      : [];
+    const links = this.buildInvocationLinks();
 
     // Always use deterministic span ID regardless of replay status
     this.idGenerator.setNextSpanId(deterministicSpanId);
@@ -288,9 +333,11 @@ export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
     };
     if (info.name) attributes["durable.operation.name"] = info.name;
 
+    const links = this.buildInvocationLinks();
+
     return this.tracer.startActiveSpan(
       spanName,
-      { attributes },
+      { attributes, links },
       parentContext,
       fn,
     );
@@ -344,10 +391,7 @@ export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
         attributes["durable.operation.subtype"] = info.subType;
       }
 
-      // Link to Invocation_Span
-      const links = this.invocationSpan
-        ? [{ context: this.invocationSpan.spanContext() }]
-        : [];
+      const links = this.buildInvocationLinks();
 
       this.idGenerator.setNextSpanId(deterministicSpanId);
       const span = this.tracer.startSpan(
@@ -391,10 +435,7 @@ export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
       attributes["durable.operation.subtype"] = info.subType;
     }
 
-    // Link to Invocation_Span
-    const links = this.invocationSpan
-      ? [{ context: this.invocationSpan.spanContext() }]
-      : [];
+    const links = this.buildInvocationLinks();
 
     const attemptSpan = this.tracer.startSpan(
       spanName,

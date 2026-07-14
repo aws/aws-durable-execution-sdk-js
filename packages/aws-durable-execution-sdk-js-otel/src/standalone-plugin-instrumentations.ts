@@ -24,8 +24,8 @@ export function registerStandaloneInstrumentations(
   tracerProvider: TracerProvider,
   config?: StandaloneOtelPluginConfig,
 ): void {
-  // Skip all instrumentation when a custom tracerProvider is provided
-  if (config?.tracerProvider) {
+  // Skip all instrumentation when using an external provider (explicit or default)
+  if (config?.tracerProvider || config?.useDefaultTracerProvider) {
     return;
   }
 
