@@ -323,6 +323,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
           );
           const attemptInfo = toAttemptInfo(stepData, currentAttempt);
           backfillOperationInfo(attemptInfo, opInfo);
+          attemptInfo.startTimestamp = new Date();
           await plugin.onOperationAttemptStart?.(attemptInfo);
           let result: T;
           const stepFn = (): Promise<T> => fn(stepContext);
