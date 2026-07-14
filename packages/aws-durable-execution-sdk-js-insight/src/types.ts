@@ -146,6 +146,29 @@ export interface WorkflowInsightConfig {
   emitMode?: "on-complete" | "on-change" | "on-failure";
 
   /**
+   * Which operations to include in each record's `operations` array.
+   *
+   * - `"top-level"` (default): include only top-level operations (anything with
+   *   a `parentId` is dropped). This yields a consistent, resume-independent
+   *   snapshot — the same set of operations regardless of when it's emitted —
+   *   and never depends on child preservation. It's the default because
+   *   `"full-tree"` can otherwise silently under-report (see below).
+   * - `"full-tree"`: include every operation — top-level operations **and** the
+   *   children of contexts (parallel branches, map items, and their nested
+   *   operations). NOTE: children of a context that already finished in an
+   *   earlier invocation are, by default, pruned by the backend on resume — so
+   *   for an execution that suspends/resumes, a `"full-tree"` record only
+   *   contains children of contexts that were still active in the emitting
+   *   invocation. To keep the full tree across resume, also set
+   *   `DurableExecutionConfig.pluginsConfig.childOperationsDepth` on
+   *   `withDurableExecution` (this replays preserved contexts on resume to keep
+   *   their children in state — see that field's cost note).
+   *
+   * @experimental This field is experimental and may change in future releases.
+   */
+  operationDetail?: "full-tree" | "top-level";
+
+  /**
    * Control what data is included in records (input/output transforms,
    * operation overrides, error inclusion).
    *

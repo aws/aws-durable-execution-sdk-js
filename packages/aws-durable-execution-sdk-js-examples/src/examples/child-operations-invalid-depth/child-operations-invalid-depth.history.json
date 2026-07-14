@@ -1,0 +1,43 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "a791d7c1-9434-4fd3-92da-e0e5869d96d1",
+    "EventTimestamp": "2026-07-13T22:11:27.127Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 2,
+    "EventTimestamp": "2026-07-13T22:11:27.132Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-07-13T22:11:27.127Z",
+      "EndTimestamp": "2026-07-13T22:11:27.132Z",
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "pluginsConfig.childOperationsDepth must be a non-negative integer or Infinity; got -1.",
+          "ErrorType": "Error"
+        }
+      },
+      "RequestId": "a3c3bcab-38f3-4151-a0d0-a0f723a7bbe6"
+    }
+  },
+  {
+    "EventType": "ExecutionFailed",
+    "EventId": 3,
+    "Id": "a791d7c1-9434-4fd3-92da-e0e5869d96d1",
+    "EventTimestamp": "2026-07-13T22:11:27.132Z",
+    "ExecutionFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "pluginsConfig.childOperationsDepth must be a non-negative integer or Infinity; got -1.",
+          "ErrorType": "Error"
+        }
+      }
+    }
+  }
+]

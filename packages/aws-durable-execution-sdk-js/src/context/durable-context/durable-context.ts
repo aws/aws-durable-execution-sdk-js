@@ -33,6 +33,7 @@ import { EventEmitter } from "events";
 import { createStepHandler } from "../../handlers/step-handler/step-handler";
 import { createInvokeHandler } from "../../handlers/invoke-handler/invoke-handler";
 import { createRunInChildContextHandler } from "../../handlers/run-in-child-context-handler/run-in-child-context-handler";
+import { resolveChildArgs } from "../../handlers/run-in-child-context-handler/resolve-child-args";
 import { createWaitHandler } from "../../handlers/wait-handler/wait-handler";
 import { createWaitForConditionHandler } from "../../handlers/wait-for-condition-handler/wait-for-condition-handler";
 import {
@@ -90,6 +91,17 @@ export class DurableContextImpl<
   private modeManagement: ModeManagement;
   private durableExecution: DurableExecution;
 
+  /**
+   * Remaining depth budget for preserving child-context operations across
+   * suspend/resume. A context sets `ReplayChildren` on a child it runs when the
+   * child's budget (this value minus 1) is >= 1. Decremented by one for each
+   * nested context. `0` (default) disables preservation; `Infinity` preserves
+   * the whole tree. Seeded at the root from
+   * `DurableExecutionConfig.pluginsConfig.childOperationsDepth`.
+   * @internal
+   */
+  private _preserveChildDepth: number = 0;
+
   private _defaultSerdes: AnySerdes = defaultSerdes;
 
   private _defaultCallbackDeserializer: AnySerdesDeserializer =
@@ -113,9 +125,11 @@ export class DurableContextImpl<
     stepPrefix: string | undefined,
     durableExecution: DurableExecution,
     parentId?: string,
+    preserveChildDepth: number = 0,
   ) {
     this._stepPrefix = stepPrefix;
     this._parentId = parentId;
+    this._preserveChildDepth = preserveChildDepth;
     this.durableExecution = durableExecution;
     this.durableLogger = inheritedLogger;
     this.durableLogger.configureDurableLoggingContext?.(
@@ -384,6 +398,30 @@ export class DurableContextImpl<
       this._executionContext.terminationManager,
     );
     return this.withDurableModeManagement(() => {
+      // Budget handed to the child context we're about to run: one level less
+      // than ours (Infinity stays Infinity, and it never goes below 0). This
+      // both (a) decides whether the child's own children are preserved
+      // (ReplayChildren, in executeChildContext) and (b) seeds the child
+      // context so its grandchildren decrement further.
+      //
+      // Virtual contexts (map/parallel FLAT nesting) are the exception: they
+      // don't checkpoint and their children re-parent onto this context's
+      // ancestor, so they add no node to the operation tree. Decrementing for
+      // them would make `childOperationsDepth` count invisible layers and come
+      // up short (off-by-one) for contexts nested inside a FLAT item. So pass
+      // the budget through unchanged for a virtual child, keeping the depth
+      // aligned with the visible operation tree.
+      const { options: childOptions } = resolveChildArgs<T, Logger>(
+        nameOrFn,
+        fnOrOptions,
+        maybeOptions,
+      );
+      const isVirtualChild = childOptions?.virtualContext === true;
+      const childPreserveDepth = isVirtualChild
+        ? this._preserveChildDepth
+        : this._preserveChildDepth === Infinity
+          ? Infinity
+          : Math.max(0, this._preserveChildDepth - 1);
       const blockHandler = createRunInChildContextHandler(
         this._executionContext,
         this.checkpoint,
@@ -408,6 +446,7 @@ export class DurableContextImpl<
             stepPrefix,
             this.durableExecution,
             parentId,
+            childPreserveDepth,
           );
           // Propagate serdes config to child context
           childCtx.configureSerdes({
@@ -421,6 +460,7 @@ export class DurableContextImpl<
         this._parentId,
         () => this._defaultSerdes,
         this.durableExecution.plugin,
+        childPreserveDepth,
       );
       return blockHandler(nameOrFn, fnOrOptions, maybeOptions);
     });
@@ -678,6 +718,7 @@ export const createDurableContext = <Logger extends DurableLogger>(
   stepPrefix: string | undefined,
   durableExecution: DurableExecution,
   parentId?: string,
+  preserveChildDepth: number = 0,
 ): DurableContextImpl<Logger> => {
   return new DurableContextImpl<Logger>(
     executionContext,
@@ -687,5 +728,6 @@ export const createDurableContext = <Logger extends DurableLogger>(
     stepPrefix,
     durableExecution,
     parentId,
+    preserveChildDepth,
   );
 };

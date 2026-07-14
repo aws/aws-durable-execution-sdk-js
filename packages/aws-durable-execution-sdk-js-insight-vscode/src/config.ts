@@ -32,18 +32,55 @@ export interface InsightConfig {
 
 const SECTION = "workflowInsight";
 
+/**
+ * Abstracts where config values come from so the same normalization logic can
+ * run against either the persisted VS Code settings ({@link readConfig}) or the
+ * unsaved values coming from the Settings webview ({@link configFromWireSettings},
+ * used by the "Test connection" button before anything is written).
+ */
+interface ConfigSource {
+  getString(key: string): string | undefined;
+  getBool(key: string): boolean | undefined;
+  getNumber(key: string): number | undefined;
+}
+
 export function readConfig(): InsightConfig {
   const c = vscode.workspace.getConfiguration(SECTION);
+  return normalizeConfig({
+    getString: (k) => c.get<string>(k),
+    getBool: (k) => c.get<boolean>(k),
+    getNumber: (k) => c.get<number>(k),
+  });
+}
+
+/**
+ * Builds an {@link InsightConfig} from the webview's all-string settings payload
+ * without persisting it. Lets the "Test connection" action validate exactly what
+ * the user currently has typed in the modal (which may differ from what's saved).
+ */
+export function configFromWireSettings(
+  settings: Record<string, string>,
+): InsightConfig {
+  const has = (k: string): boolean =>
+    Object.prototype.hasOwnProperty.call(settings, k);
+  return normalizeConfig({
+    getString: (k) => (has(k) ? settings[k] : undefined),
+    getBool: (k) => (has(k) ? settings[k] === "true" : undefined),
+    getNumber: (k) => (has(k) ? Number(settings[k]) : undefined),
+  });
+}
+
+function normalizeConfig(src: ConfigSource): InsightConfig {
   const region =
-    (c.get<string>("region") || "").trim() ||
+    (src.getString("region") || "").trim() ||
     process.env.AWS_REGION ||
     process.env.AWS_DEFAULT_REGION ||
     "us-east-1";
-  const logGroupNames = (c.get<string>("logGroupName") || "")
+  const logGroupNames = (src.getString("logGroupName") || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  const raw = (c.get<string>("destinationType") || "").trim();
+  const raw = (src.getString("destinationType") || "").trim();
   const destinationType =
     raw === "lambda-log-exporter"
       ? ("lambda-log-exporter" as const)
@@ -56,24 +93,24 @@ export function readConfig(): InsightConfig {
             : raw === "s3"
               ? ("s3" as const)
               : ("cloudwatch-logs-exporter" as const);
-  const dynamodbTableName = (c.get<string>("dynamodbTableName") || "").trim();
-  const auroraResourceArn = (c.get<string>("auroraResourceArn") || "").trim();
-  const auroraSecretArn = (c.get<string>("auroraSecretArn") || "").trim();
+  const dynamodbTableName = (src.getString("dynamodbTableName") || "").trim();
+  const auroraResourceArn = (src.getString("auroraResourceArn") || "").trim();
+  const auroraSecretArn = (src.getString("auroraSecretArn") || "").trim();
   const auroraDatabase =
-    (c.get<string>("auroraDatabase") || "").trim() || "postgres";
+    (src.getString("auroraDatabase") || "").trim() || "postgres";
   const auroraTable =
-    (c.get<string>("auroraTable") || "").trim() || "workflow_insight";
-  const sqsQueueUrl = (c.get<string>("sqsQueueUrl") || "").trim();
-  const sqsDeleteAfterRead = c.get<boolean>("sqsDeleteAfterRead") ?? false;
-  const athenaDatabase = (c.get<string>("athenaDatabase") || "").trim();
+    (src.getString("auroraTable") || "").trim() || "workflow_insight";
+  const sqsQueueUrl = (src.getString("sqsQueueUrl") || "").trim();
+  const sqsDeleteAfterRead = src.getBool("sqsDeleteAfterRead") ?? false;
+  const athenaDatabase = (src.getString("athenaDatabase") || "").trim();
   const athenaTable =
-    (c.get<string>("athenaTable") || "").trim() || "workflow_insight";
-  const athenaWorkgroup = (c.get<string>("athenaWorkgroup") || "").trim();
+    (src.getString("athenaTable") || "").trim() || "workflow_insight";
+  const athenaWorkgroup = (src.getString("athenaWorkgroup") || "").trim();
   const athenaOutputLocation = (
-    c.get<string>("athenaOutputLocation") || ""
+    src.getString("athenaOutputLocation") || ""
   ).trim();
-  const athenaS3Location = (c.get<string>("athenaS3Location") || "").trim();
-  const llmProviderRaw = (c.get<string>("llmProvider") || "").trim();
+  const athenaS3Location = (src.getString("athenaS3Location") || "").trim();
+  const llmProviderRaw = (src.getString("llmProvider") || "").trim();
   const llmProvider =
     llmProviderRaw === "copilot"
       ? ("copilot" as const)
@@ -82,27 +119,27 @@ export function readConfig(): InsightConfig {
         : llmProviderRaw === "local-server"
           ? ("local-server" as const)
           : ("bedrock" as const);
-  const awsProfile = (c.get<string>("awsProfile") || "").trim() || undefined;
+  const awsProfile = (src.getString("awsProfile") || "").trim() || undefined;
   const bedrockModelId =
-    (c.get<string>("bedrockModelId") || "").trim() ||
+    (src.getString("bedrockModelId") || "").trim() ||
     "us.anthropic.claude-sonnet-4-20250514-v1:0";
   const localModel =
-    (c.get<string>("localModel") || "").trim() || "llama-3-groq-8b-tool-use";
+    (src.getString("localModel") || "").trim() || "llama-3-groq-8b-tool-use";
   const localServerUrl =
-    (c.get<string>("localServerUrl") || "").trim() ||
+    (src.getString("localServerUrl") || "").trim() ||
     "http://localhost:11434/v1";
   const localServerModel =
-    (c.get<string>("localServerModel") || "").trim() || "llama3.1";
-  const rawMaxIter = c.get<number>("agenticMaxIterations");
+    (src.getString("localServerModel") || "").trim() || "llama3.1";
+  const rawMaxIter = src.getNumber("agenticMaxIterations");
   const agenticMaxIterations =
     typeof rawMaxIter === "number" && Number.isFinite(rawMaxIter)
       ? Math.min(20, Math.max(1, Math.floor(rawMaxIter)))
       : 8;
-  const rawMode = (c.get<string>("queryMode") || "").trim();
+  const rawMode = (src.getString("queryMode") || "").trim();
   const queryMode =
     rawMode === "query" || rawMode === "ask" ? rawMode : ("agent" as const);
   const aiDisclosureAcceptedVersion = (
-    c.get<string>("aiDisclosureAcceptedVersion") || ""
+    src.getString("aiDisclosureAcceptedVersion") || ""
   ).trim();
 
   return {
