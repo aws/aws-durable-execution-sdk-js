@@ -7,45 +7,33 @@ import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
   NodeTracerProvider,
-  BatchSpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
-import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
 import { ExampleConfig } from "../../../types";
 import { SerializedSpan } from "../shared/otel-test-setup";
 
 /**
- * Detect whether we're running in Lambda (cloud) vs local test runner.
- * This example uses StandaloneOtelPlugin with useDefaultTracerProvider: true,
- * meaning it picks up the globally registered TracerProvider rather than
- * creating its own.
+ * Detect whether we're running in an ADOT-instrumented cloud environment.
+ * The ADOT layer sets AWS_LAMBDA_EXEC_WRAPPER to /opt/otel-instrument,
+ * which registers a global TracerProvider and creates an ambient invocation span.
  */
-function isCloudEnvironment(): boolean {
-  return process.env.AWS_LAMBDA_FUNCTION_NAME !== undefined;
+function isAdotEnvironment(): boolean {
+  return process.env.AWS_LAMBDA_EXEC_WRAPPER === "/opt/otel-instrument";
 }
 
 // Dual-mode setup for StandaloneOtelPlugin with useDefaultTracerProvider:
-// - Cloud (Lambda): Register a NodeTracerProvider globally with OTLP exporter
-//   (to ADOT collector sidecar at localhost:4318), then create StandaloneOtelPlugin
-//   with useDefaultTracerProvider: true.
+// - Cloud (ADOT layer): The ADOT layer registers a global TracerProvider and
+//   creates an ambient invocation span. StandaloneOtelPlugin picks it up via
+//   useDefaultTracerProvider: true. No manual provider registration needed.
 // - Local: Register a NodeTracerProvider globally with InMemorySpanExporter,
 //   then create StandaloneOtelPlugin with useDefaultTracerProvider: true.
 let exporter: InMemorySpanExporter | undefined;
 let plugin: StandaloneOtelPlugin;
 
-if (isCloudEnvironment()) {
-  // Cloud mode: Register a global NodeTracerProvider with OTLP exporter
-  // The ADOT collector sidecar listens on localhost:4318 (OTLP HTTP)
-  const otlpExporter = new OTLPTraceExporter({
-    url: "http://localhost:4318/v1/traces",
-  });
-  const provider = new NodeTracerProvider({
-    spanProcessors: [new BatchSpanProcessor(otlpExporter)],
-  });
-  // Register globally so trace.getTracerProvider() returns this provider
-  provider.register();
-
-  // StandaloneOtelPlugin picks up the global provider
+if (isAdotEnvironment()) {
+  // Cloud mode: ADOT layer already registered a global TracerProvider.
+  // StandaloneOtelPlugin picks it up via useDefaultTracerProvider.
+  // The ambient invocation span from ADOT will be captured in savedInvocationContext.
   plugin = new StandaloneOtelPlugin({ useDefaultTracerProvider: true });
 } else {
   // Local mode: Register a global NodeTracerProvider with InMemorySpanExporter
@@ -53,7 +41,7 @@ if (isCloudEnvironment()) {
   const provider = new NodeTracerProvider({
     spanProcessors: [new SimpleSpanProcessor(exporter)],
   });
-  // Register globally
+  // Register globally so trace.getTracerProvider() returns this provider
   provider.register();
 
   // StandaloneOtelPlugin picks up the global provider
@@ -98,7 +86,7 @@ export function resetExporter(): void {
 }
 
 export const config: ExampleConfig = {
-  name: "OTel Standalone Default Provider XRay E2E",
+  name: "OTel Default Provider XRay E2E",
   durableConfig: {
     ExecutionTimeout: 120,
     RetentionPeriodInDays: 7,
