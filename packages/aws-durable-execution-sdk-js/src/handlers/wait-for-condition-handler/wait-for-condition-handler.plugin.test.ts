@@ -84,6 +84,7 @@ describe("WaitForCondition Handler - plugin hooks", () => {
       (_info: unknown, fn: () => unknown) => fn(),
     );
 
+    const beforeTime = new Date();
     const handler = createWaitForConditionHandler(
       mockContext,
       mockCheckpoint,
@@ -103,10 +104,22 @@ describe("WaitForCondition Handler - plugin hooks", () => {
     };
 
     await handler("my-condition", checkFunc, config);
+    const afterTime = new Date();
 
     expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledTimes(1);
     expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledWith(
       expect.objectContaining({ attempt: 1, isReplay: false }),
+    );
+
+    // Verify startTimestamp is the current time, not from stepData
+    const attemptInfo = (mockPlugin.onOperationAttemptStart as jest.Mock).mock
+      .calls[0][0];
+    expect(attemptInfo.startTimestamp).toBeInstanceOf(Date);
+    expect(attemptInfo.startTimestamp.getTime()).toBeGreaterThanOrEqual(
+      beforeTime.getTime(),
+    );
+    expect(attemptInfo.startTimestamp.getTime()).toBeLessThanOrEqual(
+      afterTime.getTime(),
     );
 
     expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledTimes(1);

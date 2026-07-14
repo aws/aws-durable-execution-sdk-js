@@ -81,6 +81,7 @@ export {
   PreviewConfig,
 } from "./utils/serdes/filesystem-serdes";
 export { buildPreview } from "./utils/serdes/preview";
+export { refreshLogConfig } from "./utils/logger/logger";
 export { DurableExecutionApiClient } from "./durable-execution-api-client/durable-execution-api-client";
 export {
   createWaitStrategy,

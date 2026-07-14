@@ -87,7 +87,15 @@ export type CompletionReason =
  * @public
  */
 export interface BatchResult<TResult> {
-  /** All items in the batch with their results/errors */
+  /**
+   * All items in the batch with their results/errors.
+   *
+   * Treat this array as immutable: counts ({@link BatchResult.successCount},
+   * {@link BatchResult.failureCount}, {@link BatchResult.startedCount}) and the
+   * filtered views ({@link BatchResult.succeeded}, {@link BatchResult.failed},
+   * {@link BatchResult.started}) are computed once and will not reflect
+   * mutations made to this array after construction.
+   */
   all: Array<BatchItem<TResult>>;
   /** Returns only the items that succeeded */
   succeeded(): Array<BatchItem<TResult> & { result: TResult }>;

@@ -70,34 +70,34 @@ describe("Validation Functions", () => {
   });
 
   describe("setupEnvironment", () => {
-    it("should set DURABLE_VERBOSE_MODE when verbose is true", () => {
+    it("should set DURABLE_VERBOSE_MODE when verbose is true", async () => {
       delete process.env.DURABLE_VERBOSE_MODE;
 
-      validation.setupEnvironment(true);
+      await validation.setupEnvironment(true);
 
       expect(process.env.DURABLE_VERBOSE_MODE).toBe("true");
     });
 
-    it("should not set DURABLE_VERBOSE_MODE when verbose is false", () => {
+    it("should not set DURABLE_VERBOSE_MODE when verbose is false", async () => {
       delete process.env.DURABLE_VERBOSE_MODE;
 
-      validation.setupEnvironment(false);
+      await validation.setupEnvironment(false);
 
       expect(process.env.DURABLE_VERBOSE_MODE).toBeUndefined();
     });
 
-    it("should not modify existing environment variable when verbose is false", () => {
+    it("should not modify existing environment variable when verbose is false", async () => {
       process.env.DURABLE_VERBOSE_MODE = "existing_value";
 
-      validation.setupEnvironment(false);
+      await validation.setupEnvironment(false);
 
       expect(process.env.DURABLE_VERBOSE_MODE).toBe("existing_value");
     });
 
-    it("should overwrite existing environment variable when verbose is true", () => {
+    it("should overwrite existing environment variable when verbose is true", async () => {
       process.env.DURABLE_VERBOSE_MODE = "old_value";
 
-      validation.setupEnvironment(true);
+      await validation.setupEnvironment(true);
 
       expect(process.env.DURABLE_VERBOSE_MODE).toBe("true");
     });

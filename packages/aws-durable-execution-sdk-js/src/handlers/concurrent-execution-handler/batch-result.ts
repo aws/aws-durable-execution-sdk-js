@@ -87,30 +87,66 @@ function reconstructBatchError(errorObject: SerializedBatchError): Error {
 }
 
 export class BatchResultImpl<R> implements BatchResult<R> {
+  // Counts are computed in a single pass at construction and filtered views
+  // are memoized on first access. `all` must therefore not be mutated after
+  // construction (readonly prevents reassignment, not push()/element writes) —
+  // all internal construction sites pass locally-built arrays. The public
+  // contract is documented on BatchResult.all.
+  // Native #private fields keep these out of JSON.stringify output so the
+  // serialized shape is identical to the previous getter-based implementation.
+  readonly #successCount: number;
+  readonly #failureCount: number;
+  readonly #startedCount: number;
+  #succeededMemo?: Array<BatchItem<R> & { result: R }>;
+  #failedMemo?: Array<BatchItem<R> & { error: ChildContextError }>;
+  #startedMemo?: Array<BatchItem<R> & { status: BatchItemStatus.STARTED }>;
+
   constructor(
     public readonly all: Array<BatchItem<R>>,
     public readonly completionReason: CompletionReason,
-  ) {}
+  ) {
+    let success = 0;
+    let failure = 0;
+    let started = 0;
+    for (const item of all) {
+      if (item.status === BatchItemStatus.SUCCEEDED) {
+        success++;
+      } else if (item.status === BatchItemStatus.FAILED) {
+        failure++;
+      } else if (item.status === BatchItemStatus.STARTED) {
+        started++;
+      }
+    }
+    this.#successCount = success;
+    this.#failureCount = failure;
+    this.#startedCount = started;
+  }
 
   succeeded(): Array<BatchItem<R> & { result: R }> {
-    return this.all.filter(
+    this.#succeededMemo ??= this.all.filter(
       (item): item is BatchItem<R> & { result: R } =>
         item.status === BatchItemStatus.SUCCEEDED && item.result !== undefined,
     );
+    // Fresh copy per call: callers could always mutate the returned array
+    // (sort/reverse) without affecting later calls, and memoization must not
+    // change that.
+    return this.#succeededMemo.slice();
   }
 
   failed(): Array<BatchItem<R> & { error: ChildContextError }> {
-    return this.all.filter(
+    this.#failedMemo ??= this.all.filter(
       (item): item is BatchItem<R> & { error: ChildContextError } =>
         item.status === BatchItemStatus.FAILED && item.error !== undefined,
     );
+    return this.#failedMemo.slice();
   }
 
   started(): Array<BatchItem<R> & { status: BatchItemStatus.STARTED }> {
-    return this.all.filter(
+    this.#startedMemo ??= this.all.filter(
       (item): item is BatchItem<R> & { status: BatchItemStatus.STARTED } =>
         item.status === BatchItemStatus.STARTED,
     );
+    return this.#startedMemo.slice();
   }
 
   get status(): BatchItemStatus.SUCCEEDED | BatchItemStatus.FAILED {
@@ -127,7 +163,7 @@ export class BatchResultImpl<R> implements BatchResult<R> {
   }
 
   get hasFailure(): boolean {
-    return this.all.some((item) => item.status === BatchItemStatus.FAILED);
+    return this.#failureCount > 0;
   }
 
   throwIfError(): void {
@@ -153,18 +189,15 @@ export class BatchResultImpl<R> implements BatchResult<R> {
   }
 
   get successCount(): number {
-    return this.all.filter((item) => item.status === BatchItemStatus.SUCCEEDED)
-      .length;
+    return this.#successCount;
   }
 
   get failureCount(): number {
-    return this.all.filter((item) => item.status === BatchItemStatus.FAILED)
-      .length;
+    return this.#failureCount;
   }
 
   get startedCount(): number {
-    return this.all.filter((item) => item.status === BatchItemStatus.STARTED)
-      .length;
+    return this.#startedCount;
   }
 
   get totalCount(): number {

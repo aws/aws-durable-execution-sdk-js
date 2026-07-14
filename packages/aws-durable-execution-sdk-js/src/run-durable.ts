@@ -2,12 +2,16 @@
 
 import { Context } from "aws-lambda";
 import { withDurableExecution } from "./with-durable-execution";
+import { refreshLogConfig } from "./utils/logger/logger";
 import { dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 import { DurableExecutionInvocationInput } from "./types";
 
-// Set verbose mode for local testing
+// Set verbose mode for local testing. The logger caches the flag at module
+// load (which already happened via the imports above), so refresh it after
+// mutating the environment.
 process.env.DURABLE_VERBOSE_MODE = "true";
+refreshLogConfig();
 
 async function runHandler(
   handlerPath: string,

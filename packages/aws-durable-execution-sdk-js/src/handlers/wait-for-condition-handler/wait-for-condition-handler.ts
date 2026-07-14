@@ -55,8 +55,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
   return <T>(
     nameOrCheck: string | undefined | WaitForConditionCheckFunc<T, Logger>,
     checkOrConfig?:
-      | WaitForConditionCheckFunc<T, Logger>
-      | WaitForConditionConfig<T>,
+      WaitForConditionCheckFunc<T, Logger> | WaitForConditionConfig<T>,
     maybeConfig?: WaitForConditionConfig<T>,
   ): DurablePromise<T> => {
     let name: string | undefined;
@@ -248,6 +247,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
 
           const attemptInfo = toAttemptInfo(stepData, currentAttempt);
           backfillOperationInfo(attemptInfo, opInfo);
+          attemptInfo.startTimestamp = new Date();
           const checkFunc = () => check(currentState, waitForConditionContext);
 
           await plugin.onOperationAttemptStart?.(attemptInfo);

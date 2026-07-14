@@ -78,6 +78,7 @@ describe("Step Handler - plugin hooks", () => {
   });
 
   it("should call onOperationAttemptStart and onOperationAttemptEnd with succeeded outcome on success", async () => {
+    const beforeTime = new Date();
     const stepHandler = createStepHandler(
       mockContext,
       mockCheckpoint,
@@ -92,10 +93,22 @@ describe("Step Handler - plugin hooks", () => {
     const stepFn = jest.fn().mockResolvedValue("result");
 
     await stepHandler("my-step", stepFn);
+    const afterTime = new Date();
 
     expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledTimes(1);
     expect(mockPlugin.onOperationAttemptStart).toHaveBeenCalledWith(
       expect.objectContaining({ attempt: 1, isReplay: false }),
+    );
+
+    // Verify startTimestamp is the current time, not from stepData
+    const attemptInfo = (mockPlugin.onOperationAttemptStart as jest.Mock).mock
+      .calls[0][0];
+    expect(attemptInfo.startTimestamp).toBeInstanceOf(Date);
+    expect(attemptInfo.startTimestamp.getTime()).toBeGreaterThanOrEqual(
+      beforeTime.getTime(),
+    );
+    expect(attemptInfo.startTimestamp.getTime()).toBeLessThanOrEqual(
+      afterTime.getTime(),
     );
 
     expect(mockPlugin.wrapOperationAttemptFn).toHaveBeenCalledTimes(1);
