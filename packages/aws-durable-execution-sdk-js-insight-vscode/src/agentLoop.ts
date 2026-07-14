@@ -1,12 +1,12 @@
 import {
   BedrockRuntimeClient,
-  ConverseCommand,
   type ContentBlock,
   type Message,
   type Tool,
   type ToolUseBlock,
 } from "@aws-sdk/client-bedrock-runtime";
 import type { AwsCredentialIdentityProvider } from "@aws-sdk/types";
+import { sendConverse } from "./bedrockConverse";
 import { buildSystemPrompt, type DestinationType } from "./schema";
 import { runSandboxedJs } from "./sandbox";
 
@@ -412,20 +412,18 @@ export async function runAgentLoop(
   });
 
   for (let i = 0; i < opts.maxIterations; i++) {
-    const response = await client.send(
-      new ConverseCommand({
-        modelId: opts.modelId,
-        system: [{ text: system }],
-        messages,
-        toolConfig: {
-          tools: [RUN_QUERY_TOOL, RUN_JAVASCRIPT_TOOL, FINISH_TOOL],
-        },
-        // Generous cap: a finish call can carry answer + a multi-line query +
-        // explanation + suggestedCharts, plus run_javascript can emit a chunk
-        // of code — 1024 could truncate those mid-tool-call.
-        inferenceConfig: { maxTokens: 4096, temperature: 0 },
-      }),
-    );
+    const response = await sendConverse(client, {
+      modelId: opts.modelId,
+      system: [{ text: system }],
+      messages,
+      toolConfig: {
+        tools: [RUN_QUERY_TOOL, RUN_JAVASCRIPT_TOOL, FINISH_TOOL],
+      },
+      // Generous cap: a finish call can carry answer + a multi-line query +
+      // explanation + suggestedCharts, plus run_javascript can emit a chunk
+      // of code — 1024 could truncate those mid-tool-call.
+      inferenceConfig: { maxTokens: 4096, temperature: 0 },
+    });
     const message = response.output?.message;
     if (!message) break;
     messages.push(message);

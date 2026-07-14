@@ -18,6 +18,7 @@ export type OutboundMessage =
   | { type: "newSession" }
   | { type: "saveSettings"; settings: Record<string, string> }
   | { type: "testDestination"; settings: Record<string, string> }
+  | { type: "listModels"; settings: Record<string, string> }
   | { type: "downloadModel"; localModel?: string }
   // Save the result table to a file (host shows a save dialog). The webview
   // builds the CSV/JSON text; the host just writes it.
@@ -158,6 +159,7 @@ export type InboundMessage =
   | { type: "sessionCleared" }
   | { type: "settingsSaved" }
   | { type: "destinationTestResult"; result: DestinationTestReport }
+  | { type: "bedrockModels"; models?: string[]; error?: string }
   | { type: "downloadProgress"; percent: number; done: boolean }
   | { type: "sqsStatus"; listening: boolean }
   | { type: "sqsMessages"; messages: SqsMessageRow[] }
@@ -237,7 +239,7 @@ export const DEFAULT_SETTINGS: Settings = {
   athenaS3Location: "",
   llmProvider: "bedrock",
   awsProfile: "",
-  bedrockModelId: "us.anthropic.claude-sonnet-4-20250514-v1:0",
+  bedrockModelId: "us.anthropic.claude-sonnet-5",
   localModel: "llama-3-groq-8b-tool-use",
   localServerUrl: "http://localhost:11434/v1",
   localServerModel: "llama3.1",

@@ -122,7 +122,7 @@ function normalizeConfig(src: ConfigSource): InsightConfig {
   const awsProfile = (src.getString("awsProfile") || "").trim() || undefined;
   const bedrockModelId =
     (src.getString("bedrockModelId") || "").trim() ||
-    "us.anthropic.claude-sonnet-4-20250514-v1:0";
+    "us.anthropic.claude-sonnet-5";
   const localModel =
     (src.getString("localModel") || "").trim() || "llama-3-groq-8b-tool-use";
   const localServerUrl =

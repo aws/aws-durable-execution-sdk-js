@@ -8,6 +8,7 @@ import Input from "@cloudscape-design/components/input";
 import Checkbox from "@cloudscape-design/components/checkbox";
 import Alert from "@cloudscape-design/components/alert";
 import Select, { type SelectProps } from "@cloudscape-design/components/select";
+import Autosuggest from "@cloudscape-design/components/autosuggest";
 import ProgressBar from "@cloudscape-design/components/progress-bar";
 import Tabs from "@cloudscape-design/components/tabs";
 import type { Settings, DestinationTestReport } from "./types";
@@ -28,6 +29,14 @@ interface Props {
   onTest: (settings: Settings) => void;
   /** Clear a stale test result (called on open and on destination change). */
   onClearTest: () => void;
+  /** Bedrock model ids fetched via "List models" (Autosuggest suggestions). */
+  bedrockModels: string[];
+  /** True while the model list is being fetched. */
+  bedrockModelsLoading: boolean;
+  /** Error from the last model-list fetch, or "" if none. */
+  bedrockModelsError: string;
+  /** Fetch the Bedrock models available for the current region/profile. */
+  onListModels: (settings: Settings) => void;
 }
 
 const DEST_OPTIONS: SelectProps.Option[] = [
@@ -59,7 +68,7 @@ const LOCAL_MODEL_OPTIONS: SelectProps.Option[] = [
   },
 ];
 
-export function SettingsModal({ visible, settings, modelDownloaded, downloadPercent, onDismiss, onSave, testing, testResult, onTest, onClearTest }: Props) {
+export function SettingsModal({ visible, settings, modelDownloaded, downloadPercent, onDismiss, onSave, testing, testResult, onTest, onClearTest, bedrockModels, bedrockModelsLoading, bedrockModelsError, onListModels }: Props) {
   const [form, setForm] = useState<Settings>(settings);
   const [downloading, setDownloading] = useState(false);
 
@@ -327,8 +336,49 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
                 </Alert>
 
                 {form.llmProvider === "bedrock" && (
-                  <FormField label="Bedrock Model ID" description="Model or inference profile ID">
-                    <Input value={form.bedrockModelId} onChange={({ detail }) => update("bedrockModelId", detail.value)} placeholder="us.anthropic.claude-sonnet-4-20250514-v1:0" />
+                  <FormField
+                    label="Bedrock Model ID"
+                    description="Model or inference profile ID. Pick one your account can access, or type any value."
+                  >
+                    <SpaceBetween size="xs">
+                      <Autosuggest
+                        value={form.bedrockModelId}
+                        onChange={({ detail }) => update("bedrockModelId", detail.value)}
+                        options={bedrockModels.map((m) => ({ value: m }))}
+                        enteredTextLabel={(v) => `Use "${v}"`}
+                        placeholder="us.anthropic.claude-sonnet-5"
+                        empty={
+                          bedrockModelsLoading
+                            ? "Loading models…"
+                            : "No models loaded yet — click List available models, or type an ID."
+                        }
+                        statusType={bedrockModelsLoading ? "loading" : "finished"}
+                        loadingText="Loading models…"
+                        filteringType="auto"
+                        virtualScroll
+                        ariaLabel="Bedrock Model ID"
+                      />
+                      <div>
+                        <Button
+                          onClick={() => onListModels(form)}
+                          loading={bedrockModelsLoading}
+                          iconName="refresh"
+                        >
+                          List available models
+                        </Button>
+                      </div>
+                      <Box color="text-body-secondary" fontSize="body-s">
+                        Uses your configured Region and AWS Profile. Shows models
+                        available in the Region (inference profiles + on-demand
+                        models); some may still need model access granted in the
+                        Bedrock console.
+                      </Box>
+                      {bedrockModelsError && (
+                        <Alert type="error" header="Couldn't list models">
+                          {bedrockModelsError}
+                        </Alert>
+                      )}
+                    </SpaceBetween>
                   </FormField>
                 )}
 
