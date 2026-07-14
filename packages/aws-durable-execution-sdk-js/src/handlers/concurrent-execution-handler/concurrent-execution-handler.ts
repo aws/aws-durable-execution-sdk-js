@@ -342,10 +342,15 @@ export class ConcurrencyController<Logger extends DurableLogger> {
 
     // Per-item snapshot ordered by original index, so shouldComplete can
     // reason about which specific items/branches finished.
+    // Index results once (O(n)) instead of find() per item (O(n²)).
+    const statusByIndex = new Map<number, BatchItemStatus>();
+    for (const r of resultItems) {
+      statusByIndex.set(r.index, r.status);
+    }
     const itemStatuses: CompletionItemStatus[] = items.map((item) => ({
       index: item.index,
       name: item.name,
-      status: resultItems.find((r) => r.index === item.index)?.status,
+      status: statusByIndex.get(item.index),
     }));
 
     return new BatchResultImpl(

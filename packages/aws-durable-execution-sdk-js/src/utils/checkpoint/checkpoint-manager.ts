@@ -41,7 +41,14 @@ const TERMINAL_STATUSES: OperationStatus[] = [
 
 interface QueuedCheckpoint {
   stepId: string;
+  /**
+   * Must not be mutated after enqueue: {@link QueuedCheckpoint.sizeBytes} is
+   * computed from it once at enqueue time, so later mutation would let a
+   * batch drift past MAX_PAYLOAD_SIZE.
+   */
   data: Partial<OperationUpdate>;
+  /** Approximate wire size, computed once at enqueue time. */
+  sizeBytes: number;
   resolve: () => void;
   reject: (error: Error) => void;
 }
@@ -58,10 +65,12 @@ export class CheckpointManager implements Checkpoint {
   private readonly MAX_PAYLOAD_SIZE = 750 * 1024; // 750KB in bytes
   private readonly MAX_ITEMS_IN_BATCH = 250;
   private isTerminating = false;
-  private static textEncoder = new TextEncoder();
 
   // Operation lifecycle tracking
   private operations = new Map<string, OperationInfo>();
+  // Reverse index: hashed step ID → original operations-map key. Keeps
+  // resolveWaitingOperation O(1) instead of hashing every tracked operation.
+  private hashedIdIndex = new Map<string, string>();
 
   // Termination cooldown
   private terminationTimer: NodeJS.Timeout | null = null;
@@ -181,6 +190,11 @@ export class CheckpointManager implements Checkpoint {
       const queuedItem: QueuedCheckpoint = {
         stepId,
         data,
+        // Same shape the previous per-batch estimation serialized (functions
+        // were dropped by JSON.stringify), computed once instead of on every
+        // processQueue pass. Buffer.byteLength avoids allocating an encoded
+        // copy just to measure it.
+        sizeBytes: Buffer.byteLength(JSON.stringify({ stepId, data }), "utf8"),
         resolve: () => {
           resolve();
         },
@@ -191,11 +205,11 @@ export class CheckpointManager implements Checkpoint {
 
       this.queue.push(queuedItem);
 
-      log("📥", "Checkpoint queued:", {
+      log("📥", "Checkpoint queued:", () => ({
         stepId,
         queueLength: this.queue.length,
         isProcessing: this.isProcessing,
-      });
+      }));
 
       if (!this.isProcessing) {
         setImmediate(() => {
@@ -287,31 +301,34 @@ export class CheckpointManager implements Checkpoint {
     const baseSize = this.currentTaskToken.length + 100;
     let currentSize = baseSize;
 
-    while (this.queue.length > 0) {
-      const nextItem = this.queue[0];
-      const itemSize = CheckpointManager.textEncoder.encode(
-        JSON.stringify(nextItem),
-      ).length;
+    // Cursor-based drain: sizes were computed at enqueue time, and a single
+    // slice() replaces O(n²) per-item shift().
+    let consumed = 0;
+    while (consumed < this.queue.length) {
+      const nextItem = this.queue[consumed];
 
       if (
-        (currentSize + itemSize > this.MAX_PAYLOAD_SIZE ||
+        (currentSize + nextItem.sizeBytes > this.MAX_PAYLOAD_SIZE ||
           batch.length >= this.MAX_ITEMS_IN_BATCH) &&
         batch.length > 0
       ) {
         break;
       }
 
-      this.queue.shift();
       batch.push(nextItem);
-      currentSize += itemSize;
+      currentSize += nextItem.sizeBytes;
+      consumed++;
+    }
+    if (consumed > 0) {
+      this.queue = this.queue.slice(consumed);
     }
 
-    log("🔄", "Processing checkpoint batch:", {
+    log("🔄", "Processing checkpoint batch:", () => ({
       batchSize: batch.length,
       remainingInQueue: this.queue.length,
       estimatedSize: currentSize,
       maxSize: this.MAX_PAYLOAD_SIZE,
-    });
+    }));
 
     try {
       if (batch.length > 0 || this.forceCheckpointPromises.length > 0) {
@@ -395,7 +412,7 @@ export class CheckpointManager implements Checkpoint {
       Updates: updates,
     };
 
-    log("⏺️", "Creating checkpoint batch:", {
+    log("⏺️", "Creating checkpoint batch:", () => ({
       batchSize: updates.length,
       checkpointToken: this.currentTaskToken,
       updates: updates.map((u) => ({
@@ -403,7 +420,7 @@ export class CheckpointManager implements Checkpoint {
         Action: u.Action,
         Type: u.Type,
       })),
-    });
+    }));
 
     const response = await this.storage.checkpoint(checkpointData, this.logger);
 
@@ -421,10 +438,10 @@ export class CheckpointManager implements Checkpoint {
   private async updateStepDataFromCheckpointResponse(
     operations: Operation[],
   ): Promise<void> {
-    log("🔄", "Updating stepData from checkpoint response:", {
+    log("🔄", "Updating stepData from checkpoint response:", () => ({
       operationCount: operations.length,
       operationIds: operations.map((op) => op.Id).filter(Boolean),
-    });
+    }));
 
     const updatedOperations: Record<string, Operation> = {};
 
@@ -464,17 +481,19 @@ export class CheckpointManager implements Checkpoint {
     });
   }
   private resolveWaitingOperation(hashedStepId: string): void {
-    // Find operation by hashed ID in our operations map
-    for (const [stepId, op] of this.operations.entries()) {
-      if (hashId(stepId) === hashedStepId && op.resolver) {
-        log("✅", `Resolving waiting operation ${stepId} due to status change`);
-        op.resolver();
-        op.resolver = undefined;
-        if (op.timer) {
-          clearTimeout(op.timer);
-          op.timer = undefined;
-        }
-        break;
+    // O(1) lookup via reverse index instead of hashing every tracked operation
+    const stepId = this.hashedIdIndex.get(hashedStepId);
+    if (stepId === undefined) {
+      return;
+    }
+    const op = this.operations.get(stepId);
+    if (op?.resolver) {
+      log("✅", `Resolving waiting operation ${stepId} due to status change`);
+      op.resolver();
+      op.resolver = undefined;
+      if (op.timer) {
+        clearTimeout(op.timer);
+        op.timer = undefined;
       }
     }
   }
@@ -513,6 +532,7 @@ export class CheckpointManager implements Checkpoint {
         endTimestamp: options.endTimestamp,
       };
       this.operations.set(stepId, op);
+      this.hashedIdIndex.set(hashId(stepId), stepId);
     } else {
       // Update existing operation
       op.state = state;
@@ -684,6 +704,7 @@ export class CheckpointManager implements Checkpoint {
           );
           this.cleanupOperation(op.stepId);
           this.operations.delete(op.stepId);
+          this.hashedIdIndex.delete(hashId(op.stepId));
         }
       }
     }

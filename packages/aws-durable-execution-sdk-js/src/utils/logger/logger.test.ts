@@ -1,4 +1,4 @@
-import { log } from "./logger";
+import { log, refreshLogConfig } from "./logger";
 
 describe("Logger", () => {
   let consoleDebugSpy: jest.SpyInstance;
@@ -18,11 +18,13 @@ describe("Logger", () => {
     } else {
       delete process.env.DURABLE_VERBOSE_MODE;
     }
+    refreshLogConfig();
   });
 
   test("should log message when DURABLE_VERBOSE_MODE is true", () => {
     // Arrange
     process.env.DURABLE_VERBOSE_MODE = "true";
+    refreshLogConfig();
     const emoji = "🚀";
     const message = "Test message";
 
@@ -37,6 +39,7 @@ describe("Logger", () => {
   test("should not log message when DURABLE_VERBOSE_MODE is false", () => {
     // Arrange
     process.env.DURABLE_VERBOSE_MODE = "false";
+    refreshLogConfig();
     const emoji = "🚀";
     const message = "Test message";
 
@@ -50,6 +53,7 @@ describe("Logger", () => {
   test("should not log message when DURABLE_VERBOSE_MODE is undefined", () => {
     // Arrange
     delete process.env.DURABLE_VERBOSE_MODE;
+    refreshLogConfig();
     const emoji = "🚀";
     const message = "Test message";
 
@@ -63,6 +67,7 @@ describe("Logger", () => {
   test("should log message with stringified data when data is provided", () => {
     // Arrange
     process.env.DURABLE_VERBOSE_MODE = "true";
+    refreshLogConfig();
     const emoji = "📊";
     const message = "Data received";
     const data = { id: 123, name: "test" };
@@ -81,6 +86,7 @@ describe("Logger", () => {
   test("should handle complex data structures", () => {
     // Arrange
     process.env.DURABLE_VERBOSE_MODE = "true";
+    refreshLogConfig();
     const emoji = "🔄";
     const message = "Complex data";
     const complexData = {
@@ -105,6 +111,7 @@ describe("Logger", () => {
   test("should handle null and undefined data", () => {
     // Arrange
     process.env.DURABLE_VERBOSE_MODE = "true";
+    refreshLogConfig();
     const emoji = "⚠️";
     const message = "No data";
 

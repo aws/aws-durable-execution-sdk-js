@@ -79,8 +79,18 @@ export const loadModuleFromPath = async (
 /**
  * Set up environment variables based on CLI options
  */
-export function setupEnvironment(verbose: boolean): void {
+export async function setupEnvironment(verbose: boolean): Promise<void> {
   if (verbose) {
     process.env.DURABLE_VERBOSE_MODE = "true";
+
+    // The SDK caches DURABLE_VERBOSE_MODE when its modules load, which has
+    // already happened by the time the CLI runs (the test-runner imports SDK
+    // enums at module load). Refresh the cache so verbose takes effect.
+    // The typeof guard keeps this working against older peer SDK versions
+    // that don't export refreshLogConfig yet.
+    const sdk = await import("@aws/durable-execution-sdk-js");
+    if (typeof sdk.refreshLogConfig === "function") {
+      sdk.refreshLogConfig();
+    }
   }
 }
