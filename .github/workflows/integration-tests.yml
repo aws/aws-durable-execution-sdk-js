@@ -37,7 +37,7 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: Setup SAM CLI
-        uses: aws-actions/setup-sam@v2
+        uses: aws-actions/setup-sam@v3
 
       - name: Download build artifacts
         uses: actions/download-artifact@v8
