@@ -28,6 +28,7 @@ import {
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { DurablePromise } from "../../types/durable-promise";
 import { DurableLogger } from "../../types/durable-logger";
+import { resolveChildArgs } from "./resolve-child-args";
 import {
   DurableInstrumentationPlugin,
   PluginOperationStatus,
@@ -86,24 +87,18 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
 
   getDefaultSerdes?: () => AnySerdes,
   plugin: DurableInstrumentationPlugin = {},
+  childPreserveDepth: number = 0,
 ) => {
   return <T>(
     nameOrFn: string | undefined | ChildFunc<T, Logger>,
     fnOrOptions?: ChildFunc<T, Logger> | ChildConfig<T>,
     maybeOptions?: ChildConfig<T>,
   ): DurablePromise<T> => {
-    let name: string | undefined;
-    let fn: ChildFunc<T, Logger>;
-    let options: ChildConfig<T> | undefined;
-
-    if (typeof nameOrFn === "string" || nameOrFn === undefined) {
-      name = nameOrFn;
-      fn = fnOrOptions as ChildFunc<T, Logger>;
-      options = maybeOptions;
-    } else {
-      fn = nameOrFn;
-      options = fnOrOptions as ChildConfig<T>;
-    }
+    const { name, fn, options } = resolveChildArgs<T, Logger>(
+      nameOrFn,
+      fnOrOptions,
+      maybeOptions,
+    );
 
     const entityId = createStepId();
 
@@ -171,6 +166,7 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
         parentId,
         getDefaultSerdes,
         plugin,
+        childPreserveDepth,
       );
     })()
       .then((result) => {
@@ -324,6 +320,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
 
   getDefaultSerdes?: () => AnySerdes,
   plugin: DurableInstrumentationPlugin = {},
+  preserveChildDepth: number = 0,
 ): Promise<T> => {
   const serdes =
     options?.serdes || (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes);
@@ -427,6 +424,20 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       });
     }
 
+    // Preserve this context's children across suspend/resume when the execution
+    // opts in within the configured depth (pluginsConfig.childOperationsDepth).
+    // Setting ReplayChildren tells the backend not to prune this context's
+    // children when it finishes, so a later invocation's snapshot still sees
+    // the full tree. Unlike the large-payload case we keep the FULL result
+    // checkpointed. On replay the context's orchestration re-runs and its
+    // result is rebuilt by replaying the (still-checkpointed) children — the
+    // children themselves are NOT re-executed (their step bodies/side effects
+    // don't run again). See the cost note on
+    // DurableExecutionConfig.pluginsConfig.childOperationsDepth.
+    if (preserveChildDepth >= 1) {
+      replayChildren = true;
+    }
+
     // Mark this run-in-child-context as finished to prevent descendant operations (only for non-virtual)
     if (!isVirtual) {
       checkpoint.markAncestorFinished(entityId);
@@ -506,6 +517,14 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         SubType: subType,
         Type: OperationType.CONTEXT,
         Error: createErrorObjectFromError(error),
+        // Preserve the children of a FAILED context too when within the
+        // configured depth — failures are often the most important thing to
+        // observe (e.g. emitMode "on-failure"). A failed context throws its
+        // checkpointed error on replay (ReplayMode) and is never re-executed,
+        // so this only asks the backend to retain the children; it adds no
+        // replay cost. See pluginsConfig.childOperationsDepth.
+        ContextOptions:
+          preserveChildDepth >= 1 ? { ReplayChildren: true } : undefined,
         Name: name,
       });
       const currentStepData = context.getStepData(entityId);

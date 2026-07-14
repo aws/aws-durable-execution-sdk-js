@@ -1,0 +1,149 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "5e6cf2ac-50e7-4646-a814-a26a8d5e5cc4",
+    "EventTimestamp": "2026-07-13T21:51:04.825Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "RunInChildContext",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "failing-branch",
+    "EventTimestamp": "2026-07-13T21:51:04.831Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "child-step-ok",
+    "EventTimestamp": "2026-07-13T21:51:04.831Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "child-step-ok",
+    "EventTimestamp": "2026-07-13T21:51:04.831Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"ok\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "child-step-boom",
+    "EventTimestamp": "2026-07-13T21:51:04.833Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "child-step-boom",
+    "EventTimestamp": "2026-07-13T21:51:04.833Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "intentional child failure",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "ContextFailed",
+    "SubType": "RunInChildContext",
+    "EventId": 7,
+    "Id": "c4ca4238a0b92382",
+    "Name": "failing-branch",
+    "EventTimestamp": "2026-07-13T21:51:04.836Z",
+    "ContextFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "StepError",
+          "ErrorMessage": "intentional child failure"
+        }
+      }
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 8,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "cooldown",
+    "EventTimestamp": "2026-07-13T21:51:04.838Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2026-07-13T21:51:05.838Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 9,
+    "EventTimestamp": "2026-07-13T21:51:04.861Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-07-13T21:51:04.825Z",
+      "EndTimestamp": "2026-07-13T21:51:04.861Z",
+      "Error": {},
+      "RequestId": "a8977e6f-26c8-4dea-8d4e-3ce4576595e1"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 10,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "cooldown",
+    "EventTimestamp": "2026-07-13T21:51:05.838Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 11,
+    "EventTimestamp": "2026-07-13T21:51:05.839Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-07-13T21:51:05.838Z",
+      "EndTimestamp": "2026-07-13T21:51:05.839Z",
+      "Error": {},
+      "RequestId": "aa61745b-d699-4f6b-b02c-09ba6475ef62"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 12,
+    "Id": "5e6cf2ac-50e7-4646-a814-a26a8d5e5cc4",
+    "EventTimestamp": "2026-07-13T21:51:05.839Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"branchFailed\":true}"
+      }
+    }
+  }
+]
