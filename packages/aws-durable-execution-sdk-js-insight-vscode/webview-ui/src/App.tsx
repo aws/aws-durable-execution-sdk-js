@@ -125,6 +125,11 @@ export function App() {
   const [destTesting, setDestTesting] = useState(false);
   const [destTestResult, setDestTestResult] =
     useState<DestinationTestReport | null>(null);
+  // Bedrock model ids fetched via the "List models" button (suggestions for the
+  // model-id field), plus loading/error state for that fetch.
+  const [bedrockModels, setBedrockModels] = useState<string[]>([]);
+  const [bedrockModelsLoading, setBedrockModelsLoading] = useState(false);
+  const [bedrockModelsError, setBedrockModelsError] = useState("");
   const [page, setPage] = useState<Page>("data");
   const [sqsMessages, setSqsMessages] = useState<SqsMessageRow[]>([]);
   const [sqsListening, setSqsListening] = useState(false);
@@ -268,6 +273,13 @@ export function App() {
         setDestTesting(false);
         setDestTestResult(msg.result);
         break;
+      case "bedrockModels":
+        setBedrockModelsLoading(false);
+        // Only replace the list when the host actually sent one; on error it
+        // omits `models` so we keep any previously-fetched suggestions.
+        if (msg.models) setBedrockModels(msg.models);
+        setBedrockModelsError(msg.error ?? "");
+        break;
       case "sqsStatus":
         setSqsListening(msg.listening);
         break;
@@ -392,6 +404,12 @@ export function App() {
   };
 
   const handleClearTest = useCallback(() => setDestTestResult(null), []);
+
+  const handleListModels = (s: Settings) => {
+    setBedrockModelsError("");
+    setBedrockModelsLoading(true);
+    postMessage({ type: "listModels", settings: toWireSettings(s) });
+  };
 
   return (
     <div style={{ padding: "16px" }}>
@@ -605,6 +623,10 @@ export function App() {
           testResult={destTestResult}
           onTest={handleTestDestination}
           onClearTest={handleClearTest}
+          bedrockModels={bedrockModels}
+          bedrockModelsLoading={bedrockModelsLoading}
+          bedrockModelsError={bedrockModelsError}
+          onListModels={handleListModels}
         />
 
         <AiConsentModal

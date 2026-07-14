@@ -198,8 +198,12 @@ Pick a provider under **⚙ → LLM Provider**:
 - **Amazon Bedrock** (default) — set the **Bedrock Model ID** to an inference profile you have access to:
 
   ```
-  us.anthropic.claude-sonnet-4-20250514-v1:0
+  us.anthropic.claude-sonnet-5
   ```
+
+  Click **List available models** next to the field to fetch the models
+  available for your configured Region and AWS Profile and pick one from the
+  suggestions — or type any model / inference profile ID directly.
 
 - **GitHub Copilot** — uses the VS Code Language Model API; requires an active Copilot subscription. No extra config.
 

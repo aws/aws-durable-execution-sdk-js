@@ -151,7 +151,7 @@
         },
         "workflowInsight.bedrockModelId": {
           "type": "string",
-          "default": "us.anthropic.claude-sonnet-4-20250514-v1:0",
+          "default": "us.anthropic.claude-sonnet-5",
           "description": "Amazon Bedrock model id (or inference profile id) used by the AI features when LLM Provider is 'bedrock'. Requests and the limited data described for the AI features are sent to this model in Amazon Bedrock in your configured AWS account and region, and processed under your AWS agreement and the Amazon Bedrock service terms. You are responsible for having access to the model and for the content you submit."
         },
         "workflowInsight.localServerUrl": {
@@ -220,6 +220,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-athena": "^3.658.0",
+    "@aws-sdk/client-bedrock": "^3.1086.0",
     "@aws-sdk/client-bedrock-runtime": "^3.658.0",
     "@aws-sdk/client-cloudwatch-logs": "^3.658.0",
     "@aws-sdk/client-dynamodb": "^3.658.0",
