@@ -25,10 +25,23 @@ import type {
   AgentStep,
   QueryMode,
   Favorite,
+  DestinationTestReport,
 } from "./types";
 import { DEFAULT_SETTINGS, AI_DISCLOSURE_VERSION } from "./types";
 
 applyMode(Mode.Dark);
+
+/**
+ * Serializes Settings into the all-string payload the extension host expects
+ * (each key maps 1:1 to a VS Code setting; sqsDeleteAfterRead is the only
+ * boolean, coerced here at the boundary). Shared by the Save and Test actions
+ * so their wire encoding can't drift apart.
+ */
+function toWireSettings(s: Settings): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(s).map(([key, value]) => [key, String(value)]),
+  );
+}
 
 /**
  * A simple, ready-to-run starter query for the current destination, used to
@@ -107,6 +120,11 @@ export function App() {
   const [loading, setLoading] = useState(false);
   const [modelDownloaded, setModelDownloaded] = useState(false);
   const [downloadPercent, setDownloadPercent] = useState(0);
+  // Result of a "Test connection" run in the Settings modal (null = not run
+  // yet this session); `destTesting` shows the in-flight spinner.
+  const [destTesting, setDestTesting] = useState(false);
+  const [destTestResult, setDestTestResult] =
+    useState<DestinationTestReport | null>(null);
   const [page, setPage] = useState<Page>("data");
   const [sqsMessages, setSqsMessages] = useState<SqsMessageRow[]>([]);
   const [sqsListening, setSqsListening] = useState(false);
@@ -246,6 +264,10 @@ export function App() {
       case "settingsSaved":
         setSettingsOpen(false);
         break;
+      case "destinationTestResult":
+        setDestTesting(false);
+        setDestTestResult(msg.result);
+        break;
       case "sqsStatus":
         setSqsListening(msg.listening);
         break;
@@ -358,14 +380,18 @@ export function App() {
   };
 
   const handleSave = (s: Settings) => {
-    // The wire contract for saveSettings is all-string (matches every VS Code
-    // setting key it writes through 1:1); sqsDeleteAfterRead is the only
-    // boolean field in Settings, so serialize it here at the boundary.
-    const wire: Record<string, string> = Object.fromEntries(
-      Object.entries(s).map(([key, value]) => [key, String(value)]),
-    );
-    postMessage({ type: "saveSettings", settings: wire });
+    postMessage({ type: "saveSettings", settings: toWireSettings(s) });
   };
+
+  const handleTestDestination = (s: Settings) => {
+    // Tests the current (possibly unsaved) form values; the host normalizes the
+    // same all-string payload without persisting it.
+    setDestTestResult(null);
+    setDestTesting(true);
+    postMessage({ type: "testDestination", settings: toWireSettings(s) });
+  };
+
+  const handleClearTest = useCallback(() => setDestTestResult(null), []);
 
   return (
     <div style={{ padding: "16px" }}>
@@ -575,6 +601,10 @@ export function App() {
           downloadPercent={downloadPercent}
           onDismiss={() => setSettingsOpen(false)}
           onSave={handleSave}
+          testing={destTesting}
+          testResult={destTestResult}
+          onTest={handleTestDestination}
+          onClearTest={handleClearTest}
         />
 
         <AiConsentModal

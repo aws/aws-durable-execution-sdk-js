@@ -1,7 +1,12 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import { randomUUID } from "crypto";
-import { readConfig, resolveCredentials } from "./config";
+import {
+  readConfig,
+  resolveCredentials,
+  configFromWireSettings,
+} from "./config";
+import { testDestination } from "./destinationTest";
 import {
   generateQuery,
   verifyResult,
@@ -44,6 +49,7 @@ type InboundMessage =
   | { type: "setConsent"; version: string }
   | { type: "newSession" }
   | { type: "saveSettings"; settings: Record<string, string> }
+  | { type: "testDestination"; settings: Record<string, string> }
   | { type: "downloadModel"; localModel?: string }
   | { type: "exportChart"; format: "svg" | "png"; content: string }
   | {
@@ -274,6 +280,8 @@ class ExplorerPanel {
           return;
         case "saveSettings":
           return await this.onSaveSettings(msg.settings);
+        case "testDestination":
+          return await this.onTestDestination(msg.settings);
         case "downloadModel":
           return await this.onDownloadModel(msg.localModel);
         case "exportChart":
@@ -343,6 +351,29 @@ class ExplorerPanel {
       },
       modelDownloaded: isModelDownloaded(),
     });
+  }
+
+  private async onTestDestination(
+    settings: Record<string, string>,
+  ): Promise<void> {
+    // Test exactly what the user has typed in the modal (not the saved config),
+    // so they can validate before committing. Failures are reported as a normal
+    // result payload — not the global `error` toast — so they render inline in
+    // the modal next to the Test button.
+    const cfg = configFromWireSettings(settings);
+    try {
+      const result = await testDestination(cfg);
+      this.post({ type: "destinationTestResult", result });
+    } catch (err) {
+      this.post({
+        type: "destinationTestResult",
+        result: {
+          ok: false,
+          summary: err instanceof Error ? err.message : String(err),
+          checks: [],
+        },
+      });
+    }
   }
 
   private async onSaveSettings(
