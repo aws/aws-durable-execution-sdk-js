@@ -340,6 +340,105 @@ describe("Run In Child Context Handler", () => {
     );
   });
 
+  describe("child operations preservation (ReplayChildren via depth budget)", () => {
+    // Build a handler whose child entity receives the given preserve-child
+    // depth budget (the value executeChildContext uses to force ReplayChildren).
+    const makeHandler = (childPreserveDepth: number) =>
+      createRunInChildContextHandler(
+        mockExecutionContext,
+        mockCheckpoint,
+        mockParentContext,
+        createStepId,
+        jest.fn().mockReturnValue({ log: jest.fn() }),
+        jest
+          .fn()
+          .mockReturnValue({ _stepPrefix: TEST_CONSTANTS.CHILD_CONTEXT_ID }),
+        "parent-step-123",
+        undefined, // getDefaultSerdes
+        undefined, // plugin
+        childPreserveDepth,
+      );
+
+    const succeedCheckpoint = () =>
+      mockCheckpoint.mock.calls.find(
+        (c) =>
+          (c[1] as { Action?: string })?.Action === OperationAction.SUCCEED,
+      )?.[1] as { ContextOptions?: unknown; Payload?: unknown } | undefined;
+
+    test.each([1, 2, Infinity])(
+      "forces ReplayChildren and keeps the full payload when the budget is %p",
+      async (depth) => {
+        const childFn = jest
+          .fn()
+          .mockResolvedValue(TEST_CONSTANTS.CHILD_CONTEXT_RESULT);
+
+        await makeHandler(depth)(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn);
+
+        const succeed = succeedCheckpoint();
+        expect(succeed?.ContextOptions).toEqual({ ReplayChildren: true });
+        // Unlike the large-payload path, the full result stays checkpointed.
+        expect(succeed?.Payload).toBe(
+          JSON.stringify(TEST_CONSTANTS.CHILD_CONTEXT_RESULT),
+        );
+      },
+    );
+
+    test.each([0, -1])(
+      "does not set ReplayChildren when the budget is %p",
+      async (depth) => {
+        const childFn = jest
+          .fn()
+          .mockResolvedValue(TEST_CONSTANTS.CHILD_CONTEXT_RESULT);
+
+        await makeHandler(depth)(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn);
+
+        expect(succeedCheckpoint()?.ContextOptions).toBeUndefined();
+      },
+    );
+
+    test("does not set ReplayChildren by default (no budget passed)", async () => {
+      const childFn = jest
+        .fn()
+        .mockResolvedValue(TEST_CONSTANTS.CHILD_CONTEXT_RESULT);
+
+      // The module-level handler is created without a childPreserveDepth arg
+      // (defaults to 0) — matching the default, opt-out behavior.
+      await runInChildContextHandler(
+        TEST_CONSTANTS.CHILD_CONTEXT_NAME,
+        childFn,
+      );
+
+      expect(succeedCheckpoint()?.ContextOptions).toBeUndefined();
+    });
+
+    const failCheckpoint = () =>
+      mockCheckpoint.mock.calls.find(
+        (c) => (c[1] as { Action?: string })?.Action === OperationAction.FAIL,
+      )?.[1] as { ContextOptions?: unknown } | undefined;
+
+    test("forces ReplayChildren on a FAILED context when the budget is >= 1", async () => {
+      const childFn = jest.fn().mockRejectedValue(new Error("boom"));
+
+      await expect(
+        makeHandler(1)(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn),
+      ).rejects.toThrow();
+
+      expect(failCheckpoint()?.ContextOptions).toEqual({
+        ReplayChildren: true,
+      });
+    });
+
+    test("does not set ReplayChildren on a FAILED context when the budget is 0", async () => {
+      const childFn = jest.fn().mockRejectedValue(new Error("boom"));
+
+      await expect(
+        makeHandler(0)(TEST_CONSTANTS.CHILD_CONTEXT_NAME, childFn),
+      ).rejects.toThrow();
+
+      expect(failCheckpoint()?.ContextOptions).toBeUndefined();
+    });
+  });
+
   test("should return cached result for completed child context", async () => {
     const stepData = mockExecutionContext._stepData;
     stepData[hashId(TEST_CONSTANTS.CHILD_CONTEXT_ID)] = {

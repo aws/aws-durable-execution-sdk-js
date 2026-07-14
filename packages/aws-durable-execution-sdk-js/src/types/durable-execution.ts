@@ -141,6 +141,65 @@ export interface DurableExecutionConfig {
    * @experimental This parameter is experimental and may be changed or removed in future releases.
    */
   plugins?: DurableInstrumentationPlugin[];
+
+  /**
+   * Execution-level settings that affect how instrumentation plugins observe
+   * the run.
+   *
+   * @experimental This parameter is experimental and may be changed or removed in future releases.
+   */
+  pluginsConfig?: {
+    /**
+     * How many nested levels of child-context operations to **preserve across
+     * suspend/resume** so instrumentation plugins can observe the full
+     * operation tree.
+     *
+     * By default, when a parent context finishes the backend prunes its child
+     * operations from the state handed to later invocations (a performance
+     * optimization). As a result, a snapshot taken in a *later* invocation
+     * (e.g. after a `wait`) will only contain top-level operations — the
+     * children of already-finished contexts are gone. This setting keeps them.
+     *
+     * Counting (children of the top level = 1):
+     * - `undefined` / `0` — preserve nothing extra (default; top-level only).
+     * - `1` — keep the direct children of top-level contexts (e.g. map items,
+     *   parallel branches).
+     * - `2` — also keep their children (e.g. the steps inside each map item).
+     * - `Infinity` — keep the entire tree.
+     *
+     * Must be a non-negative integer or `Infinity`; any other value (negative,
+     * fractional, or `NaN`) is a configuration error that **fails the execution
+     * immediately** — before the handler runs — rather than being silently
+     * ignored.
+     *
+     * Depth is counted over the **visible operation tree**: virtual wrapper
+     * contexts created by map/parallel with FLAT nesting don't checkpoint and
+     * their children re-parent onto the ancestor, so they are transparent to
+     * this count (they don't consume a level).
+     *
+     * Applies to both **succeeded and failed** contexts (a failed branch's
+     * children are often the most useful to inspect). A failed context still
+     * throws its checkpointed error on replay and is never re-executed, so
+     * preserving its children adds no replay cost.
+     *
+     * ⚠️ **Cost:** preservation is implemented by forcing the SDK's
+     * `ReplayChildren` mode on each preserved context. This keeps that
+     * context's child operations in the execution state (they aren't pruned
+     * when the context finishes) and, on replay, rebuilds the context's result
+     * by **replaying** those already-checkpointed children — i.e. the context's
+     * orchestration code re-runs, but the children themselves are **not**
+     * re-executed: steps and other durable operations inside the context return
+     * their checkpointed results, so no step body or side effect runs again.
+     * The added cost is therefore an extra replay pass over each preserved
+     * context (re-running its orchestration and deserializing its children)
+     * plus carrying those children in the execution state — it grows with the
+     * number of preserved contexts and the depth requested, and is **not** a
+     * re-doing of the children's work. Enable only the depth you actually need.
+     *
+     * @experimental
+     */
+    childOperationsDepth?: number;
+  };
 }
 
 /**
