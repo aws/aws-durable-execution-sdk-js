@@ -17,6 +17,7 @@ export type OutboundMessage =
   | { type: "setConsent"; version: string }
   | { type: "newSession" }
   | { type: "saveSettings"; settings: Record<string, string> }
+  | { type: "testDestination"; settings: Record<string, string> }
   | { type: "downloadModel"; localModel?: string }
   // Save the result table to a file (host shows a save dialog). The webview
   // builds the CSV/JSON text; the host just writes it.
@@ -50,6 +51,21 @@ export type OutboundMessage =
       month?: string;
       day?: string;
     };
+
+/** A single check within a destination connectivity test. Mirrors the
+ * DestinationCheck shape produced by the host's destinationTest.ts. */
+export interface DestinationCheck {
+  label: string;
+  ok: boolean;
+  detail?: string;
+}
+
+/** Result of a "Test connection" run, produced by the host. */
+export interface DestinationTestReport {
+  ok: boolean;
+  summary: string;
+  checks: DestinationCheck[];
+}
 
 /** A single SQS message, normalized for display. */
 export interface SqsMessageRow {
@@ -141,6 +157,7 @@ export type InboundMessage =
   | { type: "error"; message: string }
   | { type: "sessionCleared" }
   | { type: "settingsSaved" }
+  | { type: "destinationTestResult"; result: DestinationTestReport }
   | { type: "downloadProgress"; percent: number; done: boolean }
   | { type: "sqsStatus"; listening: boolean }
   | { type: "sqsMessages"; messages: SqsMessageRow[] }
