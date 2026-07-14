@@ -7,6 +7,7 @@ import {
   configFromWireSettings,
 } from "./config";
 import { testDestination } from "./destinationTest";
+import { listBedrockModels } from "./bedrockModels";
 import {
   generateQuery,
   verifyResult,
@@ -50,6 +51,7 @@ type InboundMessage =
   | { type: "newSession" }
   | { type: "saveSettings"; settings: Record<string, string> }
   | { type: "testDestination"; settings: Record<string, string> }
+  | { type: "listModels"; settings: Record<string, string> }
   | { type: "downloadModel"; localModel?: string }
   | { type: "exportChart"; format: "svg" | "png"; content: string }
   | {
@@ -282,6 +284,8 @@ class ExplorerPanel {
           return await this.onSaveSettings(msg.settings);
         case "testDestination":
           return await this.onTestDestination(msg.settings);
+        case "listModels":
+          return await this.onListModels(msg.settings);
         case "downloadModel":
           return await this.onDownloadModel(msg.localModel);
         case "exportChart":
@@ -372,6 +376,28 @@ class ExplorerPanel {
           summary: err instanceof Error ? err.message : String(err),
           checks: [],
         },
+      });
+    }
+  }
+
+  private async onListModels(settings: Record<string, string>): Promise<void> {
+    // Use the region/profile currently in the modal (may be unsaved) so the
+    // list matches what the user is about to save. Errors are reported inline
+    // via the same payload rather than the global error toast.
+    const cfg = configFromWireSettings(settings);
+    try {
+      const models = await listBedrockModels({
+        region: cfg.region,
+        credentials: resolveCredentials(cfg.awsProfile),
+      });
+      this.post({ type: "bedrockModels", models });
+    } catch (err) {
+      // Omit `models` on failure so the webview keeps any previously-fetched
+      // suggestions (e.g. after a retry with a typo'd profile) rather than
+      // clearing the list.
+      this.post({
+        type: "bedrockModels",
+        error: err instanceof Error ? err.message : String(err),
       });
     }
   }

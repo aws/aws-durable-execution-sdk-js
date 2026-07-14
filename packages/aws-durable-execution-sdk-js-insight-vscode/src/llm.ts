@@ -1,11 +1,11 @@
 import * as vscode from "vscode";
 import {
   BedrockRuntimeClient,
-  ConverseCommand,
   type ContentBlock,
   type Tool,
 } from "@aws-sdk/client-bedrock-runtime";
 import type { AwsCredentialIdentityProvider } from "@aws-sdk/types";
+import { sendConverse } from "./bedrockConverse";
 import { buildSystemPrompt, type DestinationType } from "./schema";
 import { parseChartSpec } from "./chartSpec";
 import { parseLocalServerQueryResponse } from "./localServerParse";
@@ -220,17 +220,15 @@ export async function verifyResult(
         region: opts.region,
         credentials: opts.credentials,
       });
-      const response = await client.send(
-        new ConverseCommand({
-          modelId: opts.modelId,
-          messages: [{ role: "user", content: [{ text: instruction }] }],
-          toolConfig: {
-            tools: [JUDGE_TOOL],
-            toolChoice: { tool: { name: "judge_result" } },
-          },
-          inferenceConfig: { maxTokens: 4096, temperature: 0 },
-        }),
-      );
+      const response = await sendConverse(client, {
+        modelId: opts.modelId,
+        messages: [{ role: "user", content: [{ text: instruction }] }],
+        toolConfig: {
+          tools: [JUDGE_TOOL],
+          toolChoice: { tool: { name: "judge_result" } },
+        },
+        inferenceConfig: { maxTokens: 4096, temperature: 0 },
+      });
       const blocks: ContentBlock[] = response.output?.message?.content ?? [];
       const toolUse = blocks.find((b) => "toolUse" in b && b.toolUse)?.toolUse;
       const input = toolUse?.input as
@@ -435,13 +433,11 @@ async function completeText(
       region: opts.region,
       credentials: opts.credentials,
     });
-    const response = await client.send(
-      new ConverseCommand({
-        modelId: opts.modelId,
-        messages: [{ role: "user", content: [{ text: prompt }] }],
-        inferenceConfig: { maxTokens, temperature: 0 },
-      }),
-    );
+    const response = await sendConverse(client, {
+      modelId: opts.modelId,
+      messages: [{ role: "user", content: [{ text: prompt }] }],
+      inferenceConfig: { maxTokens, temperature: 0 },
+    });
     const blocks: ContentBlock[] = response.output?.message?.content ?? [];
     return blocks
       .map((b) => ("text" in b && b.text ? b.text : ""))
@@ -556,18 +552,16 @@ async function generateViaBedrock(
     agentic: opts.agentic,
   });
 
-  const response = await client.send(
-    new ConverseCommand({
-      modelId: opts.modelId,
-      system: [{ text: systemPrompt }],
-      messages: [{ role: "user", content: [{ text: opts.question }] }],
-      toolConfig: {
-        tools: [EMIT_QUERY_TOOL],
-        toolChoice: { tool: { name: "emit_query" } },
-      },
-      inferenceConfig: { maxTokens: 4096, temperature: 0 },
-    }),
-  );
+  const response = await sendConverse(client, {
+    modelId: opts.modelId,
+    system: [{ text: systemPrompt }],
+    messages: [{ role: "user", content: [{ text: opts.question }] }],
+    toolConfig: {
+      tools: [EMIT_QUERY_TOOL],
+      toolChoice: { tool: { name: "emit_query" } },
+    },
+    inferenceConfig: { maxTokens: 4096, temperature: 0 },
+  });
 
   const blocks: ContentBlock[] = response.output?.message?.content ?? [];
   const toolUse = blocks.find((b) => "toolUse" in b && b.toolUse)?.toolUse;
