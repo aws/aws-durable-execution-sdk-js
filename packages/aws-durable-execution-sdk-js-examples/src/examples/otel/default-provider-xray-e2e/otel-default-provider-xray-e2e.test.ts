@@ -22,7 +22,7 @@ createTests({
       resetExporter();
     });
 
-    it("should execute workflow and produce traces via StandaloneOtelPlugin with useDefaultTracerProvider (ADOT layer)", async () => {
+    it("should execute workflow and produce traces via ExecutionOtelPlugin with useDefaultTracerProvider (ADOT layer)", async () => {
       const execution = await runner.run();
       expect(execution.getStatus()).toBe(ExecutionStatus.SUCCEEDED);
 
@@ -39,7 +39,7 @@ createTests({
 
       if (isCloud) {
         // Cloud mode: ADOT layer registers global TracerProvider and creates
-        // an ambient invocation span. StandaloneOtelPlugin captures it via
+        // an ambient invocation span. ExecutionOtelPlugin captures it via
         // context.active() and links operation spans to it.
         expect(result.xRayHeader).toBeDefined();
 
@@ -53,7 +53,7 @@ createTests({
           delayMs: 30000,
         });
 
-        // Assert span names exist (StandaloneOtelPlugin produces these)
+        // Assert span names exist (ExecutionOtelPlugin produces these)
         assertSpanNames(trace, [
           "fetch-data",
           "short-pause",

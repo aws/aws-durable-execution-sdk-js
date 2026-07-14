@@ -29,7 +29,7 @@ const ADOT_LAYER_ARNS: Record<string, string> = {
     "arn:aws:lambda:ap-southeast-2:615299751070:layer:AWSOpenTelemetryDistroJs:7",
 };
 
-// OpenTelemetry community collector-only layer for StandaloneOtelPlugin functions (us-west-2 default)
+// OpenTelemetry community collector-only layer for ExecutionOtelPlugin functions (us-west-2 default)
 const OTEL_COLLECTOR_LAYER_ARN =
   "arn:aws:lambda:us-west-2:184161586896:layer:opentelemetry-collector-amd64-0_22_0:1";
 
@@ -47,6 +47,12 @@ const EXAMPLE_CONFIGS: Record<string, any> = {
     ],
   },
 };
+
+// Functions whose log groups already exist in AWS and should not be re-created
+// by CloudFormation (avoids "already exists" conflicts on deploy).
+const SKIP_LOG_GROUP_CREATION: Set<string> = new Set([
+  "otel-standalone-xray-e2e",
+]);
 
 // Default configuration for Lambda functions
 const DEFAULT_CONFIG = {
@@ -140,10 +146,9 @@ function createFunctionResource(
       MemorySize: config.memorySize,
       Timeout: catalog.lambdaTimeoutSeconds ?? config.timeout,
       DurableConfig: catalog.durableConfig,
-      Role:
-        options.lambdaExecutionRoleArn ?? {
-          "Fn::GetAtt": ["DurableFunctionRole", "Arn"],
-        },
+      Role: options.lambdaExecutionRoleArn ?? {
+        "Fn::GetAtt": ["DurableFunctionRole", "Arn"],
+      },
       Environment: {
         Variables: environmentVariables,
       },
@@ -168,12 +173,12 @@ function createFunctionResource(
     // Only set exec wrapper for non-standalone otel functions
     if (!catalog.handler.includes("otel-standalone")) {
       functionResource.Properties.Layers = [
-      getAdotLayerArn(options.awsRegion ?? "us-west-2"),
-    ];
+        getAdotLayerArn(options.awsRegion ?? "us-west-2"),
+      ];
       functionResource.Properties.Environment.Variables.AWS_LAMBDA_EXEC_WRAPPER =
         "/opt/otel-instrument";
     } else {
-      // StandaloneOtelPlugin: use collector-only layer
+      // ExecutionOtelPlugin: use collector-only layer
       functionResource.Properties.Layers = [OTEL_COLLECTOR_LAYER_ARN];
       functionResource.Properties.Environment.Variables.OPENTELEMETRY_COLLECTOR_CONFIG_FILE =
         "/var/task/collector.yaml";
@@ -288,7 +293,7 @@ function generateTemplate(options: TemplateOptions | boolean = {}) {
         normalizedOptions,
       );
 
-      if (manageLogGroups) {
+      if (manageLogGroups && !SKIP_LOG_GROUP_CREATION.has(handlerFile)) {
         template.Resources[logGroupResourceName] = {
           Type: "AWS::Logs::LogGroup",
           Properties: {
@@ -377,7 +382,9 @@ function main() {
     fs.mkdirSync(path.dirname(templatePath), { recursive: true });
     fs.writeFileSync(templatePath, yamlContent, "utf8");
 
-    console.log(`Generated template.yml with ${functionCount} Lambda functions`);
+    console.log(
+      `Generated template.yml with ${functionCount} Lambda functions`,
+    );
     console.log(`Template written to: ${templatePath}`);
     if (options.skipVerboseLogging) {
       console.log("Verbose logging disabled");

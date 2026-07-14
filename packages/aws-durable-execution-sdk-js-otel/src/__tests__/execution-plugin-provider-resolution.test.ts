@@ -1,6 +1,6 @@
 /**
  * Unit tests for provider resolution and instrumentation skipping
- * in StandaloneOtelPlugin when useDefaultTracerProvider is configured.
+ * in ExecutionOtelPlugin when useDefaultTracerProvider is configured.
  *
  * Requirements: 1.2, 1.3, 1.5, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3
  */
@@ -11,9 +11,9 @@ import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
-import { createTracerProvider } from "../standalone-plugin-provider";
-import { registerStandaloneInstrumentations } from "../standalone-plugin-instrumentations";
-import type { StandaloneOtelPluginConfig } from "../standalone-plugin-config";
+import { createTracerProvider } from "../execution-plugin-provider";
+import { registerStandaloneInstrumentations } from "../execution-plugin-instrumentations";
+import type { ExecutionOtelPluginConfig } from "../execution-plugin-config";
 
 // Save original env
 const originalEnv = process.env;
@@ -244,8 +244,8 @@ describe("registerStandaloneInstrumentations", () => {
   });
 });
 
-describe("StandaloneOtelPlugin integration - provider resolution", () => {
-  // These tests verify the end-to-end behavior through the StandaloneOtelPlugin
+describe("ExecutionOtelPlugin integration - provider resolution", () => {
+  // These tests verify the end-to-end behavior through the ExecutionOtelPlugin
   // constructor which calls both createTracerProvider and registerStandaloneInstrumentations
 
   it("useDefaultTracerProvider=true retrieves the global provider (Req 2.2)", async () => {
@@ -256,10 +256,10 @@ describe("StandaloneOtelPlugin integration - provider resolution", () => {
     });
     globalProvider.register();
 
-    // Import StandaloneOtelPlugin dynamically to avoid module-level side effects
-    const { StandaloneOtelPlugin } = await import("../standalone-plugin");
+    // Import ExecutionOtelPlugin dynamically to avoid module-level side effects
+    const { ExecutionOtelPlugin } = await import("../execution-plugin");
 
-    const plugin = new StandaloneOtelPlugin({
+    const plugin = new ExecutionOtelPlugin({
       useDefaultTracerProvider: true,
     });
 
@@ -302,9 +302,9 @@ describe("StandaloneOtelPlugin integration - provider resolution", () => {
     });
     globalProvider.register();
 
-    const { StandaloneOtelPlugin } = await import("../standalone-plugin");
+    const { ExecutionOtelPlugin } = await import("../execution-plugin");
 
-    const plugin = new StandaloneOtelPlugin({
+    const plugin = new ExecutionOtelPlugin({
       useDefaultTracerProvider: true,
     });
 

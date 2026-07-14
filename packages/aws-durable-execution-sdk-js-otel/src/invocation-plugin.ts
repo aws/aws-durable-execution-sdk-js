@@ -22,9 +22,9 @@ import { xRayContextExtractor } from "./context-extractors";
 import type { ContextExtractor } from "./context-extractors";
 
 /**
- * Configuration options for the OtelPlugin.
+ * Configuration options for the InvocationOtelPlugin.
  */
-export interface OtelPluginConfig {
+export interface InvocationOtelPluginConfig {
   /** Custom TracerProvider. If omitted, the plugin creates one internally. */
   tracerProvider?: TracerProvider;
   /** Context extractor function. Defaults to xRayContextExtractor. */
@@ -42,7 +42,7 @@ const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
  * traces that correlate across multiple Lambda invocations of a single
  * durable execution.
  */
-export class OtelPlugin implements DurableInstrumentationPlugin {
+export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   private readonly tracerProvider: TracerProvider;
   private readonly tracer: Tracer;
   private readonly idGenerator: DeterministicIdGenerator;
@@ -55,7 +55,7 @@ export class OtelPlugin implements DurableInstrumentationPlugin {
   private executionArn: string = "";
   private attemptSpan: Span | undefined;
 
-  constructor(config?: OtelPluginConfig) {
+  constructor(config?: InvocationOtelPluginConfig) {
     const instrumentationName =
       config?.instrumentationName ?? DEFAULT_INSTRUMENTATION_NAME;
 

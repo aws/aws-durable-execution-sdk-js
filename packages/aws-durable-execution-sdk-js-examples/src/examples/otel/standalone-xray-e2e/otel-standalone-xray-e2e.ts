@@ -2,7 +2,7 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
-import { StandaloneOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+import { ExecutionOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
 import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
@@ -16,21 +16,21 @@ import { SerializedSpan } from "../shared/otel-test-setup";
  * Detect whether we're running in Lambda (cloud) vs local test runner.
  * Unlike other OTel examples that use isAdotEnvironment() (which checks
  * AWS_LAMBDA_EXEC_WRAPPER), this function intentionally does NOT set that
- * wrapper — the StandaloneOtelPlugin manages its own TracerProvider.
+ * wrapper — the ExecutionOtelPlugin manages its own TracerProvider.
  */
 function isCloudEnvironment(): boolean {
   return process.env.AWS_LAMBDA_FUNCTION_NAME !== undefined;
 }
 
-// Dual-mode setup for StandaloneOtelPlugin:
+// Dual-mode setup for ExecutionOtelPlugin:
 // - Cloud (Lambda): default config (OTLP to ADOT collector at localhost:4318)
 // - Local: InMemorySpanExporter for direct span assertions
 let exporter: InMemorySpanExporter | undefined;
-let plugin: StandaloneOtelPlugin;
+let plugin: ExecutionOtelPlugin;
 
 if (isCloudEnvironment()) {
-  // Cloud mode: StandaloneOtelPlugin with default OTLP export to ADOT collector
-  plugin = new StandaloneOtelPlugin();
+  // Cloud mode: ExecutionOtelPlugin with default OTLP export to ADOT collector
+  plugin = new ExecutionOtelPlugin();
 } else {
   // Local mode: custom TracerProvider with InMemorySpanExporter
   exporter = new InMemorySpanExporter();
@@ -38,7 +38,7 @@ if (isCloudEnvironment()) {
     spanProcessors: [new SimpleSpanProcessor(exporter)],
   });
 
-  plugin = new StandaloneOtelPlugin({ tracerProvider: provider });
+  plugin = new ExecutionOtelPlugin({ tracerProvider: provider });
 }
 
 export function getSerializedSpans(): SerializedSpan[] {

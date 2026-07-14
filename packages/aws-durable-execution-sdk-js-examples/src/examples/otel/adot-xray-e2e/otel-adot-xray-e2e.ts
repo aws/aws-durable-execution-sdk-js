@@ -2,18 +2,19 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
-import { OtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+import { ExecutionOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
 import { ExampleConfig } from "../../../types";
 
 /**
  * ADOT-layer variant of the standalone-xray-e2e example.
  *
  * Exercises the exact same workflow (steps, wait, child context) as
- * otel-standalone-xray-e2e but uses the OtelPlugin backed by the ADOT
- * Lambda layer. This allows direct trace comparison between the two
- * plugin implementations in X-Ray.
+ * otel-standalone-xray-e2e but uses the ExecutionOtelPlugin with
+ * useDefaultTracerProvider: true, backed by the ADOT Lambda layer's
+ * globally registered TracerProvider. This allows direct trace comparison
+ * between the two plugin implementations in X-Ray.
  */
-const plugin = new OtelPlugin();
+const plugin = new ExecutionOtelPlugin({ useDefaultTracerProvider: true });
 
 export const config: ExampleConfig = {
   name: "OTel ADOT XRay E2E",

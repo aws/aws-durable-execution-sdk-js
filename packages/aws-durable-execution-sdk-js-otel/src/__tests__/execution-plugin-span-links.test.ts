@@ -13,7 +13,7 @@ import type {
   AttemptInfo,
   AttemptEndInfo,
 } from "@aws/durable-execution-sdk-js";
-import { StandaloneOtelPlugin } from "../standalone-plugin";
+import { ExecutionOtelPlugin } from "../execution-plugin";
 
 const TEST_ARN =
   "arn:aws:states:us-east-1:123456789012:execution:my-sm:exec-123";
@@ -102,7 +102,7 @@ function findSpan(
   return getExportedSpans(exporter).find((s) => s.name === name);
 }
 
-describe("StandaloneOtelPlugin - Span Link Construction", () => {
+describe("ExecutionOtelPlugin - Span Link Construction", () => {
   let exporter: InMemorySpanExporter;
   let provider: NodeTracerProvider;
 
@@ -130,7 +130,7 @@ describe("StandaloneOtelPlugin - Span Link Construction", () => {
      * context and builds span links pointing to the ambient invocation span.
      */
     it("Operation_Span has a link to the ambient invocation span", async () => {
-      const plugin = new StandaloneOtelPlugin({
+      const plugin = new ExecutionOtelPlugin({
         tracerProvider: provider,
         useDefaultTracerProvider: true,
       });
@@ -167,7 +167,7 @@ describe("StandaloneOtelPlugin - Span Link Construction", () => {
     });
 
     it("Attempt_Span has a link to the ambient invocation span", async () => {
-      const plugin = new StandaloneOtelPlugin({
+      const plugin = new ExecutionOtelPlugin({
         tracerProvider: provider,
         useDefaultTracerProvider: true,
       });
@@ -215,7 +215,7 @@ describe("StandaloneOtelPlugin - Span Link Construction", () => {
     });
 
     it("Context_Execution_Span has a link to the ambient invocation span", async () => {
-      const plugin = new StandaloneOtelPlugin({
+      const plugin = new ExecutionOtelPlugin({
         tracerProvider: provider,
         useDefaultTracerProvider: true,
       });
@@ -275,7 +275,7 @@ describe("StandaloneOtelPlugin - Span Link Construction", () => {
      * an explicit Invocation_Span and builds span links pointing to it.
      */
     it("Operation_Span has a link to the explicit Invocation_Span", async () => {
-      const plugin = new StandaloneOtelPlugin({
+      const plugin = new ExecutionOtelPlugin({
         tracerProvider: provider,
         useDefaultTracerProvider: false,
       });
@@ -304,7 +304,7 @@ describe("StandaloneOtelPlugin - Span Link Construction", () => {
     });
 
     it("Attempt_Span has a link to the explicit Invocation_Span", async () => {
-      const plugin = new StandaloneOtelPlugin({
+      const plugin = new ExecutionOtelPlugin({
         tracerProvider: provider,
         useDefaultTracerProvider: false,
       });
@@ -352,7 +352,7 @@ describe("StandaloneOtelPlugin - Span Link Construction", () => {
      * and there's no explicit Invocation_Span, links should be empty.
      */
     it("Operation_Span has no links when no ambient invocation span exists", async () => {
-      const plugin = new StandaloneOtelPlugin({
+      const plugin = new ExecutionOtelPlugin({
         tracerProvider: provider,
         useDefaultTracerProvider: true,
       });
@@ -377,7 +377,7 @@ describe("StandaloneOtelPlugin - Span Link Construction", () => {
     });
 
     it("Attempt_Span has no links when no ambient invocation span exists", async () => {
-      const plugin = new StandaloneOtelPlugin({
+      const plugin = new ExecutionOtelPlugin({
         tracerProvider: provider,
         useDefaultTracerProvider: true,
       });
@@ -426,7 +426,7 @@ describe("StandaloneOtelPlugin - Span Link Construction", () => {
      * from the provider, defaulting to "aws-durable-execution-sdk-js".
      */
     it("uses default instrumentationName when not specified", async () => {
-      const plugin = new StandaloneOtelPlugin({
+      const plugin = new ExecutionOtelPlugin({
         tracerProvider: provider,
       });
 
@@ -449,7 +449,7 @@ describe("StandaloneOtelPlugin - Span Link Construction", () => {
 
     it("uses custom instrumentationName when specified", async () => {
       const customName = "my-custom-instrumentation";
-      const plugin = new StandaloneOtelPlugin({
+      const plugin = new ExecutionOtelPlugin({
         tracerProvider: provider,
         instrumentationName: customName,
       });
@@ -475,7 +475,7 @@ describe("StandaloneOtelPlugin - Span Link Construction", () => {
     });
 
     it("single tracer instance is used for all span operations", async () => {
-      const plugin = new StandaloneOtelPlugin({
+      const plugin = new ExecutionOtelPlugin({
         tracerProvider: provider,
       });
 

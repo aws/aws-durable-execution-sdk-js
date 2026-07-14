@@ -22,7 +22,7 @@ createTests({
       resetExporter();
     });
 
-    it("should execute workflow and produce traces via StandaloneOtelPlugin", async () => {
+    it("should execute workflow and produce traces via ExecutionOtelPlugin", async () => {
       const execution = await runner.run();
       expect(execution.getStatus()).toBe(ExecutionStatus.SUCCEEDED);
 
@@ -51,7 +51,7 @@ createTests({
           delayMs: 30000,
         });
 
-        // Assert span names exist (StandaloneOtelPlugin produces these)
+        // Assert span names exist (ExecutionOtelPlugin produces these)
         assertSpanNames(trace, [
           "fetch-data",
           "short-pause",
@@ -79,7 +79,7 @@ createTests({
           "durable.operation.type": "STEP",
         });
 
-        // StandaloneOtelPlugin-specific: verify Workflow span and Invocation span
+        // ExecutionOtelPlugin-specific: verify Workflow span and Invocation span
         assertSpanNames(trace, ["Workflow", "Invocation"]);
 
         // Verify Workflow span has durable.execution.arn attribute
@@ -96,7 +96,7 @@ createTests({
         // Local mode: assert spans via InMemorySpanExporter
         const spans = getSerializedSpans();
 
-        // StandaloneOtelPlugin produces:
+        // ExecutionOtelPlugin produces:
         // - 1 Workflow span
         // - 1 Invocation span
         // - 4 operation spans (fetch-data, short-pause, process-data, child-operations)

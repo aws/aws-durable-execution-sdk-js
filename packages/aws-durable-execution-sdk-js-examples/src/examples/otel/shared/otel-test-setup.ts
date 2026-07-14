@@ -4,7 +4,7 @@ import {
   NodeTracerProvider,
 } from "@opentelemetry/sdk-trace-node";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
-import { OtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+import { InvocationOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
 
 /**
  * Serialized representation of an OpenTelemetry span for test assertions.
@@ -25,7 +25,7 @@ export interface SerializedSpan {
 export interface OtelTestSetup {
   provider: NodeTracerProvider;
   exporter: InMemorySpanExporter;
-  plugin: OtelPlugin;
+  plugin: InvocationOtelPlugin;
   getSerializedSpans(): SerializedSpan[];
   reset(): void;
 }
@@ -34,7 +34,7 @@ export interface OtelTestSetup {
  * Creates a shared OTel test infrastructure for integration test examples.
  *
  * Configures a NodeTracerProvider with a SimpleSpanProcessor backed by an
- * InMemorySpanExporter, and passes the provider to OtelPlugin
+ * InMemorySpanExporter, and passes the provider to InvocationOtelPlugin
  * via the `tracerProvider` option.
  *
  * @returns An OtelTestSetup object containing the provider, exporter, plugin,
@@ -46,7 +46,7 @@ export function createOtelTestSetup(): OtelTestSetup {
     spanProcessors: [new SimpleSpanProcessor(exporter)],
   });
 
-  const plugin = new OtelPlugin({
+  const plugin = new InvocationOtelPlugin({
     tracerProvider: provider,
   });
 
@@ -103,7 +103,7 @@ export function isAdotEnvironment(): boolean {
 }
 
 export interface DualModeOtelSetup {
-  plugin: OtelPlugin;
+  plugin: InvocationOtelPlugin;
   getSerializedSpans(): SerializedSpan[];
   resetExporter(): void;
 }
@@ -112,15 +112,15 @@ export interface DualModeOtelSetup {
  * Creates a dual-mode OTel setup that works for both local and cloud testing.
  *
  * - In local mode: Uses InMemorySpanExporter so spans can be asserted directly.
- * - In cloud mode (ADOT): Uses plain OtelPlugin (no custom provider) so ADOT
+ * - In cloud mode (ADOT): Uses plain InvocationOtelPlugin (no custom provider) so ADOT
  *   can export spans to X-Ray. Spans are retrieved via X-Ray in the test.
  *
  * @returns A DualModeOtelSetup object with the plugin and utility functions.
  */
 export function createDualModeOtelSetup(): DualModeOtelSetup {
   if (isAdotEnvironment()) {
-    // Cloud mode: plain OtelPlugin; ADOT handles trace export to X-Ray
-    const plugin = new OtelPlugin();
+    // Cloud mode: plain InvocationOtelPlugin; ADOT handles trace export to X-Ray
+    const plugin = new InvocationOtelPlugin();
     return {
       plugin,
       getSerializedSpans: () => [],

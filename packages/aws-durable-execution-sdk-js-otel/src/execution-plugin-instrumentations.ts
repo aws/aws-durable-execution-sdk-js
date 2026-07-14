@@ -2,10 +2,10 @@ import type { TracerProvider } from "@opentelemetry/api";
 import { AwsInstrumentation } from "@opentelemetry/instrumentation-aws-sdk";
 import { HttpInstrumentation } from "@opentelemetry/instrumentation-http";
 import { registerInstrumentations } from "@opentelemetry/instrumentation";
-import type { StandaloneOtelPluginConfig } from "./standalone-plugin-config";
+import type { ExecutionOtelPluginConfig } from "./execution-plugin-config";
 
 /**
- * Registers HTTP and AWS SDK instrumentations for the StandaloneOtelPlugin.
+ * Registers HTTP and AWS SDK instrumentations for the ExecutionOtelPlugin.
  *
  * Skips ALL instrumentation registration when a custom `tracerProvider` is
  * provided in the config (the caller owns instrumentation in that case).
@@ -22,7 +22,7 @@ import type { StandaloneOtelPluginConfig } from "./standalone-plugin-config";
  */
 export function registerStandaloneInstrumentations(
   tracerProvider: TracerProvider,
-  config?: StandaloneOtelPluginConfig,
+  config?: ExecutionOtelPluginConfig,
 ): void {
   // Skip all instrumentation when using an external provider (explicit or default)
   if (config?.tracerProvider || config?.useDefaultTracerProvider) {

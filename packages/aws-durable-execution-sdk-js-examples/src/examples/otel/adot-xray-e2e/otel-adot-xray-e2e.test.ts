@@ -13,7 +13,7 @@ import {
 createTests({
   handler,
   tests: (runner, { assertEventSignatures, isCloud }) => {
-    it("should execute workflow and produce traces via OtelPlugin + ADOT layer", async () => {
+    it("should execute workflow and produce traces via ExecutionOtelPlugin + ADOT layer", async () => {
       const execution = await runner.run();
       expect(execution.getStatus()).toBe(ExecutionStatus.SUCCEEDED);
 

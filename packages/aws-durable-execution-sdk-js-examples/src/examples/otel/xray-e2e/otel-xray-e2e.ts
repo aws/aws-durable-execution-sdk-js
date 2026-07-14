@@ -2,11 +2,11 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
-import { OtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+import { InvocationOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
 import { ExampleConfig } from "../../../types";
 
 // No createOtelTestSetup — ADOT handles export at runtime
-const plugin = new OtelPlugin();
+const plugin = new InvocationOtelPlugin();
 
 export const config: ExampleConfig = {
   name: "OTel XRay E2E",

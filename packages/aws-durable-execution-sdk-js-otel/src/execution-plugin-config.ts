@@ -3,14 +3,14 @@ import type { TextMapPropagator } from "@opentelemetry/api";
 import type { ContextExtractor } from "./context-extractors";
 
 /**
- * Configuration options for the StandaloneOtelPlugin.
+ * Configuration options for the ExecutionOtelPlugin.
  *
  * All fields are optional. When no configuration is provided, the plugin
  * auto-configures a fully working TracerProvider with OTLP export to
  * `http://localhost:4318/v1/traces`, HTTP + AWS SDK instrumentation,
  * and AWSXRay + W3C TraceContext propagators.
  */
-export interface StandaloneOtelPluginConfig {
+export interface ExecutionOtelPluginConfig {
   /**
    * Custom TracerProvider. When provided, the plugin skips all auto-setup
    * (no exporter, no propagators, no instrumentations are registered).

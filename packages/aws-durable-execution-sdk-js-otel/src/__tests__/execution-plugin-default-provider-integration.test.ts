@@ -13,7 +13,7 @@ import type {
   AttemptInfo,
   AttemptEndInfo,
 } from "@aws/durable-execution-sdk-js";
-import { StandaloneOtelPlugin } from "../standalone-plugin";
+import { ExecutionOtelPlugin } from "../execution-plugin";
 
 const TEST_ARN =
   "arn:aws:states:us-east-1:123456789012:execution:my-sm:exec-integration-1";
@@ -115,13 +115,13 @@ function findSpans(
  * Validates Requirements: 1.1, 4.1, 5.2, 5.4, 5.5, 5.8
  *
  * This test registers a real NodeTracerProvider with InMemorySpanExporter globally,
- * creates a StandaloneOtelPlugin with useDefaultTracerProvider: true, and simulates
+ * creates a ExecutionOtelPlugin with useDefaultTracerProvider: true, and simulates
  * a full invocation lifecycle verifying the complete span hierarchy is exported.
  *
  * Since this test runs locally (no Lambda environment), there is no ambient invocation
  * span. Span links will be empty — this is expected behavior in local/test environments.
  */
-describe("StandaloneOtelPlugin - Integration: End-to-end span export with default provider (no ambient span)", () => {
+describe("ExecutionOtelPlugin - Integration: End-to-end span export with default provider (no ambient span)", () => {
   let exporter: InMemorySpanExporter;
   let provider: NodeTracerProvider;
 
@@ -143,7 +143,7 @@ describe("StandaloneOtelPlugin - Integration: End-to-end span export with defaul
   });
 
   it("exports spans through the globally registered provider pipeline", async () => {
-    const plugin = new StandaloneOtelPlugin({
+    const plugin = new ExecutionOtelPlugin({
       useDefaultTracerProvider: true,
     });
 
@@ -192,7 +192,7 @@ describe("StandaloneOtelPlugin - Integration: End-to-end span export with defaul
   });
 
   it("Workflow_Span is a root span with no parent", async () => {
-    const plugin = new StandaloneOtelPlugin({
+    const plugin = new ExecutionOtelPlugin({
       useDefaultTracerProvider: true,
     });
 
@@ -215,7 +215,7 @@ describe("StandaloneOtelPlugin - Integration: End-to-end span export with defaul
   });
 
   it("no Invocation_Span is created by the plugin", async () => {
-    const plugin = new StandaloneOtelPlugin({
+    const plugin = new ExecutionOtelPlugin({
       useDefaultTracerProvider: true,
     });
 
@@ -241,7 +241,7 @@ describe("StandaloneOtelPlugin - Integration: End-to-end span export with defaul
   });
 
   it("operation and attempt spans have correct parent-child hierarchy under Workflow_Span", async () => {
-    const plugin = new StandaloneOtelPlugin({
+    const plugin = new ExecutionOtelPlugin({
       useDefaultTracerProvider: true,
     });
 
@@ -284,7 +284,7 @@ describe("StandaloneOtelPlugin - Integration: End-to-end span export with defaul
   });
 
   it("span links are empty because there is no ambient invocation span in local environment", async () => {
-    const plugin = new StandaloneOtelPlugin({
+    const plugin = new ExecutionOtelPlugin({
       useDefaultTracerProvider: true,
     });
 
@@ -322,7 +322,7 @@ describe("StandaloneOtelPlugin - Integration: End-to-end span export with defaul
   it("no shutdown is called on the globally registered provider", async () => {
     const shutdownSpy = jest.spyOn(provider, "shutdown");
 
-    const plugin = new StandaloneOtelPlugin({
+    const plugin = new ExecutionOtelPlugin({
       useDefaultTracerProvider: true,
     });
 
@@ -344,7 +344,7 @@ describe("StandaloneOtelPlugin - Integration: End-to-end span export with defaul
   });
 
   it("full lifecycle with multiple operations produces correct span hierarchy", async () => {
-    const plugin = new StandaloneOtelPlugin({
+    const plugin = new ExecutionOtelPlugin({
       useDefaultTracerProvider: true,
     });
 

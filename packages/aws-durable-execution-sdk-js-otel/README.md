@@ -8,13 +8,13 @@ This package provides two plugin implementations:
 
 | Plugin                 | Use Case                                                                              | Infrastructure Required                               |
 | ---------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `OtelPlugin`           | Lightweight — delegates auto-instrumentation and export to the full ADOT Lambda layer | ADOT Lambda layer with `AWS_LAMBDA_EXEC_WRAPPER`      |
-| `StandaloneOtelPlugin` | Self-contained — manages its own TracerProvider, instrumentations, and OTLP export    | Collector-only Lambda layer (no auto-instrumentation) |
+| `InvocationOtelPlugin` | Lightweight — delegates auto-instrumentation and export to the full ADOT Lambda layer | ADOT Lambda layer with `AWS_LAMBDA_EXEC_WRAPPER`      |
+| `ExecutionOtelPlugin`  | Self-contained — manages its own TracerProvider, instrumentations, and OTLP export    | Collector-only Lambda layer (no auto-instrumentation) |
 
 ## Table of Contents
 
 - [Installation](#installation)
-- [StandaloneOtelPlugin](#standaloneoetlplugin)
+- [ExecutionOtelPlugin](#standaloneoetlplugin)
   - [Minimal Handler Setup](#minimal-handler-setup)
   - [Export Strategies](#export-strategies)
   - [Collector Layer Setup](#collector-layer-setup)
@@ -23,11 +23,11 @@ This package provides two plugin implementations:
   - [IAM Permissions](#iam-permissions)
   - [Environment Variables](#environment-variables)
   - [SAM/CloudFormation Templates](#samcloudformation-templates)
-  - [StandaloneOtelPluginConfig Interface](#standaloneoetlpluginconfig-interface)
+  - [ExecutionOtelPluginConfig Interface](#standaloneoetlpluginconfig-interface)
   - [Trace Structure](#trace-structure)
   - [Additional npm Dependencies](#additional-npm-dependencies)
-  - [Migration from OtelPlugin](#migration-from-otelplugin)
-- [OtelPlugin (ADOT Layer)](#otelplugin-adot-layer)
+  - [Migration from InvocationOtelPlugin](#migration-from-otelplugin)
+- [InvocationOtelPlugin (ADOT Layer)](#otelplugin-adot-layer)
 - [API Reference](#api-reference)
 - [License](#license)
 
@@ -39,9 +39,9 @@ npm install @aws/durable-execution-sdk-js-otel
 
 ---
 
-## StandaloneOtelPlugin
+## ExecutionOtelPlugin
 
-`StandaloneOtelPlugin` is a self-contained OpenTelemetry instrumentation plugin that provides full distributed tracing without requiring the ADOT Lambda layer's auto-instrumentation. It creates and manages its own TracerProvider, registers HTTP and AWS SDK instrumentations, configures X-Ray and W3C propagators, and exports spans via OTLP — all with zero-config defaults.
+`ExecutionOtelPlugin` is a self-contained OpenTelemetry instrumentation plugin that provides full distributed tracing without requiring the ADOT Lambda layer's auto-instrumentation. It creates and manages its own TracerProvider, registers HTTP and AWS SDK instrumentations, configures X-Ray and W3C propagators, and exports spans via OTLP — all with zero-config defaults.
 
 You only need a **collector-only Lambda layer** (or equivalent OTLP endpoint) for span transport.
 
@@ -49,9 +49,9 @@ You only need a **collector-only Lambda layer** (or equivalent OTLP endpoint) fo
 
 ```typescript
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
-import { StandaloneOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+import { ExecutionOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
 
-const plugin = new StandaloneOtelPlugin();
+const plugin = new ExecutionOtelPlugin();
 
 export const handler = withDurableExecution(
   async (event, context) => {
@@ -97,7 +97,7 @@ Lambda → OTLP (localhost:4318) → Collector Extension → X-Ray/CloudWatch
 - Well-tested, production-proven path
 - Supports multi-destination fan-out via collector configuration
 
-No code changes needed — `new StandaloneOtelPlugin()` targets `localhost:4318` by default.
+No code changes needed — `new ExecutionOtelPlugin()` targets `localhost:4318` by default.
 
 #### Direct to CloudWatch OTLP Endpoint
 
@@ -120,7 +120,7 @@ OTEL_EXPORTER_OTLP_ENDPOINT=https://xray.us-east-1.amazonaws.com/v1/traces
 Export to Datadog, Honeycomb, Grafana Cloud, or any OTLP-compatible vendor.
 
 ```typescript
-const plugin = new StandaloneOtelPlugin({
+const plugin = new ExecutionOtelPlugin({
   exporterConfig: {
     endpoint: "https://api.honeycomb.io/v1/traces",
     headers: { "x-honeycomb-team": process.env.HONEYCOMB_API_KEY! },
@@ -162,13 +162,13 @@ arn:aws:lambda:{region}:184161586896:layer:opentelemetry-collector-{arch}-{versi
 OPENTELEMETRY_COLLECTOR_CONFIG_URI=/var/task/collector.yaml
 ```
 
-**Step 5.** Do **NOT** set `AWS_LAMBDA_EXEC_WRAPPER`. The StandaloneOtelPlugin handles all instrumentation — the collector layer only transports spans.
+**Step 5.** Do **NOT** set `AWS_LAMBDA_EXEC_WRAPPER`. The ExecutionOtelPlugin handles all instrumentation — the collector layer only transports spans.
 
 **Step 6.** Deploy and verify traces appear in X-Ray/CloudWatch.
 
 #### Option B: Legacy ADOT Lambda Layer
 
-The full ADOT Lambda layer includes both a collector and SDK auto-instrumentation. When used with StandaloneOtelPlugin, only the collector component is utilized.
+The full ADOT Lambda layer includes both a collector and SDK auto-instrumentation. When used with ExecutionOtelPlugin, only the collector component is utilized.
 
 **Step 1.** Find the ADOT Node.js layer ARN:
 
@@ -365,12 +365,12 @@ Resources:
       AutoPublishAlias: live
 ```
 
-### StandaloneOtelPluginConfig Interface
+### ExecutionOtelPluginConfig Interface
 
 All configuration options are optional. When no config is provided, the plugin auto-configures a fully working setup.
 
 ```typescript
-interface StandaloneOtelPluginConfig {
+interface ExecutionOtelPluginConfig {
   /**
    * Custom TracerProvider. When provided, the plugin skips all auto-setup
    * (no exporter, no propagators, no instrumentations are registered).
@@ -422,15 +422,15 @@ interface StandaloneOtelPluginConfig {
 
 ```typescript
 // Zero-config (recommended starting point)
-const plugin = new StandaloneOtelPlugin();
+const plugin = new ExecutionOtelPlugin();
 
 // Disable HTTP instrumentation
-const plugin = new StandaloneOtelPlugin({
+const plugin = new ExecutionOtelPlugin({
   enableHttpInstrumentation: false,
 });
 
 // Custom endpoint and headers
-const plugin = new StandaloneOtelPlugin({
+const plugin = new ExecutionOtelPlugin({
   exporterConfig: {
     endpoint: "https://otel-collector.internal:4318/v1/traces",
     headers: { Authorization: "Bearer token123" },
@@ -443,12 +443,12 @@ import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 const provider = new NodeTracerProvider({
   /* your config */
 });
-const plugin = new StandaloneOtelPlugin({ tracerProvider: provider });
+const plugin = new ExecutionOtelPlugin({ tracerProvider: provider });
 ```
 
 ### Trace Structure
 
-The StandaloneOtelPlugin produces a hierarchical trace structure with the Workflow_Span as the synthetic root:
+The ExecutionOtelPlugin produces a hierarchical trace structure with the Workflow_Span as the synthetic root:
 
 ```
 Workflow_Span (deterministic ID from execution ARN, exported on terminal status only)
@@ -467,9 +467,9 @@ Workflow_Span (deterministic ID from execution ARN, exported on terminal status 
     └── [link → Invocation_Span]
 ```
 
-**Key differences from OtelPlugin:**
+**Key differences from InvocationOtelPlugin:**
 
-| Aspect                   | OtelPlugin                     | StandaloneOtelPlugin                     |
+| Aspect                   | InvocationOtelPlugin           | ExecutionOtelPlugin                      |
 | ------------------------ | ------------------------------ | ---------------------------------------- |
 | Trace root               | Invocation span (from ADOT)    | Workflow_Span (synthetic, deterministic) |
 | Operation parent         | Invocation span                | Workflow_Span                            |
@@ -488,7 +488,7 @@ Workflow_Span (deterministic ID from execution ARN, exported on terminal status 
 
 ### Additional npm Dependencies
 
-The StandaloneOtelPlugin requires the following additional peer dependencies beyond the base package:
+The ExecutionOtelPlugin requires the following additional peer dependencies beyond the base package:
 
 ```bash
 npm install @opentelemetry/exporter-trace-otlp-http \
@@ -509,18 +509,18 @@ npm install @opentelemetry/exporter-trace-otlp-http \
 | `@opentelemetry/core`                     | Propagators, samplers                          | Required (already a peer dep)                        |
 | `@opentelemetry/instrumentation-aws-sdk`  | Auto-instrument AWS SDK calls                  | Required (already a peer dep)                        |
 
-### Migration from OtelPlugin
+### Migration from InvocationOtelPlugin
 
-If you're currently using `OtelPlugin` with the full ADOT Lambda layer, here's how to switch to `StandaloneOtelPlugin`:
+If you're currently using `InvocationOtelPlugin` with the full ADOT Lambda layer, here's how to switch to `ExecutionOtelPlugin`:
 
 #### 1. Update your handler code
 
 ```diff
-- import { OtelPlugin } from "@aws/durable-execution-sdk-js-otel";
-+ import { StandaloneOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+- import { InvocationOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
++ import { ExecutionOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
 
-- const plugin = new OtelPlugin();
-+ const plugin = new StandaloneOtelPlugin();
+- const plugin = new InvocationOtelPlugin();
++ const plugin = new ExecutionOtelPlugin();
 
   export const handler = withDurableExecution(
     async (event, context) => { /* ... */ },
@@ -537,7 +537,7 @@ If you're currently using `OtelPlugin` with the full ADOT Lambda layer, here's h
 +     OPENTELEMETRY_COLLECTOR_CONFIG_URI: /var/task/collector.yaml
 ```
 
-Remove `AWS_LAMBDA_EXEC_WRAPPER` — the StandaloneOtelPlugin handles all instrumentation internally. The ADOT layer's auto-instrumentation is no longer needed.
+Remove `AWS_LAMBDA_EXEC_WRAPPER` — the ExecutionOtelPlugin handles all instrumentation internally. The ADOT layer's auto-instrumentation is no longer needed.
 
 #### 3. Replace or keep the Lambda layer
 
@@ -575,9 +575,9 @@ After migration:
 
 ---
 
-## OtelPlugin (ADOT Layer)
+## InvocationOtelPlugin (ADOT Layer)
 
-The lightweight `OtelPlugin` is designed to work alongside the full ADOT Lambda layer (including its auto-instrumentation). It requires:
+The lightweight `InvocationOtelPlugin` is designed to work alongside the full ADOT Lambda layer (including its auto-instrumentation). It requires:
 
 1. The ADOT Lambda layer attached to your function
 2. `AWS_LAMBDA_EXEC_WRAPPER=/opt/otel-instrument` set
@@ -587,7 +587,7 @@ The lightweight `OtelPlugin` is designed to work alongside the full ADOT Lambda 
 
 ```typescript
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
-import { OtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+import { InvocationOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
 
 export const handler = withDurableExecution(
   async (event, context) => {
@@ -598,7 +598,7 @@ export const handler = withDurableExecution(
     await context.step("process", async () => process(result));
     return result;
   },
-  { plugins: [new OtelPlugin()] },
+  { plugins: [new InvocationOtelPlugin()] },
 );
 ```
 
@@ -629,10 +629,10 @@ MyFunction:
       - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
 ```
 
-### OtelPlugin Configuration
+### InvocationOtelPlugin Configuration
 
 ```typescript
-new OtelPlugin({
+new InvocationOtelPlugin({
   contextExtractor?: ContextExtractor,  // Default: xRayContextExtractor
   tracerProvider?: TracerProvider,       // Default: global TracerProvider (from ADOT)
   instrumentationName?: string,          // Default: "aws-durable-execution-sdk-js"
@@ -652,20 +652,20 @@ new OtelPlugin({
 
 ## API Reference
 
-### `StandaloneOtelPlugin`
+### `ExecutionOtelPlugin`
 
 Self-contained plugin with full TracerProvider management. Implements `DurableInstrumentationPlugin`.
 
 ```typescript
-new StandaloneOtelPlugin(config?: StandaloneOtelPluginConfig)
+new ExecutionOtelPlugin(config?: ExecutionOtelPluginConfig)
 ```
 
-### `OtelPlugin`
+### `InvocationOtelPlugin`
 
 Lightweight plugin for use with the ADOT Lambda layer. Implements `DurableInstrumentationPlugin`.
 
 ```typescript
-new OtelPlugin(config?: OtelPluginConfig)
+new InvocationOtelPlugin(config?: InvocationOtelPluginConfig)
 ```
 
 ### `DeterministicIdGenerator`
@@ -674,7 +674,7 @@ Custom OpenTelemetry `IdGenerator` that produces reproducible trace and span IDs
 
 ### `deriveWorkflowSpanId(executionArn: string): string`
 
-Derives a deterministic 16-character hex span ID from an execution ARN. Used internally by StandaloneOtelPlugin for the Workflow_Span.
+Derives a deterministic 16-character hex span ID from an execution ARN. Used internally by ExecutionOtelPlugin for the Workflow_Span.
 
 ### `xRayContextExtractor`
 
@@ -707,8 +707,8 @@ After deploying with either plugin:
 
 | Symptom                                 | Likely Cause                                                                  |
 | --------------------------------------- | ----------------------------------------------------------------------------- |
-| No traces appear (StandaloneOtelPlugin) | Collector layer not attached, or `OPENTELEMETRY_COLLECTOR_CONFIG_URI` not set |
-| No traces appear (OtelPlugin)           | ADOT layer not configured, or `AWS_LAMBDA_EXEC_WRAPPER` not set               |
+| No traces appear (ExecutionOtelPlugin)  | Collector layer not attached, or `OPENTELEMETRY_COLLECTOR_CONFIG_URI` not set |
+| No traces appear (InvocationOtelPlugin) | ADOT layer not configured, or `AWS_LAMBDA_EXEC_WRAPPER` not set               |
 | Traces fragmented across IDs            | X-Ray active tracing not enabled on the function                              |
 | Missing operation spans                 | Sampling ratio set below 1.0                                                  |
 | Collector layer errors                  | Check `collector.yaml` is in the function bundle at the path specified        |

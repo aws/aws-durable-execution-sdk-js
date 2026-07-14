@@ -30,24 +30,24 @@ import {
 } from "./deterministic-id-generator";
 import { xRayContextExtractor } from "./context-extractors";
 import type { ContextExtractor } from "./context-extractors";
-import type { StandaloneOtelPluginConfig } from "./standalone-plugin-config";
-import { createTracerProvider } from "./standalone-plugin-provider";
-import { registerStandaloneInstrumentations } from "./standalone-plugin-instrumentations";
+import type { ExecutionOtelPluginConfig } from "./execution-plugin-config";
+import { createTracerProvider } from "./execution-plugin-provider";
+import { registerStandaloneInstrumentations } from "./execution-plugin-instrumentations";
 
 const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
 
 /**
  * Self-contained OpenTelemetry instrumentation plugin for durable executions.
  *
- * Unlike OtelPlugin (which relies on the ADOT Lambda layer for auto-instrumentation),
- * StandaloneOtelPlugin creates and manages its own TracerProvider, registers
+ * Unlike InvocationOtelPlugin (which relies on the ADOT Lambda layer for auto-instrumentation),
+ * ExecutionOtelPlugin creates and manages its own TracerProvider, registers
  * instrumentations and propagators, and exports spans via OTLP to a local collector.
  *
  * Implements the DurableInstrumentationPlugin interface with a Workflow_Span as the
  * synthetic trace root, deferred operation span export, and invocation spans as
  * correlation siblings (not parents) of operation spans.
  */
-export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
+export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   // Shared utilities (reused from existing package)
   private readonly idGenerator: DeterministicIdGenerator;
   private readonly contextExtractor: ContextExtractor;
@@ -71,7 +71,7 @@ export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
   // Cold start tracking
   private isColdStart: boolean = true;
 
-  constructor(config?: StandaloneOtelPluginConfig) {
+  constructor(config?: ExecutionOtelPluginConfig) {
     const instrumentationName =
       config?.instrumentationName ?? DEFAULT_INSTRUMENTATION_NAME;
 
@@ -101,7 +101,7 @@ export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
     // 1. Store the execution ARN
     this.executionArn = info.executionArn;
 
-    // 2. Extract trace context via context extractor (same as OtelPlugin)
+    // 2. Extract trace context via context extractor (same as InvocationOtelPlugin)
     const extractedContext = this.contextExtractor(info);
 
     // 3. Set the trace ID on the ID generator
@@ -225,7 +225,7 @@ export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
         ).forceFlush();
       } catch (e) {
         console.error(
-          "[StandaloneOtelPlugin] forceFlush failed:",
+          "[ExecutionOtelPlugin] forceFlush failed:",
           e instanceof Error ? e.message : e,
         );
       }
@@ -309,7 +309,7 @@ export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
     const operationSpan = this.spanMap.get(info.id);
 
     if (info.type !== "CONTEXT") {
-      // Non-CONTEXT: just set the operation span as active context (same as OtelPlugin)
+      // Non-CONTEXT: just set the operation span as active context (same as InvocationOtelPlugin)
       if (!operationSpan) {
         return fn();
       }
@@ -473,7 +473,7 @@ export class StandaloneOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onOperationChange(_info: OperationChangeInfo): Promise<void> {
-    // No-op — same as OtelPlugin
+    // No-op — same as InvocationOtelPlugin
   }
 
   enrichLogContext(): Record<string, string | number | boolean> | undefined {

@@ -13,7 +13,7 @@ import type {
   AttemptInfo,
   AttemptEndInfo,
 } from "@aws/durable-execution-sdk-js";
-import { StandaloneOtelPlugin } from "../standalone-plugin";
+import { ExecutionOtelPlugin } from "../execution-plugin";
 
 const TEST_ARN =
   "arn:aws:states:us-east-1:123456789012:execution:my-sm:exec-integration";
@@ -102,7 +102,7 @@ function findSpan(
   return getExportedSpans(exporter).find((s) => s.name === name);
 }
 
-describe("StandaloneOtelPlugin - Integration: End-to-end span export with default provider", () => {
+describe("ExecutionOtelPlugin - Integration: End-to-end span export with default provider", () => {
   let exporter: InMemorySpanExporter;
   let provider: NodeTracerProvider;
 
@@ -133,7 +133,7 @@ describe("StandaloneOtelPlugin - Integration: End-to-end span export with defaul
      *
      * Requirements: 1.1, 4.1, 5.2, 5.4, 5.5, 5.8
      */
-    const plugin = new StandaloneOtelPlugin({
+    const plugin = new ExecutionOtelPlugin({
       useDefaultTracerProvider: true,
     });
 
@@ -279,7 +279,7 @@ describe("StandaloneOtelPlugin - Integration: End-to-end span export with defaul
      */
     const shutdownSpy = jest.spyOn(provider, "shutdown");
 
-    const plugin = new StandaloneOtelPlugin({
+    const plugin = new ExecutionOtelPlugin({
       useDefaultTracerProvider: true,
     });
 
@@ -307,7 +307,7 @@ describe("StandaloneOtelPlugin - Integration: End-to-end span export with defaul
      *
      * Requirements: 4.4
      */
-    const plugin = new StandaloneOtelPlugin({
+    const plugin = new ExecutionOtelPlugin({
       useDefaultTracerProvider: true,
     });
 

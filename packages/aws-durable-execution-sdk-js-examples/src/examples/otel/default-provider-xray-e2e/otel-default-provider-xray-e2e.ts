@@ -2,7 +2,7 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
-import { StandaloneOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+import { ExecutionOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
 import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
@@ -21,20 +21,20 @@ function isAdotEnvironment(): boolean {
   return process.env.AWS_LAMBDA_EXEC_WRAPPER === "/opt/otel-instrument";
 }
 
-// Dual-mode setup for StandaloneOtelPlugin with useDefaultTracerProvider:
+// Dual-mode setup for ExecutionOtelPlugin with useDefaultTracerProvider:
 // - Cloud (ADOT layer): The ADOT layer registers a global TracerProvider and
-//   creates an ambient invocation span. StandaloneOtelPlugin picks it up via
+//   creates an ambient invocation span. ExecutionOtelPlugin picks it up via
 //   useDefaultTracerProvider: true. No manual provider registration needed.
 // - Local: Register a NodeTracerProvider globally with InMemorySpanExporter,
-//   then create StandaloneOtelPlugin with useDefaultTracerProvider: true.
+//   then create ExecutionOtelPlugin with useDefaultTracerProvider: true.
 let exporter: InMemorySpanExporter | undefined;
-let plugin: StandaloneOtelPlugin;
+let plugin: ExecutionOtelPlugin;
 
 if (isAdotEnvironment()) {
   // Cloud mode: ADOT layer already registered a global TracerProvider.
-  // StandaloneOtelPlugin picks it up via useDefaultTracerProvider.
+  // ExecutionOtelPlugin picks it up via useDefaultTracerProvider.
   // The ambient invocation span from ADOT will be captured in savedInvocationContext.
-  plugin = new StandaloneOtelPlugin({ useDefaultTracerProvider: true });
+  plugin = new ExecutionOtelPlugin({ useDefaultTracerProvider: true });
 } else {
   // Local mode: Register a global NodeTracerProvider with InMemorySpanExporter
   exporter = new InMemorySpanExporter();
@@ -44,8 +44,8 @@ if (isAdotEnvironment()) {
   // Register globally so trace.getTracerProvider() returns this provider
   provider.register();
 
-  // StandaloneOtelPlugin picks up the global provider
-  plugin = new StandaloneOtelPlugin({ useDefaultTracerProvider: true });
+  // ExecutionOtelPlugin picks up the global provider
+  plugin = new ExecutionOtelPlugin({ useDefaultTracerProvider: true });
 }
 
 export function getSerializedSpans(): SerializedSpan[] {

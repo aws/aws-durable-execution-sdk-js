@@ -9,7 +9,7 @@ import type {
   InvocationInfo,
   InvocationEndInfo,
 } from "@aws/durable-execution-sdk-js";
-import { StandaloneOtelPlugin } from "../standalone-plugin";
+import { ExecutionOtelPlugin } from "../execution-plugin";
 
 const TEST_ARN =
   "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-123";
@@ -55,7 +55,7 @@ function findSpan(
   return getExportedSpans(exporter).find((s) => s.name === name);
 }
 
-describe("StandaloneOtelPlugin - Invocation lifecycle in default-provider mode", () => {
+describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", () => {
   let exporter: InMemorySpanExporter;
   let provider: NodeTracerProvider;
 
@@ -77,7 +77,7 @@ describe("StandaloneOtelPlugin - Invocation lifecycle in default-provider mode",
 
   describe("No Invocation_Span is created when useDefaultTracerProvider=true (Req 5.1, 5.7)", () => {
     it("does not create an Invocation span when useDefaultTracerProvider is true", async () => {
-      const plugin = new StandaloneOtelPlugin({
+      const plugin = new ExecutionOtelPlugin({
         useDefaultTracerProvider: true,
       });
 
@@ -96,7 +96,7 @@ describe("StandaloneOtelPlugin - Invocation lifecycle in default-provider mode",
     });
 
     it("creates an Invocation span when useDefaultTracerProvider is false", async () => {
-      const plugin = new StandaloneOtelPlugin({
+      const plugin = new ExecutionOtelPlugin({
         tracerProvider: provider,
       });
 
@@ -112,7 +112,7 @@ describe("StandaloneOtelPlugin - Invocation lifecycle in default-provider mode",
 
   describe("Workflow_Span has no span links to saved invocation context (Req 5.3)", () => {
     it("Workflow_Span has no links when an ambient invocation span exists", async () => {
-      const plugin = new StandaloneOtelPlugin({
+      const plugin = new ExecutionOtelPlugin({
         useDefaultTracerProvider: true,
       });
 
@@ -138,7 +138,7 @@ describe("StandaloneOtelPlugin - Invocation lifecycle in default-provider mode",
 
   describe("Ambient context is captured BEFORE Workflow_Span creation (Req 5.1)", () => {
     it("captures the ambient context with the active invocation span before Workflow_Span is created", async () => {
-      const plugin = new StandaloneOtelPlugin({
+      const plugin = new ExecutionOtelPlugin({
         useDefaultTracerProvider: true,
       });
 
@@ -181,7 +181,7 @@ describe("StandaloneOtelPlugin - Invocation lifecycle in default-provider mode",
     });
 
     it("captures context even if the ambient context has no span", async () => {
-      const plugin = new StandaloneOtelPlugin({
+      const plugin = new ExecutionOtelPlugin({
         useDefaultTracerProvider: true,
       });
 
@@ -220,7 +220,7 @@ describe("StandaloneOtelPlugin - Invocation lifecycle in default-provider mode",
         forceFlush: jest.fn().mockRejectedValue(new Error("flush failed")),
       };
 
-      const plugin = new StandaloneOtelPlugin({
+      const plugin = new ExecutionOtelPlugin({
         tracerProvider: mockProvider as any,
       });
 
@@ -239,7 +239,7 @@ describe("StandaloneOtelPlugin - Invocation lifecycle in default-provider mode",
 
       // Should have logged the error
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        "[StandaloneOtelPlugin] forceFlush failed:",
+        "[ExecutionOtelPlugin] forceFlush failed:",
         "flush failed",
       );
 
@@ -252,7 +252,7 @@ describe("StandaloneOtelPlugin - Invocation lifecycle in default-provider mode",
         forceFlush: jest.fn().mockRejectedValue("string error"),
       };
 
-      const plugin = new StandaloneOtelPlugin({
+      const plugin = new ExecutionOtelPlugin({
         tracerProvider: mockProvider as any,
       });
 
@@ -266,7 +266,7 @@ describe("StandaloneOtelPlugin - Invocation lifecycle in default-provider mode",
       );
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        "[StandaloneOtelPlugin] forceFlush failed:",
+        "[ExecutionOtelPlugin] forceFlush failed:",
         "string error",
       );
 
@@ -276,7 +276,7 @@ describe("StandaloneOtelPlugin - Invocation lifecycle in default-provider mode",
 
   describe("Per-invocation state is cleared after onInvocationEnd (Req 4.3, 5.7)", () => {
     it("clears savedInvocationContext after onInvocationEnd", async () => {
-      const plugin = new StandaloneOtelPlugin({
+      const plugin = new ExecutionOtelPlugin({
         useDefaultTracerProvider: true,
       });
 
@@ -330,7 +330,7 @@ describe("StandaloneOtelPlugin - Invocation lifecycle in default-provider mode",
     });
 
     it("clears workflowSpan, invocationSpan, and spanMap after onInvocationEnd", async () => {
-      const plugin = new StandaloneOtelPlugin({
+      const plugin = new ExecutionOtelPlugin({
         useDefaultTracerProvider: true,
       });
 
@@ -373,7 +373,7 @@ describe("StandaloneOtelPlugin - Invocation lifecycle in default-provider mode",
     });
 
     it("clears attemptSpan after onInvocationEnd", async () => {
-      const plugin = new StandaloneOtelPlugin({
+      const plugin = new ExecutionOtelPlugin({
         useDefaultTracerProvider: true,
       });
 

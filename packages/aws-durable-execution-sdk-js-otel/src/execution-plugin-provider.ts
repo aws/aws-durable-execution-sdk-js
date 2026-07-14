@@ -13,7 +13,7 @@ import {
   NodeTracerProvider,
   TraceIdRatioBasedSampler,
 } from "@opentelemetry/sdk-trace-node";
-import type { StandaloneOtelPluginConfig } from "./standalone-plugin-config";
+import type { ExecutionOtelPluginConfig } from "./execution-plugin-config";
 
 const DEFAULT_OTLP_ENDPOINT = "http://localhost:4318/v1/traces";
 
@@ -77,7 +77,7 @@ function buildLambdaResource() {
 
 /**
  * Factory function that creates and configures a `TracerProvider` for the
- * StandaloneOtelPlugin.
+ * ExecutionOtelPlugin.
  *
  * When a custom `tracerProvider` is supplied in the config, it is returned
  * as-is with `ownsProvider: false` — no exporter, propagator, or sampler
@@ -91,7 +91,7 @@ function buildLambdaResource() {
  * - Lambda resource attributes when `AWS_LAMBDA_FUNCTION_NAME` is set
  */
 export function createTracerProvider(
-  config?: StandaloneOtelPluginConfig,
+  config?: ExecutionOtelPluginConfig,
 ): ProviderResult {
   // Priority 1: If a custom provider is supplied, skip all auto-setup.
   if (config?.tracerProvider) {
