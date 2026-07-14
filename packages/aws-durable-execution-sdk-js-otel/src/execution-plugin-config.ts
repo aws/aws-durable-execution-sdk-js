@@ -76,4 +76,10 @@ export interface ExecutionOtelPluginConfig {
    * Defaults to false.
    */
   useDefaultTracerProvider?: boolean;
+
+  /**
+   * Custom name for the root Workflow span.
+   * Defaults to `"Workflow"`.
+   */
+  workflowSpanName?: string;
 }

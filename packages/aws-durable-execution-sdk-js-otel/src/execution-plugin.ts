@@ -68,6 +68,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   private readonly useDefaultTracerProvider: boolean;
   private savedInvocationContext: Context | undefined;
 
+  // Workflow span name (configurable)
+  private readonly workflowSpanName: string;
+
   // Cold start tracking
   private isColdStart: boolean = true;
 
@@ -78,6 +81,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     this.idGenerator = new DeterministicIdGenerator();
     this.contextExtractor = config?.contextExtractor ?? xRayContextExtractor;
     this.useDefaultTracerProvider = config?.useDefaultTracerProvider ?? false;
+    this.workflowSpanName = config?.workflowSpanName ?? "Workflow";
 
     // Create or accept TracerProvider via the provider factory
     const { tracerProvider, ownsProvider } = createTracerProvider(config);
@@ -126,7 +130,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
     // 6. Create the Workflow_Span with deterministic ID (always as root — no parent)
     this.workflowSpan = this.tracer.startSpan(
-      "Workflow",
+      this.workflowSpanName,
       {
         attributes: {
           "durable.execution.arn": info.executionArn,
