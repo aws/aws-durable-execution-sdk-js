@@ -1,3 +1,4 @@
+import { refreshLogConfig } from "../../utils/logger/logger";
 import { createParallelHandler } from "./parallel-handler";
 import {
   ExecutionContext,
@@ -189,6 +190,7 @@ describe("Parallel Handler", () => {
     // Set verbose mode for this test
     const originalEnv = process.env.DURABLE_VERBOSE_MODE;
     process.env.DURABLE_VERBOSE_MODE = "true";
+    refreshLogConfig();
 
     const consoleSpy = jest.spyOn(console, "debug").mockImplementation();
 
@@ -248,6 +250,7 @@ describe("Parallel Handler", () => {
     } else {
       delete process.env.DURABLE_VERBOSE_MODE;
     }
+    refreshLogConfig();
   });
 
   describe("named branches", () => {

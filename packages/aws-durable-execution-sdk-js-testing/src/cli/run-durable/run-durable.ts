@@ -14,6 +14,14 @@ export async function runDurable() {
   const { filePath, options } = parseCliArgs();
 
   try {
+    // Set up the environment before anything else. Two mechanisms cooperate
+    // here: setupEnvironment refreshes the log-flag cache of the SDK instance
+    // already loaded by this CLI's own import chain (the test-runner imports
+    // SDK enums at module load, freezing the cache at process startup), and
+    // setting the env var before the handler import covers any second SDK
+    // instance the handler's module graph may load (e.g. via a tsx ESM loader).
+    await setupEnvironment(options.verbose);
+
     // Validate file and load handler
     const absolutePath = validateFilePath(filePath);
     const handler = await loadAndValidateHandler(
@@ -21,9 +29,6 @@ export async function runDurable() {
       options.handlerExport,
       filePath,
     );
-
-    // Set up environment
-    setupEnvironment(options.verbose);
 
     // Set up test environment
     await LocalDurableTestRunner.setupTestEnvironment({

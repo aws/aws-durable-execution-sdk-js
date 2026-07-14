@@ -3,16 +3,36 @@ import { Operation } from "@aws-sdk/client-lambda";
 
 const HASH_LENGTH = 16;
 
+// Step IDs are stable strings within an execution and hashing is pure, so
+// results are memoized. When the bound is reached the cache is cleared and
+// rebuilt rather than frozen, keeping amortized caching for map-heavy
+// workloads that exceed it (an occasional full re-hash beats paying full
+// hash cost for every new ID forever).
+// Note: module-global, so it persists across warm Lambda invocations —
+// beneficial, since step IDs repeat across replays of the same function.
+const MAX_HASH_CACHE_SIZE = 10_000;
+const hashCache = new Map<string, string>();
+
 /**
- * Creates an MD5 hash of the input string for better performance than SHA-256
+ * Creates an MD5 hash of the input string for better performance than SHA-256.
+ * Results are memoized since IDs repeat frequently in hot paths (checkpoint
+ * batching, step data lookups, status-change resolution).
  * @param input - The string to hash
  * @returns The truncated hexadecimal hash string
  */
 export const hashId = (input: string): string => {
-  return createHash("md5")
-    .update(input)
-    .digest("hex")
-    .substring(0, HASH_LENGTH);
+  let hash = hashCache.get(input);
+  if (hash === undefined) {
+    hash = createHash("md5")
+      .update(input)
+      .digest("hex")
+      .substring(0, HASH_LENGTH);
+    if (hashCache.size >= MAX_HASH_CACHE_SIZE) {
+      hashCache.clear();
+    }
+    hashCache.set(input, hash);
+  }
+  return hash;
 };
 
 /**
