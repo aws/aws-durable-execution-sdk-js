@@ -10,7 +10,7 @@ import Alert from "@cloudscape-design/components/alert";
 import Select, { type SelectProps } from "@cloudscape-design/components/select";
 import ProgressBar from "@cloudscape-design/components/progress-bar";
 import Tabs from "@cloudscape-design/components/tabs";
-import type { Settings } from "./types";
+import type { Settings, DestinationTestReport } from "./types";
 import { postMessage } from "./vscode";
 
 interface Props {
@@ -20,6 +20,14 @@ interface Props {
   downloadPercent: number;
   onDismiss: () => void;
   onSave: (settings: Settings) => void;
+  /** True while a "Test connection" run is in flight. */
+  testing: boolean;
+  /** Result of the last test this session, or null if none / cleared. */
+  testResult: DestinationTestReport | null;
+  /** Kick off a connectivity test for the current (unsaved) form values. */
+  onTest: (settings: Settings) => void;
+  /** Clear a stale test result (called on open and on destination change). */
+  onClearTest: () => void;
 }
 
 const DEST_OPTIONS: SelectProps.Option[] = [
@@ -51,7 +59,7 @@ const LOCAL_MODEL_OPTIONS: SelectProps.Option[] = [
   },
 ];
 
-export function SettingsModal({ visible, settings, modelDownloaded, downloadPercent, onDismiss, onSave }: Props) {
+export function SettingsModal({ visible, settings, modelDownloaded, downloadPercent, onDismiss, onSave, testing, testResult, onTest, onClearTest }: Props) {
   const [form, setForm] = useState<Settings>(settings);
   const [downloading, setDownloading] = useState(false);
 
@@ -59,8 +67,17 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
     setForm(settings);
   }, [settings, visible]);
 
-  const update = (field: keyof Settings, value: string | boolean) =>
+  // Drop any prior test result when the modal (re)opens so a stale pass/fail
+  // from a previous session isn't shown against freshly-loaded settings.
+  useEffect(() => {
+    onClearTest();
+  }, [visible, onClearTest]);
+
+  const update = (field: keyof Settings, value: string | boolean) => {
+    // Changing the destination invalidates any existing test result.
+    if (field === "destinationType") onClearTest();
     setForm((f) => ({ ...f, [field]: value }));
+  };
 
   const canSave = form.llmProvider !== "local" || modelDownloaded;
 
@@ -191,6 +208,47 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
                     </Box>
                   </SpaceBetween>
                 )}
+
+                <SpaceBetween size="xs">
+                  <div>
+                    <Button
+                      onClick={() => onTest(form)}
+                      loading={testing}
+                      disabled={testing}
+                    >
+                      Test connection
+                    </Button>
+                  </div>
+                  <Box color="text-body-secondary" fontSize="body-s">
+                    Runs read-only checks against this destination (and confirms
+                    the config is complete) without saving. For S3 + Athena it
+                    also verifies the Glue table and runs a test query.
+                  </Box>
+                  {testResult && (
+                    <Alert type={testResult.ok ? "success" : "error"} header={testResult.summary}>
+                      {testResult.checks.length > 0 && (
+                        <SpaceBetween size="xxs">
+                          {testResult.checks.map((c, i) => (
+                            <Box key={i}>
+                              <Box
+                                variant="span"
+                                fontWeight="bold"
+                                color={c.ok ? "text-status-success" : "text-status-error"}
+                              >
+                                {c.ok ? "✓" : "✗"} {c.label}
+                              </Box>
+                              {c.detail && (
+                                <Box variant="span" color="text-body-secondary">
+                                  {" "}— {c.detail}
+                                </Box>
+                              )}
+                            </Box>
+                          ))}
+                        </SpaceBetween>
+                      )}
+                    </Alert>
+                  )}
+                </SpaceBetween>
               </SpaceBetween>
             ),
           },
