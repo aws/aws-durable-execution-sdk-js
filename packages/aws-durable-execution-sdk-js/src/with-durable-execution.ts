@@ -9,8 +9,6 @@ import { SerdesFailedError } from "./errors/serdes-errors/serdes-errors";
 import { isUnrecoverableInvocationError } from "./errors/unrecoverable-error/unrecoverable-error";
 import { isNonRetryableCustomerError } from "./errors/non-retryable-errors";
 import { TerminationReason } from "./termination-manager/types";
-import { resolveRootPreserveChildDepth } from "./utils/child-operations-depth/child-operations-depth";
-import { validateDurableExecutionConfig } from "./config-validation/config-validation";
 
 import {
   DurableLogger,
@@ -33,15 +31,12 @@ import { createPluginRunner } from "./utils/plugin/plugin-runner";
 import { toOperationInfoMap } from "./utils/operation/operation";
 import {
   DurableInstrumentationPlugin,
-  InvocationBaseInfo,
   InvocationInfo,
-  OperationInfo,
   PluginInvocationStatus,
 } from "./types/plugin";
 
 // Lambda response size limit is 6MB
 const LAMBDA_RESPONSE_SIZE_LIMIT = 6 * 1024 * 1024 - 50; // 6MB in bytes, minus 50 bytes for envelope
-
 async function runHandler<
   Input,
   Output,
@@ -54,7 +49,6 @@ async function runHandler<
   checkpointToken: string,
   handler: DurableExecutionHandler<Input, Output, Logger>,
   plugin: DurableInstrumentationPlugin,
-  config: DurableExecutionConfig | undefined,
 ): Promise<DurableExecutionInvocationOutput> {
   // Create checkpoint manager and step data emitter
   const stepDataEmitter = new EventEmitter();
@@ -81,54 +75,15 @@ async function runHandler<
     initialExecutionEvent?.ExecutionDetails?.InputPayload ?? "{}",
   );
 
-  const allOperations = toOperationInfoMap(executionContext._stepData);
-  const updatedOperationIds = event.UpdatedOperationIds ?? [];
-  const updatedOperations: Record<string, OperationInfo> = {};
-  for (const id of updatedOperationIds) {
-    if (allOperations[id]) {
-      updatedOperations[id] = allOperations[id];
-    }
-  }
-
-  const invocationBaseInfo: InvocationBaseInfo = {
+  const invocationInfo: InvocationInfo = {
     requestId: executionContext.requestId,
     executionArn: executionContext.durableExecutionArn,
-    executionInput: customerHandlerEvent,
-    operations: allOperations,
-  };
-
-  const invocationInfo: InvocationInfo = {
-    ...invocationBaseInfo,
     isFirstInvocation:
       durableExecutionMode === DurableExecutionMode.ExecutionMode,
-    executionStartTimestamp: initialExecutionEvent?.StartTimestamp
-      ? new Date(initialExecutionEvent.StartTimestamp)
-      : undefined,
-    updatedOperations,
+    executionInput: customerHandlerEvent,
+    operations: toOperationInfoMap(executionContext._stepData),
   };
   await plugin.onInvocationStart?.(invocationInfo);
-
-  // Reject invalid configuration before anything else. It's a non-retryable
-  // error and no durable operations have started yet, so fail fast: return
-  // FAILED without creating the context or invoking the user handler. We return
-  // FAILED (rather than throw) so Lambda does not retry a permanently-broken
-  // configuration.
-  const configError = validateDurableExecutionConfig(config);
-  if (configError) {
-    const error = new Error(configError);
-    await plugin.onInvocationEnd?.({
-      ...invocationBaseInfo,
-      status: PluginInvocationStatus.FAILED,
-      executionInput: customerHandlerEvent,
-      executionError: error,
-      executionResult: undefined,
-      operations: allOperations,
-    });
-    return {
-      Status: InvocationStatus.FAILED,
-      Error: createErrorObjectFromError(error),
-    };
-  }
 
   // Set the checkpoint terminating callback on the termination manager
   executionContext.terminationManager.setCheckpointTerminatingCallback(() => {
@@ -142,11 +97,6 @@ async function runHandler<
     setTerminating: (): void => checkpointManager.setTerminating(),
   };
 
-  // Config was validated above; map childOperationsDepth to the root budget.
-  const rootPreserveChildDepth = resolveRootPreserveChildDepth(
-    config?.pluginsConfig?.childOperationsDepth,
-  );
-
   const durableContext = createDurableContext<Logger>(
     executionContext,
     context,
@@ -158,8 +108,6 @@ async function runHandler<
     ) as Logger,
     undefined,
     durableExecution,
-    undefined,
-    rootPreserveChildDepth,
   );
 
   const executeInvocation =
@@ -247,7 +195,7 @@ async function runHandler<
             ),
           };
           await plugin.onInvocationEnd?.({
-            ...invocationBaseInfo,
+            ...invocationInfo,
             status: PluginInvocationStatus.FAILED,
             executionInput: customerHandlerEvent,
             executionError: result.error || new Error(result.message),
@@ -261,7 +209,7 @@ async function runHandler<
           log("🛑", "Returning termination response");
 
           await plugin.onInvocationEnd?.({
-            ...invocationBaseInfo,
+            ...invocationInfo,
             status: PluginInvocationStatus.PENDING,
             executionInput: customerHandlerEvent,
             executionResult: undefined,
@@ -316,7 +264,7 @@ async function runHandler<
             }
 
             await plugin.onInvocationEnd?.({
-              ...invocationBaseInfo,
+              ...invocationInfo,
               status: PluginInvocationStatus.SUCCEEDED,
               executionInput: customerHandlerEvent,
               executionResult: result,
@@ -350,7 +298,7 @@ async function runHandler<
         }
 
         await plugin.onInvocationEnd?.({
-          ...invocationBaseInfo,
+          ...invocationInfo,
           status: PluginInvocationStatus.SUCCEEDED,
           executionInput: customerHandlerEvent,
           executionResult: result,
@@ -372,7 +320,7 @@ async function runHandler<
             "Unrecoverable invocation error - terminating Lambda execution",
           );
           await plugin.onInvocationEnd?.({
-            ...invocationBaseInfo,
+            ...invocationInfo,
             status: PluginInvocationStatus.RETRYING,
             executionInput: customerHandlerEvent,
             executionError: error,
@@ -395,7 +343,7 @@ async function runHandler<
         }
 
         await plugin.onInvocationEnd?.({
-          ...invocationBaseInfo,
+          ...invocationInfo,
           status: PluginInvocationStatus.FAILED,
           executionInput: customerHandlerEvent,
           executionError:
@@ -528,7 +476,6 @@ export const withDurableExecution = <
         checkpointToken,
         handler,
         plugin,
-        config,
       );
     } catch (error) {
       // Non-retryable customer errors (e.g., KMS key misconfiguration) should
