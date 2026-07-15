@@ -12,6 +12,7 @@ import Autosuggest from "@cloudscape-design/components/autosuggest";
 import ProgressBar from "@cloudscape-design/components/progress-bar";
 import Tabs from "@cloudscape-design/components/tabs";
 import type { Settings, DestinationTestReport } from "./types";
+import { RECOMMENDED_BEDROCK_MODELS } from "./types";
 import { postMessage } from "./vscode";
 
 interface Props {
@@ -344,7 +345,27 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
                       <Autosuggest
                         value={form.bedrockModelId}
                         onChange={({ detail }) => update("bedrockModelId", detail.value)}
-                        options={bedrockModels.map((m) => ({ value: m }))}
+                        options={[
+                          {
+                            label: "Recommended",
+                            options: RECOMMENDED_BEDROCK_MODELS,
+                          },
+                          ...(bedrockModels.length
+                            ? [
+                                {
+                                  label: "All available in your account",
+                                  options: bedrockModels
+                                    .filter(
+                                      (m) =>
+                                        !RECOMMENDED_BEDROCK_MODELS.some(
+                                          (r) => r.value === m,
+                                        ),
+                                    )
+                                    .map((m) => ({ value: m })),
+                                },
+                              ]
+                            : []),
+                        ]}
                         enteredTextLabel={(v) => `Use "${v}"`}
                         placeholder="us.anthropic.claude-sonnet-5"
                         empty={
@@ -368,10 +389,12 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
                         </Button>
                       </div>
                       <Box color="text-body-secondary" fontSize="body-s">
-                        Uses your configured Region and AWS Profile. Shows models
-                        available in the Region (inference profiles + on-demand
-                        models); some may still need model access granted in the
-                        Bedrock console.
+                        A curated set of recommended models is shown by default.
+                        Click List available models to fetch everything your
+                        Region and AWS Profile can use (inference profiles +
+                        on-demand models); some may still need model access
+                        granted in the Bedrock console. You can also type any
+                        model / inference profile ID directly.
                       </Box>
                       {bedrockModelsError && (
                         <Alert type="error" header="Couldn't list models">
