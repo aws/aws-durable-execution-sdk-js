@@ -110,15 +110,6 @@
 - [x] `HttpExporter` — generic POST/PUT to any URL
 - [x] `FileExporter` — filesystem (EFS, S3 mount, /tmp) in ndjson or json mode
 
-> `TimestreamExporter` (Amazon Timestream for LiveAnalytics) was implemented and
-> then removed: AWS closed LiveAnalytics to new customers on 2025-06-20 (existing
-> customers only; see
-> [availability change](https://docs.aws.amazon.com/timestream/latest/developerguide/AmazonTimestreamForLiveAnalytics-availability-change.html)),
-> so provisioning it fails for any new deployment. AWS's replacement,
-> Timestream for InfluxDB, is architecturally different (instance-based, VPC-bound,
-> line-protocol writes rather than a stateless `WriteRecords` API call) and would
-> need its own exporter design, not a drop-in swap.
-
 ## Testing
 
 > Jest is set up for the package (`jest.config.js` + `npm test`), mirroring the
