@@ -30,9 +30,9 @@ import {
 } from "./deterministic-id-generator";
 import { xRayContextExtractor } from "./context-extractors";
 import type { ContextExtractor } from "./context-extractors";
-import type { ExecutionOtelPluginConfig } from "./execution-plugin-config";
-import { createTracerProvider } from "./execution-plugin-provider";
-import { registerStandaloneInstrumentations } from "./execution-plugin-instrumentations";
+import type { OtelPluginConfig } from "./otel-plugin-config";
+import { createTracerProvider } from "./otel-plugin-provider";
+import { registerStandaloneInstrumentations } from "./otel-plugin-instrumentations";
 
 const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
 
@@ -74,7 +74,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   // Cold start tracking
   private isColdStart: boolean = true;
 
-  constructor(config?: ExecutionOtelPluginConfig) {
+  constructor(config?: OtelPluginConfig) {
     const instrumentationName =
       config?.instrumentationName ?? DEFAULT_INSTRUMENTATION_NAME;
 

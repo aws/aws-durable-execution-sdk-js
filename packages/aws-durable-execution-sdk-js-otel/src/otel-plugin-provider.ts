@@ -13,7 +13,7 @@ import {
   NodeTracerProvider,
   TraceIdRatioBasedSampler,
 } from "@opentelemetry/sdk-trace-node";
-import type { ExecutionOtelPluginConfig } from "./execution-plugin-config";
+import type { OtelPluginConfig } from "./otel-plugin-config";
 
 const DEFAULT_OTLP_ENDPOINT = "http://localhost:4318/v1/traces";
 
@@ -91,7 +91,7 @@ function buildLambdaResource() {
  * - Lambda resource attributes when `AWS_LAMBDA_FUNCTION_NAME` is set
  */
 export function createTracerProvider(
-  config?: ExecutionOtelPluginConfig,
+  config?: OtelPluginConfig,
 ): ProviderResult {
   // Priority 1: If a custom provider is supplied, skip all auto-setup.
   if (config?.tracerProvider) {

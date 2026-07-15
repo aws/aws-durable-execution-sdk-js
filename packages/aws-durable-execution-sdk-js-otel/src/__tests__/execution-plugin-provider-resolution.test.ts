@@ -11,9 +11,9 @@ import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
-import { createTracerProvider } from "../execution-plugin-provider";
-import { registerStandaloneInstrumentations } from "../execution-plugin-instrumentations";
-import type { ExecutionOtelPluginConfig } from "../execution-plugin-config";
+import { createTracerProvider } from "../otel-plugin-provider";
+import { registerStandaloneInstrumentations } from "../otel-plugin-instrumentations";
+import type { OtelPluginConfig } from "../otel-plugin-config";
 
 // Save original env
 const originalEnv = process.env;

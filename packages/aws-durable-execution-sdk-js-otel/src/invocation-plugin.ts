@@ -11,8 +11,6 @@ import type {
 import type { DurableExecutionInvocationOutput } from "@aws/durable-execution-sdk-js";
 import type { TracerProvider, Tracer, Span } from "@opentelemetry/api";
 import { context, trace, SpanStatusCode } from "@opentelemetry/api";
-import { AwsInstrumentation } from "@opentelemetry/instrumentation-aws-sdk";
-import { registerInstrumentations } from "@opentelemetry/instrumentation";
 import {
   DeterministicIdGenerator,
   deriveTraceIdFromArn,
@@ -20,18 +18,15 @@ import {
 } from "./deterministic-id-generator";
 import { xRayContextExtractor } from "./context-extractors";
 import type { ContextExtractor } from "./context-extractors";
+import type { OtelPluginConfig } from "./otel-plugin-config";
+import { createTracerProvider } from "./otel-plugin-provider";
+import { registerStandaloneInstrumentations } from "./otel-plugin-instrumentations";
 
 /**
- * Configuration options for the InvocationOtelPlugin.
+ * @deprecated Use `OtelPluginConfig` instead.
+ * This type alias is kept for backward compatibility.
  */
-export interface InvocationOtelPluginConfig {
-  /** Custom TracerProvider. If omitted, the plugin creates one internally. */
-  tracerProvider?: TracerProvider;
-  /** Context extractor function. Defaults to xRayContextExtractor. */
-  contextExtractor?: ContextExtractor;
-  /** Instrumentation scope name. Defaults to "aws-durable-execution-sdk-js". */
-  instrumentationName?: string;
-}
+export type InvocationOtelPluginConfig = OtelPluginConfig;
 
 const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
 
@@ -55,27 +50,25 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   private executionArn: string = "";
   private attemptSpan: Span | undefined;
 
-  constructor(config?: InvocationOtelPluginConfig) {
+  constructor(config?: OtelPluginConfig) {
     const instrumentationName =
       config?.instrumentationName ?? DEFAULT_INSTRUMENTATION_NAME;
 
     this.idGenerator = new DeterministicIdGenerator();
     this.contextExtractor = config?.contextExtractor ?? xRayContextExtractor;
 
-    if (config?.tracerProvider) {
-      this.tracerProvider = config.tracerProvider;
-    } else {
-      this.tracerProvider = trace.getTracerProvider();
-      registerInstrumentations({
-        tracerProvider: this.tracerProvider,
-        instrumentations: [
-          new AwsInstrumentation({
-            suppressInternalInstrumentation: true,
-            sqsExtractContextPropagationFromPayload: true,
-          }),
-        ],
-      });
-    }
+    // For InvocationOtelPlugin, default useDefaultTracerProvider to true
+    // when neither tracerProvider nor useDefaultTracerProvider is explicitly set.
+    const resolvedConfig: OtelPluginConfig =
+      config?.tracerProvider || config?.useDefaultTracerProvider !== undefined
+        ? { ...config }
+        : { ...config, useDefaultTracerProvider: true };
+
+    const { tracerProvider } = createTracerProvider(resolvedConfig);
+    this.tracerProvider = tracerProvider;
+
+    // Register instrumentations using the shared module
+    registerStandaloneInstrumentations(this.tracerProvider, resolvedConfig);
 
     this.tracer = this.tracerProvider.getTracer(instrumentationName);
 
