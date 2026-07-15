@@ -9,6 +9,7 @@ import {
   DynamoDBExporter,
   AuroraExporter,
   RedshiftExporter,
+  OpenSearchExporter,
   SQSExporter,
   S3Exporter,
 } from "@aws/durable-execution-sdk-js-insight";
@@ -60,6 +61,15 @@ const exporters = [
           table: process.env.INSIGHT_REDSHIFT_TABLE ?? "workflow_insight",
           schema: process.env.INSIGHT_REDSHIFT_SCHEMA ?? "public",
           region: process.env.AWS_REGION,
+        }),
+      ]
+    : []),
+  ...(process.env.INSIGHT_OPENSEARCH_ENDPOINT
+    ? [
+        new OpenSearchExporter({
+          endpoint: process.env.INSIGHT_OPENSEARCH_ENDPOINT,
+          indexName: process.env.INSIGHT_OPENSEARCH_INDEX ?? "workflow-insight",
+          region: process.env.AWS_REGION!,
         }),
       ]
     : []),

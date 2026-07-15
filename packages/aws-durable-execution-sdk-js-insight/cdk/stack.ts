@@ -482,6 +482,7 @@ export class InsightDestinationsStack extends cdk.Stack {
     }
 
     // --- OpenSearch ---
+    let openSearchEndpoint: string | undefined;
     if (config.destinations.opensearch.enabled) {
       const domain = new opensearch.Domain(this, "InsightOpenSearch", {
         domainName: config.destinations.opensearch.domainName,
@@ -528,6 +529,13 @@ export class InsightDestinationsStack extends cdk.Stack {
           resources: [`${domain.domainArn}/*`],
         }),
       );
+
+      // Endpoint (hostname, no scheme) — exposed to the example function so its
+      // OpenSearchExporter can index records, and output for the extension.
+      openSearchEndpoint = domain.domainEndpoint;
+      new cdk.CfnOutput(this, "OpenSearchEndpoint", {
+        value: `https://${domain.domainEndpoint}`,
+      });
     }
 
     // --- Firehose ---
@@ -672,6 +680,12 @@ export class InsightDestinationsStack extends cdk.Stack {
           config.destinations.redshift.databaseName;
         envVars.INSIGHT_REDSHIFT_TABLE = config.destinations.redshift.tableName;
         envVars.INSIGHT_REDSHIFT_SCHEMA = config.destinations.redshift.schema;
+      }
+      if (config.destinations.opensearch.enabled && openSearchEndpoint) {
+        // OpenSearchExporter signs requests with SigV4 using the function's
+        // role (granted es:ESHttpPut/Post above and allow-listed in the domain
+        // access policy). Endpoint needs the https:// scheme.
+        envVars.INSIGHT_OPENSEARCH_ENDPOINT = `https://${openSearchEndpoint}`;
       }
 
       const exampleFn = new lambdaNode.NodejsFunction(

@@ -19,6 +19,8 @@ export interface InsightConfig {
   redshiftDatabase: string;
   redshiftTable: string;
   redshiftSchema: string;
+  opensearchEndpoint: string;
+  opensearchIndex: string;
   sqsQueueUrl: string;
   sqsDeleteAfterRead: boolean;
   athenaDatabase: string;
@@ -97,11 +99,13 @@ function normalizeConfig(src: ConfigSource): InsightConfig {
           ? ("aurora" as const)
           : raw === "redshift"
             ? ("redshift" as const)
-            : raw === "sqs"
-              ? ("sqs" as const)
-              : raw === "s3"
-                ? ("s3" as const)
-                : ("cloudwatch-logs-exporter" as const);
+            : raw === "opensearch"
+              ? ("opensearch" as const)
+              : raw === "sqs"
+                ? ("sqs" as const)
+                : raw === "s3"
+                  ? ("s3" as const)
+                  : ("cloudwatch-logs-exporter" as const);
   const dynamodbTableName = (src.getString("dynamodbTableName") || "").trim();
   const auroraResourceArn = (src.getString("auroraResourceArn") || "").trim();
   const auroraSecretArn = (src.getString("auroraSecretArn") || "").trim();
@@ -123,6 +127,9 @@ function normalizeConfig(src: ConfigSource): InsightConfig {
     (src.getString("redshiftTable") || "").trim() || "workflow_insight";
   const redshiftSchema =
     (src.getString("redshiftSchema") || "").trim() || "public";
+  const opensearchEndpoint = (src.getString("opensearchEndpoint") || "").trim();
+  const opensearchIndex =
+    (src.getString("opensearchIndex") || "").trim() || "workflow-insight";
   const sqsQueueUrl = (src.getString("sqsQueueUrl") || "").trim();
   const sqsDeleteAfterRead = src.getBool("sqsDeleteAfterRead") ?? false;
   const athenaDatabase = (src.getString("athenaDatabase") || "").trim();
@@ -181,6 +188,8 @@ function normalizeConfig(src: ConfigSource): InsightConfig {
     redshiftDatabase,
     redshiftTable,
     redshiftSchema,
+    opensearchEndpoint,
+    opensearchIndex,
     sqsQueueUrl,
     sqsDeleteAfterRead,
     athenaDatabase,

@@ -23,6 +23,9 @@ jest.mock("./aurora", () => ({
 jest.mock("./redshift", () => ({
   runRedshiftQuery: jest.fn(),
 }));
+jest.mock("./opensearch", () => ({
+  pingOpenSearch: jest.fn(),
+}));
 jest.mock("./config", () => ({
   resolveCredentials: jest.fn(() => ({})),
 }));
@@ -32,6 +35,7 @@ import { testDestination } from "./destinationTest";
 import { tableExists, runAthenaQuery } from "./athena";
 import { runAuroraQuery } from "./aurora";
 import { runRedshiftQuery } from "./redshift";
+import { pingOpenSearch } from "./opensearch";
 
 function baseCfg(overrides: Partial<InsightConfig>): InsightConfig {
   return {
@@ -50,6 +54,8 @@ function baseCfg(overrides: Partial<InsightConfig>): InsightConfig {
     redshiftDatabase: "dev",
     redshiftTable: "workflow_insight",
     redshiftSchema: "public",
+    opensearchEndpoint: "",
+    opensearchIndex: "workflow-insight",
     sqsQueueUrl: "",
     sqsDeleteAfterRead: false,
     athenaDatabase: "",
@@ -231,6 +237,46 @@ describe("testDestination — Redshift", () => {
     );
     expect(r.ok).toBe(false);
     expect(r.checks.at(-1)?.detail).toMatch(/relation does not exist/);
+  });
+});
+
+describe("testDestination — OpenSearch", () => {
+  it("fails when endpoint missing", async () => {
+    const r = await testDestination(baseCfg({ destinationType: "opensearch" }));
+    expect(r.ok).toBe(false);
+    expect(pingOpenSearch).not.toHaveBeenCalled();
+  });
+
+  it("passes when the SigV4 ping succeeds", async () => {
+    (pingOpenSearch as jest.Mock).mockResolvedValue(
+      'Connected to cluster "x".',
+    );
+    const r = await testDestination(
+      baseCfg({
+        destinationType: "opensearch",
+        opensearchEndpoint: "https://d.us-east-1.es.amazonaws.com",
+      }),
+    );
+    expect(r.ok).toBe(true);
+    expect(pingOpenSearch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endpoint: "https://d.us-east-1.es.amazonaws.com",
+      }),
+    );
+  });
+
+  it("fails when the ping errors (e.g. 403 not authorized)", async () => {
+    (pingOpenSearch as jest.Mock).mockRejectedValue(
+      new Error("OpenSearch connection failed (403 Forbidden)"),
+    );
+    const r = await testDestination(
+      baseCfg({
+        destinationType: "opensearch",
+        opensearchEndpoint: "https://d.us-east-1.es.amazonaws.com",
+      }),
+    );
+    expect(r.ok).toBe(false);
+    expect(r.checks.at(-1)?.detail).toMatch(/403/);
   });
 });
 
