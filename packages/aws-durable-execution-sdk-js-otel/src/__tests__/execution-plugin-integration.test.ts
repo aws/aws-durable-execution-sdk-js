@@ -130,8 +130,6 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
      * Exercises: onInvocationStart (with ambient invocation span) →
      * onOperationStart → onOperationAttemptStart → onOperationAttemptEnd →
      * onOperationEnd → wrapChildContextFn (CONTEXT type) → onInvocationEnd
-     *
-     * Requirements: 1.1, 4.1, 5.2, 5.4, 5.5, 5.8
      */
     const plugin = new ExecutionOtelPlugin({
       useDefaultTracerProvider: true,
@@ -274,8 +272,6 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
      * stored internally is the ProxyTracerProvider from trace.getTracerProvider(),
      * which may not expose forceFlush directly. The plugin checks for forceFlush
      * presence and calls it if available.
-     *
-     * Requirements: 4.1, 4.2
      */
     const shutdownSpy = jest.spyOn(provider, "shutdown");
 
@@ -304,8 +300,6 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     /**
      * Verifies that per-invocation state is properly cleared between invocations
      * and the global provider remains functional across multiple lifecycles.
-     *
-     * Requirements: 4.4
      */
     const plugin = new ExecutionOtelPlugin({
       useDefaultTracerProvider: true,
@@ -366,6 +360,102 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     // No links to the first ambient span
     expect(secondOpSpan!.links[0].context.spanId).not.toBe(
       ambientSpan1.spanContext().spanId,
+    );
+  });
+});
+
+describe("ExecutionOtelPlugin - Parent-child workflow span ID collision prevention", () => {
+  let exporter: InMemorySpanExporter;
+  let provider: NodeTracerProvider;
+
+  beforeEach(() => {
+    exporter = new InMemorySpanExporter();
+    provider = new NodeTracerProvider({
+      spanProcessors: [new SimpleSpanProcessor(exporter)],
+    });
+    provider.register();
+  });
+
+  afterEach(async () => {
+    await provider.shutdown();
+    exporter.reset();
+    trace.disable();
+    context.disable();
+    propagation.disable();
+  });
+
+  it("parent and child workflows with same operation position produce distinct span IDs", async () => {
+    const { ExecutionOtelPlugin } = await import("../execution-plugin");
+
+    const PARENT_ARN =
+      "arn:aws:lambda:us-east-1:123456789012:function:durable-workflow:$LATEST:parent-exec-1";
+    const CHILD_ARN =
+      "arn:aws:lambda:us-east-1:123456789012:function:durable-enrich:$LATEST:child-exec-1";
+
+    const parentPlugin = new ExecutionOtelPlugin({
+      useDefaultTracerProvider: true,
+    });
+    const childPlugin = new ExecutionOtelPlugin({
+      useDefaultTracerProvider: true,
+    });
+
+    // --- Parent workflow execution ---
+    await parentPlugin.onInvocationStart(
+      makeInvocationInfo({ executionArn: PARENT_ARN }),
+    );
+    await parentPlugin.onOperationStart(
+      makeOperationInfo({
+        id: "1",
+        name: "validate",
+        type: "STEP",
+        isReplay: false,
+      }),
+    );
+    await parentPlugin.onOperationEnd(
+      makeOperationEndInfo({ id: "1", name: "validate", type: "STEP" }),
+    );
+    await parentPlugin.onInvocationEnd(
+      makeInvocationEndInfo({ executionArn: PARENT_ARN }),
+    );
+
+    // --- Child workflow execution ---
+    await childPlugin.onInvocationStart(
+      makeInvocationInfo({ executionArn: CHILD_ARN }),
+    );
+    await childPlugin.onOperationStart(
+      makeOperationInfo({
+        id: "1",
+        name: "enrich",
+        type: "STEP",
+        isReplay: false,
+      }),
+    );
+    await childPlugin.onOperationEnd(
+      makeOperationEndInfo({ id: "1", name: "enrich", type: "STEP" }),
+    );
+    await childPlugin.onInvocationEnd(
+      makeInvocationEndInfo({ executionArn: CHILD_ARN }),
+    );
+
+    // --- Verify span IDs are DIFFERENT ---
+    const allSpans = getExportedSpans(exporter);
+    const validateSpan = allSpans.find(
+      (s) =>
+        s.name === "validate" &&
+        s.attributes["durable.execution.arn"] === PARENT_ARN,
+    );
+    const enrichSpan = allSpans.find(
+      (s) =>
+        s.name === "enrich" &&
+        s.attributes["durable.execution.arn"] === CHILD_ARN,
+    );
+
+    expect(validateSpan).toBeDefined();
+    expect(enrichSpan).toBeDefined();
+
+    // Same operation position ("1") but different ARNs → different span IDs
+    expect(validateSpan!.spanContext().spanId).not.toBe(
+      enrichSpan!.spanContext().spanId,
     );
   });
 });

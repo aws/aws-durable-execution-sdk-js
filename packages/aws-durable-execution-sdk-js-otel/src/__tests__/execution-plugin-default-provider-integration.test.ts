@@ -112,8 +112,6 @@ function findSpans(
 /**
  * Integration test: End-to-end span export with default provider.
  *
- * Validates Requirements: 1.1, 4.1, 5.2, 5.4, 5.5, 5.8
- *
  * This test registers a real NodeTracerProvider with InMemorySpanExporter globally,
  * creates a ExecutionOtelPlugin with useDefaultTracerProvider: true, and simulates
  * a full invocation lifecycle verifying the complete span hierarchy is exported.

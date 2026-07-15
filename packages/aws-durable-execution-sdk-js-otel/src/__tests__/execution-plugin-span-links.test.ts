@@ -124,8 +124,6 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
 
   describe("buildInvocationLinks() returns link to ambient span in default-provider mode", () => {
     /**
-     * Requirements: 5.4, 5.5, 5.6
-     *
      * When useDefaultTracerProvider=true, the plugin captures the ambient
      * context and builds span links pointing to the ambient invocation span.
      */
@@ -269,8 +267,6 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
 
   describe("buildInvocationLinks() returns link to explicit Invocation_Span when not in default-provider mode", () => {
     /**
-     * Requirements: 5.4, 5.5, 5.6
-     *
      * When useDefaultTracerProvider is false (default), the plugin creates
      * an explicit Invocation_Span and builds span links pointing to it.
      */
@@ -346,8 +342,6 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
 
   describe("buildInvocationLinks() returns empty array when no invocation context exists", () => {
     /**
-     * Requirements: 5.4, 5.5, 5.6
-     *
      * When useDefaultTracerProvider is true but no ambient span exists,
      * and there's no explicit Invocation_Span, links should be empty.
      */
@@ -420,8 +414,6 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
 
   describe("Tracer instrumentationName", () => {
     /**
-     * Requirements: 6.1, 6.2, 6.4
-     *
      * The tracer should be created with the correct instrumentation name
      * from the provider, defaulting to "aws-durable-execution-sdk-js".
      */

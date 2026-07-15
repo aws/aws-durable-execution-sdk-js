@@ -75,7 +75,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     propagation.disable();
   });
 
-  describe("No Invocation_Span is created when useDefaultTracerProvider=true (Req 5.1, 5.7)", () => {
+  describe("No Invocation_Span is created when useDefaultTracerProvider=true", () => {
     it("does not create an Invocation span when useDefaultTracerProvider is true", async () => {
       const plugin = new ExecutionOtelPlugin({
         useDefaultTracerProvider: true,
@@ -110,7 +110,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     });
   });
 
-  describe("Workflow_Span has no span links to saved invocation context (Req 5.3)", () => {
+  describe("Workflow_Span has no span links to saved invocation context", () => {
     it("Workflow_Span has no links when an ambient invocation span exists", async () => {
       const plugin = new ExecutionOtelPlugin({
         useDefaultTracerProvider: true,
@@ -136,7 +136,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     });
   });
 
-  describe("Ambient context is captured BEFORE Workflow_Span creation (Req 5.1)", () => {
+  describe("Ambient context is captured BEFORE Workflow_Span creation", () => {
     it("captures the ambient context with the active invocation span before Workflow_Span is created", async () => {
       const plugin = new ExecutionOtelPlugin({
         useDefaultTracerProvider: true,
@@ -212,7 +212,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     });
   });
 
-  describe("forceFlush error is logged and swallowed (Req 4.3)", () => {
+  describe("forceFlush error is logged and swallowed", () => {
     it("logs the error and does not propagate it when forceFlush throws", async () => {
       // Create a provider that throws on forceFlush
       const mockProvider = {
@@ -274,7 +274,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     });
   });
 
-  describe("Per-invocation state is cleared after onInvocationEnd (Req 4.3, 5.7)", () => {
+  describe("Per-invocation state is cleared after onInvocationEnd", () => {
     it("clears savedInvocationContext after onInvocationEnd", async () => {
       const plugin = new ExecutionOtelPlugin({
         useDefaultTracerProvider: true,

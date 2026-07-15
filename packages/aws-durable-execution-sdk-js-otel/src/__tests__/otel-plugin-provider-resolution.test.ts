@@ -1,8 +1,7 @@
 /**
  * Unit tests for provider resolution and instrumentation skipping
- * in ExecutionOtelPlugin when useDefaultTracerProvider is configured.
- *
- * Requirements: 1.2, 1.3, 1.5, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3
+ * in the shared OTel plugin infrastructure (used by both ExecutionOtelPlugin
+ * and InvocationOtelPlugin) when useDefaultTracerProvider is configured.
  */
 import { trace, context, propagation } from "@opentelemetry/api";
 import type { TracerProvider } from "@opentelemetry/api";
@@ -13,7 +12,6 @@ import {
 } from "@opentelemetry/sdk-trace-node";
 import { createTracerProvider } from "../otel-plugin-provider";
 import { registerStandaloneInstrumentations } from "../otel-plugin-instrumentations";
-import type { OtelPluginConfig } from "../otel-plugin-config";
 
 // Save original env
 const originalEnv = process.env;
@@ -50,7 +48,7 @@ describe("createTracerProvider", () => {
       globalProvider.shutdown();
     });
 
-    it("sets ownsProvider=false (Req 1.3)", () => {
+    it("sets ownsProvider=false", () => {
       const globalProvider = new NodeTracerProvider();
       globalProvider.register();
 
@@ -62,7 +60,7 @@ describe("createTracerProvider", () => {
     });
   });
 
-  describe("precedence: explicit tracerProvider wins over useDefaultTracerProvider (Req 1.5, 2.1)", () => {
+  describe("precedence: explicit tracerProvider wins over useDefaultTracerProvider", () => {
     it("uses the explicit tracerProvider when both are specified", () => {
       const globalProvider = new NodeTracerProvider();
       globalProvider.register();
@@ -96,7 +94,7 @@ describe("createTracerProvider", () => {
     });
   });
 
-  describe("useDefaultTracerProvider=false behaves same as absent (Req 2.3, 2.4)", () => {
+  describe("useDefaultTracerProvider=false behaves same as absent", () => {
     it("creates an internal provider with ownsProvider=true when useDefaultTracerProvider=false", () => {
       const result = createTracerProvider({
         useDefaultTracerProvider: false,
@@ -153,7 +151,7 @@ describe("createTracerProvider", () => {
 });
 
 describe("registerStandaloneInstrumentations", () => {
-  describe("useDefaultTracerProvider=true skips registration (Req 1.2, 3.1, 3.2, 3.3)", () => {
+  describe("useDefaultTracerProvider=true skips registration", () => {
     it("returns without registering instrumentations when useDefaultTracerProvider=true", () => {
       const mockProvider: TracerProvider = {
         getTracer: jest.fn().mockReturnValue({
@@ -248,7 +246,7 @@ describe("ExecutionOtelPlugin integration - provider resolution", () => {
   // These tests verify the end-to-end behavior through the ExecutionOtelPlugin
   // constructor which calls both createTracerProvider and registerStandaloneInstrumentations
 
-  it("useDefaultTracerProvider=true retrieves the global provider (Req 2.2)", async () => {
+  it("useDefaultTracerProvider=true retrieves the global provider", async () => {
     // Register a known global provider
     const exporter = new InMemorySpanExporter();
     const globalProvider = new NodeTracerProvider({
@@ -295,7 +293,7 @@ describe("ExecutionOtelPlugin integration - provider resolution", () => {
     globalProvider.shutdown();
   });
 
-  it("useDefaultTracerProvider=true does NOT create an Invocation span (Req 1.2 - skips auto-setup)", async () => {
+  it("useDefaultTracerProvider=true does NOT create an Invocation span", async () => {
     const exporter = new InMemorySpanExporter();
     const globalProvider = new NodeTracerProvider({
       spanProcessors: [new SimpleSpanProcessor(exporter)],

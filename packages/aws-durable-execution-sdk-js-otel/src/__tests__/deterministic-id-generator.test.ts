@@ -189,8 +189,6 @@ describe("deriveSpanIdFromOperationId", () => {
  *
  * A fixed execution ARN is passed as the second argument to be compatible
  * with both the current API (ignores extra arg) and future API (uses it).
- *
- * **Validates: Requirements 3.1, 3.2, 3.5**
  */
 describe("deriveSpanIdFromOperationId - Preservation Properties", () => {
   const FIXED_EXECUTION_ARN =
@@ -248,8 +246,6 @@ describe("deriveSpanIdFromOperationId - Preservation Properties", () => {
 
 describe("Bug Condition Exploration - Property-Based Tests", () => {
   /**
-   * **Validates: Requirements 1.1, 1.3**
-   *
    * Property 1: Bug Condition - Different Executions Produce Distinct Span IDs
    *
    * This test encodes the EXPECTED behavior: when two different execution ARNs
