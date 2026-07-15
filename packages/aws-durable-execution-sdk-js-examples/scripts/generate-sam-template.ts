@@ -51,7 +51,8 @@ const EXAMPLE_CONFIGS: Record<string, any> = {
 // Functions whose log groups already exist in AWS and should not be re-created
 // by CloudFormation (avoids "already exists" conflicts on deploy).
 const SKIP_LOG_GROUP_CREATION: Set<string> = new Set([
-  "otel-standalone-xray-e2e",
+  "otel-community-collector-execution-xray-e2e",
+  "otel-community-collector-invocation-xray-e2e",
 ]);
 
 // Default configuration for Lambda functions
@@ -170,8 +171,8 @@ function createFunctionResource(
   // Add ADOT layer and Active Tracing for all otel functions
   if (catalog.handler && catalog.handler.includes("otel-")) {
     functionResource.Properties.Tracing = "Active";
-    // Only set exec wrapper for non-standalone otel functions
-    if (!catalog.handler.includes("otel-standalone")) {
+    // Only set exec wrapper for non-community-collector otel functions
+    if (!catalog.handler.includes("otel-community-collector")) {
       functionResource.Properties.Layers = [
         getAdotLayerArn(options.awsRegion ?? "us-west-2"),
       ];

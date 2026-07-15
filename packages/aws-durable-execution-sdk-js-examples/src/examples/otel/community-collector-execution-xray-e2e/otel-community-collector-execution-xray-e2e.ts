@@ -79,7 +79,7 @@ export function resetExporter(): void {
 }
 
 export const config: ExampleConfig = {
-  name: "OTel Standalone XRay E2E",
+  name: "OTel Community Collector Execution XRay E2E",
   durableConfig: {
     ExecutionTimeout: 120,
     RetentionPeriodInDays: 7,

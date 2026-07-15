@@ -2,7 +2,7 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
-import { ExecutionOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+import { InvocationOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
 import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
@@ -13,39 +13,32 @@ import { ExampleConfig } from "../../../types";
 import { SerializedSpan } from "../shared/otel-test-setup";
 
 /**
- * Detect whether we're running in an ADOT-instrumented cloud environment.
- * The ADOT layer sets AWS_LAMBDA_EXEC_WRAPPER to /opt/otel-instrument,
- * which registers a global TracerProvider and creates an ambient invocation span.
+ * Detect whether we're running in Lambda (cloud) vs local test runner.
+ * Unlike other OTel examples that use isAdotEnvironment() (which checks
+ * AWS_LAMBDA_EXEC_WRAPPER), this function intentionally does NOT set that
+ * wrapper — the InvocationOtelPlugin manages its own TracerProvider.
  */
-function isAdotEnvironment(): boolean {
-  return process.env.AWS_LAMBDA_EXEC_WRAPPER === "/opt/otel-instrument";
+function isCloudEnvironment(): boolean {
+  return process.env.AWS_LAMBDA_FUNCTION_NAME !== undefined;
 }
 
-// Dual-mode setup for ExecutionOtelPlugin with useDefaultTracerProvider:
-// - Cloud (ADOT layer): The ADOT layer registers a global TracerProvider and
-//   creates an ambient invocation span. ExecutionOtelPlugin picks it up via
-//   useDefaultTracerProvider: true. No manual provider registration needed.
-// - Local: Register a NodeTracerProvider globally with InMemorySpanExporter,
-//   then create ExecutionOtelPlugin with useDefaultTracerProvider: true.
+// Dual-mode setup for InvocationOtelPlugin:
+// - Cloud (Lambda): default config (OTLP to community collector at localhost:4318)
+// - Local: InMemorySpanExporter for direct span assertions
 let exporter: InMemorySpanExporter | undefined;
-let plugin: ExecutionOtelPlugin;
+let plugin: InvocationOtelPlugin;
 
-if (isAdotEnvironment()) {
-  // Cloud mode: ADOT layer already registered a global TracerProvider.
-  // ExecutionOtelPlugin picks it up via useDefaultTracerProvider.
-  // The ambient invocation span from ADOT will be captured in savedInvocationContext.
-  plugin = new ExecutionOtelPlugin({ useDefaultTracerProvider: true });
+if (isCloudEnvironment()) {
+  // Cloud mode: InvocationOtelPlugin with default OTLP export (useDefaultTracerProvider: true)
+  plugin = new InvocationOtelPlugin();
 } else {
-  // Local mode: Register a global NodeTracerProvider with InMemorySpanExporter
+  // Local mode: custom TracerProvider with InMemorySpanExporter
   exporter = new InMemorySpanExporter();
   const provider = new NodeTracerProvider({
     spanProcessors: [new SimpleSpanProcessor(exporter)],
   });
-  // Register globally so trace.getTracerProvider() returns this provider
-  provider.register();
 
-  // ExecutionOtelPlugin picks up the global provider
-  plugin = new ExecutionOtelPlugin({ useDefaultTracerProvider: true });
+  plugin = new InvocationOtelPlugin({ tracerProvider: provider });
 }
 
 export function getSerializedSpans(): SerializedSpan[] {
@@ -86,7 +79,7 @@ export function resetExporter(): void {
 }
 
 export const config: ExampleConfig = {
-  name: "OTel Default Provider XRay E2E",
+  name: "OTel Community Collector Invocation XRay E2E",
   durableConfig: {
     ExecutionTimeout: 120,
     RetentionPeriodInDays: 7,
@@ -102,7 +95,7 @@ export const handler = withDurableExecution(
     // Exercise multiple operation types for X-Ray verification
     const step1 = await context.step("fetch-data", async () => "data-value");
 
-    // Wait to force a multi-invocation workflow
+    // Wait to force a multi-invocation workflow for trace comparison
     await context.wait("short-pause", { seconds: 1 });
 
     const step2 = await context.step(

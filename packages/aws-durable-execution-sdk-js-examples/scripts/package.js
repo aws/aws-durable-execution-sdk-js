@@ -47,15 +47,21 @@ try {
   );
 } catch {}
 
-// Copy collector.yaml for standalone otel functions
-if (fileName.includes("otel-standalone")) {
+// Copy collector.yaml for community collector otel functions
+if (fileName.includes("otel-community-collector")) {
+  // Derive folder name from handler file name:
+  // "otel-community-collector-xray-e2e" -> "community-collector-xray-e2e"
+  // "otel-community-collector-invocation-xray-e2e" -> "community-collector-invocation-xray-e2e"
+  const folderName = fileName.replace("otel-", "");
   const collectorSrc = path.join(
     __dirname,
-    "../src/examples/otel/standalone-xray-e2e/collector.yaml",
+    `../src/examples/otel/${folderName}/collector.yaml`,
   );
   if (fs.existsSync(collectorSrc)) {
     fs.copyFileSync(collectorSrc, path.join(tempDir, "collector.yaml"));
-    console.log("  Included collector.yaml for StandaloneOtelPlugin");
+    console.log(
+      "  Included collector.yaml for community collector OTel function",
+    );
   }
 }
 

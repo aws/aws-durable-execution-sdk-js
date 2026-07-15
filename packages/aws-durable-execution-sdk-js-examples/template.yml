@@ -51,6 +51,56 @@ Resources:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
+  ChildOperationsInvalidDepth:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ChildOperationsInvalidDepth-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: child-operations-invalid-depth.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      Environment:
+        Variables:
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+    Metadata:
+      SkipBuild: "True"
+  ChildOperationsPreservation:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ChildOperationsPreservation-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: child-operations-preservation.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      Environment:
+        Variables:
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+    Metadata:
+      SkipBuild: "True"
   ComprehensiveOperations:
     Type: AWS::Serverless::Function
     Properties:
@@ -1249,12 +1299,12 @@ Resources:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
-  OtelAdotXrayE2e:
+  OtelAdotExecutionXrayE2e:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: OTelADOTXRayE2E-22x-NodeJS-Local
+      FunctionName: OTelADOTExecutionXRayE2E-22x-NodeJS-Local
       CodeUri: ./dist
-      Handler: otel-adot-xray-e2e.handler
+      Handler: otel-adot-execution-xray-e2e.handler
       Runtime: nodejs22.x
       Architectures:
         - x86_64
@@ -1365,6 +1415,35 @@ Resources:
         - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
     Metadata:
       SkipBuild: "True"
+  OtelCommunityCollectorInvocationXrayE2e:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: OTelCommunityCollectorInvocationXRayE2E-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: otel-community-collector-invocation-xray-e2e.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 120
+        RetentionPeriodInDays: 7
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      Environment:
+        Variables:
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          OPENTELEMETRY_COLLECTOR_CONFIG_FILE: /var/task/collector.yaml
+      Tracing: Active
+      Layers:
+        - arn:aws:lambda:us-west-2:184161586896:layer:opentelemetry-collector-amd64-0_22_0:1
+    Metadata:
+      SkipBuild: "True"
   OtelInvoke:
     Type: AWS::Serverless::Function
     Properties:
@@ -1423,12 +1502,12 @@ Resources:
         - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
     Metadata:
       SkipBuild: "True"
-  OtelStandaloneXrayE2e:
+  OtelCommunityCollectorExecutionXrayE2e:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: OTelStandaloneXRayE2E-22x-NodeJS-Local
+      FunctionName: OTelCommunityCollectorExecutionXRayE2E-22x-NodeJS-Local
       CodeUri: ./dist
-      Handler: otel-standalone-xray-e2e.handler
+      Handler: otel-community-collector-execution-xray-e2e.handler
       Runtime: nodejs22.x
       Architectures:
         - x86_64
@@ -1510,12 +1589,12 @@ Resources:
         - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
     Metadata:
       SkipBuild: "True"
-  OtelXrayE2e:
+  OtelAdotInvocationXrayE2e:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: OTelXRayE2E-22x-NodeJS-Local
+      FunctionName: OTelADOTInvocationXRayE2E-22x-NodeJS-Local
       CodeUri: ./dist
-      Handler: otel-xray-e2e.handler
+      Handler: otel-adot-invocation-xray-e2e.handler
       Runtime: nodejs22.x
       Architectures:
         - x86_64

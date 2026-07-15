@@ -1,6 +1,6 @@
 import { ExecutionStatus } from "@aws/durable-execution-sdk-js-testing";
 import { XRayClient } from "@aws-sdk/client-xray";
-import { handler } from "./otel-adot-xray-e2e";
+import { handler } from "./otel-adot-execution-xray-e2e";
 import { createTests } from "../../../utils/test-helper";
 import {
   fetchXRayTrace,

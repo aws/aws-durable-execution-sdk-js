@@ -76,26 +76,30 @@ function getOtelCollectorLayerArn(region: string): string {
 
 /**
  * Checks if the handler corresponds to an otel function that needs ADOT
- * auto-instrumentation (AWS_LAMBDA_EXEC_WRAPPER). Standalone plugin functions
+ * auto-instrumentation (AWS_LAMBDA_EXEC_WRAPPER). Community collector functions
  * use a collector-only layer — no exec wrapper needed.
  */
 function isOtelFunction(handler: string): boolean {
-  return handler.includes("otel-") && !handler.includes("otel-standalone");
+  return (
+    handler.includes("otel-") && !handler.includes("otel-community-collector")
+  );
 }
 
 /**
- * Checks if the handler is a standalone otel function that needs the
+ * Checks if the handler is a community collector otel function that needs the
  * collector-only layer (no ADOT auto-instrumentation).
  */
 function isStandaloneOtelFunction(handler: string): boolean {
-  return handler.includes("otel-standalone");
+  return handler.includes("otel-community-collector");
 }
 
 /**
  * Checks if the handler needs the ADOT layer (regular otel functions only).
  */
 function needsAdotLayer(handler: string): boolean {
-  return handler.includes("otel-") && !handler.includes("otel-standalone");
+  return (
+    handler.includes("otel-") && !handler.includes("otel-community-collector")
+  );
 }
 
 // Types
@@ -376,7 +380,7 @@ async function createFunction(
 
   // IAM Role Requirements:
   // - The Lambda execution role must have `CloudWatchLambdaApplicationSignalsExecutionRolePolicy`
-  //   attached for the otel-xray-e2e function (grants xray:PutTraceSegments, xray:PutTelemetryRecords,
+  //   attached for ADOT otel functions (grants xray:PutTraceSegments, xray:PutTelemetryRecords,
   //   and related CloudWatch permissions needed by the ADOT layer to export spans to X-Ray).
   // - The test runner role must have `xray:GetTraceSummaries` and `xray:BatchGetTraces`
   //   permissions to query X-Ray traces in the e2e assertion tests.
@@ -390,7 +394,7 @@ async function createFunction(
     ? { AWS_ENDPOINT_URL_LAMBDA: env.LAMBDA_ENDPOINT }
     : undefined;
 
-  // Apply ADOT layer + Active Tracing for otel-xray-e2e
+  // Apply ADOT layer + Active Tracing for ADOT otel functions
   let tracingConfig: { Mode: "Active" | "PassThrough" } | undefined;
   let layers: string[] | undefined;
 

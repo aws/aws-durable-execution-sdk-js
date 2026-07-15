@@ -4,7 +4,7 @@ import {
   handler,
   resetExporter,
   getSerializedSpans,
-} from "./otel-standalone-xray-e2e";
+} from "./otel-community-collector-invocation-xray-e2e";
 import { createTests } from "../../../utils/test-helper";
 import { SerializedSpan } from "../shared/otel-test-setup";
 import {
@@ -22,7 +22,7 @@ createTests({
       resetExporter();
     });
 
-    it("should execute workflow and produce traces via ExecutionOtelPlugin", async () => {
+    it("should execute workflow and produce traces via InvocationOtelPlugin", async () => {
       const execution = await runner.run();
       expect(execution.getStatus()).toBe(ExecutionStatus.SUCCEEDED);
 
@@ -51,7 +51,7 @@ createTests({
           delayMs: 30000,
         });
 
-        // Assert span names exist (ExecutionOtelPlugin produces these)
+        // Assert span names exist (InvocationOtelPlugin produces operation spans only)
         assertSpanNames(trace, [
           "fetch-data",
           "short-pause",
@@ -78,61 +78,18 @@ createTests({
         assertSpanAttributes(trace, "inner-step", {
           "durable.operation.type": "STEP",
         });
-
-        // ExecutionOtelPlugin-specific: verify Workflow span and Invocation span
-        assertSpanNames(trace, ["Workflow", "Invocation"]);
-
-        // Verify Workflow span has durable.execution.arn attribute
-        assertSpanAttributes(trace, "Workflow", {
-          "durable.execution.status": "SUCCEEDED",
-        });
-
-        // Verify Invocation span has Lambda semantic attributes
-        assertSpanAttributes(trace, "Invocation", {
-          "cloud.provider": "aws",
-          "cloud.platform": "aws_lambda",
-        });
       } else {
         // Local mode: assert spans via InMemorySpanExporter
         const spans = getSerializedSpans();
 
-        // ExecutionOtelPlugin produces:
-        // - 1 Workflow span
-        // - 1 Invocation span
-        // - 4 operation spans (fetch-data, short-pause, process-data, child-operations)
-        // - 3 attempt spans (one per step: fetch-data, process-data, inner-step)
-        // - 1 inner-step operation span
-        // - 1 Context_Execution span for child-operations
-        expect(spans.length).toBeGreaterThanOrEqual(9);
-
-        // All spans share the same traceId
-        const traceId = spans[0].traceId;
-        expect(spans.every((s) => s.traceId === traceId)).toBe(true);
-
-        // Verify Workflow span exists
-        const workflowSpan = spans.find((s) => s.name === "Workflow");
-        expect(workflowSpan).toBeDefined();
-        expect(workflowSpan!.attributes["durable.execution.arn"]).toBeDefined();
-
-        // Verify Invocation span exists and is child of Workflow
-        const invocationSpan = spans.find((s) => s.name === "Invocation");
-        expect(invocationSpan).toBeDefined();
-        expect(invocationSpan!.parentSpanId).toBe(workflowSpan!.spanId);
-        expect(invocationSpan!.attributes["cloud.provider"]).toBe("aws");
-        expect(invocationSpan!.attributes["cloud.platform"]).toBe("aws_lambda");
-
-        // Verify operation spans exist with correct attributes.
-        // Filter out Context_Execution spans (which have "execution" in name)
-        // and attempt spans.
+        // Filter to operation spans: have durable.operation.type but NOT durable.operation.attempt
         const operationSpans = spans.filter(
           (s) =>
             s.attributes["durable.operation.type"] !== undefined &&
-            s.attributes["durable.operation.attempt"] === undefined &&
-            s.attributes["durable.operation.subtype"] !== undefined &&
-            s.name !== "Workflow" &&
-            s.name !== "Invocation",
+            s.attributes["durable.operation.attempt"] === undefined,
         );
 
+        // Verify operation spans exist with correct attributes by durable.operation.name
         const fetchDataSpan = operationSpans.find(
           (s) => s.attributes["durable.operation.name"] === "fetch-data",
         );
@@ -157,35 +114,20 @@ createTests({
           "CONTEXT",
         );
 
-        // Verify inner-step is nested under child-operations
         const innerStepSpan = operationSpans.find(
           (s) => s.attributes["durable.operation.name"] === "inner-step",
         );
         expect(innerStepSpan).toBeDefined();
+        expect(innerStepSpan!.attributes["durable.operation.type"]).toBe(
+          "STEP",
+        );
+
+        // All operation spans share the same traceId
+        const traceId = operationSpans[0].traceId;
+        expect(operationSpans.every((s) => s.traceId === traceId)).toBe(true);
+
+        // Verify inner-step is nested under child-operations
         expect(innerStepSpan!.parentSpanId).toBe(childOpsSpan!.spanId);
-
-        // Verify attempt spans exist
-        const attemptSpans = spans.filter(
-          (s) => s.attributes["durable.operation.attempt"] !== undefined,
-        );
-        expect(attemptSpans.length).toBeGreaterThanOrEqual(3);
-
-        // Each attempt span should be a child of its corresponding operation span
-        for (const attemptSpan of attemptSpans) {
-          const parentOp = operationSpans.find(
-            (op) => op.spanId === attemptSpan.parentSpanId,
-          );
-          expect(parentOp).toBeDefined();
-        }
-
-        // Verify STEP operation spans have links to an invocation span
-        // (During replay, links point to the invocation that exported the span)
-        const stepSpans = operationSpans.filter(
-          (s) => s.attributes["durable.operation.type"] === "STEP",
-        );
-        for (const opSpan of stepSpans) {
-          expect(opSpan.links.length).toBeGreaterThanOrEqual(1);
-        }
       }
 
       assertEventSignatures(execution);
