@@ -120,4 +120,11 @@ describe("InsightDestinationsStack", () => {
       Handler: "index.handler",
     });
   });
+
+  it("does not auto-invoke the example function by default", () => {
+    // lambda.autoInvoke.enabled is false by default (avoids unexpected
+    // recurring, billable invocations). With it off, no EventBridge schedule
+    // rule should be synthesized to drive the example function.
+    template.resourceCountIs("AWS::Events::Rule", 0);
+  });
 });
