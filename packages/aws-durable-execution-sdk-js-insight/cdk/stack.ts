@@ -374,6 +374,19 @@ export class InsightDestinationsStack extends cdk.Stack {
           NamespaceName: config.destinations.redshift.namespaceName,
           BaseCapacity: 8,
           PubliclyAccessible: false,
+          // WorkflowInsightRecord uses camelCase JSON keys (functionName,
+          // durationMs, executionArn, input.claimType, ...). Redshift's default
+          // (enable_case_sensitive_identifier=false) folds SUPER path
+          // identifiers to lowercase, so record_json.functionName silently
+          // resolves to NULL. Enabling case-sensitive identifiers lets queries
+          // reach the camelCase attributes via double-quoted paths, e.g.
+          // record_json."functionName", record_json."input"."claimType".
+          ConfigParameters: [
+            {
+              ParameterKey: "enable_case_sensitive_identifier",
+              ParameterValue: "true",
+            },
+          ],
         },
       });
       workgroup.addDependency(namespace);
@@ -393,6 +406,7 @@ export class InsightDestinationsStack extends cdk.Stack {
           record_json SUPER,
           emitted_at VARCHAR(30)
         );
+        GRANT ALL ON ${fqTable} TO PUBLIC;
       `;
 
       // Use a Provider-backed custom resource that polls DescribeStatement
@@ -647,6 +661,17 @@ export class InsightDestinationsStack extends cdk.Stack {
       }
       if (config.destinations.s3.enabled && insightBucket) {
         envVars.INSIGHT_S3_BUCKET = insightBucket.bucketName;
+      }
+      if (config.destinations.redshift.enabled) {
+        // Serverless workgroup — the exporter authenticates via IAM
+        // (redshift-serverless:GetCredentials, granted in the policy block
+        // above), so no secret is passed here.
+        envVars.INSIGHT_REDSHIFT_WORKGROUP =
+          config.destinations.redshift.workgroupName;
+        envVars.INSIGHT_REDSHIFT_DATABASE =
+          config.destinations.redshift.databaseName;
+        envVars.INSIGHT_REDSHIFT_TABLE = config.destinations.redshift.tableName;
+        envVars.INSIGHT_REDSHIFT_SCHEMA = config.destinations.redshift.schema;
       }
 
       const exampleFn = new lambdaNode.NodejsFunction(

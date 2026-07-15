@@ -8,6 +8,7 @@ import type { InsightConfig } from "./config";
 import { resolveCredentials } from "./config";
 import { tableExists, runAthenaQuery } from "./athena";
 import { runAuroraQuery } from "./aurora";
+import { runRedshiftQuery } from "./redshift";
 
 /**
  * Result of a single check within a destination test (e.g. "Glue table exists",
@@ -83,6 +84,8 @@ export async function testDestination(
       return testDynamoDB(cfg, credentials);
     case "aurora":
       return testAurora(cfg, credentials);
+    case "redshift":
+      return testRedshift(cfg, credentials);
     case "sqs":
       return testSqs(cfg, credentials);
     case "cloudwatch-logs-exporter":
@@ -222,6 +225,48 @@ async function testAurora(
         sql: "SELECT 1",
       });
       return "Connected to the cluster via the RDS Data API.";
+    }),
+  );
+  return report(checks);
+}
+
+async function testRedshift(
+  cfg: InsightConfig,
+  credentials: ReturnType<typeof resolveCredentials>,
+): Promise<DestinationTestReport> {
+  const checks: DestinationCheck[] = [];
+  const missing: string[] = [];
+  // Serverless (workgroup) or provisioned (cluster) — need exactly one.
+  if (!cfg.redshiftWorkgroupName && !cfg.redshiftClusterIdentifier)
+    missing.push("Workgroup name or Cluster identifier");
+  if (!cfg.redshiftDatabase) missing.push("Database");
+  checks.push({
+    label: "Required fields",
+    ok: missing.length === 0,
+    detail:
+      missing.length === 0
+        ? `${
+            cfg.redshiftWorkgroupName
+              ? `Workgroup "${cfg.redshiftWorkgroupName}"`
+              : `Cluster "${cfg.redshiftClusterIdentifier}"`
+          }, database "${cfg.redshiftDatabase}", table "${cfg.redshiftSchema}.${cfg.redshiftTable}".`
+        : `Missing: ${missing.join(", ")}.`,
+  });
+  if (missing.length > 0) return report(checks);
+
+  checks.push(
+    await probe("Redshift Data API connection (SELECT 1)", async () => {
+      await runRedshiftQuery({
+        region: cfg.region,
+        credentials,
+        database: cfg.redshiftDatabase,
+        workgroupName: cfg.redshiftWorkgroupName || undefined,
+        clusterIdentifier: cfg.redshiftClusterIdentifier || undefined,
+        dbUser: cfg.redshiftDbUser || undefined,
+        secretArn: cfg.redshiftSecretArn || undefined,
+        sql: "SELECT 1",
+      });
+      return "Connected and ran a statement via the Redshift Data API.";
     }),
   );
   return report(checks);

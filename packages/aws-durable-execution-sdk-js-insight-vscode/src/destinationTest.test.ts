@@ -20,6 +20,9 @@ jest.mock("./athena", () => ({
 jest.mock("./aurora", () => ({
   runAuroraQuery: jest.fn(),
 }));
+jest.mock("./redshift", () => ({
+  runRedshiftQuery: jest.fn(),
+}));
 jest.mock("./config", () => ({
   resolveCredentials: jest.fn(() => ({})),
 }));
@@ -28,6 +31,7 @@ import type { InsightConfig } from "./config";
 import { testDestination } from "./destinationTest";
 import { tableExists, runAthenaQuery } from "./athena";
 import { runAuroraQuery } from "./aurora";
+import { runRedshiftQuery } from "./redshift";
 
 function baseCfg(overrides: Partial<InsightConfig>): InsightConfig {
   return {
@@ -39,6 +43,13 @@ function baseCfg(overrides: Partial<InsightConfig>): InsightConfig {
     auroraSecretArn: "",
     auroraDatabase: "postgres",
     auroraTable: "workflow_insight",
+    redshiftWorkgroupName: "",
+    redshiftClusterIdentifier: "",
+    redshiftDbUser: "",
+    redshiftSecretArn: "",
+    redshiftDatabase: "dev",
+    redshiftTable: "workflow_insight",
+    redshiftSchema: "public",
     sqsQueueUrl: "",
     sqsDeleteAfterRead: false,
     athenaDatabase: "",
@@ -175,6 +186,51 @@ describe("testDestination — Aurora", () => {
     expect(runAuroraQuery).toHaveBeenCalledWith(
       expect.objectContaining({ sql: "SELECT 1" }),
     );
+  });
+});
+
+describe("testDestination — Redshift", () => {
+  it("fails when neither workgroup nor cluster is set", async () => {
+    const r = await testDestination(baseCfg({ destinationType: "redshift" }));
+    expect(r.ok).toBe(false);
+    expect(runRedshiftQuery).not.toHaveBeenCalled();
+  });
+
+  it("passes SELECT 1 against the Data API (Serverless workgroup)", async () => {
+    (runRedshiftQuery as jest.Mock).mockResolvedValue({
+      columns: [],
+      rows: [],
+    });
+    const r = await testDestination(
+      baseCfg({
+        destinationType: "redshift",
+        redshiftWorkgroupName: "insight-workgroup",
+        redshiftDatabase: "dev",
+      }),
+    );
+    expect(r.ok).toBe(true);
+    expect(runRedshiftQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sql: "SELECT 1",
+        workgroupName: "insight-workgroup",
+        database: "dev",
+      }),
+    );
+  });
+
+  it("fails when the Data API statement errors", async () => {
+    (runRedshiftQuery as jest.Mock).mockRejectedValue(
+      new Error("Redshift statement failed: relation does not exist"),
+    );
+    const r = await testDestination(
+      baseCfg({
+        destinationType: "redshift",
+        redshiftClusterIdentifier: "my-cluster",
+        redshiftDatabase: "dev",
+      }),
+    );
+    expect(r.ok).toBe(false);
+    expect(r.checks.at(-1)?.detail).toMatch(/relation does not exist/);
   });
 });
 

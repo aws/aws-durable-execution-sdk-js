@@ -192,6 +192,13 @@ export interface Settings {
   auroraSecretArn: string;
   auroraDatabase: string;
   auroraTable: string;
+  redshiftWorkgroupName: string;
+  redshiftClusterIdentifier: string;
+  redshiftDbUser: string;
+  redshiftSecretArn: string;
+  redshiftDatabase: string;
+  redshiftTable: string;
+  redshiftSchema: string;
   sqsQueueUrl: string;
   sqsDeleteAfterRead: boolean;
   athenaDatabase: string;
@@ -268,6 +275,13 @@ export const DEFAULT_SETTINGS: Settings = {
   auroraSecretArn: "",
   auroraDatabase: "postgres",
   auroraTable: "workflow_insight",
+  redshiftWorkgroupName: "",
+  redshiftClusterIdentifier: "",
+  redshiftDbUser: "",
+  redshiftSecretArn: "",
+  redshiftDatabase: "dev",
+  redshiftTable: "workflow_insight",
+  redshiftSchema: "public",
   sqsQueueUrl: "",
   sqsDeleteAfterRead: false,
   athenaDatabase: "",

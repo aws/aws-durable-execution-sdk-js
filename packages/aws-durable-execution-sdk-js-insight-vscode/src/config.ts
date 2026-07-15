@@ -12,6 +12,13 @@ export interface InsightConfig {
   auroraSecretArn: string;
   auroraDatabase: string;
   auroraTable: string;
+  redshiftWorkgroupName: string;
+  redshiftClusterIdentifier: string;
+  redshiftDbUser: string;
+  redshiftSecretArn: string;
+  redshiftDatabase: string;
+  redshiftTable: string;
+  redshiftSchema: string;
   sqsQueueUrl: string;
   sqsDeleteAfterRead: boolean;
   athenaDatabase: string;
@@ -88,11 +95,13 @@ function normalizeConfig(src: ConfigSource): InsightConfig {
         ? ("dynamodb" as const)
         : raw === "aurora"
           ? ("aurora" as const)
-          : raw === "sqs"
-            ? ("sqs" as const)
-            : raw === "s3"
-              ? ("s3" as const)
-              : ("cloudwatch-logs-exporter" as const);
+          : raw === "redshift"
+            ? ("redshift" as const)
+            : raw === "sqs"
+              ? ("sqs" as const)
+              : raw === "s3"
+                ? ("s3" as const)
+                : ("cloudwatch-logs-exporter" as const);
   const dynamodbTableName = (src.getString("dynamodbTableName") || "").trim();
   const auroraResourceArn = (src.getString("auroraResourceArn") || "").trim();
   const auroraSecretArn = (src.getString("auroraSecretArn") || "").trim();
@@ -100,6 +109,20 @@ function normalizeConfig(src: ConfigSource): InsightConfig {
     (src.getString("auroraDatabase") || "").trim() || "postgres";
   const auroraTable =
     (src.getString("auroraTable") || "").trim() || "workflow_insight";
+  const redshiftWorkgroupName = (
+    src.getString("redshiftWorkgroupName") || ""
+  ).trim();
+  const redshiftClusterIdentifier = (
+    src.getString("redshiftClusterIdentifier") || ""
+  ).trim();
+  const redshiftDbUser = (src.getString("redshiftDbUser") || "").trim();
+  const redshiftSecretArn = (src.getString("redshiftSecretArn") || "").trim();
+  const redshiftDatabase =
+    (src.getString("redshiftDatabase") || "").trim() || "dev";
+  const redshiftTable =
+    (src.getString("redshiftTable") || "").trim() || "workflow_insight";
+  const redshiftSchema =
+    (src.getString("redshiftSchema") || "").trim() || "public";
   const sqsQueueUrl = (src.getString("sqsQueueUrl") || "").trim();
   const sqsDeleteAfterRead = src.getBool("sqsDeleteAfterRead") ?? false;
   const athenaDatabase = (src.getString("athenaDatabase") || "").trim();
@@ -151,6 +174,13 @@ function normalizeConfig(src: ConfigSource): InsightConfig {
     auroraSecretArn,
     auroraDatabase,
     auroraTable,
+    redshiftWorkgroupName,
+    redshiftClusterIdentifier,
+    redshiftDbUser,
+    redshiftSecretArn,
+    redshiftDatabase,
+    redshiftTable,
+    redshiftSchema,
     sqsQueueUrl,
     sqsDeleteAfterRead,
     athenaDatabase,

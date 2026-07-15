@@ -8,6 +8,8 @@
  * - "dynamodb": record attributes incl. an `operationsByName` map (PartiQL nav).
  * - "aurora": Postgres; only the canonical operations array (no operationsByName) —
  *   query operations by name via a JSONB/JSONPath predicate on the array.
+ * - "redshift": Redshift SQL; record_json is a SUPER column — navigate/unnest it
+ *   with PartiQL (dot/bracket paths, `FROM tbl t, t.record_json.operations o`).
  */
 
 /**
@@ -23,6 +25,7 @@ export type DestinationType =
   | "lambda-log-exporter"
   | "dynamodb"
   | "aurora"
+  | "redshift"
   | "sqs"
   | "s3";
 
@@ -286,6 +289,80 @@ A: SELECT function_name, AVG(duration_ms) AS avg_ms, COUNT(*) AS ct FROM TABLE_N
 Q: executions where operation "convert_data" took less than 5 seconds
 A: SELECT execution_arn, function_name FROM TABLE_NAME WHERE record_json @? '$.operations[*] ? (@.name == "convert_data" && @.durationMs < 5000)' LIMIT 50`;
 
+// ─── REDSHIFT (Redshift SQL over the Data API; JSON via SUPER/PartiQL) ────────
+
+const RECORD_SCHEMA_REDSHIFT = `Records are stored in an Amazon Redshift table "TABLE_NAME" with columns:
+- execution_arn: VARCHAR(512) PRIMARY KEY
+- execution_name: VARCHAR(256)
+- function_name: VARCHAR(128)
+- status: VARCHAR(20) — values: RUNNING, SUCCEEDED, FAILED
+- start_time: VARCHAR(30) (ISO-8601 string, NOT a native timestamp)
+- end_time: VARCHAR(30) (ISO-8601 string, NULL if still running)
+- duration_ms: BIGINT (NULL if still running)
+- record_json: SUPER — full WorkflowInsightRecord as semi-structured JSON
+- emitted_at: VARCHAR(30) (ISO-8601 string)
+
+The record_json SUPER column contains the full record. The workgroup has
+enable_case_sensitive_identifier=true, and the stored JSON keys are camelCase,
+so SUPER attribute names MUST be double-quoted to preserve case — an unquoted
+path like record_json.functionName is folded to lowercase and resolves to NULL.
+Navigate with PartiQL dot/bracket paths (no JSON functions needed):
+- record_json."input" — execution input (structure varies per function)
+- record_json."output" — execution output (structure varies per function)
+- record_json."error" — error details ("name", "message")
+- record_json."operations" — array of operations
+
+Note: Redshift stores only the canonical operations array (there is no
+operationsByName index here). To filter/aggregate by operation name or fields,
+UNNEST the SUPER array by joining it as a table alias, e.g.
+  SELECT e.execution_arn FROM TABLE_NAME e, e.record_json."operations" o
+  WHERE o."name" = 'convert_data' AND o."durationMs"::bigint < 5000
+
+To read a SUPER value as a normal scalar, cast it (e.g. o."durationMs"::bigint,
+record_json."input"."fieldName"::varchar). Prefer the top-level snake_case
+columns above (execution_arn, function_name, status, duration_ms, ...) when the
+data you need is there — they need no quoting. The user will specify which
+fields they want — do not assume the structure.`;
+
+const DIALECT_REDSHIFT = `Target query language: Amazon Redshift SQL (with PartiQL for SUPER navigation).
+- Table name is TABLE_NAME.
+- Time columns (start_time, end_time, emitted_at) are ISO-8601 STRINGS, not
+  native timestamps. Compare them lexically (ISO-8601 sorts chronologically), or
+  cast with (start_time::timestamptz) when you need date math like NOW()/INTERVAL.
+- record_json is SUPER — navigate with dot/bracket paths and UNNEST arrays by
+  joining them as a table alias (FROM tbl t, t.record_json."operations" o). The
+  JSON keys are camelCase and case-sensitive identifiers are ON, so ALWAYS
+  double-quote SUPER attribute names (record_json."functionName", o."durationMs")
+  — unquoted names resolve to NULL. Cast extracted SUPER values to a concrete
+  type (::bigint, ::varchar) before arithmetic or comparisons.
+- Always include LIMIT (default 100) unless aggregating.
+- Return ONLY the SQL query. No prose.`;
+
+const FEWSHOTS_REDSHIFT = `Examples:
+Q: show the most recent failed executions
+A: SELECT execution_arn, function_name, duration_ms, emitted_at FROM TABLE_NAME WHERE status = 'FAILED' ORDER BY emitted_at DESC LIMIT 50
+
+Q: average duration of successful executions
+A: SELECT AVG(duration_ms) AS avg_duration_ms FROM TABLE_NAME WHERE status = 'SUCCEEDED'
+
+Q: count executions by status
+A: SELECT status, COUNT(*) AS ct FROM TABLE_NAME GROUP BY status ORDER BY ct DESC
+
+Q: executions longer than 5 seconds
+A: SELECT execution_arn, function_name, duration_ms FROM TABLE_NAME WHERE status = 'SUCCEEDED' AND duration_ms > 5000 ORDER BY duration_ms DESC LIMIT 50
+
+Q: failure rate percentage
+A: SELECT COUNT(CASE WHEN status = 'FAILED' THEN 1 END) * 100.0 / COUNT(*) AS failure_pct FROM TABLE_NAME
+
+Q: show last 100 records
+A: SELECT execution_arn, status, function_name, duration_ms, emitted_at FROM TABLE_NAME ORDER BY emitted_at DESC LIMIT 100
+
+Q: average duration grouped by function
+A: SELECT function_name, AVG(duration_ms) AS avg_ms, COUNT(*) AS ct FROM TABLE_NAME WHERE status = 'SUCCEEDED' GROUP BY function_name ORDER BY avg_ms DESC
+
+Q: executions where operation "convert_data" took less than 5 seconds
+A: SELECT DISTINCT e.execution_arn, e.function_name FROM TABLE_NAME e, e.record_json."operations" o WHERE o."name" = 'convert_data' AND o."durationMs"::bigint < 5000 LIMIT 50`;
+
 // ─── ATHENA (Trino/Presto SQL over S3 via S3Exporter) ────────────────────────
 
 const RECORD_SCHEMA_ATHENA = `Records are stored as one JSON object per file in S3 (via S3Exporter), registered as
@@ -512,6 +589,22 @@ export function buildSystemPrompt(
       DIALECT_AURORA.replace(/TABLE_NAME/g, table),
       "",
       FEWSHOTS_AURORA.replace(/TABLE_NAME/g, table),
+      "",
+      ...closing,
+    ].join("\n");
+  }
+
+  if (destinationType === "redshift") {
+    const table = options?.tableName || "workflow_insight";
+    return [
+      "You convert a user's plain-English question into a single Amazon Redshift SQL query",
+      "for querying AWS Durable Execution Workflow Insight records in Amazon Redshift.",
+      "",
+      RECORD_SCHEMA_REDSHIFT.replace(/TABLE_NAME/g, table),
+      "",
+      DIALECT_REDSHIFT.replace(/TABLE_NAME/g, table),
+      "",
+      FEWSHOTS_REDSHIFT.replace(/TABLE_NAME/g, table),
       "",
       ...closing,
     ].join("\n");

@@ -38,6 +38,31 @@ export async function handler(
   const database = event.ResourceProperties.Database;
   const sql = event.ResourceProperties.Sql;
 
+  // The Redshift Data API's ExecuteStatement runs a SINGLE statement, but the
+  // provisioning SQL contains several (CREATE TABLE, GRANT, ...). Split on ';'
+  // and run each in order, polling each to completion.
+  const statements = String(sql)
+    .split(";")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+
+  let lastStatementId = "";
+  for (const statement of statements) {
+    lastStatementId = await runStatement(workgroupName, database, statement);
+  }
+
+  return {
+    PhysicalResourceId: `redshift-create-table-${workgroupName}-${database}`,
+    Data: { status: "FINISHED", statementId: lastStatementId },
+  };
+}
+
+/** Execute one SQL statement via the Redshift Data API and poll until done. */
+async function runStatement(
+  workgroupName: string,
+  database: string,
+  sql: string,
+): Promise<string> {
   const executeResp = await client.send(
     new ExecuteStatementCommand({
       WorkgroupName: workgroupName,
@@ -49,7 +74,6 @@ export async function handler(
   const statementId = executeResp.Id!;
   console.log(`ExecuteStatement submitted: ${statementId}`);
 
-  // Poll until finished
   const startTime = Date.now();
   while (Date.now() - startTime < MAX_WAIT_MS) {
     await sleep(POLL_INTERVAL_MS);
@@ -62,21 +86,18 @@ export async function handler(
     console.log(`Statement ${statementId}: ${status}`);
 
     if (status === "FINISHED") {
-      return {
-        PhysicalResourceId: `redshift-create-table-${workgroupName}-${database}`,
-        Data: { status: "FINISHED", statementId },
-      };
+      return statementId;
     }
 
     if (status === "FAILED" || status === "ABORTED") {
       throw new Error(
-        `Redshift CREATE TABLE failed: ${desc.Error ?? "unknown error"} (statement: ${statementId})`,
+        `Redshift statement failed: ${desc.Error ?? "unknown error"} (statement: ${statementId})`,
       );
     }
   }
 
   throw new Error(
-    `Redshift CREATE TABLE timed out after ${MAX_WAIT_MS / 1000}s (statement: ${statementId})`,
+    `Redshift statement timed out after ${MAX_WAIT_MS / 1000}s (statement: ${statementId})`,
   );
 }
 
