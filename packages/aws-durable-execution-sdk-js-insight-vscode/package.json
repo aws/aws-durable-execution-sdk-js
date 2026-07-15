@@ -144,7 +144,7 @@
         "workflowInsight.opensearchEndpoint": {
           "type": "string",
           "default": "",
-          "description": "Amazon OpenSearch domain endpoint, e.g. https://my-domain.us-east-1.es.amazonaws.com (required when destinationType is 'opensearch'). Queried via the SQL plugin with SigV4 auth."
+          "description": "Amazon OpenSearch domain endpoint, e.g. https://my-domain.us-east-1.es.amazonaws.com (required when destinationType is 'opensearch'). Queried via the SQL plugin with SigV4 auth. Note: the SQL plugin caps results at ~200 rows by default (plugins.query.size_limit) even without a LIMIT, so prefer aggregations for whole-dataset questions."
         },
         "workflowInsight.opensearchIndex": {
           "type": "string",

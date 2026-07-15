@@ -11,7 +11,8 @@
  * - "redshift": Redshift SQL; record_json is a SUPER column — navigate/unnest it
  *   with PartiQL (dot/bracket paths, `FROM tbl t, t.record_json.operations o`).
  * - "opensearch": Amazon OpenSearch; queried via the SQL plugin (_plugins/_sql).
- *   String fields are text+keyword — filter/group on the `.keyword` subfield.
+ *   String fields are text+keyword, but the SQL plugin can't resolve the
+ *   `.keyword` subfield — filter/group on the plain field name.
  */
 
 /**
@@ -404,6 +405,9 @@ subset of standard SQL).
 - ORDER BY only on numeric/date fields or aggregate aliases, never a raw text field.
 - Supported: SELECT, WHERE, GROUP BY, HAVING, ORDER BY, LIMIT, and aggregates
   (COUNT, AVG, SUM, MIN, MAX). No JOINs, no CTEs, no window functions.
+- The SQL plugin returns at most ~200 rows by default (plugins.query.size_limit),
+  even without a LIMIT — prefer aggregation (COUNT/AVG/GROUP BY) for whole-dataset
+  questions rather than listing rows, so results aren't silently truncated.
 - Always include LIMIT (default 100) unless aggregating.
 - Return ONLY the SQL query. No prose.`;
 

@@ -9,7 +9,7 @@ import { resolveCredentials } from "./config";
 import { tableExists, runAthenaQuery } from "./athena";
 import { runAuroraQuery } from "./aurora";
 import { runRedshiftQuery } from "./redshift";
-import { pingOpenSearch } from "./opensearch";
+import { pingOpenSearch, countOpenSearchDocs } from "./opensearch";
 
 /**
  * Result of a single check within a destination test (e.g. "Glue table exists",
@@ -299,6 +299,21 @@ async function testOpenSearch(
         credentials,
         endpoint: cfg.opensearchEndpoint,
       });
+    }),
+  );
+
+  // Second probe: GET <index>/_count. Catches a mistyped index name at test
+  // time (a 404 is a soft pass — the index is created on first export, so an
+  // empty/fresh domain shouldn't hard-fail).
+  checks.push(
+    await probe(`Index "${cfg.opensearchIndex}"`, async () => {
+      const n = await countOpenSearchDocs(
+        { region: cfg.region, credentials, endpoint: cfg.opensearchEndpoint },
+        cfg.opensearchIndex,
+      );
+      return n === undefined
+        ? `Index "${cfg.opensearchIndex}" not found yet — it's created on first export. Double-check the name if you expected data.`
+        : `Index "${cfg.opensearchIndex}" exists with ${n} document(s).`;
     }),
   );
   return report(checks);

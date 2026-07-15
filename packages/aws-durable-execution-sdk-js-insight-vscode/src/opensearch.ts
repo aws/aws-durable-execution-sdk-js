@@ -38,21 +38,35 @@ function cellToString(value: unknown): string {
   return String(value);
 }
 
+/** Max chars of an error response body to include in a thrown error message. */
+const ERR_DETAIL_MAX = 500;
+
 /**
  * SigV4-sign and send a request to the OpenSearch domain. Amazon OpenSearch
  * Service authorizes with SigV4 over the "es" service; the caller's resolved
  * credentials (profile/instance role) must be allow-listed in the domain's
  * access policy. Uses native fetch — no OpenSearch client library.
  *
- * No query-string params are used (paths only), so the signed canonical
- * request and the fetched URL stay identical.
+ * Callers pass a leading-slash `path` (e.g. "/_plugins/_sql"); the domain
+ * endpoint is normalized (trailing slash stripped) here so that logic lives in
+ * one place. Query strings are intentionally unsupported: they'd be part of the
+ * SigV4 canonical request, so an unsigned one would 403 — fail loudly instead
+ * of shipping a self-inflicted, hard-to-diagnose 403.
  */
 async function signedFetch(
   conn: OpenSearchConnection,
   method: string,
-  url: string,
+  path: string,
   body?: string,
 ): Promise<Response> {
+  const url = `${conn.endpoint.replace(/\/$/, "")}${path}`;
+  const u = new URL(url);
+  if (u.search) {
+    throw new Error(
+      `signedFetch does not support query strings (unsigned params 403 on OpenSearch): ${path}`,
+    );
+  }
+
   const signer = new SignatureV4({
     service: "es",
     region: conn.region,
@@ -60,7 +74,6 @@ async function signedFetch(
     sha256: Sha256,
   });
 
-  const u = new URL(url);
   const headers: Record<string, string> = { host: u.host };
   if (body != null) headers["content-type"] = "application/json";
 
@@ -88,12 +101,10 @@ async function signedFetch(
 export async function runOpenSearchQuery(
   opts: OpenSearchConnection & { sql: string },
 ): Promise<OpenSearchQueryResult> {
-  const endpoint = opts.endpoint.replace(/\/$/, "");
-  const url = `${endpoint}/_plugins/_sql`;
   const res = await signedFetch(
     opts,
     "POST",
-    url,
+    "/_plugins/_sql",
     JSON.stringify({ query: opts.sql }),
   );
 
@@ -101,7 +112,7 @@ export async function runOpenSearchQuery(
   if (!res.ok) {
     // The SQL plugin returns a JSON error body with reason/details — surface it
     // so the model (agent mode) can correct the query.
-    let detail = text.slice(0, 800);
+    let detail = text.slice(0, ERR_DETAIL_MAX);
     try {
       const err = JSON.parse(text);
       detail = err?.error?.reason || err?.error?.details || detail;
@@ -136,17 +147,17 @@ export async function runOpenSearchQuery(
 export async function fetchOpenSearchRecord(
   opts: OpenSearchConnection & { index: string; executionArn: string },
 ): Promise<Record<string, string> | undefined> {
-  const endpoint = opts.endpoint.replace(/\/$/, "");
-  const url = `${endpoint}/${opts.index}/_doc/${encodeURIComponent(
-    opts.executionArn,
-  )}`;
-  const res = await signedFetch(opts, "GET", url);
+  const res = await signedFetch(
+    opts,
+    "GET",
+    `/${opts.index}/_doc/${encodeURIComponent(opts.executionArn)}`,
+  );
 
   if (res.status === 404) return undefined;
   const text = await res.text();
   if (!res.ok) {
     throw new Error(
-      `OpenSearch get failed (${res.status} ${res.statusText}): ${text.slice(0, 500)}`,
+      `OpenSearch get failed (${res.status} ${res.statusText}): ${text.slice(0, ERR_DETAIL_MAX)}`,
     );
   }
 
@@ -170,12 +181,11 @@ export async function fetchOpenSearchRecord(
 export async function pingOpenSearch(
   conn: OpenSearchConnection,
 ): Promise<string> {
-  const endpoint = conn.endpoint.replace(/\/$/, "");
-  const res = await signedFetch(conn, "GET", `${endpoint}/`);
+  const res = await signedFetch(conn, "GET", "/");
   const text = await res.text();
   if (!res.ok) {
     throw new Error(
-      `OpenSearch connection failed (${res.status} ${res.statusText}): ${text.slice(0, 300)}`,
+      `OpenSearch connection failed (${res.status} ${res.statusText}): ${text.slice(0, ERR_DETAIL_MAX)}`,
     );
   }
   try {
@@ -187,4 +197,26 @@ export async function pingOpenSearch(
   } catch {
     return "Connected to the OpenSearch domain.";
   }
+}
+
+/**
+ * Signed GET <index>/_count. Returns the document count, or `undefined` when
+ * the index does not exist yet (404) — which is expected before the first
+ * record is exported. Lets the connection test surface a likely index-name
+ * typo without hard-failing a freshly-provisioned (empty) domain.
+ */
+export async function countOpenSearchDocs(
+  conn: OpenSearchConnection,
+  index: string,
+): Promise<number | undefined> {
+  const res = await signedFetch(conn, "GET", `/${index}/_count`);
+  if (res.status === 404) return undefined;
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(
+      `OpenSearch count failed (${res.status} ${res.statusText}): ${text.slice(0, ERR_DETAIL_MAX)}`,
+    );
+  }
+  const data = JSON.parse(text) as { count?: number };
+  return data.count ?? 0;
 }

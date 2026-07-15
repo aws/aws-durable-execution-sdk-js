@@ -12,6 +12,7 @@ import {
   runOpenSearchQuery,
   fetchOpenSearchRecord,
   pingOpenSearch,
+  countOpenSearchDocs,
 } from "./opensearch";
 
 const conn = {
@@ -160,5 +161,37 @@ describe("pingOpenSearch", () => {
       body: "no",
     });
     await expect(pingOpenSearch(conn)).rejects.toThrow(/403/);
+  });
+});
+
+describe("countOpenSearchDocs", () => {
+  it("returns the document count and hits <index>/_count", async () => {
+    mockFetchOnce({
+      ok: true,
+      status: 200,
+      body: JSON.stringify({ count: 42 }),
+    });
+    const n = await countOpenSearchDocs(conn, "workflow-insight");
+    expect(n).toBe(42);
+    const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(url).toBe(`${conn.endpoint}/workflow-insight/_count`);
+    expect(init.method).toBe("GET");
+  });
+
+  it("returns undefined when the index doesn't exist (404)", async () => {
+    mockFetchOnce({ ok: false, status: 404, body: "" });
+    expect(await countOpenSearchDocs(conn, "missing-index")).toBeUndefined();
+  });
+
+  it("throws on other errors", async () => {
+    mockFetchOnce({
+      ok: false,
+      status: 403,
+      statusText: "Forbidden",
+      body: "denied",
+    });
+    await expect(countOpenSearchDocs(conn, "workflow-insight")).rejects.toThrow(
+      /403/,
+    );
   });
 });
