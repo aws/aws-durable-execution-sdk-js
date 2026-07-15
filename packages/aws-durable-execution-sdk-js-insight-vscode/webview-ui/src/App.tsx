@@ -55,6 +55,8 @@ function starterQueryFor(s: Settings): string {
       return `SELECT * FROM "${s.dynamodbTableName || "your-table"}" LIMIT 50`;
     case "aurora":
       return `SELECT * FROM ${s.auroraTable || "workflow_insight"} LIMIT 50`;
+    case "redshift":
+      return `SELECT * FROM ${s.redshiftSchema || "public"}.${s.redshiftTable || "workflow_insight"} LIMIT 50`;
     case "s3":
       return `SELECT * FROM ${s.athenaTable || "workflow_insight"} LIMIT 50`;
     default:

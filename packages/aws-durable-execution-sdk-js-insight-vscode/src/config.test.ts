@@ -18,6 +18,29 @@ describe("configFromWireSettings", () => {
     expect(cfg.logGroupNames).toEqual([]);
   });
 
+  it("applies Redshift defaults for an empty payload", () => {
+    const cfg = configFromWireSettings({});
+    expect(cfg.redshiftDatabase).toBe("dev");
+    expect(cfg.redshiftTable).toBe("workflow_insight");
+    expect(cfg.redshiftSchema).toBe("public");
+    expect(cfg.redshiftWorkgroupName).toBe("");
+  });
+
+  it("maps Redshift fields from the wire payload", () => {
+    const cfg = configFromWireSettings({
+      destinationType: "redshift",
+      redshiftWorkgroupName: "insight-workgroup",
+      redshiftDatabase: "prod",
+      redshiftSchema: "analytics",
+      redshiftTable: "wi",
+    });
+    expect(cfg.destinationType).toBe("redshift");
+    expect(cfg.redshiftWorkgroupName).toBe("insight-workgroup");
+    expect(cfg.redshiftDatabase).toBe("prod");
+    expect(cfg.redshiftSchema).toBe("analytics");
+    expect(cfg.redshiftTable).toBe("wi");
+  });
+
   it("maps Athena/S3 fields from the wire payload", () => {
     const cfg = configFromWireSettings({
       destinationType: "s3",

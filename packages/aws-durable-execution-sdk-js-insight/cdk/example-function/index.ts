@@ -8,6 +8,7 @@ import {
   CloudWatchLogsExporter,
   DynamoDBExporter,
   AuroraExporter,
+  RedshiftExporter,
   SQSExporter,
   S3Exporter,
 } from "@aws/durable-execution-sdk-js-insight";
@@ -47,6 +48,17 @@ const exporters = [
           database: process.env.INSIGHT_AURORA_DATABASE ?? "postgres",
           table: process.env.INSIGHT_AURORA_TABLE ?? "workflow_insight",
           engine: "postgresql",
+          region: process.env.AWS_REGION,
+        }),
+      ]
+    : []),
+  ...(process.env.INSIGHT_REDSHIFT_WORKGROUP
+    ? [
+        new RedshiftExporter({
+          workgroupName: process.env.INSIGHT_REDSHIFT_WORKGROUP,
+          database: process.env.INSIGHT_REDSHIFT_DATABASE ?? "dev",
+          table: process.env.INSIGHT_REDSHIFT_TABLE ?? "workflow_insight",
+          schema: process.env.INSIGHT_REDSHIFT_SCHEMA ?? "public",
           region: process.env.AWS_REGION,
         }),
       ]

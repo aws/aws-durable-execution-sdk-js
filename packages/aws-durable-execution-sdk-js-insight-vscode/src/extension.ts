@@ -27,6 +27,7 @@ import {
 import { runLogsInsightsQuery, fetchLogsInsightsRecord } from "./logsInsights";
 import { runDynamoDBQuery, fetchDynamoDBRecord } from "./dynamodb";
 import { runAuroraQuery, fetchAuroraRecord } from "./aurora";
+import { runRedshiftQuery, fetchRedshiftRecord } from "./redshift";
 import {
   runAthenaQuery,
   ensureAthenaTable,
@@ -336,6 +337,13 @@ class ExplorerPanel {
         auroraSecretArn: cfg.auroraSecretArn,
         auroraDatabase: cfg.auroraDatabase,
         auroraTable: cfg.auroraTable,
+        redshiftWorkgroupName: cfg.redshiftWorkgroupName,
+        redshiftClusterIdentifier: cfg.redshiftClusterIdentifier,
+        redshiftDbUser: cfg.redshiftDbUser,
+        redshiftSecretArn: cfg.redshiftSecretArn,
+        redshiftDatabase: cfg.redshiftDatabase,
+        redshiftTable: cfg.redshiftTable,
+        redshiftSchema: cfg.redshiftSchema,
         sqsQueueUrl: cfg.sqsQueueUrl,
         sqsDeleteAfterRead: cfg.sqsDeleteAfterRead,
         athenaDatabase: cfg.athenaDatabase,
@@ -674,9 +682,11 @@ class ExplorerPanel {
         ? cfg.dynamodbTableName
         : cfg.destinationType === "aurora"
           ? cfg.auroraTable
-          : cfg.destinationType === "s3"
-            ? cfg.athenaTable
-            : undefined;
+          : cfg.destinationType === "redshift"
+            ? `${cfg.redshiftSchema}.${cfg.redshiftTable}`
+            : cfg.destinationType === "s3"
+              ? cfg.athenaTable
+              : undefined;
 
     // Dispatch by the selected mode:
     //  - query: run the text verbatim (no LLM)
@@ -1060,9 +1070,11 @@ class ExplorerPanel {
         ? cfg.dynamodbTableName
         : cfg.destinationType === "aurora"
           ? cfg.auroraTable
-          : cfg.destinationType === "s3"
-            ? cfg.athenaTable
-            : undefined;
+          : cfg.destinationType === "redshift"
+            ? `${cfg.redshiftSchema}.${cfg.redshiftTable}`
+            : cfg.destinationType === "s3"
+              ? cfg.athenaTable
+              : undefined;
 
     let iteration = 0;
     // The most recent successful query execution, so a turn that ends with a
@@ -1382,6 +1394,40 @@ class ExplorerPanel {
         hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
       };
     }
+    if (cfg.destinationType === "redshift") {
+      if (!cfg.redshiftWorkgroupName && !cfg.redshiftClusterIdentifier)
+        throw new Error("Redshift not configured.");
+      assertReadOnly(generated.query, "Redshift SQL");
+      const { query, idColumn, injectedColumns } = inject
+        ? ensureIdentifierColumn(generated.query, "execution_arn", "sql")
+        : {
+            query: generated.query,
+            idColumn: undefined,
+            injectedColumns: [] as string[],
+          };
+      const table = await runOnce(query, () =>
+        runRedshiftQuery({
+          region: cfg.region,
+          credentials,
+          database: cfg.redshiftDatabase,
+          workgroupName: cfg.redshiftWorkgroupName || undefined,
+          clusterIdentifier: cfg.redshiftClusterIdentifier || undefined,
+          dbUser: cfg.redshiftDbUser || undefined,
+          secretArn: cfg.redshiftSecretArn || undefined,
+          sql: query,
+        }),
+      );
+      const capped = capRows(table);
+      return {
+        ...table,
+        ...capped,
+        explanation: generated.explanation,
+        suggestedCharts: generated.suggestedCharts,
+        finalQuery: query,
+        idColumn: resolveActualColumnCasing(idColumn, table.columns),
+        hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
+      };
+    }
     if (cfg.destinationType === "s3") {
       if (!cfg.athenaDatabase) throw new Error("Athena not configured.");
       assertReadOnly(generated.query, "Trino/Presto SQL");
@@ -1496,6 +1542,18 @@ class ExplorerPanel {
           secretArn: cfg.auroraSecretArn,
           database: cfg.auroraDatabase,
           table: cfg.auroraTable,
+          executionArn: idValue,
+        });
+      } else if (cfg.destinationType === "redshift") {
+        record = await fetchRedshiftRecord({
+          region: cfg.region,
+          credentials,
+          database: cfg.redshiftDatabase,
+          workgroupName: cfg.redshiftWorkgroupName || undefined,
+          clusterIdentifier: cfg.redshiftClusterIdentifier || undefined,
+          dbUser: cfg.redshiftDbUser || undefined,
+          secretArn: cfg.redshiftSecretArn || undefined,
+          table: `${cfg.redshiftSchema}.${cfg.redshiftTable}`,
           executionArn: idValue,
         });
       } else if (cfg.destinationType === "s3") {

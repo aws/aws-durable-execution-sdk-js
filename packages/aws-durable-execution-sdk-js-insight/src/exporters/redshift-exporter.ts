@@ -115,40 +115,58 @@ export class RedshiftExporter implements InsightExporter {
       { name: "emitted_at", value: record.emittedAt },
     ];
 
-    // Nullable fields: Redshift Data API doesn't support NULL or empty string
-    // in parameters, so we use SQL NULL literals for absent values.
-    const endTimeExpr = record.endTime
+    // Nullable fields: the Redshift Data API doesn't support NULL/empty-string
+    // parameter values, so absent values are emitted as typed SQL NULL literals
+    // in the source projection instead of bound parameters.
+    const endTimeSel = record.endTime
       ? (parameters.push({ name: "end_time", value: record.endTime }),
-        ":end_time")
-      : "NULL";
-    const durationExpr =
+        ":end_time::varchar")
+      : "NULL::varchar";
+    const durationSel =
       record.durationMs != null
         ? (parameters.push({
             name: "duration_ms",
             value: String(record.durationMs),
           }),
-          ":duration_ms")
-        : "NULL";
-    const execNameExpr = record.executionName
+          ":duration_ms::bigint")
+        : "NULL::bigint";
+    const execNameSel = record.executionName
       ? (parameters.push({
           name: "execution_name",
           value: record.executionName,
         }),
-        ":execution_name")
-      : "NULL";
+        ":execution_name::varchar")
+      : "NULL::varchar";
 
-    const sql = `MERGE INTO ${this.fqTable} USING (SELECT 1) AS src
-    ON ${this.fqTable}.execution_arn = :execution_arn
+    // Upsert by executionArn. The source row is projected in a subquery and the
+    // MERGE joins target/source on execution_arn — Redshift's MERGE requires an
+    // equality join on a SOURCE COLUMN (joining on a parameter/constant makes it
+    // plan a NestedLoop join, which MERGE rejects with "NestedLoop join is not
+    // supported in MERGE"). record_json is populated with JSON_PARSE(...) so it
+    // lands in the SUPER column.
+    const sql = `MERGE INTO ${this.fqTable} USING (
+      SELECT
+        :execution_arn::varchar AS execution_arn,
+        ${execNameSel} AS execution_name,
+        :function_name::varchar AS function_name,
+        :status::varchar AS status,
+        :start_time::varchar AS start_time,
+        ${endTimeSel} AS end_time,
+        ${durationSel} AS duration_ms,
+        JSON_PARSE(:record_json) AS record_json,
+        :emitted_at::varchar AS emitted_at
+    ) AS src
+    ON ${this.fqTable}.execution_arn = src.execution_arn
     WHEN MATCHED THEN UPDATE SET
-      status = :status,
-      end_time = ${endTimeExpr},
-      duration_ms = ${durationExpr},
-      record_json = JSON_PARSE(:record_json),
-      emitted_at = :emitted_at
+      status = src.status,
+      end_time = src.end_time,
+      duration_ms = src.duration_ms,
+      record_json = src.record_json,
+      emitted_at = src.emitted_at
     WHEN NOT MATCHED THEN INSERT
       (execution_arn, execution_name, function_name, status, start_time, end_time, duration_ms, record_json, emitted_at)
     VALUES
-      (:execution_arn, ${execNameExpr}, :function_name, :status, :start_time, ${endTimeExpr}, ${durationExpr}, JSON_PARSE(:record_json), :emitted_at)`;
+      (src.execution_arn, src.execution_name, src.function_name, src.status, src.start_time, src.end_time, src.duration_ms, src.record_json, src.emitted_at)`;
 
     await this.client.send(
       new ExecuteStatementCommand({

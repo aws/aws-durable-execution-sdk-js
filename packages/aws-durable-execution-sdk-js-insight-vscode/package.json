@@ -54,6 +54,7 @@
             "lambda-log-exporter",
             "dynamodb",
             "aurora",
+            "redshift",
             "s3",
             "sqs"
           ],
@@ -62,6 +63,7 @@
             "Function's own log group via LambdaLogExporter — records nested in Lambda JSON envelope (message field)",
             "DynamoDB table via DynamoDBExporter — records queryable via PartiQL",
             "Aurora PostgreSQL/MySQL via AuroraExporter — full SQL with GROUP BY, JOIN, aggregations",
+            "Amazon Redshift via RedshiftExporter — full SQL; record_json is a SUPER column navigated with PartiQL",
             "S3 via S3Exporter — queried through Amazon Athena (Trino/Presto SQL) over a Glue table",
             "Amazon SQS via SQSExporter — live view that listens to the queue as records arrive (no query engine)"
           ],
@@ -101,6 +103,41 @@
           "type": "string",
           "default": "workflow_insight",
           "description": "Aurora table name containing insight records."
+        },
+        "workflowInsight.redshiftWorkgroupName": {
+          "type": "string",
+          "default": "",
+          "description": "Redshift Serverless workgroup name (required for Serverless when destinationType is 'redshift'). Leave empty if using a provisioned cluster."
+        },
+        "workflowInsight.redshiftClusterIdentifier": {
+          "type": "string",
+          "default": "",
+          "description": "Provisioned Redshift cluster identifier (alternative to redshiftWorkgroupName). Leave empty if using Redshift Serverless."
+        },
+        "workflowInsight.redshiftDbUser": {
+          "type": "string",
+          "default": "",
+          "description": "Database user for a provisioned Redshift cluster (used with GetClusterCredentials). Not needed for Serverless or when redshiftSecretArn is set."
+        },
+        "workflowInsight.redshiftSecretArn": {
+          "type": "string",
+          "default": "",
+          "description": "Secrets Manager ARN for Redshift Data API auth (optional; alternative to IAM/dbUser)."
+        },
+        "workflowInsight.redshiftDatabase": {
+          "type": "string",
+          "default": "dev",
+          "description": "Redshift database name."
+        },
+        "workflowInsight.redshiftTable": {
+          "type": "string",
+          "default": "workflow_insight",
+          "description": "Redshift table name containing insight records."
+        },
+        "workflowInsight.redshiftSchema": {
+          "type": "string",
+          "default": "public",
+          "description": "Redshift schema containing the insight table (queried as <schema>.<table>)."
         },
         "workflowInsight.athenaDatabase": {
           "type": "string",
@@ -226,6 +263,7 @@
     "@aws-sdk/client-dynamodb": "^3.658.0",
     "@aws-sdk/client-glue": "^3.658.0",
     "@aws-sdk/client-rds-data": "^3.658.0",
+    "@aws-sdk/client-redshift-data": "^3.658.0",
     "@aws-sdk/client-sqs": "^3.658.0",
     "@aws-sdk/credential-providers": "^3.658.0",
     "@aws-sdk/util-dynamodb": "^3.658.0",
