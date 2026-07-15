@@ -10,6 +10,9 @@
  *   query operations by name via a JSONB/JSONPath predicate on the array.
  * - "redshift": Redshift SQL; record_json is a SUPER column — navigate/unnest it
  *   with PartiQL (dot/bracket paths, `FROM tbl t, t.record_json.operations o`).
+ * - "opensearch": Amazon OpenSearch; queried via the SQL plugin (_plugins/_sql).
+ *   String fields are text+keyword, but the SQL plugin can't resolve the
+ *   `.keyword` subfield — filter/group on the plain field name.
  */
 
 /**
@@ -26,6 +29,7 @@ export type DestinationType =
   | "dynamodb"
   | "aurora"
   | "redshift"
+  | "opensearch"
   | "sqs"
   | "s3";
 
@@ -363,6 +367,72 @@ A: SELECT function_name, AVG(duration_ms) AS avg_ms, COUNT(*) AS ct FROM TABLE_N
 Q: executions where operation "convert_data" took less than 5 seconds
 A: SELECT DISTINCT e.execution_arn, e.function_name FROM TABLE_NAME e, e.record_json."operations" o WHERE o."name" = 'convert_data' AND o."durationMs"::bigint < 5000 LIMIT 50`;
 
+// ─── OPENSEARCH (Amazon OpenSearch SQL plugin: POST _plugins/_sql) ────────────
+
+const RECORD_SCHEMA_OPENSEARCH = `Each record is one OpenSearch document (doc _id = executionArn) in the index
+\`TABLE_NAME\`. The index name contains a hyphen, so it MUST be wrapped in
+backticks in the FROM clause. Documents are the raw WorkflowInsightRecord with
+camelCase fields:
+- recordType: keyword ("WorkflowInsight")
+- schemaVersion, executionArn, executionName, functionName, functionQualifier,
+  region, accountId, status (RUNNING|SUCCEEDED|FAILED): string fields
+- emittedAt, startTime, endTime: ISO-8601 date strings
+- durationMs: numeric (long), null while running
+- input, output: nested objects (structure varies per function)
+- error: object {name, message}
+- operations: array of operation objects (see limitation below)
+
+CRITICAL — query STRING fields by their plain names (status, functionName,
+input.claimType). Although the mapping has a .keyword subfield, the OpenSearch
+SQL plugin does NOT expose it as a column — writing status.keyword fails with
+"can't resolve status.keyword". The plugin filters/groups on the text field
+directly (WHERE status = 'FAILED', GROUP BY status both work). Numeric
+(durationMs) and date (emittedAt/startTime/endTime) fields are used directly.
+Do NOT use ORDER BY on a raw text field (text isn't sortable); order by a
+numeric/date field or an aggregate alias instead.
+
+Limitation: operations is an array of objects. The OpenSearch SQL plugin cannot
+reliably unnest or aggregate array-of-object subfields — do NOT try to query
+individual operations by name/duration here. Answer operation-level questions
+from the top-level fields (status, durationMs, functionName) instead.`;
+
+const DIALECT_OPENSEARCH = `Target query language: Amazon OpenSearch SQL (the _plugins/_sql dialect, a
+subset of standard SQL).
+- FROM \`TABLE_NAME\` (index name — always backtick-quoted).
+- Query string fields by plain name (status, functionName, input.claimType).
+  Do NOT append .keyword — the SQL plugin can't resolve the keyword subfield.
+- durationMs is numeric; emittedAt/startTime/endTime are dates (comparable, orderable).
+- ORDER BY only on numeric/date fields or aggregate aliases, never a raw text field.
+- Supported: SELECT, WHERE, GROUP BY, HAVING, ORDER BY, LIMIT, and aggregates
+  (COUNT, AVG, SUM, MIN, MAX). No JOINs, no CTEs, no window functions.
+- The SQL plugin returns at most ~200 rows by default (plugins.query.size_limit),
+  even without a LIMIT — prefer aggregation (COUNT/AVG/GROUP BY) for whole-dataset
+  questions rather than listing rows, so results aren't silently truncated.
+- Always include LIMIT (default 100) unless aggregating.
+- Return ONLY the SQL query. No prose.`;
+
+const FEWSHOTS_OPENSEARCH = `Examples:
+Q: show the most recent failed executions
+A: SELECT executionArn, functionName, durationMs, emittedAt FROM \`TABLE_NAME\` WHERE status = 'FAILED' ORDER BY emittedAt DESC LIMIT 50
+
+Q: average duration of successful executions
+A: SELECT AVG(durationMs) AS avg_duration_ms FROM \`TABLE_NAME\` WHERE status = 'SUCCEEDED'
+
+Q: count executions by status
+A: SELECT status, COUNT(*) AS ct FROM \`TABLE_NAME\` GROUP BY status ORDER BY ct DESC
+
+Q: executions longer than 5 seconds
+A: SELECT executionArn, functionName, durationMs FROM \`TABLE_NAME\` WHERE status = 'SUCCEEDED' AND durationMs > 5000 ORDER BY durationMs DESC LIMIT 50
+
+Q: average duration grouped by function
+A: SELECT functionName, AVG(durationMs) AS avg_ms, COUNT(*) AS ct FROM \`TABLE_NAME\` GROUP BY functionName ORDER BY avg_ms DESC
+
+Q: break down executions by claim type
+A: SELECT input.claimType AS claim_type, COUNT(*) AS ct FROM \`TABLE_NAME\` GROUP BY input.claimType ORDER BY ct DESC
+
+Q: show last 100 records
+A: SELECT executionArn, status, functionName, durationMs, emittedAt FROM \`TABLE_NAME\` ORDER BY emittedAt DESC LIMIT 100`;
+
 // ─── ATHENA (Trino/Presto SQL over S3 via S3Exporter) ────────────────────────
 
 const RECORD_SCHEMA_ATHENA = `Records are stored as one JSON object per file in S3 (via S3Exporter), registered as
@@ -605,6 +675,22 @@ export function buildSystemPrompt(
       DIALECT_REDSHIFT.replace(/TABLE_NAME/g, table),
       "",
       FEWSHOTS_REDSHIFT.replace(/TABLE_NAME/g, table),
+      "",
+      ...closing,
+    ].join("\n");
+  }
+
+  if (destinationType === "opensearch") {
+    const table = options?.tableName || "workflow-insight";
+    return [
+      "You convert a user's plain-English question into a single OpenSearch SQL query",
+      "for querying AWS Durable Execution Workflow Insight records in Amazon OpenSearch.",
+      "",
+      RECORD_SCHEMA_OPENSEARCH.replace(/TABLE_NAME/g, table),
+      "",
+      DIALECT_OPENSEARCH.replace(/TABLE_NAME/g, table),
+      "",
+      FEWSHOTS_OPENSEARCH.replace(/TABLE_NAME/g, table),
       "",
       ...closing,
     ].join("\n");

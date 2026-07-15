@@ -199,6 +199,8 @@ export interface Settings {
   redshiftDatabase: string;
   redshiftTable: string;
   redshiftSchema: string;
+  opensearchEndpoint: string;
+  opensearchIndex: string;
   sqsQueueUrl: string;
   sqsDeleteAfterRead: boolean;
   athenaDatabase: string;
@@ -282,6 +284,8 @@ export const DEFAULT_SETTINGS: Settings = {
   redshiftDatabase: "dev",
   redshiftTable: "workflow_insight",
   redshiftSchema: "public",
+  opensearchEndpoint: "",
+  opensearchIndex: "workflow-insight",
   sqsQueueUrl: "",
   sqsDeleteAfterRead: false,
   athenaDatabase: "",

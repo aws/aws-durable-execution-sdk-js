@@ -46,6 +46,7 @@ const DEST_OPTIONS: SelectProps.Option[] = [
   { value: "dynamodb", label: "DynamoDB" },
   { value: "aurora", label: "Aurora PostgreSQL" },
   { value: "redshift", label: "Amazon Redshift" },
+  { value: "opensearch", label: "Amazon OpenSearch" },
   { value: "s3", label: "S3 + Athena" },
   { value: "sqs", label: "Amazon SQS (live view)" },
 ];
@@ -102,6 +103,7 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
   const showDdb = dest === "dynamodb";
   const showAurora = dest === "aurora";
   const showRedshift = dest === "redshift";
+  const showOpenSearch = dest === "opensearch";
   const showAthena = dest === "s3";
   const showSqs = dest === "sqs";
 
@@ -186,6 +188,17 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
                     </FormField>
                     <FormField label="Secret ARN" description="Optional: Secrets Manager ARN for Data API auth (alternative to IAM/DB user).">
                       <Input value={form.redshiftSecretArn} onChange={({ detail }) => update("redshiftSecretArn", detail.value)} placeholder="arn:aws:secretsmanager:..." />
+                    </FormField>
+                  </SpaceBetween>
+                )}
+
+                {showOpenSearch && (
+                  <SpaceBetween size="s">
+                    <FormField label="Domain Endpoint" description="Amazon OpenSearch Service HTTPS endpoint. Authenticated with SigV4 (your AWS identity must be in the domain access policy).">
+                      <Input value={form.opensearchEndpoint} onChange={({ detail }) => update("opensearchEndpoint", detail.value)} placeholder="https://my-domain.us-east-1.es.amazonaws.com" />
+                    </FormField>
+                    <FormField label="Index">
+                      <Input value={form.opensearchIndex} onChange={({ detail }) => update("opensearchIndex", detail.value)} placeholder="workflow-insight" />
                     </FormField>
                   </SpaceBetween>
                 )}

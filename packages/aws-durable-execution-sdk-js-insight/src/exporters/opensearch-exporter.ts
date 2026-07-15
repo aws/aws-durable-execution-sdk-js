@@ -86,7 +86,15 @@ export class OpenSearchExporter implements InsightExporter {
 
     if (this.auth === "sigv4") {
       const signed = await this.signRequest(url, body);
-      fetchHeaders = { ...headers, ...signed.headers };
+      // Use the signed header set verbatim. Do NOT merge the pre-signing
+      // `headers` on top: that object carries a capital-cased "Content-Type"
+      // while SignatureV4 emits a lowercase "content-type" it included in the
+      // signature. Sending both makes fetch/undici collapse them
+      // case-insensitively into a duplicated value that no longer matches the
+      // canonical request SigV4 signed — OpenSearch then rejects it with 403
+      // Forbidden. signed.headers already includes content-type + host + the
+      // auth/date/security-token headers, so it is complete on its own.
+      fetchHeaders = signed.headers;
       fetchUrl = signed.url;
     }
 
@@ -97,8 +105,9 @@ export class OpenSearchExporter implements InsightExporter {
     });
 
     if (!response.ok && response.status !== 201 && response.status !== 200) {
+      const detail = await response.text().catch(() => "");
       throw new Error(
-        `OpenSearch index failed: ${response.status} ${response.statusText}`,
+        `OpenSearch index failed: ${response.status} ${response.statusText}${detail ? ` — ${detail.slice(0, 500)}` : ""}`,
       );
     }
   }

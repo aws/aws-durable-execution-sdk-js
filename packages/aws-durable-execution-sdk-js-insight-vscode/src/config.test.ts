@@ -41,6 +41,20 @@ describe("configFromWireSettings", () => {
     expect(cfg.redshiftTable).toBe("wi");
   });
 
+  it("maps OpenSearch fields and defaults the index", () => {
+    const empty = configFromWireSettings({});
+    expect(empty.opensearchIndex).toBe("workflow-insight");
+    expect(empty.opensearchEndpoint).toBe("");
+    const cfg = configFromWireSettings({
+      destinationType: "opensearch",
+      opensearchEndpoint: "https://d.us-east-1.es.amazonaws.com",
+      opensearchIndex: "wi-index",
+    });
+    expect(cfg.destinationType).toBe("opensearch");
+    expect(cfg.opensearchEndpoint).toBe("https://d.us-east-1.es.amazonaws.com");
+    expect(cfg.opensearchIndex).toBe("wi-index");
+  });
+
   it("maps Athena/S3 fields from the wire payload", () => {
     const cfg = configFromWireSettings({
       destinationType: "s3",

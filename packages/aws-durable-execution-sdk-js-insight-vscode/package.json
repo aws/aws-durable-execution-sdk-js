@@ -55,6 +55,7 @@
             "dynamodb",
             "aurora",
             "redshift",
+            "opensearch",
             "s3",
             "sqs"
           ],
@@ -64,6 +65,7 @@
             "DynamoDB table via DynamoDBExporter — records queryable via PartiQL",
             "Aurora PostgreSQL/MySQL via AuroraExporter — full SQL with GROUP BY, JOIN, aggregations",
             "Amazon Redshift via RedshiftExporter — full SQL; record_json is a SUPER column navigated with PartiQL",
+            "Amazon OpenSearch via OpenSearchExporter — queried through the SQL plugin (_plugins/_sql), SigV4-signed",
             "S3 via S3Exporter — queried through Amazon Athena (Trino/Presto SQL) over a Glue table",
             "Amazon SQS via SQSExporter — live view that listens to the queue as records arrive (no query engine)"
           ],
@@ -138,6 +140,16 @@
           "type": "string",
           "default": "public",
           "description": "Redshift schema containing the insight table (queried as <schema>.<table>)."
+        },
+        "workflowInsight.opensearchEndpoint": {
+          "type": "string",
+          "default": "",
+          "description": "Amazon OpenSearch domain endpoint, e.g. https://my-domain.us-east-1.es.amazonaws.com (required when destinationType is 'opensearch'). Queried via the SQL plugin with SigV4 auth. Note: the SQL plugin caps results at ~200 rows by default (plugins.query.size_limit) even without a LIMIT, so prefer aggregations for whole-dataset questions."
+        },
+        "workflowInsight.opensearchIndex": {
+          "type": "string",
+          "default": "workflow-insight",
+          "description": "OpenSearch index containing the insight records."
         },
         "workflowInsight.athenaDatabase": {
           "type": "string",
@@ -256,6 +268,7 @@
     "clean": "rm -rf dist media/webview.js media/webview.css"
   },
   "dependencies": {
+    "@aws-crypto/sha256-js": "^5.2.0",
     "@aws-sdk/client-athena": "^3.658.0",
     "@aws-sdk/client-bedrock": "^3.1086.0",
     "@aws-sdk/client-bedrock-runtime": "^3.658.0",
@@ -268,6 +281,7 @@
     "@aws-sdk/credential-providers": "^3.658.0",
     "@aws-sdk/util-dynamodb": "^3.658.0",
     "@jitl/quickjs-singlefile-cjs-release-sync": "^0.32.0",
+    "@smithy/signature-v4": "^5.0.0",
     "node-llama-cpp": "^3.18.1",
     "quickjs-emscripten-core": "^0.32.0"
   },

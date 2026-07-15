@@ -28,6 +28,7 @@ import { runLogsInsightsQuery, fetchLogsInsightsRecord } from "./logsInsights";
 import { runDynamoDBQuery, fetchDynamoDBRecord } from "./dynamodb";
 import { runAuroraQuery, fetchAuroraRecord } from "./aurora";
 import { runRedshiftQuery, fetchRedshiftRecord } from "./redshift";
+import { runOpenSearchQuery, fetchOpenSearchRecord } from "./opensearch";
 import {
   runAthenaQuery,
   ensureAthenaTable,
@@ -344,6 +345,8 @@ class ExplorerPanel {
         redshiftDatabase: cfg.redshiftDatabase,
         redshiftTable: cfg.redshiftTable,
         redshiftSchema: cfg.redshiftSchema,
+        opensearchEndpoint: cfg.opensearchEndpoint,
+        opensearchIndex: cfg.opensearchIndex,
         sqsQueueUrl: cfg.sqsQueueUrl,
         sqsDeleteAfterRead: cfg.sqsDeleteAfterRead,
         athenaDatabase: cfg.athenaDatabase,
@@ -684,9 +687,11 @@ class ExplorerPanel {
           ? cfg.auroraTable
           : cfg.destinationType === "redshift"
             ? `${cfg.redshiftSchema}.${cfg.redshiftTable}`
-            : cfg.destinationType === "s3"
-              ? cfg.athenaTable
-              : undefined;
+            : cfg.destinationType === "opensearch"
+              ? cfg.opensearchIndex
+              : cfg.destinationType === "s3"
+                ? cfg.athenaTable
+                : undefined;
 
     // Dispatch by the selected mode:
     //  - query: run the text verbatim (no LLM)
@@ -1072,9 +1077,11 @@ class ExplorerPanel {
           ? cfg.auroraTable
           : cfg.destinationType === "redshift"
             ? `${cfg.redshiftSchema}.${cfg.redshiftTable}`
-            : cfg.destinationType === "s3"
-              ? cfg.athenaTable
-              : undefined;
+            : cfg.destinationType === "opensearch"
+              ? cfg.opensearchIndex
+              : cfg.destinationType === "s3"
+                ? cfg.athenaTable
+                : undefined;
 
     let iteration = 0;
     // The most recent successful query execution, so a turn that ends with a
@@ -1428,6 +1435,36 @@ class ExplorerPanel {
         hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
       };
     }
+    if (cfg.destinationType === "opensearch") {
+      if (!cfg.opensearchEndpoint)
+        throw new Error("OpenSearch not configured.");
+      assertReadOnly(generated.query, "OpenSearch SQL");
+      const { query, idColumn, injectedColumns } = inject
+        ? ensureIdentifierColumn(generated.query, "executionArn", "sql")
+        : {
+            query: generated.query,
+            idColumn: undefined,
+            injectedColumns: [] as string[],
+          };
+      const table = await runOnce(query, () =>
+        runOpenSearchQuery({
+          region: cfg.region,
+          credentials,
+          endpoint: cfg.opensearchEndpoint,
+          sql: query,
+        }),
+      );
+      const capped = capRows(table);
+      return {
+        ...table,
+        ...capped,
+        explanation: generated.explanation,
+        suggestedCharts: generated.suggestedCharts,
+        finalQuery: query,
+        idColumn: resolveActualColumnCasing(idColumn, table.columns),
+        hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
+      };
+    }
     if (cfg.destinationType === "s3") {
       if (!cfg.athenaDatabase) throw new Error("Athena not configured.");
       assertReadOnly(generated.query, "Trino/Presto SQL");
@@ -1554,6 +1591,14 @@ class ExplorerPanel {
           dbUser: cfg.redshiftDbUser || undefined,
           secretArn: cfg.redshiftSecretArn || undefined,
           table: `${cfg.redshiftSchema}.${cfg.redshiftTable}`,
+          executionArn: idValue,
+        });
+      } else if (cfg.destinationType === "opensearch") {
+        record = await fetchOpenSearchRecord({
+          region: cfg.region,
+          credentials,
+          endpoint: cfg.opensearchEndpoint,
+          index: cfg.opensearchIndex,
           executionArn: idValue,
         });
       } else if (cfg.destinationType === "s3") {
