@@ -20,6 +20,13 @@ jest.mock("./athena", () => ({
 jest.mock("./aurora", () => ({
   runAuroraQuery: jest.fn(),
 }));
+jest.mock("./redshift", () => ({
+  runRedshiftQuery: jest.fn(),
+}));
+jest.mock("./opensearch", () => ({
+  pingOpenSearch: jest.fn(),
+  countOpenSearchDocs: jest.fn(),
+}));
 jest.mock("./config", () => ({
   resolveCredentials: jest.fn(() => ({})),
 }));
@@ -28,6 +35,8 @@ import type { InsightConfig } from "./config";
 import { testDestination } from "./destinationTest";
 import { tableExists, runAthenaQuery } from "./athena";
 import { runAuroraQuery } from "./aurora";
+import { runRedshiftQuery } from "./redshift";
+import { pingOpenSearch, countOpenSearchDocs } from "./opensearch";
 
 function baseCfg(overrides: Partial<InsightConfig>): InsightConfig {
   return {
@@ -39,6 +48,15 @@ function baseCfg(overrides: Partial<InsightConfig>): InsightConfig {
     auroraSecretArn: "",
     auroraDatabase: "postgres",
     auroraTable: "workflow_insight",
+    redshiftWorkgroupName: "",
+    redshiftClusterIdentifier: "",
+    redshiftDbUser: "",
+    redshiftSecretArn: "",
+    redshiftDatabase: "dev",
+    redshiftTable: "workflow_insight",
+    redshiftSchema: "public",
+    opensearchEndpoint: "",
+    opensearchIndex: "workflow-insight",
     sqsQueueUrl: "",
     sqsDeleteAfterRead: false,
     athenaDatabase: "",
@@ -175,6 +193,109 @@ describe("testDestination — Aurora", () => {
     expect(runAuroraQuery).toHaveBeenCalledWith(
       expect.objectContaining({ sql: "SELECT 1" }),
     );
+  });
+});
+
+describe("testDestination — Redshift", () => {
+  it("fails when neither workgroup nor cluster is set", async () => {
+    const r = await testDestination(baseCfg({ destinationType: "redshift" }));
+    expect(r.ok).toBe(false);
+    expect(runRedshiftQuery).not.toHaveBeenCalled();
+  });
+
+  it("passes SELECT 1 against the Data API (Serverless workgroup)", async () => {
+    (runRedshiftQuery as jest.Mock).mockResolvedValue({
+      columns: [],
+      rows: [],
+    });
+    const r = await testDestination(
+      baseCfg({
+        destinationType: "redshift",
+        redshiftWorkgroupName: "insight-workgroup",
+        redshiftDatabase: "dev",
+      }),
+    );
+    expect(r.ok).toBe(true);
+    expect(runRedshiftQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sql: "SELECT 1",
+        workgroupName: "insight-workgroup",
+        database: "dev",
+      }),
+    );
+  });
+
+  it("fails when the Data API statement errors", async () => {
+    (runRedshiftQuery as jest.Mock).mockRejectedValue(
+      new Error("Redshift statement failed: relation does not exist"),
+    );
+    const r = await testDestination(
+      baseCfg({
+        destinationType: "redshift",
+        redshiftClusterIdentifier: "my-cluster",
+        redshiftDatabase: "dev",
+      }),
+    );
+    expect(r.ok).toBe(false);
+    expect(r.checks.at(-1)?.detail).toMatch(/relation does not exist/);
+  });
+});
+
+describe("testDestination — OpenSearch", () => {
+  it("fails when endpoint missing", async () => {
+    const r = await testDestination(baseCfg({ destinationType: "opensearch" }));
+    expect(r.ok).toBe(false);
+    expect(pingOpenSearch).not.toHaveBeenCalled();
+  });
+
+  it("passes when the SigV4 ping and index count succeed", async () => {
+    (pingOpenSearch as jest.Mock).mockResolvedValue(
+      'Connected to cluster "x".',
+    );
+    (countOpenSearchDocs as jest.Mock).mockResolvedValue(5);
+    const r = await testDestination(
+      baseCfg({
+        destinationType: "opensearch",
+        opensearchEndpoint: "https://d.us-east-1.es.amazonaws.com",
+      }),
+    );
+    expect(r.ok).toBe(true);
+    expect(pingOpenSearch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endpoint: "https://d.us-east-1.es.amazonaws.com",
+      }),
+    );
+    expect(r.checks.at(-1)?.detail).toMatch(/5 document/);
+  });
+
+  it("soft-passes the index check when the index doesn't exist yet (404)", async () => {
+    (pingOpenSearch as jest.Mock).mockResolvedValue(
+      'Connected to cluster "x".',
+    );
+    (countOpenSearchDocs as jest.Mock).mockResolvedValue(undefined);
+    const r = await testDestination(
+      baseCfg({
+        destinationType: "opensearch",
+        opensearchEndpoint: "https://d.us-east-1.es.amazonaws.com",
+      }),
+    );
+    expect(r.ok).toBe(true);
+    expect(r.checks.at(-1)?.detail).toMatch(/not found yet/);
+  });
+
+  it("fails when the ping errors (e.g. 403 not authorized)", async () => {
+    (pingOpenSearch as jest.Mock).mockRejectedValue(
+      new Error("OpenSearch connection failed (403 Forbidden)"),
+    );
+    (countOpenSearchDocs as jest.Mock).mockResolvedValue(0);
+    const r = await testDestination(
+      baseCfg({
+        destinationType: "opensearch",
+        opensearchEndpoint: "https://d.us-east-1.es.amazonaws.com",
+      }),
+    );
+    expect(r.ok).toBe(false);
+    expect(r.checks.some((c) => /403/.test(c.detail ?? ""))).toBe(true);
   });
 });
 

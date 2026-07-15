@@ -31,6 +31,7 @@ import { createPluginRunner } from "./utils/plugin/plugin-runner";
 import { toOperationInfoMap } from "./utils/operation/operation";
 import {
   DurableInstrumentationPlugin,
+  InvocationBaseInfo,
   InvocationInfo,
   PluginInvocationStatus,
 } from "./types/plugin";
@@ -75,13 +76,19 @@ async function runHandler<
     initialExecutionEvent?.ExecutionDetails?.InputPayload ?? "{}",
   );
 
-  const invocationInfo: InvocationInfo = {
+  const invocationBaseInfo: InvocationBaseInfo = {
     requestId: executionContext.requestId,
     executionArn: executionContext.durableExecutionArn,
+    executionInput: customerHandlerEvent,
+    operations: toOperationInfoMap(executionContext._stepData),
+    executionStartTimestamp: initialExecutionEvent?.StartTimestamp ?? undefined,
+  };
+
+  const invocationInfo: InvocationInfo = {
+    ...invocationBaseInfo,
     isFirstInvocation:
       durableExecutionMode === DurableExecutionMode.ExecutionMode,
     executionInput: customerHandlerEvent,
-    operations: toOperationInfoMap(executionContext._stepData),
   };
   await plugin.onInvocationStart?.(invocationInfo);
 

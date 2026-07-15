@@ -39,7 +39,14 @@ const mockTerminationManager = {
   setCheckpointTerminatingCallback: jest.fn(),
 };
 const mockExecutionContext = {
-  _stepData: {},
+  _stepData: {
+    "initial-op": {
+      StartTimestamp: new Date("2024-06-01T12:00:00Z"),
+      ExecutionDetails: {
+        InputPayload: "{}",
+      },
+    },
+  },
   durableExecutionArn: "arn:test",
   requestId: "req-123",
   terminationManager: mockTerminationManager,
@@ -89,6 +96,7 @@ describe("plugin hooks", () => {
       executionInput: expect.anything(),
       operations: expect.any(Object),
       updatedOperations: expect.any(Object),
+      executionStartTimestamp: new Date("2024-06-01T12:00:00Z"),
     });
   });
 
@@ -111,6 +119,7 @@ describe("plugin hooks", () => {
       executionInput: expect.anything(),
       operations: expect.any(Object),
       updatedOperations: expect.any(Object),
+      executionStartTimestamp: new Date("2024-06-01T12:00:00Z"),
     });
   });
 

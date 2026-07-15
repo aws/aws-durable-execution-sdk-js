@@ -42,6 +42,7 @@ function makeInvocationInfo(
     executionInput: {},
     operations: {},
     updatedOperations: {},
+    executionStartTimestamp: new Date("2024-01-01T00:00:00Z"),
     ...overrides,
   };
 }
@@ -57,6 +58,7 @@ function makeInvocationEndInfo(
     status: "SUCCEEDED" as any,
     executionResult: undefined,
     executionError: undefined,
+    executionStartTimestamp: new Date("2024-01-01T00:00:00Z"),
     ...overrides,
   };
 }

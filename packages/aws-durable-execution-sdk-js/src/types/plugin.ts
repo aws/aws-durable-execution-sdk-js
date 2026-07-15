@@ -119,6 +119,14 @@ export interface AttemptEndInfo extends AttemptInfo {
 export interface InvocationBaseInfo {
   requestId: string;
   executionArn: string;
+  executionInput: unknown;
+  operations: Record<string, OperationInfo>;
+  /**
+   * The timestamp when the overall durable execution was first started,
+   * as reported by the backend. This remains the same across all
+   * invocations (including replays) of a given execution.
+   */
+  executionStartTimestamp?: Date;
 }
 
 /**

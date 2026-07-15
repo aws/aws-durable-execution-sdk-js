@@ -1,63 +1,110 @@
 {
-  "_comment": "Config for the example/demo CDK stack (packages/aws-durable-execution-sdk-js-insight/cdk). destinations.*.enabled controls which example resources this stack provisions by default when deployed. cloudwatchLogs/dynamodb/aurora/s3/sqs are all enabled out of the box, so a fresh `cdk deploy` of this example provisions: a CloudWatch log group, a DynamoDB table, an Aurora Serverless v2 cluster (+ VPC), an S3 bucket + Glue database/table (added for S3+Athena support), and an SQS queue — all tagged for easy teardown (RemovalPolicy.DESTROY, autoDeleteObjects on the S3 bucket) but still real billable resources while deployed. redshift/opensearch/firehose/eventbridge stay opt-in (enabled: false) since they're heavier/less commonly needed for the example. Set any destination's enabled to false before deploying if you don't want that resource provisioned.",
+  "_comment": "Config for the example/demo CDK stack (packages/aws-durable-execution-sdk-js-insight/cdk). destinations.*.enabled controls which example resources this stack provisions when deployed. cloudwatchLogs/dynamodb/aurora/s3/sqs are enabled out of the box, so a fresh `cdk deploy` provisions: a CloudWatch log group, a DynamoDB table, an Aurora Serverless v2 cluster (+ VPC), an S3 bucket + Glue database/table, and an SQS queue — all tagged for easy teardown (RemovalPolicy.DESTROY, autoDeleteObjects on the S3 bucket) but still real billable resources while deployed. redshift/opensearch/firehose/eventbridge stay opt-in. lambda.autoInvoke is OFF by default: it runs the example function on a recurring schedule, which keeps generating (billable) invocations until you tear the stack down, so you must opt in explicitly. Every field below has a sibling `<field>Comment` describing it. Set any destination's enabled to false before deploying if you don't want that resource. JSON has no comments, so descriptions are carried in `_comment`/`*Comment` keys, which the CDK code ignores.",
   "destinations": {
     "cloudwatchLogs": {
+      "_comment": "CloudWatch Logs destination: a dedicated log group the SDK's exporter writes Workflow Insight records to.",
       "enabled": true,
+      "enabledComment": "Whether to provision this destination on deploy. Billable while deployed.",
       "logGroupName": "/workflow-insight/demo",
-      "retentionDays": 30
+      "logGroupNameComment": "Name of the CloudWatch log group to create and write records to.",
+      "retentionDays": 30,
+      "retentionDaysComment": "How many days to retain log events before CloudWatch deletes them automatically."
     },
     "dynamodb": {
+      "_comment": "DynamoDB destination: a pay-per-request table storing one item per execution record.",
       "enabled": true,
-      "tableName": "workflow-insight"
+      "enabledComment": "Whether to provision this destination on deploy. Billable while deployed.",
+      "tableName": "workflow-insight",
+      "tableNameComment": "Name of the DynamoDB table to create (partition key `pk`, on-demand billing)."
     },
     "aurora": {
+      "_comment": "Aurora Serverless v2 (PostgreSQL) destination. Also creates a VPC and, via a custom resource, the destination table. Note: an Aurora cluster + VPC is the most expensive default destination.",
       "enabled": true,
+      "enabledComment": "Whether to provision this destination on deploy. Provisions an Aurora Serverless v2 cluster and a dedicated VPC — billable while deployed.",
       "tableName": "workflow_insight",
+      "tableNameComment": "Name of the PostgreSQL table created (via the RDS Data API) to hold records.",
       "databaseName": "postgres",
+      "databaseNameComment": "Name of the default database created in the cluster and queried by the extension.",
       "minCapacity": 0.5,
-      "maxCapacity": 1
+      "minCapacityComment": "Minimum Aurora Serverless v2 capacity in ACUs / Aurora Capacity Units (the cluster never scales below this; 0.5 is the smallest allowed).",
+      "maxCapacity": 1,
+      "maxCapacityComment": "Maximum Aurora Serverless v2 capacity in ACUs (upper bound the cluster can scale up to under load)."
     },
     "s3": {
+      "_comment": "S3 + Athena destination: an S3 bucket for record files plus a pre-provisioned Glue database/table (partition-projection enabled) so the data is queryable in Athena immediately after deploy.",
       "enabled": true,
+      "enabledComment": "Whether to provision this destination on deploy. Creates the S3 bucket and the Glue database + table. Billable while deployed.",
       "bucketName": "workflow-insight-records",
+      "bucketNameComment": "Name of the S3 bucket that stores exported record files (must be globally unique across all AWS accounts).",
       "glueDatabaseName": "workflow_insight",
-      "glueTableName": "workflow_insight"
+      "glueDatabaseNameComment": "Name of the Glue/Athena database created to hold the records table.",
+      "glueTableName": "workflow_insight",
+      "glueTableNameComment": "Name of the Glue/Athena table created over the bucket's `workflow-insight/` prefix."
     },
     "redshift": {
+      "_comment": "Redshift Serverless destination (opt-in): a namespace + workgroup and a table created via the Redshift Data API.",
       "enabled": false,
+      "enabledComment": "Whether to provision this destination on deploy. Off by default (heavier/less commonly needed for the demo). Billable while deployed.",
       "namespaceName": "insight-namespace",
+      "namespaceNameComment": "Name of the Redshift Serverless namespace (the database + its objects/permissions).",
       "workgroupName": "insight-workgroup",
+      "workgroupNameComment": "Name of the Redshift Serverless workgroup (the compute the extension queries).",
       "databaseName": "dev",
+      "databaseNameComment": "Name of the database within the namespace that holds the records table.",
       "tableName": "workflow_insight",
-      "schema": "public"
+      "tableNameComment": "Name of the Redshift table created to hold records.",
+      "schema": "public",
+      "schemaComment": "Schema the records table is created in (fully-qualified as `<schema>.<tableName>`)."
     },
     "opensearch": {
+      "_comment": "OpenSearch Service destination (opt-in): a single-node domain records are indexed into.",
       "enabled": false,
-      "domainName": "workflow-insight"
+      "enabledComment": "Whether to provision this destination on deploy. Off by default (heavier/less commonly needed for the demo). Billable while deployed.",
+      "domainName": "workflow-insight",
+      "domainNameComment": "Name of the OpenSearch Service domain to create and index records into."
     },
     "firehose": {
+      "_comment": "Kinesis Data Firehose destination (opt-in): a delivery stream that buffers records and writes them to its own S3 bucket.",
       "enabled": false,
+      "enabledComment": "Whether to provision this destination on deploy. Off by default. Billable while deployed.",
       "streamName": "workflow-insight",
+      "streamNameComment": "Name of the Firehose delivery stream to create.",
       "bufferIntervalSeconds": 60,
-      "bufferSizeMB": 1
+      "bufferIntervalSecondsComment": "Max seconds Firehose buffers records before flushing a batch to S3 (lower = fresher data, more/smaller S3 objects).",
+      "bufferSizeMB": 1,
+      "bufferSizeMBComment": "Max buffer size in MB before Firehose flushes a batch to S3 (whichever of size/interval is hit first triggers a flush)."
     },
     "sqs": {
+      "_comment": "SQS destination: a queue the exporter sends record messages to (used by the extension's live-view).",
       "enabled": true,
+      "enabledComment": "Whether to provision this destination on deploy. Billable while deployed.",
       "queueName": "workflow-insight",
-      "fifo": false
+      "queueNameComment": "Base name of the SQS queue to create (a `.fifo` suffix is appended automatically when `fifo` is true).",
+      "fifo": false,
+      "fifoComment": "Whether to create a FIFO queue (ordered, content-based dedup) instead of a standard queue."
     },
     "eventbridge": {
+      "_comment": "EventBridge destination (opt-in): records are published as events. Uses the account default bus, or creates a custom bus if a non-`default` name is given.",
       "enabled": false,
-      "eventBusName": "default"
+      "enabledComment": "Whether to grant/enable this destination on deploy. Off by default.",
+      "eventBusName": "default",
+      "eventBusNameComment": "Event bus to publish to. `default` uses the account's default bus (no new bus created); any other value creates a custom event bus with that name."
     }
   },
   "lambda": {
+    "_comment": "Which Lambda execution roles get the Workflow Insight destination permissions, plus the optional example function and its scheduler.",
     "roleNames": [],
+    "roleNamesComment": "Explicit IAM role names (of your durable functions) to attach the destination-access policy to. Leave empty to rely on discovery and/or the example function role.",
     "discoverDurableFunctions": false,
+    "discoverDurableFunctionsComment": "If true, app.ts calls ListFunctions at synth time to find durable functions and attaches the policy to their roles automatically.",
     "createExampleFunction": true,
+    "createExampleFunctionComment": "If true, deploy a sample durable Lambda (with a durable-execution role) that emits records to the enabled destinations — useful for trying the extension end to end.",
     "autoInvoke": {
-      "enabled": true,
-      "rateMinutes": 5
+      "_comment": "Optional EventBridge schedule that repeatedly invokes the example function so records appear without manual invocation. OFF by default because it keeps producing billable invocations until the stack is torn down.",
+      "enabled": false,
+      "enabledComment": "Whether to create the dispatcher Lambda + EventBridge rule that auto-invokes the example function on a schedule. Off by default to avoid unexpected recurring cost — set true only if you want the demo to generate data on its own. Requires createExampleFunction to be true.",
+      "rateMinutes": 5,
+      "rateMinutesComment": "How often (in minutes) the schedule invokes the example function when autoInvoke.enabled is true."
     }
   }
 }

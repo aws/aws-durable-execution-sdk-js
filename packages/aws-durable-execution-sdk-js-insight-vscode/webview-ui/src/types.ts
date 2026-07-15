@@ -192,6 +192,15 @@ export interface Settings {
   auroraSecretArn: string;
   auroraDatabase: string;
   auroraTable: string;
+  redshiftWorkgroupName: string;
+  redshiftClusterIdentifier: string;
+  redshiftDbUser: string;
+  redshiftSecretArn: string;
+  redshiftDatabase: string;
+  redshiftTable: string;
+  redshiftSchema: string;
+  opensearchEndpoint: string;
+  opensearchIndex: string;
   sqsQueueUrl: string;
   sqsDeleteAfterRead: boolean;
   athenaDatabase: string;
@@ -221,6 +230,44 @@ export interface Settings {
  */
 export const AI_DISCLOSURE_VERSION = "2";
 
+/**
+ * Curated Bedrock models shown as suggestions by default (before/without
+ * fetching the full account list). Hand-picked from an internal benchmark of
+ * the agent-mode query task ("group by … in execution input") run against real
+ * data on BOTH the Aurora (PostgreSQL) and S3/Athena (Trino) destinations:
+ * these reliably discovered the right JSON keys and produced correct,
+ * multi-dimension grouped SQL in both dialects. (Some models that did well only
+ * on Aurora — e.g. Mistral Pixtral Large — were excluded because they were weak
+ * on Athena.) The full account list is still available via the "List available
+ * models" button. `us.` (US cross-region) inference profiles are used;
+ * `global.`/`eu.` equivalents work too if you prefer.
+ */
+export const RECOMMENDED_BEDROCK_MODELS: {
+  value: string;
+  description: string;
+}[] = [
+  {
+    value: "us.anthropic.claude-sonnet-5",
+    description: "Recommended default — top accuracy on query tasks",
+  },
+  {
+    value: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    description: "Excellent; a lower-cost alternative to Sonnet 5",
+  },
+  {
+    value: "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    description: "Fast and accurate — strong low-cost pick",
+  },
+  {
+    value: "us.anthropic.claude-opus-4-5-20251101-v1:0",
+    description: "Highest capability (slower/pricier)",
+  },
+  {
+    value: "us.amazon.nova-pro-v1:0",
+    description: "Strong non-Claude option (correct on Aurora + Athena)",
+  },
+];
+
 export const DEFAULT_SETTINGS: Settings = {
   region: "us-east-1",
   destinationType: "cloudwatch-logs-exporter",
@@ -230,6 +277,15 @@ export const DEFAULT_SETTINGS: Settings = {
   auroraSecretArn: "",
   auroraDatabase: "postgres",
   auroraTable: "workflow_insight",
+  redshiftWorkgroupName: "",
+  redshiftClusterIdentifier: "",
+  redshiftDbUser: "",
+  redshiftSecretArn: "",
+  redshiftDatabase: "dev",
+  redshiftTable: "workflow_insight",
+  redshiftSchema: "public",
+  opensearchEndpoint: "",
+  opensearchIndex: "workflow-insight",
   sqsQueueUrl: "",
   sqsDeleteAfterRead: false,
   athenaDatabase: "",

@@ -12,6 +12,7 @@ import Autosuggest from "@cloudscape-design/components/autosuggest";
 import ProgressBar from "@cloudscape-design/components/progress-bar";
 import Tabs from "@cloudscape-design/components/tabs";
 import type { Settings, DestinationTestReport } from "./types";
+import { RECOMMENDED_BEDROCK_MODELS } from "./types";
 import { postMessage } from "./vscode";
 
 interface Props {
@@ -44,6 +45,8 @@ const DEST_OPTIONS: SelectProps.Option[] = [
   { value: "lambda-log-exporter", label: "CloudWatch Logs (Lambda function log group)" },
   { value: "dynamodb", label: "DynamoDB" },
   { value: "aurora", label: "Aurora PostgreSQL" },
+  { value: "redshift", label: "Amazon Redshift" },
+  { value: "opensearch", label: "Amazon OpenSearch" },
   { value: "s3", label: "S3 + Athena" },
   { value: "sqs", label: "Amazon SQS (live view)" },
 ];
@@ -99,6 +102,8 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
   const showLogGroup = dest === "cloudwatch-logs-exporter" || dest === "lambda-log-exporter";
   const showDdb = dest === "dynamodb";
   const showAurora = dest === "aurora";
+  const showRedshift = dest === "redshift";
+  const showOpenSearch = dest === "opensearch";
   const showAthena = dest === "s3";
   const showSqs = dest === "sqs";
 
@@ -157,6 +162,43 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
                     </FormField>
                     <FormField label="Table">
                       <Input value={form.auroraTable} onChange={({ detail }) => update("auroraTable", detail.value)} placeholder="workflow_insight" />
+                    </FormField>
+                  </SpaceBetween>
+                )}
+
+                {showRedshift && (
+                  <SpaceBetween size="s">
+                    <FormField label="Workgroup Name" description="Redshift Serverless workgroup. Leave empty if using a provisioned cluster.">
+                      <Input value={form.redshiftWorkgroupName} onChange={({ detail }) => update("redshiftWorkgroupName", detail.value)} placeholder="insight-workgroup" />
+                    </FormField>
+                    <FormField label="Cluster Identifier" description="Provisioned Redshift cluster (alternative to a Serverless workgroup).">
+                      <Input value={form.redshiftClusterIdentifier} onChange={({ detail }) => update("redshiftClusterIdentifier", detail.value)} placeholder="my-redshift-cluster" />
+                    </FormField>
+                    <FormField label="Database">
+                      <Input value={form.redshiftDatabase} onChange={({ detail }) => update("redshiftDatabase", detail.value)} placeholder="dev" />
+                    </FormField>
+                    <FormField label="Schema">
+                      <Input value={form.redshiftSchema} onChange={({ detail }) => update("redshiftSchema", detail.value)} placeholder="public" />
+                    </FormField>
+                    <FormField label="Table">
+                      <Input value={form.redshiftTable} onChange={({ detail }) => update("redshiftTable", detail.value)} placeholder="workflow_insight" />
+                    </FormField>
+                    <FormField label="DB User" description="Provisioned clusters only (temporary credentials). Leave empty for Serverless or when using a Secret ARN.">
+                      <Input value={form.redshiftDbUser} onChange={({ detail }) => update("redshiftDbUser", detail.value)} placeholder="admin" />
+                    </FormField>
+                    <FormField label="Secret ARN" description="Optional: Secrets Manager ARN for Data API auth (alternative to IAM/DB user).">
+                      <Input value={form.redshiftSecretArn} onChange={({ detail }) => update("redshiftSecretArn", detail.value)} placeholder="arn:aws:secretsmanager:..." />
+                    </FormField>
+                  </SpaceBetween>
+                )}
+
+                {showOpenSearch && (
+                  <SpaceBetween size="s">
+                    <FormField label="Domain Endpoint" description="Amazon OpenSearch Service HTTPS endpoint. Authenticated with SigV4 (your AWS identity must be in the domain access policy).">
+                      <Input value={form.opensearchEndpoint} onChange={({ detail }) => update("opensearchEndpoint", detail.value)} placeholder="https://my-domain.us-east-1.es.amazonaws.com" />
+                    </FormField>
+                    <FormField label="Index">
+                      <Input value={form.opensearchIndex} onChange={({ detail }) => update("opensearchIndex", detail.value)} placeholder="workflow-insight" />
                     </FormField>
                   </SpaceBetween>
                 )}
@@ -344,7 +386,27 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
                       <Autosuggest
                         value={form.bedrockModelId}
                         onChange={({ detail }) => update("bedrockModelId", detail.value)}
-                        options={bedrockModels.map((m) => ({ value: m }))}
+                        options={[
+                          {
+                            label: "Recommended",
+                            options: RECOMMENDED_BEDROCK_MODELS,
+                          },
+                          ...(bedrockModels.length
+                            ? [
+                                {
+                                  label: "All available in your account",
+                                  options: bedrockModels
+                                    .filter(
+                                      (m) =>
+                                        !RECOMMENDED_BEDROCK_MODELS.some(
+                                          (r) => r.value === m,
+                                        ),
+                                    )
+                                    .map((m) => ({ value: m })),
+                                },
+                              ]
+                            : []),
+                        ]}
                         enteredTextLabel={(v) => `Use "${v}"`}
                         placeholder="us.anthropic.claude-sonnet-5"
                         empty={
@@ -368,10 +430,12 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
                         </Button>
                       </div>
                       <Box color="text-body-secondary" fontSize="body-s">
-                        Uses your configured Region and AWS Profile. Shows models
-                        available in the Region (inference profiles + on-demand
-                        models); some may still need model access granted in the
-                        Bedrock console.
+                        A curated set of recommended models is shown by default.
+                        Click List available models to fetch everything your
+                        Region and AWS Profile can use (inference profiles +
+                        on-demand models); some may still need model access
+                        granted in the Bedrock console. You can also type any
+                        model / inference profile ID directly.
                       </Box>
                       {bedrockModelsError && (
                         <Alert type="error" header="Couldn't list models">
