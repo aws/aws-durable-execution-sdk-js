@@ -119,8 +119,8 @@ export interface DualModeOtelSetup {
  */
 export function createDualModeOtelSetup(): DualModeOtelSetup {
   if (isAdotEnvironment()) {
-    // Cloud mode: plain InvocationOtelPlugin; ADOT handles trace export to X-Ray
-    const plugin = new InvocationOtelPlugin();
+    // Cloud mode: use ADOT's globally registered TracerProvider for trace export to X-Ray
+    const plugin = new InvocationOtelPlugin({ useDefaultTracerProvider: true });
     return {
       plugin,
       getSerializedSpans: () => [],

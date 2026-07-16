@@ -5,8 +5,8 @@ import {
 import { InvocationOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
 import { ExampleConfig } from "../../../types";
 
-// No createOtelTestSetup — ADOT handles export at runtime
-const plugin = new InvocationOtelPlugin();
+// ADOT layer registers a global TracerProvider — use it via useDefaultTracerProvider
+const plugin = new InvocationOtelPlugin({ useDefaultTracerProvider: true });
 
 export const config: ExampleConfig = {
   name: "OTel ADOT Invocation XRay E2E",
