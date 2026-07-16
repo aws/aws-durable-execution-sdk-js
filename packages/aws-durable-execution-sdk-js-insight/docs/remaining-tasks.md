@@ -131,7 +131,9 @@
 - [x] Unit tests for sampling logic (including replay determinism) — covers
       rate 0 / 1 / omitted, fractional partitioning, invocationId-independence
       (replay stability), stable re-runs, and out-of-range/NaN clamping.
-- [ ] Unit tests for each exporter (mock SDK clients, verify correct API calls)
+- [x] Unit tests for each exporter (mock SDK clients, verify correct API calls) —
+      colocated `*-exporter.test.ts` for all 12 first-party exporters (happy path + one nuance each: SQL dialect, upsert vs history, FIFO, NDJSON, SigV4/basic,
+      OTLP shape, timestamptz MERGE, partitioning, ndjson/json, etc.)
 - [ ] Integration test with the testing SDK (end-to-end plugin lifecycle)
 - [x] Verified end-to-end on deployed Lambda (account 730758745077, `insight-demo-scheduled`)
 
@@ -155,10 +157,12 @@
 - [x] Time range inferred from question by Bedrock
 - [x] Self-correction loop (retry with error feedback on MalformedQueryException)
 - [x] TESTING.md step-by-step guide
-- [ ] Support additional query providers (S3/Athena, DynamoDB)
-- [ ] Model provider abstraction (local LLM option)
-- [ ] Query history and saved queries
-- [ ] CSV export
+- [x] Support additional query providers — S3/Athena, DynamoDB, Aurora,
+      Redshift, and OpenSearch are all supported query destinations now
+- [x] Model provider abstraction — `llmProvider` supports bedrock, GitHub Copilot,
+      local (in-process), and local-server (OpenAI-compatible) options
+- [x] Query history and saved queries
+- [x] CSV export
 
 ## Known Limitations (document, not necessarily fix)
 
@@ -170,6 +174,7 @@
       README (content caveat), `OperationOverride.result` JSDoc, and plugin-contracts.
 - [ ] Document no coverage for backend-initiated events (`STOPPED`, `TIMED_OUT`);
       customers must subscribe to EventBridge lifecycle events themselves
-- [ ] `RedshiftExporter` stores time fields as `VARCHAR(30)` — needs `::timestamptz`
-      casts in the MERGE SQL (same fix applied to AuroraExporter). Fix when adding
-      Redshift to the VS Code extension query providers.
+- [x] `RedshiftExporter` now stores time fields as `TIMESTAMPTZ` (table DDL) and
+      casts `:start_time::timestamptz` / `:end_time::timestamptz` /
+      `:emitted_at::timestamptz` in the MERGE SQL, mirroring AuroraExporter — so
+      date math works natively in the VS Code extension's Redshift queries.
