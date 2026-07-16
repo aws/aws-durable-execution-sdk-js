@@ -357,6 +357,66 @@ describe("WaitForCondition Handler", () => {
       expect(waitStrategy).toHaveBeenCalledWith("result", 1);
     });
 
+    it("should expose attempt = 1 on WaitForConditionContext on the first execution", async () => {
+      const handler = createWaitForConditionHandler(
+        mockContext,
+        mockCheckpoint,
+        createStepId,
+        createDefaultLogger(),
+        undefined,
+      );
+
+      const checkFunc = jest.fn().mockResolvedValue("result");
+      const config: WaitForConditionConfig<string> = {
+        waitStrategy: () => ({ shouldContinue: false }),
+        initialState: "initial",
+      };
+
+      await handler(checkFunc, config);
+
+      // Fresh execution: no prior checkpointed attempts -> attempt is 1 (1-based).
+      expect(checkFunc).toHaveBeenCalledTimes(1);
+      expect(checkFunc.mock.calls[0][1]).toHaveProperty("attempt", 1);
+      expect(checkFunc.mock.calls[0][1]).toHaveProperty("logger");
+    });
+
+    it("should expose attempt reflecting prior retries (1-based) on WaitForConditionContext", async () => {
+      const stepId = "step-1";
+      const hashedStepId = hashId(stepId);
+
+      // Mock step data with attempt = 2 (so currentAttempt should be 3)
+      (mockContext as any)._stepData[hashedStepId] = {
+        Id: hashedStepId,
+        Status: OperationStatus.READY,
+        StepDetails: {
+          Attempt: 2,
+          Result: JSON.stringify("previous-state"),
+        },
+      };
+
+      (mockContext.getStepData as jest.Mock).mockReturnValue(
+        (mockContext as any)._stepData[hashedStepId],
+      );
+
+      const handler = createWaitForConditionHandler(
+        mockContext,
+        mockCheckpoint,
+        createStepId,
+        createDefaultLogger(),
+        undefined,
+      );
+
+      const checkFunc = jest.fn().mockResolvedValue("result");
+      const config: WaitForConditionConfig<string> = {
+        waitStrategy: () => ({ shouldContinue: false }),
+        initialState: "initial",
+      };
+
+      await handler(checkFunc, config);
+
+      expect(checkFunc.mock.calls[0][1]).toHaveProperty("attempt", 3);
+    });
+
     it("should calculate currentAttempt correctly based on step data attempt count", async () => {
       const stepId = "step-1";
       const hashedStepId = hashId(stepId);
