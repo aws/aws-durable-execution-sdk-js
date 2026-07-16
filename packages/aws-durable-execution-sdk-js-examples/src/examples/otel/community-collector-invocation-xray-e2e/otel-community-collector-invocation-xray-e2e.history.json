@@ -1,0 +1,162 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "c2c2390a-9469-460d-b4db-fe7aabd53be7",
+    "EventTimestamp": "2026-07-15T22:51:42.392Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "fetch-data",
+    "EventTimestamp": "2026-07-15T22:51:42.400Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "fetch-data",
+    "EventTimestamp": "2026-07-15T22:51:42.400Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"data-value\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "short-pause",
+    "EventTimestamp": "2026-07-15T22:51:42.404Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2026-07-15T22:51:43.404Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2026-07-15T22:51:42.428Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-07-15T22:51:42.392Z",
+      "EndTimestamp": "2026-07-15T22:51:42.428Z",
+      "Error": {},
+      "RequestId": "09562105-916e-4527-8a29-301254aebeb9"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 6,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "short-pause",
+    "EventTimestamp": "2026-07-15T22:51:43.403Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "process-data",
+    "EventTimestamp": "2026-07-15T22:51:43.405Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "process-data",
+    "EventTimestamp": "2026-07-15T22:51:43.405Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"processed-data-value\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "RunInChildContext",
+    "EventId": 9,
+    "Id": "a87ff679a2f3e71d",
+    "Name": "child-operations",
+    "EventTimestamp": "2026-07-15T22:51:43.408Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 10,
+    "Id": "74bdefab9757a081",
+    "Name": "inner-step",
+    "EventTimestamp": "2026-07-15T22:51:43.408Z",
+    "ParentId": "a87ff679a2f3e71d",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 11,
+    "Id": "74bdefab9757a081",
+    "Name": "inner-step",
+    "EventTimestamp": "2026-07-15T22:51:43.408Z",
+    "ParentId": "a87ff679a2f3e71d",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"inner-value\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "RunInChildContext",
+    "EventId": 12,
+    "Id": "a87ff679a2f3e71d",
+    "Name": "child-operations",
+    "EventTimestamp": "2026-07-15T22:51:43.410Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"inner-value\""
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 13,
+    "EventTimestamp": "2026-07-15T22:51:43.412Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-07-15T22:51:43.403Z",
+      "EndTimestamp": "2026-07-15T22:51:43.412Z",
+      "Error": {},
+      "RequestId": "84221c73-03b5-45fc-b444-13c70925ff9a"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 14,
+    "Id": "c2c2390a-9469-460d-b4db-fe7aabd53be7",
+    "EventTimestamp": "2026-07-15T22:51:43.412Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"result\":{\"step1\":\"data-value\",\"step2\":\"processed-data-value\",\"childResult\":\"inner-value\"},\"spans\":[{\"name\":\"fetch-data attempt 1\",\"traceId\":\"ef1584cb157cdb8bf3dd53fe6d05d71b\",\"spanId\":\"d36ff7db16ef0e2e\",\"parentSpanId\":\"81f7788dab7549e1\",\"attributes\":{\"durable.execution.arn\":\"7a5e7820-bb94-49a6-b555-eb57ff53783e\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"fetch-data\",\"durable.operation.subtype\":\"Step\",\"durable.attempt.outcome\":\"SUCCEEDED\"},\"links\":[{\"traceId\":\"ef1584cb157cdb8bf3dd53fe6d05d71b\",\"spanId\":\"81f7788dab7549e1\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"fetch-data\",\"traceId\":\"ef1584cb157cdb8bf3dd53fe6d05d71b\",\"spanId\":\"81f7788dab7549e1\",\"parentSpanId\":\"c1d3e51e766cf0a9\",\"attributes\":{\"durable.execution.arn\":\"7a5e7820-bb94-49a6-b555-eb57ff53783e\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"fetch-data\",\"durable.operation.subtype\":\"Step\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"short-pause\",\"traceId\":\"ef1584cb157cdb8bf3dd53fe6d05d71b\",\"spanId\":\"ff0a1ea8ab492f5a\",\"parentSpanId\":\"c1d3e51e766cf0a9\",\"attributes\":{\"durable.execution.arn\":\"7a5e7820-bb94-49a6-b555-eb57ff53783e\",\"durable.operation.id\":\"c81e728d9d4c2f63\",\"durable.operation.type\":\"WAIT\",\"durable.operation.name\":\"short-pause\",\"durable.operation.subtype\":\"Wait\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"invocation\",\"traceId\":\"ef1584cb157cdb8bf3dd53fe6d05d71b\",\"spanId\":\"c1d3e51e766cf0a9\",\"attributes\":{\"durable.execution.arn\":\"7a5e7820-bb94-49a6-b555-eb57ff53783e\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"process-data attempt 1\",\"traceId\":\"ef1584cb157cdb8bf3dd53fe6d05d71b\",\"spanId\":\"a00b2e86396a1da4\",\"parentSpanId\":\"050f3851500e08c1\",\"attributes\":{\"durable.execution.arn\":\"7a5e7820-bb94-49a6-b555-eb57ff53783e\",\"durable.operation.id\":\"eccbc87e4b5ce2fe\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"process-data\",\"durable.operation.subtype\":\"Step\",\"durable.attempt.outcome\":\"SUCCEEDED\"},\"links\":[{\"traceId\":\"ef1584cb157cdb8bf3dd53fe6d05d71b\",\"spanId\":\"050f3851500e08c1\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"process-data\",\"traceId\":\"ef1584cb157cdb8bf3dd53fe6d05d71b\",\"spanId\":\"050f3851500e08c1\",\"parentSpanId\":\"8d3873041d1f8dbb\",\"attributes\":{\"durable.execution.arn\":\"7a5e7820-bb94-49a6-b555-eb57ff53783e\",\"durable.operation.id\":\"eccbc87e4b5ce2fe\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"process-data\",\"durable.operation.subtype\":\"Step\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"inner-step attempt 1\",\"traceId\":\"ef1584cb157cdb8bf3dd53fe6d05d71b\",\"spanId\":\"a1922ac65b155381\",\"parentSpanId\":\"9e7b76a5d74d0576\",\"attributes\":{\"durable.execution.arn\":\"7a5e7820-bb94-49a6-b555-eb57ff53783e\",\"durable.operation.id\":\"74bdefab9757a081\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.name\":\"inner-step\",\"durable.operation.subtype\":\"Step\",\"durable.attempt.outcome\":\"SUCCEEDED\"},\"links\":[{\"traceId\":\"ef1584cb157cdb8bf3dd53fe6d05d71b\",\"spanId\":\"9e7b76a5d74d0576\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"inner-step\",\"traceId\":\"ef1584cb157cdb8bf3dd53fe6d05d71b\",\"spanId\":\"9e7b76a5d74d0576\",\"parentSpanId\":\"823af252be1ebce5\",\"attributes\":{\"durable.execution.arn\":\"7a5e7820-bb94-49a6-b555-eb57ff53783e\",\"durable.operation.id\":\"74bdefab9757a081\",\"durable.operation.type\":\"STEP\",\"durable.operation.name\":\"inner-step\",\"durable.operation.subtype\":\"Step\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"child-operations\",\"traceId\":\"ef1584cb157cdb8bf3dd53fe6d05d71b\",\"spanId\":\"823af252be1ebce5\",\"parentSpanId\":\"8d3873041d1f8dbb\",\"attributes\":{\"durable.execution.arn\":\"7a5e7820-bb94-49a6-b555-eb57ff53783e\",\"durable.operation.id\":\"a87ff679a2f3e71d\",\"durable.operation.type\":\"CONTEXT\",\"durable.operation.name\":\"child-operations\",\"durable.operation.subtype\":\"RunInChildContext\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]}]}"
+      }
+    }
+  }
+]

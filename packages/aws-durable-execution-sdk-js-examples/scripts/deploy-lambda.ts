@@ -62,11 +62,44 @@ const ADOT_LAYER_ARNS: Record<string, string> = {
     "arn:aws:lambda:ap-southeast-2:615299751070:layer:AWSOpenTelemetryDistroJs:7",
 };
 
+// OpenTelemetry community collector-only layer for ExecutionOtelPlugin functions.
+// This layer only runs the OTel collector extension (OTLP receiver on localhost:4318 → X-Ray).
+// It does NOT include auto-instrumentation — the ExecutionOtelPlugin handles that.
+// Format: arn:aws:lambda:{region}:184161586896:layer:opentelemetry-collector-amd64-{version}:{layer-version}
+// Source: https://github.com/open-telemetry/opentelemetry-lambda/releases
+const OTEL_COLLECTOR_LAYER_ARN_TEMPLATE =
+  "arn:aws:lambda:${region}:184161586896:layer:opentelemetry-collector-amd64-0_22_0:1";
+
+function getOtelCollectorLayerArn(region: string): string {
+  return OTEL_COLLECTOR_LAYER_ARN_TEMPLATE.replace("${region}", region);
+}
+
 /**
- * Checks if the handler corresponds to an otel function that needs ADOT.
+ * Checks if the handler corresponds to an otel function that needs ADOT
+ * auto-instrumentation (AWS_LAMBDA_EXEC_WRAPPER). Community collector functions
+ * use a collector-only layer — no exec wrapper needed.
  */
 function isOtelFunction(handler: string): boolean {
-  return handler.includes("otel-");
+  return (
+    handler.includes("otel-") && !handler.includes("otel-community-collector")
+  );
+}
+
+/**
+ * Checks if the handler is a community collector otel function that needs the
+ * collector-only layer (no ADOT auto-instrumentation).
+ */
+function isStandaloneOtelFunction(handler: string): boolean {
+  return handler.includes("otel-community-collector");
+}
+
+/**
+ * Checks if the handler needs the ADOT layer (regular otel functions only).
+ */
+function needsAdotLayer(handler: string): boolean {
+  return (
+    handler.includes("otel-") && !handler.includes("otel-community-collector")
+  );
 }
 
 // Types
@@ -347,7 +380,7 @@ async function createFunction(
 
   // IAM Role Requirements:
   // - The Lambda execution role must have `CloudWatchLambdaApplicationSignalsExecutionRolePolicy`
-  //   attached for the otel-xray-e2e function (grants xray:PutTraceSegments, xray:PutTelemetryRecords,
+  //   attached for ADOT otel functions (grants xray:PutTraceSegments, xray:PutTelemetryRecords,
   //   and related CloudWatch permissions needed by the ADOT layer to export spans to X-Ray).
   // - The test runner role must have `xray:GetTraceSummaries` and `xray:BatchGetTraces`
   //   permissions to query X-Ray traces in the e2e assertion tests.
@@ -361,11 +394,11 @@ async function createFunction(
     ? { AWS_ENDPOINT_URL_LAMBDA: env.LAMBDA_ENDPOINT }
     : undefined;
 
-  // Apply ADOT layer + Active Tracing for otel-xray-e2e
+  // Apply ADOT layer + Active Tracing for ADOT otel functions
   let tracingConfig: { Mode: "Active" | "PassThrough" } | undefined;
   let layers: string[] | undefined;
 
-  if (isOtelFunction(exampleConfig.handler)) {
+  if (needsAdotLayer(exampleConfig.handler)) {
     const adotArn = ADOT_LAYER_ARNS[env.AWS_REGION];
     if (!adotArn) {
       console.error(
@@ -376,9 +409,19 @@ async function createFunction(
     }
     tracingConfig = { Mode: "Active" };
     layers = [adotArn];
+    if (isOtelFunction(exampleConfig.handler)) {
+      envVars = {
+        ...envVars,
+        AWS_LAMBDA_EXEC_WRAPPER: "/opt/otel-instrument",
+      };
+    }
+  } else if (isStandaloneOtelFunction(exampleConfig.handler)) {
+    // ExecutionOtelPlugin: use the OTel community collector-only layer
+    tracingConfig = { Mode: "Active" };
+    layers = [getOtelCollectorLayerArn(env.AWS_REGION)];
     envVars = {
       ...envVars,
-      AWS_LAMBDA_EXEC_WRAPPER: "/opt/otel-instrument",
+      OPENTELEMETRY_COLLECTOR_CONFIG_FILE: "/var/task/collector.yaml",
     };
   }
 
@@ -479,6 +522,13 @@ async function updateFunction(
           };
         }
 
+        if (isStandaloneOtelFunction(exampleConfig.handler)) {
+          vars = {
+            ...vars,
+            OPENTELEMETRY_COLLECTOR_CONFIG_FILE: "/var/task/collector.yaml",
+          };
+        }
+
         return vars;
       })(),
     },
@@ -494,7 +544,7 @@ async function updateFunction(
     TenancyConfig: exampleConfig.handler.includes("tenant-target")
       ? { TenantIsolationMode: "PER_TENANT" }
       : undefined,
-    ...(isOtelFunction(exampleConfig.handler)
+    ...(needsAdotLayer(exampleConfig.handler)
       ? {
           TracingConfig: { Mode: "Active" as const },
           Layers: (() => {
@@ -509,7 +559,12 @@ async function updateFunction(
             return [adotArn];
           })(),
         }
-      : {}),
+      : isStandaloneOtelFunction(exampleConfig.handler)
+        ? {
+            TracingConfig: { Mode: "Active" as const },
+            Layers: [getOtelCollectorLayerArn(env.AWS_REGION)],
+          }
+        : {}),
   };
 
   // Check if DurableConfig needs updating

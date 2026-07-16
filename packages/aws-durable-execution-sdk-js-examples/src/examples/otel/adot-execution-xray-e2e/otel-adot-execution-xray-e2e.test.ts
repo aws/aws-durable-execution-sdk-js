@@ -1,6 +1,6 @@
 import { ExecutionStatus } from "@aws/durable-execution-sdk-js-testing";
 import { XRayClient } from "@aws-sdk/client-xray";
-import { handler } from "./otel-xray-e2e";
+import { handler } from "./otel-adot-execution-xray-e2e";
 import { createTests } from "../../../utils/test-helper";
 import {
   fetchXRayTrace,
@@ -13,7 +13,7 @@ import {
 createTests({
   handler,
   tests: (runner, { assertEventSignatures, isCloud }) => {
-    it("should execute workflow and return trace ID", async () => {
+    it("should execute workflow and produce traces via ExecutionOtelPlugin + ADOT layer", async () => {
       const execution = await runner.run();
       expect(execution.getStatus()).toBe(ExecutionStatus.SUCCEEDED);
 
@@ -31,7 +31,7 @@ createTests({
       if (isCloud) {
         expect(result.xRayHeader).toBeDefined();
 
-        // Extract trace ID from the raw header using the same parsing as xRayContextExtractor
+        // Extract trace ID from the raw header
         const traceId = extractTraceIdFromXRayHeader(result.xRayHeader!);
         expect(traceId).toBeDefined();
         expect(traceId).toMatch(/^[0-9a-f]{32}$/);
@@ -41,9 +41,10 @@ createTests({
           delayMs: 30000,
         });
 
-        // Assert span names exist
+        // Assert span names exist (same operations as standalone variant)
         assertSpanNames(trace, [
           "fetch-data",
+          "short-pause",
           "process-data",
           "child-operations",
           "inner-step",

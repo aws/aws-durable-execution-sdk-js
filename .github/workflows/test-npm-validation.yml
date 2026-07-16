@@ -10,10 +10,10 @@ name: Test NPM Publish Validation
 on:
   pull_request:
     paths:
-      - '.github/workflows/iterate-publish-npm.sh'
-      - '.github/workflows/npm-publish.yml'
-      - '.github/workflows/test-npm-validation.yml'
-      - '.github/workflows/scripts/test-publish/**'
+      - ".github/workflows/iterate-publish-npm.sh"
+      - ".github/workflows/npm-publish.yml"
+      - ".github/workflows/test-npm-validation.yml"
+      - ".github/workflows/scripts/test-publish/**"
   workflow_dispatch:
 
 permissions:

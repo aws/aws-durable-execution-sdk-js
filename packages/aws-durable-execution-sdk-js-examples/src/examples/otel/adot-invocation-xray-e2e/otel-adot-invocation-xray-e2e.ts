@@ -2,14 +2,14 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
-import { OtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+import { InvocationOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
 import { ExampleConfig } from "../../../types";
 
-// No createOtelTestSetup — ADOT handles export at runtime
-const plugin = new OtelPlugin();
+// ADOT layer registers a global TracerProvider — use it via useDefaultTracerProvider
+const plugin = new InvocationOtelPlugin({ useDefaultTracerProvider: true });
 
 export const config: ExampleConfig = {
-  name: "OTel XRay E2E",
+  name: "OTel ADOT Invocation XRay E2E",
   durableConfig: {
     ExecutionTimeout: 120,
     RetentionPeriodInDays: 7,
@@ -18,12 +18,15 @@ export const config: ExampleConfig = {
 };
 
 export const handler = withDurableExecution(
-  async (event: any, context: DurableContext) => {
+  async (_event: any, context: DurableContext) => {
     // Derive trace ID from X-Ray header for test assertions
     const xRayHeader = process.env._X_AMZN_TRACE_ID;
 
     // Exercise multiple operation types for X-Ray verification
     const step1 = await context.step("fetch-data", async () => "data-value");
+
+    // Wait to force a multi-invocation workflow for trace comparison
+    await context.wait("short-pause", { seconds: 1 });
 
     const step2 = await context.step(
       "process-data",
