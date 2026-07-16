@@ -4478,7 +4478,7 @@
             {
               "kind": "MethodSignature",
               "canonicalReference": "@aws/durable-execution-sdk-js!DurableContext#waitForCondition:member(1)",
-              "docComment": "/**\n * Waits for a condition to be met by periodically checking state\n *\n * @param name - Step name for tracking and debugging\n *\n * @param checkFunc - Function that checks the current state and returns updated state\n *\n * @param config - Configuration for initial state, wait strategy, and serialization\n *\n * @example\n * ```typescript\n * const finalState = await context.waitForCondition(\n *   \"wait-for-job-completion\",\n *   async (currentState, ctx) => {\n *     const jobStatus = await checkJobStatus(currentState.jobId);\n *     return { ...currentState, status: jobStatus };\n *   },\n *   {\n *     initialState: { jobId: \"job-123\", status: \"pending\" },\n *     waitStrategy: (state, attempt) => {\n *       if (state.status === \"completed\") {\n *         return { shouldContinue: false };\n *       }\n *       return { shouldContinue: true, delay: { seconds: Math.min(attempt * 2, 60) } };\n *     }\n *   }\n * );\n * ```\n *\n */\n",
+              "docComment": "/**\n * Waits for a condition to be met by periodically checking state\n *\n * @param name - Step name for tracking and debugging\n *\n * @param checkFunc - Function that checks the current state and returns updated state. The second argument is a `WaitForConditionContext` (providing a logger and the current retry `attempt` number, 1-based) that can be used for attempt-aware logic, e.g. escalating checks or switching data sources on later attempts.\n *\n * @param config - Configuration for initial state, wait strategy, and serialization\n *\n * @example\n * ```typescript\n * const finalState = await context.waitForCondition(\n *   \"wait-for-job-completion\",\n *   async (currentState, ctx) => {\n *     const jobStatus = await checkJobStatus(currentState.jobId);\n *     return { ...currentState, status: jobStatus };\n *   },\n *   {\n *     initialState: { jobId: \"job-123\", status: \"pending\" },\n *     waitStrategy: (state, attempt) => {\n *       if (state.status === \"completed\") {\n *         return { shouldContinue: false };\n *       }\n *       return { shouldContinue: true, delay: { seconds: Math.min(attempt * 2, 60) } };\n *     }\n *   }\n * );\n * ```\n *\n */\n",
               "excerptTokens": [
                 {
                   "kind": "Content",
@@ -8709,7 +8709,7 @@
         {
           "kind": "TypeAlias",
           "canonicalReference": "@aws/durable-execution-sdk-js!WaitForConditionCheckFunc:type",
-          "docComment": "/**\n * Function that checks and updates state for waitForCondition operations\n *\n * @param state - Current state value\n *\n * @param context - Context for logging and other operations during state checking\n *\n * @returns Promise resolving to the updated state\n *\n * @public\n */\n",
+          "docComment": "/**\n * Function that checks and updates state for waitForCondition operations\n *\n * @param state - Current state value\n *\n * @param context - Context for logging and the current retry attempt number (1-based)\n *\n * @returns Promise resolving to the updated state\n *\n * @public\n */\n",
           "excerptTokens": [
             {
               "kind": "Content",
@@ -8740,7 +8740,7 @@
             {
               "kind": "Reference",
               "text": "WaitForConditionContext",
-              "canonicalReference": "@aws/durable-execution-sdk-js!~WaitForConditionContext:type"
+              "canonicalReference": "@aws/durable-execution-sdk-js!~WaitForConditionContext:interface"
             },
             {
               "kind": "Content",
