@@ -57,18 +57,14 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     this.idGenerator = new DeterministicIdGenerator();
     this.contextExtractor = config?.contextExtractor ?? xRayContextExtractor;
 
-    // For InvocationOtelPlugin, default useDefaultTracerProvider to true
-    // when neither tracerProvider nor useDefaultTracerProvider is explicitly set.
-    const resolvedConfig: OtelPluginConfig =
-      config?.tracerProvider || config?.useDefaultTracerProvider !== undefined
-        ? { ...config }
-        : { ...config, useDefaultTracerProvider: true };
-
-    const { tracerProvider } = createTracerProvider(resolvedConfig);
+    // Pass config directly to createTracerProvider — when neither tracerProvider
+    // nor useDefaultTracerProvider is set, option 3 creates an internal provider
+    // with OTLP export (same behavior as ExecutionOtelPlugin).
+    const { tracerProvider } = createTracerProvider(config);
     this.tracerProvider = tracerProvider;
 
     // Register instrumentations using the shared module
-    registerStandaloneInstrumentations(this.tracerProvider, resolvedConfig);
+    registerStandaloneInstrumentations(this.tracerProvider, config);
 
     this.tracer = this.tracerProvider.getTracer(instrumentationName);
 

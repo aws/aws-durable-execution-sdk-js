@@ -101,10 +101,8 @@ describe("InvocationOtelPlugin - useDefaultTracerProvider mode", () => {
     propagation.disable();
   });
 
-  it("defaults to useDefaultTracerProvider=true and uses the global provider", async () => {
-    // InvocationOtelPlugin defaults to useDefaultTracerProvider=true
-    // when neither tracerProvider nor useDefaultTracerProvider is explicitly set.
-    const plugin = new InvocationOtelPlugin();
+  it("uses the global provider when useDefaultTracerProvider is explicitly true", async () => {
+    const plugin = new InvocationOtelPlugin({ useDefaultTracerProvider: true });
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onInvocationEnd(makeInvocationEndInfo());
@@ -115,8 +113,22 @@ describe("InvocationOtelPlugin - useDefaultTracerProvider mode", () => {
     expect(invocationSpan).toBeDefined();
   });
 
-  it("exports operation spans via the global provider", async () => {
+  it("creates its own internal provider when no config is provided", async () => {
+    // When no config is provided, InvocationOtelPlugin creates its own provider (option 3)
+    // Spans will NOT appear in the globally registered exporter
     const plugin = new InvocationOtelPlugin();
+
+    await plugin.onInvocationStart(makeInvocationInfo());
+    await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+    // The global exporter should NOT have any spans since the plugin uses its own provider
+    const globalSpans = exporter.getFinishedSpans();
+    const invocationSpan = globalSpans.find((s) => s.name === "invocation");
+    expect(invocationSpan).toBeUndefined();
+  });
+
+  it("exports operation spans via the global provider when useDefaultTracerProvider=true", async () => {
+    const plugin = new InvocationOtelPlugin({ useDefaultTracerProvider: true });
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onOperationStart(
@@ -134,7 +146,7 @@ describe("InvocationOtelPlugin - useDefaultTracerProvider mode", () => {
   });
 
   it("supports multiple invocation lifecycles without leaking state", async () => {
-    const plugin = new InvocationOtelPlugin();
+    const plugin = new InvocationOtelPlugin({ useDefaultTracerProvider: true });
 
     // First invocation
     await plugin.onInvocationStart(makeInvocationInfo());
@@ -175,7 +187,7 @@ describe("InvocationOtelPlugin - useDefaultTracerProvider mode", () => {
   });
 
   it("does not shutdown the global provider on invocation end", async () => {
-    const plugin = new InvocationOtelPlugin();
+    const plugin = new InvocationOtelPlugin({ useDefaultTracerProvider: true });
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onInvocationEnd(makeInvocationEndInfo());
