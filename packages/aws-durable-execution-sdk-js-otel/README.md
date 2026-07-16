@@ -6,29 +6,36 @@ OpenTelemetry instrumentation plugin for AWS Durable Execution SDK. Emits distri
 
 This package provides two plugin implementations:
 
-| Plugin                 | Use Case                                                                              | Infrastructure Required                               |
-| ---------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `InvocationOtelPlugin` | Lightweight — delegates auto-instrumentation and export to the full ADOT Lambda layer | ADOT Lambda layer with `AWS_LAMBDA_EXEC_WRAPPER`      |
-| `ExecutionOtelPlugin`  | Self-contained — manages its own TracerProvider, instrumentations, and OTLP export    | Collector-only Lambda layer (no auto-instrumentation) |
+| Plugin                 | Trace Structure                                                                 |
+| ---------------------- | ------------------------------------------------------------------------------- |
+| `ExecutionOtelPlugin`  | Workflow_Span as synthetic root; operations are siblings of the invocation span |
+| `InvocationOtelPlugin` | Invocation span as root; operations are children of the invocation span         |
+
+Both plugins share the same configuration interface (`OtelPluginConfig`) and support three TracerProvider modes:
+
+1. **Auto-created** (default) — the plugin creates its own TracerProvider with OTLP export to `localhost:4318`
+2. **Custom** — you pass your own `tracerProvider` instance
+3. **Global default** — set `useDefaultTracerProvider: true` to use the globally registered provider (e.g., from the ADOT layer)
+
+Both plugins can be deployed with either the **ADOT Lambda layer** or the **OpenTelemetry community collector-only layer**.
 
 ## Table of Contents
 
 - [Installation](#installation)
-- [ExecutionOtelPlugin](#standaloneoetlplugin)
-  - [Minimal Handler Setup](#minimal-handler-setup)
-  - [Export Strategies](#export-strategies)
-  - [Collector Layer Setup](#collector-layer-setup)
-  - [Why a Collector Layer Is Required](#why-a-collector-layer-is-required)
-  - [Sample collector.yaml](#sample-collectoryaml)
-  - [IAM Permissions](#iam-permissions)
-  - [Environment Variables](#environment-variables)
-  - [SAM/CloudFormation Templates](#samcloudformation-templates)
-  - [ExecutionOtelPluginConfig Interface](#standaloneoetlpluginconfig-interface)
-  - [Trace Structure](#trace-structure)
-  - [Additional npm Dependencies](#additional-npm-dependencies)
-  - [Migration from InvocationOtelPlugin](#migration-from-otelplugin)
-- [InvocationOtelPlugin (ADOT Layer)](#otelplugin-adot-layer)
+- [Quick Start](#quick-start)
+- [Choosing a Plugin](#choosing-a-plugin)
+- [Lambda Layer Options](#lambda-layer-options)
+- [Deployment Matrix](#deployment-matrix)
+- [Shared Configuration](#shared-configuration)
+- [Export Strategies](#export-strategies)
+- [Collector Configuration](#collector-configuration)
+- [IAM Permissions](#iam-permissions)
+- [Environment Variables](#environment-variables)
+- [SAM/CloudFormation Templates](#samcloudformation-templates)
+- [Trace Structure Comparison](#trace-structure-comparison)
+- [Additional npm Dependencies](#additional-npm-dependencies)
 - [API Reference](#api-reference)
+- [Verification](#verification)
 - [License](#license)
 
 ## Installation
@@ -39,19 +46,17 @@ npm install @aws/durable-execution-sdk-js-otel
 
 ---
 
-## ExecutionOtelPlugin
+## Quick Start
 
-`ExecutionOtelPlugin` is a self-contained OpenTelemetry instrumentation plugin that provides full distributed tracing without requiring the ADOT Lambda layer's auto-instrumentation. It creates and manages its own TracerProvider, registers HTTP and AWS SDK instrumentations, configures X-Ray and W3C propagators, and exports spans via OTLP — all with zero-config defaults.
-
-You only need a **collector-only Lambda layer** (or equivalent OTLP endpoint) for span transport.
-
-### Minimal Handler Setup
+Both plugins are used the same way — only the import and class name differ:
 
 ```typescript
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
 import { ExecutionOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+// OR: import { InvocationOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
 
 const plugin = new ExecutionOtelPlugin();
+// OR: const plugin = new InvocationOtelPlugin();
 
 export const handler = withDurableExecution(
   async (event, context) => {
@@ -71,53 +76,296 @@ export const handler = withDurableExecution(
 );
 ```
 
-No additional configuration is required. The plugin auto-configures:
+With no configuration, both plugins auto-create a TracerProvider with:
 
-- A `TracerProvider` with OTLP export to `http://localhost:4318/v1/traces`
+- OTLP export to `http://localhost:4318/v1/traces`
 - HTTP and AWS SDK instrumentations
 - AWSXRay + W3C TraceContext propagators
 - Deterministic trace and span ID generation
 
-### Export Strategies
+---
 
-Choose the export strategy that matches your infrastructure:
+## Choosing a Plugin
 
-#### Recommended: Via a Collector-Only Lambda Layer
+| Aspect                   | `ExecutionOtelPlugin`                    | `InvocationOtelPlugin`          |
+| ------------------------ | ---------------------------------------- | ------------------------------- |
+| Trace root               | Workflow_Span (synthetic, deterministic) | Invocation span                 |
+| Operation parent         | Workflow_Span                            | Invocation span                 |
+| Invocation span role     | Sibling with span links                  | Parent of operations            |
+| Export timing            | Operations deferred until complete       | All spans exported immediately  |
+| Non-terminal invocations | Workflow_Span discarded (clean traces)   | All spans always emitted        |
+| Trace continuity         | Single trace across all invocations      | Per-invocation trace with links |
 
-Export spans to `localhost:4318` where the collector extension forwards them to X-Ray/CloudWatch.
+**Use `ExecutionOtelPlugin` when** you want a single unified trace view across all invocations of a durable execution, with the workflow as the logical root.
+
+**Use `InvocationOtelPlugin` when** you want each Lambda invocation to produce its own trace tree, correlated to other invocations via span links.
+
+---
+
+## Lambda Layer Options
+
+Both plugins can use either Lambda layer. The layer provides span transport (a collector that listens on `localhost:4318` and forwards to X-Ray/CloudWatch).
+
+| Layer                              | What It Provides                                       | ARN Format                                                                                  |
+| ---------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| **ADOT Lambda Layer**              | OTel SDK auto-instrumentation + collector extension    | `arn:aws:lambda:{region}:615299751070:layer:AWSOpenTelemetryDistroJs:{version}`             |
+| **Community Collector-Only Layer** | Collector extension only (no SDK auto-instrumentation) | `arn:aws:lambda:{region}:184161586896:layer:opentelemetry-nodejs-{version}:{layer-version}` |
+
+**ADOT Layer:** Registers a global TracerProvider with auto-instrumentation. Use `useDefaultTracerProvider: true` so the plugin delegates to that provider. Set `AWS_LAMBDA_EXEC_WRAPPER=/opt/otel-instrument` to activate it.
+
+**Community Collector Layer:** Only runs a collector process at `localhost:4318`. The plugin creates its own TracerProvider (default mode) and exports spans to the collector. Requires a `collector.yaml` in your function bundle and `OPENTELEMETRY_COLLECTOR_CONFIG_URI=/var/task/collector.yaml`.
+
+> **Tip:** The community collector layer is smaller and purpose-built for span transport. The ADOT layer is convenient if you want zero-config auto-instrumentation from the layer itself.
+
+---
+
+## Deployment Matrix
+
+| #   | Plugin                 | Layer                     | `useDefaultTracerProvider` | `AWS_LAMBDA_EXEC_WRAPPER` | `collector.yaml` needed? |
+| --- | ---------------------- | ------------------------- | -------------------------- | ------------------------- | ------------------------ |
+| 1   | `ExecutionOtelPlugin`  | ADOT Layer                | `true`                     | `/opt/otel-instrument`    | No                       |
+| 2   | `ExecutionOtelPlugin`  | Community Collector Layer | `false` (default)          | Do NOT set                | Yes                      |
+| 3   | `InvocationOtelPlugin` | ADOT Layer                | `true`                     | `/opt/otel-instrument`    | No                       |
+| 4   | `InvocationOtelPlugin` | Community Collector Layer | `false` (default)          | Do NOT set                | Yes                      |
+
+### 1. ExecutionOtelPlugin + ADOT Layer
+
+The ADOT layer provides both the collector and a global TracerProvider. The plugin uses the global provider and produces a Workflow_Span as the trace root.
+
+**Handler code:**
+
+```typescript
+import { ExecutionOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+const plugin = new ExecutionOtelPlugin({ useDefaultTracerProvider: true });
+```
+
+**SAM template:**
+
+```yaml
+MyFunction:
+  Type: AWS::Serverless::Function
+  Properties:
+    Runtime: nodejs22.x
+    Handler: index.handler
+    CodeUri: ./src
+    Layers:
+      - !Sub arn:aws:lambda:${AWS::Region}:615299751070:layer:AWSOpenTelemetryDistroJs:7
+    Environment:
+      Variables:
+        AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+    Tracing: Active
+    DurableConfig:
+      ExecutionTimeout: 3600
+      RetentionPeriodInDays: 7
+    Policies:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicDurableExecutionRolePolicy
+      - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+    AutoPublishAlias: live
+```
+
+### 2. ExecutionOtelPlugin + Community Collector Layer
+
+The plugin creates its own TracerProvider and exports spans to the collector on `localhost:4318`. Produces a Workflow_Span as the trace root.
+
+**Handler code:**
+
+```typescript
+import { ExecutionOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+const plugin = new ExecutionOtelPlugin();
+```
+
+**SAM template:**
+
+```yaml
+MyFunction:
+  Type: AWS::Serverless::Function
+  Properties:
+    Runtime: nodejs22.x
+    Handler: index.handler
+    CodeUri: ./src
+    Layers:
+      - !Sub arn:aws:lambda:${AWS::Region}:184161586896:layer:opentelemetry-nodejs-0_22_0:1
+    Environment:
+      Variables:
+        OPENTELEMETRY_COLLECTOR_CONFIG_URI: /var/task/collector.yaml
+    Tracing: Active
+    DurableConfig:
+      ExecutionTimeout: 3600
+      RetentionPeriodInDays: 7
+    Policies:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicDurableExecutionRolePolicy
+      - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+    AutoPublishAlias: live
+```
+
+### 3. InvocationOtelPlugin + ADOT Layer
+
+The ADOT layer provides both the collector and a global TracerProvider. The plugin uses the global provider and produces an invocation span as the trace root.
+
+**Handler code:**
+
+```typescript
+import { InvocationOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+const plugin = new InvocationOtelPlugin({ useDefaultTracerProvider: true });
+```
+
+**SAM template:**
+
+```yaml
+MyFunction:
+  Type: AWS::Serverless::Function
+  Properties:
+    Runtime: nodejs22.x
+    Handler: index.handler
+    CodeUri: ./src
+    Layers:
+      - !Sub arn:aws:lambda:${AWS::Region}:615299751070:layer:AWSOpenTelemetryDistroJs:7
+    Environment:
+      Variables:
+        AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+    Tracing: Active
+    DurableConfig:
+      ExecutionTimeout: 3600
+      RetentionPeriodInDays: 7
+    Policies:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicDurableExecutionRolePolicy
+      - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+    AutoPublishAlias: live
+```
+
+### 4. InvocationOtelPlugin + Community Collector Layer
+
+The plugin creates its own TracerProvider and exports spans to the collector on `localhost:4318`. Produces an invocation span as the trace root.
+
+**Handler code:**
+
+```typescript
+import { InvocationOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+const plugin = new InvocationOtelPlugin();
+```
+
+**SAM template:**
+
+```yaml
+MyFunction:
+  Type: AWS::Serverless::Function
+  Properties:
+    Runtime: nodejs22.x
+    Handler: index.handler
+    CodeUri: ./src
+    Layers:
+      - !Sub arn:aws:lambda:${AWS::Region}:184161586896:layer:opentelemetry-nodejs-0_22_0:1
+    Environment:
+      Variables:
+        OPENTELEMETRY_COLLECTOR_CONFIG_URI: /var/task/collector.yaml
+    Tracing: Active
+    DurableConfig:
+      ExecutionTimeout: 3600
+      RetentionPeriodInDays: 7
+    Policies:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicDurableExecutionRolePolicy
+      - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+    AutoPublishAlias: live
+```
+
+### Which Combination Should I Use?
+
+| Scenario                                               | Recommendation                                        |
+| ------------------------------------------------------ | ----------------------------------------------------- |
+| New deployment, want unified trace per execution       | ExecutionOtelPlugin + Community Collector (option 2)  |
+| New deployment, want per-invocation traces             | InvocationOtelPlugin + Community Collector (option 4) |
+| Already have ADOT layer, want unified execution traces | ExecutionOtelPlugin + ADOT Layer (option 1)           |
+| Already have ADOT layer, want per-invocation traces    | InvocationOtelPlugin + ADOT Layer (option 3)          |
+| Want smallest layer size                               | Community Collector (collector-only, no bundled SDK)  |
+| Want zero-config auto-instrumentation from ADOT        | ADOT Layer with `useDefaultTracerProvider: true`      |
+
+---
+
+## Shared Configuration
+
+Both plugins accept the same `OtelPluginConfig` interface:
+
+```typescript
+interface OtelPluginConfig {
+  /** Custom TracerProvider. Skips all auto-setup when provided. */
+  tracerProvider?: TracerProvider;
+
+  /** Use the globally registered TracerProvider (e.g., from ADOT). Defaults to false. */
+  useDefaultTracerProvider?: boolean;
+
+  /** Context extractor for upstream trace context. Defaults to xRayContextExtractor. */
+  contextExtractor?: ContextExtractor;
+
+  /** Instrumentation scope name. Defaults to "aws-durable-execution-sdk-js". */
+  instrumentationName?: string;
+
+  /** Whether to register HTTP instrumentation. Defaults to true. */
+  enableHttpInstrumentation?: boolean;
+
+  /** OTLP exporter config. Only used when auto-creating TracerProvider. */
+  exporterConfig?: {
+    endpoint?: string;
+    headers?: Record<string, string>;
+  };
+
+  /** Custom propagators. Replaces default [AWSXRay, W3CTraceContext]. */
+  propagators?: TextMapPropagator[];
+
+  /** Custom Workflow span name (ExecutionOtelPlugin only). Defaults to "Workflow". */
+  workflowSpanName?: string;
+}
+```
+
+**TracerProvider precedence:** explicit `tracerProvider` > `useDefaultTracerProvider: true` > auto-created.
+
+**Usage examples:**
+
+```typescript
+// Zero-config (auto-creates TracerProvider with OTLP export)
+const plugin = new ExecutionOtelPlugin();
+
+// Use the ADOT layer's globally registered TracerProvider
+const plugin = new InvocationOtelPlugin({ useDefaultTracerProvider: true });
+
+// Custom endpoint and headers (third-party vendor)
+const plugin = new ExecutionOtelPlugin({
+  exporterConfig: {
+    endpoint: "https://api.honeycomb.io/v1/traces",
+    headers: { "x-honeycomb-team": process.env.HONEYCOMB_API_KEY! },
+  },
+});
+
+// Bring your own TracerProvider
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+const provider = new NodeTracerProvider({
+  /* your config */
+});
+const plugin = new InvocationOtelPlugin({ tracerProvider: provider });
+```
+
+---
+
+## Export Strategies
+
+When the plugin auto-creates its TracerProvider (default mode), you can configure where spans go:
+
+### Via a Collector Layer (Recommended)
 
 ```
 Lambda → OTLP (localhost:4318) → Collector Extension → X-Ray/CloudWatch
 ```
 
-**Why this is recommended:**
+No code changes needed — auto-created providers target `localhost:4318` by default.
 
-- No SigV4 signing complexity in your application code
-- The collector handles batching, retry, and buffering during Lambda freeze/thaw cycles
-- Well-tested, production-proven path
-- Supports multi-destination fan-out via collector configuration
-
-No code changes needed — `new ExecutionOtelPlugin()` targets `localhost:4318` by default.
-
-#### Direct to CloudWatch OTLP Endpoint
-
-Export spans directly to the CloudWatch OTLP endpoint without a collector layer.
-
-```
-Lambda → OTLP (https://xray.{region}.amazonaws.com/v1/traces) → X-Ray/CloudWatch
-```
-
-Use this when minimizing Lambda layers is a priority. Requires SigV4 authentication on the OTLP requests.
+### Direct to CloudWatch OTLP Endpoint
 
 ```bash
 OTEL_EXPORTER_OTLP_ENDPOINT=https://xray.us-east-1.amazonaws.com/v1/traces
 ```
 
-> **Note:** Direct export requires SigV4 signed requests. You may need a custom exporter or middleware to handle authentication.
+> **Note:** Direct export requires SigV4 signed requests.
 
-#### Via Third-Party OTLP Endpoint
-
-Export to Datadog, Honeycomb, Grafana Cloud, or any OTLP-compatible vendor.
+### Via Third-Party OTLP Endpoint
 
 ```typescript
 const plugin = new ExecutionOtelPlugin({
@@ -135,70 +383,11 @@ OTEL_EXPORTER_OTLP_ENDPOINT=https://api.honeycomb.io/v1/traces
 OTEL_EXPORTER_OTLP_HEADERS=x-honeycomb-team=YOUR_API_KEY
 ```
 
-Can be combined with a collector layer for additional reliability (retry, buffering).
+---
 
-### Collector Layer Setup
+## Collector Configuration
 
-#### Option A (Recommended): OpenTelemetry Community Collector-Only Layer
-
-A lightweight, purpose-built collector layer from the OpenTelemetry Lambda project.
-
-**Step 1.** Find the latest collector layer ARN for your region and architecture from:
-https://github.com/open-telemetry/opentelemetry-lambda/releases
-
-The ARN follows the format:
-
-```
-arn:aws:lambda:{region}:184161586896:layer:opentelemetry-collector-{arch}-{version}:{layer-version}
-```
-
-**Step 2.** Attach the layer to your Lambda function.
-
-**Step 3.** Add a `collector.yaml` to your function bundle (see [Sample collector.yaml](#sample-collectoryaml) below).
-
-**Step 4.** Set the collector config URI environment variable:
-
-```bash
-OPENTELEMETRY_COLLECTOR_CONFIG_URI=/var/task/collector.yaml
-```
-
-**Step 5.** Do **NOT** set `AWS_LAMBDA_EXEC_WRAPPER`. The ExecutionOtelPlugin handles all instrumentation — the collector layer only transports spans.
-
-**Step 6.** Deploy and verify traces appear in X-Ray/CloudWatch.
-
-#### Option B: Legacy ADOT Lambda Layer
-
-The full ADOT Lambda layer includes both a collector and SDK auto-instrumentation. When used with ExecutionOtelPlugin, only the collector component is utilized.
-
-**Step 1.** Find the ADOT Node.js layer ARN:
-
-```
-arn:aws:lambda:{region}:901920570463:layer:aws-otel-nodejs-{arch}-ver-1-30-2:1
-```
-
-**Step 2.** Attach the layer to your Lambda function.
-
-**Step 3.** Do **NOT** set `AWS_LAMBDA_EXEC_WRAPPER`. This disables the ADOT SDK auto-instrumentation while the collector extension still runs and listens on `localhost:4318`.
-
-**Step 4.** Deploy and verify traces appear in X-Ray/CloudWatch.
-
-> **Tip:** Option A is preferred for new deployments because it's smaller (collector-only, no bundled SDK) and purpose-built for this use case.
-
-### Why a Collector Layer Is Required
-
-The collector handles several concerns that are impractical to solve in application code:
-
-- **Batching** — aggregates spans into efficient export batches
-- **Retry with backoff** — handles transient export failures without blocking your function
-- **Buffering during Lambda freeze/thaw** — the collector extension remains active during freeze cycles, draining buffered spans
-- **Protocol translation** — converts OTLP format to X-Ray segment format
-- **No SigV4 in your code** — the collector handles AWS authentication for X-Ray export
-
-Without a collector, your application would need to handle all of these concerns directly, adding complexity and latency to every invocation.
-
-### Sample collector.yaml
-
-Include this file in your function bundle (e.g., at the project root so it's packaged as `/var/task/collector.yaml`):
+When using the community collector-only layer, include a `collector.yaml` in your function bundle:
 
 ```yaml
 receivers:
@@ -218,36 +407,27 @@ service:
       exporters: [awsxray]
 ```
 
-Set the environment variable to point to this file:
+Set the environment variable:
 
 ```bash
 OPENTELEMETRY_COLLECTOR_CONFIG_URI=/var/task/collector.yaml
 ```
 
-### IAM Permissions
+### Why Use a Collector?
 
-#### Via Collector Layer (Recommended)
+- **Batching** — aggregates spans into efficient export batches
+- **Retry with backoff** — handles transient failures without blocking your function
+- **Buffering during Lambda freeze/thaw** — the collector extension remains active during freeze cycles
+- **Protocol translation** — converts OTLP to X-Ray segment format
+- **No SigV4 in your code** — the collector handles AWS authentication
 
-When using a collector layer, the **function's execution role** needs X-Ray write permissions (the collector uses the function's role):
+---
 
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": ["xray:PutTraceSegments", "xray:PutTelemetryRecords"],
-      "Resource": "*"
-    }
-  ]
-}
-```
+## IAM Permissions
 
-Or attach the managed policy: `arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess`
+### Via Collector Layer (ADOT or Community)
 
-#### Direct to CloudWatch OTLP Endpoint
-
-When exporting directly to `https://xray.{region}.amazonaws.com/v1/traces`:
+The function's execution role needs X-Ray write permissions:
 
 ```json
 {
@@ -262,193 +442,85 @@ When exporting directly to `https://xray.{region}.amazonaws.com/v1/traces`:
 }
 ```
 
-The function's execution role must also be configured with SigV4 signing credentials for the OTLP requests.
+Or attach: `arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess`
 
-#### Via Third-Party Endpoint
+### Via Third-Party Endpoint
 
-No AWS IAM permissions are required for third-party export. Authentication is handled via headers (API keys) set in `OTEL_EXPORTER_OTLP_HEADERS` or the `exporterConfig.headers` option.
+No AWS IAM permissions required. Authentication is handled via headers in `OTEL_EXPORTER_OTLP_HEADERS` or `exporterConfig.headers`.
 
-### Environment Variables
+---
 
-| Variable                          | Description                                                                                                                       | Default                           |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| `OTEL_EXPORTER_OTLP_ENDPOINT`     | OTLP exporter endpoint URL                                                                                                        | `http://localhost:4318/v1/traces` |
-| `OTEL_EXPORTER_OTLP_HEADERS`      | Comma-separated key=value headers for the exporter (e.g., `x-api-key=abc123`)                                                     | —                                 |
-| `OTEL_DURABLE_SAMPLING_RATIO`     | Trace-ID-based probabilistic sampling ratio (0.0 to 1.0). All invocations of the same execution are sampled/dropped consistently. | `1.0` (all traces sampled)        |
-| `AWS_LAMBDA_FUNCTION_NAME`        | Set by the Lambda runtime. Used to detect Lambda environment and populate resource attributes.                                    | —                                 |
-| `AWS_REGION`                      | Set by the Lambda runtime. Used for resource attributes and collector configuration.                                              | —                                 |
-| `AWS_LAMBDA_FUNCTION_MEMORY_SIZE` | Set by the Lambda runtime. Populates the `faas.max_memory` span attribute (in MB).                                                | —                                 |
+## Environment Variables
 
-### SAM/CloudFormation Templates
+| Variable                             | Description                                                                                                                       | Default                           |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`        | OTLP exporter endpoint URL                                                                                                        | `http://localhost:4318/v1/traces` |
+| `OTEL_EXPORTER_OTLP_HEADERS`         | Comma-separated key=value headers for the exporter                                                                                | —                                 |
+| `OTEL_DURABLE_SAMPLING_RATIO`        | Trace-ID-based probabilistic sampling ratio (0.0 to 1.0). All invocations of the same execution are sampled/dropped consistently. | `1.0` (all traces sampled)        |
+| `AWS_LAMBDA_EXEC_WRAPPER`            | Set to `/opt/otel-instrument` to activate the ADOT layer's auto-instrumentation                                                   | —                                 |
+| `OPENTELEMETRY_COLLECTOR_CONFIG_URI` | Path to `collector.yaml` for the community collector layer                                                                        | —                                 |
+| `AWS_LAMBDA_FUNCTION_NAME`           | Set by the Lambda runtime. Used to detect Lambda environment and populate resource attributes.                                    | —                                 |
+| `AWS_REGION`                         | Set by the Lambda runtime. Used for resource attributes and collector configuration.                                              | —                                 |
+| `AWS_LAMBDA_FUNCTION_MEMORY_SIZE`    | Set by the Lambda runtime. Populates the `faas.max_memory` span attribute (in MB).                                                | —                                 |
 
-#### Recommended: Collector-Only Layer
+---
 
-```yaml
-AWSTemplateFormatVersion: "2010-09-09"
-Transform: AWS::Serverless-2016-10-31
+## SAM/CloudFormation Templates
 
-Resources:
-  MyDurableFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Runtime: nodejs22.x
-      Handler: index.handler
-      CodeUri: ./src
-      MemorySize: 512
-      DurableConfig:
-        ExecutionTimeout: 3600
-        RetentionPeriodInDays: 7
-      Layers:
-        # OpenTelemetry community collector-only layer (check latest version)
-        - !Sub arn:aws:lambda:${AWS::Region}:184161586896:layer:opentelemetry-collector-arm64-0_14_0:1
-      Environment:
-        Variables:
-          OPENTELEMETRY_COLLECTOR_CONFIG_URI: /var/task/collector.yaml
-      Policies:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicDurableExecutionRolePolicy
-        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
-      AutoPublishAlias: live
-```
+See the [Deployment Matrix](#deployment-matrix) section for plugin-specific templates with both layer options. Below are additional templates for alternative export targets.
 
-#### Direct to CloudWatch (No Collector Layer)
+### Direct to CloudWatch (No Layer)
 
 ```yaml
-AWSTemplateFormatVersion: "2010-09-09"
-Transform: AWS::Serverless-2016-10-31
-
-Resources:
-  MyDurableFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Runtime: nodejs22.x
-      Handler: index.handler
-      CodeUri: ./src
-      MemorySize: 512
-      DurableConfig:
-        ExecutionTimeout: 3600
-        RetentionPeriodInDays: 7
-      Environment:
-        Variables:
-          OTEL_EXPORTER_OTLP_ENDPOINT: !Sub "https://xray.${AWS::Region}.amazonaws.com/v1/traces"
-      Policies:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicDurableExecutionRolePolicy
-        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
-      AutoPublishAlias: live
+MyFunction:
+  Type: AWS::Serverless::Function
+  Properties:
+    Runtime: nodejs22.x
+    Handler: index.handler
+    CodeUri: ./src
+    DurableConfig:
+      ExecutionTimeout: 3600
+      RetentionPeriodInDays: 7
+    Environment:
+      Variables:
+        OTEL_EXPORTER_OTLP_ENDPOINT: !Sub "https://xray.${AWS::Region}.amazonaws.com/v1/traces"
+    Policies:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicDurableExecutionRolePolicy
+      - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+    AutoPublishAlias: live
 ```
 
-#### Third-Party OTLP Endpoint
+### Third-Party OTLP Endpoint
 
 ```yaml
-AWSTemplateFormatVersion: "2010-09-09"
-Transform: AWS::Serverless-2016-10-31
-
-Resources:
-  MyDurableFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Runtime: nodejs22.x
-      Handler: index.handler
-      CodeUri: ./src
-      MemorySize: 512
-      DurableConfig:
-        ExecutionTimeout: 3600
-        RetentionPeriodInDays: 7
-      Layers:
-        # Optional: collector layer for reliability (retry/buffering)
-        - !Sub arn:aws:lambda:${AWS::Region}:184161586896:layer:opentelemetry-collector-arm64-0_14_0:1
-      Environment:
-        Variables:
-          OTEL_EXPORTER_OTLP_ENDPOINT: "https://api.honeycomb.io/v1/traces"
-          OTEL_EXPORTER_OTLP_HEADERS: "x-honeycomb-team=YOUR_API_KEY"
-      Policies:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicDurableExecutionRolePolicy
-      AutoPublishAlias: live
+MyFunction:
+  Type: AWS::Serverless::Function
+  Properties:
+    Runtime: nodejs22.x
+    Handler: index.handler
+    CodeUri: ./src
+    DurableConfig:
+      ExecutionTimeout: 3600
+      RetentionPeriodInDays: 7
+    Layers:
+      # Optional: collector layer for reliability (retry/buffering)
+      - !Sub arn:aws:lambda:${AWS::Region}:184161586896:layer:opentelemetry-nodejs-0_22_0:1
+    Environment:
+      Variables:
+        OTEL_EXPORTER_OTLP_ENDPOINT: "https://api.honeycomb.io/v1/traces"
+        OTEL_EXPORTER_OTLP_HEADERS: "x-honeycomb-team=YOUR_API_KEY"
+    Policies:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicDurableExecutionRolePolicy
+    AutoPublishAlias: live
 ```
 
-### ExecutionOtelPluginConfig Interface
+---
 
-All configuration options are optional. When no config is provided, the plugin auto-configures a fully working setup.
+## Trace Structure Comparison
 
-```typescript
-interface ExecutionOtelPluginConfig {
-  /**
-   * Custom TracerProvider. When provided, the plugin skips all auto-setup
-   * (no exporter, no propagators, no instrumentations are registered).
-   * The caller is responsible for configuring the provider.
-   */
-  tracerProvider?: TracerProvider;
+### ExecutionOtelPlugin
 
-  /**
-   * Context extractor function used to extract upstream trace context
-   * from the invocation environment. Defaults to `xRayContextExtractor`.
-   */
-  contextExtractor?: ContextExtractor;
-
-  /**
-   * Instrumentation scope name used when creating tracers.
-   * Defaults to "aws-durable-execution-sdk-js".
-   */
-  instrumentationName?: string;
-
-  /**
-   * Whether to register @opentelemetry/instrumentation-http.
-   * Defaults to true. Set to false to skip HTTP instrumentation.
-   * AWS SDK instrumentation is always registered unless a custom
-   * tracerProvider is provided.
-   */
-  enableHttpInstrumentation?: boolean;
-
-  /**
-   * OTLP exporter configuration. Only used when no custom tracerProvider
-   * is provided.
-   */
-  exporterConfig?: {
-    /** Exporter endpoint URL. Defaults to OTEL_EXPORTER_OTLP_ENDPOINT
-     *  env var or http://localhost:4318/v1/traces. */
-    endpoint?: string;
-    /** Custom headers sent with each export request. */
-    headers?: Record<string, string>;
-  };
-
-  /**
-   * Custom propagators. When provided, replaces the default composite
-   * propagator [AWSXRayPropagator, W3CTraceContextPropagator].
-   */
-  propagators?: TextMapPropagator[];
-}
-```
-
-**Usage examples:**
-
-```typescript
-// Zero-config (recommended starting point)
-const plugin = new ExecutionOtelPlugin();
-
-// Disable HTTP instrumentation
-const plugin = new ExecutionOtelPlugin({
-  enableHttpInstrumentation: false,
-});
-
-// Custom endpoint and headers
-const plugin = new ExecutionOtelPlugin({
-  exporterConfig: {
-    endpoint: "https://otel-collector.internal:4318/v1/traces",
-    headers: { Authorization: "Bearer token123" },
-  },
-});
-
-// Bring your own TracerProvider (advanced)
-import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
-
-const provider = new NodeTracerProvider({
-  /* your config */
-});
-const plugin = new ExecutionOtelPlugin({ tracerProvider: provider });
-```
-
-### Trace Structure
-
-The ExecutionOtelPlugin produces a hierarchical trace structure with the Workflow_Span as the synthetic root:
+Produces a hierarchical trace with Workflow_Span as the synthetic root:
 
 ```
 Workflow_Span (deterministic ID from execution ARN, exported on terminal status only)
@@ -467,28 +539,38 @@ Workflow_Span (deterministic ID from execution ARN, exported on terminal status 
     └── [link → Invocation_Span]
 ```
 
-**Key differences from InvocationOtelPlugin:**
+> When `useDefaultTracerProvider: true`, the plugin does not create its own Invocation_Span. Instead, it links to the ambient invocation span from the ADOT layer's context.
 
-| Aspect                   | InvocationOtelPlugin           | ExecutionOtelPlugin                      |
-| ------------------------ | ------------------------------ | ---------------------------------------- |
-| Trace root               | Invocation span (from ADOT)    | Workflow_Span (synthetic, deterministic) |
-| Operation parent         | Invocation span                | Workflow_Span                            |
-| Invocation span role     | Parent of operations           | Sibling with span links                  |
-| Export timing            | All spans exported immediately | Operations deferred until complete       |
-| Non-terminal invocations | Workflow span always emitted   | Workflow_Span discarded (clean traces)   |
-| HTTP spans               | ADOT auto-instrumentation      | Self-registered instrumentation          |
-| Lambda attributes        | Set by ADOT layer              | Set by plugin (`faas.*`, `cloud.*`)      |
+### InvocationOtelPlugin
 
-**Span attributes:**
+Produces a per-invocation trace with the invocation span as root:
 
-- Workflow_Span: `durable.execution.arn`, `durable.execution.status`
-- Invocation_Span: `faas.invocation_id`, `faas.coldstart`, `cloud.resource_id`, `cloud.provider`, `cloud.platform`, `faas.max_memory`, `durable.execution.arn`
-- Operation_Span: `durable.execution.arn`, `durable.operation.id`, `durable.operation.type`, `durable.operation.name`, `durable.operation.subtype`
-- Attempt_Span: all operation attributes plus `durable.operation.attempt`, `durable.attempt.outcome`
+```
+Invocation_Span (one per Lambda invocation)
+├── Operation_Span: "fetch-data" (STEP)
+│   ├── Attempt_Span: "fetch-data attempt 1"
+│   │   └── HTTP Span: GET https://api.example.com/data
+│   └── [link → deterministic span ID]
+├── Operation_Span: "cooldown" (WAIT)
+└── Operation_Span: "process-order" (CONTEXT)
+    ├── (nested operations from child context)
+    └── HTTP Span: POST https://api.example.com/orders
+```
 
-### Additional npm Dependencies
+Cross-invocation operations are correlated via span links to deterministic span IDs.
 
-The ExecutionOtelPlugin requires the following additional peer dependencies beyond the base package:
+### Span Attributes
+
+- **Workflow_Span** (ExecutionOtelPlugin only): `durable.execution.arn`, `durable.execution.status`
+- **Invocation_Span**: `faas.invocation_id`, `faas.coldstart`, `cloud.resource_id`, `cloud.provider`, `cloud.platform`, `faas.max_memory`, `durable.execution.arn`
+- **Operation_Span**: `durable.execution.arn`, `durable.operation.id`, `durable.operation.type`, `durable.operation.name`, `durable.operation.subtype`
+- **Attempt_Span**: all operation attributes plus `durable.operation.attempt`, `durable.attempt.outcome`
+
+---
+
+## Additional npm Dependencies
+
+When the plugin auto-creates its TracerProvider (default mode), these peer dependencies are required:
 
 ```bash
 npm install @opentelemetry/exporter-trace-otlp-http \
@@ -500,7 +582,7 @@ npm install @opentelemetry/exporter-trace-otlp-http \
 
 | Package                                   | Role                                           | Required?                                            |
 | ----------------------------------------- | ---------------------------------------------- | ---------------------------------------------------- |
-| `@opentelemetry/exporter-trace-otlp-http` | OTLP span export over HTTP                     | Optional (only if not using custom TracerProvider)   |
+| `@opentelemetry/exporter-trace-otlp-http` | OTLP span export over HTTP                     | Only when auto-creating TracerProvider               |
 | `@opentelemetry/propagator-aws-xray`      | X-Ray context propagation on outgoing requests | Required                                             |
 | `@opentelemetry/instrumentation-http`     | Auto-instrument outgoing HTTP calls            | Required (unless `enableHttpInstrumentation: false`) |
 | `@opentelemetry/resources`                | Lambda resource detection                      | Required                                             |
@@ -509,144 +591,7 @@ npm install @opentelemetry/exporter-trace-otlp-http \
 | `@opentelemetry/core`                     | Propagators, samplers                          | Required (already a peer dep)                        |
 | `@opentelemetry/instrumentation-aws-sdk`  | Auto-instrument AWS SDK calls                  | Required (already a peer dep)                        |
 
-### Migration from InvocationOtelPlugin
-
-If you're currently using `InvocationOtelPlugin` with the full ADOT Lambda layer, here's how to switch to `ExecutionOtelPlugin`:
-
-#### 1. Update your handler code
-
-```diff
-- import { InvocationOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
-+ import { ExecutionOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
-
-- const plugin = new InvocationOtelPlugin();
-+ const plugin = new ExecutionOtelPlugin();
-
-  export const handler = withDurableExecution(
-    async (event, context) => { /* ... */ },
-    { plugins: [plugin] },
-  );
-```
-
-#### 2. Update Lambda configuration
-
-```diff
-  Environment:
-    Variables:
--     AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
-+     OPENTELEMETRY_COLLECTOR_CONFIG_URI: /var/task/collector.yaml
-```
-
-Remove `AWS_LAMBDA_EXEC_WRAPPER` — the ExecutionOtelPlugin handles all instrumentation internally. The ADOT layer's auto-instrumentation is no longer needed.
-
-#### 3. Replace or keep the Lambda layer
-
-**Option A:** Replace the full ADOT layer with the lightweight collector-only layer:
-
-```diff
-  Layers:
--   - !Sub arn:aws:lambda:${AWS::Region}:901920570463:layer:aws-otel-nodejs-arm64-ver-1-30-2:1
-+   - !Sub arn:aws:lambda:${AWS::Region}:184161586896:layer:opentelemetry-collector-arm64-0_14_0:1
-```
-
-**Option B:** Keep the existing ADOT layer (just remove `AWS_LAMBDA_EXEC_WRAPPER`). The collector extension still runs and listens on `localhost:4318`.
-
-#### 4. Add collector.yaml to your bundle
-
-Add the [sample collector.yaml](#sample-collectoryaml) to your function package if using the collector layer.
-
-#### 5. Install additional dependencies
-
-```bash
-npm install @opentelemetry/exporter-trace-otlp-http \
-            @opentelemetry/propagator-aws-xray \
-            @opentelemetry/instrumentation-http
-```
-
-#### What changes in your traces
-
-After migration:
-
-- A synthetic **Workflow_Span** becomes the trace root (only exported on terminal invocations)
-- Operations are parented under the Workflow_Span instead of the Invocation_Span
-- Non-terminal invocations produce cleaner traces (no partial Workflow_Span exported)
-- Lambda semantic attributes (`faas.*`, `cloud.*`) are set by the plugin instead of ADOT
-- HTTP outgoing call spans appear as children of the active operation/attempt span
-
----
-
-## InvocationOtelPlugin (ADOT Layer)
-
-The lightweight `InvocationOtelPlugin` is designed to work alongside the full ADOT Lambda layer (including its auto-instrumentation). It requires:
-
-1. The ADOT Lambda layer attached to your function
-2. `AWS_LAMBDA_EXEC_WRAPPER=/opt/otel-instrument` set
-3. X-Ray Active Tracing enabled
-
-### Quick Start
-
-```typescript
-import { withDurableExecution } from "@aws/durable-execution-sdk-js";
-import { InvocationOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
-
-export const handler = withDurableExecution(
-  async (event, context) => {
-    const result = await context.step("fetch-data", async () =>
-      fetchData(event.id),
-    );
-    await context.wait({ seconds: 5 });
-    await context.step("process", async () => process(result));
-    return result;
-  },
-  { plugins: [new InvocationOtelPlugin()] },
-);
-```
-
-### ADOT Lambda Layer Setup
-
-The ADOT layer ARN format:
-
-```
-arn:aws:lambda:{region}:901920570463:layer:aws-otel-nodejs-{arch}-ver-{version}:{layer-version}
-```
-
-Refer to the [ADOT Lambda Layer documentation](https://aws-otel.github.io/docs/getting-started/lambda) for the latest ARNs.
-
-**SAM template:**
-
-```yaml
-MyFunction:
-  Type: AWS::Serverless::Function
-  Properties:
-    Layers:
-      - !Sub arn:aws:lambda:${AWS::Region}:901920570463:layer:aws-otel-nodejs-arm64-ver-1-30-2:1
-    Environment:
-      Variables:
-        AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
-    TracingConfig:
-      Mode: Active
-    Policies:
-      - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
-```
-
-### InvocationOtelPlugin Configuration
-
-```typescript
-new InvocationOtelPlugin({
-  contextExtractor?: ContextExtractor,  // Default: xRayContextExtractor
-  tracerProvider?: TracerProvider,       // Default: global TracerProvider (from ADOT)
-  instrumentationName?: string,          // Default: "aws-durable-execution-sdk-js"
-});
-```
-
-### Environment Variables (ADOT Layer)
-
-| Variable                      | Description                                                 | Default           |
-| ----------------------------- | ----------------------------------------------------------- | ----------------- |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | Endpoint for OTLP exporter                                  | Set by ADOT layer |
-| `AWS_LAMBDA_EXEC_WRAPPER`     | Set to `/opt/otel-instrument` for ADOT auto-instrumentation | —                 |
-| `OTEL_TRACES_SAMPLER`         | Sampler (e.g., `traceidratio`)                              | `always_on`       |
-| `OTEL_TRACES_SAMPLER_ARG`     | Sampler argument (e.g., `0.3` for 30%)                      | —                 |
+When using `useDefaultTracerProvider: true` (ADOT layer mode), the ADOT layer provides all OTel dependencies — you only need `@opentelemetry/api` in your package.
 
 ---
 
@@ -654,18 +599,18 @@ new InvocationOtelPlugin({
 
 ### `ExecutionOtelPlugin`
 
-Self-contained plugin with full TracerProvider management. Implements `DurableInstrumentationPlugin`.
+Plugin that produces a Workflow_Span as the synthetic trace root. Implements `DurableInstrumentationPlugin`.
 
 ```typescript
-new ExecutionOtelPlugin(config?: ExecutionOtelPluginConfig)
+new ExecutionOtelPlugin(config?: OtelPluginConfig)
 ```
 
 ### `InvocationOtelPlugin`
 
-Lightweight plugin for use with the ADOT Lambda layer. Implements `DurableInstrumentationPlugin`.
+Plugin that produces an invocation span as the trace root. Implements `DurableInstrumentationPlugin`.
 
 ```typescript
-new InvocationOtelPlugin(config?: InvocationOtelPluginConfig)
+new InvocationOtelPlugin(config?: OtelPluginConfig)
 ```
 
 ### `DeterministicIdGenerator`
@@ -674,7 +619,7 @@ Custom OpenTelemetry `IdGenerator` that produces reproducible trace and span IDs
 
 ### `deriveWorkflowSpanId(executionArn: string): string`
 
-Derives a deterministic 16-character hex span ID from an execution ARN. Used internally by ExecutionOtelPlugin for the Workflow_Span.
+Derives a deterministic 16-character hex span ID from an execution ARN.
 
 ### `xRayContextExtractor`
 
@@ -694,9 +639,13 @@ type ContextExtractor = (
 ) => ContextExtractorResult | undefined;
 ```
 
+---
+
 ## Verification
 
-After deploying with either plugin:
+> **Important:** When using the community collector layer, you must enable **CloudWatch Transaction Search** in your AWS account for traces to be visible in X-Ray. Navigate to CloudWatch → Settings → Traces and Logs and turn on Transaction Search.
+
+After deploying with either plugin and either layer:
 
 1. **Invoke your durable function** — trigger an execution with multiple steps or a wait/resume cycle.
 2. **Check CloudWatch console** — Navigate to CloudWatch → Traces. You should see spans grouped under one trace ID.
@@ -705,13 +654,14 @@ After deploying with either plugin:
 
 ### Troubleshooting
 
-| Symptom                                 | Likely Cause                                                                  |
-| --------------------------------------- | ----------------------------------------------------------------------------- |
-| No traces appear (ExecutionOtelPlugin)  | Collector layer not attached, or `OPENTELEMETRY_COLLECTOR_CONFIG_URI` not set |
-| No traces appear (InvocationOtelPlugin) | ADOT layer not configured, or `AWS_LAMBDA_EXEC_WRAPPER` not set               |
-| Traces fragmented across IDs            | X-Ray active tracing not enabled on the function                              |
-| Missing operation spans                 | Sampling ratio set below 1.0                                                  |
-| Collector layer errors                  | Check `collector.yaml` is in the function bundle at the path specified        |
+| Symptom                         | Likely Cause                                                                                                                                 |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| No traces appear                | Collector layer not attached, or config env var not set                                                                                      |
+| No traces with ADOT layer       | `AWS_LAMBDA_EXEC_WRAPPER` not set (when using `useDefaultTracerProvider: true`)                                                              |
+| Traces fragmented across IDs    | X-Ray active tracing not enabled on the function                                                                                             |
+| Missing operation spans         | Sampling ratio set below 1.0                                                                                                                 |
+| Collector layer errors          | Check `collector.yaml` is in the function bundle at the path specified                                                                       |
+| Duplicate spans with ADOT layer | `AWS_LAMBDA_EXEC_WRAPPER` is set but `useDefaultTracerProvider` is false — either remove the env var or set `useDefaultTracerProvider: true` |
 
 ## License
 
