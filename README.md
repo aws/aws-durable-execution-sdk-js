@@ -97,7 +97,7 @@ aws lambda invoke \
 
 - **[AWS Documentation](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html)** – Official AWS Lambda durable functions guide
 - **[SDK README](./packages/aws-durable-execution-sdk-js/README.md)** – Detailed SDK usage guide with code examples
-- **[API Reference](./docs/api-reference/index.md)** – Complete technical reference with type definitions
+- **[API Reference](https://docs.aws.amazon.com/durable-execution/)** – Complete technical reference with type definitions
 - **[Concepts & Use Cases](./packages/aws-durable-execution-sdk-js/src/documents/CONCEPTS.md)** – Replay model, best practices, and real-world patterns
 - **[Examples](./packages/aws-durable-execution-sdk-js-examples)** – Working examples including hello-world, callbacks, parallel processing, and more
 

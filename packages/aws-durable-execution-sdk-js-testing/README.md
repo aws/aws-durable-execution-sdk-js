@@ -163,7 +163,7 @@ describe("CloudDurableTestRunner", () => {
 
 This README provides a quick reference for the Testing SDK's main features. For more detailed information:
 
-- **[API Reference](../../docs/api-reference/durable-execution-sdk-js-testing.md)** - Complete technical reference with detailed type definitions and operation specifications
+- **[API Reference](https://docs.aws.amazon.com/durable-execution/)** - Complete technical reference with detailed type definitions and operation specifications
 - **[run-durable CLI Guide](./RUN_DURABLE_CLI.md)** - Complete guide for using the command-line tool to quickly test durable functions
 - **[Contributing](../../CONTRIBUTING.md)** - Learn about contributing to the AWS Durable Execution Testing SDK for JavaScript
 

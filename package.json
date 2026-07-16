@@ -33,7 +33,6 @@
   "devDependencies": {
     "@eslint/compat": "^1.4.1",
     "@eslint/js": "^9.29.0",
-    "@microsoft/api-documenter": "^7.28.1",
     "@rollup/plugin-esm-shim": "^0.1.8",
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-typescript": "^12.1.4",
