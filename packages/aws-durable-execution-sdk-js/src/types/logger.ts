@@ -75,8 +75,19 @@ export interface StepContext<
  * Context for waitForCondition operations.
  * @public
  */
-export type WaitForConditionContext<Logger extends DurableLogger> =
-  OperationContext<DurableContextLogger<Logger>>;
+export interface WaitForConditionContext<
+  Logger extends DurableLogger,
+> extends OperationContext<DurableContextLogger<Logger>> {
+  /**
+   * The current attempt number for this waitForCondition check, starting at
+   * `1` for the first execution and incrementing by `1` on each subsequent
+   * retry (i.e. each time `waitStrategy` decides to continue waiting).
+   *
+   * Use this to implement attempt-aware logic in the check function, for
+   * example escalating checks or switching data sources on later attempts.
+   */
+  attempt: number;
+}
 
 /**
  * Context for step operations.

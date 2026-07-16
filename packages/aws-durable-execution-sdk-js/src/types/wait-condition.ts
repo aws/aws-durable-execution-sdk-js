@@ -5,7 +5,7 @@ import { DurableLogger, Duration } from "../types";
 /**
  * Function that checks and updates state for waitForCondition operations
  * @param state - Current state value
- * @param context - Context for logging and other operations during state checking
+ * @param context - Context for logging and the current retry attempt number (1-based)
  * @returns Promise resolving to the updated state
  *
  * @public

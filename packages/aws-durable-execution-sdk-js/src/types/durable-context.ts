@@ -271,7 +271,10 @@ export interface DurableContext<TLogger extends DurableLogger = DurableLogger> {
   /**
    * Waits for a condition to be met by periodically checking state
    * @param name - Step name for tracking and debugging
-   * @param checkFunc - Function that checks the current state and returns updated state
+   * @param checkFunc - Function that checks the current state and returns updated state. The
+   * second argument is a `WaitForConditionContext` (providing a logger and the current retry
+   * `attempt` number, 1-based) that can be used for attempt-aware logic, e.g. escalating checks
+   * or switching data sources on later attempts.
    * @param config - Configuration for initial state, wait strategy, and serialization
    * @example
    * ```typescript
