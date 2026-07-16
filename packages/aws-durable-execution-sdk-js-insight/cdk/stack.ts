@@ -400,11 +400,11 @@ export class InsightDestinationsStack extends cdk.Stack {
           execution_name VARCHAR(256),
           function_name VARCHAR(128),
           status VARCHAR(20),
-          start_time VARCHAR(30),
-          end_time VARCHAR(30),
+          start_time TIMESTAMPTZ,
+          end_time TIMESTAMPTZ,
           duration_ms BIGINT,
           record_json SUPER,
-          emitted_at VARCHAR(30)
+          emitted_at TIMESTAMPTZ
         );
         GRANT ALL ON ${fqTable} TO PUBLIC;
       `;

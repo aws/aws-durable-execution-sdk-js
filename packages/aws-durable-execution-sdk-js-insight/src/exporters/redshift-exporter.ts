@@ -120,8 +120,8 @@ export class RedshiftExporter implements InsightExporter {
     // in the source projection instead of bound parameters.
     const endTimeSel = record.endTime
       ? (parameters.push({ name: "end_time", value: record.endTime }),
-        ":end_time::varchar")
-      : "NULL::varchar";
+        ":end_time::timestamptz")
+      : "NULL::timestamptz";
     const durationSel =
       record.durationMs != null
         ? (parameters.push({
@@ -143,18 +143,20 @@ export class RedshiftExporter implements InsightExporter {
     // equality join on a SOURCE COLUMN (joining on a parameter/constant makes it
     // plan a NestedLoop join, which MERGE rejects with "NestedLoop join is not
     // supported in MERGE"). record_json is populated with JSON_PARSE(...) so it
-    // lands in the SUPER column.
+    // lands in the SUPER column. Time fields are cast to timestamptz to match
+    // the TIMESTAMPTZ table columns (ISO-8601 strings parse cleanly), so date
+    // math works natively — mirrors AuroraExporter.
     const sql = `MERGE INTO ${this.fqTable} USING (
       SELECT
         :execution_arn::varchar AS execution_arn,
         ${execNameSel} AS execution_name,
         :function_name::varchar AS function_name,
         :status::varchar AS status,
-        :start_time::varchar AS start_time,
+        :start_time::timestamptz AS start_time,
         ${endTimeSel} AS end_time,
         ${durationSel} AS duration_ms,
         JSON_PARSE(:record_json) AS record_json,
-        :emitted_at::varchar AS emitted_at
+        :emitted_at::timestamptz AS emitted_at
     ) AS src
     ON ${this.fqTable}.execution_arn = src.execution_arn
     WHEN MATCHED THEN UPDATE SET
