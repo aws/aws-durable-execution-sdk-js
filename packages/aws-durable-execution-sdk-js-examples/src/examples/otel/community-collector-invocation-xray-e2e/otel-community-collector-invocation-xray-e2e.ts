@@ -11,6 +11,7 @@ import {
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
 import { ExampleConfig } from "../../../types";
 import { SerializedSpan } from "../shared/otel-test-setup";
+import { xrayE2eWorkflow } from "../shared/xray-e2e-workflow";
 
 /**
  * Detect whether we're running in Lambda (cloud) vs local test runner.
@@ -89,30 +90,8 @@ export const config: ExampleConfig = {
 
 export const handler = withDurableExecution(
   async (_event: any, context: DurableContext) => {
-    // Derive trace ID from X-Ray header for test assertions
-    const xRayHeader = process.env._X_AMZN_TRACE_ID;
-
-    // Exercise multiple operation types for X-Ray verification
-    const step1 = await context.step("fetch-data", async () => "data-value");
-
-    // Wait to force a multi-invocation workflow for trace comparison
-    await context.wait("short-pause", { seconds: 1 });
-
-    const step2 = await context.step(
-      "process-data",
-      async () => `processed-${step1}`,
-    );
-
-    const childResult = await context.runInChildContext(
-      "child-operations",
-      async (childCtx: DurableContext) => {
-        const inner = await childCtx.step(
-          "inner-step",
-          async () => "inner-value",
-        );
-        return inner;
-      },
-    );
+    const { xRayHeader, step1, step2, childResult } =
+      await xrayE2eWorkflow(context);
 
     return {
       xRayHeader,

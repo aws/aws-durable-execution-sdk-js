@@ -58,11 +58,12 @@ createTests({
           "process-data",
           "child-operations",
           "inner-step",
+          "fails-then-succeeds",
         ]);
 
-        // Assert hierarchy: child-operations contains inner-step
+        // Assert hierarchy: child-operations contains inner-step and fails-then-succeeds
         assertSpanHierarchy(trace, {
-          "child-operations": ["inner-step"],
+          "child-operations": ["inner-step", "fails-then-succeeds"],
         });
 
         // Assert span attributes
@@ -76,6 +77,9 @@ createTests({
           "durable.operation.type": "CONTEXT",
         });
         assertSpanAttributes(trace, "inner-step", {
+          "durable.operation.type": "STEP",
+        });
+        assertSpanAttributes(trace, "fails-then-succeeds", {
           "durable.operation.type": "STEP",
         });
       } else {
@@ -122,12 +126,24 @@ createTests({
           "STEP",
         );
 
+        const failsThenSucceedsSpan = operationSpans.find(
+          (s) =>
+            s.attributes["durable.operation.name"] === "fails-then-succeeds",
+        );
+        expect(failsThenSucceedsSpan).toBeDefined();
+        expect(
+          failsThenSucceedsSpan!.attributes["durable.operation.type"],
+        ).toBe("STEP");
+
         // All operation spans share the same traceId
         const traceId = operationSpans[0].traceId;
         expect(operationSpans.every((s) => s.traceId === traceId)).toBe(true);
 
         // Verify inner-step is nested under child-operations
         expect(innerStepSpan!.parentSpanId).toBe(childOpsSpan!.spanId);
+
+        // Verify fails-then-succeeds is nested under child-operations
+        expect(failsThenSucceedsSpan!.parentSpanId).toBe(childOpsSpan!.spanId);
       }
 
       assertEventSignatures(execution);

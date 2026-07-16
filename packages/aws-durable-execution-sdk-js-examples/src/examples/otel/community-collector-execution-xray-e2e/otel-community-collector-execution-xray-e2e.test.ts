@@ -58,11 +58,12 @@ createTests({
           "process-data",
           "child-operations",
           "inner-step",
+          "fails-then-succeeds",
         ]);
 
-        // Assert hierarchy: child-operations contains inner-step
+        // Assert hierarchy: child-operations contains inner-step and fails-then-succeeds
         assertSpanHierarchy(trace, {
-          "child-operations": ["inner-step"],
+          "child-operations": ["inner-step", "fails-then-succeeds"],
         });
 
         // Assert span attributes
@@ -76,6 +77,9 @@ createTests({
           "durable.operation.type": "CONTEXT",
         });
         assertSpanAttributes(trace, "inner-step", {
+          "durable.operation.type": "STEP",
+        });
+        assertSpanAttributes(trace, "fails-then-succeeds", {
           "durable.operation.type": "STEP",
         });
 
@@ -99,11 +103,11 @@ createTests({
         // ExecutionOtelPlugin produces:
         // - 1 Workflow span
         // - 1 Invocation span
-        // - 4 operation spans (fetch-data, short-pause, process-data, child-operations)
-        // - 3 attempt spans (one per step: fetch-data, process-data, inner-step)
+        // - 5 operation spans (fetch-data, short-pause, process-data, child-operations, fails-then-succeeds)
+        // - 5 attempt spans (fetch-data, process-data, inner-step, fails-then-succeeds x2 failed + 1 success)
         // - 1 inner-step operation span
         // - 1 Context_Execution span for child-operations
-        expect(spans.length).toBeGreaterThanOrEqual(9);
+        expect(spans.length).toBeGreaterThanOrEqual(12);
 
         // All spans share the same traceId
         const traceId = spans[0].traceId;
@@ -163,6 +167,17 @@ createTests({
         );
         expect(innerStepSpan).toBeDefined();
         expect(innerStepSpan!.parentSpanId).toBe(childOpsSpan!.spanId);
+
+        // Verify fails-then-succeeds is nested under child-operations
+        const failsThenSucceedsSpan = operationSpans.find(
+          (s) =>
+            s.attributes["durable.operation.name"] === "fails-then-succeeds",
+        );
+        expect(failsThenSucceedsSpan).toBeDefined();
+        expect(
+          failsThenSucceedsSpan!.attributes["durable.operation.type"],
+        ).toBe("STEP");
+        expect(failsThenSucceedsSpan!.parentSpanId).toBe(childOpsSpan!.spanId);
 
         // Verify attempt spans exist
         const attemptSpans = spans.filter(

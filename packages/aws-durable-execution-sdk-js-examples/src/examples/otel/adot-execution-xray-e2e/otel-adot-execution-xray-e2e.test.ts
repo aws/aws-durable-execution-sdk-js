@@ -48,11 +48,12 @@ createTests({
           "process-data",
           "child-operations",
           "inner-step",
+          "fails-then-succeeds",
         ]);
 
-        // Assert hierarchy: child-operations contains inner-step
+        // Assert hierarchy: child-operations contains inner-step and fails-then-succeeds
         assertSpanHierarchy(trace, {
-          "child-operations": ["inner-step"],
+          "child-operations": ["inner-step", "fails-then-succeeds"],
         });
 
         // Assert span attributes
@@ -66,6 +67,9 @@ createTests({
           "durable.operation.type": "CONTEXT",
         });
         assertSpanAttributes(trace, "inner-step", {
+          "durable.operation.type": "STEP",
+        });
+        assertSpanAttributes(trace, "fails-then-succeeds", {
           "durable.operation.type": "STEP",
         });
       }
