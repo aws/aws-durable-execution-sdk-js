@@ -3,6 +3,7 @@
   "description": "Workflow Insight plugin for AWS Durable Execution SDK — curated execution observability",
   "license": "Apache-2.0",
   "version": "0.1.0-alpha.0",
+  "private": false,
   "repository": {
     "type": "git",
     "url": "git+ssh://git@github.com/aws/aws-durable-execution-sdk-js.git",
@@ -37,7 +38,7 @@
     "clean": "rm -rf dist dist-cjs dist-types"
   },
   "peerDependencies": {
-    "@aws/durable-execution-sdk-js": ">=2.0.0-alpha.1",
+    "@aws/durable-execution-sdk-js": ">=2.1.0",
     "@aws-sdk/client-s3": "^3.0.0",
     "@aws-sdk/client-dynamodb": "^3.0.0",
     "@aws-sdk/util-dynamodb": "^3.0.0",
