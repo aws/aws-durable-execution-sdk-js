@@ -89,7 +89,7 @@ function isOtelFunction(handler: string): boolean {
  * Checks if the handler is a community collector otel function that needs the
  * collector-only layer (no ADOT auto-instrumentation).
  */
-function isStandaloneOtelFunction(handler: string): boolean {
+function needsCollectorLayer(handler: string): boolean {
   return handler.includes("otel-community-collector");
 }
 
@@ -415,7 +415,7 @@ async function createFunction(
         AWS_LAMBDA_EXEC_WRAPPER: "/opt/otel-instrument",
       };
     }
-  } else if (isStandaloneOtelFunction(exampleConfig.handler)) {
+  } else if (needsCollectorLayer(exampleConfig.handler)) {
     // ExecutionOtelPlugin: use the OTel community collector-only layer
     tracingConfig = { Mode: "Active" };
     layers = [getOtelCollectorLayerArn(env.AWS_REGION)];
@@ -522,7 +522,7 @@ async function updateFunction(
           };
         }
 
-        if (isStandaloneOtelFunction(exampleConfig.handler)) {
+        if (needsCollectorLayer(exampleConfig.handler)) {
           vars = {
             ...vars,
             OPENTELEMETRY_COLLECTOR_CONFIG_FILE: "/var/task/collector.yaml",
@@ -559,7 +559,7 @@ async function updateFunction(
             return [adotArn];
           })(),
         }
-      : isStandaloneOtelFunction(exampleConfig.handler)
+      : needsCollectorLayer(exampleConfig.handler)
         ? {
             TracingConfig: { Mode: "Active" as const },
             Layers: [getOtelCollectorLayerArn(env.AWS_REGION)],
