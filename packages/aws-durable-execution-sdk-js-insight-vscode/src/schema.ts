@@ -300,11 +300,11 @@ const RECORD_SCHEMA_REDSHIFT = `Records are stored in an Amazon Redshift table "
 - execution_name: VARCHAR(256)
 - function_name: VARCHAR(128)
 - status: VARCHAR(20) — values: RUNNING, SUCCEEDED, FAILED
-- start_time: VARCHAR(30) (ISO-8601 string, NOT a native timestamp)
-- end_time: VARCHAR(30) (ISO-8601 string, NULL if still running)
+- start_time: TIMESTAMPTZ (native timestamp)
+- end_time: TIMESTAMPTZ (NULL if still running)
 - duration_ms: BIGINT (NULL if still running)
 - record_json: SUPER — full WorkflowInsightRecord as semi-structured JSON
-- emitted_at: VARCHAR(30) (ISO-8601 string)
+- emitted_at: TIMESTAMPTZ
 
 The record_json SUPER column contains the full record. The workgroup has
 enable_case_sensitive_identifier=true, and the stored JSON keys are camelCase,
@@ -330,9 +330,8 @@ fields they want — do not assume the structure.`;
 
 const DIALECT_REDSHIFT = `Target query language: Amazon Redshift SQL (with PartiQL for SUPER navigation).
 - Table name is TABLE_NAME.
-- Time columns (start_time, end_time, emitted_at) are ISO-8601 STRINGS, not
-  native timestamps. Compare them lexically (ISO-8601 sorts chronologically), or
-  cast with (start_time::timestamptz) when you need date math like NOW()/INTERVAL.
+- Time columns (start_time, end_time, emitted_at) are native TIMESTAMPTZ — use
+  directly with NOW(), INTERVAL, DATE_TRUNC, and comparisons for date math.
 - record_json is SUPER — navigate with dot/bracket paths and UNNEST arrays by
   joining them as a table alias (FROM tbl t, t.record_json."operations" o). The
   JSON keys are camelCase and case-sensitive identifiers are ON, so ALWAYS
