@@ -118,3 +118,9 @@ non-zero exit means at least one requirement failed.
 `.github/workflows/conformance-tests.yml` runs the same flow on pull requests and
 on manual dispatch, one parallel job per suite (a build matrix). It assumes AWS
 credentials via OIDC using the repository's existing integration secrets.
+
+Before deploying, CI runs `scripts/inject_execution_role.py` to point every
+function at the pre-existing execution role (`TEST_LAMBDA_EXECUTION_ROLE_ARN`)
+and drop the template's self-created `DurableFunctionRole` — so CI deploys
+don't create IAM roles. This rewrites only CI's checkout; the checked-in
+template stays self-contained for local runs.

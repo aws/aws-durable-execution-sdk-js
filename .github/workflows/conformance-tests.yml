@@ -71,6 +71,21 @@ jobs:
           role-session-name: githubConformanceTest
           aws-region: ${{ vars.AWS_REGION }}
 
+      - name: Inject Lambda execution role into template
+        env:
+          ROLE_ARN: ${{ secrets.TEST_LAMBDA_EXECUTION_ROLE_ARN }}
+        run: |
+          if [ -z "$ROLE_ARN" ]; then
+            echo "TEST_LAMBDA_EXECUTION_ROLE_ARN not set; template will create its own role."
+            exit 0
+          fi
+          # Point every function at the pre-existing execution role and drop the
+          # self-created DurableFunctionRole. Mutates only the CI checkout; the
+          # checked-in template stays self-contained for local runs.
+          python3 scripts/inject_execution_role.py \
+            --template template_${{ matrix.suite }}.yaml \
+            --role-arn "$ROLE_ARN"
+
       - name: Run conformance suite
         env:
           # Same env the SAM-based integration deploy passes. LAMBDA_ENDPOINT is
