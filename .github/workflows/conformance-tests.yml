@@ -90,6 +90,18 @@ jobs:
             --report junit \
             --report-file report-${{ matrix.suite }}
 
+      - name: Dump CloudFormation failure events
+        if: failure()
+        run: |
+          STACK=durable-execution-conformance-tests-conformance-js-${{ matrix.suite }}-${{ github.run_id }}
+          echo "Describing failed stack: $STACK"
+          aws cloudformation describe-stack-events \
+            --stack-name "$STACK" \
+            --region ${{ vars.AWS_REGION }} \
+            --query "reverse(StackEvents[?ResourceStatus=='CREATE_FAILED'].[LogicalResourceId,ResourceType,ResourceStatusReason])" \
+            --output table \
+          || echo "Could not describe stack $STACK (it may have been deleted)."
+
       - name: Upload conformance report
         if: always()
         uses: actions/upload-artifact@v4
