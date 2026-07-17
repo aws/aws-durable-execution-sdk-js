@@ -1,0 +1,96 @@
+name: Conformance Tests
+
+# Full-integration conformance run: builds the JS handlers, installs the pinned
+# language-agnostic runner from PyPI, then deploys + invokes + validates one SAM
+# stack per suite. Each suite runs as its own parallel matrix job. To add a suite
+# later, add its name to `strategy.matrix.suite` (and ship its template_<suite>.yaml
+# + handlers).
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "packages/aws-durable-execution-sdk-js-conformance/**"
+      - ".github/workflows/conformance-tests.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.head_ref || github.ref_name || github.run_id }}-conformance
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write # Required for AWS OIDC credentials
+
+jobs:
+  conformance:
+    name: conformance (${{ matrix.suite }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [step]
+    defaults:
+      run:
+        working-directory: packages/aws-durable-execution-sdk-js-conformance
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22.x"
+          cache: "npm"
+
+      - name: Install monorepo dependencies
+        working-directory: .
+        run: npm ci
+
+      - name: Build SDK
+        working-directory: .
+        run: npm run build -w @aws/durable-execution-sdk-js
+
+      - name: Build conformance handlers
+        run: npm run build # rollup -> dist/<handler>.js
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install conformance runner
+        run: pip install aws-durable-execution-conformance-tests==0.0.1
+
+      - name: Get AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.ACTIONS_INTEGRATION_ROLE_NAME }}
+          role-session-name: githubConformanceTest
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Run conformance suite
+        env:
+          # Available to the runner/SDK if endpoint wiring is required; may need
+          # to be threaded into the Lambda function Environment in template_*.yaml.
+          LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+        run: |
+          python -m aws_durable_execution_conformance_tests.app \
+            --template template_${{ matrix.suite }}.yaml \
+            --language js \
+            --suite ${{ matrix.suite }} \
+            --name conformance-js-${{ matrix.suite }}-${{ github.run_id }} \
+            --region ${{ vars.AWS_REGION }} \
+            --history-dir history-${{ matrix.suite }} \
+            --report junit \
+            --report-file report-${{ matrix.suite }}
+
+      - name: Upload conformance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-report-${{ matrix.suite }}
+          path: |
+            packages/aws-durable-execution-sdk-js-conformance/report-${{ matrix.suite }}.xml
+            packages/aws-durable-execution-sdk-js-conformance/history-${{ matrix.suite }}/
+          if-no-files-found: warn
