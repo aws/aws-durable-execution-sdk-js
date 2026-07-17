@@ -112,7 +112,28 @@ jobs:
             --exclude='./webview-ui/node_modules' --exclude='./webview-ui/dist' \
             -cf - . | tar -xf - -C "$ISOLATED"
           cd "$ISOLATED"
-          npm install --no-workspaces --ignore-scripts
+          # Run node-llama-cpp's postinstall (i.e. don't pass --ignore-scripts)
+          # so binary resolution happens deterministically here, matching
+          # node-llama-cpp's own documented recommendation ("allow scripts...
+          # to ensure resolving the binaries happens during npm install,
+          # instead of on the first time of calling getLlama"). As of the npm
+          # version pinned above, install scripts still run by default (the
+          # package.json "allowScripts" allow-list is advisory-only in this
+          # npm release per `npm help approve-scripts`; a future npm release
+          # is expected to enforce it, at which point this step may need an
+          # explicit allow-list entry for node-llama-cpp).
+          #
+          # The getLlama() smoke test below is the real guardrail: it fails
+          # the build if this platform's native binary didn't resolve,
+          # instead of silently shipping a .vsix that would only fail for an
+          # end user on first use of the local (on-device) LLM provider.
+          npm install --no-workspaces
+          test -d node_modules/node-llama-cpp || { echo "node-llama-cpp did not install"; exit 1; }
+          node --input-type=module -e "
+            import('node-llama-cpp').then(({getLlama}) => getLlama())
+              .then(() => console.log('getLlama() resolved OK'))
+              .catch(e => { console.error('getLlama() failed:', e.message); process.exit(1); });
+          "
           (cd webview-ui && npm ci)
           VER=$(node -p "require('./package.json').version")
           mkdir -p vsix
