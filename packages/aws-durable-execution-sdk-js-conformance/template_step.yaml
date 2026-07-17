@@ -28,29 +28,6 @@ Resources:
             - lambda:CheckpointDurableExecution
             - lambda:GetDurableExecutionState
             Resource: '*'
-      - PolicyName: DynamoDBPolicy
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action:
-            - dynamodb:GetItem
-            - dynamodb:PutItem
-            - dynamodb:UpdateItem
-            Resource:
-              Fn::GetAtt:
-              - AttemptsTable
-              - Arn
-  AttemptsTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      AttributeDefinitions:
-      - AttributeName: executionId
-        AttributeType: S
-      KeySchema:
-      - AttributeName: executionId
-        KeyType: HASH
-      BillingMode: PAY_PER_REQUEST
   StepBasic:
     Type: AWS::Serverless::Function
     Metadata:
@@ -238,10 +215,6 @@ Resources:
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
-      Environment:
-        Variables:
-          ATTEMPTS_TABLE_NAME:
-            Ref: AttemptsTable
   StepRetryExhaustion:
     Type: AWS::Serverless::Function
     Metadata:
@@ -276,10 +249,6 @@ Resources:
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
-      Environment:
-        Variables:
-          ATTEMPTS_TABLE_NAME:
-            Ref: AttemptsTable
   StepRetryCustomConfig:
     Type: AWS::Serverless::Function
     Metadata:
@@ -297,10 +266,6 @@ Resources:
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
-      Environment:
-        Variables:
-          ATTEMPTS_TABLE_NAME:
-            Ref: AttemptsTable
   StepRetrySpecificException:
     Type: AWS::Serverless::Function
     Metadata:
@@ -318,10 +283,6 @@ Resources:
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
-      Environment:
-        Variables:
-          ATTEMPTS_TABLE_NAME:
-            Ref: AttemptsTable
   StepRetryNonRetryable:
     Type: AWS::Serverless::Function
     Metadata:
@@ -373,10 +334,6 @@ Resources:
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
-      Environment:
-        Variables:
-          ATTEMPTS_TABLE_NAME:
-            Ref: AttemptsTable
   StepWithError:
     Type: AWS::Serverless::Function
     Metadata:
