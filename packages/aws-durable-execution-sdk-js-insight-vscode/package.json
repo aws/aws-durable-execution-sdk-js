@@ -264,8 +264,8 @@
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
     "test": "jest",
-    "package": "mkdir -p vsix && npx --yes @vscode/vsce@^3 package --out vsix/",
-    "package:target": "mkdir -p vsix && VER=$(node -p \"require('./package.json').version\") && npx --yes @vscode/vsce@^3 package --target \"$VSCE_TARGET\" --out \"vsix/aws-durable-execution-sdk-js-insight-vscode-${VER}-${VSCE_TARGET}.vsix\"",
+    "package": "mkdir -p vsix && npx --yes @vscode/vsce@3.9.2 package --out vsix/",
+    "package:target": "mkdir -p vsix && VER=$(node -p \"require('./package.json').version\") && npx --yes @vscode/vsce@3.9.2 package --target \"$VSCE_TARGET\" --out \"vsix/aws-durable-execution-sdk-js-insight-vscode-${VER}-${VSCE_TARGET}.vsix\"",
     "clean": "rm -rf dist media/webview.js media/webview.css"
   },
   "dependencies": {

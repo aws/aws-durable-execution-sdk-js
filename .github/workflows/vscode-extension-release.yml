@@ -33,7 +33,7 @@ jobs:
       should_release: ${{ steps.check.outputs.should_release }}
       vsix_version: ${{ steps.check.outputs.vsix_version }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.event.release.tag_name }}
       - id: check
@@ -41,11 +41,15 @@ jobs:
           PKG_VERSION=$(node -p "require('./packages/aws-durable-execution-sdk-js-insight-vscode/package.json').version")
           TAG_NAME="${{ github.event.release.tag_name }}"
           echo "vsix_version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
-          if [[ "$TAG_NAME" == *"$PKG_VERSION"* ]]; then
+          # Exact match against a documented tag convention (see this
+          # package's README: `workflow-insight-vscode-v<version>`), not a
+          # substring match — a substring match could false-positive (e.g.
+          # version "0.1.0" matching tag "core-sdk-v0.1.0-unrelated").
+          if [[ "$TAG_NAME" == "workflow-insight-vscode-v${PKG_VERSION}" ]]; then
             echo "should_release=true" >> "$GITHUB_OUTPUT"
           else
             echo "should_release=false" >> "$GITHUB_OUTPUT"
-            echo "Release tag '$TAG_NAME' does not match insight-vscode version '$PKG_VERSION'; skipping .vsix build."
+            echo "Release tag '$TAG_NAME' does not match expected 'workflow-insight-vscode-v${PKG_VERSION}'; skipping .vsix build."
           fi
 
   build-and-attach:
@@ -74,10 +78,10 @@ jobs:
       run:
         working-directory: packages/aws-durable-execution-sdk-js-insight-vscode
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.event.release.tag_name }}
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24
       - run: npm ci
@@ -135,10 +139,7 @@ jobs:
               .catch(e => { console.error('getLlama() failed:', e.message); process.exit(1); });
           "
           (cd webview-ui && npm ci)
-          VER=$(node -p "require('./package.json').version")
-          mkdir -p vsix
-          npx --yes @vscode/vsce@^3 package --target "$VSCE_TARGET" \
-            --out "vsix/aws-durable-execution-sdk-js-insight-vscode-${VER}-${VSCE_TARGET}.vsix"
+          npm run package:target
           mkdir -p "$GITHUB_WORKSPACE/packages/aws-durable-execution-sdk-js-insight-vscode/vsix"
           cp vsix/*.vsix "$GITHUB_WORKSPACE/packages/aws-durable-execution-sdk-js-insight-vscode/vsix/"
         env:
@@ -150,3 +151,37 @@ jobs:
         run: |
           gh release upload "${{ github.event.release.tag_name }}" vsix/*.vsix --clobber \
             --repo "${{ github.repository }}"
+
+  verify-all-platforms:
+    needs: [check-version, build-and-attach]
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm all 4 platform .vsix files landed on the release
+        # A matrix job upload succeeding doesn't guarantee every leg ran (a
+        # single-leg failure with fail-fast: false lets the others continue,
+        # potentially publishing a release with only some platforms
+        # supported and no one noticing). Explicitly list the release assets
+        # and fail loudly if any expected target is missing.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.release.tag_name }}"
+          VER="${{ needs.check-version.outputs.vsix_version }}"
+          ASSETS=$(gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name')
+          MISSING=0
+          for target in darwin-arm64 win32-x64 win32-arm64 linux-x64; do
+            EXPECTED="aws-durable-execution-sdk-js-insight-vscode-${VER}-${target}.vsix"
+            if echo "$ASSETS" | grep -qxF "$EXPECTED"; then
+              echo "OK: $EXPECTED present"
+            else
+              echo "MISSING: $EXPECTED"
+              MISSING=1
+            fi
+          done
+          if [ "$MISSING" -ne 0 ]; then
+            echo "One or more platform .vsix files are missing from release '$TAG'."
+            exit 1
+          fi
