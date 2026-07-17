@@ -1,0 +1,131 @@
+# Builds the Workflow Insight Explorer VS Code extension for each supported
+# platform/arch and attaches the packaged .vsix files to the GitHub Release as
+# assets. This extension is not published to npm (it's "private": true) or,
+# during preview, to the VS Code Marketplace — see
+# packages/aws-durable-execution-sdk-js-insight-vscode/README.md.
+# Testers/customers install it by downloading the .vsix matching their
+# platform from the release and side-loading it with
+# `code --install-extension`.
+#
+# Multiple platform-specific .vsix files are required because the bundled
+# local (on-device) LLM provider depends on node-llama-cpp, which ships
+# native prebuilt binaries per OS/arch. `vsce package --target <target>` must
+# run on a matching host so npm resolves that target's binary via
+# optionalDependencies — there is no cross-compiling this from one runner.
+#
+# Only runs when the release version matches this package's own version, so
+# an unrelated package release (e.g. the core SDK) doesn't attach a stale
+# .vsix that doesn't correspond to the tag being released.
+
+name: vscode extension release
+
+permissions:
+  contents: read
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      vsix_version: ${{ steps.check.outputs.vsix_version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - id: check
+        run: |
+          PKG_VERSION=$(node -p "require('./packages/aws-durable-execution-sdk-js-insight-vscode/package.json').version")
+          TAG_NAME="${{ github.event.release.tag_name }}"
+          echo "vsix_version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$TAG_NAME" == *"$PKG_VERSION"* ]]; then
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "Release tag '$TAG_NAME' does not match insight-vscode version '$PKG_VERSION'; skipping .vsix build."
+          fi
+
+  build-and-attach:
+    needs: [check-version]
+    if: needs.check-version.outputs.should_release == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # node-llama-cpp ships native prebuilt binaries per OS/arch (resolved
+          # by npm via optionalDependencies at install time based on the HOST
+          # platform) — so each target's .vsix must be built on a runner that
+          # actually matches that target; there is no cross-compiling this.
+          - target: darwin-arm64
+            os: macos-14
+          - target: win32-x64
+            os: windows-latest
+          - target: win32-arm64
+            os: windows-11-arm
+          - target: linux-x64
+            os: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write # required to upload a release asset
+    defaults:
+      run:
+        working-directory: packages/aws-durable-execution-sdk-js-insight-vscode
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - run: npm ci
+      - name: Install webview-ui dependencies
+        # webview-ui is a nested package outside the root workspaces glob
+        # (packages/*), so it needs its own explicit install.
+        working-directory: packages/aws-durable-execution-sdk-js-insight-vscode/webview-ui
+        run: npm ci
+      - run: npm run typecheck
+      - run: npm run test
+      - name: Package (${{ matrix.target }}) in an isolated (non-workspace) copy
+        # `vsce package` cannot run correctly from inside this npm workspace:
+        # - npm hoists node-llama-cpp's resolved per-platform native binary
+        #   (@node-llama-cpp/<platform>) to the repo-root node_modules/, but
+        #   vsce/VS Code require a self-contained package directory.
+        # - vsce's dependency walk also picks up sibling workspace packages
+        #   via `../` and fails outright (`invalid relative path`).
+        # Isolating a copy of just this package (with its own standalone
+        # `npm install --no-workspaces`) outside the workspace tree avoids
+        # both problems — this is the standard workaround for vsce +
+        # npm/yarn workspaces (see microsoft/vscode-vsce#471, #581).
+        shell: bash
+        run: |
+          set -euo pipefail
+          ISOLATED="$RUNNER_TEMP/insight-vscode-pkg"
+          rm -rf "$ISOLATED"
+          mkdir -p "$ISOLATED"
+          # Portable copy (avoids relying on rsync, which isn't preinstalled
+          # on Windows runners): tar streamed through a pipe, excluding
+          # directories we don't want carried into the isolated copy.
+          tar --exclude='./node_modules' --exclude='./vsix' --exclude='./dist' \
+            --exclude='./webview-ui/node_modules' --exclude='./webview-ui/dist' \
+            -cf - . | tar -xf - -C "$ISOLATED"
+          cd "$ISOLATED"
+          npm install --no-workspaces --ignore-scripts
+          (cd webview-ui && npm ci)
+          VER=$(node -p "require('./package.json').version")
+          mkdir -p vsix
+          npx --yes @vscode/vsce@^3 package --target "$VSCE_TARGET" \
+            --out "vsix/aws-durable-execution-sdk-js-insight-vscode-${VER}-${VSCE_TARGET}.vsix"
+          mkdir -p "$GITHUB_WORKSPACE/packages/aws-durable-execution-sdk-js-insight-vscode/vsix"
+          cp vsix/*.vsix "$GITHUB_WORKSPACE/packages/aws-durable-execution-sdk-js-insight-vscode/vsix/"
+        env:
+          VSCE_TARGET: ${{ matrix.target }}
+      - name: Upload .vsix to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" vsix/*.vsix --clobber \
+            --repo "${{ github.repository }}"
