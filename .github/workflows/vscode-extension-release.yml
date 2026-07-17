@@ -154,7 +154,18 @@ jobs:
 
   verify-all-platforms:
     needs: [check-version, build-and-attach]
-    if: needs.check-version.outputs.should_release == 'true'
+    # !cancelled() (not the implicit if: success()) is required here: with
+    # strategy.fail-fast: false, a single matrix leg failing still marks the
+    # whole build-and-attach job as failed overall, and a downstream job that
+    # only `needs` a failed job is skipped by default — meaning this
+    # verification would never run in exactly the scenario it exists to
+    # catch (a partial release with some platforms missing). We still gate
+    # on check-version's own result explicitly, so this doesn't run at all
+    # for a release this workflow was never supposed to act on.
+    if: |
+      !cancelled() &&
+      needs.check-version.result == 'success' &&
+      needs.check-version.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Confirm all 4 platform .vsix files landed on the release
