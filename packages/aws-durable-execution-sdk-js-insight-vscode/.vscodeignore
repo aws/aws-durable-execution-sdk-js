@@ -1,8 +1,14 @@
 .vscode/**
 src/**
 webview-ui/**
-node_modules/**
 vsix/**
+# node_modules is ignored by default except for node-llama-cpp (and its own
+# dependency tree, incl. the resolved @node-llama-cpp/<platform> optional
+# package) — esbuild statically bundles every other dependency into
+# dist/extension.js, so nothing else in node_modules is needed at runtime.
+node_modules/**
+!node_modules/node-llama-cpp/**
+!node_modules/@node-llama-cpp/**
 .gitignore
 esbuild.mjs
 tsconfig.json
