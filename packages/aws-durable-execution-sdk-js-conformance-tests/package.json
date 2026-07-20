@@ -1,11 +1,11 @@
 {
-  "name": "@aws/durable-execution-sdk-js-conformance",
+  "name": "@aws/durable-execution-sdk-js-conformance-tests",
   "version": "0.0.1",
   "description": "Cross-SDK conformance test handlers for the Durable Execution JS SDK, exercised by the aws-durable-execution-conformance-tests runner.",
   "license": "Apache-2.0",
   "private": true,
-  "repository": "ssh:github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-conformance",
-  "homepage": "https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-conformance",
+  "repository": "ssh:github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-conformance-tests",
+  "homepage": "https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-conformance-tests",
   "engines": {
     "node": ">=22"
   },

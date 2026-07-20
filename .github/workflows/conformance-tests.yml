@@ -10,7 +10,7 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - "packages/aws-durable-execution-sdk-js-conformance/**"
+      - "packages/aws-durable-execution-sdk-js-conformance-tests/**"
       - ".github/workflows/conformance-tests.yml"
   workflow_dispatch:
 
@@ -32,7 +32,7 @@ jobs:
         suite: [step, wait]
     defaults:
       run:
-        working-directory: packages/aws-durable-execution-sdk-js-conformance
+        working-directory: packages/aws-durable-execution-sdk-js-conformance-tests
     steps:
       - uses: actions/checkout@v6
 
@@ -111,6 +111,6 @@ jobs:
         with:
           name: conformance-report-${{ matrix.suite }}
           path: |
-            packages/aws-durable-execution-sdk-js-conformance/report-${{ matrix.suite }}.xml
-            packages/aws-durable-execution-sdk-js-conformance/history-${{ matrix.suite }}/
+            packages/aws-durable-execution-sdk-js-conformance-tests/report-${{ matrix.suite }}.xml
+            packages/aws-durable-execution-sdk-js-conformance-tests/history-${{ matrix.suite }}/
           if-no-files-found: warn

@@ -93,13 +93,13 @@ an account where the Durable Execution service is available.
 # 1. Build the SDK + these handlers (from the monorepo root)
 npm ci
 npm run build -w @aws/durable-execution-sdk-js
-npm run build -w @aws/durable-execution-sdk-js-conformance   # -> dist/*.js
+npm run build -w @aws/durable-execution-sdk-js-conformance-tests   # -> dist/*.js
 
 # 2. Install the conformance runner (pinned)
 pip install aws-durable-execution-conformance-tests==0.1.0
 
 # 3. Deploy + invoke + validate one suite
-cd packages/aws-durable-execution-sdk-js-conformance
+cd packages/aws-durable-execution-sdk-js-conformance-tests
 python -m aws_durable_execution_conformance_tests.app \
   --template template_step.yaml \
   --language js \
