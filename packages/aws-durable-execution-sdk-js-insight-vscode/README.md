@@ -85,6 +85,7 @@ For contributors, or to produce your own `.vsix`:
 ```bash
 cd packages/aws-durable-execution-sdk-js-insight-vscode
 npm install
+npm --prefix webview-ui install   # webview-ui isn't an npm workspace; install it separately
 npm run build
 ```
 
@@ -103,7 +104,31 @@ Publishing a preview to testers: create a GitHub Release and attach that `.vsix`
 ### 1. Launch the extension
 
 - **Installed from the `.vsix`:** run **⌘⇧P** (`Ctrl+Shift+P`) → **Workflow Insight: Open Explorer**.
-- **Running from source:** open this folder in VS Code and press **F5** to start the Extension Development Host, then run the same command in the new window.
+- **Running from source:** open this folder (`packages/aws-durable-execution-sdk-js-insight-vscode`) directly in VS Code — not the monorepo root — then press **F5** to start the Extension Development Host, and run the same command in the new window.
+
+  `.vscode/` is git-ignored, so F5 does nothing until you create
+  `.vscode/launch.json` yourself:
+
+  ```json
+  {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Run Extension",
+        "type": "extensionHost",
+        "request": "launch",
+        "args": [
+          "--extensionDevelopmentPath=${workspaceFolder}",
+          "${workspaceFolder}"
+        ]
+      }
+    ]
+  }
+  ```
+
+  See [TESTING.md](./TESTING.md) for the full source setup, including a
+  `.vscode/settings.json` example for pointing the extension at your own
+  AWS region/log group.
 
 > **⌘⇧P** → **Workflow Insight: Open Explorer**
 
