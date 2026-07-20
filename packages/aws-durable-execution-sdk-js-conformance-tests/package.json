@@ -1,0 +1,30 @@
+{
+  "name": "@aws/durable-execution-sdk-js-conformance-tests",
+  "version": "0.0.1",
+  "description": "Cross-SDK conformance test handlers for the Durable Execution JS SDK, exercised by the aws-durable-execution-conformance-tests runner.",
+  "license": "Apache-2.0",
+  "private": true,
+  "repository": "ssh:github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-conformance-tests",
+  "homepage": "https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-conformance-tests",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "clean": "rm -rf dist node_modules .rollup.cache",
+    "build": "rollup --config rollup.config.mjs --silent",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws/durable-execution-sdk-js": "*"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^28.0.9",
+    "@rollup/plugin-json": "^6.1.0",
+    "@rollup/plugin-node-resolve": "^16.0.2",
+    "@rollup/plugin-typescript": "^11.1.0",
+    "@types/node": "^22.13.5",
+    "rollup": "^4.0.0",
+    "tslib": "^2.6.0",
+    "typescript": "^5.8.2"
+  }
+}

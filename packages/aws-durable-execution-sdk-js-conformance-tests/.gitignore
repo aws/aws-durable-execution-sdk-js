@@ -1,0 +1,7 @@
+dist/
+node_modules/
+.rollup.cache/
+*.tsbuildinfo
+history-*/
+report-*.xml
+report-*.json
