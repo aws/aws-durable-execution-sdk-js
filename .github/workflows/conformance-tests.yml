@@ -10,6 +10,7 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - "packages/aws-durable-execution-sdk-js/**"
       - "packages/aws-durable-execution-sdk-js-conformance-tests/**"
       - ".github/workflows/conformance-tests.yml"
   workflow_dispatch:
