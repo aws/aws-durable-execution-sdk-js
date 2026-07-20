@@ -29,7 +29,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [step, wait]
+        suite:
+          [
+            step,
+            wait,
+            child,
+            callback,
+            invoke,
+            wait_for_condition,
+            wait_for_callback,
+            parallel,
+            map,
+          ]
     defaults:
       run:
         working-directory: packages/aws-durable-execution-sdk-js-conformance-tests
