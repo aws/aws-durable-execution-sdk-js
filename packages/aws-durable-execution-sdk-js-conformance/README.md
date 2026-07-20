@@ -26,7 +26,8 @@ rollup.config.mjs           # bundles handlers/<suite>/*.ts -> dist/<name>.js (C
 ```
 
 Each SAM template is a self-contained deployment for one **suite** (operation
-category). Suites are added incrementally; today this package ships `step`.
+category). Suites are added incrementally; today this package ships `step` and
+`wait`.
 
 ## How a handler maps to a requirement
 
@@ -95,7 +96,7 @@ npm run build -w @aws/durable-execution-sdk-js
 npm run build -w @aws/durable-execution-sdk-js-conformance   # -> dist/*.js
 
 # 2. Install the conformance runner (pinned)
-pip install aws-durable-execution-conformance-tests==0.0.1
+pip install aws-durable-execution-conformance-tests==0.1.0
 
 # 3. Deploy + invoke + validate one suite
 cd packages/aws-durable-execution-sdk-js-conformance

@@ -29,7 +29,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [step]
+        suite: [step, wait]
     defaults:
       run:
         working-directory: packages/aws-durable-execution-sdk-js-conformance
@@ -59,7 +59,7 @@ jobs:
           python-version: "3.14"
 
       - name: Install conformance runner
-        run: pip install aws-durable-execution-conformance-tests==0.0.1
+        run: pip install aws-durable-execution-conformance-tests==0.1.0
 
       - name: Get AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
