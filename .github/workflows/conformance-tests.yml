@@ -97,6 +97,12 @@ jobs:
             --template template_${{ matrix.suite }}.yaml \
             --role-arn "$ROLE_ARN"
 
+      - name: Compute stack-safe suite slug
+        run: |
+          # CloudFormation stack names allow only [a-zA-Z][-a-zA-Z0-9]*;
+          # suite names like wait_for_condition contain underscores.
+          echo "SUITE_SLUG=$(echo '${{ matrix.suite }}' | tr '_' '-')" >> "$GITHUB_ENV"
+
       - name: Run conformance suite
         env:
           # Same env the SAM-based integration deploy passes. LAMBDA_ENDPOINT is
@@ -110,7 +116,7 @@ jobs:
             --template template_${{ matrix.suite }}.yaml \
             --language js \
             --suite ${{ matrix.suite }} \
-            --name conformance-js-${{ matrix.suite }}-${{ github.run_id }} \
+            --name conformance-js-${SUITE_SLUG}-${{ github.run_id }} \
             --region ${{ vars.AWS_REGION }} \
             --history-dir history-${{ matrix.suite }} \
             --report junit \
