@@ -160,9 +160,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ISOLATED="$RUNNER_TEMP/insight-vscode-pkg"
-          rm -rf "$ISOLATED"
-          mkdir -p "$ISOLATED"
+          # Don't build the isolation/copy-back paths from $RUNNER_TEMP or
+          # $GITHUB_WORKSPACE directly: on Windows runners those are native
+          # Windows-style strings (e.g. D:\a\_temp), and passing them through
+          # Git Bash into a real Windows binary like tar.exe has repeatedly
+          # been observed to mangle them (colons/backslashes double-escaped,
+          # producing a path tar can't open — this matches a known class of
+          # GitHub Actions Windows+bash issues, e.g. actions/runner#1328).
+          # mktemp -d and `pwd` are pure bash/coreutils operations that stay
+          # entirely within Git Bash's own POSIX-path view of the
+          # filesystem, so the string never has to round-trip through a
+          # native Windows path representation.
+          WORKSPACE_DIR="$(pwd)"
+          ISOLATED="$(mktemp -d)"
           # Portable copy (avoids relying on rsync, which isn't preinstalled
           # on Windows runners): tar streamed through a pipe, excluding
           # directories we don't want carried into the isolated copy.
@@ -194,8 +204,8 @@ jobs:
           "
           (cd webview-ui && npm ci)
           npm run package:target
-          mkdir -p "$GITHUB_WORKSPACE/packages/aws-durable-execution-sdk-js-insight-vscode/vsix"
-          cp vsix/*.vsix "$GITHUB_WORKSPACE/packages/aws-durable-execution-sdk-js-insight-vscode/vsix/"
+          mkdir -p "$WORKSPACE_DIR/vsix"
+          cp vsix/*.vsix "$WORKSPACE_DIR/vsix/"
         env:
           VSCE_TARGET: ${{ matrix.target }}
       - name: Upload .vsix to draft release
