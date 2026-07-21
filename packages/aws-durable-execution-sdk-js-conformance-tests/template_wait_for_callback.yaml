@@ -1,0 +1,285 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Timeout: 60
+    MemorySize: 128
+Resources:
+  DurableFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyName: DurableExecutionPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - lambda:CheckpointDurableExecution
+            - lambda:GetDurableExecutionState
+            Resource: '*'
+  WfcBasic:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["7-1"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_callback_basic.handler
+      Description: Wait-for-callback basic
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WfcExplicitName:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["7-2"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_callback_explicit_name.handler
+      Description: Wait-for-callback with explicit static name
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WfcAnonymous:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["7-3"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_callback_anonymous.handler
+      Description: Wait-for-callback anonymous submitter (no name)
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WfcExternalFailure:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["7-4"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_callback_external_failure.handler
+      Description: Wait-for-callback external failure (uncaught)
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WfcTimeout:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["7-5"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_callback_timeout.handler
+      Description: Wait-for-callback timeout (no external completion)
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WfcFailureCaught:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["7-6"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_callback_failure_caught.handler
+      Description: Wait-for-callback external failure caught (recovers)
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WfcSubmitterRetryExhaustion:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["7-7"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_callback_submitter_retry_exhaustion.handler
+      Description: Wait-for-callback submitter retry exhaustion
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WfcInChildContext:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["7-8"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_callback_in_child_context.handler
+      Description: Wait-for-callback inside a child context
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WfcTwoSequential:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["7-9"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_callback_two_sequential.handler
+      Description: Multiple sequential wait-for-callback operations
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WfcMixedOps:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["7-10"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_callback_mixed_ops.handler
+      Description: Wait-for-callback mixed with wait and step
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WfcJsonResult:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["7-11"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_callback_json_result.handler
+      Description: Wait-for-callback with structured JSON result deserialization
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WfcHeartbeatTimeout:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["7-12"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_callback_heartbeat_timeout.handler
+      Description: Wait-for-callback heartbeat timeout (no heartbeat sent)
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WfcHeartbeatThenSuccess:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["7-13"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_callback_heartbeat_then_success.handler
+      Description: Wait-for-callback with heartbeat then success
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WfcTimeoutCaught:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["7-14"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_callback_timeout_caught.handler
+      Description: Wait-for-callback timeout caught (recovers)
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WfcNullResult:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["7-15"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_callback_empty_result.handler
+      Description: Wait-for-callback success with empty (null) payload
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300

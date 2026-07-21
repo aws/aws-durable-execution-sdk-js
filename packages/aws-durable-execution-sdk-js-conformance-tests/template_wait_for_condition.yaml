@@ -1,0 +1,251 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Timeout: 60
+    MemorySize: 128
+Resources:
+  DurableFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyName: DurableExecutionPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - lambda:CheckpointDurableExecution
+            - lambda:GetDurableExecutionState
+            Resource: '*'
+  WaitForConditionBasicPoll:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["6-1"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_condition_basic_poll.handler
+      Description: Wait-for-condition basic poll
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WaitForConditionImmediateStop:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["6-2"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_condition_immediate_stop.handler
+      Description: Wait-for-condition immediate stop
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WaitForConditionWithName:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["6-3"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_condition_with_name.handler
+      Description: Wait-for-condition with explicit name
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WaitForConditionCustomInitialState:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["6-4"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_condition_custom_initial_state.handler
+      Description: Wait-for-condition custom initial state
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WaitForConditionFixedDelay:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["6-5"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_condition_fixed_delay.handler
+      Description: Wait-for-condition fixed-delay strategy
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WaitForConditionMaxAttempts:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["6-6"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_condition_max_attempts.handler
+      Description: Wait-for-condition max attempts exceeded
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WaitForConditionCheckThrows:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["6-7"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_condition_check_throws.handler
+      Description: Wait-for-condition check throws uncaught
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WaitForConditionCheckThrowsCaught:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["6-8"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_condition_check_throws_caught.handler
+      Description: Wait-for-condition check throws caught
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WaitForConditionComplexObject:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["6-9"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_condition_complex_object.handler
+      Description: Wait-for-condition complex object state
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WaitForConditionNullResult:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["6-10"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_condition_null_result.handler
+      Description: Wait-for-condition null result
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WaitForConditionCustomSerdes:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["6-11"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_condition_custom_serdes.handler
+      Description: Wait-for-condition custom serdes
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WaitForConditionThenStep:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["6-12"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_condition_then_step.handler
+      Description: Wait-for-condition followed by step
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  WaitForConditionMultipleSequential:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["6-13"]
+    Properties:
+      CodeUri: ./dist
+      Handler: wait_for_condition_multiple_sequential.handler
+      Description: Multiple sequential wait_for_condition operations
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
