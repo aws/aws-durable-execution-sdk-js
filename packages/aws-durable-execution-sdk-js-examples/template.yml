@@ -1438,7 +1438,7 @@ Resources:
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          OPENTELEMETRY_COLLECTOR_CONFIG_FILE: /var/task/collector.yaml
+          OPENTELEMETRY_COLLECTOR_CONFIG_URI: /var/task/collector.yaml
       Tracing: Active
       Layers:
         - arn:aws:lambda:us-west-2:184161586896:layer:opentelemetry-collector-amd64-0_22_0:1
@@ -1525,7 +1525,7 @@ Resources:
           DURABLE_VERBOSE_MODE: "false"
           DURABLE_EXAMPLES_VERBOSE: "true"
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          OPENTELEMETRY_COLLECTOR_CONFIG_FILE: /var/task/collector.yaml
+          OPENTELEMETRY_COLLECTOR_CONFIG_URI: /var/task/collector.yaml
       Tracing: Active
       Layers:
         - arn:aws:lambda:us-west-2:184161586896:layer:opentelemetry-collector-amd64-0_22_0:1

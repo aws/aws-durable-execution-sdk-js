@@ -51,8 +51,9 @@ createTests({
           delayMs: 30000,
         });
 
-        // Assert span names exist (InvocationOtelPlugin produces operation spans only)
+        // Assert span names exist (InvocationOtelPlugin produces operation spans + Workflow span)
         assertSpanNames(trace, [
+          "Workflow",
           "fetch-data",
           "short-pause",
           "process-data",
@@ -82,9 +83,24 @@ createTests({
         assertSpanAttributes(trace, "fails-then-succeeds", {
           "durable.operation.type": "STEP",
         });
+
+        // Verify Workflow span has execution status
+        assertSpanAttributes(trace, "Workflow", {
+          "durable.execution.status": "SUCCEEDED",
+        });
       } else {
         // Local mode: assert spans via InMemorySpanExporter
         const spans = getSerializedSpans();
+
+        // Verify Workflow span exists (InvocationOtelPlugin creates it in community collector mode)
+        const workflowSpan = spans.find((s) => s.name === "Workflow");
+        expect(workflowSpan).toBeDefined();
+        expect(workflowSpan!.attributes["durable.execution.arn"]).toBeDefined();
+
+        // Verify Invocation span exists and is child of Workflow
+        const invocationSpan = spans.find((s) => s.name === "invocation");
+        expect(invocationSpan).toBeDefined();
+        expect(invocationSpan!.parentSpanId).toBe(workflowSpan!.spanId);
 
         // Filter to operation spans: have durable.operation.type but NOT durable.operation.attempt
         const operationSpans = spans.filter(

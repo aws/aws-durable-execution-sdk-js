@@ -75,17 +75,6 @@ function getOtelCollectorLayerArn(region: string): string {
 }
 
 /**
- * Checks if the handler corresponds to an otel function that needs ADOT
- * auto-instrumentation (AWS_LAMBDA_EXEC_WRAPPER). Community collector functions
- * use a collector-only layer — no exec wrapper needed.
- */
-function isOtelFunction(handler: string): boolean {
-  return (
-    handler.includes("otel-") && !handler.includes("otel-community-collector")
-  );
-}
-
-/**
  * Checks if the handler is a community collector otel function that needs the
  * collector-only layer (no ADOT auto-instrumentation).
  */
@@ -95,6 +84,8 @@ function needsCollectorLayer(handler: string): boolean {
 
 /**
  * Checks if the handler needs the ADOT layer (regular otel functions only).
+ * These functions use ADOT auto-instrumentation (AWS_LAMBDA_EXEC_WRAPPER).
+ * Community collector functions use a collector-only layer instead.
  */
 function needsAdotLayer(handler: string): boolean {
   return (
@@ -409,7 +400,7 @@ async function createFunction(
     }
     tracingConfig = { Mode: "Active" };
     layers = [adotArn];
-    if (isOtelFunction(exampleConfig.handler)) {
+    if (needsAdotLayer(exampleConfig.handler)) {
       envVars = {
         ...envVars,
         AWS_LAMBDA_EXEC_WRAPPER: "/opt/otel-instrument",
@@ -421,7 +412,7 @@ async function createFunction(
     layers = [getOtelCollectorLayerArn(env.AWS_REGION)];
     envVars = {
       ...envVars,
-      OPENTELEMETRY_COLLECTOR_CONFIG_FILE: "/var/task/collector.yaml",
+      OPENTELEMETRY_COLLECTOR_CONFIG_URI: "/var/task/collector.yaml",
     };
   }
 
@@ -515,7 +506,7 @@ async function updateFunction(
           ? { AWS_ENDPOINT_URL_LAMBDA: env.LAMBDA_ENDPOINT }
           : undefined;
 
-        if (isOtelFunction(exampleConfig.handler)) {
+        if (needsAdotLayer(exampleConfig.handler)) {
           vars = {
             ...vars,
             AWS_LAMBDA_EXEC_WRAPPER: "/opt/otel-instrument",
@@ -525,7 +516,7 @@ async function updateFunction(
         if (needsCollectorLayer(exampleConfig.handler)) {
           vars = {
             ...vars,
-            OPENTELEMETRY_COLLECTOR_CONFIG_FILE: "/var/task/collector.yaml",
+            OPENTELEMETRY_COLLECTOR_CONFIG_URI: "/var/task/collector.yaml",
           };
         }
 

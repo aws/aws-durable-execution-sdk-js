@@ -169,9 +169,10 @@ describe("InvocationOtelPlugin", () => {
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
       const spans = getExportedSpans();
-      // Should have: op-1, op-2, invocation (all ended)
-      expect(spans.length).toBe(3);
+      // Should have: op-1, op-2, invocation, Workflow (all ended)
+      expect(spans.length).toBe(4);
       expect(findSpan("invocation")).toBeDefined();
+      expect(findSpan("Workflow")).toBeDefined();
     });
 
     it("flushes spans (they appear in exporter)", async () => {
@@ -204,8 +205,8 @@ describe("InvocationOtelPlugin", () => {
       expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(
         "arn:second",
       );
-      // Only 1 invocation span from second invocation, no leftover op-1
-      expect(spans.length).toBe(1);
+      // Only invocation span + Workflow span from second invocation, no leftover op-1
+      expect(spans.length).toBe(2);
     });
   });
 

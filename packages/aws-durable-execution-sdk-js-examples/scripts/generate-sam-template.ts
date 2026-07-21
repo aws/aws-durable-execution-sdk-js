@@ -181,7 +181,7 @@ function createFunctionResource(
     } else {
       // ExecutionOtelPlugin: use collector-only layer
       functionResource.Properties.Layers = [OTEL_COLLECTOR_LAYER_ARN];
-      functionResource.Properties.Environment.Variables.OPENTELEMETRY_COLLECTOR_CONFIG_FILE =
+      functionResource.Properties.Environment.Variables.OPENTELEMETRY_COLLECTOR_CONFIG_URI =
         "/var/task/collector.yaml";
     }
   }

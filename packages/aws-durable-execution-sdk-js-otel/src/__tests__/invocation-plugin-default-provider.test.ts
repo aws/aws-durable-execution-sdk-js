@@ -105,12 +105,23 @@ describe("InvocationOtelPlugin - useDefaultTracerProvider mode", () => {
     const plugin = new InvocationOtelPlugin({ useDefaultTracerProvider: true });
 
     await plugin.onInvocationStart(makeInvocationInfo());
+    await plugin.onOperationStart(
+      makeOperationInfo({ id: "op-1", name: "test-op", type: "STEP" }),
+    );
+    await plugin.onOperationEnd(
+      makeOperationEndInfo({ id: "op-1", name: "test-op", type: "STEP" }),
+    );
     await plugin.onInvocationEnd(makeInvocationEndInfo());
 
     const spans = exporter.getFinishedSpans();
-    expect(spans.length).toBeGreaterThan(0);
+    // Operation spans are exported via the global provider
+    const opSpan = spans.find((s) => s.name === "test-op");
+    expect(opSpan).toBeDefined();
+    // No invocation or workflow span in default provider mode
     const invocationSpan = spans.find((s) => s.name === "invocation");
-    expect(invocationSpan).toBeDefined();
+    expect(invocationSpan).toBeUndefined();
+    const workflowSpan = spans.find((s) => s.name === "Workflow");
+    expect(workflowSpan).toBeUndefined();
   });
 
   it("creates its own internal provider when no config is provided", async () => {
@@ -190,6 +201,12 @@ describe("InvocationOtelPlugin - useDefaultTracerProvider mode", () => {
     const plugin = new InvocationOtelPlugin({ useDefaultTracerProvider: true });
 
     await plugin.onInvocationStart(makeInvocationInfo());
+    await plugin.onOperationStart(
+      makeOperationInfo({ id: "op-1", name: "first-op", type: "STEP" }),
+    );
+    await plugin.onOperationEnd(
+      makeOperationEndInfo({ id: "op-1", name: "first-op", type: "STEP" }),
+    );
     await plugin.onInvocationEnd(makeInvocationEndInfo());
 
     // If provider was shut down, creating another span would fail silently
@@ -198,12 +215,19 @@ describe("InvocationOtelPlugin - useDefaultTracerProvider mode", () => {
     await plugin.onInvocationStart(
       makeInvocationInfo({ executionArn: "arn:second" }),
     );
+    await plugin.onOperationStart(
+      makeOperationInfo({ id: "op-2", name: "second-op", type: "STEP" }),
+    );
+    await plugin.onOperationEnd(
+      makeOperationEndInfo({ id: "op-2", name: "second-op", type: "STEP" }),
+    );
     await plugin.onInvocationEnd(
       makeInvocationEndInfo({ executionArn: "arn:second" }),
     );
 
     const spans = exporter.getFinishedSpans();
     expect(spans.length).toBeGreaterThan(0);
+    expect(spans.find((s) => s.name === "second-op")).toBeDefined();
   });
 });
 
