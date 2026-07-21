@@ -84,7 +84,15 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-      - run: npm ci
+      - name: Install root dependencies
+        # --ignore-scripts avoids the repo-root "prepare" script (husky
+        # install), which can fail on a fresh CI checkout (observed:
+        # "sh: husky: command not found", exit 127) — likely a PATH-timing
+        # issue with npm's lifecycle-script execution, not anything this
+        # job needs. Git hooks are irrelevant in CI, and nothing below
+        # (typecheck, test, or the isolated packaging step) depends on any
+        # other root-level lifecycle script.
+        run: npm ci --ignore-scripts
       - name: Install webview-ui dependencies
         # webview-ui is a nested package outside the root workspaces glob
         # (packages/*), so it needs its own explicit install.
