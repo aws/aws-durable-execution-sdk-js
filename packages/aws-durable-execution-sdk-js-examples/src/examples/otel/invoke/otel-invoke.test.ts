@@ -80,7 +80,8 @@ createTests({
         // all spans across all invocations:
         // Invocation 1: "before-invoke" (operation + attempt), "invoke-target" (CHAINED_INVOKE), "invocation"
         // Invocation 2: "invoke-target" (continuation), "after-invoke" (operation + attempt), "invocation"
-        expect(spans).toHaveLength(7);
+        // + 1 Workflow span
+        expect(spans).toHaveLength(8);
 
         // All spans share the same traceId
         const traceId = spans[0].traceId;

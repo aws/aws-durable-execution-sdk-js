@@ -56,8 +56,8 @@ createTests({
       } else {
         // Local mode: assert spans via InMemorySpanExporter
         const spans = getSerializedSpans();
-        // Single invocation, 1 poll: STEP (op + attempt) + invocation = 3 spans
-        expect(spans).toHaveLength(3);
+        // Single invocation, 1 poll: STEP (op + attempt) + invocation + Workflow = 4 spans
+        expect(spans).toHaveLength(4);
 
         // All spans share the same traceId (deterministic from execution ARN)
         const traceId = spans[0].traceId;
@@ -121,8 +121,8 @@ createTests({
         } else {
           // Local mode: assert spans via InMemorySpanExporter
           const spans = getSerializedSpans();
-          // All spans across 3 poll invocations: 3 STEP ops + 3 attempts + 3 invocation spans = 9 spans
-          expect(spans).toHaveLength(9);
+          // All spans across 3 poll invocations: 3 STEP ops + 3 attempts + 3 invocation spans + 1 Workflow span = 10 spans
+          expect(spans).toHaveLength(10);
 
           // All spans share the same traceId (deterministic from execution ARN)
           const traceId = spans[0].traceId;

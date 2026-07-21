@@ -46,8 +46,8 @@ createTests({
         // Local mode: assert spans via InMemorySpanExporter
         const spans = getSerializedSpans();
 
-        // 3 attempts × (1 operation + 1 attempt) + 3 invocation spans = 9 spans
-        expect(spans).toHaveLength(9);
+        // 3 attempts × (1 operation + 1 attempt) + 3 invocation spans + 1 Workflow span = 10 spans
+        expect(spans).toHaveLength(10);
 
         // All spans share the same traceId
         const traceId = spans[0].traceId;
