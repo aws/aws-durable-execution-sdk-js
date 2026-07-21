@@ -202,7 +202,7 @@ createTests({
       }
 
       assertEventSignatures(execution, undefined, {
-        invocationCompletedDifference: 2,
+        invocationCompletedDifference: 3,
       });
     });
   },
