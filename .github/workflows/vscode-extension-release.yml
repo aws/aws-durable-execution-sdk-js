@@ -203,7 +203,19 @@ jobs:
               .catch(e => { console.error('getLlama() failed:', e.message); process.exit(1); });
           "
           (cd webview-ui && npm ci)
-          npm run package:target
+          # Not `npm run package:target`: npm spawns cmd.exe (not bash) to
+          # execute package.json scripts on Windows by default (this is
+          # npm's own documented behavior — see "npm run" docs), so the
+          # POSIX syntax in that script ($VSCE_TARGET, $(...)) was being
+          # passed to vsce as literal, unexpanded text on the Windows legs.
+          # Invoking vsce directly here keeps it inside the shell this step
+          # already declared (Git Bash), where that syntax works correctly
+          # — verified by the get-Llama() check above succeeding on the
+          # same runner just before this line.
+          mkdir -p vsix
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          npx --yes @vscode/vsce@3.9.2 package --target "$VSCE_TARGET" \
+            --out "vsix/aws-durable-execution-sdk-js-insight-vscode-${PKG_VERSION}-${VSCE_TARGET}.vsix"
           mkdir -p "$WORKSPACE_DIR/vsix"
           cp vsix/*.vsix "$WORKSPACE_DIR/vsix/"
         env:
