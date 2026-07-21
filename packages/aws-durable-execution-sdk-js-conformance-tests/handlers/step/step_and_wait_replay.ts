@@ -1,0 +1,15 @@
+// 1-8: Step and wait with replay
+import {
+  DurableContext,
+  withDurableExecution,
+} from "@aws/durable-execution-sdk-js";
+
+export const handler = withDurableExecution(
+  async (event: any, context: DurableContext) => {
+    const result = await context.step(async () => {
+      return "computed";
+    });
+    await context.wait({ seconds: 2 });
+    return result;
+  },
+);
