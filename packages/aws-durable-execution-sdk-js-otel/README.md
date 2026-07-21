@@ -6,10 +6,10 @@ OpenTelemetry instrumentation plugin for AWS Durable Execution SDK. Emits distri
 
 This package provides two plugin implementations:
 
-| Plugin                 | Trace Structure                                                                 |
-| ---------------------- | ------------------------------------------------------------------------------- |
-| `ExecutionOtelPlugin`  | Workflow_Span as synthetic root; operations are siblings of the invocation span |
-| `InvocationOtelPlugin` | Invocation span as root; operations are children of the invocation span         |
+| Plugin                 | Trace Structure                                                                       |
+| ---------------------- | ------------------------------------------------------------------------------------- |
+| `ExecutionOtelPlugin`  | Workflow_Span as synthetic root; operations are siblings of the invocation span       |
+| `InvocationOtelPlugin` | Workflow_Span as synthetic root (community collector) or per-invocation traces (ADOT) |
 
 Both plugins share the same configuration interface (`OtelPluginConfig`) and support three TracerProvider modes:
 
@@ -87,18 +87,18 @@ With no configuration, both plugins auto-create a TracerProvider with:
 
 ## Choosing a Plugin
 
-| Aspect                   | `ExecutionOtelPlugin`                    | `InvocationOtelPlugin`          |
-| ------------------------ | ---------------------------------------- | ------------------------------- |
-| Trace root               | Workflow_Span (synthetic, deterministic) | Invocation span                 |
-| Operation parent         | Workflow_Span                            | Invocation span                 |
-| Invocation span role     | Sibling with span links                  | Parent of operations            |
-| Export timing            | Operations deferred until complete       | All spans exported immediately  |
-| Non-terminal invocations | Workflow_Span discarded (clean traces)   | All spans always emitted        |
-| Trace continuity         | Single trace across all invocations      | Per-invocation trace with links |
+| Aspect                   | `ExecutionOtelPlugin`                    | `InvocationOtelPlugin`                                                  |
+| ------------------------ | ---------------------------------------- | ----------------------------------------------------------------------- |
+| Trace root               | Workflow_Span (synthetic, deterministic) | Workflow_Span (community collector) or ADOT invocation span             |
+| Operation parent         | Workflow_Span                            | Invocation span (community collector) or ADOT invocation span           |
+| Invocation span role     | Sibling with span links                  | Parent of operations (community collector) or delegated to ADOT         |
+| Export timing            | Operations deferred until complete       | All spans exported immediately                                          |
+| Non-terminal invocations | Workflow_Span discarded (clean traces)   | Workflow_Span discarded (community collector); all spans emitted (ADOT) |
+| Trace continuity         | Single trace across all invocations      | Single trace (community collector) or per-invocation with links (ADOT)  |
 
 **Use `ExecutionOtelPlugin` when** you want a single unified trace view across all invocations of a durable execution, with the workflow as the logical root.
 
-**Use `InvocationOtelPlugin` when** you want each Lambda invocation to produce its own trace tree, correlated to other invocations via span links.
+**Use `InvocationOtelPlugin` when** you want a lighter-weight plugin that still produces a unified Workflow trace with the community collector, or delegates entirely to the ADOT layer's auto-instrumentation when `useDefaultTracerProvider: true`.
 
 ---
 
@@ -200,7 +200,7 @@ MyFunction:
 
 ### 3. InvocationOtelPlugin + ADOT Layer
 
-The ADOT layer provides both the collector and a global TracerProvider. The plugin uses the global provider and produces an invocation span as the trace root.
+The ADOT layer provides both the collector and a global TracerProvider. The plugin uses the global provider and delegates all span creation to the ADOT layer — no Workflow or Invocation spans are created by the plugin itself. Operations are attached to the ADOT layer's invocation span.
 
 **Handler code:**
 
@@ -235,7 +235,7 @@ MyFunction:
 
 ### 4. InvocationOtelPlugin + Community Collector Layer
 
-The plugin creates its own TracerProvider and exports spans to the collector on `localhost:4318`. Produces an invocation span as the trace root.
+The plugin creates its own TracerProvider and exports spans to the collector on `localhost:4318`. Produces a Workflow_Span as the synthetic trace root (with a deterministic ID derived from the execution ARN) and an Invocation span as its child. The Workflow_Span is only exported on terminal status (SUCCEEDED/FAILED), ensuring clean traces without incomplete workflow spans from intermediate invocations.
 
 **Handler code:**
 
@@ -311,7 +311,7 @@ interface OtelPluginConfig {
   /** Custom propagators. Replaces default [AWSXRay, W3CTraceContext]. */
   propagators?: TextMapPropagator[];
 
-  /** Custom Workflow span name (ExecutionOtelPlugin only). Defaults to "Workflow". */
+  /** Custom Workflow span name. Defaults to "Workflow". */
   workflowSpanName?: string;
 }
 ```
@@ -546,22 +546,26 @@ Workflow_Span (deterministic ID from execution ARN, exported on terminal status 
 Produces a per-invocation trace with the invocation span as root:
 
 ```
-Invocation_Span (one per Lambda invocation)
-├── Operation_Span: "fetch-data" (STEP)
-│   ├── Attempt_Span: "fetch-data attempt 1"
-│   │   └── HTTP Span: GET https://api.example.com/data
-│   └── [link → deterministic span ID]
-├── Operation_Span: "cooldown" (WAIT)
-└── Operation_Span: "process-order" (CONTEXT)
-    ├── (nested operations from child context)
-    └── HTTP Span: POST https://api.example.com/orders
+Workflow_Span (deterministic ID from execution ARN, exported on terminal status only — community collector mode)
+├── Invocation_Span (one per Lambda invocation)
+│   ├── Operation_Span: "fetch-data" (STEP)
+│   │   ├── Attempt_Span: "fetch-data attempt 1"
+│   │   │   └── HTTP Span: GET https://api.example.com/data
+│   │   └── [link → deterministic span ID]
+│   ├── Operation_Span: "cooldown" (WAIT)
+│   └── Operation_Span: "process-order" (CONTEXT)
+│       ├── (nested operations from child context)
+│       └── HTTP Span: POST https://api.example.com/orders
+└── [attributes: durable.execution.arn, durable.execution.status]
 ```
+
+> When `useDefaultTracerProvider: true` (ADOT mode), neither the Workflow_Span nor the Invocation_Span is created by the plugin. Operations are attached to the ADOT layer's ambient invocation span instead.
 
 Cross-invocation operations are correlated via span links to deterministic span IDs.
 
 ### Span Attributes
 
-- **Workflow_Span** (ExecutionOtelPlugin only): `durable.execution.arn`, `durable.execution.status`
+- **Workflow_Span**: `durable.execution.arn`, `durable.execution.status`
 - **Invocation_Span**: `faas.invocation_id`, `faas.coldstart`, `cloud.resource_id`, `cloud.provider`, `cloud.platform`, `faas.max_memory`, `durable.execution.arn`
 - **Operation_Span**: `durable.execution.arn`, `durable.operation.id`, `durable.operation.type`, `durable.operation.name`, `durable.operation.subtype`
 - **Attempt_Span**: all operation attributes plus `durable.operation.attempt`, `durable.attempt.outcome`
