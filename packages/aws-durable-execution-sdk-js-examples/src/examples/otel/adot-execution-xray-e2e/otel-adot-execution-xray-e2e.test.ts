@@ -37,9 +37,7 @@ createTests({
         expect(traceId).toMatch(/^[0-9a-f]{32}$/);
 
         const xrayClient = new XRayClient({});
-        const trace = await fetchXRayTrace(xrayClient, traceId!, {
-          delayMs: 30000,
-        });
+        const trace = await fetchXRayTrace(xrayClient, traceId!);
 
         // Assert span names exist (same operations as standalone variant)
         assertSpanNames(trace, [

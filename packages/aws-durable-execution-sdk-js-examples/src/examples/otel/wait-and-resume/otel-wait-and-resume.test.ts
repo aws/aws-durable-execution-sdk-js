@@ -40,9 +40,7 @@ createTests({
         expect(traceId).toBeDefined();
 
         const xrayClient = new XRayClient({});
-        const trace = await fetchXRayTrace(xrayClient, traceId!, {
-          delayMs: 30000,
-        });
+        const trace = await fetchXRayTrace(xrayClient, traceId!);
 
         assertSpanNames(trace, ["before-wait", "short-wait", "after-wait"]);
 
