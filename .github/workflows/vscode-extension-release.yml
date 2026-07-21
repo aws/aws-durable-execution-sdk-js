@@ -202,6 +202,46 @@ jobs:
               .then(() => console.log('getLlama() resolved OK'))
               .catch(e => { console.error('getLlama() failed:', e.message); process.exit(1); });
           "
+          # npm's optionalDependencies resolution installs every
+          # @node-llama-cpp/<variant> package valid for this OS/arch — for
+          # x64 that's 4 variants (base, cuda, cuda-ext, vulkan), all
+          # bundled into node_modules side by side (npm doesn't know this
+          # extension only needs one). Left unpruned, this bloats the .vsix
+          # by ~400MB+ on x64 targets with CUDA/Vulkan binaries that only
+          # matter for GPU-accelerated inference — out of scope for this
+          # extension's actual usage (occasional NL queries, not heavy local
+          # inference), so we keep the on-device provider CPU-only and prune
+          # every other installed variant before packaging. Also prunes
+          # node-llama-cpp's own build-tooling: gitRelease.bundle (a ~30MB
+          # git bundle used only by its from-source build fallback) and any
+          # llama.cpp/localBuilds directories from an actual from-source
+          # build — none of this is needed once a prebuilt binary variant
+          # is in place (confirmed by the getLlama() checks before and
+          # after pruning below).
+          case "$VSCE_TARGET" in
+            darwin-arm64) KEEP_VARIANT="mac-arm64-metal" ;;
+            win32-x64)    KEEP_VARIANT="win-x64" ;;
+            win32-arm64)  KEEP_VARIANT="win-arm64" ;;
+            linux-x64)    KEEP_VARIANT="linux-x64" ;;
+            *) echo "No @node-llama-cpp variant mapping for target '$VSCE_TARGET'"; exit 1 ;;
+          esac
+          for dir in node_modules/@node-llama-cpp/*/; do
+            variant="$(basename "$dir")"
+            if [ "$variant" != "$KEEP_VARIANT" ]; then
+              rm -rf "$dir"
+            fi
+          done
+          rm -rf node_modules/node-llama-cpp/llama/llama.cpp
+          rm -rf node_modules/node-llama-cpp/llama/localBuilds
+          rm -f node_modules/node-llama-cpp/llama/gitRelease.bundle
+          # Re-verify getLlama() still resolves after pruning, so a wrong
+          # KEEP_VARIANT mapping (or an unexpected extra prune) fails the
+          # build here instead of silently shipping a broken .vsix.
+          node --input-type=module -e "
+            import('node-llama-cpp').then(({getLlama}) => getLlama())
+              .then(() => console.log('getLlama() still resolves after pruning'))
+              .catch(e => { console.error('getLlama() failed after pruning:', e.message); process.exit(1); });
+          "
           (cd webview-ui && npm ci)
           # Not `npm run package:target`: npm spawns cmd.exe (not bash) to
           # execute package.json scripts on Windows by default (this is
