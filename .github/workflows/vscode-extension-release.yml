@@ -1,7 +1,8 @@
 # Builds the Workflow Insight Explorer VS Code extension for each supported
-# platform/arch and attaches the packaged .vsix files to the GitHub Release as
-# assets. This extension is not published to npm (it's "private": true) or,
-# during preview, to the VS Code Marketplace — see
+# platform/arch, creates a DRAFT GitHub Release, attaches all 4 platform
+# .vsix files to it, then publishes the release as the final step. This
+# extension is not published to npm (it's "private": true) or, during
+# preview, to the VS Code Marketplace — see
 # packages/aws-durable-execution-sdk-js-insight-vscode/README.md.
 # Testers/customers install it by downloading the .vsix matching their
 # platform from the release and side-loading it with
@@ -13,9 +14,20 @@
 # run on a matching host so npm resolves that target's binary via
 # optionalDependencies — there is no cross-compiling this from one runner.
 #
-# Only runs when the release version matches this package's own version, so
-# an unrelated package release (e.g. the core SDK) doesn't attach a stale
-# .vsix that doesn't correspond to the tag being released.
+# --- Why workflow_dispatch instead of `on: release: published` ---
+# This repo has GitHub's immutable-releases protection enabled: once a
+# release is published, its assets can no longer be added, changed, or
+# removed (HTTP 422 "Cannot upload assets to an immutable release"). A
+# `release: published` trigger fires only AFTER the release is already
+# published — too late to attach anything.
+# GitHub's own docs recommend the fix: create the release as a DRAFT, attach
+# every asset while it's still a draft, then publish it last. But `release`
+# events are explicitly NOT sent for draft-related activity (per GitHub's
+# events-that-trigger-workflows docs: "Workflows are not triggered for the
+# created, edited, or deleted activity types for draft releases"), so no
+# `release`-event trigger can drive this. workflow_dispatch (a manual/scripted
+# trigger, run BEFORE any release or tag exists) is the only way to run this
+# sequence in the right order.
 
 name: vscode extension release
 
@@ -23,38 +35,62 @@ permissions:
   contents: read
 
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (must exactly match packages/aws-durable-execution-sdk-js-insight-vscode/package.json's version on the ref you're running this from). The release tag will be workflow-insight-vscode-v<version>."
+        required: true
+        type: string
 
 jobs:
   check-version:
     runs-on: ubuntu-latest
     outputs:
-      should_release: ${{ steps.check.outputs.should_release }}
       vsix_version: ${{ steps.check.outputs.vsix_version }}
+      tag_name: ${{ steps.check.outputs.tag_name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.release.tag_name }}
       - id: check
         run: |
+          set -euo pipefail
           PKG_VERSION=$(node -p "require('./packages/aws-durable-execution-sdk-js-insight-vscode/package.json').version")
-          TAG_NAME="${{ github.event.release.tag_name }}"
+          INPUT_VERSION="${{ inputs.version }}"
+          if [[ "$INPUT_VERSION" != "$PKG_VERSION" ]]; then
+            echo "Input version '$INPUT_VERSION' does not match package.json version '$PKG_VERSION' on this ref. Aborting before creating any release."
+            exit 1
+          fi
           echo "vsix_version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
-          # Exact match against a documented tag convention (see this
-          # package's README: `workflow-insight-vscode-v<version>`), not a
-          # substring match — a substring match could false-positive (e.g.
-          # version "0.1.0" matching tag "core-sdk-v0.1.0-unrelated").
-          if [[ "$TAG_NAME" == "workflow-insight-vscode-v${PKG_VERSION}" ]]; then
-            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          echo "tag_name=workflow-insight-vscode-v${PKG_VERSION}" >> "$GITHUB_OUTPUT"
+
+  create-draft-release:
+    needs: [check-version]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # required to create the draft release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Create draft release (or reuse an existing one for this tag)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ needs.check-version.outputs.tag_name }}"
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            IS_DRAFT=$(gh release view "$TAG" --repo "${{ github.repository }}" --json isDraft --jq '.isDraft')
+            if [[ "$IS_DRAFT" != "true" ]]; then
+              echo "Release '$TAG' already exists and is already published (not a draft) — refusing to touch it. Bump the version to release again."
+              exit 1
+            fi
+            echo "Draft release '$TAG' already exists; reusing it."
           else
-            echo "should_release=false" >> "$GITHUB_OUTPUT"
-            echo "Release tag '$TAG_NAME' does not match expected 'workflow-insight-vscode-v${PKG_VERSION}'; skipping .vsix build."
+            gh release create "$TAG" --repo "${{ github.repository }}" \
+              --title "Workflow Insight Explorer ${{ needs.check-version.outputs.vsix_version }} (Preview)" \
+              --notes "Preview build — multi-platform .vsix release. Includes darwin-arm64, win32-x64, win32-arm64, and linux-x64 builds with on-device LLM support." \
+              --draft
           fi
 
   build-and-attach:
-    needs: [check-version]
-    if: needs.check-version.outputs.should_release == 'true'
+    needs: [check-version, create-draft-release]
     strategy:
       fail-fast: false
       matrix:
@@ -79,8 +115,6 @@ jobs:
         working-directory: packages/aws-durable-execution-sdk-js-insight-vscode
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.release.tag_name }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -152,42 +186,39 @@ jobs:
           cp vsix/*.vsix "$GITHUB_WORKSPACE/packages/aws-durable-execution-sdk-js-insight-vscode/vsix/"
         env:
           VSCE_TARGET: ${{ matrix.target }}
-      - name: Upload .vsix to release
+      - name: Upload .vsix to draft release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh release upload "${{ github.event.release.tag_name }}" vsix/*.vsix --clobber \
+          gh release upload "${{ needs.check-version.outputs.tag_name }}" vsix/*.vsix --clobber \
             --repo "${{ github.repository }}"
 
-  verify-all-platforms:
+  verify-and-publish:
     needs: [check-version, build-and-attach]
     # !cancelled() (not the implicit if: success()) is required here: with
     # strategy.fail-fast: false, a single matrix leg failing still marks the
     # whole build-and-attach job as failed overall, and a downstream job that
     # only `needs` a failed job is skipped by default — meaning this
     # verification would never run in exactly the scenario it exists to
-    # catch (a partial release with some platforms missing). We still gate
-    # on check-version's own result explicitly, so this doesn't run at all
-    # for a release this workflow was never supposed to act on.
-    if: |
-      !cancelled() &&
-      needs.check-version.result == 'success' &&
-      needs.check-version.outputs.should_release == 'true'
+    # catch (a partial release with some platforms missing).
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # required to publish the release
     steps:
-      - name: Confirm all 4 platform .vsix files landed on the release
-        # A matrix job upload succeeding doesn't guarantee every leg ran (a
-        # single-leg failure with fail-fast: false lets the others continue,
-        # potentially publishing a release with only some platforms
-        # supported and no one noticing). Explicitly list the release assets
-        # and fail loudly if any expected target is missing.
+      - name: Confirm all 4 platform .vsix files are attached, then publish
+        # Only publish once every expected asset is present — this is what
+        # keeps the draft-first design safe: nothing becomes immutable until
+        # this check passes. If anything is missing, the release is left as
+        # a draft (not immutable, not visible to normal users) so the run
+        # can be fixed and re-triggered without any cleanup.
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          TAG="${{ github.event.release.tag_name }}"
+          TAG="${{ needs.check-version.outputs.tag_name }}"
           VER="${{ needs.check-version.outputs.vsix_version }}"
           ASSETS=$(gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name')
           MISSING=0
@@ -201,6 +232,8 @@ jobs:
             fi
           done
           if [ "$MISSING" -ne 0 ]; then
-            echo "One or more platform .vsix files are missing from release '$TAG'."
+            echo "One or more platform .vsix files are missing from draft release '$TAG'. Leaving it as a draft — re-run this workflow after fixing the failing leg(s)."
             exit 1
           fi
+          echo "All 4 platform .vsix files present. Publishing release '$TAG'."
+          gh release edit "$TAG" --repo "${{ github.repository }}" --draft=false
