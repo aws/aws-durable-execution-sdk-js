@@ -2,7 +2,7 @@
   "name": "aws-durable-execution-sdk-js-insight-vscode",
   "displayName": "Workflow Insight Explorer",
   "description": "Query AWS Durable Execution Workflow Insight data from CloudWatch Logs using plain English.",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-alpha.1",
   "license": "Apache-2.0",
   "publisher": "aws",
   "private": true,
