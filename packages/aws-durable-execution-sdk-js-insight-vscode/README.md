@@ -76,7 +76,13 @@ region, destination, and model provider, then ask a question (see
 > endpoint you run, e.g. Ollama), and **Local (on-device)** — see
 > [LLM provider](#3-choose-an-llm-provider). The on-device provider bundles a
 > native runtime (`node-llama-cpp`) built for the `.vsix`'s specific
-> platform/arch, which is why each platform ships its own `.vsix`.
+> platform/arch, which is why each platform ships its own `.vsix`. On
+> **macOS** it's GPU-accelerated via Metal; on **Windows and Linux** it's
+> CPU-only in the packaged build (no CUDA/Vulkan) to keep the `.vsix` a
+> reasonable size — `node-llama-cpp` only ships one prebuilt variant per
+> macOS/Windows-arm64 target (Metal for Mac, no GPU variant for
+> Windows-arm64), but ships several GPU variants for Windows/Linux x64,
+> which we don't bundle.
 
 ## Build from Source
 
@@ -253,7 +259,7 @@ Pick a provider under **⚙ → LLM Provider**:
 
   Then set **Server URL** (default `http://localhost:11434/v1`) and **Model** (e.g. `llama3.1`). This is the recommended way to run local models from the packaged `.vsix`.
 
-- **Local LLM (on-device)** — an embedded model downloaded on first use. Only available when running from source (not bundled in the `.vsix`).
+- **Local LLM (on-device)** — an embedded model downloaded on first use, running entirely on your machine. GPU-accelerated via Metal on macOS; CPU-only on Windows and Linux (the packaged `.vsix` doesn't include CUDA/Vulkan acceleration on those platforms).
 
 > Bedrock is the most capable, especially for the multi-step **agent** mode
 > (it uses Bedrock's tool-use API); Copilot and the local providers run the
