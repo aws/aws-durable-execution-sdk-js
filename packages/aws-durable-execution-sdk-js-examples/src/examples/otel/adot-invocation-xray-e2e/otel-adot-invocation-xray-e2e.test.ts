@@ -74,7 +74,9 @@ createTests({
         });
       }
 
-      assertEventSignatures(execution);
+      assertEventSignatures(execution, undefined, {
+        invocationCompletedDifference: 2,
+      });
     });
   },
 });

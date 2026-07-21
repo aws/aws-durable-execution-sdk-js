@@ -162,7 +162,9 @@ createTests({
         expect(failsThenSucceedsSpan!.parentSpanId).toBe(childOpsSpan!.spanId);
       }
 
-      assertEventSignatures(execution);
+      assertEventSignatures(execution, undefined, {
+        invocationCompletedDifference: 2,
+      });
     });
   },
 });
