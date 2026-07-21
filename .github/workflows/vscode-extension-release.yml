@@ -160,7 +160,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ISOLATED="$RUNNER_TEMP/insight-vscode-pkg"
+          # On Windows runners, $RUNNER_TEMP and $GITHUB_WORKSPACE are
+          # native Windows paths (e.g. D:\a\_temp) that Git Bash's own
+          # env-injection can mangle further (observed: colons and
+          # backslashes double-escaped, producing a path tar/mkdir/cp can't
+          # open). cygpath -u (ships with Git Bash/MSYS2 by default)
+          # converts them to clean POSIX paths; on macOS/Linux runners
+          # cygpath doesn't exist, so fall back to the values as-is (they're
+          # already normal POSIX paths there).
+          to_posix() {
+            if command -v cygpath >/dev/null 2>&1; then cygpath -u "$1"; else printf '%s' "$1"; fi
+          }
+          RUNNER_TEMP_POSIX=$(to_posix "$RUNNER_TEMP")
+          GITHUB_WORKSPACE_POSIX=$(to_posix "$GITHUB_WORKSPACE")
+          ISOLATED="$RUNNER_TEMP_POSIX/insight-vscode-pkg"
           rm -rf "$ISOLATED"
           mkdir -p "$ISOLATED"
           # Portable copy (avoids relying on rsync, which isn't preinstalled
@@ -194,8 +207,8 @@ jobs:
           "
           (cd webview-ui && npm ci)
           npm run package:target
-          mkdir -p "$GITHUB_WORKSPACE/packages/aws-durable-execution-sdk-js-insight-vscode/vsix"
-          cp vsix/*.vsix "$GITHUB_WORKSPACE/packages/aws-durable-execution-sdk-js-insight-vscode/vsix/"
+          mkdir -p "$GITHUB_WORKSPACE_POSIX/packages/aws-durable-execution-sdk-js-insight-vscode/vsix"
+          cp vsix/*.vsix "$GITHUB_WORKSPACE_POSIX/packages/aws-durable-execution-sdk-js-insight-vscode/vsix/"
         env:
           VSCE_TARGET: ${{ matrix.target }}
       - name: Upload .vsix to draft release
