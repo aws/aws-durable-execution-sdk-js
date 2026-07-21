@@ -82,19 +82,21 @@ jobs:
       - name: Create draft release (or reuse an existing one for this tag)
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.check-version.outputs.tag_name }}
+          REPO: ${{ github.repository }}
+          VSIX_VERSION: ${{ needs.check-version.outputs.vsix_version }}
         run: |
           set -euo pipefail
-          TAG="${{ needs.check-version.outputs.tag_name }}"
-          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            IS_DRAFT=$(gh release view "$TAG" --repo "${{ github.repository }}" --json isDraft --jq '.isDraft')
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            IS_DRAFT=$(gh release view "$TAG" --repo "$REPO" --json isDraft --jq '.isDraft')
             if [[ "$IS_DRAFT" != "true" ]]; then
               echo "Release '$TAG' already exists and is already published (not a draft) — refusing to touch it. Bump the version to release again."
               exit 1
             fi
             echo "Draft release '$TAG' already exists; reusing it."
           else
-            gh release create "$TAG" --repo "${{ github.repository }}" \
-              --title "Workflow Insight Explorer ${{ needs.check-version.outputs.vsix_version }} (Preview)" \
+            gh release create "$TAG" --repo "$REPO" \
+              --title "Workflow Insight Explorer ${VSIX_VERSION} (Preview)" \
               --notes "Preview build — multi-platform .vsix release. Includes darwin-arm64, win32-x64, win32-arm64, and linux-x64 builds with on-device LLM support." \
               --draft
           fi
@@ -199,10 +201,11 @@ jobs:
       - name: Upload .vsix to draft release
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.check-version.outputs.tag_name }}
+          REPO: ${{ github.repository }}
         shell: bash
         run: |
-          gh release upload "${{ needs.check-version.outputs.tag_name }}" vsix/*.vsix --clobber \
-            --repo "${{ github.repository }}"
+          gh release upload "$TAG" vsix/*.vsix --clobber --repo "$REPO"
 
   verify-and-publish:
     needs: [check-version, build-and-attach]
@@ -212,7 +215,14 @@ jobs:
     # only `needs` a failed job is skipped by default — meaning this
     # verification would never run in exactly the scenario it exists to
     # catch (a partial release with some platforms missing).
-    if: ${{ !cancelled() }}
+    #
+    # needs.check-version.result == 'success' is also required: without it,
+    # a failure in check-version itself (e.g. version mismatch) skips
+    # create-draft-release and build-and-attach, but !cancelled() alone
+    # would still let this job run with empty TAG/VER outputs — turning one
+    # clean, expected failure (bad version input) into a second, confusing
+    # "release not found" error instead of a clean skip.
+    if: ${{ !cancelled() && needs.check-version.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write # required to publish the release
@@ -225,12 +235,13 @@ jobs:
         # can be fixed and re-triggered without any cleanup.
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.check-version.outputs.tag_name }}
+          REPO: ${{ github.repository }}
+          VER: ${{ needs.check-version.outputs.vsix_version }}
         shell: bash
         run: |
           set -euo pipefail
-          TAG="${{ needs.check-version.outputs.tag_name }}"
-          VER="${{ needs.check-version.outputs.vsix_version }}"
-          ASSETS=$(gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name')
+          ASSETS=$(gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name')
           MISSING=0
           for target in darwin-arm64 win32-x64 win32-arm64 linux-x64; do
             EXPECTED="aws-durable-execution-sdk-js-insight-vscode-${VER}-${target}.vsix"
@@ -246,4 +257,4 @@ jobs:
             exit 1
           fi
           echo "All 4 platform .vsix files present. Publishing release '$TAG'."
-          gh release edit "$TAG" --repo "${{ github.repository }}" --draft=false
+          gh release edit "$TAG" --repo "$REPO" --draft=false
