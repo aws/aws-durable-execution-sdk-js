@@ -186,17 +186,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     );
     const spanName = info.name ?? info.type;
 
-    // Resolve parent span: use parentId from map, or fall back to invocation span
-    let parentSpan: Span | undefined;
-    if (info.parentId && this.spanMap.has(info.parentId)) {
-      parentSpan = this.spanMap.get(info.parentId);
-    } else {
-      parentSpan = this.invocationSpan;
-    }
-
-    const parentContext = parentSpan
-      ? trace.setSpan(context.active(), parentSpan)
-      : context.active();
+    const parentContext = context.active();
 
     const attributes: Record<string, string> = {
       "durable.execution.arn": this.executionArn,

@@ -244,18 +244,21 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     });
 
     await plugin.onInvocationStart(makeInvocationInfo());
-    await plugin.onOperationStart(
-      makeOperationInfo({ id: "op-1", name: "process-item" }),
-    );
-    await plugin.onOperationAttemptStart(
-      makeAttemptInfo({ id: "op-1", name: "process-item", attempt: 1 }),
-    );
-    await plugin.onOperationAttemptEnd(
-      makeAttemptEndInfo({ id: "op-1", attempt: 1 }),
-    );
-    await plugin.onOperationEnd(
-      makeOperationEndInfo({ id: "op-1", name: "process-item" }),
-    );
+    await plugin.wrapInvocation(makeInvocationInfo(), async () => {
+      await plugin.onOperationStart(
+        makeOperationInfo({ id: "op-1", name: "process-item" }),
+      );
+      await plugin.onOperationAttemptStart(
+        makeAttemptInfo({ id: "op-1", name: "process-item", attempt: 1 }),
+      );
+      await plugin.onOperationAttemptEnd(
+        makeAttemptEndInfo({ id: "op-1", attempt: 1 }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({ id: "op-1", name: "process-item" }),
+      );
+      return { output: undefined } as any;
+    });
     await plugin.onInvocationEnd(
       makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
     );
@@ -349,33 +352,37 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     // Simulate: start → op1 (with attempt) → op2 (with attempt) → end
     await plugin.onInvocationStart(makeInvocationInfo());
 
-    // Operation 1
-    await plugin.onOperationStart(
-      makeOperationInfo({ id: "op-1", name: "validate-input" }),
-    );
-    await plugin.onOperationAttemptStart(
-      makeAttemptInfo({ id: "op-1", name: "validate-input", attempt: 1 }),
-    );
-    await plugin.onOperationAttemptEnd(
-      makeAttemptEndInfo({ id: "op-1", attempt: 1 }),
-    );
-    await plugin.onOperationEnd(
-      makeOperationEndInfo({ id: "op-1", name: "validate-input" }),
-    );
+    await plugin.wrapInvocation(makeInvocationInfo(), async () => {
+      // Operation 1
+      await plugin.onOperationStart(
+        makeOperationInfo({ id: "op-1", name: "validate-input" }),
+      );
+      await plugin.onOperationAttemptStart(
+        makeAttemptInfo({ id: "op-1", name: "validate-input", attempt: 1 }),
+      );
+      await plugin.onOperationAttemptEnd(
+        makeAttemptEndInfo({ id: "op-1", attempt: 1 }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({ id: "op-1", name: "validate-input" }),
+      );
 
-    // Operation 2
-    await plugin.onOperationStart(
-      makeOperationInfo({ id: "op-2", name: "process-data" }),
-    );
-    await plugin.onOperationAttemptStart(
-      makeAttemptInfo({ id: "op-2", name: "process-data", attempt: 1 }),
-    );
-    await plugin.onOperationAttemptEnd(
-      makeAttemptEndInfo({ id: "op-2", attempt: 1 }),
-    );
-    await plugin.onOperationEnd(
-      makeOperationEndInfo({ id: "op-2", name: "process-data" }),
-    );
+      // Operation 2
+      await plugin.onOperationStart(
+        makeOperationInfo({ id: "op-2", name: "process-data" }),
+      );
+      await plugin.onOperationAttemptStart(
+        makeAttemptInfo({ id: "op-2", name: "process-data", attempt: 1 }),
+      );
+      await plugin.onOperationAttemptEnd(
+        makeAttemptEndInfo({ id: "op-2", attempt: 1 }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({ id: "op-2", name: "process-data" }),
+      );
+
+      return { output: undefined } as any;
+    });
 
     await plugin.onInvocationEnd(
       makeInvocationEndInfo({ status: "SUCCEEDED" as any }),

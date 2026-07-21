@@ -146,51 +146,54 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
       await plugin.onInvocationStart(makeInvocationInfo());
     });
 
-    // --- Phase 2: Operation with attempt ---
-    await plugin.onOperationStart(
-      makeOperationInfo({ id: "op-step-1", name: "fetch-data" }),
-    );
-    await plugin.onOperationAttemptStart(
-      makeAttemptInfo({
-        id: "op-step-1",
-        name: "fetch-data",
-        attempt: 1,
-      }),
-    );
-    await plugin.onOperationAttemptEnd(
-      makeAttemptEndInfo({
-        id: "op-step-1",
-        name: "fetch-data",
-        attempt: 1,
-      }),
-    );
-    await plugin.onOperationEnd(
-      makeOperationEndInfo({ id: "op-step-1", name: "fetch-data" }),
-    );
+    // --- Phase 2-3: Operations within wrapInvocation context ---
+    await plugin.wrapInvocation(makeInvocationInfo(), async () => {
+      await plugin.onOperationStart(
+        makeOperationInfo({ id: "op-step-1", name: "fetch-data" }),
+      );
+      await plugin.onOperationAttemptStart(
+        makeAttemptInfo({
+          id: "op-step-1",
+          name: "fetch-data",
+          attempt: 1,
+        }),
+      );
+      await plugin.onOperationAttemptEnd(
+        makeAttemptEndInfo({
+          id: "op-step-1",
+          name: "fetch-data",
+          attempt: 1,
+        }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({ id: "op-step-1", name: "fetch-data" }),
+      );
 
-    // --- Phase 3: CONTEXT operation (runInChildContext) ---
-    const contextOpInfo = makeOperationInfo({
-      id: "op-ctx-1",
-      name: "child-context",
-      type: "CONTEXT",
-    });
-    await plugin.onOperationStart(contextOpInfo);
-
-    plugin.wrapChildContextFn(contextOpInfo, (...args: unknown[]) => {
-      // The callback receives the span as first arg in startActiveSpan
-      const span = args[0] as any;
-      if (span && typeof span.end === "function") {
-        span.end();
-      }
-    });
-
-    await plugin.onOperationEnd(
-      makeOperationEndInfo({
+      // --- CONTEXT operation (runInChildContext) ---
+      const contextOpInfo = makeOperationInfo({
         id: "op-ctx-1",
         name: "child-context",
         type: "CONTEXT",
-      }),
-    );
+      });
+      await plugin.onOperationStart(contextOpInfo);
+
+      plugin.wrapChildContextFn(contextOpInfo, (...args: unknown[]) => {
+        const span = args[0] as any;
+        if (span && typeof span.end === "function") {
+          span.end();
+        }
+      });
+
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({
+          id: "op-ctx-1",
+          name: "child-context",
+          type: "CONTEXT",
+        }),
+      );
+
+      return { output: undefined } as any;
+    });
 
     // --- Phase 4: End invocation ---
     await plugin.onInvocationEnd(makeInvocationEndInfo());
