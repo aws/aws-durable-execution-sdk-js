@@ -184,6 +184,8 @@ export function assertSpanNames(
  * Asserts parent-child hierarchy matches expected structure.
  * For each parent→children mapping, verifies the parent segment contains
  * the expected child in its subsegments array (parent→child direction).
+ * When multiple segments share the same parent name, the assertion passes
+ * if any of those segments contains the expected children.
  *
  * @param trace - The X-Ray trace with flattened segments
  * @param hierarchy - Object mapping parent span names to arrays of child span names
@@ -194,20 +196,28 @@ export function assertSpanHierarchy(
   hierarchy: Record<string, string[]>,
 ): void {
   for (const [parentName, childNames] of Object.entries(hierarchy)) {
-    const parentSegment = trace.segments.find((seg) => seg.name === parentName);
-    if (!parentSegment) {
+    const parentSegments = trace.segments.filter(
+      (seg) => seg.name === parentName,
+    );
+    if (parentSegments.length === 0) {
       throw new Error(
         `Parent span "${parentName}" not found in trace. Available spans: [${trace.segments.map((s) => s.name).join(", ")}]`,
       );
     }
 
-    const subsegmentNames = getSubsegmentNames(parentSegment);
+    // Collect subsegment names across ALL matching parent segments
+    const allSubsegmentNames = new Set<string>();
+    for (const parentSegment of parentSegments) {
+      for (const name of getSubsegmentNames(parentSegment)) {
+        allSubsegmentNames.add(name);
+      }
+    }
 
     for (const childName of childNames) {
-      if (!subsegmentNames.has(childName)) {
+      if (!allSubsegmentNames.has(childName)) {
         throw new Error(
           `Hierarchy mismatch: expected "${childName}" to be a subsegment of "${parentName}", ` +
-            `but "${parentName}" only has subsegments: [${[...subsegmentNames].join(", ")}]`,
+            `but "${parentName}" (${parentSegments.length} segment(s)) only has subsegments: [${[...allSubsegmentNames].join(", ")}]`,
         );
       }
     }
