@@ -62,7 +62,6 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   private invocationSpan: Span | undefined;
   private spanMap: Map<string, Span>;
   private executionArn: string;
-  private attemptSpan: Span | undefined;
 
   // Default provider mode
   private readonly useDefaultTracerProvider: boolean;
@@ -241,7 +240,6 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     this.invocationSpan = undefined;
     this.savedInvocationContext = undefined;
     this.executionArn = "";
-    this.attemptSpan = undefined;
   }
 
   /**
@@ -343,7 +341,45 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       spanName,
       { attributes, links },
       parentContext,
-      fn,
+      (span: Span) => {
+        try {
+          const result = fn();
+          // Handle async results (Promises)
+          if (result && typeof (result as any).then === "function") {
+            return (result as Promise<unknown>).then(
+              (value) => {
+                span.end();
+                return value;
+              },
+              (error) => {
+                span.setStatus({
+                  code: SpanStatusCode.ERROR,
+                  message:
+                    error instanceof Error ? error.message : String(error),
+                });
+                if (error instanceof Error) {
+                  span.recordException(error);
+                }
+                span.end();
+                throw error;
+              },
+            );
+          }
+          // Synchronous result
+          span.end();
+          return result;
+        } catch (error) {
+          span.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: error instanceof Error ? error.message : String(error),
+          });
+          if (error instanceof Error) {
+            span.recordException(error);
+          }
+          span.end();
+          throw error;
+        }
+      },
     );
   }
 
@@ -416,6 +452,10 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     }
   }
 
+  private getAttemptKey(id: string, attempt: number): string {
+    return `${id}:attempt:${attempt}`;
+  }
+
   async onOperationAttemptStart(info: AttemptInfo): Promise<void> {
     const baseName = info.name ?? info.type;
     const spanName = `${baseName} attempt ${info.attempt}`;
@@ -451,28 +491,33 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       parentContext,
     );
 
-    this.attemptSpan = attemptSpan;
+    this.spanMap.set(this.getAttemptKey(info.id, info.attempt), attemptSpan);
   }
 
-  wrapOperationAttemptFn(_info: AttemptInfo, fn: () => unknown): unknown {
-    if (!this.attemptSpan) {
+  wrapOperationAttemptFn(info: AttemptInfo, fn: () => unknown): unknown {
+    const attemptSpan = this.spanMap.get(
+      this.getAttemptKey(info.id, info.attempt),
+    );
+    if (!attemptSpan) {
       return fn();
     }
-    return context.with(trace.setSpan(context.active(), this.attemptSpan), fn);
+    return context.with(trace.setSpan(context.active(), attemptSpan), fn);
   }
 
   async onOperationAttemptEnd(info: AttemptEndInfo): Promise<void> {
-    if (this.attemptSpan) {
-      this.attemptSpan.setAttribute("durable.attempt.outcome", info.outcome);
+    const key = this.getAttemptKey(info.id, info.attempt);
+    const attemptSpan = this.spanMap.get(key);
+    if (attemptSpan) {
+      attemptSpan.setAttribute("durable.attempt.outcome", info.outcome);
       if (info.error) {
-        this.attemptSpan.setStatus({
+        attemptSpan.setStatus({
           code: SpanStatusCode.ERROR,
           message: info.error.message,
         });
-        this.attemptSpan.recordException(info.error);
+        attemptSpan.recordException(info.error);
       }
-      this.attemptSpan.end(info.endTimestamp);
-      this.attemptSpan = undefined;
+      attemptSpan.end(info.endTimestamp);
+      this.spanMap.delete(key);
     }
   }
 

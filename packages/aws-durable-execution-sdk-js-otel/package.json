@@ -66,10 +66,5 @@
     "@opentelemetry/resources": "^2.0.0",
     "@opentelemetry/sdk-trace-node": "^2.6.1"
   },
-  "peerDependenciesMeta": {
-    "@opentelemetry/exporter-trace-otlp-http": {
-      "optional": true
-    }
-  },
   "private": false
 }

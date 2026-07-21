@@ -10,10 +10,16 @@ import type {
 } from "@aws/durable-execution-sdk-js";
 import type { DurableExecutionInvocationOutput } from "@aws/durable-execution-sdk-js";
 import type { TracerProvider, Tracer, Span } from "@opentelemetry/api";
-import { context, trace, SpanStatusCode } from "@opentelemetry/api";
+import {
+  context,
+  trace,
+  SpanStatusCode,
+  ROOT_CONTEXT,
+} from "@opentelemetry/api";
 import {
   DeterministicIdGenerator,
   deriveTraceIdFromArn,
+  deriveWorkflowSpanId,
   deriveSpanIdFromOperationId,
 } from "./deterministic-id-generator";
 import { xRayContextExtractor } from "./context-extractors";
@@ -21,12 +27,6 @@ import type { ContextExtractor } from "./context-extractors";
 import type { OtelPluginConfig } from "./otel-plugin-config";
 import { createTracerProvider } from "./otel-plugin-provider";
 import { registerStandaloneInstrumentations } from "./otel-plugin-instrumentations";
-
-/**
- * @deprecated Use `OtelPluginConfig` instead.
- * This type alias is kept for backward compatibility.
- */
-export type InvocationOtelPluginConfig = OtelPluginConfig;
 
 const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
 
@@ -42,11 +42,14 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   private readonly tracer: Tracer;
   private readonly idGenerator: DeterministicIdGenerator;
   private readonly contextExtractor: ContextExtractor;
+  private readonly useDefaultTracerProvider: boolean;
+  private readonly workflowSpanName: string;
 
   // Per-invocation state
   private spanMap: Map<string, Span> = new Map();
   private spanStack: Span[] = [];
   private invocationSpan: Span | undefined;
+  private workflowSpan: Span | undefined;
   private executionArn: string = "";
   private attemptSpan: Span | undefined;
 
@@ -56,6 +59,8 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
 
     this.idGenerator = new DeterministicIdGenerator();
     this.contextExtractor = config?.contextExtractor ?? xRayContextExtractor;
+    this.useDefaultTracerProvider = config?.useDefaultTracerProvider ?? false;
+    this.workflowSpanName = config?.workflowSpanName ?? "Workflow";
 
     // Pass config directly to createTracerProvider — when neither tracerProvider
     // nor useDefaultTracerProvider is set, option 3 creates an internal provider
@@ -89,12 +94,35 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       this.idGenerator.setTraceId(derivedId);
     }
 
-    // 4. Create the invocation span
-    this.invocationSpan = this.tracer.startSpan("invocation", {
-      attributes: {
-        "durable.execution.arn": info.executionArn,
-      },
-    });
+    // 4. Create the Workflow span when using community collector (not default provider)
+    if (!this.useDefaultTracerProvider) {
+      const workflowSpanId = deriveWorkflowSpanId(info.executionArn);
+      this.idGenerator.setNextSpanId(workflowSpanId);
+
+      this.workflowSpan = this.tracer.startSpan(
+        this.workflowSpanName,
+        {
+          attributes: {
+            "durable.execution.arn": info.executionArn,
+          },
+          startTime: info.executionStartTimestamp ?? new Date(),
+        },
+        ROOT_CONTEXT,
+      );
+
+      // 5. Create the invocation span as child of workflow span
+      const parentContext = trace.setSpan(context.active(), this.workflowSpan);
+
+      this.invocationSpan = this.tracer.startSpan(
+        "invocation",
+        {
+          attributes: {
+            "durable.execution.arn": info.executionArn,
+          },
+        },
+        parentContext,
+      );
+    }
   }
 
   wrapInvocation(
@@ -110,7 +138,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     );
   }
 
-  async onInvocationEnd(_info: InvocationEndInfo): Promise<void> {
+  async onInvocationEnd(info: InvocationEndInfo): Promise<void> {
     // 1. End all spans in the stack in reverse order
     while (this.spanStack.length > 0) {
       const span = this.spanStack.pop()!;
@@ -122,7 +150,16 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       this.invocationSpan.end();
     }
 
-    // 3. Force flush the tracer provider
+    // 3. Handle Workflow span based on terminal status (community collector mode only)
+    if (this.workflowSpan) {
+      if (info.status === "SUCCEEDED" || info.status === "FAILED") {
+        this.workflowSpan.setAttribute("durable.execution.status", info.status);
+        this.workflowSpan.end();
+      }
+      // Non-terminal: do NOT end — span is dropped without export
+    }
+
+    // 4. Force flush the tracer provider
     if ("forceFlush" in this.tracerProvider) {
       try {
         await (
@@ -133,10 +170,11 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       }
     }
 
-    // 4. Clear all per-invocation state
+    // 5. Clear all per-invocation state
     this.spanMap.clear();
     this.spanStack = [];
     this.invocationSpan = undefined;
+    this.workflowSpan = undefined;
     this.executionArn = "";
     this.attemptSpan = undefined;
   }
