@@ -26,8 +26,9 @@ rollup.config.mjs           # bundles handlers/<suite>/*.ts -> dist/<name>.js (C
 ```
 
 Each SAM template is a self-contained deployment for one **suite** (operation
-category). Suites are added incrementally; today this package ships `step` and
-`wait`.
+category). This package ships all nine suites: `step`, `wait`, `child`,
+`callback`, `invoke`, `wait_for_condition`, `wait_for_callback`, `parallel`,
+and `map`.
 
 ## How a handler maps to a requirement
 

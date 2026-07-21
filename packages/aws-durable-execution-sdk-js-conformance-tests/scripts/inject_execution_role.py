@@ -6,6 +6,9 @@ uses the provided execution role ARN, and removes the self-created
 DurableFunctionRole resource. Used by CI to avoid creating an IAM role per
 deploy; the checked-in template stays self-contained for local runs.
 
+CloudFormation short-form intrinsic tags (!Sub, !GetAtt, !Ref, ...) are
+preserved through a tag-aware load/dump round-trip.
+
 Usage:
     python3 scripts/inject_execution_role.py --template template_step.yaml \
         --role-arn arn:aws:iam::123456789012:role/my-execution-role
@@ -24,10 +27,50 @@ SELF_CREATED_ROLE = "DurableFunctionRole"
 FUNCTION_TYPE = "AWS::Serverless::Function"
 
 
+class CfnTag:
+    """Opaque holder for a CloudFormation short-form tag (e.g. !Sub, !GetAtt)."""
+
+    def __init__(self, tag: str, value: object) -> None:
+        self.tag = tag
+        self.value = value
+
+
+class CfnLoader(yaml.SafeLoader):
+    """SafeLoader that wraps unknown (CloudFormation) tags instead of failing."""
+
+
+def _construct_cfn_tag(loader: CfnLoader, suffix: str, node: yaml.Node) -> CfnTag:
+    if isinstance(node, yaml.ScalarNode):
+        value: object = loader.construct_scalar(node)
+    elif isinstance(node, yaml.SequenceNode):
+        value = loader.construct_sequence(node, deep=True)
+    else:
+        value = loader.construct_mapping(node, deep=True)
+    return CfnTag(node.tag, value)
+
+
+CfnLoader.add_multi_constructor("!", _construct_cfn_tag)
+
+
+class CfnDumper(yaml.SafeDumper):
+    """SafeDumper that re-emits wrapped CloudFormation tags verbatim."""
+
+
+def _represent_cfn_tag(dumper: CfnDumper, data: CfnTag) -> yaml.Node:
+    if isinstance(data.value, str):
+        return dumper.represent_scalar(data.tag, data.value)
+    if isinstance(data.value, list):
+        return dumper.represent_sequence(data.tag, data.value)
+    return dumper.represent_mapping(data.tag, data.value)
+
+
+CfnDumper.add_representer(CfnTag, _represent_cfn_tag)
+
+
 def inject(template_path: str, role_arn: str) -> int:
     """Rewrite template_path in place; return the number of functions updated."""
     with open(template_path, encoding="utf-8") as f:
-        doc = yaml.safe_load(f)
+        doc = yaml.load(f, Loader=CfnLoader)  # noqa: S506 - CfnLoader extends SafeLoader
 
     resources = doc.get("Resources")
     if not isinstance(resources, dict):
@@ -45,7 +88,7 @@ def inject(template_path: str, role_arn: str) -> int:
         raise SystemExit(f"{template_path}: no {FUNCTION_TYPE} resources found")
 
     with open(template_path, "w", encoding="utf-8") as f:
-        yaml.safe_dump(doc, f, sort_keys=False)
+        yaml.dump(doc, f, Dumper=CfnDumper, sort_keys=False)
 
     return updated
 

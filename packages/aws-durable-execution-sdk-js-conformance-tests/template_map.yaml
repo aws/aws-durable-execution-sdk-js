@@ -1,0 +1,370 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Timeout: 60
+    MemorySize: 128
+Resources:
+  DurableFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyName: DurableExecutionPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - lambda:CheckpointDurableExecution
+            - lambda:GetDurableExecutionState
+            Resource: '*'
+  MapBasic:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["9-1"]
+    Properties:
+      CodeUri: ./dist
+      Handler: map_basic.handler
+      Description: Map basic (one step per item, all succeed)
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  MapItemsOnly:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["9-2"]
+    Properties:
+      CodeUri: ./dist
+      Handler: map_items_only.handler
+      Description: Map items-only form (no operation name)
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  MapItemIndex:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["9-3"]
+    Properties:
+      CodeUri: ./dist
+      Handler: map_item_index.handler
+      Description: Map function receives item and index
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  MapEmpty:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["9-4"]
+    Properties:
+      CodeUri: ./dist
+      Handler: map_empty.handler
+      Description: Map with an empty items list
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  MapFailFast:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["9-5"]
+    Properties:
+      CodeUri: ./dist
+      Handler: map_fail_fast.handler
+      Description: Map fail-fast (tolerated-failure-count=0) stops after first failure
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  MapThrowIfError:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["9-6"]
+    Properties:
+      CodeUri: ./dist
+      Handler: map_throw_if_error.handler
+      Description: Map throw-if-error propagates an item failure to the execution
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  MapMinSuccessful:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["9-7"]
+    Properties:
+      CodeUri: ./dist
+      Handler: map_min_successful.handler
+      Description: Map min-successful early completion
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  MapToleratedWithin:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["9-8"]
+    Properties:
+      CodeUri: ./dist
+      Handler: map_tolerated_within.handler
+      Description: Map tolerated-failure-count within tolerance (all items complete)
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  MapToleratedExceeded:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["9-9"]
+    Properties:
+      CodeUri: ./dist
+      Handler: map_tolerated_exceeded.handler
+      Description: Map tolerated-failure-count exceeded (stops early)
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  MapToleratedPct:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["9-10"]
+    Properties:
+      CodeUri: ./dist
+      Handler: map_tolerated_pct.handler
+      Description: Map tolerated-failure-percentage exceeded (stops early)
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  MapConcurrent:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["9-11"]
+    Properties:
+      CodeUri: ./dist
+      Handler: map_concurrent.handler
+      Description: Map real concurrency preserves index-ordered results
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  MapFlat:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["9-12"]
+    Properties:
+      CodeUri: ./dist
+      Handler: map_flat.handler
+      Description: Map with FLAT nesting (virtual iteration contexts)
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  MapItemNamer:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["9-13"]
+    Properties:
+      CodeUri: ./dist
+      Handler: map_item_namer.handler
+      Description: Map with a custom item namer
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  MapItemSerdes:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["9-14"]
+    Properties:
+      CodeUri: ./dist
+      Handler: map_custom_serde.handler
+      Description: Map with a custom per-item serdes
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  MapSuspendIteration:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["9-15"]
+    Properties:
+      CodeUri: ./dist
+      Handler: map_suspend_iteration.handler
+      Description: Map suspends inside an iteration; replay skips the completed iteration
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  MapLargeResult:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["9-16"]
+    Properties:
+      CodeUri: ./dist
+      Handler: map_large_result.handler
+      Description: Map with a large aggregate result (exceeds checkpoint size threshold)
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  MapThenWait:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["9-17"]
+    Properties:
+      CodeUri: ./dist
+      Handler: map_then_wait.handler
+      Description: Suspension after a successful map (replay skips the completed map)
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  MapFailThenWait:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["9-18"]
+    Properties:
+      CodeUri: ./dist
+      Handler: map_fail_then_wait.handler
+      Description: Suspension after a map that completed with a failure
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  MapOpSerde:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["9-19"]
+    Properties:
+      CodeUri: ./dist
+      Handler: map_op_serde.handler
+      Description: Map operation-level serdes - serialize on a fresh operation
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  MapOpSerdeReplay:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["9-20"]
+    Properties:
+      CodeUri: ./dist
+      Handler: map_op_serde_replay.handler
+      Description: Map operation-level serdes - deserialize on replay
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
