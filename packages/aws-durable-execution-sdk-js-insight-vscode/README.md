@@ -35,11 +35,22 @@ The extension supports multiple destinations — each with its own query engine:
 > how you give a tester/customer access before the public launch: point them at
 > the release and have them side-load it. No Marketplace account needed.
 
-**1. Download the `.vsix`**
+**1. Download the `.vsix` for your platform**
 
-Grab the latest `aws-durable-execution-sdk-js-insight-vscode-<version>.vsix` from the
-repo's [**Releases**](https://github.com/aws/aws-durable-execution-sdk-js/releases) page
-(look for a `workflow-insight-vscode-*` tag).
+Grab the latest `.vsix` matching your OS/arch from the repo's
+[**Releases**](https://github.com/aws/aws-durable-execution-sdk-js/releases) page
+(look for a `workflow-insight-vscode-*` tag). Each release attaches one `.vsix`
+per supported platform:
+
+| Platform              | Filename suffix      |
+| --------------------- | -------------------- |
+| Apple Silicon (macOS) | `-darwin-arm64.vsix` |
+| Windows (Intel/x64)   | `-win32-x64.vsix`    |
+| Windows (ARM64)       | `-win32-arm64.vsix`  |
+| Linux (x64)           | `-linux-x64.vsix`    |
+
+> Other platforms (Intel macOS, ARM Linux) aren't built yet during preview —
+> [open an issue](https://github.com/aws/aws-durable-execution-sdk-js/issues/new) if you need one.
 
 **2. Install it into VS Code**
 
@@ -48,7 +59,7 @@ repo's [**Releases**](https://github.com/aws/aws-durable-execution-sdk-js/releas
 - **From the command line:**
 
   ```bash
-  code --install-extension aws-durable-execution-sdk-js-insight-vscode-<version>.vsix
+  code --install-extension aws-durable-execution-sdk-js-insight-vscode-<version>-<platform>.vsix
   ```
 
 **3. Open the Explorer**
@@ -61,10 +72,11 @@ region, destination, and model provider, then ask a question (see
 > version), or uninstall the previous one from the Extensions view first.
 >
 > **Model providers in the `.vsix`:** the packaged build supports **Bedrock**
-> (default), **GitHub Copilot**, and **Local server** (an OpenAI-compatible
-> endpoint you run, e.g. Ollama — see [LLM provider](#3-choose-an-llm-provider)).
-> The bundled offline on-device model (`local`) isn't included in the `.vsix`;
-> use it only when running from source.
+> (default), **GitHub Copilot**, **Local server** (an OpenAI-compatible
+> endpoint you run, e.g. Ollama), and **Local (on-device)** — see
+> [LLM provider](#3-choose-an-llm-provider). The on-device provider bundles a
+> native runtime (`node-llama-cpp`) built for the `.vsix`'s specific
+> platform/arch, which is why each platform ships its own `.vsix`.
 
 ## Build from Source
 
@@ -73,6 +85,7 @@ For contributors, or to produce your own `.vsix`:
 ```bash
 cd packages/aws-durable-execution-sdk-js-insight-vscode
 npm install
+npm --prefix webview-ui install   # webview-ui isn't an npm workspace; install it separately
 npm run build
 ```
 
@@ -91,7 +104,31 @@ Publishing a preview to testers: create a GitHub Release and attach that `.vsix`
 ### 1. Launch the extension
 
 - **Installed from the `.vsix`:** run **⌘⇧P** (`Ctrl+Shift+P`) → **Workflow Insight: Open Explorer**.
-- **Running from source:** open this folder in VS Code and press **F5** to start the Extension Development Host, then run the same command in the new window.
+- **Running from source:** open this folder (`packages/aws-durable-execution-sdk-js-insight-vscode`) directly in VS Code — not the monorepo root — then press **F5** to start the Extension Development Host, and run the same command in the new window.
+
+  `.vscode/` is git-ignored, so F5 does nothing until you create
+  `.vscode/launch.json` yourself:
+
+  ```json
+  {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Run Extension",
+        "type": "extensionHost",
+        "request": "launch",
+        "args": [
+          "--extensionDevelopmentPath=${workspaceFolder}",
+          "${workspaceFolder}"
+        ]
+      }
+    ]
+  }
+  ```
+
+  See [TESTING.md](./TESTING.md) for the full source setup, including a
+  `.vscode/settings.json` example for pointing the extension at your own
+  AWS region/log group.
 
 > **⌘⇧P** → **Workflow Insight: Open Explorer**
 
