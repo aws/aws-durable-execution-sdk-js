@@ -242,6 +242,19 @@ jobs:
               .then(() => console.log('getLlama() still resolves after pruning'))
               .catch(e => { console.error('getLlama() failed after pruning:', e.message); process.exit(1); });
           "
+          # This getLlama() call has been observed to itself recreate
+          # llama.cpp/localBuilds/gitRelease.bundle on at least one runner
+          # (ubuntu-latest/linux-x64) even though the prebuilt binary is
+          # present and getLlama() succeeds both before and after — some
+          # internal check in node-llama-cpp re-triggers a redundant
+          # from-source build after the other @node-llama-cpp/* variant
+          # directories are removed. The prebuilt binary still works
+          # correctly (confirmed by this call succeeding), so this isn't a
+          # real failure — just unpruned build byproduct. Sweep once more,
+          # right before packaging, to remove anything this call created.
+          rm -rf node_modules/node-llama-cpp/llama/llama.cpp
+          rm -rf node_modules/node-llama-cpp/llama/localBuilds
+          rm -f node_modules/node-llama-cpp/llama/gitRelease.bundle
           (cd webview-ui && npm ci)
           # Not `npm run package:target`: npm spawns cmd.exe (not bash) to
           # execute package.json scripts on Windows by default (this is
@@ -252,6 +265,13 @@ jobs:
           # already declared (Git Bash), where that syntax works correctly
           # — verified by the get-Llama() check above succeeding on the
           # same runner just before this line.
+          # One more sweep immediately before packaging: cheap insurance
+          # against any of the above steps (webview-ui's own npm ci, etc.)
+          # unexpectedly re-triggering node-llama-cpp's postinstall/build
+          # path again.
+          rm -rf node_modules/node-llama-cpp/llama/llama.cpp
+          rm -rf node_modules/node-llama-cpp/llama/localBuilds
+          rm -f node_modules/node-llama-cpp/llama/gitRelease.bundle
           mkdir -p vsix
           PKG_VERSION=$(node -p "require('./package.json').version")
           npx --yes @vscode/vsce@3.9.2 package --target "$VSCE_TARGET" \
