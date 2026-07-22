@@ -117,11 +117,12 @@ jobs:
             --template template_${{ matrix.suite }}.yaml \
             --language js \
             --suite ${{ matrix.suite }} \
-            --name conformance-js-${SUITE_SLUG}-${{ github.run_id }} \
+            --name conformance-js-${SUITE_SLUG} \
             --region ${{ vars.AWS_REGION }} \
             --history-dir history-${{ matrix.suite }} \
             --report junit \
-            --report-file report-${{ matrix.suite }}
+            --report-file report-${{ matrix.suite }} \
+            --no-cleanup
 
       - name: Upload conformance report
         if: always()
