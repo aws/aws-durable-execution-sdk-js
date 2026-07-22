@@ -40,9 +40,7 @@ createTests({
         expect(traceId).toBeDefined();
 
         const xrayClient = new XRayClient({});
-        const trace = await fetchXRayTrace(xrayClient, traceId!, {
-          delayMs: 30000,
-        });
+        const trace = await fetchXRayTrace(xrayClient, traceId!);
 
         assertSpanNames(trace, ["before-wait", "short-wait", "after-wait"]);
 
@@ -60,8 +58,8 @@ createTests({
         // Local mode: assert spans via InMemorySpanExporter
         const spans = getSerializedSpans();
         // All spans across both invocations: before-wait (op + attempt),
-        // short-wait, invocation, invocation (2nd), after-wait (op + attempt) = 7 spans
-        expect(spans).toHaveLength(7);
+        // short-wait, invocation, invocation (2nd), after-wait (op + attempt) + Workflow = 8 spans
+        expect(spans).toHaveLength(8);
 
         // All spans share the same traceId (deterministic from execution ARN)
         const traceId = spans[0].traceId;

@@ -51,9 +51,7 @@ createTests({
           expect(traceId).toBeDefined();
 
           const xrayClient = new XRayClient({});
-          const trace = await fetchXRayTrace(xrayClient, traceId!, {
-            delayMs: 30000,
-          });
+          const trace = await fetchXRayTrace(xrayClient, traceId!);
 
           assertSpanNames(trace, ["log-step-1", "log-step-2"]);
 
@@ -69,8 +67,8 @@ createTests({
           const spans = getSerializedSpans();
 
           // Single invocation, 2 steps: log-step-1 (op + attempt) +
-          // log-step-2 (op + attempt) + invocation = 5 spans
-          expect(spans).toHaveLength(5);
+          // log-step-2 (op + attempt) + invocation + Workflow = 6 spans
+          expect(spans).toHaveLength(6);
 
           // All spans share the same traceId
           const traceId = spans[0].traceId;

@@ -1,8 +1,13 @@
 // Public exports for @aws/durable-execution-sdk-js-otel
 
-// Plugin
-export { OtelPlugin } from "./plugin";
-export type { OtelPluginConfig } from "./plugin";
+// Execution Plugin
+export { ExecutionOtelPlugin } from "./execution-plugin";
+
+// Shared Plugin Config
+export type { OtelPluginConfig } from "./otel-plugin-config";
+
+// Invocation Plugin
+export { InvocationOtelPlugin } from "./invocation-plugin";
 
 // ID Generator
 export {
@@ -10,6 +15,7 @@ export {
   deriveTraceIdFromXRayRoot,
   deriveTraceIdFromArn,
   deriveSpanIdFromOperationId,
+  deriveWorkflowSpanId,
 } from "./deterministic-id-generator";
 
 // Context Extractors

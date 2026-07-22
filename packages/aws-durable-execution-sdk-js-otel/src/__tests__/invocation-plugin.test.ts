@@ -10,7 +10,7 @@ import {
   propagation,
 } from "@opentelemetry/api";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
-import { OtelPlugin } from "../plugin";
+import { InvocationOtelPlugin } from "../invocation-plugin";
 import {
   DeterministicIdGenerator,
   deriveSpanIdFromOperationId,
@@ -26,7 +26,7 @@ import type {
 
 let exporter: InMemorySpanExporter;
 let provider: NodeTracerProvider;
-let plugin: OtelPlugin;
+let plugin: InvocationOtelPlugin;
 
 const TEST_ARN =
   "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-123";
@@ -124,7 +124,7 @@ beforeEach(() => {
     idGenerator,
   });
   provider.register();
-  plugin = new OtelPlugin({ tracerProvider: provider });
+  plugin = new InvocationOtelPlugin({ tracerProvider: provider });
 });
 
 afterEach(async () => {
@@ -136,7 +136,7 @@ afterEach(async () => {
   propagation.disable();
 });
 
-describe("OtelPlugin", () => {
+describe("InvocationOtelPlugin", () => {
   describe("onInvocationStart", () => {
     it("creates an invocation span with durable.execution.arn attribute", async () => {
       const info = makeInvocationInfo();
@@ -169,9 +169,10 @@ describe("OtelPlugin", () => {
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
       const spans = getExportedSpans();
-      // Should have: op-1, op-2, invocation (all ended)
-      expect(spans.length).toBe(3);
+      // Should have: op-1, op-2, invocation, Workflow (all ended)
+      expect(spans.length).toBe(4);
       expect(findSpan("invocation")).toBeDefined();
+      expect(findSpan("Workflow")).toBeDefined();
     });
 
     it("flushes spans (they appear in exporter)", async () => {
@@ -204,8 +205,8 @@ describe("OtelPlugin", () => {
       expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(
         "arn:second",
       );
-      // Only 1 invocation span from second invocation, no leftover op-1
-      expect(spans.length).toBe(1);
+      // Only invocation span + Workflow span from second invocation, no leftover op-1
+      expect(spans.length).toBe(2);
     });
   });
 
@@ -1285,10 +1286,14 @@ describe("OtelPlugin", () => {
         "arn:aws:lambda:us-east-1:123456789012:function:durable-enrich:$LATEST:child-exec-1";
 
       // Create parent plugin with shared provider
-      const parentPlugin = new OtelPlugin({ tracerProvider: provider });
+      const parentPlugin = new InvocationOtelPlugin({
+        tracerProvider: provider,
+      });
 
       // Create child plugin with shared provider
-      const childPlugin = new OtelPlugin({ tracerProvider: provider });
+      const childPlugin = new InvocationOtelPlugin({
+        tracerProvider: provider,
+      });
 
       // --- Parent workflow execution ---
       await parentPlugin.onInvocationStart(

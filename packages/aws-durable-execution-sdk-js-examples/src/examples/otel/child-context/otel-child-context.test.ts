@@ -39,9 +39,7 @@ createTests({
         expect(traceId).toBeDefined();
 
         const xrayClient = new XRayClient({});
-        const trace = await fetchXRayTrace(xrayClient, traceId!, {
-          delayMs: 30000,
-        });
+        const trace = await fetchXRayTrace(xrayClient, traceId!);
 
         assertSpanNames(trace, ["child-ctx", "inner-step-1", "inner-step-2"]);
 
@@ -64,8 +62,8 @@ createTests({
         // Local mode: assert spans via InMemorySpanExporter
         const spans = getSerializedSpans();
         // All spans: child-ctx (CONTEXT), inner-step-1 (op + attempt),
-        // inner-step-2 (op + attempt), invocation = 6 spans
-        expect(spans.length).toBe(6);
+        // inner-step-2 (op + attempt), invocation + Workflow = 7 spans
+        expect(spans.length).toBe(7);
 
         // All spans share the same traceId
         const traceId = spans[0].traceId;

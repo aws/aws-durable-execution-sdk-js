@@ -1,6 +1,6 @@
 import { ExecutionStatus } from "@aws/durable-execution-sdk-js-testing";
 import { XRayClient } from "@aws-sdk/client-xray";
-import { handler } from "./otel-xray-e2e";
+import { handler } from "./otel-adot-invocation-xray-e2e";
 import { createTests } from "../../../utils/test-helper";
 import {
   fetchXRayTrace,
@@ -37,21 +37,21 @@ createTests({
         expect(traceId).toMatch(/^[0-9a-f]{32}$/);
 
         const xrayClient = new XRayClient({});
-        const trace = await fetchXRayTrace(xrayClient, traceId!, {
-          delayMs: 30000,
-        });
+        const trace = await fetchXRayTrace(xrayClient, traceId!);
 
         // Assert span names exist
         assertSpanNames(trace, [
           "fetch-data",
+          "short-pause",
           "process-data",
           "child-operations",
           "inner-step",
+          "fails-then-succeeds",
         ]);
 
-        // Assert hierarchy: child-operations contains inner-step
+        // Assert hierarchy: child-operations contains inner-step and fails-then-succeeds
         assertSpanHierarchy(trace, {
-          "child-operations": ["inner-step"],
+          "child-operations": ["inner-step", "fails-then-succeeds"],
         });
 
         // Assert span attributes
@@ -67,9 +67,14 @@ createTests({
         assertSpanAttributes(trace, "inner-step", {
           "durable.operation.type": "STEP",
         });
+        assertSpanAttributes(trace, "fails-then-succeeds", {
+          "durable.operation.type": "STEP",
+        });
       }
 
-      assertEventSignatures(execution);
+      assertEventSignatures(execution, undefined, {
+        invocationCompletedDifference: 3,
+      });
     });
   },
 });

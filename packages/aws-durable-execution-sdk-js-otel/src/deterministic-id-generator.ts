@@ -135,3 +135,34 @@ export function deriveSpanIdFromOperationId(
     .digest("hex")
     .slice(0, 16);
 }
+
+/**
+ * Derive a deterministic span ID for a Workflow_Span from an execution ARN.
+ * Hashes `"workflow:" + executionArn` with SHA-256 and truncates to the first
+ * 16 lowercase hex characters.
+ *
+ * The "workflow:" prefix acts as a salt to ensure the resulting span ID is
+ * distinct from IDs produced by `deriveSpanIdFromOperationId` for the same ARN.
+ *
+ * @param executionArn - The execution ARN string (must be non-empty)
+ * @returns A 16-char lowercase hex string, never equal to "0000000000000000"
+ * @throws Error if the execution ARN is an empty string
+ */
+export function deriveWorkflowSpanId(executionArn: string): string {
+  if (executionArn === "") {
+    throw new Error("Execution ARN must be non-empty");
+  }
+
+  const spanId = createHash("sha256")
+    .update("workflow:" + executionArn)
+    .digest("hex")
+    .slice(0, 16);
+
+  // Ensure the result is never all-zeros (astronomically unlikely with SHA-256,
+  // but guaranteed by contract)
+  if (spanId === "0000000000000000") {
+    return "0000000000000001";
+  }
+
+  return spanId;
+}

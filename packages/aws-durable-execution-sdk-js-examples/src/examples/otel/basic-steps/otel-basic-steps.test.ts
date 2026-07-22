@@ -38,9 +38,7 @@ createTests({
         expect(traceId).toBeDefined();
 
         const xrayClient = new XRayClient({});
-        const trace = await fetchXRayTrace(xrayClient, traceId!, {
-          delayMs: 30000,
-        });
+        const trace = await fetchXRayTrace(xrayClient, traceId!);
 
         assertSpanNames(trace, ["step-1", "step-2", "step-3"]);
 
@@ -57,8 +55,8 @@ createTests({
       } else {
         // Local mode: assert spans via InMemorySpanExporter
         const spans = getSerializedSpans();
-        // The plugin produces 7 spans: 3 operation spans + 3 attempt spans + 1 invocation span
-        expect(spans).toHaveLength(7);
+        // The plugin produces 8 spans: 3 operation spans + 3 attempt spans + 1 invocation span + 1 Workflow span
+        expect(spans).toHaveLength(8);
 
         // Assert all spans share the same traceId
         const traceId = spans[0].traceId;

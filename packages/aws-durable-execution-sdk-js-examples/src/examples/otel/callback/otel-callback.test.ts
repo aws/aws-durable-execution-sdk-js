@@ -48,9 +48,7 @@ createTests({
         expect(traceId).toBeDefined();
 
         const xrayClient = new XRayClient({});
-        const trace = await fetchXRayTrace(xrayClient, traceId!, {
-          delayMs: 30000,
-        });
+        const trace = await fetchXRayTrace(xrayClient, traceId!);
 
         assertSpanNames(trace, [
           "before-callback",
@@ -73,8 +71,8 @@ createTests({
         const spans = getSerializedSpans();
         // All spans across all invocations: before-callback (op + attempt),
         // STEP (submitter op + attempt), CALLBACK, my-callback (CONTEXT), invocation,
-        // my-callback (continuation), after-callback (op + attempt), invocation (2nd) = 11 spans
-        expect(spans).toHaveLength(11);
+        // my-callback (continuation), after-callback (op + attempt), invocation (2nd) + Workflow = 12 spans
+        expect(spans).toHaveLength(12);
 
         // All spans share the same traceId
         const traceId = spans[0].traceId;
