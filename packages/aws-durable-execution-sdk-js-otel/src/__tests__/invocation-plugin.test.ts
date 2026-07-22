@@ -324,69 +324,27 @@ describe("InvocationOtelPlugin", () => {
     });
   });
 
-  describe("Parent-child resolution via active context", () => {
-    it("operation becomes child of invocation span via wrapInvocation context", async () => {
+  describe("Parent-child resolution with parentId", () => {
+    it("operation with parentId in map becomes child of that parent span", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
-
-      await plugin.wrapInvocation(makeInvocationInfo(), async () => {
-        await plugin.onOperationStart(
-          makeOperationInfo({ id: "root-op", name: "root-child" }),
-        );
-        await plugin.onOperationEnd(
-          makeOperationEndInfo({ id: "root-op", name: "root-child" }),
-        );
-        return { output: undefined } as any;
-      });
-
-      await plugin.onInvocationEnd(makeInvocationEndInfo());
-
-      const invocationSpan = findSpan("invocation");
-      const rootOpSpan = findSpan("root-child");
-      expect(invocationSpan).toBeDefined();
-      expect(rootOpSpan).toBeDefined();
-      expect(rootOpSpan!.parentSpanContext?.spanId).toBe(
-        invocationSpan!.spanContext().spanId,
+      // Start parent operation
+      await plugin.onOperationStart(
+        makeOperationInfo({ id: "parent-op", name: "parent" }),
       );
-    });
-
-    it("nested operation becomes child of parent operation via wrapChildContextFn context", async () => {
-      await plugin.onInvocationStart(makeInvocationInfo());
-
-      await plugin.wrapInvocation(makeInvocationInfo(), async () => {
-        const parentOpInfo = makeOperationInfo({
-          id: "parent-op",
-          name: "parent",
-        });
-        await plugin.onOperationStart(parentOpInfo);
-
-        // wrapChildContextFn sets the parent operation as active context
-        plugin.wrapChildContextFn(parentOpInfo, () => {
-          // Synchronously start the child within the parent's context
-          // (in real usage this is async but the context propagation is synchronous)
-        });
-
-        // Start child operation inside the parent's context via wrapChildContextFn
-        const childResult = plugin.wrapChildContextFn(parentOpInfo, () => {
-          plugin.onOperationStart(
-            makeOperationInfo({
-              id: "child-op",
-              name: "child",
-              parentId: "parent-op",
-            }),
-          );
-          return "done";
-        });
-        expect(childResult).toBe("done");
-
-        await plugin.onOperationEnd(
-          makeOperationEndInfo({ id: "child-op", name: "child" }),
-        );
-        await plugin.onOperationEnd(
-          makeOperationEndInfo({ id: "parent-op", name: "parent" }),
-        );
-        return { output: undefined } as any;
-      });
-
+      // Start child operation with parentId referencing parent-op
+      await plugin.onOperationStart(
+        makeOperationInfo({
+          id: "child-op",
+          name: "child",
+          parentId: "parent-op",
+        }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({ id: "child-op", name: "child" }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({ id: "parent-op", name: "parent" }),
+      );
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
       const parentSpan = findSpan("parent");
@@ -398,9 +356,9 @@ describe("InvocationOtelPlugin", () => {
       );
     });
 
-    it("operation without active context has no explicit parent", async () => {
+    it("operation with parentId NOT in map becomes child of invocation span", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
-      // Call onOperationStart directly without wrapInvocation context
+      // Start operation with parentId that doesn't exist in map
       await plugin.onOperationStart(
         makeOperationInfo({
           id: "orphan-op",
@@ -413,10 +371,32 @@ describe("InvocationOtelPlugin", () => {
       );
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
+      const invocationSpan = findSpan("invocation");
       const orphanSpan = findSpan("orphan");
+      expect(invocationSpan).toBeDefined();
       expect(orphanSpan).toBeDefined();
-      // Without active context, parent comes from whatever context.active() resolves to
-      // (in tests with no global context set, this is the root)
+      expect(orphanSpan!.parentSpanContext?.spanId).toBe(
+        invocationSpan!.spanContext().spanId,
+      );
+    });
+
+    it("operation with no parentId becomes child of invocation span", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onOperationStart(
+        makeOperationInfo({ id: "root-op", name: "root-child" }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({ id: "root-op", name: "root-child" }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      const invocationSpan = findSpan("invocation");
+      const rootOpSpan = findSpan("root-child");
+      expect(invocationSpan).toBeDefined();
+      expect(rootOpSpan).toBeDefined();
+      expect(rootOpSpan!.parentSpanContext?.spanId).toBe(
+        invocationSpan!.spanContext().spanId,
+      );
     });
   });
 
@@ -1316,43 +1296,41 @@ describe("InvocationOtelPlugin", () => {
       });
 
       // --- Parent workflow execution ---
-      const parentInfo = makeInvocationInfo({ executionArn: PARENT_ARN });
-      await parentPlugin.onInvocationStart(parentInfo);
-      await parentPlugin.wrapInvocation(parentInfo, async () => {
-        await parentPlugin.onOperationStart(
-          makeOperationInfo({
-            id: "1",
-            name: "validate",
-            type: "STEP",
-            isReplay: false,
-          }),
-        );
-        await parentPlugin.onOperationEnd(
-          makeOperationEndInfo({ id: "1", name: "validate", type: "STEP" }),
-        );
-        return { output: undefined } as any;
-      });
+      await parentPlugin.onInvocationStart(
+        makeInvocationInfo({ executionArn: PARENT_ARN }),
+      );
+      // Parent has operation at position "1" (same as child will have)
+      await parentPlugin.onOperationStart(
+        makeOperationInfo({
+          id: "1",
+          name: "validate",
+          type: "STEP",
+          isReplay: false,
+        }),
+      );
+      await parentPlugin.onOperationEnd(
+        makeOperationEndInfo({ id: "1", name: "validate", type: "STEP" }),
+      );
       await parentPlugin.onInvocationEnd(
         makeInvocationEndInfo({ executionArn: PARENT_ARN }),
       );
 
       // --- Child workflow execution ---
-      const childInfo = makeInvocationInfo({ executionArn: CHILD_ARN });
-      await childPlugin.onInvocationStart(childInfo);
-      await childPlugin.wrapInvocation(childInfo, async () => {
-        await childPlugin.onOperationStart(
-          makeOperationInfo({
-            id: "1",
-            name: "enrich",
-            type: "STEP",
-            isReplay: false,
-          }),
-        );
-        await childPlugin.onOperationEnd(
-          makeOperationEndInfo({ id: "1", name: "enrich", type: "STEP" }),
-        );
-        return { output: undefined } as any;
-      });
+      await childPlugin.onInvocationStart(
+        makeInvocationInfo({ executionArn: CHILD_ARN }),
+      );
+      // Child also has operation at position "1"
+      await childPlugin.onOperationStart(
+        makeOperationInfo({
+          id: "1",
+          name: "enrich",
+          type: "STEP",
+          isReplay: false,
+        }),
+      );
+      await childPlugin.onOperationEnd(
+        makeOperationEndInfo({ id: "1", name: "enrich", type: "STEP" }),
+      );
       await childPlugin.onInvocationEnd(
         makeInvocationEndInfo({ executionArn: CHILD_ARN }),
       );

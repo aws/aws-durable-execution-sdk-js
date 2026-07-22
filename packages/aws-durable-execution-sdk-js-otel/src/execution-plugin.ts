@@ -268,7 +268,22 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     );
     const spanName = info.name ?? info.type;
 
-    const parentContext = context.active();
+    // Resolve parent span: check for Context_Execution span first (for nested ops),
+    // then fall back to operation span, then Workflow_Span
+    let parentSpan: Span | undefined;
+    if (info.parentId) {
+      // Prefer the Context_Execution span (child operations inside runInChildContext)
+      parentSpan =
+        this.spanMap.get(`ctx-exec:${info.parentId}`) ??
+        this.spanMap.get(info.parentId);
+    }
+    if (!parentSpan) {
+      parentSpan = this.workflowSpan;
+    }
+
+    const parentContext = parentSpan
+      ? trace.setSpan(context.active(), parentSpan)
+      : context.active();
 
     const attributes: Record<string, string> = {
       "durable.execution.arn": this.executionArn,
@@ -332,6 +347,13 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       { attributes, links },
       parentContext,
       (span: Span) => {
+        // Store the Context_Execution span in spanMap under a dedicated key
+        // so nested operations can find it via info.parentId lookup.
+        // We use the same info.id key — nested operations' parentId will reference
+        // this CONTEXT operation's ID, and they should be children of the execution span.
+        const ctxExecKey = `ctx-exec:${info.id}`;
+        this.spanMap.set(ctxExecKey, span);
+
         try {
           const result = fn();
           // Handle async results (Promises)
@@ -339,6 +361,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
             return (result as Promise<unknown>).then(
               (value) => {
                 span.end();
+                this.spanMap.delete(ctxExecKey);
                 return value;
               },
               (error) => {
@@ -351,12 +374,14 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
                   span.recordException(error);
                 }
                 span.end();
+                this.spanMap.delete(ctxExecKey);
                 throw error;
               },
             );
           }
           // Synchronous result
           span.end();
+          this.spanMap.delete(ctxExecKey);
           return result;
         } catch (error) {
           span.setStatus({
@@ -367,6 +392,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
             span.recordException(error);
           }
           span.end();
+          this.spanMap.delete(ctxExecKey);
           throw error;
         }
       },
