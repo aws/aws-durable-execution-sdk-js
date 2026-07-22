@@ -567,6 +567,180 @@ describe("InvocationOtelPlugin", () => {
       expect(attemptSpan!.name).toBe("step attempt 1");
     });
 
+    it("handles interleaved attempt starts and ends for different operations", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onOperationStart(
+        makeOperationInfo({ id: "op-a", name: "step-a", type: "step" }),
+      );
+      await plugin.onOperationStart(
+        makeOperationInfo({ id: "op-b", name: "step-b", type: "step" }),
+      );
+
+      // Start attempt for op-a
+      await plugin.onOperationAttemptStart(
+        makeAttemptInfo({
+          id: "op-a",
+          name: "step-a",
+          type: "step",
+          attempt: 1,
+        }),
+      );
+      // Start attempt for op-b (interleaved)
+      await plugin.onOperationAttemptStart(
+        makeAttemptInfo({
+          id: "op-b",
+          name: "step-b",
+          type: "step",
+          attempt: 1,
+        }),
+      );
+
+      // End attempt for op-a first
+      await plugin.onOperationAttemptEnd(
+        makeAttemptEndInfo({
+          id: "op-a",
+          attempt: 1,
+          outcome: "SUCCEEDED" as any,
+        }),
+      );
+      // End attempt for op-b second
+      await plugin.onOperationAttemptEnd(
+        makeAttemptEndInfo({
+          id: "op-b",
+          attempt: 1,
+          outcome: "FAILED" as any,
+          error: new Error("op-b failed"),
+        }),
+      );
+
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({ id: "op-a", name: "step-a" }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({ id: "op-b", name: "step-b" }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      const spans = getExportedSpans();
+
+      // Find attempt spans by operation ID
+      const attemptA = spans.find(
+        (s) =>
+          s.attributes["durable.operation.id"] === "op-a" &&
+          s.attributes["durable.operation.attempt"] === 1,
+      );
+      const attemptB = spans.find(
+        (s) =>
+          s.attributes["durable.operation.id"] === "op-b" &&
+          s.attributes["durable.operation.attempt"] === 1,
+      );
+
+      expect(attemptA).toBeDefined();
+      expect(attemptB).toBeDefined();
+
+      // Each attempt span should have its own correct outcome
+      expect(attemptA!.attributes["durable.attempt.outcome"]).toBe("SUCCEEDED");
+      expect(attemptB!.attributes["durable.attempt.outcome"]).toBe("FAILED");
+
+      // op-b attempt should have error status
+      expect(attemptB!.status.code).toBe(SpanStatusCode.ERROR);
+      expect(attemptB!.status.message).toBe("op-b failed");
+
+      // op-a attempt should NOT have error status
+      expect(attemptA!.status.code).not.toBe(SpanStatusCode.ERROR);
+
+      // Each attempt should be parented to its own operation span
+      const opASpan = spans.find(
+        (s) =>
+          s.name === "step-a" && !s.attributes["durable.operation.attempt"],
+      );
+      const opBSpan = spans.find(
+        (s) =>
+          s.name === "step-b" && !s.attributes["durable.operation.attempt"],
+      );
+      expect(attemptA!.parentSpanContext?.spanId).toBe(
+        opASpan!.spanContext().spanId,
+      );
+      expect(attemptB!.parentSpanContext?.spanId).toBe(
+        opBSpan!.spanContext().spanId,
+      );
+    });
+
+    it("handles interleaved attempts with different attempt numbers for the same operation", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onOperationStart(
+        makeOperationInfo({ id: "op-multi", name: "multi-step", type: "step" }),
+      );
+
+      // Start attempt 1
+      await plugin.onOperationAttemptStart(
+        makeAttemptInfo({
+          id: "op-multi",
+          name: "multi-step",
+          type: "step",
+          attempt: 1,
+        }),
+      );
+      // End attempt 1
+      await plugin.onOperationAttemptEnd(
+        makeAttemptEndInfo({
+          id: "op-multi",
+          attempt: 1,
+          outcome: "FAILED" as any,
+          error: new Error("retry needed"),
+        }),
+      );
+
+      // Start attempt 2
+      await plugin.onOperationAttemptStart(
+        makeAttemptInfo({
+          id: "op-multi",
+          name: "multi-step",
+          type: "step",
+          attempt: 2,
+        }),
+      );
+      // End attempt 2
+      await plugin.onOperationAttemptEnd(
+        makeAttemptEndInfo({
+          id: "op-multi",
+          attempt: 2,
+          outcome: "SUCCEEDED" as any,
+        }),
+      );
+
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({ id: "op-multi", name: "multi-step" }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      const spans = getExportedSpans();
+
+      const attempt1 = spans.find(
+        (s) =>
+          s.attributes["durable.operation.id"] === "op-multi" &&
+          s.attributes["durable.operation.attempt"] === 1,
+      );
+      const attempt2 = spans.find(
+        (s) =>
+          s.attributes["durable.operation.id"] === "op-multi" &&
+          s.attributes["durable.operation.attempt"] === 2,
+      );
+
+      expect(attempt1).toBeDefined();
+      expect(attempt2).toBeDefined();
+
+      // Attempt 1 failed, attempt 2 succeeded
+      expect(attempt1!.attributes["durable.attempt.outcome"]).toBe("FAILED");
+      expect(attempt1!.status.code).toBe(SpanStatusCode.ERROR);
+      expect(attempt2!.attributes["durable.attempt.outcome"]).toBe("SUCCEEDED");
+      expect(attempt2!.status.code).not.toBe(SpanStatusCode.ERROR);
+
+      // Both should have correct names
+      expect(attempt1!.name).toBe("multi-step attempt 1");
+      expect(attempt2!.name).toBe("multi-step attempt 2");
+    });
+
     it("attempt span includes durable.attempt.outcome attribute on success", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onOperationStart(
