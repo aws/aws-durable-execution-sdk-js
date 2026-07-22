@@ -239,18 +239,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
       ambientSpanContext.spanId,
     );
 
-    // Assertion 6: Context_Execution_Span has link to the ambient invocation span
-    const ctxExecSpan = findSpan(exporter, "child-context execution");
-    expect(ctxExecSpan).toBeDefined();
-    expect(ctxExecSpan!.links.length).toBeGreaterThan(0);
-    expect(ctxExecSpan!.links[0].context.traceId).toBe(
-      ambientSpanContext.traceId,
-    );
-    expect(ctxExecSpan!.links[0].context.spanId).toBe(
-      ambientSpanContext.spanId,
-    );
-
-    // Assertion 7: All child spans are parented under Workflow_Span or its descendants (not ambient)
+    // Assertion 6: All child spans are parented under Workflow_Span or its descendants (not ambient)
     const workflowSpanId = workflowSpan!.spanContext().spanId;
     expect(opSpan!.parentSpanContext?.spanId).toBe(workflowSpanId);
 
@@ -262,10 +251,6 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     const ctxOpSpan = findSpan(exporter, "child-context");
     expect(ctxOpSpan).toBeDefined();
     expect(ctxOpSpan!.parentSpanContext?.spanId).toBe(workflowSpanId);
-
-    // Context execution span is child of the CONTEXT operation span
-    const ctxOpSpanId = ctxOpSpan!.spanContext().spanId;
-    expect(ctxExecSpan!.parentSpanContext?.spanId).toBe(ctxOpSpanId);
   });
 
   it("does not shutdown the provider (only forceFlush is called)", async () => {

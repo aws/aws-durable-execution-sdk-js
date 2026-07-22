@@ -268,16 +268,11 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     );
     const spanName = info.name ?? info.type;
 
-    // Resolve parent span: check for Context_Execution span first (for nested ops),
-    // then fall back to operation span, then Workflow_Span
+    // Resolve parent span: use parentId from map, or fall back to Workflow_Span
     let parentSpan: Span | undefined;
-    if (info.parentId) {
-      // Prefer the Context_Execution span (child operations inside runInChildContext)
-      parentSpan =
-        this.spanMap.get(`ctx-exec:${info.parentId}`) ??
-        this.spanMap.get(info.parentId);
-    }
-    if (!parentSpan) {
+    if (info.parentId && this.spanMap.has(info.parentId)) {
+      parentSpan = this.spanMap.get(info.parentId);
+    } else {
       parentSpan = this.workflowSpan;
     }
 
@@ -315,88 +310,10 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   wrapChildContextFn(info: OperationInfo, fn: () => unknown): unknown {
     const operationSpan = this.spanMap.get(info.id);
 
-    if (info.type !== "CONTEXT") {
-      // Non-CONTEXT: just set the operation span as active context (same as InvocationOtelPlugin)
-      if (!operationSpan) {
-        return fn();
-      }
-      return context.with(trace.setSpan(context.active(), operationSpan), fn);
+    if (!operationSpan) {
+      return fn();
     }
-
-    // CONTEXT type: create Context_Execution_Span using startActiveSpan
-    // so nested operation spans are automatically children of the execution span
-    const baseName = info.name ?? info.type;
-    const spanName = `${baseName} execution`;
-
-    // Parent is the CONTEXT Operation_Span
-    const parentContext = operationSpan
-      ? trace.setSpan(context.active(), operationSpan)
-      : context.active();
-
-    const attributes: Record<string, string> = {
-      "durable.execution.arn": this.executionArn,
-      "durable.operation.id": info.id,
-      "durable.operation.type": info.type,
-    };
-    if (info.name) attributes["durable.operation.name"] = info.name;
-
-    const links = this.buildInvocationLinks();
-
-    return this.tracer.startActiveSpan(
-      spanName,
-      { attributes, links },
-      parentContext,
-      (span: Span) => {
-        // Store the Context_Execution span in spanMap under a dedicated key
-        // so nested operations can find it via info.parentId lookup.
-        // We use the same info.id key — nested operations' parentId will reference
-        // this CONTEXT operation's ID, and they should be children of the execution span.
-        const ctxExecKey = `ctx-exec:${info.id}`;
-        this.spanMap.set(ctxExecKey, span);
-
-        try {
-          const result = fn();
-          // Handle async results (Promises)
-          if (result && typeof (result as any).then === "function") {
-            return (result as Promise<unknown>).then(
-              (value) => {
-                span.end();
-                this.spanMap.delete(ctxExecKey);
-                return value;
-              },
-              (error) => {
-                span.setStatus({
-                  code: SpanStatusCode.ERROR,
-                  message:
-                    error instanceof Error ? error.message : String(error),
-                });
-                if (error instanceof Error) {
-                  span.recordException(error);
-                }
-                span.end();
-                this.spanMap.delete(ctxExecKey);
-                throw error;
-              },
-            );
-          }
-          // Synchronous result
-          span.end();
-          this.spanMap.delete(ctxExecKey);
-          return result;
-        } catch (error) {
-          span.setStatus({
-            code: SpanStatusCode.ERROR,
-            message: error instanceof Error ? error.message : String(error),
-          });
-          if (error instanceof Error) {
-            span.recordException(error);
-          }
-          span.end();
-          this.spanMap.delete(ctxExecKey);
-          throw error;
-        }
-      },
-    );
+    return context.with(trace.setSpan(context.active(), operationSpan), fn);
   }
 
   async onOperationEnd(info: OperationEndInfo): Promise<void> {

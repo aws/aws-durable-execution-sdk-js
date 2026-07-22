@@ -211,58 +211,6 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
       expect(linkSpanContext.traceId).toBe(ambientSpan.spanContext().traceId);
       expect(linkSpanContext.spanId).toBe(ambientSpan.spanContext().spanId);
     });
-
-    it("Context_Execution_Span has a link to the ambient invocation span", async () => {
-      const plugin = new ExecutionOtelPlugin({
-        tracerProvider: provider,
-        useDefaultTracerProvider: true,
-      });
-
-      const ambientTracer = provider.getTracer("ambient-test");
-      const ambientSpan = ambientTracer.startSpan("ambient-invocation");
-      const ambientContext = trace.setSpan(ROOT_CONTEXT, ambientSpan);
-
-      await context.with(ambientContext, async () => {
-        await plugin.onInvocationStart(makeInvocationInfo());
-      });
-
-      const opInfo = makeOperationInfo({
-        id: "op-ctx-link",
-        name: "ctx-link-op",
-        type: "CONTEXT",
-      });
-      await plugin.onOperationStart(opInfo);
-
-      // wrapChildContextFn for CONTEXT type creates a Context_Execution_Span
-      // startActiveSpan passes the span as the first arg to the callback
-      plugin.wrapChildContextFn(opInfo, (...args: unknown[]) => {
-        // End the execution span so it gets exported
-        const span = args[0] as any;
-        if (span && typeof span.end === "function") {
-          span.end();
-        }
-      });
-
-      await plugin.onOperationEnd(
-        makeOperationEndInfo({
-          id: "op-ctx-link",
-          name: "ctx-link-op",
-          type: "CONTEXT",
-        }),
-      );
-      await plugin.onInvocationEnd(makeInvocationEndInfo());
-
-      ambientSpan.end();
-
-      // Find the Context_Execution_Span (named "<name> execution")
-      const ctxExecSpan = findSpan(exporter, "ctx-link-op execution");
-      expect(ctxExecSpan).toBeDefined();
-      expect(ctxExecSpan!.links.length).toBeGreaterThan(0);
-
-      const linkSpanContext = ctxExecSpan!.links[0].context;
-      expect(linkSpanContext.traceId).toBe(ambientSpan.spanContext().traceId);
-      expect(linkSpanContext.spanId).toBe(ambientSpan.spanContext().spanId);
-    });
   });
 
   describe("buildInvocationLinks() returns link to explicit Invocation_Span when not in default-provider mode", () => {
