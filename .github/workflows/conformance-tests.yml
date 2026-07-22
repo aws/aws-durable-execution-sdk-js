@@ -27,6 +27,12 @@ jobs:
   conformance:
     name: conformance (${{ matrix.suite }})
     runs-on: ubuntu-latest
+    # Global lock per suite stack: runs from different branches/PRs share the
+    # persistent conformance-js-<suite> stacks, so deploys to the same stack
+    # must never overlap. Queued (not cancelled) so every run still executes.
+    concurrency:
+      group: conformance-stack-${{ matrix.suite }}
+      cancel-in-progress: false
     strategy:
       fail-fast: false
       matrix:
@@ -105,13 +111,6 @@ jobs:
           echo "SUITE_SLUG=$(echo '${{ matrix.suite }}' | tr '_' '-')" >> "$GITHUB_ENV"
 
       - name: Run conformance suite
-        env:
-          # Same env the SAM-based integration deploy passes. LAMBDA_ENDPOINT is
-          # the durable-execution endpoint override; the role/account are used by
-          # the SDK/tooling when present.
-          LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
-          TEST_ACCOUNT_ID: ${{ secrets.TEST_ACCOUNT_ID }}
-          TEST_LAMBDA_EXECUTION_ROLE_ARN: ${{ secrets.TEST_LAMBDA_EXECUTION_ROLE_ARN }}
         run: |
           python -m aws_durable_execution_conformance_tests.app \
             --template template_${{ matrix.suite }}.yaml \
