@@ -532,10 +532,8 @@ Workflow_Span (deterministic ID from execution ARN, exported on terminal status 
 ├── Operation_Span: "cooldown" (WAIT)
 │   └── [link → Invocation_Span]
 └── Operation_Span: "process-order" (CONTEXT)
-    ├── Context_Execution_Span: "process-order execution 1"
-    │   ├── (nested operations from child context)
-    │   └── HTTP Span: POST https://api.example.com/orders
-    ├── Context_Execution_Span: "process-order execution 2"
+    ├── (nested operations from child context)
+    ├── HTTP Span: POST https://api.example.com/orders
     └── [link → Invocation_Span]
 ```
 
