@@ -415,11 +415,7 @@ OPENTELEMETRY_COLLECTOR_CONFIG_URI=/var/task/collector.yaml
 
 ### Why Use a Collector?
 
-- **Batching** — aggregates spans into efficient export batches
-- **Retry with backoff** — handles transient failures without blocking your function
-- **Buffering during Lambda freeze/thaw** — the collector extension remains active during freeze cycles
-- **Protocol translation** — converts OTLP to X-Ray segment format
-- **No SigV4 in your code** — the collector handles AWS authentication
+Using the community collector-only layer allows you to export traces directly to third-party observability platforms (such as Datadog, Honeycomb, or Grafana) without needing to first send them to AWS and then re-export from CloudWatch or X-Ray.
 
 ---
 
