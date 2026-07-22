@@ -27,6 +27,12 @@ jobs:
   conformance:
     name: conformance (${{ matrix.suite }})
     runs-on: ubuntu-latest
+    # Global lock per suite stack: runs from different branches/PRs share the
+    # persistent conformance-js-<suite> stacks, so deploys to the same stack
+    # must never overlap. Queued (not cancelled) so every run still executes.
+    concurrency:
+      group: conformance-stack-${{ matrix.suite }}
+      cancel-in-progress: false
     strategy:
       fail-fast: false
       matrix:
