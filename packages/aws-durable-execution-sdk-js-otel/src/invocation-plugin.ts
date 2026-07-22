@@ -51,7 +51,6 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   private invocationSpan: Span | undefined;
   private workflowSpan: Span | undefined;
   private executionArn: string = "";
-  private attemptSpan: Span | undefined;
 
   constructor(config?: OtelPluginConfig) {
     const instrumentationName =
@@ -176,7 +175,6 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     this.invocationSpan = undefined;
     this.workflowSpan = undefined;
     this.executionArn = "";
-    this.attemptSpan = undefined;
   }
 
   async onOperationStart(info: OperationInfo): Promise<void> {
@@ -401,28 +399,33 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       parentContext,
     );
 
-    this.attemptSpan = attemptSpan;
+    this.spanMap.set(this.attemptSpanKey(info.id, info.attempt), attemptSpan);
   }
 
-  wrapOperationAttemptFn(_info: AttemptInfo, fn: () => unknown): unknown {
-    if (!this.attemptSpan) {
+  wrapOperationAttemptFn(info: AttemptInfo, fn: () => unknown): unknown {
+    const attemptSpan = this.spanMap.get(
+      this.attemptSpanKey(info.id, info.attempt),
+    );
+    if (!attemptSpan) {
       return fn();
     }
-    return context.with(trace.setSpan(context.active(), this.attemptSpan), fn);
+    return context.with(trace.setSpan(context.active(), attemptSpan), fn);
   }
 
   async onOperationAttemptEnd(info: AttemptEndInfo): Promise<void> {
-    if (this.attemptSpan) {
-      this.attemptSpan.setAttribute("durable.attempt.outcome", info.outcome);
+    const key = this.attemptSpanKey(info.id, info.attempt);
+    const attemptSpan = this.spanMap.get(key);
+    if (attemptSpan) {
+      attemptSpan.setAttribute("durable.attempt.outcome", info.outcome);
       if (info.error) {
-        this.attemptSpan.setStatus({
+        attemptSpan.setStatus({
           code: SpanStatusCode.ERROR,
           message: info.error.message,
         });
-        this.attemptSpan.recordException(info.error);
+        attemptSpan.recordException(info.error);
       }
-      this.attemptSpan.end(info.endTimestamp);
-      this.attemptSpan = undefined;
+      attemptSpan.end(info.endTimestamp);
+      this.spanMap.delete(key);
     }
   }
 
@@ -441,5 +444,9 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       spanId: spanContext.spanId,
       otelTraceSampled: (spanContext.traceFlags & 1) !== 0,
     };
+  }
+
+  private attemptSpanKey(operationId: string, attempt: number): string {
+    return `attempt:${operationId}:${attempt}`;
   }
 }
