@@ -67,10 +67,23 @@ def _represent_cfn_tag(dumper: CfnDumper, data: CfnTag) -> yaml.Node:
 CfnDumper.add_representer(CfnTag, _represent_cfn_tag)
 
 
+def _safe_load_cfn(stream: object) -> object:
+    """Safely load a CloudFormation template.
+
+    Equivalent to yaml.safe_load (CfnLoader extends yaml.SafeLoader) while
+    additionally preserving CloudFormation short-form tags.
+    """
+    loader = CfnLoader(stream)
+    try:
+        return loader.get_single_data()
+    finally:
+        loader.dispose()
+
+
 def inject(template_path: str, role_arn: str) -> int:
     """Rewrite template_path in place; return the number of functions updated."""
     with open(template_path, encoding="utf-8") as f:
-        doc = yaml.load(f, Loader=CfnLoader)  # noqa: S506 - CfnLoader extends SafeLoader
+        doc = _safe_load_cfn(f)
 
     resources = doc.get("Resources")
     if not isinstance(resources, dict):
