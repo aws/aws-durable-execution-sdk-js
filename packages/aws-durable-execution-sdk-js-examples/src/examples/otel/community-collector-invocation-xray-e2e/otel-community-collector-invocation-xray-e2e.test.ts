@@ -100,11 +100,11 @@ createTests({
         expect(invocationSpan).toBeDefined();
         expect(invocationSpan!.parentSpanId).toBe(workflowSpan!.spanId);
 
-        // Filter to operation spans: have durable.operation.type but NOT durable.operation.attempt
+        // Filter to operation spans: have durable.operation.type but NOT durable.attempt.outcome
         const operationSpans = spans.filter(
           (s) =>
             s.attributes["durable.operation.type"] !== undefined &&
-            s.attributes["durable.operation.attempt"] === undefined,
+            s.attributes["durable.attempt.outcome"] === undefined,
         );
 
         // Verify operation spans exist with correct attributes by durable.operation.name

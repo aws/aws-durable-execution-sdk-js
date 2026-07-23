@@ -66,7 +66,7 @@ createTests({
         const opSpans = spans.filter(
           (s) =>
             s.attributes["durable.operation.type"] === "STEP" &&
-            s.attributes["durable.operation.attempt"] === undefined,
+            s.attributes["durable.attempt.outcome"] === undefined,
         );
         expect(opSpans).toHaveLength(3);
 
@@ -89,7 +89,7 @@ createTests({
 
         // Attempt spans are children of their respective operation spans
         const attemptSpans = spans.filter(
-          (s) => s.attributes["durable.operation.attempt"] !== undefined,
+          (s) => s.attributes["durable.attempt.outcome"] !== undefined,
         );
         expect(attemptSpans).toHaveLength(3);
 
@@ -99,7 +99,7 @@ createTests({
             (op) => op.spanId === attemptSpan.parentSpanId,
           );
           expect(parentOp).toBeDefined();
-          expect(attemptSpan.attributes["durable.operation.attempt"]).toBe(1);
+          expect(attemptSpan.attributes["durable.attempt.number"]).toBe(1);
         }
       }
 

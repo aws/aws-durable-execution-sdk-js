@@ -91,14 +91,14 @@ createTests({
           (s) =>
             s.attributes["durable.operation.name"] === "before-invoke" &&
             s.attributes["durable.operation.type"] === "STEP" &&
-            s.attributes["durable.operation.attempt"] === undefined,
+            s.attributes["durable.attempt.outcome"] === undefined,
         );
         expect(beforeInvokeOp).toBeDefined();
 
         const beforeInvokeAttempt = spans.find(
           (s) =>
             s.parentSpanId === beforeInvokeOp!.spanId &&
-            s.attributes["durable.operation.attempt"] === 1,
+            s.attributes["durable.attempt.number"] === 1,
         );
         expect(beforeInvokeAttempt).toBeDefined();
 
@@ -119,14 +119,14 @@ createTests({
           (s) =>
             s.attributes["durable.operation.name"] === "after-invoke" &&
             s.attributes["durable.operation.type"] === "STEP" &&
-            s.attributes["durable.operation.attempt"] === undefined,
+            s.attributes["durable.attempt.outcome"] === undefined,
         );
         expect(afterInvokeOp).toBeDefined();
 
         const afterInvokeAttempt = spans.find(
           (s) =>
             s.parentSpanId === afterInvokeOp!.spanId &&
-            s.attributes["durable.operation.attempt"] === 1,
+            s.attributes["durable.attempt.number"] === 1,
         );
         expect(afterInvokeAttempt).toBeDefined();
 
