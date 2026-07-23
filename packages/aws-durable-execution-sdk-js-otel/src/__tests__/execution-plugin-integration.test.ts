@@ -228,7 +228,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
 
     // Assertion 5: Attempt span has link to the ambient invocation span
     const attemptSpan = spans.find(
-      (s) => s.attributes["durable.operation.attempt"] === 1,
+      (s) => s.attributes["durable.attempt.number"] === 1,
     );
     expect(attemptSpan).toBeDefined();
     expect(attemptSpan!.links.length).toBeGreaterThan(0);

@@ -560,9 +560,9 @@ Cross-invocation operations are correlated via span links to deterministic span 
 ### Span Attributes
 
 - **Workflow_Span**: `durable.execution.arn`, `durable.execution.status`
-- **Invocation_Span**: `faas.invocation_id`, `faas.coldstart`, `cloud.resource_id`, `cloud.provider`, `cloud.platform`, `faas.max_memory`, `durable.execution.arn`
-- **Operation_Span**: `durable.execution.arn`, `durable.operation.id`, `durable.operation.type`, `durable.operation.name`, `durable.operation.subtype`
-- **Attempt_Span**: all operation attributes plus `durable.operation.attempt`, `durable.attempt.outcome`
+- **Invocation_Span**: `faas.invocation_id`, `faas.coldstart`, `cloud.resource_id`, `cloud.provider`, `cloud.platform`, `faas.max_memory`, `durable.execution.arn`, `durable.invocation.first`, `durable.invocation.status`
+- **Operation_Span**: `durable.execution.arn`, `durable.operation.id`, `durable.operation.type`, `durable.operation.name`, `durable.operation.subtype`, `durable.operation.status`, `durable.attempt.number`
+- **Attempt_Span**: all operation attributes plus `durable.attempt.number`, `durable.attempt.outcome`
 
 ---
 

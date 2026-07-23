@@ -202,7 +202,7 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
       ambientSpan.end();
 
       const attemptSpan = getExportedSpans(exporter).find(
-        (s) => s.attributes["durable.operation.attempt"] === 1,
+        (s) => s.attributes["durable.attempt.number"] === 1,
       );
       expect(attemptSpan).toBeDefined();
       expect(attemptSpan!.links.length).toBeGreaterThan(0);
@@ -276,7 +276,7 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
       const attemptSpan = getExportedSpans(exporter).find(
-        (s) => s.attributes["durable.operation.attempt"] === 1,
+        (s) => s.attributes["durable.attempt.number"] === 1,
       );
       const invocationSpan = findSpan(exporter, "Invocation");
       expect(attemptSpan).toBeDefined();
@@ -353,7 +353,7 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
       const attemptSpan = getExportedSpans(exporter).find(
-        (s) => s.attributes["durable.operation.attempt"] === 1,
+        (s) => s.attributes["durable.attempt.number"] === 1,
       );
       expect(attemptSpan).toBeDefined();
       expect(attemptSpan!.links.length).toBe(0);

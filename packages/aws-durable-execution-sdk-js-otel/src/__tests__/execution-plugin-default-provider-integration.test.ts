@@ -184,7 +184,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
 
     // Verify attempt span exists
     const attemptSpan = spans.find(
-      (s) => s.attributes["durable.operation.attempt"] === 1,
+      (s) => s.attributes["durable.attempt.number"] === 1,
     );
     expect(attemptSpan).toBeDefined();
   });
@@ -266,7 +266,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     const workflowSpan = findSpan(exporter, "Workflow");
     const opSpan = findSpan(exporter, "process-item");
     const attemptSpan = getExportedSpans(exporter).find(
-      (s) => s.attributes["durable.operation.attempt"] === 1,
+      (s) => s.attributes["durable.attempt.number"] === 1,
     );
 
     expect(workflowSpan).toBeDefined();
@@ -309,7 +309,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
 
     const opSpan = findSpan(exporter, "my-operation");
     const attemptSpan = getExportedSpans(exporter).find(
-      (s) => s.attributes["durable.operation.attempt"] === 1,
+      (s) => s.attributes["durable.attempt.number"] === 1,
     );
 
     expect(opSpan).toBeDefined();
@@ -414,7 +414,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
 
     // Attempt spans are children of their respective operations
     const attemptSpans = spans.filter(
-      (s) => s.attributes["durable.operation.attempt"] === 1,
+      (s) => s.attributes["durable.attempt.number"] === 1,
     );
     expect(attemptSpans.length).toBe(2);
 
