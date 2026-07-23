@@ -215,9 +215,13 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     // A root span created with ROOT_CONTEXT has no valid parent
     expect(workflowSpan!.parentSpanContext).toBeUndefined();
 
-    // Assertion 3: No Invocation_Span is created by the plugin
+    // Assertion 3: Invocation_Span is created as child of the ambient Lambda span
     const invocationSpan = findSpan(exporter, "Invocation");
-    expect(invocationSpan).toBeUndefined();
+    expect(invocationSpan).toBeDefined();
+    expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(TEST_ARN);
+    expect(invocationSpan!.parentSpanContext?.spanId).toBe(
+      ambientSpanContext.spanId,
+    );
 
     // Assertion 4: Operation span has link to the ambient invocation span
     const opSpan = findSpan(exporter, "fetch-data");

@@ -140,9 +140,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       ROOT_CONTEXT,
     );
 
-    // Create Invocation_Span ONLY when NOT using default provider
+    // 7. Create Invocation_Span
     if (!this.useDefaultTracerProvider) {
-      // 7. Create the Invocation_Span as child of Workflow_Span with Lambda semantic attributes
+      // Non-default mode: child of Workflow_Span with Lambda semantic attributes
       const parentContext = trace.setSpan(context.active(), this.workflowSpan);
 
       const invocationAttributes: Record<string, string | number | boolean> = {
@@ -185,6 +185,22 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         {
           kind: SpanKind.INTERNAL,
           attributes: invocationAttributes,
+        },
+        parentContext,
+      );
+    } else {
+      // Default provider mode: create invocation span as child of the ambient
+      // Lambda invocation span (from the ADOT layer or other auto-instrumentation)
+      const parentContext = this.savedInvocationContext ?? context.active();
+
+      this.invocationSpan = this.tracer.startSpan(
+        "Invocation",
+        {
+          kind: SpanKind.INTERNAL,
+          attributes: {
+            "durable.execution.arn": info.executionArn,
+            "durable.invocation.first": info.isFirstInvocation,
+          },
         },
         parentContext,
       );

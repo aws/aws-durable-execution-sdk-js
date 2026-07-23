@@ -75,8 +75,8 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     propagation.disable();
   });
 
-  describe("No Invocation_Span is created when useDefaultTracerProvider=true", () => {
-    it("does not create an Invocation span when useDefaultTracerProvider is true", async () => {
+  describe("Invocation_Span is created when useDefaultTracerProvider=true", () => {
+    it("creates an Invocation span as child of ambient context when useDefaultTracerProvider is true", async () => {
       const plugin = new ExecutionOtelPlugin({
         useDefaultTracerProvider: true,
       });
@@ -88,9 +88,13 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
 
       const spans = getExportedSpans(exporter);
       const invocationSpan = findSpan(exporter, "Invocation");
-      expect(invocationSpan).toBeUndefined();
+      expect(invocationSpan).toBeDefined();
+      expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(
+        TEST_ARN,
+      );
+      expect(invocationSpan!.attributes["durable.invocation.first"]).toBe(true);
 
-      // But Workflow_Span should still be created
+      // Workflow_Span should also be created
       const workflowSpan = findSpan(exporter, "Workflow");
       expect(workflowSpan).toBeDefined();
     });
@@ -188,7 +192,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       // No ambient span - just ROOT_CONTEXT
       await plugin.onInvocationStart(makeInvocationInfo());
 
-      // Create an operation - it should have no links since no ambient span exists
+      // Create an operation - it should still have a link to our Invocation span
       await plugin.onOperationStart({
         id: "op-1",
         type: "step",
@@ -208,7 +212,13 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
 
       const opSpan = findSpan(exporter, "test-op");
       expect(opSpan).toBeDefined();
-      expect(opSpan!.links.length).toBe(0);
+      // Links to the Invocation span we always create
+      const invocationSpan = findSpan(exporter, "Invocation");
+      expect(invocationSpan).toBeDefined();
+      expect(opSpan!.links.length).toBe(1);
+      expect(opSpan!.links[0].context.spanId).toBe(
+        invocationSpan!.spanContext().spanId,
+      );
     });
   });
 
@@ -325,8 +335,13 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
 
       const opSpan = findSpan(exporter, "second-op");
       expect(opSpan).toBeDefined();
-      // No links from previous invocation's ambient context
-      expect(opSpan!.links.length).toBe(0);
+      // Should link to the new Invocation span (not the previous ambient context)
+      const invocationSpan = findSpan(exporter, "Invocation");
+      expect(invocationSpan).toBeDefined();
+      expect(opSpan!.links.length).toBe(1);
+      expect(opSpan!.links[0].context.spanId).toBe(
+        invocationSpan!.spanContext().spanId,
+      );
     });
 
     it("clears workflowSpan, invocationSpan, and spanMap after onInvocationEnd", async () => {
@@ -367,9 +382,12 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
         "arn:second",
       );
 
-      // No Invocation span (since useDefaultTracerProvider=true)
+      // Invocation span is created for the second invocation
       const invocationSpans = spans.filter((s) => s.name === "Invocation");
-      expect(invocationSpans.length).toBe(0);
+      expect(invocationSpans.length).toBe(1);
+      expect(invocationSpans[0].attributes["durable.execution.arn"]).toBe(
+        "arn:second",
+      );
     });
 
     it("clears attemptSpan after onInvocationEnd", async () => {

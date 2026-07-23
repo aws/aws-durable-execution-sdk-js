@@ -288,12 +288,12 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
     });
   });
 
-  describe("buildInvocationLinks() returns empty array when no invocation context exists", () => {
+  describe("buildInvocationLinks() links to Invocation span when no ambient invocation context exists", () => {
     /**
      * When useDefaultTracerProvider is true but no ambient span exists,
-     * and there's no explicit Invocation_Span, links should be empty.
+     * links should point to the Invocation span we always create.
      */
-    it("Operation_Span has no links when no ambient invocation span exists", async () => {
+    it("Operation_Span has link to Invocation span when no ambient invocation span exists", async () => {
       const plugin = new ExecutionOtelPlugin({
         tracerProvider: provider,
         useDefaultTracerProvider: true,
@@ -314,11 +314,16 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
       const opSpan = findSpan(exporter, "no-link-op");
+      const invocationSpan = findSpan(exporter, "Invocation");
       expect(opSpan).toBeDefined();
-      expect(opSpan!.links.length).toBe(0);
+      expect(invocationSpan).toBeDefined();
+      expect(opSpan!.links.length).toBe(1);
+      expect(opSpan!.links[0].context.spanId).toBe(
+        invocationSpan!.spanContext().spanId,
+      );
     });
 
-    it("Attempt_Span has no links when no ambient invocation span exists", async () => {
+    it("Attempt_Span has link to Invocation span when no ambient invocation span exists", async () => {
       const plugin = new ExecutionOtelPlugin({
         tracerProvider: provider,
         useDefaultTracerProvider: true,
@@ -355,8 +360,13 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
       const attemptSpan = getExportedSpans(exporter).find(
         (s) => s.attributes["durable.attempt.number"] === 1,
       );
+      const invocationSpan = findSpan(exporter, "Invocation");
       expect(attemptSpan).toBeDefined();
-      expect(attemptSpan!.links.length).toBe(0);
+      expect(invocationSpan).toBeDefined();
+      expect(attemptSpan!.links.length).toBe(1);
+      expect(attemptSpan!.links[0].context.spanId).toBe(
+        invocationSpan!.spanContext().spanId,
+      );
     });
   });
 
