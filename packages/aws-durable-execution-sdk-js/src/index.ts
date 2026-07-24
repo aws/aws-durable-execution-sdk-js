@@ -45,6 +45,32 @@ export {
   RetryDecision,
   NestingType,
 } from "./types";
+export {
+  DagContext,
+  TaskHandle,
+  AnyTaskHandle,
+  DepsMap,
+  StepTaskFn,
+  PayloadTaskFn,
+  SubmitterTaskFn,
+  CheckTaskFn,
+  ChildTaskFn,
+  ConditionalConfig,
+  TriggerRule,
+  TaskStatus,
+  SkipReason,
+  TaskExecution,
+  DagResult,
+  DagCompletionReason,
+  DagConfig,
+  NestedDagConfig,
+  DagCompletionConfig,
+  DagCompletionItemStatus,
+  DagCompletionStatus,
+  DagCustomCompletionConfig,
+  DagSummary,
+  DagFn,
+} from "./types/dag";
 export { DurablePromise } from "./types/durable-promise";
 export { StepInterruptedError } from "./errors/step-errors/step-errors";
 export {
@@ -60,6 +86,13 @@ export {
   PromiseCombinatorError,
   BatchCompletionError,
 } from "./errors/durable-error/durable-error";
+export {
+  DagCyclicDependencyError,
+  DagInvalidTaskNameError,
+  DagDuplicateTaskError,
+  DagInvalidDependencyError,
+  DagExecutionError,
+} from "./errors/dag-errors/dag-errors";
 export {
   defaultSerdes,
   createClassSerdes,

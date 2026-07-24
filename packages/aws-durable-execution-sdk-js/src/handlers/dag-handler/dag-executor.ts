@@ -1,6 +1,9 @@
 import type { DurableContextImpl } from "../../context/durable-context/durable-context";
 import { DurableLogger } from "../../types/durable-logger";
-import { CompletionOutcome } from "../../types/batch";
+import {
+  CompletionOutcome,
+  ThresholdCompletionConfig,
+} from "../../types/batch";
 import {
   DagCompletionItemStatus,
   DagCompletionReason,
@@ -14,7 +17,6 @@ import {
   TaskStatus,
   TriggerRule,
 } from "../../types/dag";
-import { ThresholdCompletionConfig } from "../../types/batch";
 import {
   DurableOperationError,
   StepError,

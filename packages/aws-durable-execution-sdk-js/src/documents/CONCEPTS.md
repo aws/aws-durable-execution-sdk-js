@@ -339,3 +339,69 @@ await context.step("critical-operation", async () => attemptOnlyOnce(), {
 - Each individual operation is limited by Lambda's timeout (max 15 minutes)
 - Concurrent operations require explicit child contexts for deterministic replay
 - Large payloads may require custom serialization strategies
+
+## DAG Support (`context.dag()`) — Experimental
+
+> ⚠️ **Experimental.** `context.dag()` and its entire surface (`DagContext`,
+> `TaskHandle`, `DepsMap`, `DagResult`, `DagConfig`, `TriggerRule`, `runIf`, the
+> DAG errors, and the `DagSummary` envelope) are experimental and may change or
+> be removed without a major-version bump. Every exported DAG symbol carries the
+> `@experimental` TSDoc tag.
+
+`context.dag()` declares a **directed-acyclic-graph of tasks** with typed
+dependencies. Tasks are declared once in a registration callback (nothing runs
+until it returns), then scheduled topologically: independent chains run
+concurrently, per-task trigger rules and `runIf` predicates gate execution, and
+results aggregate into a `DagResult`. A DAG runs as one child-context node; each
+task keeps its native operation subtype and is replay-safe for any graph shape
+because task entity IDs are derived from the task **name**
+(`{parentId}-DAG_NODE_T_{name}`) rather than a completion-order-dependent
+counter.
+
+### Declaring dependencies
+
+- Inline `deps` (the array argument) are typed and available in the task
+  function's `deps` map.
+- Builder `.deps(...)` adds ordering-only edges (wait for them, but their
+  results are not in the map).
+- `.triggerRule(rule)` sets when a task runs relative to its upstreams.
+
+```typescript
+const result = await context.dag("etl", (d) => {
+  const fetch = d.step("fetch", [], async () => fetchSource());
+  const a = d.step("a", [fetch], async (deps) => transformA(deps.fetch));
+  const b = d.step("b", [fetch], async (deps) => transformB(deps.fetch));
+  d.step("merge", [a, b], async (deps) => merge(deps.a, deps.b));
+});
+result.throwIfError();
+console.log(result.getResult("merge"));
+```
+
+### Trigger rules & compensation
+
+Trigger rules (`ALL_SUCCESS` default, `ALL_FAILED`, `ALL_DONE`, `ONE_SUCCESS`,
+`ONE_FAILED`, `NONE_FAILED`) let downstream tasks react to upstream failure — a
+failed task is a normal terminal state, not an abort. By default the DAG drains
+the reachable graph and reports `ALL_COMPLETED` (clean) or
+`COMPLETED_WITH_FAILURES`; `result.throwIfError()` throws when any task failed.
+
+```typescript
+await context.dag("payment", (d) => {
+  const charge = d.step("charge", [], async () => chargeCard(event));
+  d.step("fulfill", [charge], async (deps) => fulfill(deps.charge)); // ALL_SUCCESS
+  d.step("refund", [], async () => refundCard(event))
+    .deps(charge)
+    .triggerRule("ALL_FAILED");
+});
+```
+
+### Conditional skips (`runIf`)
+
+`runIf` is a synchronous, deterministic predicate over resolved upstream
+results; returning `false` skips the task (`skipReason: "RUN_IF_PREDICATE"`).
+
+Task names must match `^[a-zA-Z0-9_]+$` (no dashes) and must not contain the
+reserved `DAG_NODE_T_` token. Registration validation throws
+`DagInvalidTaskNameError`, `DagDuplicateTaskError`, `DagInvalidDependencyError`,
+or `DagCyclicDependencyError` (surfaced unwrapped to the caller). The `register`
+callback must be deterministic across replays.

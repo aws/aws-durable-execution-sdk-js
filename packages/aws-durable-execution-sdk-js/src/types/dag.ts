@@ -1,4 +1,4 @@
-import { CompletionReason } from "./core";
+import { CompletionReason, Duration } from "./core";
 import {
   BatchResult,
   ThresholdCompletionConfig,
@@ -13,7 +13,6 @@ import {
 import { DurableContext } from "./durable-context";
 import { DurableLogger } from "./durable-logger";
 import { DurablePromise } from "./durable-promise";
-import { Duration } from "./core";
 import {
   StepContext,
   WaitForConditionContext,
