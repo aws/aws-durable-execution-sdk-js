@@ -77,6 +77,41 @@ export class DagContextImpl<
     return [...this.tasks.values()];
   }
 
+  /**
+   * Applies the DAG-level {@link DagConfig.defaultRetryStrategy} to a task
+   * config that does not declare its own `retryStrategy`. Only meaningful for
+   * task kinds whose config carries a `retryStrategy` (step, callback).
+   */
+  private applyRetryDefault<O>(rest: O | undefined): O | undefined {
+    const dr = this.config?.defaultRetryStrategy;
+    if (dr === undefined) {
+      return rest;
+    }
+    if (
+      rest &&
+      (rest as { retryStrategy?: unknown }).retryStrategy !== undefined
+    ) {
+      return rest;
+    }
+    return { ...(rest as object), retryStrategy: dr } as O;
+  }
+
+  /**
+   * Applies the DAG-level {@link DagConfig.nesting} default to a task config
+   * that does not declare its own `nesting`. Only meaningful for task kinds
+   * whose config carries a `nesting` (map, parallel).
+   */
+  private applyNestingDefault<O>(rest: O | undefined): O | undefined {
+    const nesting = this.config?.nesting;
+    if (nesting === undefined) {
+      return rest;
+    }
+    if (rest && (rest as { nesting?: unknown }).nesting !== undefined) {
+      return rest;
+    }
+    return { ...(rest as object), nesting } as O;
+  }
+
   private register(name: string, def: TaskDef): void {
     validateTaskName(name);
     if (this.tasks.has(name)) {
@@ -115,19 +150,26 @@ export class DagContextImpl<
     options?: StepConfig<TResult> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TResult> {
     const { runIf, rest } = extractConditional(options);
-    const def = this.makeDef(name, "step", deps, runIf, rest, (ctx, depsMap) =>
-      ctx.runStepWithExplicitId(
-        name,
-        (deps.length === 0
-          ? (stepCtx: unknown) =>
-              (fn as (c: unknown) => Promise<TResult>)(stepCtx)
-          : (stepCtx: unknown) =>
-              (fn as (d: unknown, c: unknown) => Promise<TResult>)(
-                depsMap,
-                stepCtx,
-              )) as StepFunc<TResult, DurableLogger>,
-        rest as StepConfig<TResult> | undefined,
-      ),
+    const config = this.applyRetryDefault(rest);
+    const def = this.makeDef(
+      name,
+      "step",
+      deps,
+      runIf,
+      config,
+      (ctx, depsMap) =>
+        ctx.runStepWithExplicitId(
+          name,
+          (deps.length === 0
+            ? (stepCtx: unknown) =>
+                (fn as (c: unknown) => Promise<TResult>)(stepCtx)
+            : (stepCtx: unknown) =>
+                (fn as (d: unknown, c: unknown) => Promise<TResult>)(
+                  depsMap,
+                  stepCtx,
+                )) as StepFunc<TResult, DurableLogger>,
+          config as StepConfig<TResult> | undefined,
+        ),
     );
     this.register(name, def);
     return new TaskHandleImpl<TName, TResult>(name, def.id, def);
@@ -179,12 +221,13 @@ export class DagContextImpl<
     options?: WaitForCallbackConfig<TResult> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TResult> {
     const { runIf, rest } = extractConditional(options);
+    const config = this.applyRetryDefault(rest);
     const def = this.makeDef(
       name,
       "callback",
       deps,
       runIf,
-      rest,
+      config,
       (ctx, depsMap) =>
         ctx.runCallbackTaskWithExplicitId<TResult>(
           name,
@@ -206,7 +249,7 @@ export class DagContextImpl<
                   cbId,
                   cbCtx,
                 )) as WaitForCallbackSubmitterFunc<DurableLogger>,
-          rest as WaitForCallbackConfig<TResult> | undefined,
+          config as WaitForCallbackConfig<TResult> | undefined,
         ),
     );
     this.register(name, def);
@@ -314,18 +357,26 @@ export class DagContextImpl<
     options?: MapConfig<TIn, TOut> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, BatchResult<TOut>> {
     const { runIf, rest } = extractConditional(options);
-    const def = this.makeDef(name, "map", deps, runIf, rest, (ctx, depsMap) => {
-      const resolvedItems =
-        typeof items === "function"
-          ? (items as (d: Record<string, unknown>) => TIn[])(depsMap)
-          : items;
-      return ctx.runMapWithExplicitId<TIn, TOut>(
-        name,
-        resolvedItems,
-        mapFunc as MapFunc<TIn, TOut, DurableLogger>,
-        rest as MapConfig<TIn, TOut> | undefined,
-      );
-    });
+    const config = this.applyNestingDefault(rest);
+    const def = this.makeDef(
+      name,
+      "map",
+      deps,
+      runIf,
+      config,
+      (ctx, depsMap) => {
+        const resolvedItems =
+          typeof items === "function"
+            ? (items as (d: Record<string, unknown>) => TIn[])(depsMap)
+            : items;
+        return ctx.runMapWithExplicitId<TIn, TOut>(
+          name,
+          resolvedItems,
+          mapFunc as MapFunc<TIn, TOut, DurableLogger>,
+          config as MapConfig<TIn, TOut> | undefined,
+        );
+      },
+    );
     this.register(name, def);
     return new TaskHandleImpl<TName, BatchResult<TOut>>(name, def.id, def);
   }
@@ -340,14 +391,15 @@ export class DagContextImpl<
     options?: ParallelConfig<TOut> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, BatchResult<TOut>> {
     const { runIf, rest } = extractConditional(options);
-    const def = this.makeDef(name, "parallel", deps, runIf, rest, (ctx) =>
+    const config = this.applyNestingDefault(rest);
+    const def = this.makeDef(name, "parallel", deps, runIf, config, (ctx) =>
       ctx.runParallelWithExplicitId<TOut>(
         name,
         branches as (
           | ParallelFunc<TOut, DurableLogger>
           | NamedParallelBranch<TOut, DurableLogger>
         )[],
-        rest as ParallelConfig<TOut> | undefined,
+        config as ParallelConfig<TOut> | undefined,
       ),
     );
     this.register(name, def);
