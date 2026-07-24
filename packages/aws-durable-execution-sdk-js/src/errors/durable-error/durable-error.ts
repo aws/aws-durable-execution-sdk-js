@@ -89,6 +89,12 @@ export abstract class DurableOperationError extends Error {
           cause,
           errorObject.ErrorData,
         );
+      case "DagExecutionError":
+        return new DagExecutionError(
+          errorObject.ErrorMessage || "DAG execution had failures",
+          cause,
+          errorObject.ErrorData,
+        );
       default:
         return new StepError(
           errorObject.ErrorMessage || "Unknown error",
@@ -276,5 +282,20 @@ export class BatchCompletionError extends DurableOperationError {
       cause,
       errorData,
     );
+  }
+}
+
+/**
+ * Error thrown by `DagResult.throwIfError` when one or more DAG tasks failed
+ * (or a custom completion decision returned a `FAILED` outcome). Carries the
+ * first failed task's error as `cause`.
+ *
+ * @experimental This error is experimental and may be changed or removed in future releases.
+ */
+export class DagExecutionError extends DurableOperationError {
+  readonly errorType = "DagExecutionError";
+
+  constructor(message?: string, cause?: Error, errorData?: string) {
+    super(message || "DAG execution had failures", cause, errorData);
   }
 }
