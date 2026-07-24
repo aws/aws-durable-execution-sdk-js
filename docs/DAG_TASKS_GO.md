@@ -102,14 +102,14 @@ These are the only genuinely new base-SDK work. All three are additive; none rea
 - **Spec:** §2.2–§2.5 (free functions, no generic methods), §2.9 (functional options).
 - **Files:** `pkg/durable/dag/dag.go` (`Context` opaque handle; `Option` + `With*` options;
   `Dag(dc, name, register, opts...)` entry **stub** returning `(*DagResult, error)`),
-  `pkg/durable/dag/handle.go` (`AnyHandle` sealed iface, generic `TaskHandle[T]` with `DependsOn`/
+  `pkg/durable/dag/handle.go` (`AnyHandle` sealed iface, generic `TaskHandle[T]` with `After`/
   `WithTrigger` builder methods), `pkg/durable/dag/deps.go` (`Deps`, `Get[T]`, `MustGet[T]`,
   `ErrDepNotAvailable`, `ErrDepTypeMismatch`), plus registration free funcs `Step[T]`, `Invoke[In,Out]`,
   `Callback[T]`, `Wait`, `WaitForCondition[S]`, `Child[T]`, `Map[In,Out]`, `Parallel[Out]`, nested `Dag`.
   Base-SDK aliases: `type DurableContext = types.DurableContext`, `type StepContext = types.StepContext`.
 - **Dependencies:** Task 4.
 - **Acceptance:**
-  1. Registration funcs are free (mint new `T`); `DependsOn`/`WithTrigger` are methods on
+  1. Registration funcs are free (mint new `T`); `After`/`WithTrigger` are methods on
      `TaskHandle[T]` (no new type param) and chain. `Get[T]` returns the upstream's typed value.
   2. **Divergence documented in doc comments:** `Invoke[In, Out]` and `Callback[T]` REQUIRE explicit
      type args (result type appears only in the return; verified Go 1.25) — every other kind infers.
@@ -191,7 +191,7 @@ These are the only genuinely new base-SDK work. All three are additive; none rea
   (in `dag_test.go`).
 - **Dependencies:** Tasks 5, 7, 8.
 - **Acceptance:**
-  1. `DependsOn`/`WithTrigger` mutate the underlying `taskDef`; `Get[T]` type correctness + runtime
+  1. `After`/`WithTrigger` mutate the underlying `taskDef`; `Get[T]` type correctness + runtime
      `ErrDepNotAvailable` for a non-inline/failed/skipped dep.
   2. `taskID` tests for prefixed/unprefixed and nested recursion
      `…-DAG_NODE_T_a-DAG_NODE_T_b`, disjoint from positional counter IDs.

@@ -4,7 +4,7 @@
 > **Target repo:** `/Users/parpooya/workplace/aws-durable-execution-sdk-java`, module `sdk/src/main/java/software/amazon/lambda/durable/**`
 > **Stability:** ⚠️ **EXPERIMENTAL** in v1 — every public DAG type/method MUST carry the new `@Experimental` marker annotation + Javadoc `@apiNote`.
 > **Ordering:** Tasks are strictly ordered. **Task 1 is a GATING base-SDK prerequisite ([A-J2]); nothing else may start until it lands.**
-> **v2-deferred:** Custom-predicate completion (§6 Option A / `CustomDagCompletion`) is **NOT in v1** ([A-J6] verified — no SDK seam). v1 ships threshold completion only; `DagCompletionReason.CUSTOM_COMPLETION_*` are reserved-but-unreachable.
+> **v2-deferred:** Custom-predicate completion (§6 Option A / `CustomDagCompletion`) is **NOT in v1** ([A-J6] verified — no SDK seam). v1 ships threshold completion only; the `CUSTOM_COMPLETION_*` reasons are **not present** in `DagCompletionReason` (dropped per API-review C4(b) — they are added when custom completion ships). NOTE: Go, which implements custom completion, does keep those members.
 
 ---
 
@@ -42,7 +42,7 @@
 - **Files (new pkg `software.amazon.lambda.durable.dag`):** `TriggerRule.java`, `TaskStatus.java`, `SkipReason.java`, `DagCompletionReason.java`, `DagTaskError.java` (record, `MapError`-shaped); exceptions extending `DurableOperationException`: `DagException`, `DagCyclicDependencyException`, `DagInvalidTaskNameException`, `DagDuplicateTaskException`, `DagInvalidDependencyException`, `DagExecutionException`.
 - **Dependencies:** Task 2
 - **Acceptance criteria:**
-  1. `DagCompletionReason` has all 6 members (`ALL_COMPLETED`, `COMPLETED_WITH_FAILURES`, `MIN_SUCCESSFUL_REACHED`, `FAILURE_TOLERANCE_EXCEEDED`, + reserved `CUSTOM_COMPLETION_SUCCEEDED/FAILED`); `TriggerRule` has the six rules with per-constant `eval(List<TaskStatus>)`.
+  1. `DagCompletionReason` has 4 members (`ALL_COMPLETED`, `COMPLETED_WITH_FAILURES`, `MIN_SUCCESSFUL_REACHED`, `FAILURE_TOLERANCE_EXCEEDED`) — no `CUSTOM_COMPLETION_*` in v1 (API-review C4(b)); `TriggerRule` has the six rules (`ALL_SUCCESS`, `ANY_SUCCESS`, `ALL_FAILED`, `ANY_FAILED`, `ALL_DONE`, `NONE_FAILED`) as a pure value enum, with evaluation in an internal evaluator (not a public `eval()` method, per API-review C5).
   2. All public types annotated `@Experimental` with `@apiNote`; all `Dag*Exception` extend `DurableOperationException` (→ `DurableExecutionException`, `RuntimeException`).
   3. `DagTaskError` mirrors `MapError` (`errorType`/`errorMessage`/`stackTrace` + optional cause) and is Jackson-serializable.
 
@@ -51,12 +51,12 @@
 ## Task 4 — `DagContext`, `TaskHandle<T>`, `Deps`, functional interfaces, `DagConfig`
 
 - **Title:** DAG public registration surface + typed-dependency accessor
-- **Spec:** §2.2–§2.5, §2.7 (sugar), §2.11 (`DagConfig`), §2.12/§3 (`.reads`/`.dependsOn`)
+- **Spec:** §2.2–§2.5, §2.7 (sugar), §2.11 (`DagConfig`), §2.12/§3 (`.reads`/`.after`)
 - **Files:** `DagContext.java`, `TaskHandle.java`, `Deps.java`, `DagConfig.java` (record + `builder()`), `DagCompletionConfig.java` (sealed; **threshold factories only** in v1), functional interfaces `DagStepFunction/DagPayloadFunction/DagCallbackSubmitter/DagConditionFunction/DagChildFunction.java`. Optional §2.7 arity sugar may be a follow-up PR.
 - **Dependencies:** Task 3
 - **Acceptance criteria:**
   1. `<T> T Deps.get(TaskHandle<T> h)` compiles type-safely (one contained unchecked cast internally, keyed by `handle.name()`); `getOptional` returns `Optional<T>`; every DAG task fn takes `Deps` as first param (uniform, incl. roots).
-  2. `TaskHandle<T>` exposes fluent `reads(...)` (typed/inline), `dependsOn(...)` (ordering-only), `triggerRule(...)`, `runIf(Predicate<Deps>)`; reuses existing `StepConfig`/`MapConfig`/`ParallelConfig`/`InvokeConfig`/`WaitForConditionConfig`/`TypeToken`/`Duration`/`MapResult`/`ParallelResult` verbatim.
+  2. `TaskHandle<T>` exposes fluent `reads(...)` (typed/inline), `after(...)` (ordering-only), `triggerRule(...)`, `runIf(Predicate<Deps>)`; reuses existing `StepConfig`/`MapConfig`/`ParallelConfig`/`InvokeConfig`/`WaitForConditionConfig`/`TypeToken`/`Duration`/`MapResult`/`ParallelResult` verbatim.
   3. All types/methods annotated `@Experimental`; `DagConfig.builder()` present; `maxConcurrency` documented ≥ 1; `summaryGenerator` **omitted** (non-native, §8.1); `DagCompletionConfig` exposes only the 6 threshold factories (custom path v2-deferred).
 
 ---
@@ -146,7 +146,7 @@
 - **Files:** `docs/core/dag.md` (new), cross-links from `docs/design.md` / README; example under `examples/`.
 - **Dependencies:** Task 8 (docs can draft earlier; finalize after API frozen)
 - **Acceptance criteria:**
-  1. Documents `dag()`/`dagAsync()`, `.reads`/`.dependsOn`, `Deps.get`, trigger rules, threshold completion, and the EXPERIMENTAL/`@Experimental` status prominently.
+  1. Documents `dag()`/`dagAsync()`, `.reads`/`.after`, `Deps.get`, trigger rules, threshold completion, and the EXPERIMENTAL/`@Experimental` status prominently.
   2. States v2-deferred custom completion and the no-`summaryGenerator` decision (§8.1); examples compile against the shipped API.
 
 ---

@@ -74,11 +74,11 @@
 ## T7 — `TaskHandleImpl` (reference + builder)
 
 - **Spec:** §2.4, §3
-- **Files created:** `src/handlers/dag-handler/task-handle.ts` — `TaskHandleImpl` with `_name`, `_id: symbol`, phantom `_resultType`, chainable `.deps(...)` and `.triggerRule(...)` mutating the backing `TaskDef`.
+- **Files created:** `src/handlers/dag-handler/task-handle.ts` — `TaskHandleImpl` with `name`, `_id: symbol`, phantom `_resultType`, chainable `.after(...)` and `.triggerRule(...)` mutating the backing `TaskDef`.
 - **Depends on:** T2.
 - **Acceptance:**
   1. `@experimental` on exported surface; `_id` is a `symbol` and is never serialized.
-  2. `.deps(...)` appends to `allDeps` only; inline deps populate both `inlineDeps` and `allDeps` (unit-tested in T13).
+  2. `.after(...)` appends to `allDeps` only; inline deps populate both `inlineDeps` and `allDeps` (unit-tested in T13).
   3. Builder methods return `this` for chaining.
 
 ## T8 — `trigger-rules.ts` (evaluators)
