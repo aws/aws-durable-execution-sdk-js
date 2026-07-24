@@ -1,8 +1,14 @@
-import { DagExecutor } from "./dag-executor";
+import { DagExecutor, reconstructDagResult } from "./dag-executor";
 import { TaskDef } from "./task-handle";
-import { AnyTaskHandle, DagConfig, TriggerRule } from "../../types/dag";
+import {
+  AnyTaskHandle,
+  DagConfig,
+  DagSummary,
+  TriggerRule,
+} from "../../types/dag";
 import { DurableLogger } from "../../types/durable-logger";
 import type { DurableContextImpl } from "../../context/durable-context/durable-context";
+import { ExecutionContext } from "../../types/core";
 import {
   completeBatch,
   continueBatch,
@@ -190,5 +196,166 @@ describe("DagExecutor", () => {
       result.completionReason,
     );
     expect(result.successCount).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("DagExecutor trigger-rule / skip edges", () => {
+  it("skips a root task with a failure-family rule (empty upstream)", async () => {
+    const root = task("root", { triggerRule: "ALL_FAILED" });
+    const r = await run([root]);
+    expect(r.getStatus("root")).toBe("SKIPPED");
+    expect(r.skipped()[0].skipReason).toBe("TRIGGER_RULE");
+    expect(r.completionReason).toBe("ALL_COMPLETED");
+  });
+
+  it("runs success/done-family root rules on empty upstream, skips one-family", async () => {
+    const a = task("a", { triggerRule: "ALL_DONE" });
+    const b = task("b", { triggerRule: "NONE_FAILED" });
+    const c = task("c", { triggerRule: "ONE_SUCCESS" });
+    const r = await run([a, b, c]);
+    expect(r.getStatus("a")).toBe("SUCCEEDED");
+    expect(r.getStatus("b")).toBe("SUCCEEDED");
+    expect(r.getStatus("c")).toBe("SKIPPED");
+  });
+
+  it("cascades skips but still runs an ALL_DONE sink", async () => {
+    const root = task("root", { triggerRule: "ALL_FAILED" }); // skips
+    const mid = task("mid", { deps: [root] }); // ALL_SUCCESS => skip
+    const sink = task("sink", { deps: [mid], triggerRule: "ALL_DONE" }); // runs
+    const r = await run([root, mid, sink]);
+    expect(r.getStatus("root")).toBe("SKIPPED");
+    expect(r.getStatus("mid")).toBe("SKIPPED");
+    expect(r.getStatus("sink")).toBe("SUCCEEDED");
+  });
+
+  it("ONE_SUCCESS runs on a mix of one success + one failure", async () => {
+    const ok = task("ok", { run: async () => "ok" });
+    const bad = task("bad", {
+      run: async () => {
+        throw new Error("x");
+      },
+    });
+    const sink = task("sink", {
+      deps: [ok, bad],
+      triggerRule: "ONE_SUCCESS",
+      run: async () => "ran",
+    });
+    const r = await run([ok, bad, sink]);
+    expect(r.getStatus("sink")).toBe("SUCCEEDED");
+    expect(r.completionReason).toBe("COMPLETED_WITH_FAILURES");
+  });
+
+  it("custom completion continue() drains the whole graph", async () => {
+    const a = task("a", { run: async () => 1 });
+    const b = task("b", { run: async () => 2 });
+    const r = await run([a, b], {
+      completionConfig: { shouldComplete: () => continueBatch() },
+    });
+    expect(r.completionReason).toBe("ALL_COMPLETED");
+    expect(r.successCount).toBe(2);
+  });
+});
+
+describe("reconstructDagResult (design-B replay)", () => {
+  const rcCtx = {
+    createTaskId: (name: string) => `1-2-DAG_NODE_T_${name}`,
+  } as unknown as DurableContextImpl<DurableLogger>;
+
+  const handleOf = (def: TaskDef): AnyTaskHandle =>
+    ({ _name: def.name, _id: def.id }) as AnyTaskHandle;
+  const mk = (
+    name: string,
+    deps: TaskDef[] = [],
+    triggerRule?: TriggerRule,
+  ): TaskDef => ({
+    name,
+    id: Symbol(name),
+    kind: "step",
+    inlineDeps: deps.map(handleOf),
+    allDeps: deps.map(handleOf),
+    triggerRule,
+    executor: async () => undefined,
+  });
+  const execCtxWith = (
+    data: Record<string, { Status: string; result?: unknown }>,
+  ): ExecutionContext =>
+    ({
+      getStepData: (id: string) => {
+        const d = data[id];
+        if (!d) return undefined;
+        return {
+          Status: d.Status,
+          StepDetails:
+            d.result !== undefined
+              ? { Result: JSON.stringify(d.result) }
+              : undefined,
+        };
+      },
+    }) as unknown as ExecutionContext;
+  const envelope = (over: Partial<DagSummary>): DagSummary => ({
+    type: "DagResult",
+    totalCount: 0,
+    successCount: 0,
+    failureCount: 0,
+    skippedCount: 0,
+    completedCount: 0,
+    completionReason: "ALL_COMPLETED",
+    startedTaskNames: [],
+    terminalTaskNames: [],
+    ...over,
+  });
+
+  it("reconstructs succeeded results and recomputes trigger-rule skips", async () => {
+    const a = mk("a");
+    const b = mk("b", [a]);
+    const c = mk("c", [a], "ALL_FAILED"); // a succeeded => c skips
+    const exec = execCtxWith({
+      "1-2-DAG_NODE_T_a": { Status: "SUCCEEDED", result: 10 },
+      "1-2-DAG_NODE_T_b": { Status: "SUCCEEDED", result: 20 },
+    });
+    const r = await reconstructDagResult(
+      rcCtx,
+      [a, b, c],
+      envelope({ totalCount: 3, completionReason: "ALL_COMPLETED" }),
+      exec,
+    );
+    expect(r.getResult("a")).toBe(10);
+    expect(r.getResult("b")).toBe(20);
+    expect(r.getStatus("c")).toBe("SKIPPED");
+    expect(r.totalCount).toBe(3);
+  });
+
+  it("recovers the STARTED set; downstream of STARTED stays never-started (absent)", async () => {
+    const a = mk("a");
+    const b = mk("b");
+    const c = mk("c", [b]); // b in-flight at early completion => c never started
+    const exec = execCtxWith({
+      "1-2-DAG_NODE_T_a": { Status: "SUCCEEDED", result: 1 },
+    });
+    const r = await reconstructDagResult(
+      rcCtx,
+      [a, b, c],
+      envelope({
+        totalCount: 3,
+        completionReason: "MIN_SUCCESSFUL_REACHED",
+        startedTaskNames: ["b"],
+      }),
+      exec,
+    );
+    expect(r.getStatus("a")).toBe("SUCCEEDED");
+    expect(r.getStatus("b")).toBe("STARTED");
+    // Regression guard: c must NOT be skipped against b's non-terminal STARTED.
+    expect(r.getStatus("c")).toBeUndefined();
+    expect(r.completionReason).toBe("MIN_SUCCESSFUL_REACHED");
+  });
+
+  it("reconstructs FAILED tasks and reports COMPLETED_WITH_FAILURES by default", async () => {
+    const a = mk("a");
+    const exec = execCtxWith({
+      "1-2-DAG_NODE_T_a": { Status: "FAILED" },
+    });
+    const r = await reconstructDagResult(rcCtx, [a], null, exec);
+    expect(r.getStatus("a")).toBe("FAILED");
+    expect(r.completionReason).toBe("COMPLETED_WITH_FAILURES");
   });
 });

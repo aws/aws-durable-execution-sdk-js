@@ -412,26 +412,36 @@ export async function reconstructDagResult(
       } else if (startedSet.has(task.name)) {
         results.set(task.name, { name: task.name, status: "STARTED" });
       } else {
-        // No checkpoint: recompute skip vs never-started deterministically.
-        const rule = task.triggerRule ?? "ALL_SUCCESS";
+        // No checkpoint and not in the STARTED set. Recompute skip vs
+        // never-started deterministically — but ONLY if every dep reached a
+        // TERMINAL state. If any dep is STARTED (in-flight at early completion),
+        // the live scheduler never evaluated this task (it stopped starting new
+        // work), so it is never-started and must stay absent — recomputing a
+        // skip here against a non-terminal STARTED status would diverge from the
+        // original run.
         const depStatuses = task.allDeps.map(
           (d) => (results.get(d._name) as TaskExecution).status,
         );
-        if (!triggerRuleEvaluators[rule](depStatuses)) {
-          results.set(task.name, {
-            name: task.name,
-            status: "SKIPPED",
-            skipReason: "TRIGGER_RULE",
-          });
-        } else if (task.runIf && !task.runIf(buildDepsMap(task))) {
-          results.set(task.name, {
-            name: task.name,
-            status: "SKIPPED",
-            skipReason: "RUN_IF_PREDICATE",
-          });
+        if (depStatuses.some((s) => s === "STARTED")) {
+          // Downstream of an in-flight task: never started. Leave absent.
+        } else {
+          const rule = task.triggerRule ?? "ALL_SUCCESS";
+          if (!triggerRuleEvaluators[rule](depStatuses)) {
+            results.set(task.name, {
+              name: task.name,
+              status: "SKIPPED",
+              skipReason: "TRIGGER_RULE",
+            });
+          } else if (task.runIf && !task.runIf(buildDepsMap(task))) {
+            results.set(task.name, {
+              name: task.name,
+              status: "SKIPPED",
+              skipReason: "RUN_IF_PREDICATE",
+            });
+          }
+          // else: would-run but no checkpoint and not STARTED => never started
+          // (early completion). Leave absent from results.
         }
-        // else: would-run but no checkpoint and not STARTED => never started
-        // (early completion). Leave absent from results.
       }
       if (results.has(task.name)) {
         progressed = true;

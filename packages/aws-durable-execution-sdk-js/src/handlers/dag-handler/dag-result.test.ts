@@ -106,6 +106,25 @@ describe("createDagResultSerdes", () => {
     expect(typeof restoredBatch.getResults).toBe("function");
     expect(restoredBatch.getResults()).toEqual(["x"]);
   });
+
+  it("recursively restores a nested DagResult task result (resultKind dag)", async () => {
+    const serdes = createDagResultSerdes();
+    const inner = new DagResultImpl(
+      results([{ name: "y", status: "SUCCEEDED", result: 99 }]),
+      "ALL_COMPLETED",
+      1,
+    );
+    const original = new DagResultImpl(
+      results([{ name: "inner", status: "SUCCEEDED", result: inner }]),
+      "ALL_COMPLETED",
+      1,
+    );
+    const str = await serdes.serialize(original, ctx);
+    const restored = (await serdes.deserialize(str, ctx))!;
+    const restoredInner = restored.getResult("inner") as DagResultImpl;
+    expect(typeof restoredInner.getResult).toBe("function");
+    expect(restoredInner.getResult("y")).toBe(99);
+  });
 });
 
 describe("buildDagSummaryEnvelope", () => {
