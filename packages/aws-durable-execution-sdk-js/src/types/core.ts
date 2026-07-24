@@ -232,6 +232,17 @@ export enum OperationSubType {
    * and waiting for its completion. Used for function composition and workflows.
    */
   CHAINED_INVOKE = "ChainedInvoke",
+
+  /**
+   * A DAG container operation (`context.dag`).
+   *
+   * Represents a directed-acyclic-graph of tasks scheduled topologically within
+   * a single child context. Individual tasks keep their native subtypes
+   * (`STEP`, `CHAINED_INVOKE`, `RUN_IN_CHILD_CONTEXT`, `MAP`, `PARALLEL`, ...).
+   *
+   * @experimental This member is experimental and may be changed or removed in future releases.
+   */
+  DAG = "Dag",
 }
 
 /**
