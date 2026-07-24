@@ -23,6 +23,7 @@ import {
   LoggerConfig,
   InvokeConfig,
   DurableExecutionMode,
+  OperationSubType,
   BatchResult,
   DurablePromise,
   DurableLogData,
@@ -861,6 +862,85 @@ export class DurableContextImpl<
       childPreserveDepth,
     );
     return blockHandler(name, fn, options);
+  }
+
+  /** @internal */
+  runCallbackTaskWithExplicitId<T>(
+    name: string,
+    submitter: WaitForCallbackSubmitterFunc<Logger>,
+    options?: WaitForCallbackConfig<T>,
+  ): DurablePromise<T> {
+    // Family B: waitForCallback does not take createStepId; run it inside an
+    // explicit-ID child context. Container = DAG_NODE_T_{name}; the internal
+    // callback child gets a counter ID within that container (DAG_NODE_T_{name}-1).
+    return this.runInChildContextWithExplicitId<T>(
+      name,
+      async (childCtx) => childCtx.waitForCallback<T>(name, submitter, options),
+      { subType: OperationSubType.CALLBACK },
+    );
+  }
+
+  /**
+   * Concurrent-execution variant for DAG map/parallel tasks. Does NOT reuse
+   * `_executeConcurrently`: it skips withDurableModeManagement and injects the
+   * explicit-ID container binding so the batch container node gets
+   * `DAG_NODE_T_{name}`. Per-item children stay counter-based within the
+   * container (deterministic array order).
+   * @internal
+   */
+  _executeConcurrentlyWithExplicitId<TItem, TResult>(
+    nameOrItems: string | undefined | ConcurrentExecutionItem<TItem>[],
+    itemsOrExecutor?:
+      | ConcurrentExecutionItem<TItem>[]
+      | ConcurrentExecutor<TItem, TResult, Logger>,
+    executorOrConfig?:
+      | ConcurrentExecutor<TItem, TResult, Logger>
+      | ConcurrencyConfig<TResult>,
+    maybeConfig?: ConcurrencyConfig<TResult>,
+  ): DurablePromise<BatchResult<TResult>> {
+    const concurrentExecutionHandler = createConcurrentExecutionHandler(
+      this._executionContext,
+      this.runInChildContextWithExplicitId.bind(
+        this,
+      ) as DurableContext<Logger>["runInChildContext"],
+      this.skipNextOperation.bind(this),
+      () => this._defaultSerdes,
+    );
+    const promise = concurrentExecutionHandler(
+      nameOrItems,
+      itemsOrExecutor,
+      executorOrConfig,
+      maybeConfig,
+    );
+    promise?.catch(() => {});
+    return promise;
+  }
+
+  /** @internal */
+  runMapWithExplicitId<TInput, TOutput>(
+    name: string,
+    items: TInput[],
+    mapFunc: MapFunc<TInput, TOutput, Logger>,
+    options?: MapConfig<TInput, TOutput>,
+  ): DurablePromise<BatchResult<TOutput>> {
+    const mapHandler = createMapHandler(
+      this._executionContext,
+      this._executeConcurrentlyWithExplicitId.bind(this),
+    );
+    return mapHandler(name, items, mapFunc, options);
+  }
+
+  /** @internal */
+  runParallelWithExplicitId<T>(
+    name: string,
+    branches: (ParallelFunc<T, Logger> | NamedParallelBranch<T, Logger>)[],
+    options?: ParallelConfig<T>,
+  ): DurablePromise<BatchResult<T>> {
+    const parallelHandler = createParallelHandler(
+      this._executionContext,
+      this._executeConcurrentlyWithExplicitId.bind(this),
+    );
+    return parallelHandler(name, branches, options);
   }
 }
 
