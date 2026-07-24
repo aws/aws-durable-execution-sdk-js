@@ -708,6 +708,160 @@ export class DurableContextImpl<
   get promise(): DurableContext<Logger>["promise"] {
     return createPromiseHandler(this.runInChildContext.bind(this));
   }
+
+  // ───────────────────────────────────────────────────────────────────────
+  // DAG explicit-ID variants (@internal)
+  //
+  // Used exclusively by the DAG scheduler to run each task under a NAME-based
+  // entity ID (`{prefix}-DAG_NODE_T_{name}`) instead of the per-context
+  // monotonic counter. These variants intentionally:
+  //   - do NOT wrap in withDurableModeManagement (mode management is
+  //     counter-coupled via peekStepId; DAG tasks are name-keyed — §7.3.1), and
+  //   - never advance `_stepCounter`.
+  // Task replay correctness comes from the handler fast paths (keyed on the
+  // explicit ID) and validateReplayConsistency (inspects Type/Name/SubType
+  // only). Handlers that accept `checkAndUpdateReplayMode` receive a no-op.
+  // ───────────────────────────────────────────────────────────────────────
+
+  /**
+   * Derives a task's name-based entity ID within this context.
+   * @internal
+   */
+  createTaskId(name: string): string {
+    return this._stepPrefix
+      ? `${this._stepPrefix}-DAG_NODE_T_${name}`
+      : `DAG_NODE_T_${name}`;
+  }
+
+  /** @internal */
+  private static readonly NOOP_REPLAY_MODE = (): void => {};
+
+  /** @internal */
+  runStepWithExplicitId<T>(
+    name: string,
+    fn: StepFunc<T, Logger>,
+    options?: StepConfig<T>,
+  ): DurablePromise<T> {
+    const stepHandler = createStepHandler(
+      this._executionContext,
+      this.checkpoint,
+      this.lambdaContext,
+      () => this.createTaskId(name),
+      this.durableLogger,
+      this._parentId,
+      () => this._defaultSerdes,
+      this.durableExecution.plugin,
+    );
+    return stepHandler(name, fn, options);
+  }
+
+  /** @internal */
+  runInvokeWithExplicitId<I, O>(
+    name: string,
+    funcId: string,
+    payload: I,
+    options?: InvokeConfig<I, O>,
+  ): DurablePromise<O> {
+    const invokeHandler = createInvokeHandler(
+      this._executionContext,
+      this.checkpoint,
+      () => this.createTaskId(name),
+      this._parentId,
+      DurableContextImpl.NOOP_REPLAY_MODE,
+      () => this._defaultSerdes,
+      this.durableExecution.plugin,
+    );
+    return invokeHandler<I, O>(
+      ...([name, funcId, payload, options] as Parameters<
+        typeof invokeHandler<I, O>
+      >),
+    );
+  }
+
+  /** @internal */
+  runWaitWithExplicitId(
+    name: string,
+    duration: Duration,
+  ): DurablePromise<void> {
+    const waitHandler = createWaitHandler(
+      this._executionContext,
+      this.checkpoint,
+      () => this.createTaskId(name),
+      this._parentId,
+      DurableContextImpl.NOOP_REPLAY_MODE,
+      this.durableExecution.plugin,
+    );
+    return waitHandler(name, duration);
+  }
+
+  /** @internal */
+  runWaitForConditionWithExplicitId<T>(
+    name: string,
+    check: WaitForConditionCheckFunc<T, Logger>,
+    options: WaitForConditionConfig<T>,
+  ): DurablePromise<T> {
+    const waitForConditionHandler = createWaitForConditionHandler(
+      this._executionContext,
+      this.checkpoint,
+      () => this.createTaskId(name),
+      this.durableLogger,
+      this._parentId,
+      () => this._defaultSerdes,
+      this.durableExecution.plugin,
+    );
+    return waitForConditionHandler(name, check, options);
+  }
+
+  /** @internal */
+  runInChildContextWithExplicitId<T>(
+    name: string,
+    fn: ChildFunc<T, Logger>,
+    options?: ChildConfig<T>,
+  ): DurablePromise<T> {
+    const childPreserveDepth =
+      this._preserveChildDepth === Infinity
+        ? Infinity
+        : Math.max(0, this._preserveChildDepth - 1);
+    const blockHandler = createRunInChildContextHandler(
+      this._executionContext,
+      this.checkpoint,
+      this.lambdaContext,
+      () => this.createTaskId(name),
+      () => this.durableLogger,
+      (
+        executionContext,
+        parentContext,
+        durableExecutionMode,
+        inheritedLogger,
+        stepPrefix,
+        _checkpointToken,
+        parentId,
+      ) => {
+        const childCtx = createDurableContext(
+          executionContext,
+          parentContext,
+          durableExecutionMode,
+          inheritedLogger,
+          stepPrefix,
+          this.durableExecution,
+          parentId,
+          childPreserveDepth,
+        );
+        childCtx.configureSerdes({
+          defaultSerdes: this._defaultSerdes,
+          ...(this._customCallbackDeserializerSet && {
+            defaultCallbackDeserializer: this._defaultCallbackDeserializer,
+          }),
+        });
+        return childCtx;
+      },
+      this._parentId,
+      () => this._defaultSerdes,
+      this.durableExecution.plugin,
+      childPreserveDepth,
+    );
+    return blockHandler(name, fn, options);
+  }
 }
 
 export const createDurableContext = <Logger extends DurableLogger>(
