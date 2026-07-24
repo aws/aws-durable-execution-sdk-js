@@ -46,10 +46,10 @@ describe("context.dag() composed integration", () => {
       );
       d.step("fulfill", [charge], async () => "fulfilled");
       d.step("refund", [], async () => "refunded")
-        .deps(charge)
+        .after(charge)
         .triggerRule("ALL_FAILED");
       d.step("audit", [], async () => "audited")
-        .deps(charge)
+        .after(charge)
         .triggerRule("ALL_DONE");
     });
     expect(result.completionReason).toBe("COMPLETED_WITH_FAILURES");
@@ -107,7 +107,7 @@ describe("context.dag() composed integration", () => {
         const a = d.step("a", [], async () => 1);
         const b = d.step("b", [a], async () => 2);
         // Introduce a cycle via ordering-only builder dep.
-        a.deps(b);
+        a.after(b);
       }),
     ).rejects.toBeInstanceOf(DagCyclicDependencyError);
   });

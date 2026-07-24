@@ -362,7 +362,7 @@ counter.
 
 - Inline `deps` (the array argument) are typed and available in the task
   function's `deps` map.
-- Builder `.deps(...)` adds ordering-only edges (wait for them, but their
+- Builder `.after(...)` adds ordering-only edges (wait for them, but their
   results are not in the map).
 - `.triggerRule(rule)` sets when a task runs relative to its upstreams.
 
@@ -379,8 +379,8 @@ console.log(result.getResult("merge"));
 
 ### Trigger rules & compensation
 
-Trigger rules (`ALL_SUCCESS` default, `ALL_FAILED`, `ALL_DONE`, `ONE_SUCCESS`,
-`ONE_FAILED`, `NONE_FAILED`) let downstream tasks react to upstream failure — a
+Trigger rules (`ALL_SUCCESS` default, `ALL_FAILED`, `ALL_DONE`, `ANY_SUCCESS`,
+`ANY_FAILED`, `NONE_FAILED`) let downstream tasks react to upstream failure — a
 failed task is a normal terminal state, not an abort. By default the DAG drains
 the reachable graph and reports `ALL_COMPLETED` (clean) or
 `COMPLETED_WITH_FAILURES`; `result.throwIfError()` throws when any task failed.
@@ -390,7 +390,7 @@ await context.dag("payment", (d) => {
   const charge = d.step("charge", [], async () => chargeCard(event));
   d.step("fulfill", [charge], async (deps) => fulfill(deps.charge)); // ALL_SUCCESS
   d.step("refund", [], async () => refundCard(event))
-    .deps(charge)
+    .after(charge)
     .triggerRule("ALL_FAILED");
 });
 ```

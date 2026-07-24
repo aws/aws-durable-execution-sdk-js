@@ -147,16 +147,16 @@ export class DagContextImpl<
     name: TName,
     deps: TDeps,
     fn: StepTaskFn<TDeps, TResult, TLogger>,
-    options?: StepConfig<TResult> & ConditionalConfig<TDeps>,
+    config?: StepConfig<TResult> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TResult> {
-    const { runIf, rest } = extractConditional(options);
-    const config = this.applyRetryDefault(rest);
+    const { runIf, rest } = extractConditional(config);
+    const taskConfig = this.applyRetryDefault(rest);
     const def = this.makeDef(
       name,
       "step",
       deps,
       runIf,
-      config,
+      taskConfig,
       (ctx, depsMap) =>
         ctx.runStepWithExplicitId(
           name,
@@ -168,7 +168,7 @@ export class DagContextImpl<
                   depsMap,
                   stepCtx,
                 )) as StepFunc<TResult, DurableLogger>,
-          config as StepConfig<TResult> | undefined,
+          taskConfig as StepConfig<TResult> | undefined,
         ),
     );
     this.register(name, def);
@@ -185,9 +185,9 @@ export class DagContextImpl<
     funcId: string,
     deps: TDeps,
     payloadFn: PayloadTaskFn<TDeps, TIn>,
-    options?: InvokeConfig<TIn, TOut> & ConditionalConfig<TDeps>,
+    config?: InvokeConfig<TIn, TOut> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TOut> {
-    const { runIf, rest } = extractConditional(options);
+    const { runIf, rest } = extractConditional(config);
     const def = this.makeDef(
       name,
       "invoke",
@@ -218,16 +218,16 @@ export class DagContextImpl<
     name: TName,
     deps: TDeps,
     submitter: SubmitterTaskFn<TDeps, TLogger>,
-    options?: WaitForCallbackConfig<TResult> & ConditionalConfig<TDeps>,
+    config?: WaitForCallbackConfig<TResult> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TResult> {
-    const { runIf, rest } = extractConditional(options);
-    const config = this.applyRetryDefault(rest);
+    const { runIf, rest } = extractConditional(config);
+    const taskConfig = this.applyRetryDefault(rest);
     const def = this.makeDef(
       name,
       "callback",
       deps,
       runIf,
-      config,
+      taskConfig,
       (ctx, depsMap) =>
         ctx.runCallbackTaskWithExplicitId<TResult>(
           name,
@@ -249,7 +249,7 @@ export class DagContextImpl<
                   cbId,
                   cbCtx,
                 )) as WaitForCallbackSubmitterFunc<DurableLogger>,
-          config as WaitForCallbackConfig<TResult> | undefined,
+          taskConfig as WaitForCallbackConfig<TResult> | undefined,
         ),
     );
     this.register(name, def);
@@ -260,9 +260,9 @@ export class DagContextImpl<
     name: TName,
     deps: TDeps,
     duration: Duration,
-    options?: ConditionalConfig<TDeps>,
+    config?: ConditionalConfig<TDeps>,
   ): TaskHandle<TName, void> {
-    const { runIf } = extractConditional(options);
+    const { runIf } = extractConditional(config);
     const def = this.makeDef(name, "wait", deps, runIf, undefined, (ctx) =>
       ctx.runWaitWithExplicitId(name, duration),
     );
@@ -278,9 +278,9 @@ export class DagContextImpl<
     name: TName,
     deps: TDeps,
     check: CheckTaskFn<TDeps, TState, TLogger>,
-    options: WaitForConditionConfig<TState> & ConditionalConfig<TDeps>,
+    config: WaitForConditionConfig<TState> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TState> {
-    const { runIf, rest } = extractConditional(options);
+    const { runIf, rest } = extractConditional(config);
     const def = this.makeDef(
       name,
       "waitForCondition",
@@ -322,9 +322,9 @@ export class DagContextImpl<
     name: TName,
     deps: TDeps,
     fn: ChildTaskFn<TDeps, TResult, TLogger>,
-    options?: ChildConfig<TResult> & ConditionalConfig<TDeps>,
+    config?: ChildConfig<TResult> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TResult> {
-    const { runIf, rest } = extractConditional(options);
+    const { runIf, rest } = extractConditional(config);
     const def = this.makeDef(
       name,
       "runInChildContext",
@@ -354,16 +354,16 @@ export class DagContextImpl<
     deps: TDeps,
     items: TIn[] | ((deps: DepsMap<TDeps>) => TIn[]),
     mapFunc: MapFunc<TIn, TOut, TLogger>,
-    options?: MapConfig<TIn, TOut> & ConditionalConfig<TDeps>,
+    config?: MapConfig<TIn, TOut> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, BatchResult<TOut>> {
-    const { runIf, rest } = extractConditional(options);
-    const config = this.applyNestingDefault(rest);
+    const { runIf, rest } = extractConditional(config);
+    const taskConfig = this.applyNestingDefault(rest);
     const def = this.makeDef(
       name,
       "map",
       deps,
       runIf,
-      config,
+      taskConfig,
       (ctx, depsMap) => {
         const resolvedItems =
           typeof items === "function"
@@ -373,7 +373,7 @@ export class DagContextImpl<
           name,
           resolvedItems,
           mapFunc as MapFunc<TIn, TOut, DurableLogger>,
-          config as MapConfig<TIn, TOut> | undefined,
+          taskConfig as MapConfig<TIn, TOut> | undefined,
         );
       },
     );
@@ -388,18 +388,18 @@ export class DagContextImpl<
       | ParallelFunc<TOut, TLogger>
       | NamedParallelBranch<TOut, TLogger>
     )[],
-    options?: ParallelConfig<TOut> & ConditionalConfig<TDeps>,
+    config?: ParallelConfig<TOut> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, BatchResult<TOut>> {
-    const { runIf, rest } = extractConditional(options);
-    const config = this.applyNestingDefault(rest);
-    const def = this.makeDef(name, "parallel", deps, runIf, config, (ctx) =>
+    const { runIf, rest } = extractConditional(config);
+    const taskConfig = this.applyNestingDefault(rest);
+    const def = this.makeDef(name, "parallel", deps, runIf, taskConfig, (ctx) =>
       ctx.runParallelWithExplicitId<TOut>(
         name,
         branches as (
           | ParallelFunc<TOut, DurableLogger>
           | NamedParallelBranch<TOut, DurableLogger>
         )[],
-        config as ParallelConfig<TOut> | undefined,
+        taskConfig as ParallelConfig<TOut> | undefined,
       ),
     );
     this.register(name, def);
@@ -410,9 +410,9 @@ export class DagContextImpl<
     name: TName,
     deps: TDeps,
     register: (subDagCtx: DagContext<TLogger>) => void | Promise<void>,
-    options?: NestedDagConfig & ConditionalConfig<TDeps>,
+    config?: NestedDagConfig & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, DagResult> {
-    const { runIf, rest } = extractConditional(options);
+    const { runIf, rest } = extractConditional(config);
     const def = this.makeDef(name, "dag", deps, runIf, rest, (ctx) =>
       ctx.runDagWithExplicitId(
         name,

@@ -15,19 +15,19 @@ describe("TaskHandleImpl builder", () => {
   it("exposes name and symbol id", () => {
     const def = makeDef("a");
     const handle = new TaskHandleImpl("a", def.id, def);
-    expect(handle._name).toBe("a");
+    expect(handle.name).toBe("a");
     expect(typeof handle._id).toBe("symbol");
   });
 
-  it(".deps() appends to allDeps only, de-duplicated, and chains", () => {
+  it(".after() appends to allDeps only, de-duplicated, and chains", () => {
     const def = makeDef("target");
     const handle = new TaskHandleImpl("target", def.id, def);
     const depDef = makeDef("dep");
     const depHandle = new TaskHandleImpl("dep", depDef.id, depDef);
-    const returned = handle.deps(depHandle).deps(depHandle);
+    const returned = handle.after(depHandle).after(depHandle);
     expect(returned).toBe(handle);
     expect(def.allDeps).toHaveLength(1);
-    expect((def.allDeps[0] as AnyTaskHandle)._name).toBe("dep");
+    expect((def.allDeps[0] as AnyTaskHandle).name).toBe("dep");
     expect(def.inlineDeps).toHaveLength(0);
   });
 

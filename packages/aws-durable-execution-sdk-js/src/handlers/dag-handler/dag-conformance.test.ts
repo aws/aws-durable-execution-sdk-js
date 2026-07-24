@@ -223,12 +223,12 @@ describe("DAG cross-language conformance (TypeScript)", () => {
         },
         NO_RETRY,
       );
-      d.step("fulfill", [], async () => "fulfilled").deps(charge);
+      d.step("fulfill", [], async () => "fulfilled").after(charge);
       d.step("refund", [], async () => "refunded")
-        .deps(charge)
+        .after(charge)
         .triggerRule("ALL_FAILED");
       d.step("audit", [], async () => "audited")
-        .deps(charge)
+        .after(charge)
         .triggerRule("ALL_DONE");
     });
     expect(result.getStatus("charge")).toBe("FAILED");
@@ -252,12 +252,12 @@ describe("DAG cross-language conformance (TypeScript)", () => {
     const { context } = createTestDurableContext();
     const result = await context.dag("dag3", (d) => {
       const charge = d.step("charge", [], async () => "charged");
-      d.step("fulfill", [], async () => "fulfilled").deps(charge);
+      d.step("fulfill", [], async () => "fulfilled").after(charge);
       d.step("refund", [], async () => "refunded")
-        .deps(charge)
+        .after(charge)
         .triggerRule("ALL_FAILED");
       d.step("audit", [], async () => "audited")
-        .deps(charge)
+        .after(charge)
         .triggerRule("ALL_DONE");
     });
     expect(result.getResult("charge")).toBe("charged");
@@ -323,8 +323,8 @@ describe("DAG cross-language conformance (TypeScript)", () => {
       r_all_success: "ALL_SUCCESS",
       r_all_failed: "ALL_FAILED",
       r_all_done: "ALL_DONE",
-      r_one_success: "ONE_SUCCESS",
-      r_one_failed: "ONE_FAILED",
+      r_one_success: "ANY_SUCCESS",
+      r_one_failed: "ANY_FAILED",
       r_none_failed: "NONE_FAILED",
     } as const;
     const result = await context.dag("dag5", (d) => {
@@ -354,8 +354,8 @@ describe("DAG cross-language conformance (TypeScript)", () => {
       c_all_success: "ALL_SUCCESS",
       c_all_failed: "ALL_FAILED",
       c_all_done: "ALL_DONE",
-      c_one_success: "ONE_SUCCESS",
-      c_one_failed: "ONE_FAILED",
+      c_one_success: "ANY_SUCCESS",
+      c_one_failed: "ANY_FAILED",
       c_none_failed: "NONE_FAILED",
     } as const;
     const result = await context.dag("dag6", (d) => {
@@ -370,7 +370,7 @@ describe("DAG cross-language conformance (TypeScript)", () => {
       );
       for (const [name, rule] of Object.entries(consumers)) {
         d.step(name, [], async () => "c")
-          .deps(upOk, upFail)
+          .after(upOk, upFail)
           .triggerRule(rule as TriggerRule);
       }
     });
@@ -402,8 +402,8 @@ describe("DAG cross-language conformance (TypeScript)", () => {
       k_all_success: "ALL_SUCCESS",
       k_all_failed: "ALL_FAILED",
       k_all_done: "ALL_DONE",
-      k_one_success: "ONE_SUCCESS",
-      k_one_failed: "ONE_FAILED",
+      k_one_success: "ANY_SUCCESS",
+      k_one_failed: "ANY_FAILED",
       k_none_failed: "NONE_FAILED",
     } as const;
     const result = await context.dag("dag7", (d) => {
@@ -425,7 +425,7 @@ describe("DAG cross-language conformance (TypeScript)", () => {
       );
       for (const [name, rule] of Object.entries(consumers)) {
         d.step(name, [], async () => "k")
-          .deps(u1, u2)
+          .after(u1, u2)
           .triggerRule(rule as TriggerRule);
       }
     });
@@ -457,7 +457,7 @@ describe("DAG cross-language conformance (TypeScript)", () => {
       const d1 = d.step("d1", [gate], async () => "d1");
       d.step("d2", [d1], async () => "d2");
       d.step("sink", [], async () => "sink")
-        .deps(gate)
+        .after(gate)
         .triggerRule("ALL_DONE");
     });
     expect(result.getResult("seed")).toBe(1);
@@ -531,7 +531,7 @@ describe("DAG cross-language conformance (TypeScript)", () => {
       context.dag("dag11", (d) => {
         const p = d.step("p", [], async () => 1);
         const q = d.step("q", [p], async () => 2);
-        p.deps(q);
+        p.after(q);
       }),
     ).rejects.toBeInstanceOf(DagCyclicDependencyError);
     validationRecord("DAG-11", "DagCyclicDependencyError");

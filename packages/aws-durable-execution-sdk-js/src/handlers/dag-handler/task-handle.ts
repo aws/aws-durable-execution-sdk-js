@@ -30,7 +30,7 @@ export interface TaskDef {
   kind: TaskKind;
   /** Inline deps only (from the `deps` argument). Drives DepsMap construction. */
   inlineDeps: readonly AnyTaskHandle[];
-  /** inlineDeps ∪ builder `.deps(...)` edges, de-duplicated. Drives scheduling,
+  /** inlineDeps ∪ builder `.after(...)` edges, de-duplicated. Drives scheduling,
    *  readiness, trigger-rule evaluation, cycle detection, and missing-dep checks. */
   allDeps: AnyTaskHandle[];
   triggerRule?: TriggerRule;
@@ -57,12 +57,12 @@ export class TaskHandleImpl<
   readonly _resultType?: TResult;
 
   constructor(
-    readonly _name: TName,
+    readonly name: TName,
     readonly _id: symbol,
     private readonly _def: TaskDef,
   ) {}
 
-  deps(...deps: readonly AnyTaskHandle[]): this {
+  after(...deps: readonly AnyTaskHandle[]): this {
     for (const dep of deps) {
       if (!this._def.allDeps.some((existing) => existing._id === dep._id)) {
         this._def.allDeps.push(dep);

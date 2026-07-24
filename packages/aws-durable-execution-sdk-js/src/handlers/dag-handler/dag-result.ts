@@ -78,7 +78,7 @@ export class DagResultImpl implements DagResult {
   getResult(name: string): unknown;
   getResult(handleOrName: string | AnyTaskHandle): unknown {
     const name =
-      typeof handleOrName === "string" ? handleOrName : handleOrName._name;
+      typeof handleOrName === "string" ? handleOrName : handleOrName.name;
     const exec = this.results.get(name);
     return exec && exec.status === "SUCCEEDED" ? exec.result : undefined;
   }
@@ -87,7 +87,7 @@ export class DagResultImpl implements DagResult {
     const name =
       typeof taskNameOrHandle === "string"
         ? taskNameOrHandle
-        : taskNameOrHandle._name;
+        : taskNameOrHandle.name;
     return this.results.get(name)?.status;
   }
 

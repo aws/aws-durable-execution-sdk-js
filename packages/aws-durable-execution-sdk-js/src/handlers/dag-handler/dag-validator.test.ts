@@ -9,7 +9,7 @@ import {
 import { AnyTaskHandle } from "../../types/dag";
 
 const handleOf = (def: TaskDef): AnyTaskHandle =>
-  ({ _name: def.name, _id: def.id }) as AnyTaskHandle;
+  ({ name: def.name, _id: def.id }) as AnyTaskHandle;
 
 const makeTask = (name: string, deps: TaskDef[] = []): TaskDef => ({
   name,

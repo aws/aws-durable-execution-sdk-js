@@ -43,7 +43,7 @@ const task = (
     runIf: opts.runIf,
     executor: (_ctx, depsMap) => (opts.run ?? (async () => name))(depsMap),
   };
-  return { def, handle: { _name: name, _id: id } as AnyTaskHandle };
+  return { def, handle: { name, _id: id } as AnyTaskHandle };
 };
 
 const run = (built: Built[], config?: DagConfig) =>
@@ -211,7 +211,7 @@ describe("DagExecutor trigger-rule / skip edges", () => {
   it("runs success/done-family root rules on empty upstream, skips one-family", async () => {
     const a = task("a", { triggerRule: "ALL_DONE" });
     const b = task("b", { triggerRule: "NONE_FAILED" });
-    const c = task("c", { triggerRule: "ONE_SUCCESS" });
+    const c = task("c", { triggerRule: "ANY_SUCCESS" });
     const r = await run([a, b, c]);
     expect(r.getStatus("a")).toBe("SUCCEEDED");
     expect(r.getStatus("b")).toBe("SUCCEEDED");
@@ -228,7 +228,7 @@ describe("DagExecutor trigger-rule / skip edges", () => {
     expect(r.getStatus("sink")).toBe("SUCCEEDED");
   });
 
-  it("ONE_SUCCESS runs on a mix of one success + one failure", async () => {
+  it("ANY_SUCCESS runs on a mix of one success + one failure", async () => {
     const ok = task("ok", { run: async () => "ok" });
     const bad = task("bad", {
       run: async () => {
@@ -237,7 +237,7 @@ describe("DagExecutor trigger-rule / skip edges", () => {
     });
     const sink = task("sink", {
       deps: [ok, bad],
-      triggerRule: "ONE_SUCCESS",
+      triggerRule: "ANY_SUCCESS",
       run: async () => "ran",
     });
     const r = await run([ok, bad, sink]);
@@ -262,7 +262,7 @@ describe("reconstructDagResult (design-B replay)", () => {
   } as unknown as DurableContextImpl<DurableLogger>;
 
   const handleOf = (def: TaskDef): AnyTaskHandle =>
-    ({ _name: def.name, _id: def.id }) as AnyTaskHandle;
+    ({ name: def.name, _id: def.id }) as AnyTaskHandle;
   const mk = (
     name: string,
     deps: TaskDef[] = [],

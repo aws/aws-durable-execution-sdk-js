@@ -47,7 +47,7 @@ export function detectCycle(tasks: TaskDef[]): string[] | null {
     const n = queue.shift() as string;
     visited.push(n);
     for (const t of tasks) {
-      if (t.allDeps.some((d) => d._name === n)) {
+      if (t.allDeps.some((d) => d.name === n)) {
         const d = (inDegree.get(t.name) as number) - 1;
         inDegree.set(t.name, d);
         if (d === 0) {

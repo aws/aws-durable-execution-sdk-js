@@ -77,20 +77,20 @@ export class DagExecutor {
   }
 
   private isReady(task: TaskDef): boolean {
-    return task.allDeps.every((d) => this.results.has(d._name));
+    return task.allDeps.every((d) => this.results.has(d.name));
   }
 
   private depStatuses(task: TaskDef): TaskStatus[] {
     return task.allDeps.map(
-      (d) => (this.results.get(d._name) as TaskExecution).status,
+      (d) => (this.results.get(d.name) as TaskExecution).status,
     );
   }
 
   private buildDepsMap(task: TaskDef): Record<string, unknown> {
     const map: Record<string, unknown> = {};
     for (const dep of task.inlineDeps) {
-      const exec = this.results.get(dep._name);
-      map[dep._name] =
+      const exec = this.results.get(dep.name);
+      map[dep.name] =
         exec && exec.status === "SUCCEEDED" ? exec.result : undefined;
     }
     return map;
@@ -331,8 +331,8 @@ export async function reconstructDagResult(
   const buildDepsMap = (task: TaskDef): Record<string, unknown> => {
     const map: Record<string, unknown> = {};
     for (const dep of task.inlineDeps) {
-      const exec = results.get(dep._name);
-      map[dep._name] =
+      const exec = results.get(dep.name);
+      map[dep.name] =
         exec && exec.status === "SUCCEEDED" ? exec.result : undefined;
     }
     return map;
@@ -364,7 +364,7 @@ export async function reconstructDagResult(
       if (results.has(task.name)) {
         continue;
       }
-      if (!task.allDeps.every((d) => results.has(d._name))) {
+      if (!task.allDeps.every((d) => results.has(d.name))) {
         continue;
       }
       const entityId = ctx.createTaskId(task.name);
@@ -415,7 +415,7 @@ export async function reconstructDagResult(
         // because early completion halted the scheduler before it was ever
         // evaluated (§5.7, §9.6). These two must not be conflated on replay.
         const depStatuses = task.allDeps.map(
-          (d) => (results.get(d._name) as TaskExecution).status,
+          (d) => (results.get(d.name) as TaskExecution).status,
         );
         const computeSkipReason = (): SkipReason | undefined => {
           const rule = task.triggerRule ?? "ALL_SUCCESS";

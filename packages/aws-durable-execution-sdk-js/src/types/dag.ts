@@ -33,23 +33,33 @@ import { DurableOperationError } from "../errors/durable-error/durable-error";
  *
  * A `TaskHandle` is never serialized — its `_id` is an in-memory `symbol` that
  * exists only during registration and scheduling. The deserialized
- * {@link DagResult} resolves results by `_name`.
+ * {@link DagResult} resolves results by `name`.
  *
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface TaskHandle<TName extends string = string, TResult = unknown> {
-  /** The task's unique name within its DAG scope. */
-  readonly _name: TName;
-  /** In-memory identity; never serialized. */
+  /**
+   * The task's unique name within its DAG scope — the customer-facing result
+   * key used by {@link DagResult.getResult}, {@link DagResult.getStatus}, and
+   * {@link DepsMap}.
+   */
+  readonly name: TName;
+  /**
+   * In-memory identity; never serialized.
+   * @internal
+   */
   readonly _id: symbol;
-  /** Phantom field carrying `TResult` for {@link DepsMap}; never populated at runtime. */
+  /**
+   * Phantom field carrying `TResult` for {@link DepsMap}; never populated at runtime.
+   * @internal
+   */
   readonly _resultType?: TResult;
 
   /**
    * Add ordering-only dependencies: this task waits for them but does not
    * receive their results in its {@link DepsMap}.
    */
-  deps(...deps: readonly AnyTaskHandle[]): this;
+  after(...deps: readonly AnyTaskHandle[]): this;
 
   /**
    * Set the task's trigger rule (default from {@link DagConfig.defaultTriggerRule},
@@ -72,7 +82,7 @@ export type AnyTaskHandle = TaskHandle<string, unknown>;
  * @experimental This type is experimental and may be changed or removed in future releases.
  */
 export type DepsMap<TDeps extends readonly AnyTaskHandle[]> = {
-  [K in TDeps[number] as K["_name"]]: K extends TaskHandle<string, infer R>
+  [K in TDeps[number] as K["name"]]: K extends TaskHandle<string, infer R>
     ? R
     : never;
 };
@@ -175,8 +185,8 @@ export type TriggerRule =
   | "ALL_SUCCESS"
   | "ALL_FAILED"
   | "ALL_DONE"
-  | "ONE_SUCCESS"
-  | "ONE_FAILED"
+  | "ANY_SUCCESS"
+  | "ANY_FAILED"
   | "NONE_FAILED";
 
 /**
@@ -355,7 +365,7 @@ export interface DagContext<TLogger extends DurableLogger = DurableLogger> {
     name: TName,
     deps: TDeps,
     fn: StepTaskFn<TDeps, TResult, TLogger>,
-    options?: StepConfig<TResult> & ConditionalConfig<TDeps>,
+    config?: StepConfig<TResult> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TResult>;
 
   invoke<
@@ -368,7 +378,7 @@ export interface DagContext<TLogger extends DurableLogger = DurableLogger> {
     funcId: string,
     deps: TDeps,
     payloadFn: PayloadTaskFn<TDeps, TIn>,
-    options?: InvokeConfig<TIn, TOut> & ConditionalConfig<TDeps>,
+    config?: InvokeConfig<TIn, TOut> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TOut>;
 
   callback<
@@ -379,14 +389,14 @@ export interface DagContext<TLogger extends DurableLogger = DurableLogger> {
     name: TName,
     deps: TDeps,
     submitter: SubmitterTaskFn<TDeps, TLogger>,
-    options?: WaitForCallbackConfig<TResult> & ConditionalConfig<TDeps>,
+    config?: WaitForCallbackConfig<TResult> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TResult>;
 
   wait<TName extends string, TDeps extends readonly AnyTaskHandle[]>(
     name: TName,
     deps: TDeps,
     duration: Duration,
-    options?: ConditionalConfig<TDeps>,
+    config?: ConditionalConfig<TDeps>,
   ): TaskHandle<TName, void>;
 
   waitForCondition<
@@ -397,7 +407,7 @@ export interface DagContext<TLogger extends DurableLogger = DurableLogger> {
     name: TName,
     deps: TDeps,
     check: CheckTaskFn<TDeps, TState, TLogger>,
-    options: WaitForConditionConfig<TState> & ConditionalConfig<TDeps>,
+    config: WaitForConditionConfig<TState> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TState>;
 
   runInChildContext<
@@ -408,7 +418,7 @@ export interface DagContext<TLogger extends DurableLogger = DurableLogger> {
     name: TName,
     deps: TDeps,
     fn: ChildTaskFn<TDeps, TResult, TLogger>,
-    options?: ChildConfig<TResult> & ConditionalConfig<TDeps>,
+    config?: ChildConfig<TResult> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TResult>;
 
   map<TName extends string, TDeps extends readonly AnyTaskHandle[], TIn, TOut>(
@@ -416,7 +426,7 @@ export interface DagContext<TLogger extends DurableLogger = DurableLogger> {
     deps: TDeps,
     items: TIn[] | ((deps: DepsMap<TDeps>) => TIn[]),
     mapFunc: MapFunc<TIn, TOut, TLogger>,
-    options?: MapConfig<TIn, TOut> & ConditionalConfig<TDeps>,
+    config?: MapConfig<TIn, TOut> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, BatchResult<TOut>>;
 
   parallel<TName extends string, TDeps extends readonly AnyTaskHandle[], TOut>(
@@ -426,14 +436,14 @@ export interface DagContext<TLogger extends DurableLogger = DurableLogger> {
       | ParallelFunc<TOut, TLogger>
       | NamedParallelBranch<TOut, TLogger>
     )[],
-    options?: ParallelConfig<TOut> & ConditionalConfig<TDeps>,
+    config?: ParallelConfig<TOut> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, BatchResult<TOut>>;
 
   dag<TName extends string, TDeps extends readonly AnyTaskHandle[]>(
     name: TName,
     deps: TDeps,
     register: (subDagCtx: DagContext<TLogger>) => void | Promise<void>,
-    options?: NestedDagConfig & ConditionalConfig<TDeps>,
+    config?: NestedDagConfig & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, DagResult>;
 }
 
