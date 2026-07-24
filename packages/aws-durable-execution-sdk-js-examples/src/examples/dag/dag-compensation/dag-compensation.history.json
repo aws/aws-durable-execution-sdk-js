@@ -1,0 +1,137 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "349971f4-ca4d-4632-ba1a-7433ecace0d7",
+    "EventTimestamp": "2026-07-24T17:22:24.524Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "Dag",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "payment",
+    "EventTimestamp": "2026-07-24T17:22:24.533Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "d1b00f85d2ad1b02",
+    "Name": "charge",
+    "EventTimestamp": "2026-07-24T17:22:24.533Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "d1b00f85d2ad1b02",
+    "Name": "charge",
+    "EventTimestamp": "2026-07-24T17:22:24.533Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "card declined",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "763d7388eea1d2c1",
+    "Name": "refund",
+    "EventTimestamp": "2026-07-24T17:22:24.537Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "4c84a016013121f6",
+    "Name": "audit",
+    "EventTimestamp": "2026-07-24T17:22:24.537Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "763d7388eea1d2c1",
+    "Name": "refund",
+    "EventTimestamp": "2026-07-24T17:22:24.537Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"refunded\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "4c84a016013121f6",
+    "Name": "audit",
+    "EventTimestamp": "2026-07-24T17:22:24.537Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"audited\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "Dag",
+    "EventId": 9,
+    "Id": "c4ca4238a0b92382",
+    "Name": "payment",
+    "EventTimestamp": "2026-07-24T17:22:24.542Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"tasks\":[{\"name\":\"charge\",\"status\":\"FAILED\",\"startedAt\":\"2026-07-24T17:22:24.530Z\",\"completedAt\":\"2026-07-24T17:22:24.534Z\",\"error\":{\"ErrorType\":\"StepError\",\"ErrorMessage\":\"card declined\"}},{\"name\":\"fulfill\",\"status\":\"SKIPPED\",\"skipReason\":\"TRIGGER_RULE\"},{\"name\":\"refund\",\"status\":\"SUCCEEDED\",\"startedAt\":\"2026-07-24T17:22:24.534Z\",\"completedAt\":\"2026-07-24T17:22:24.538Z\",\"resultKind\":\"plain\",\"result\":\"refunded\"},{\"name\":\"audit\",\"status\":\"SUCCEEDED\",\"startedAt\":\"2026-07-24T17:22:24.534Z\",\"completedAt\":\"2026-07-24T17:22:24.538Z\",\"resultKind\":\"plain\",\"result\":\"audited\"}],\"completionReason\":\"COMPLETED_WITH_FAILURES\",\"totalCount\":4}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 10,
+    "EventTimestamp": "2026-07-24T17:22:24.543Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-07-24T17:22:24.524Z",
+      "EndTimestamp": "2026-07-24T17:22:24.543Z",
+      "Error": {},
+      "RequestId": "8a5fc1d8-3f8a-415f-95f4-523335d1a6cf"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 11,
+    "Id": "349971f4-ca4d-4632-ba1a-7433ecace0d7",
+    "EventTimestamp": "2026-07-24T17:22:24.543Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"completionReason\":\"COMPLETED_WITH_FAILURES\",\"chargeStatus\":\"FAILED\",\"fulfillStatus\":\"SKIPPED\",\"refundStatus\":\"SUCCEEDED\",\"refund\":\"refunded\",\"auditStatus\":\"SUCCEEDED\",\"audit\":\"audited\",\"successCount\":2,\"failureCount\":1,\"skippedCount\":1}"
+      }
+    }
+  }
+]

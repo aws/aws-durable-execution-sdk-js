@@ -1,0 +1,107 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "ca48c580-4546-49b7-8848-918ac7b2925b",
+    "EventTimestamp": "2026-07-24T17:22:24.678Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "Dag",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "moderation",
+    "EventTimestamp": "2026-07-24T17:22:24.686Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "45d1165bc0335040",
+    "Name": "classify",
+    "EventTimestamp": "2026-07-24T17:22:24.686Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "45d1165bc0335040",
+    "Name": "classify",
+    "EventTimestamp": "2026-07-24T17:22:24.686Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"safe\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "e094eccfaa28238f",
+    "Name": "publish",
+    "EventTimestamp": "2026-07-24T17:22:24.688Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "e094eccfaa28238f",
+    "Name": "publish",
+    "EventTimestamp": "2026-07-24T17:22:24.688Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"published\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "Dag",
+    "EventId": 7,
+    "Id": "c4ca4238a0b92382",
+    "Name": "moderation",
+    "EventTimestamp": "2026-07-24T17:22:24.694Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"tasks\":[{\"name\":\"classify\",\"status\":\"SUCCEEDED\",\"startedAt\":\"2026-07-24T17:22:24.683Z\",\"completedAt\":\"2026-07-24T17:22:24.686Z\",\"resultKind\":\"plain\",\"result\":\"safe\"},{\"name\":\"review\",\"status\":\"SKIPPED\",\"skipReason\":\"RUN_IF_PREDICATE\"},{\"name\":\"blocked\",\"status\":\"SKIPPED\",\"skipReason\":\"RUN_IF_PREDICATE\"},{\"name\":\"publish\",\"status\":\"SUCCEEDED\",\"startedAt\":\"2026-07-24T17:22:24.686Z\",\"completedAt\":\"2026-07-24T17:22:24.688Z\",\"resultKind\":\"plain\",\"result\":\"published\"}],\"completionReason\":\"ALL_COMPLETED\",\"totalCount\":4}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 8,
+    "EventTimestamp": "2026-07-24T17:22:24.694Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-07-24T17:22:24.678Z",
+      "EndTimestamp": "2026-07-24T17:22:24.694Z",
+      "Error": {},
+      "RequestId": "05cb99a8-3682-4b76-b899-0c0f9250e33a"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 9,
+    "Id": "ca48c580-4546-49b7-8848-918ac7b2925b",
+    "EventTimestamp": "2026-07-24T17:22:24.695Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"completionReason\":\"ALL_COMPLETED\",\"classify\":\"safe\",\"publish\":\"published\",\"publishStatus\":\"SUCCEEDED\",\"reviewStatus\":\"SKIPPED\",\"blockedStatus\":\"SKIPPED\",\"successCount\":2,\"skippedCount\":2}"
+      }
+    }
+  }
+]

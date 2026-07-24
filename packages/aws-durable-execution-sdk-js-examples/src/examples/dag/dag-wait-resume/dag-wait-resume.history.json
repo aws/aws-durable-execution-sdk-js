@@ -1,0 +1,143 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "ae9dddca-4ace-4c60-9eb1-fdc0857a5347",
+    "EventTimestamp": "2026-07-24T17:22:24.544Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "Dag",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "pipeline",
+    "EventTimestamp": "2026-07-24T17:22:24.551Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "63033c849e853049",
+    "Name": "prepare",
+    "EventTimestamp": "2026-07-24T17:22:24.551Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "63033c849e853049",
+    "Name": "prepare",
+    "EventTimestamp": "2026-07-24T17:22:24.551Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"prepared\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 5,
+    "Id": "ed7066676f3a7d07",
+    "Name": "pause",
+    "EventTimestamp": "2026-07-24T17:22:24.556Z",
+    "ParentId": "c4ca4238a0b92382",
+    "WaitStartedDetails": {
+      "Duration": 3,
+      "ScheduledEndTimestamp": "2026-07-24T17:22:27.556Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 6,
+    "EventTimestamp": "2026-07-24T17:22:24.577Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-07-24T17:22:24.544Z",
+      "EndTimestamp": "2026-07-24T17:22:24.577Z",
+      "Error": {},
+      "RequestId": "0e0b0c6c-bc87-4edd-a32a-25b89750a464"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 7,
+    "Id": "ed7066676f3a7d07",
+    "Name": "pause",
+    "EventTimestamp": "2026-07-24T17:22:27.556Z",
+    "ParentId": "c4ca4238a0b92382",
+    "WaitSucceededDetails": {
+      "Duration": 3
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "f11570d174bd6eaa",
+    "Name": "finalize",
+    "EventTimestamp": "2026-07-24T17:22:27.559Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 9,
+    "Id": "f11570d174bd6eaa",
+    "Name": "finalize",
+    "EventTimestamp": "2026-07-24T17:22:27.559Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"finalized\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "Dag",
+    "EventId": 10,
+    "Id": "c4ca4238a0b92382",
+    "Name": "pipeline",
+    "EventTimestamp": "2026-07-24T17:22:27.560Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"tasks\":[{\"name\":\"prepare\",\"status\":\"SUCCEEDED\",\"startedAt\":\"2026-07-24T17:22:27.557Z\",\"completedAt\":\"2026-07-24T17:22:27.557Z\",\"resultKind\":\"plain\",\"result\":\"prepared\"},{\"name\":\"pause\",\"status\":\"SUCCEEDED\",\"startedAt\":\"2026-07-24T17:22:27.557Z\",\"completedAt\":\"2026-07-24T17:22:27.557Z\",\"resultKind\":\"plain\"},{\"name\":\"finalize\",\"status\":\"SUCCEEDED\",\"startedAt\":\"2026-07-24T17:22:27.557Z\",\"completedAt\":\"2026-07-24T17:22:27.559Z\",\"resultKind\":\"plain\",\"result\":\"finalized\"}],\"completionReason\":\"ALL_COMPLETED\",\"totalCount\":3}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 11,
+    "EventTimestamp": "2026-07-24T17:22:27.560Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-07-24T17:22:27.556Z",
+      "EndTimestamp": "2026-07-24T17:22:27.560Z",
+      "Error": {},
+      "RequestId": "04015c3b-2090-4ef8-8192-79ce319290dd"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 12,
+    "Id": "ae9dddca-4ace-4c60-9eb1-fdc0857a5347",
+    "EventTimestamp": "2026-07-24T17:22:27.560Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"completionReason\":\"ALL_COMPLETED\",\"prepare\":\"prepared\",\"pauseStatus\":\"SUCCEEDED\",\"finalize\":\"finalized\",\"successCount\":3,\"totalCount\":3}"
+      }
+    }
+  }
+]
