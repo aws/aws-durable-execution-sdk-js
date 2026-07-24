@@ -316,13 +316,54 @@ describe("reconstructDagResult (design-B replay)", () => {
     const r = await reconstructDagResult(
       rcCtx,
       [a, b, c],
-      envelope({ totalCount: 3, completionReason: "ALL_COMPLETED" }),
+      envelope({
+        totalCount: 3,
+        successCount: 2,
+        skippedCount: 1,
+        completedCount: 3,
+        completionReason: "ALL_COMPLETED",
+        terminalTaskNames: ["a", "b", "c"],
+      }),
       exec,
     );
     expect(r.getResult("a")).toBe(10);
     expect(r.getResult("b")).toBe(20);
     expect(r.getStatus("c")).toBe("SKIPPED");
+    expect(r.skipped()[0].skipReason).toBe("TRIGGER_RULE");
     expect(r.totalCount).toBe(3);
+  });
+
+  it("leaves a skip-eligible task ABSENT when the envelope excludes it (early completion)", async () => {
+    // Repro for the design-B replay-fidelity bug: under early completion the
+    // live scheduler halts on the completing settle BEFORE the skip pass, so a
+    // skip-eligible task downstream of the completing task is ABSENT live.
+    // Reconstruction must NOT re-materialize it as SKIPPED, and must source
+    // counts from the (authoritative) envelope rather than recomputing.
+    const a = mk("a");
+    const c = mk("c", [a], "ALL_FAILED"); // a SUCCEEDED => c would greedily skip
+    const exec = execCtxWith({
+      "1-2-DAG_NODE_T_a": { Status: "SUCCEEDED", result: 1 },
+    });
+    const r = await reconstructDagResult(
+      rcCtx,
+      [a, c],
+      envelope({
+        totalCount: 2,
+        successCount: 1,
+        skippedCount: 0,
+        completedCount: 1,
+        completionReason: "MIN_SUCCESSFUL_REACHED",
+        terminalTaskNames: ["a"], // c is NOT terminal — it never started
+      }),
+      exec,
+    );
+    expect(r.getStatus("a")).toBe("SUCCEEDED");
+    // Regression guard: c must stay ABSENT, not SKIPPED.
+    expect(r.getStatus("c")).toBeUndefined();
+    // Counts come from the envelope, not a divergent recompute.
+    expect(r.successCount).toBe(1);
+    expect(r.skippedCount).toBe(0);
+    expect(r.completionReason).toBe("MIN_SUCCESSFUL_REACHED");
   });
 
   it("recovers the STARTED set; downstream of STARTED stays never-started (absent)", async () => {
@@ -337,8 +378,11 @@ describe("reconstructDagResult (design-B replay)", () => {
       [a, b, c],
       envelope({
         totalCount: 3,
+        successCount: 1,
+        completedCount: 1,
         completionReason: "MIN_SUCCESSFUL_REACHED",
         startedTaskNames: ["b"],
+        terminalTaskNames: ["a"],
       }),
       exec,
     );
@@ -357,5 +401,19 @@ describe("reconstructDagResult (design-B replay)", () => {
     const r = await reconstructDagResult(rcCtx, [a], null, exec);
     expect(r.getStatus("a")).toBe("FAILED");
     expect(r.completionReason).toBe("COMPLETED_WITH_FAILURES");
+  });
+
+  it("null/malformed envelope: derives skips greedily from per-task checkpoints", async () => {
+    // §8.1 contract 3: with no authoritative envelope, reconstruction derives
+    // what it can (empty STARTED set) and recomputes skips deterministically.
+    const a = mk("a");
+    const c = mk("c", [a], "ALL_FAILED"); // a SUCCEEDED => c skips greedily
+    const exec = execCtxWith({
+      "1-2-DAG_NODE_T_a": { Status: "SUCCEEDED", result: 1 },
+    });
+    const r = await reconstructDagResult(rcCtx, [a, c], null, exec);
+    expect(r.getStatus("a")).toBe("SUCCEEDED");
+    expect(r.getStatus("c")).toBe("SKIPPED");
+    expect(r.skipped()[0].skipReason).toBe("TRIGGER_RULE");
   });
 });

@@ -51,7 +51,6 @@ export class DagExecutor {
   private readonly maxConcurrency: number;
   private finished = false;
   private completionReason: DagCompletionReason = "ALL_COMPLETED";
-  private stopStarting = false;
   private resolveRun: (() => void) | undefined;
 
   constructor(
@@ -139,10 +138,7 @@ export class DagExecutor {
             continue;
           }
         }
-        // Task must run. Under early completion, stop starting new tasks.
-        if (this.stopStarting) {
-          continue;
-        }
+        // Task must run.
         if (this.inFlight.size >= this.maxConcurrency) {
           continue;
         }
@@ -330,6 +326,7 @@ export async function reconstructDagResult(
 ): Promise<DagResult> {
   const results = new Map<string, TaskExecution>();
   const startedSet = new Set(envelope?.startedTaskNames ?? []);
+  const terminalSet = new Set(envelope?.terminalTaskNames ?? []);
 
   const buildDepsMap = (task: TaskDef): Record<string, unknown> => {
     const map: Record<string, unknown> = {};
@@ -393,7 +390,8 @@ export async function reconstructDagResult(
         detail?.StepDetails?.Error ??
         detail?.ContextDetails?.Error ??
         detail?.ChainedInvokeDetails?.Error ??
-        detail?.CallbackDetails?.Error;
+        detail?.CallbackDetails?.Error ??
+        detail?.WaitDetails?.Error;
 
       if (status === "SUCCEEDED") {
         results.set(task.name, {
@@ -412,35 +410,60 @@ export async function reconstructDagResult(
       } else if (startedSet.has(task.name)) {
         results.set(task.name, { name: task.name, status: "STARTED" });
       } else {
-        // No checkpoint and not in the STARTED set. Recompute skip vs
-        // never-started deterministically — but ONLY if every dep reached a
-        // TERMINAL state. If any dep is STARTED (in-flight at early completion),
-        // the live scheduler never evaluated this task (it stopped starting new
-        // work), so it is never-started and must stay absent — recomputing a
-        // skip here against a non-terminal STARTED status would diverge from the
-        // original run.
+        // No checkpoint and not in the STARTED set. The task was either
+        // SKIPPED live (a skip checkpoints nothing, §9.5) or NEVER STARTED
+        // because early completion halted the scheduler before it was ever
+        // evaluated (§5.7, §9.6). These two must not be conflated on replay.
         const depStatuses = task.allDeps.map(
           (d) => (results.get(d._name) as TaskExecution).status,
         );
-        if (depStatuses.some((s) => s === "STARTED")) {
-          // Downstream of an in-flight task: never started. Leave absent.
-        } else {
+        const computeSkipReason = (): SkipReason | undefined => {
           const rule = task.triggerRule ?? "ALL_SUCCESS";
           if (!triggerRuleEvaluators[rule](depStatuses)) {
+            return "TRIGGER_RULE";
+          }
+          if (task.runIf && !task.runIf(buildDepsMap(task))) {
+            return "RUN_IF_PREDICATE";
+          }
+          return undefined;
+        };
+        if (envelope) {
+          // The envelope's terminal set is AUTHORITATIVE (§7.7/§8.1). A
+          // no-checkpoint task is SKIPPED iff the envelope lists it as
+          // terminal; otherwise it was never started under early completion
+          // and MUST stay absent. Greedily re-materializing it as SKIPPED
+          // would diverge from the live run, because live scheduling halts on
+          // the completing settle BEFORE the settle-triggered skip pass runs,
+          // so a skip-eligible task downstream of the completing task is
+          // absent live — it must be absent on replay too.
+          if (terminalSet.has(task.name)) {
             results.set(task.name, {
               name: task.name,
               status: "SKIPPED",
-              skipReason: "TRIGGER_RULE",
-            });
-          } else if (task.runIf && !task.runIf(buildDepsMap(task))) {
-            results.set(task.name, {
-              name: task.name,
-              status: "SKIPPED",
-              skipReason: "RUN_IF_PREDICATE",
+              skipReason: computeSkipReason() ?? "TRIGGER_RULE",
             });
           }
-          // else: would-run but no checkpoint and not STARTED => never started
-          // (early completion). Leave absent from results.
+          // else: never started — leave absent.
+        } else {
+          // No/malformed envelope (§8.1 contract 3): derive greedily from the
+          // per-task checkpoints with an empty STARTED set. Respect the
+          // in-flight guard — a task downstream of a STARTED (non-terminal)
+          // dep was never evaluated live, so recomputing a skip against that
+          // non-terminal status would diverge.
+          if (depStatuses.some((s) => s === "STARTED")) {
+            // Downstream of an in-flight task: never started. Leave absent.
+          } else {
+            const reason = computeSkipReason();
+            if (reason) {
+              results.set(task.name, {
+                name: task.name,
+                status: "SKIPPED",
+                skipReason: reason,
+              });
+            }
+            // else: would-run but no checkpoint and not STARTED => never
+            // started (early completion). Leave absent from results.
+          }
         }
       }
       if (results.has(task.name)) {
@@ -449,12 +472,27 @@ export async function reconstructDagResult(
     }
   }
 
-  const failureCount = [...results.values()].filter(
+  const derivedFailureCount = [...results.values()].filter(
     (e) => e.status === "FAILED",
   ).length;
   const completionReason: DagCompletionReason =
     envelope?.completionReason ??
-    (failureCount > 0 ? "COMPLETED_WITH_FAILURES" : "ALL_COMPLETED");
+    (derivedFailureCount > 0 ? "COMPLETED_WITH_FAILURES" : "ALL_COMPLETED");
   const totalCount = envelope?.totalCount ?? tasks.length;
-  return new DagResultImpl(results, completionReason, totalCount);
+  // When the envelope is present its counts are authoritative (§7.7/§8.1):
+  // they reflect the live run and may legitimately differ from a greedy
+  // recompute over the reconstructed `results` map under early completion.
+  const authoritativeCounts = envelope
+    ? {
+        successCount: envelope.successCount,
+        failureCount: envelope.failureCount,
+        skippedCount: envelope.skippedCount,
+      }
+    : undefined;
+  return new DagResultImpl(
+    results,
+    completionReason,
+    totalCount,
+    authoritativeCounts,
+  );
 }

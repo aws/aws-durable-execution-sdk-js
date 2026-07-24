@@ -37,24 +37,40 @@ export class DagResultImpl implements DagResult {
     results: Map<string, TaskExecution>,
     completionReason: DagCompletionReason,
     totalCount?: number,
+    authoritativeCounts?: {
+      successCount: number;
+      failureCount: number;
+      skippedCount: number;
+    },
   ) {
     this.results = results;
     this.completionReason = completionReason;
-    let success = 0;
-    let failure = 0;
-    let skipped = 0;
-    for (const exec of results.values()) {
-      if (exec.status === "SUCCEEDED") {
-        success++;
-      } else if (exec.status === "FAILED") {
-        failure++;
-      } else if (exec.status === "SKIPPED") {
-        skipped++;
+    if (authoritativeCounts) {
+      // Design-B replay: counts are sourced from the SDK-owned DagSummary
+      // envelope (§7.7/§8.1), NOT recomputed from the reconstructed results
+      // map — under early completion the two can legitimately differ (a
+      // never-started skip-eligible task is absent from `results` but was
+      // never counted live either).
+      this.successCount = authoritativeCounts.successCount;
+      this.failureCount = authoritativeCounts.failureCount;
+      this.skippedCount = authoritativeCounts.skippedCount;
+    } else {
+      let success = 0;
+      let failure = 0;
+      let skipped = 0;
+      for (const exec of results.values()) {
+        if (exec.status === "SUCCEEDED") {
+          success++;
+        } else if (exec.status === "FAILED") {
+          failure++;
+        } else if (exec.status === "SKIPPED") {
+          skipped++;
+        }
       }
+      this.successCount = success;
+      this.failureCount = failure;
+      this.skippedCount = skipped;
     }
-    this.successCount = success;
-    this.failureCount = failure;
-    this.skippedCount = skipped;
     this.totalCount = totalCount ?? results.size;
   }
 
