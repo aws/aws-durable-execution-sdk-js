@@ -220,7 +220,7 @@ d.invoke("pay:prod", lambda deps: {"amt": deps["validate"]}, deps=[validate], na
 # run_in_child_context:   (deps, child_ctx)
 ```
 
-**Ordering-only deps** (JS builder `.deps(...)`): provided via the `TaskHandle.after(*handles)` builder (§2.4). They gate scheduling and trigger-rule evaluation but do **not** appear in the `DepsMap`. `TaskDef` stores `inline_deps` (drive the map) and `all_deps = inline_deps ∪ after-edges` (drive readiness/trigger/cycle), mirroring JS §7.5.
+**Ordering-only deps** (JS builder `.after(...)`): provided via the `TaskHandle.after(*handles)` builder (§2.4). They gate scheduling and trigger-rule evaluation but do **not** appear in the `DepsMap`. `TaskDef` stores `inline_deps` (drive the map) and `all_deps = inline_deps ∪ after-edges` (drive readiness/trigger/cycle), mirroring JS §7.5.
 
 ### 2.4 `TaskHandle`
 
@@ -252,8 +252,8 @@ class TriggerRule(Enum):
     ALL_SUCCESS = "ALL_SUCCESS"   # default
     ALL_FAILED  = "ALL_FAILED"
     ALL_DONE    = "ALL_DONE"
-    ONE_SUCCESS = "ONE_SUCCESS"
-    ONE_FAILED  = "ONE_FAILED"
+    ANY_SUCCESS = "ANY_SUCCESS"
+    ANY_FAILED  = "ANY_FAILED"
     NONE_FAILED = "NONE_FAILED"
 ```
 

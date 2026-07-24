@@ -116,7 +116,7 @@ DurableFuture<DagResult> dagAsync(String name, Consumer<DagContext> register, Da
 public interface Deps {
     /** Typed result of an upstream task. Returns the checkpointed result of `handle`.
      *  Throws IllegalStateException if `handle` is not an inline dependency of this task
-     *  (ordering-only deps added via .dependsOn(...) are NOT retrievable here — mirrors JS
+     *  (ordering-only deps added via .after(...) are NOT retrievable here — mirrors JS
      *  "only inline deps populate DepsMap"). Returns null if the upstream did not SUCCEED
      *  (see the non-ALL_SUCCESS caveat, §2.6). */
     <T> T get(TaskHandle<T> handle);
@@ -131,7 +131,7 @@ This is **type-safe without literal-string types**: `deps.get(fetchHandle)` retu
 
 > **Type-soundness note (✅ source-verified pattern).** `<T> T get(TaskHandle<T> handle)` is fully sound: it is the same **typed-key heterogeneous container** pattern proven in the JDK/ecosystem — `ClassToInstanceMap<T>`, Netty `AttributeMap`/`AttributeKey<T>`, and gRPC `Context.Key<T>`. Internally the results are stored in a `Map<String, Object>` keyed by `handle.name()`, and `get` performs one **contained, provably-safe** unchecked cast to `T` because the `(handle → result type)` binding is fixed at registration and handles are unique per task. No unchecked warning or `ClassCastException` risk leaks to the caller. The Java SDK itself relies on the same reified-type discipline via `TypeToken<T>` for serde — **verified in source**: `SerializableDurableOperation.deserializeResult` calls `resultSerDes.deserialize(result, resultTypeToken)` and `deserializeException` uses `TypeToken.get(exceptionClass.asSubclass(Throwable.class))` (`operation/SerializableDurableOperation.java`), and every `DurableContextImpl.*Async` op carries a `TypeToken<T>`/`Class<T>` result type. So `Deps.get(handle)` is idiomatic and consistent with the existing API.
 
-> **Why not a positional-arity `zip` overload (`.dependsOn(a, b) -> (A, B) -> R`)?** Considered (Reactor `Mono.zip` / Airflow-style). Rejected as the _primary_ API because: (a) it caps at a fixed arity (typically 2–8 overloads) and degrades to `Object[]`/`Tuple` past that; (b) it does not compose with the _ordering-only_ deps distinction; (c) it forces a different call shape per dep count. It is offered as **optional sugar** for the common 1–3 typed-dep case (§2.7), but `Deps.get(handle)` is the canonical, arity-unbounded form.
+> **Why not a positional-arity `zip` overload (`.after(a, b) -> (A, B) -> R`)?** Considered (Reactor `Mono.zip` / Airflow-style). Rejected as the _primary_ API because: (a) it caps at a fixed arity (typically 2–8 overloads) and degrades to `Object[]`/`Tuple` past that; (b) it does not compose with the _ordering-only_ deps distinction; (c) it forces a different call shape per dep count. It is offered as **optional sugar** for the common 1–3 typed-dep case (§2.7), but `Deps.get(handle)` is the canonical, arity-unbounded form.
 
 ### 2.3 `TaskHandle<T>`
 
@@ -147,7 +147,7 @@ public interface TaskHandle<T> {
     TaskHandle<T> reads(TaskHandle<?>... deps);
 
     /** Ordering-only deps: wait for these but do not receive their results in Deps. */
-    TaskHandle<T> dependsOn(TaskHandle<?>... deps);
+    TaskHandle<T> after(TaskHandle<?>... deps);
 
     /** Trigger rule (default from DagConfig.defaultTriggerRule, else ALL_SUCCESS). */
     TaskHandle<T> triggerRule(TriggerRule rule);
@@ -159,7 +159,7 @@ public interface TaskHandle<T> {
 
 The in-memory identity is an SDK-internal object reference (Java's answer to JS's `symbol _id`) — never serialized. `TaskHandle` is used only during registration/scheduling.
 
-> **[CODE NOTE]** Builder methods return `this` (typed `TaskHandle<T>`) for chaining, e.g. `d.step(...).dependsOn(a).triggerRule(TriggerRule.ALL_DONE)`. This matches the fluent `parallel().branch(...)` and `*Config.builder()` styles already in the Java SDK.
+> **[CODE NOTE]** Builder methods return `this` (typed `TaskHandle<T>`) for chaining, e.g. `d.step(...).after(a).triggerRule(TriggerRule.ALL_DONE)`. This matches the fluent `parallel().branch(...)` and `*Config.builder()` styles already in the Java SDK.
 
 ### 2.4 `DagContext` — declarative task registration
 
@@ -243,24 +243,25 @@ Each interface's non-`Deps` parameters preserve the **native** shape of the unde
 
 Same runtime caveat as JS §2.5: under trigger rules other than `ALL_SUCCESS`, an upstream can be `FAILED`/`SKIPPED` and still let this task run, so `deps.get(handle)` may be `null`. Java offers `deps.getOptional(handle)` for those paths. `Deps.get` returns the declared `T` on the common `ALL_SUCCESS` path.
 
-### 2.7 Optional positional-arity sugar (non-normative)
+### 2.7 Positional-arity typed-deps sugar (implemented, non-normative)
 
-For the common 1–3 typed-dep case, offer typed convenience overloads that avoid the `Deps` accessor, mirroring `Mono.zip`:
+For the common 1–3 typed-dep case, `DagContext` ships typed convenience overloads that avoid the `Deps` accessor, mirroring `Mono.zip`:
 
 ```java
-// Sugar layer — desugars to Deps.get() internally; capped at a small arity.
-<A, T> TaskHandle<T> step(String name, Class<T> type, TaskHandle<A> a, BiFunction<A, StepContext, T> fn);
-<A, B, T> TaskHandle<T> step(String name, Class<T> type, TaskHandle<A> a, TaskHandle<B> b, TriFunction<A, B, StepContext, T> fn);
+// Sugar layer — desugars to step(...).reads(...) + Deps.get() internally; capped at arity 3.
+<A, T>       TaskHandle<T> step(String name, Class<T> type, TaskHandle<A> a, DagStep1Function<A, T> fn);
+<A, B, T>    TaskHandle<T> step(String name, Class<T> type, TaskHandle<A> a, TaskHandle<B> b, DagStep2Function<A, B, T> fn);
+<A, B, C, T> TaskHandle<T> step(String name, Class<T> type, TaskHandle<A> a, TaskHandle<B> b, TaskHandle<C> c, DagStep3Function<A, B, C, T> fn);
 ```
 
-This is **additive sugar**, not the canonical path (§2.2). `Deps.get(handle)` remains the arity-unbounded form and the one this spec normatively describes.
+This is **additive sugar**, not the canonical path (§2.2), shipped in v1 backed by the `@Experimental` `DagStep1Function`/`DagStep2Function`/`DagStep3Function` interfaces. `Deps.get(handle)` (via `.reads(...)`) remains the arity-unbounded form and the one this spec normatively describes.
 
 ### 2.8 `TriggerRule`, `TaskStatus`, `SkipReason`
 
 Java enums (JS uses string-literal unions). Direct port — enums are the idiomatic Java form and serialize cleanly.
 
 ```java
-public enum TriggerRule { ALL_SUCCESS, ALL_FAILED, ALL_DONE, ONE_SUCCESS, ONE_FAILED, NONE_FAILED }
+public enum TriggerRule { ALL_SUCCESS, ALL_FAILED, ALL_DONE, ANY_SUCCESS, ANY_FAILED, NONE_FAILED }
 public enum TaskStatus  { SUCCEEDED, FAILED, SKIPPED, STARTED }
 public enum SkipReason  { TRIGGER_RULE, RUN_IF_PREDICATE }
 ```
@@ -302,9 +303,8 @@ public interface DagResult {
 
     DagCompletionReason completionReason();
 
-    /** Throws DagExecutionException if failureCount > 0. (Also fires on CUSTOM_COMPLETION_FAILED,
-     *  but that reason is unreachable under the recommended v1 Option B — §6 defers custom
-     *  completion; the clause is inert until/unless Option A ships.) */
+    /** Throws DagExecutionException if failureCount > 0. (Custom-predicate completion is deferred
+     *  to v2 in Java, so there is no CUSTOM_COMPLETION_FAILED reason to also key off — §6.) */
     void throwIfError();
 }
 ```
@@ -324,13 +324,11 @@ public enum DagCompletionReason {
     ALL_COMPLETED,                 // default drain, all reachable tasks succeeded/skipped
     COMPLETED_WITH_FAILURES,       // DAG-specific: default drain, >=1 task FAILED (resolves the JS F13 footgun)
     MIN_SUCCESSFUL_REACHED,        // via completionConfig
-    FAILURE_TOLERANCE_EXCEEDED,    // via completionConfig
-    CUSTOM_COMPLETION_SUCCEEDED,   // via custom predicate — see §6 (may be deferred)
-    CUSTOM_COMPLETION_FAILED       // via custom predicate — see §6 (may be deferred)
+    FAILURE_TOLERANCE_EXCEEDED     // via completionConfig
 }
 ```
 
-> **[CODE NOTE — divergence]** Because the Java batch enum lacks `CUSTOM_COMPLETION_*`, `DagCompletionReason` is NOT a strict extension of an existing Java enum — it is a new DAG-local enum. Semantics match JS: default drain distinguishes clean (`ALL_COMPLETED`) from drained-with-failures (`COMPLETED_WITH_FAILURES`), so the reason itself disambiguates. `throwIfError()` keys off `failureCount`, not the reason. The two `CUSTOM_COMPLETION_*` members appear **only if** the custom-predicate path (§6) is implemented; if v1 defers custom completion (see [A-J6]), they are reserved-but-unreachable.
+> **[CODE NOTE — divergence]** Because the Java batch enum lacks `CUSTOM_COMPLETION_*`, `DagCompletionReason` is NOT a strict extension of an existing Java enum — it is a new DAG-local enum. Semantics match JS: default drain distinguishes clean (`ALL_COMPLETED`) from drained-with-failures (`COMPLETED_WITH_FAILURES`), so the reason itself disambiguates. `throwIfError()` keys off `failureCount`, not the reason. **Custom-predicate completion (§6) is deferred to v2 in Java, so the `CUSTOM_COMPLETION_SUCCEEDED/FAILED` members are NOT declared** (they were dropped rather than shipped reserved-but-unreachable); they will be added when Option A ships. (Go, which implements custom completion, keeps its `CUSTOM_COMPLETION_*` reasons.)
 
 ### 2.11 `DagConfig`
 
@@ -361,13 +359,13 @@ ctx.dag("etl", d -> {
                 process(deps.get(a), deps.get(b)))
              .reads(a, b);                                             // declare inline (typed) deps: retrievable via Deps.get
     d.step("notify", Void.class, (deps, s) -> notifyDone())
-             .dependsOn(c);                                            // ordering-only: waits for c, no result access
+             .after(c);                                            // ordering-only: waits for c, no result access
 });
 ```
 
-Inline deps are declared explicitly via `.reads(...)`; only those handles are retrievable via `Deps.get(...)` inside the fn. `.dependsOn(...)` adds ordering-only edges (scheduling/trigger/cycle only, not in `Deps`).
+Inline deps are declared explicitly via `.reads(...)`; only those handles are retrievable via `Deps.get(...)` inside the fn. `.after(...)` adds ordering-only edges (scheduling/trigger/cycle only, not in `Deps`).
 
-> **[CODE NOTE — divergence from JS]** JS distinguishes inline deps (`deps: [a,b]` array param) from builder deps (`.deps(...)`) _syntactically_. Java has no separate deps array param and cannot introspect a lambda body to discover which handles it calls `deps.get(...)` on; instead **a task's inline deps must be declared explicitly on the builder via `.reads(a, b)`**, so the scheduler knows the full graph (and the retrievable-deps set) without executing the body. Only handles passed to `.reads(...)` are retrievable via `Deps.get`; passing an undeclared handle throws `IllegalStateException` (§3). See §3 for the concrete `TaskDef`/registration mechanics.
+> **[CODE NOTE — divergence from JS]** JS distinguishes inline deps (`deps: [a,b]` array param) from builder deps (`.after(...)`) _syntactically_. Java has no separate deps array param and cannot introspect a lambda body to discover which handles it calls `deps.get(...)` on; instead **a task's inline deps must be declared explicitly on the builder via `.reads(a, b)`**, so the scheduler knows the full graph (and the retrievable-deps set) without executing the body. Only handles passed to `.reads(...)` are retrievable via `Deps.get`; passing an undeclared handle throws `IllegalStateException` (§3). See §3 for the concrete `TaskDef`/registration mechanics.
 
 ---
 
@@ -381,7 +379,7 @@ var c = d.step("c", C.class, (deps, s) -> process(deps.get(a), deps.get(b)))
 ```
 
 - `.reads(TaskHandle<?>... deps)` — declares **inline** deps: they gate scheduling AND are retrievable via `Deps.get`. (Runtime guard: `Deps.get(h)` throws `IllegalStateException` if `h` was not declared via `.reads(...)`.)
-- `.dependsOn(TaskHandle<?>... deps)` — declares **ordering-only** deps: gate scheduling but NOT retrievable via `Deps`.
+- `.after(TaskHandle<?>... deps)` — declares **ordering-only** deps: gate scheduling but NOT retrievable via `Deps`.
 
 `TaskDef` (internal) stores both sets, exactly like JS `inlineDeps` vs `allDeps`:
 
@@ -390,7 +388,7 @@ record TaskDef<T>(
     String name,
     TaskKind kind,                       // STEP, INVOKE, CALLBACK, WAIT, WAIT_FOR_CONDITION, CHILD, MAP, PARALLEL, DAG
     List<TaskHandle<?>> inlineDeps,      // from .reads(...)  -> drives Deps
-    List<TaskHandle<?>> allDeps,         // inlineDeps ∪ .dependsOn(...) -> readiness, trigger, cycle, missing-dep
+    List<TaskHandle<?>> allDeps,         // inlineDeps ∪ .after(...) -> readiness, trigger, cycle, missing-dep
     Optional<TriggerRule> triggerRule,
     Optional<Predicate<Deps>> runIf,
     Object options,
@@ -403,7 +401,7 @@ record TaskDef<T>(
 | `Deps` construction (typed result access)                                  | `inlineDeps` |
 | Readiness / trigger-rule status / cycle detection / missing-dep validation | `allDeps`    |
 
-> **[CODE NOTE — the cleaner alternative + why not]** A deps-in-signature form (`d.step("c", C.class, List.of(a,b), (deps,s)->...)`) makes inline deps a required positional argument (closest to JS). Rejected as canonical because it fixes an awkward `List<TaskHandle<?>>` param in every overload and reads worse than fluent `.reads(...)`. The `.reads(...)`/`.dependsOn(...)` builder pair is the idiomatic Java choice and keeps the method overload set small. The positional-arity sugar (§2.7) is the escape hatch for those who want the deps _and_ their types inline.
+> **[CODE NOTE — the cleaner alternative + why not]** A deps-in-signature form (`d.step("c", C.class, List.of(a,b), (deps,s)->...)`) makes inline deps a required positional argument (closest to JS). Rejected as canonical because it fixes an awkward `List<TaskHandle<?>>` param in every overload and reads worse than fluent `.reads(...)`. The `.reads(...)`/`.after(...)` builder pair is the idiomatic Java choice and keeps the method overload set small. The positional-arity sugar (§2.7) is the escape hatch for those who want the deps _and_ their types inline.
 
 ---
 
@@ -471,8 +469,8 @@ Ported from JS §5. The Java scheduler (`DagExecutor`) is a topological schedule
       ALL_SUCCESS  { boolean eval(List<TaskStatus> s){ return s.stream().allMatch(x->x==SUCCEEDED); } },      // [] -> true (Run)
       ALL_FAILED   { boolean eval(List<TaskStatus> s){ return !s.isEmpty() && s.stream().allMatch(x->x==FAILED); } }, // [] -> false (Skip)
       ALL_DONE     { boolean eval(List<TaskStatus> s){ return true; } },                                        // [] -> true (Run)
-      ONE_SUCCESS  { boolean eval(List<TaskStatus> s){ return s.stream().anyMatch(x->x==SUCCEEDED); } },        // [] -> false (Skip)
-      ONE_FAILED   { boolean eval(List<TaskStatus> s){ return s.stream().anyMatch(x->x==FAILED); } },           // [] -> false (Skip)
+      ANY_SUCCESS  { boolean eval(List<TaskStatus> s){ return s.stream().anyMatch(x->x==SUCCEEDED); } },        // [] -> false (Skip)
+      ANY_FAILED   { boolean eval(List<TaskStatus> s){ return s.stream().anyMatch(x->x==FAILED); } },           // [] -> false (Skip)
       NONE_FAILED  { boolean eval(List<TaskStatus> s){ return s.stream().noneMatch(x->x==FAILED); } };          // [] -> true (Run)
       abstract boolean eval(List<TaskStatus> statuses);
   }
@@ -525,7 +523,7 @@ public sealed interface DagCompletionConfig
                                       int completedCount, int totalCount,
                                       Map<String, TaskExecution<?>> results) {}   // results = value-based short-circuit
   ```
-  This is feasible **without touching the batch enum** because the DAG owns its scheduler and its own `DagCompletionReason` (§2.10) already reserves `CUSTOM_COMPLETION_*`.
+  This is feasible **without touching the batch enum** because the DAG owns its scheduler and its own `DagCompletionReason` (§2.10) can add `CUSTOM_COMPLETION_*` when Option A ships (they are **not** declared in v1 — dropped rather than reserved, per C4b).
 - **Option B (recommended for v1):** ship only the threshold path in v1 and mark result-based short-circuit (JS §13.4) as **deferred**. Since [A-J6] is verified (the SDK has no custom-completion machinery to reuse), custom completion is a **net-new DAG-owned feature** either way; deferring it keeps v1 minimal and avoids committing to Option A before the scheduler internals are built.
 
 > **[CODE NOTE — divergence]** This is the single largest _feature_ divergence from JS: JS ships value-based custom completion in v1; Java should ship threshold completion in v1 and gate custom completion on verifying an internal predicate seam. The DAG-owned scheduler makes Option A tractable, but it is flagged as an assumption.
@@ -629,7 +627,7 @@ Parent `maxConcurrency` limits only top-level tasks; each nested DAG has its own
 | c   | Name-based entity IDs + reserved `DAG_NODE_T_` delimiter + no-dash names | **Ports (normative core)**           | Language-independent; identical injectivity proof (§4). [A-J2] explicit-ID seam **resolved `CAN-BE-ADDED`** — minimal `OperationIdGenerator.operationIdForName` + internal `*AsyncWithId` entry points (§4.3).                                                                                                                                     |
 | d   | Trigger rules                                                            | **Ports**                            | `enum TriggerRule` with per-constant `eval()` (§5); truth table verbatim.                                                                                                                                                                                                                                                                          |
 | d   | `runIf`                                                                  | **Ports**                            | `Predicate<Deps>` on the builder (§2.6).                                                                                                                                                                                                                                                                                                           |
-| e   | Completion-reason core/superset layering                                 | **Adapts**                           | Java can't union enums; define DAG-local `enum DagCompletionReason` (§2.10) as a superset of the 3-member `ConcurrencyCompletionStatus` + `COMPLETED_WITH_FAILURES` (+ reserved `CUSTOM_COMPLETION_*`).                                                                                                                                            |
+| e   | Completion-reason core/superset layering                                 | **Adapts**                           | Java can't union enums; define DAG-local `enum DagCompletionReason` (§2.10) as a superset of the 3-member `ConcurrencyCompletionStatus` + `COMPLETED_WITH_FAILURES` (`CUSTOM_COMPLETION_*` deferred to v2 — added when custom completion ships, not declared in v1 per C4b).                                                                       |
 | e   | Custom completion predicate w/ result-based short-circuit                | **Adapts (defer to v2)**             | [A-J6] **verified**: Java batch has no custom-predicate hook / no `CUSTOM_COMPLETION_*`. Custom completion is net-new either way; v1 ships threshold only (§6 Option B). Option A (DAG-owned `Predicate<DagCompletionSnapshot>`) remains possible later because the scheduler is separate. §6.                                                     |
 | f   | SDK-owned summary envelope + design-B reconstruction                     | **Does NOT port ([A-J3] falsified)** | Java has no summary-generator hook / `*Summary` envelope. Large `DagResult` handled by **native child-context re-execution** + **per-task checkpoint reconstruction** (like `map`); customer `summaryGenerator` dropped as non-native (§8.1).                                                                                                      |
 | g   | Concurrency model                                                        | **Adapts**                           | `DurableFuture`-driven scheduler: launch ready tasks via `*Async`, await with `DurableFuture.get()`/`allOf`/`anyOf`, enforce `maxConcurrency` by deferring the `*Async` call (§9). **Correction:** `DurableFuture` is thread-backed (user executor); determinism is from op-ID replay + active-thread-count suspension, not from avoiding threads. |
@@ -648,7 +646,7 @@ Mirror the Java SDK's testing utilities (`sdk-testing`, local runner) and the JS
 
 - **`DagValidatorTest`** (JUnit 5): cycle detection (self-loop, 2-cycle, deep, diamond=no-cycle); invalid names (empty, >100, dash, `DAG_NODE_T_` substring); duplicates across op kinds; missing/foreign-scope deps → `Dag*Exception` assertions via `assertThrows`.
 - **`TriggerRuleTest`**: full truth table (§5) × {all-succ, all-fail, mixed, includes-skip, empty} for all six rules (parameterized test).
-- **`TaskHandleTest`**: `.reads()`/`.dependsOn()`/`.triggerRule()`/`.runIf()` mutate `TaskDef`; `Deps.get(handle)` returns typed result; `Deps.get` on undeclared handle throws `IllegalStateException`.
+- **`TaskHandleTest`**: `.reads()`/`.after()`/`.triggerRule()`/`.runIf()` mutate `TaskDef`; `Deps.get(handle)` returns typed result; `Deps.get` on undeclared handle throws `IllegalStateException`.
 - **`DagExecutorTest`** (mock context): readiness/topological order, `maxConcurrency` throttling, skip propagation, `runIf` skip, threshold completion, drain-with-compensation.
 - **`DagResultTest`**: typed `getResult(handle)` for succeeded/failed/skipped/not-run (`Optional.empty()`); `throwIfError()` → `DagExecutionException`; serdes round-trip incl. error reconstruction and recursive `MapResult`/`DagResult` restore (no `DagSummary` envelope exists — §8.1).
 - **Entity-ID tests**: `DAG_NODE_T_{name}` for prefixed/unprefixed; nested recursion; no collision with counter IDs.

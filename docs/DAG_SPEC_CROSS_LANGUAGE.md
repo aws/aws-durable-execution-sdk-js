@@ -131,7 +131,7 @@ The scheduler **MUST** guarantee:
 
 Six rules, default `ALL_SUCCESS`. The truth table (incl. the empty-upstream row) is normative and **MUST** be ported verbatim. `SKIPPED` counts as **neither success nor failure**.
 
-| Upstream states     | ALL_SUCCESS | ALL_FAILED | ALL_DONE |  ONE_SUCCESS   | ONE_FAILED  | NONE_FAILED |
+| Upstream states     | ALL_SUCCESS | ALL_FAILED | ALL_DONE |  ANY_SUCCESS   | ANY_FAILED  | NONE_FAILED |
 | ------------------- | :---------: | :--------: | :------: | :------------: | :---------: | :---------: |
 | **Empty (no deps)** |     Run     |  **Skip**  |   Run    |    **Skip**    |  **Skip**   |     Run     |
 | All succeeded       |     Run     |    Skip    |   Run    |      Run       |    Skip     |     Run     |
@@ -139,7 +139,7 @@ Six rules, default `ALL_SUCCESS`. The truth table (incl. the empty-upstream row)
 | Mixed succ/fail     |    Skip     |    Skip    |   Run    |      Run       |     Run     |    Skip     |
 | Includes SKIPPED    |    Skip     |    Skip    |   Run    | if any success | if any fail | if no fail  |
 
-The failure-family rules (`ALL_FAILED`, `ONE_FAILED`) **MUST** carry an explicit "at least one upstream" guard (`len(statuses) > 0`) so a depless task never runs them vacuously. Success/done-family rules (`ALL_SUCCESS`, `ALL_DONE`, `NONE_FAILED`) are vacuously satisfied on empty upstream (a root with default `ALL_SUCCESS` runs). A non-default rule on a depless task is **legal** (not a validation error) and follows the empty-upstream row.
+The failure-family rules (`ALL_FAILED`, `ANY_FAILED`) **MUST** carry an explicit "at least one upstream" guard (`len(statuses) > 0`) so a depless task never runs them vacuously. Success/done-family rules (`ALL_SUCCESS`, `ALL_DONE`, `NONE_FAILED`) are vacuously satisfied on empty upstream (a root with default `ALL_SUCCESS` runs). A non-default rule on a depless task is **legal** (not a validation error) and follows the empty-upstream row.
 
 #### 2.B.3 `runIf` — deterministic & synchronous
 
@@ -151,7 +151,7 @@ A skip (trigger-rule or `runIf`) is a **pure function** of upstream terminal sta
 
 #### 2.B.5 Failure semantics — drain, not fail-fast
 
-- A **failed task is a normal terminal state, not an abort signal.** This is the pivot that makes compensation/fallback trigger rules (`ALL_FAILED`, `ALL_DONE`, `ONE_FAILED`, `NONE_FAILED`) usable.
+- A **failed task is a normal terminal state, not an abort signal.** This is the pivot that makes compensation/fallback trigger rules (`ALL_FAILED`, `ALL_DONE`, `ANY_FAILED`, `NONE_FAILED`) usable.
 - **Default (no completion config): the scheduler MUST drain the reachable graph** — keep starting ready tasks until none is startable — so downstream rules can react to failures. This is a **deliberate divergence from the batch (`map`/`parallel`) default**, which is fail-fast in JS/Python (and drain-all in Java). It is a **local design choice** of the DAG's own scheduler, never a change to shared batch code.
 - `dag()` **MUST NOT** raise/reject on task failure; it resolves/returns a `DagResult` with `failureCount > 0` and `completionReason == COMPLETED_WITH_FAILURES`.
 - **`throwIfError()` MUST key off `failureCount`** (`> 0`), **not** off the completion reason. (It also throws on `CUSTOM_COMPLETION_FAILED` where custom completion exists.) A customer wanting batch-style fail-fast opts in explicitly via a completion config.
@@ -209,11 +209,11 @@ Legend: **Port** = carries over essentially unchanged · **Adapt** = same observ
 
 The hardest area to port is **typed dependency access** — JS's headline `DepsMap<TDeps>`, a mapped type keyed on each dep's **literal-string name** so `deps.fetch` is statically typed as fetch's result. No other language has literal-string type keys. Each SDK approximates it differently:
 
-- **TypeScript (canonical).** `DepsMap<TDeps> = { [K in TDeps[number] as K["_name"]]: … }`. Full static safety: both **key membership** (only declared deps are keys) and **result type** are compile-time-checked. `deps.fetch` just works. The deps-first fn signature _collapses_ the `deps` param away for root tasks via conditional types.
+- **TypeScript (canonical).** `DepsMap<TDeps> = { [K in TDeps[number] as K["name"]]: … }`. Full static safety: both **key membership** (only declared deps are keys) and **result type** are compile-time-checked. `deps.fetch` just works. The deps-first fn signature _collapses_ the `deps` param away for root tasks via conditional types.
 
 - **Python.** No type-level `DepsMap`. Runtime **name-keyed `Mapping`**: `deps["fetch"]` returns the result typed `Any`. To recover static types, an `@overload` on handle-keyed access — `deps[fetch_handle] -> T` — carries `T` from `TaskHandle[T]`. Recommended ergonomic: **index by handle for typed access**, by string for dynamic access. The deps-first rule is **uniform** (deps always the first param, empty for roots) — simpler than JS's conditional collapse. Loss: **key-membership checking** (string keys are unchecked); result type recovered only via the handle overload.
 
-- **Java.** No literal-string keys, no heterogeneous typed maps. A `Deps` accessor keyed by **handle**: `deps.get(TaskHandle<T>) -> T` (generics carry `T`; `getOptional` for non-`ALL_SUCCESS` paths where an upstream may be absent). Inline deps must be **declared explicitly** on the builder (`.reads(a, b)`) because Java can't introspect a lambda body; `.dependsOn(…)` adds ordering-only edges. Optional **positional-arity sugar** (`step(name, type, a, b, (A,B,ctx)->…)`) for the 1–3 dep case. The fn signature is **uniform** (`Deps` always first, empty for roots). Loss: key membership is a **runtime** `IllegalStateException`, not compile-time; `Deps.get` on the common path returns declared `T`.
+- **Java.** No literal-string keys, no heterogeneous typed maps. A `Deps` accessor keyed by **handle**: `deps.get(TaskHandle<T>) -> T` (generics carry `T`; `getOptional` for non-`ALL_SUCCESS` paths where an upstream may be absent). Inline deps must be **declared explicitly** on the builder (`.reads(a, b)`) because Java can't introspect a lambda body; `.after(…)` adds ordering-only edges. Optional **positional-arity sugar** (`step(name, type, a, b, (A,B,ctx)->…)`) for the 1–3 dep case. The fn signature is **uniform** (`Deps` always first, empty for roots). Loss: key membership is a **runtime** `IllegalStateException`, not compile-time; `Deps.get` on the common path returns declared `T`.
 
 - **Go.** No mapped types, and **methods cannot be generic**, so registration is **free functions** `dag.Step[T](d, name, deps, fn)` (only way to mint `TaskHandle[T]`). Typed access via a **generic free accessor**: `dag.Get[T](deps, handle) (T, error)` — result type preserved from the handle; missing/mismatched dep is a **runtime** `error`, not a compile error. Deps passed as `[]AnyHandle`; the fn shape is **uniform** (`deps Deps` always first). Serialization _improves_ on JS: each result is stored as `json.RawMessage` and lazily unmarshaled into `T` at access time, sidestepping the "methods lost on `any`" problem (only batch/dag results need the `resultKind` discriminator for recursive restore).
 

@@ -91,7 +91,7 @@ export interface DagContext<TLogger extends DurableLogger = DurableLogger> {
     name: TName,
     deps: TDeps,
     fn: StepTaskFn<TDeps, TResult, TLogger>,
-    options?: StepConfig<TResult> & ConditionalConfig<TDeps>,
+    config?: StepConfig<TResult> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TResult>;
 
   invoke<
@@ -104,7 +104,7 @@ export interface DagContext<TLogger extends DurableLogger = DurableLogger> {
     funcId: string,
     deps: TDeps,
     payloadFn: PayloadTaskFn<TDeps, TIn>,
-    options?: InvokeConfig<TIn, TOut> & ConditionalConfig<TDeps>,
+    config?: InvokeConfig<TIn, TOut> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TOut>;
 
   callback<
@@ -115,14 +115,14 @@ export interface DagContext<TLogger extends DurableLogger = DurableLogger> {
     name: TName,
     deps: TDeps,
     submitter: SubmitterTaskFn<TDeps, TLogger>,
-    options?: WaitForCallbackConfig<TResult> & ConditionalConfig<TDeps>,
+    config?: WaitForCallbackConfig<TResult> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TResult>;
 
   wait<TName extends string, TDeps extends readonly AnyTaskHandle[]>(
     name: TName,
     deps: TDeps,
     duration: Duration,
-    options?: ConditionalConfig<TDeps>,
+    config?: ConditionalConfig<TDeps>,
   ): TaskHandle<TName, void>;
 
   waitForCondition<
@@ -133,7 +133,7 @@ export interface DagContext<TLogger extends DurableLogger = DurableLogger> {
     name: TName,
     deps: TDeps,
     check: CheckTaskFn<TDeps, TState, TLogger>,
-    options: WaitForConditionConfig<TState> & ConditionalConfig<TDeps>,
+    config: WaitForConditionConfig<TState> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TState>;
 
   runInChildContext<
@@ -144,7 +144,7 @@ export interface DagContext<TLogger extends DurableLogger = DurableLogger> {
     name: TName,
     deps: TDeps,
     fn: ChildTaskFn<TDeps, TResult, TLogger>,
-    options?: ChildConfig<TResult> & ConditionalConfig<TDeps>,
+    config?: ChildConfig<TResult> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TResult>;
 
   map<TName extends string, TDeps extends readonly AnyTaskHandle[], TIn, TOut>(
@@ -152,7 +152,7 @@ export interface DagContext<TLogger extends DurableLogger = DurableLogger> {
     deps: TDeps,
     items: TIn[] | ((deps: DepsMap<TDeps>) => TIn[]),
     mapFunc: MapFunc<TIn, TOut, TLogger>,
-    options?: MapConfig<TIn, TOut> & ConditionalConfig<TDeps>,
+    config?: MapConfig<TIn, TOut> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, BatchResult<TOut>>;
 
   parallel<TName extends string, TDeps extends readonly AnyTaskHandle[], TOut>(
@@ -162,14 +162,14 @@ export interface DagContext<TLogger extends DurableLogger = DurableLogger> {
       | ParallelFunc<TOut, TLogger>
       | NamedParallelBranch<TOut, TLogger>
     )[],
-    options?: ParallelConfig<TOut> & ConditionalConfig<TDeps>,
+    config?: ParallelConfig<TOut> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, BatchResult<TOut>>;
 
   dag<TName extends string, TDeps extends readonly AnyTaskHandle[]>(
     name: TName,
     deps: TDeps,
     register: (subDagCtx: DagContext<TLogger>) => void | Promise<void>,
-    options?: NestedDagConfig & ConditionalConfig<TDeps>,
+    config?: NestedDagConfig & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, DagResult>;
 }
 ```
@@ -289,11 +289,11 @@ dagCtx.runInChildContext("finalize", [approval], async (deps, ctx) =>
 );
 ```
 
-**Reminder — only inline deps populate the map.** Ordering-only deps added via the `.deps(...)` builder (§3) gate scheduling but do **not** appear in `DepsMap`, so they never add a parameter:
+**Reminder — only inline deps populate the map.** Ordering-only deps added via the `.after(...)` builder (§3) gate scheduling but do **not** appear in `DepsMap`, so they never add a parameter:
 
 ```ts
 // `a` is inline (typed, in deps map); `b` is ordering-only (waits for b, but no deps.b)
-const e = dagCtx.step("e", [a], async (deps, ctx) => process(deps.a)).deps(b);
+const e = dagCtx.step("e", [a], async (deps, ctx) => process(deps.a)).after(b);
 //                                       deps === { a: <a's result> }   // no `b` key
 ```
 
@@ -303,12 +303,15 @@ Registration-time reference + builder. **Never serialized** (`_id` is a `symbol`
 
 ```ts
 export interface TaskHandle<TName extends string = string, TResult = unknown> {
-  readonly _name: TName;
-  readonly _id: symbol; // in-memory identity; not serialized
-  readonly _resultType?: TResult; // phantom; carries TResult for DepsMap only
+  /** Customer-facing result key (used by getResult/getStatus/DepsMap). */
+  readonly name: TName;
+  /** @internal in-memory identity; not serialized */
+  readonly _id: symbol;
+  /** @internal phantom; carries TResult for DepsMap only */
+  readonly _resultType?: TResult;
 
   /** Ordering-only deps: wait for these but do not receive their results. */
-  deps(...deps: readonly AnyTaskHandle[]): this;
+  after(...deps: readonly AnyTaskHandle[]): this;
 
   /** Trigger rule (default from DagConfig.defaultTriggerRule, else ALL_SUCCESS). */
   triggerRule(rule: TriggerRule): this;
@@ -323,7 +326,7 @@ Builder methods mutate the underlying `TaskDef` and return `this` for chaining.
 
 ```ts
 export type DepsMap<TDeps extends readonly AnyTaskHandle[]> = {
-  [K in TDeps[number] as K["_name"]]: K extends TaskHandle<string, infer R>
+  [K in TDeps[number] as K["name"]]: K extends TaskHandle<string, infer R>
     ? R
     : never;
 };
@@ -352,8 +355,8 @@ export type TriggerRule =
   | "ALL_SUCCESS" // default
   | "ALL_FAILED"
   | "ALL_DONE"
-  | "ONE_SUCCESS"
-  | "ONE_FAILED"
+  | "ANY_SUCCESS"
+  | "ANY_FAILED"
   | "NONE_FAILED";
 ```
 
@@ -511,12 +514,12 @@ const c = dagCtx.step("c", [a, b], async (deps) => process(deps.a, deps.b));
 // Root task => empty array (no typed access)
 const a = dagCtx.step("a", [], async () => fetchA());
 // Ordering-only via builder => no result access
-const d = dagCtx.step("d", [], async () => notify()).deps(a);
+const d = dagCtx.step("d", [], async () => notify()).after(a);
 // Mixed: typed inline deps + ordering-only builder deps
-const e = dagCtx.step("e", [a], async (deps) => process(deps.a)).deps(b);
+const e = dagCtx.step("e", [a], async (deps) => process(deps.a)).after(b);
 ```
 
-Inline `deps` populate `DepsMap` (typed). Builder `.deps(...)` add edges for scheduling/trigger-rule evaluation only; they are **not** in `DepsMap`. Concretely, `TaskDef` (§7.5) stores these as two fields: `inlineDeps` (drives `DepsMap`) and `allDeps` = `inlineDeps ∪ builder edges` (drives readiness, trigger-rule status, cycle detection, and missing-dep validation).
+Inline `deps` populate `DepsMap` (typed). Builder `.after(...)` add edges for scheduling/trigger-rule evaluation only; they are **not** in `DepsMap`. Concretely, `TaskDef` (§7.5) stores these as two fields: `inlineDeps` (drives `DepsMap`) and `allDeps` = `inlineDeps ∪ builder edges` (drives readiness, trigger-rule status, cycle detection, and missing-dep validation).
 
 ---
 
@@ -609,7 +612,7 @@ A task is **ready** when every dep (inline + builder) is present in `results` (i
 
 When a ready task is dequeued, evaluate its `triggerRule` against the **statuses** of its deps (inline + builder), per this table (from the design doc, matching the runtime semantics):
 
-| Upstream states     | ALL_SUCCESS | ALL_FAILED | ALL_DONE |    ONE_SUCCESS     |   ONE_FAILED    |  NONE_FAILED   |
+| Upstream states     | ALL_SUCCESS | ALL_FAILED | ALL_DONE |    ANY_SUCCESS     |   ANY_FAILED    |  NONE_FAILED   |
 | ------------------- | :---------: | :--------: | :------: | :----------------: | :-------------: | :------------: |
 | **Empty (no deps)** |   **Run**   |  **Skip**  | **Run**  |      **Skip**      |    **Skip**     |    **Run**     |
 | All succeeded       |     Run     |    Skip    |   Run    |        Run         |      Skip       |      Run       |
@@ -627,13 +630,13 @@ const triggerRuleEvaluators: Record<TriggerRule, (s: TaskStatus[]) => boolean> =
     ALL_SUCCESS: (s) => s.every((x) => x === "SUCCEEDED"), // [] => true  => Run
     ALL_FAILED: (s) => s.length > 0 && s.every((x) => x === "FAILED"), // [] => false => Skip
     ALL_DONE: () => true, // [] => true  => Run
-    ONE_SUCCESS: (s) => s.some((x) => x === "SUCCEEDED"), // [] => false => Skip
-    ONE_FAILED: (s) => s.some((x) => x === "FAILED"), // [] => false => Skip
+    ANY_SUCCESS: (s) => s.some((x) => x === "SUCCEEDED"), // [] => false => Skip
+    ANY_FAILED: (s) => s.some((x) => x === "FAILED"), // [] => false => Skip
     NONE_FAILED: (s) => s.every((x) => x !== "FAILED"), // [] => true  => Run
   };
 ```
 
-Note the explicit `s.length > 0` guard on `ALL_FAILED`: without it, vacuous `every` would run a **depless** task on `ALL_FAILED`, which is meaningless (there is no failure upstream). The "failure-family" rules (`ALL_FAILED`, `ONE_FAILED`) therefore require at least one actual upstream failure; the "success/done-family" rules (`ALL_SUCCESS`, `ALL_DONE`, `NONE_FAILED`) are vacuously satisfied so a root task with the default `ALL_SUCCESS` runs. A **non-default** trigger rule on a depless task is **allowed** (not a validation error) and follows this table; the empty-row semantics are the documented contract. Recommendation: depless tasks should keep the default `ALL_SUCCESS` — a non-default rule on a root is legal but usually a modeling mistake.
+Note the explicit `s.length > 0` guard on `ALL_FAILED`: without it, vacuous `every` would run a **depless** task on `ALL_FAILED`, which is meaningless (there is no failure upstream). The "failure-family" rules (`ALL_FAILED`, `ANY_FAILED`) therefore require at least one actual upstream failure; the "success/done-family" rules (`ALL_SUCCESS`, `ALL_DONE`, `NONE_FAILED`) are vacuously satisfied so a root task with the default `ALL_SUCCESS` runs. A **non-default** trigger rule on a depless task is **allowed** (not a validation error) and follows this table; the empty-row semantics are the documented contract. Recommendation: depless tasks should keep the default `ALL_SUCCESS` — a non-default rule on a root is legal but usually a modeling mistake.
 
 ### 5.4 `runIf` evaluation
 
@@ -664,7 +667,7 @@ When early completion fires, **in-flight tasks are not cancelled** — they fini
 
 ### 5.8 Failure semantics of the DAG promise
 
-A **failed task is a normal terminal state**, not an abort signal. This is the pivot that makes trigger rules work: compensation/fallback tasks (`ALL_FAILED`, `ALL_DONE`, `ONE_FAILED`, `NONE_FAILED`) downstream of a failure must still be scheduled and evaluated.
+A **failed task is a normal terminal state**, not an abort signal. This is the pivot that makes trigger rules work: compensation/fallback tasks (`ALL_FAILED`, `ALL_DONE`, `ANY_FAILED`, `NONE_FAILED`) downstream of a failure must still be scheduled and evaluated.
 
 - **No `completionConfig` (default)**: the scheduler **drains the reachable graph** — it keeps starting ready tasks until no task is startable, letting downstream trigger rules react to each failure. When the graph drains, `completionReason` is `"ALL_COMPLETED"` if every reachable task succeeded or skipped, or `"COMPLETED_WITH_FAILURES"` (the DAG-specific superset member, §2.8) if one or more tasks failed — so the reason itself distinguishes a clean run from a drained-with-failures run. **The `dag()` promise itself does NOT reject** — it resolves with a `DagResult`; callers opt into throwing via `result.throwIfError()`, which throws `DagExecutionError` when `failureCount > 0`. This mirrors `BatchResult` (a failed batch still resolves; `throwIfError()` throws).
 
@@ -715,7 +718,7 @@ Every dep `TaskHandle` (inline or builder) must have its `_id` present in the re
 Kahn's algorithm over inline+builder edges, `O(V+E)`, once:
 
 ```ts
-// Edges = allDeps (inlineDeps ∪ builder .deps), NOT inlineDeps alone (F7).
+// Edges = allDeps (inlineDeps ∪ builder .after), NOT inlineDeps alone (F7).
 function detectCycle(tasks: TaskDef[]): string[] | null {
   const inDegree = new Map(tasks.map((t) => [t.name, t.allDeps.length]));
   const queue = tasks
@@ -726,7 +729,7 @@ function detectCycle(tasks: TaskDef[]): string[] | null {
     const n = queue.shift()!;
     visited.push(n);
     for (const t of tasks)
-      if (t.allDeps.some((d) => d._name === n)) {
+      if (t.allDeps.some((d) => d.name === n)) {
         const d = inDegree.get(t.name)! - 1;
         inDegree.set(t.name, d);
         if (d === 0) queue.push(t.name);
@@ -1059,7 +1062,7 @@ export const createDagHandler =
 
 Each method: validate name (§6.1) → assert-not-duplicate (§6.2) → build a `TaskDef` → store → return `new TaskHandleImpl(name, symbol)`. The `executor` closure binds the operation kind and applies the **deps-first argument rule** (§2.3).
 
-**`TaskDef` carries two distinct dep sets (F7).** The inline `deps` array (typed, in `DepsMap`) and the builder `.deps(...)` edges (ordering-only, **not** in `DepsMap`) have different consumers, so `TaskDef` stores them separately:
+**`TaskDef` carries two distinct dep sets (F7).** The inline `deps` array (typed, in `DepsMap`) and the builder `.after(...)` edges (ordering-only, **not** in `DepsMap`) have different consumers, so `TaskDef` stores them separately:
 
 ```ts
 interface TaskDef {
@@ -1076,7 +1079,7 @@ interface TaskDef {
     | "dag";
   /** Inline deps only (from the `deps` argument). Drives DepsMap construction. */
   inlineDeps: readonly AnyTaskHandle[];
-  /** inlineDeps ∪ builder .deps(...) edges, de-duplicated. Drives scheduling,
+  /** inlineDeps ∪ builder .after(...) edges, de-duplicated. Drives scheduling,
    *  readiness, trigger-rule evaluation, and cycle detection. */
   allDeps: readonly AnyTaskHandle[];
   triggerRule?: TriggerRule;
@@ -1099,7 +1102,7 @@ Which surface consumes which set:
 | Missing-dep validation                                      | `inlineDeps ∪ allDeps` (i.e. `allDeps`) | §6.3       |
 | Cycle detection (`detectCycle`)                             | `allDeps`                               | §6.4       |
 
-`.deps(...)` on the builder appends to `allDeps` only; the inline `deps` argument populates **both** `inlineDeps` and `allDeps`. This prevents builder deps from leaking into the typed `DepsMap` (the design doc's `buildDepsMap` must iterate `inlineDeps`, **not** the union) while still letting them gate scheduling/trigger/cycle. The scheduler builds a task's `depsMap` from `inlineDeps` (looking each up in `results`), so ordering-only builder deps never appear as keys.
+`.after(...)` on the builder appends to `allDeps` only; the inline `deps` argument populates **both** `inlineDeps` and `allDeps`. This prevents builder deps from leaking into the typed `DepsMap` (the design doc's `buildDepsMap` must iterate `inlineDeps`, **not** the union) while still letting them gate scheduling/trigger/cycle. The scheduler builds a task's `depsMap` from `inlineDeps` (looking each up in `results`), so ordering-only builder deps never appear as keys.
 
 The `executor` closure (deps-first rule, §2.3):
 
@@ -1183,7 +1186,7 @@ Mirror the `BatchResult` machinery in `src/handlers/concurrent-execution-handler
   - `"plain"` ⇒ the task's own operation serdes (or default) produced a JSON-safe value already.
 - **restore (`restoreDagResult(plain)`):** rehydrates the top-level `DagResult` methods, then walks `tasks[]` and for each `SUCCEEDED` task **recursively restores the result by `resultKind`**: `"batch"` ⇒ `restoreBatchResult(result)`; `"dag"` ⇒ `restoreDagResult(result)` (recursive); `"plain"` ⇒ used as-is. This guarantees `getResult(mapOrNestedDagHandle)` returns a **fully-methoded** `BatchResult`/`DagResult` on the completed-replay path, satisfying the `getResult<TResult>` type.
 
-Errors serialize via `DurableOperationError.toErrorObject()` and reconstruct via `DurableOperationError.fromErrorObject()` (batch results reuse the batch cause-chain serializer). `TaskHandle._id` (symbol) is **not** serialized — the deserialized `DagResult.getResult(handle)` resolves by `handle._name`.
+Errors serialize via `DurableOperationError.toErrorObject()` and reconstruct via `DurableOperationError.fromErrorObject()` (batch results reuse the batch cause-chain serializer). `TaskHandle._id` (symbol) is **not** serialized — the deserialized `DagResult.getResult(handle)` resolves by `handle.name`.
 
 ### 8.1 `DagSummary` (large-payload fallback) — SDK-owned envelope, replay-safe by construction
 
@@ -1310,7 +1313,7 @@ The `register` callback must be deterministic on replay (same task names, deps, 
 
 - **`dag-validator.test.ts`**: cycle detection (self-loop, 2-cycle, deep cycle, diamond=no-cycle), invalid names (empty, >100, bad chars, valid dashes), duplicates (same name across different op kinds), missing/foreign-scope deps.
 - **`trigger-rules.test.ts`**: full truth table (§5.3) for all six rules × {all-succ, all-fail, mixed, includes-skip}.
-- **`task-handle.test.ts`**: `.deps()`/`.triggerRule()` chaining mutates `TaskDef`; `DepsMap` type-level tests (via `tsd`/`expectType`) for empty vs non-empty deps and name-keyed result typing.
+- **`task-handle.test.ts`**: `.after()`/`.triggerRule()` chaining mutates `TaskDef`; `DepsMap` type-level tests (via `tsd`/`expectType`) for empty vs non-empty deps and name-keyed result typing.
 - **`dag-executor.test.ts`** (mock context): readiness/topological order, `maxConcurrency` throttling, skip propagation, `runIf` skip, `completionConfig` threshold + custom paths, fail-fast vs compensation.
 - **`dag-result.test.ts`**: `getResult`/`getStatus` for succeeded/failed/skipped/not-run; `throwIfError`; `createDagResultSerdes` round-trip incl. error reconstruction; `restoreDagResult`; `DagSummary` shape.
 - **Entity-ID tests**: `createTaskId` output for prefixed/unprefixed contexts; nested recursion `…-DAG_NODE_T_a-DAG_NODE_T_b`; no collision with counter IDs.
@@ -1361,10 +1364,10 @@ await context.dag("payment", async (d) => {
   const charge = d.step("charge", [], async () => chargeCard(event));
   d.step("fulfill", [charge], async (deps) => fulfill(deps.charge)); // ALL_SUCCESS
   d.step("refund", [], async () => refundCard(event))
-    .deps(charge)
+    .after(charge)
     .triggerRule("ALL_FAILED");
   d.step("notify", [], async () => notifyCustomer(event))
-    .deps(charge)
+    .after(charge)
     .triggerRule("ALL_DONE");
 });
 ```
@@ -1387,7 +1390,7 @@ await context.dag("moderation", async (d) => {
     runIf: (deps) => deps.classify === "block",
   });
   d.step("audit", [], async () => audit(event))
-    .deps(classify)
+    .after(classify)
     .triggerRule("ALL_DONE");
 });
 ```

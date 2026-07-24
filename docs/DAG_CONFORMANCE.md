@@ -137,7 +137,7 @@ Proves the same graph produces the inverse skip/run pattern when the guarded tas
 
 ### DAG-5 — Trigger-rule matrix: the empty-upstream row (root task per rule)
 
-Six **root** tasks (no deps), one per trigger rule, evaluated against the empty upstream set. Proves the `len > 0` guard on the failure-family rules (`ALL_FAILED`, `ONE_FAILED`) and the vacuous-truth of the success/done family. (Normative table row "Empty (no deps)" in `DAG_SPEC.md` §5.3.)
+Six **root** tasks (no deps), one per trigger rule, evaluated against the empty upstream set. Proves the `len > 0` guard on the failure-family rules (`ALL_FAILED`, `ANY_FAILED`) and the vacuous-truth of the success/done family. (Normative table row "Empty (no deps)" in `DAG_SPEC.md` §5.3.)
 
 **Graph** — each task body returns `"ok"`; deps `[]`:
 
@@ -146,8 +146,8 @@ Six **root** tasks (no deps), one per trigger rule, evaluated against the empty 
 | `r_all_success` | ALL_SUCCESS | Run          |
 | `r_all_failed`  | ALL_FAILED  | Skip         |
 | `r_all_done`    | ALL_DONE    | Run          |
-| `r_one_success` | ONE_SUCCESS | Skip         |
-| `r_one_failed`  | ONE_FAILED  | Skip         |
+| `r_one_success` | ANY_SUCCESS | Skip         |
+| `r_one_failed`  | ANY_FAILED  | Skip         |
 | `r_none_failed` | NONE_FAILED | Run          |
 
 **Expected task outcomes**
@@ -178,8 +178,8 @@ Upstream `up_ok` SUCCEEDS and `up_fail` FAILS; six consumers each depend (orderi
 | `c_all_success` | step | `after=[up_ok, up_fail]` | ALL_SUCCESS | return `"c"`             |
 | `c_all_failed`  | step | `after=[up_ok, up_fail]` | ALL_FAILED  | return `"c"`             |
 | `c_all_done`    | step | `after=[up_ok, up_fail]` | ALL_DONE    | return `"c"`             |
-| `c_one_success` | step | `after=[up_ok, up_fail]` | ONE_SUCCESS | return `"c"`             |
-| `c_one_failed`  | step | `after=[up_ok, up_fail]` | ONE_FAILED  | return `"c"`             |
+| `c_one_success` | step | `after=[up_ok, up_fail]` | ANY_SUCCESS | return `"c"`             |
+| `c_one_failed`  | step | `after=[up_ok, up_fail]` | ANY_FAILED  | return `"c"`             |
 | `c_none_failed` | step | `after=[up_ok, up_fail]` | NONE_FAILED | return `"c"`             |
 
 **Expected task outcomes**
@@ -201,7 +201,7 @@ Upstream `up_ok` SUCCEEDS and `up_fail` FAILS; six consumers each depend (orderi
 
 ### DAG-7 — Trigger-rule matrix: all-failed upstream (ALL_FAILED len>0 satisfied)
 
-Two roots both FAIL; six consumers depend on both ⇒ the "All failed" row. Confirms `ALL_FAILED`/`ONE_FAILED` **run** here (the `len > 0` guard is satisfied), the inverse of DAG-5.
+Two roots both FAIL; six consumers depend on both ⇒ the "All failed" row. Confirms `ALL_FAILED`/`ANY_FAILED` **run** here (the `len > 0` guard is satisfied), the inverse of DAG-5.
 
 **Graph**
 
@@ -212,8 +212,8 @@ Two roots both FAIL; six consumers depend on both ⇒ the "All failed" row. Conf
 | `k_all_success` | step | `after=[u1, u2]` | ALL_SUCCESS | return `"k"`             |
 | `k_all_failed`  | step | `after=[u1, u2]` | ALL_FAILED  | return `"k"`             |
 | `k_all_done`    | step | `after=[u1, u2]` | ALL_DONE    | return `"k"`             |
-| `k_one_success` | step | `after=[u1, u2]` | ONE_SUCCESS | return `"k"`             |
-| `k_one_failed`  | step | `after=[u1, u2]` | ONE_FAILED  | return `"k"`             |
+| `k_one_success` | step | `after=[u1, u2]` | ANY_SUCCESS | return `"k"`             |
+| `k_one_failed`  | step | `after=[u1, u2]` | ANY_FAILED  | return `"k"`             |
 | `k_none_failed` | step | `after=[u1, u2]` | NONE_FAILED | return `"k"`             |
 
 **Expected task outcomes**

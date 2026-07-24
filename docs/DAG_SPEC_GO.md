@@ -48,7 +48,7 @@ Status: **Grounded / Buildable** · **Stability: Experimental** · Target: `aws-
 
 **Yes, and the base machinery to build it now exists.** The parts of the JS design that constitute the _durability contract_ — the reserved `DAG_NODE_T_` delimiter, no-dash task names, the injectivity proof, topological scheduling with readiness/trigger-rule/`runIf` semantics, the completion-reason core+superset layering, and the drain-by-default failure model — are **string- and algorithm-level** decisions that carry over to Go essentially unchanged. Both real SDKs already provide the hard runtime substrate: positional+hashed operation IDs with per-op checkpoint fast-path replay (a: `state.go`/`execution_context.go`; b: `context/dcontext.go`), replay-consistency validation (a: `validateReplayConsistency`; b: `checkReplayConsistency`), child-context scope isolation, 256KB large-payload offload via `ReplayChildren`, deterministic-order concurrent ID pre-claiming in batch, value-typed errors, and a local test runner. Go's concurrency model (goroutines + bounded worker pool + `context.Context` cancellation) is arguably a **better** host for the topological scheduler than JS's single event loop — and firstcut-a already ships the exact primitives (`Go[T]`, `Future[T]`, `All/Any/Race`) a scheduler would want.
 
-**What changes is the _surface ergonomics_, driven by Go generics limits** — now confirmed against both SDKs' real API style. The fluent, deeply type-inferred JS API cannot be reproduced. Go gets a **free-function registration API** (`dag.Step[T](d, "x", deps, fn)`) with a **map-based `Deps` + generic accessor** (`dag.Get[T](deps, handle)`). Error handling is value-based: task failures live inside `DagResult.Err()` (modeled on firstcut-a's `BatchResult.ThrowIfError()`), while registration/validation failures surface as the `error` return of `dag.Dag(...)`.
+**What changes is the _surface ergonomics_, driven by Go generics limits** — now confirmed against both SDKs' real API style. The fluent, deeply type-inferred JS API cannot be reproduced. Go gets a **free-function registration API** (`dag.Step[T](d, "x", deps, fn)`) with a **map-based `Deps` + generic accessor** (`dag.Get[T](deps, handle)`). Error handling is value-based: task failures live inside `DagResult.ThrowIfError()` (modeled on firstcut-a's `BatchResult.ThrowIfError()`), while registration/validation failures surface as the `error` return of `dag.Dag(...)`.
 
 **What must be added to the base SDK** (see banner): a custom completion predicate, name-based task-ID minting, and completion-reason supersets. All three are additive and well-scoped; none requires rearchitecting the base SDK.
 
@@ -87,7 +87,7 @@ Neither real SDK hangs typed operations off the context object (both use free ge
 //                          §5.10). Includes DagValidationError, cycle errors, and a
 //                          deterministic panic/error escaping the register callback.
 //   - err == nil        => the DAG drained (or early-completed). Individual task
-//                          failures are reported INSIDE the result: res.Err() != nil.
+//                          failures are reported INSIDE the result: res.ThrowIfError() != nil.
 func Dag(
     dc DurableContext,          // alias for the base SDK's context interface
     name string,
@@ -96,7 +96,7 @@ func Dag(
 ) (*DagResult, error)
 ```
 
-[GO DIVERGENCE — no exceptions] JS splits outcomes into "promise rejects" (validation) vs "promise resolves with `DagResult`" (task failures). Go collapses this into the idiomatic `(*DagResult, error)` two-channel return: `error` = the JS reject cases; `DagResult.Err()` = the JS `throwIfError()` case. This exactly matches firstcut-a's existing `BatchResult.ThrowIfError() error` (`batch.go`) pattern.
+[GO DIVERGENCE — no exceptions] JS splits outcomes into "promise rejects" (validation) vs "promise resolves with `DagResult`" (task failures). Go collapses this into the idiomatic `(*DagResult, error)` two-channel return: `error` = the JS reject cases; `DagResult.ThrowIfError()` = the JS `throwIfError()` case. This exactly matches firstcut-a's existing `BatchResult.ThrowIfError() error` (`batch.go`) pattern.
 
 ### 2.2 `dag.Context` (registration) — methods are NOT generic
 
@@ -161,13 +161,14 @@ func Wait(
 ) TaskHandle[Void]                       // Void = struct{}
 
 // ── waitForCondition ─────────────────────────────────────────────────────────
-// Base check runs in a StepContext; InitialState + wait strategy travel in config
-// (a: ConditionConfig[S]{InitialState, WaitStrategy}; b: WithConditionRetryStrategy).
+// Base check runs in a StepContext. The initial state is a POSITIONAL parameter
+// (no WithInitialState option); the condition/wait strategy travel in opts and the
+// condition (WithCondition) is REQUIRED — validated at registration (DagInvalidConfigError).
 type CheckFunc[S any] func(deps Deps, state S, sctx StepContext) (S, error)
 
 func WaitForCondition[S any](
     d *Context, name string, deps []AnyHandle,
-    check CheckFunc[S], opts ...Option,   // opts MUST carry InitialState + condition/strategy
+    initial S, check CheckFunc[S], opts ...Option,   // initial state positional; opts MUST carry WithCondition (+ strategy)
 ) TaskHandle[S]
 
 // ── runInChildContext ────────────────────────────────────────────────────────
@@ -243,7 +244,7 @@ res, err := dag.Dag(dc, "etl", func(d *dag.Context) {
         })
 })
 if err != nil { return err }        // registration/validation error
-if err := res.Err(); err != nil { return err }   // >=1 task FAILED (JS throwIfError)
+if err := res.ThrowIfError(); err != nil { return err }   // >=1 task FAILED (JS throwIfError)
 ```
 
 ### 2.4 `TaskHandle[T]` and `AnyHandle`
@@ -272,13 +273,13 @@ func (h TaskHandle[T]) taskID() nodeID          { return h.id }
 func (h TaskHandle[T]) resultKind() resultKind  { return h.kind }
 
 // ── builder (chainable; mutates the underlying TaskDef in the registry) ──
-func (h TaskHandle[T]) DependsOn(deps ...AnyHandle) TaskHandle[T]  // ordering-only edges (§3 of JS: builder .deps)
+func (h TaskHandle[T]) After(deps ...AnyHandle) TaskHandle[T]  // ordering-only edges (§3 of JS: builder .after)
 func (h TaskHandle[T]) WithTrigger(rule TriggerRule) TaskHandle[T] // JS .triggerRule
 ```
 
-[GO DIVERGENCE — builder vs JS `_id: symbol`] JS uses a `symbol` for in-memory identity. Go uses an unexported `nodeID` (a monotonic registration index string or the name itself). `TaskHandle[T]` is a **value type**; `DependsOn`/`WithTrigger` mutate the registry entry (looked up by `id`) and return the handle by value for chaining. The handle is never serialized (as in JS).
+[GO DIVERGENCE — builder vs JS `_id: symbol`] JS uses a `symbol` for in-memory identity. Go uses an unexported `nodeID` (a monotonic registration index string or the name itself). `TaskHandle[T]` is a **value type**; `After`/`WithTrigger` mutate the registry entry (looked up by `id`) and return the handle by value for chaining. The handle is never serialized (as in JS).
 
-**Chaining works, registration does not chain.** Note the asymmetry vs JS: builder _mutation_ methods (`DependsOn`, `WithTrigger`) are legal Go methods (they don't introduce a new type param — return type stays `TaskHandle[T]`). But _registration_ (`Step`, `Invoke`, …) must be free functions because they mint a _new_ `T`. So Go reads `h := dag.Step[T](d, …)` then `h.DependsOn(x).WithTrigger(dag.AllDone)`, not JS's `dagCtx.step(…).deps(x).triggerRule(…)`.
+**Chaining works, registration does not chain.** Note the asymmetry vs JS: builder _mutation_ methods (`After`, `WithTrigger`) are legal Go methods (they don't introduce a new type param — return type stays `TaskHandle[T]`). But _registration_ (`Step`, `Invoke`, …) must be free functions because they mint a _new_ `T`. So Go reads `h := dag.Step[T](d, …)` then `h.After(x).WithTrigger(dag.AllDone)`, not JS's `dagCtx.step(…).after(x).triggerRule(…)`.
 
 ### 2.5 `Deps` and the generic accessor (replaces `DepsMap`)
 
@@ -318,8 +319,8 @@ const (
     AllSuccess TriggerRule = "ALL_SUCCESS"   // default
     AllFailed  TriggerRule = "ALL_FAILED"
     AllDone    TriggerRule = "ALL_DONE"
-    OneSuccess TriggerRule = "ONE_SUCCESS"
-    OneFailed  TriggerRule = "ONE_FAILED"
+    AnySuccess TriggerRule = "ANY_SUCCESS"
+    AnyFailed  TriggerRule = "ANY_FAILED"
     NoneFailed TriggerRule = "NONE_FAILED"
 )
 
@@ -369,16 +370,16 @@ func (r *DagResult) Failed() []TaskExecution
 func (r *DagResult) Skipped() []TaskExecution
 func (r *DagResult) Results() map[string]TaskExecution           // copy
 
-func (r *DagResult) SuccessCount() int
+func (r *DagResult) SucceededCount() int
 func (r *DagResult) FailureCount() int
 func (r *DagResult) SkippedCount() int
 func (r *DagResult) TotalCount() int
 func (r *DagResult) CompletionReason() CompletionReason
 
-// JS throwIfError(): idiomatic Go returns the error rather than throwing.
+// Base BatchResult.ThrowIfError() parity: idiomatic Go returns the error rather than throwing.
 // Returns *DagExecutionError (wrapping the first failed task's Err via Unwrap)
 // when FailureCount() > 0 OR CompletionReason() == CustomCompletionFailed; else nil.
-func (r *DagResult) Err() error
+func (r *DagResult) ThrowIfError() error
 ```
 
 [GO DIVERGENCE — getter is a free function] `getResult<T>(handle)` in JS is a method with a type param. In Go it must be the free function `dag.Result[T](r, handle)` (methods can't add `T`). A non-generic `r.Status(...)` method is fine.
@@ -406,7 +407,7 @@ const CompletedWithFailures CompletionReason = "COMPLETED_WITH_FAILURES"
 
 > **[NEEDS SDK ADDITION] + grounding note.** Both base SDKs already have a batch `CompletionReason`, but only the **three threshold reasons**, and with _different underlying types_: firstcut-a `batch.go` is an **`int` enum** (`CompletionAllCompleted`/`CompletionMinSuccessfulReached`/`CompletionFailureToleranceExceeded`, with a `String()` giving `ALL_COMPLETED` etc.); firstcut-b `batch.go` uses **string consts** (`CompletionReasonAllCompleted`/`…MinSuccessfulReached`/…). Neither has `CUSTOM_COMPLETION_SUCCEEDED/FAILED` or `COMPLETED_WITH_FAILURES`. The DAG must **add** those members. If building on firstcut-b, model the DAG's `CompletionReason` as a `string` type (matching b's style); on firstcut-a, either extend the int enum or introduce a parallel string type in the `dag` package. The dependency direction the JS design requested (`dag` → core, never core → `dag`) is still honored either way.
 
-The semantics are identical: default drain ⇒ `AllCompleted` if all reachable tasks succeeded/skipped, else `CompletedWithFailures`; `Err()` keys off `FailureCount()`.
+The semantics are identical: default drain ⇒ `AllCompleted` if all reachable tasks succeeded/skipped, else `CompletedWithFailures`; `ThrowIfError()` keys off `FailureCount()`.
 
 ### 2.9 Options (functional options replace the JS config object)
 
@@ -421,8 +422,7 @@ func WithSerdes(s Serdes) Option                     // Serdes is NON-generic in
                                                      //   a: Serdes{Marshal([]byte);Unmarshal}
                                                      //   b: types.Serdes{Serialize(v,entityID,execARN)string;Deserialize}
 func WithTimeout(d time.Duration) Option             // callback/condition
-func WithInitialState[S any](s S) Option             // waitForCondition
-func WithCondition[S any](pred func(S) bool) Option
+func WithCondition[S any](pred func(S) bool) Option  // waitForCondition; REQUIRED (validated at registration)
 
 // DAG-level (passed to dag.Dag / nested dag.Dag)
 func WithMaxConcurrency(n int) Option
@@ -433,7 +433,7 @@ func WithSummaryGenerator(f func(*DagResult) string) Option   // observability-o
 func WithNesting(n durable.NestingType) Option
 ```
 
-[GO DIVERGENCE — typed options] `WithSerdes` is non-generic (the base `Serdes` interface is non-generic in both SDKs, so no type param is needed — the serdes works over `any`). The two that DO need a type param — `WithInitialState[S]`, `WithCondition[S]` (waitForCondition state) — are **generic free functions returning `Option`**, legal because they are functions, not methods. They stash a `S`-erased closure into the config. This is the standard Go workaround for "typed functional options," and matches how firstcut-a threads `ConditionConfig[S]` through `WaitForCondition`.
+[GO DIVERGENCE — typed options] `WithSerdes` is non-generic (the base `Serdes` interface is non-generic in both SDKs, so no type param is needed — the serdes works over `any`). The one that DOES need a type param — `WithCondition[S]` (the waitForCondition predicate; initial state is now a **positional** param, §2.9/C7) — is a **generic free function returning `Option`**, legal because it is a function, not a method. It stashes an `S`-erased closure into the config. This is the standard Go workaround for "typed functional options," and matches how firstcut-a threads `ConditionConfig[S]` through `WaitForCondition`.
 
 ### 2.10 `DagCompletionConfig` (custom predicate with results)
 
@@ -485,7 +485,7 @@ Legend: **Ports** = carries over essentially unchanged · **Adapts** = same inte
 | --- | ------------------------------------------------------------------------------------ | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | `context.dag()` entry (§2.1)                                                         | **Adapts**                                     | `(*DagResult, error)` return; no promises/exceptions.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | 2   | `DagContext` with a method per task kind (§2.2)                                      | **Adapts (major)**                             | Go methods can't have type params → **free functions** `dag.Step[T](d, …)` etc. `Context` is a plain opaque handle. Result type is inferred for most kinds; `Invoke[In,Out]` and `Callback[T]` require **explicit** type args (result type appears only in the return — §2.3, verified Go 1.25).                                                                                                                                                                                                                                                                                          |
-| 3   | `TaskHandle[T]` + `.deps()/.triggerRule()` builder (§2.4)                            | **Ports**                                      | Generic struct with phantom `T`; builder methods return `TaskHandle[T]` (no new type param ⇒ legal on methods). `AnyHandle` sealed interface for heterogeneous deps.                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 3   | `TaskHandle[T]` + `.after()/.triggerRule()` builder (§2.4)                           | **Ports**                                      | Generic struct with phantom `T`; builder methods return `TaskHandle[T]` (no new type param ⇒ legal on methods). `AnyHandle` sealed interface for heterogeneous deps.                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | 4   | `DepsMap<TDeps>` literal-name typed access (§2.5)                                    | **Infeasible → Adapts**                        | No mapped/template-literal types. `Deps` map + `dag.Get[T](deps, handle) (T, error)`. Result **type preserved**; **key-membership check lost** (runtime `ErrDepNotAvailable`).                                                                                                                                                                                                                                                                                                                                                                                                            |
 | 5   | Conditional deps-first fn collapse (§2.3)                                            | **Adapts**                                     | No conditional types/overloading → uniform `func(deps Deps, native…) (T, error)`; `deps` empty for roots.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | 6   | Positional typed deps ergonomics                                                     | **Deferred**                                   | `Dag2/Dag3`-style arity helpers don't fit arbitrary fan-in + builder deps. Optional 2–3-dep sugar only; deferred.                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
@@ -500,7 +500,7 @@ Legend: **Ports** = carries over essentially unchanged · **Adapts** = same inte
 | 15  | Heterogeneous result serdes tagged by `resultKind` (§8)                              | **Adapts (improves)**                          | Store per-task result as `json.RawMessage`; `Result[T]/Get[T]` lazy-`Unmarshal` into `T`. Sidesteps Go's "`any` loses concrete type". `resultKind` discriminator drives batch/dag **recursive** restore.                                                                                                                                                                                                                                                                                                                                                                                  |
 | 16  | Concurrency: ready-set scheduler, `maxConcurrency` (§5.1–5.2)                        | **Ports (Go-native), verified**                | Both SDKs already run a bounded concurrent scheduler: firstcut-a `batch.go` pre-claims child IDs on the owner goroutine then dispatches to `sem := make(chan struct{}, concurrency)`; firstcut-a also ships public `Go[T]`/`Future[T]`/`All/Any/Race`. firstcut-b `batch.go` claims by index then spawns branch goroutines. The DAG scheduler mirrors this exact pattern. Determinism from **deterministic ID claim order**, same argument as JS §4.4.                                                                                                                                    |
 | 17  | Failure = terminal state, drain by default (§5.7)                                    | **Ports**                                      | Scheduler does not cancel on task failure; drains reachable graph. Opt into fail-fast via `WithCompletion`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| 18  | `throwIfError()` (§2.8)                                                              | **Adapts**                                     | `DagResult.Err() error` returning `*DagExecutionError` (with `Unwrap`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 18  | `throwIfError()` (§2.8)                                                              | **Adapts**                                     | `DagResult.ThrowIfError() error` returning `*DagExecutionError` (with `Unwrap`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | 19  | `Dag*Error` classes (§5.10)                                                          | **Adapts**                                     | Typed `error` structs; `errors.Is/As`. Registration errors **accumulated on `Context`**, returned by `dag.Dag(...)` (see #20).                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | 20  | Registration-time throw ergonomics (§5.10, §6)                                       | **Adapts**                                     | Free registration fns return a handle but **cannot cleanly return an error too** without wrecking ergonomics → errors are recorded on `Context` and surfaced as the `error` return of `dag.Dag(...)`. JS throws at the call site; Go reports at `Dag()` boundary.                                                                                                                                                                                                                                                                                                                         |
 | 21  | `errorMapper` pass-through so raw `Dag*Error` escapes child ctx (§7.4)               | **Ports (verified path)**                      | Both SDKs wrap a failing child body's error in `ChildContextError` (a `child_context.go`; b `invoke.go` `contextError`). Since Go can validate/aggregate registration errors **before** the child body runs, validation errors are returned directly by `Dag()` and never need to survive the child-context wrapper. Task-execution errors are already value-typed and unwrappable (`errors.As`), so no bespoke error-mapper is required.                                                                                                                                                 |
@@ -578,8 +578,8 @@ var triggerRuleEvaluators = map[TriggerRule]func([]TaskStatus) bool{
     AllSuccess: func(s []TaskStatus) bool { return allAre(s, StatusSucceeded) },              // [] => true
     AllFailed:  func(s []TaskStatus) bool { return len(s) > 0 && allAre(s, StatusFailed) },   // [] => false
     AllDone:    func(s []TaskStatus) bool { return true },                                    // [] => true
-    OneSuccess: func(s []TaskStatus) bool { return anyIs(s, StatusSucceeded) },               // [] => false
-    OneFailed:  func(s []TaskStatus) bool { return anyIs(s, StatusFailed) },                  // [] => false
+    AnySuccess: func(s []TaskStatus) bool { return anyIs(s, StatusSucceeded) },               // [] => false
+    AnyFailed:  func(s []TaskStatus) bool { return anyIs(s, StatusFailed) },                  // [] => false
     NoneFailed: func(s []TaskStatus) bool { return noneIs(s, StatusFailed) },                 // [] => true
 }
 ```
@@ -596,7 +596,7 @@ Parent `maxConcurrency` limits only top-level tasks; each nested DAG has its own
 
 ### 5.5 Failure semantics (ports)
 
-A failed task is a **terminal state, not an abort**. Default (no `WithCompletion`): drain the reachable graph, then `CompletionReason` = `AllCompleted` (all succeeded/skipped) or `CompletedWithFailures` (≥1 failed). `dag.Dag(...)` returns `err == nil`; the caller inspects `res.Err()`. This is exactly firstcut-a's batch behavior (`batch.go`: a failed item is recorded, not propagated, unless a threshold fires). With `WithCompletion`, threshold/custom predicate can stop scheduling early (cancel `ctx`; in-flight goroutines finish but their results are dropped from the DAG result — the same "stop scheduling new work, let in-flight settle" shape as batch's `reasonLocked`/`stopped` flags); they appear `STARTED`.
+A failed task is a **terminal state, not an abort**. Default (no `WithCompletion`): drain the reachable graph, then `CompletionReason` = `AllCompleted` (all succeeded/skipped) or `CompletedWithFailures` (≥1 failed). `dag.Dag(...)` returns `err == nil`; the caller inspects `res.ThrowIfError()`. This is exactly firstcut-a's batch behavior (`batch.go`: a failed item is recorded, not propagated, unless a threshold fires). With `WithCompletion`, threshold/custom predicate can stop scheduling early (cancel `ctx`; in-flight goroutines finish but their results are dropped from the DAG result — the same "stop scheduling new work, let in-flight settle" shape as batch's `reasonLocked`/`stopped` flags); they appear `STARTED`.
 
 ### 5.6 Early completion & `STARTED`
 
@@ -718,11 +718,11 @@ res, err := c.Dag("payment", func(d *dag.Context) {
 
     dag.Step(d, "refund", nil,
         func(_ dag.Deps, s *durable.StepContext) (Void, error) { return Void{}, refundCard(event) }).
-        DependsOn(charge).WithTrigger(dag.AllFailed)
+        After(charge).WithTrigger(dag.AllFailed)
 
     dag.Step(d, "notify", nil,
         func(_ dag.Deps, s *durable.StepContext) (Void, error) { return Void{}, notify(event) }).
-        DependsOn(charge).WithTrigger(dag.AllDone)
+        After(charge).WithTrigger(dag.AllDone)
 })
 ```
 
@@ -751,7 +751,7 @@ res, err := c.Dag("rules", func(d *dag.Context) {
     }),
 )
 if err == nil && res.CompletionReason() == durable.CustomCompletionFailed {
-    // a rule rejected; res.Err() != nil
+    // a rule rejected; res.ThrowIfError() != nil
 }
 ```
 
@@ -769,7 +769,7 @@ if err == nil && res.CompletionReason() == durable.CustomCompletionFailed {
 1. **Deps key-membership checking (§2.5).** Result _types_ are preserved via `TaskHandle[T]`, but there is no compile-time guarantee that a handle passed to `Get` is actually in the task's deps list. _Recommendation:_ accept as a documented limitation; optionally add a `go vet`-style analyzer. Revisit `Dag2/Dag3` positional helpers (§2.5) for the common small-fan-in case if friction appears.
 2. **Blocking durable ops in goroutines (§7) — RESOLVED.** Verified supported in both SDKs, subject to the ownership rule: each concurrent task must run in its own child context with `currentGoroutineOwner()` captured inside the worker goroutine (firstcut-a `goroutine.go`/`RunInChildContextAsync`; firstcut-b batch branch goroutines). The DAG scheduler is structurally the existing batch scheduler with a dependency graph. _Recommendation:_ port firstcut-a's `Go[T]`/`Future[T]`/`suspendSignal` join primitives if building on b (b lacks public equivalents).
 3. **Open enums (§2.6, §2.8).** Go can't close `TriggerRule`/`CompletionReason`. _Recommendation:_ runtime validation + exhaustive-switch linters.
-4. **Typed options (§2.9).** `WithSerdes[T]`/`WithInitialState[S]` erase their type into the config. _Recommendation:_ validate the type at registration against the `TaskHandle[T]` where possible.
+4. **Typed options (§2.9).** `WithCondition[S]` erases its type into the config (initial state is now a positional param, C7). _Recommendation:_ validate the type at registration against the `TaskHandle[T]` where possible.
 5. **Aggregated vs fail-fast validation (§6).** Go returns all registration errors at once. Confirm this is the desired ergonomics vs. first-error.
 
 ---
@@ -780,9 +780,9 @@ Use the standard `testing` package + the base SDK's real local runner (**verifie
 
 - **`validate_test.go`**: cycle detection (self-loop, 2-cycle, deep, diamond=no-cycle), invalid names (empty, >100, dash, `DAG_NODE_T_` substring), duplicates across kinds, missing/foreign-scope deps, aggregated `DagValidationError`.
 - **`trigger_test.go`**: full truth table × 6 rules × {all-succ, all-fail, mixed, includes-skip, empty}.
-- **`handle_test.go`**: `DependsOn`/`WithTrigger` mutate the `taskDef`; `Get[T]`/`Result[T]` type correctness (compile-time via generic instantiation; runtime `ErrDepNotAvailable` for missing).
+- **`handle_test.go`**: `After`/`WithTrigger` mutate the `taskDef`; `Get[T]`/`Result[T]` type correctness (compile-time via generic instantiation; runtime `ErrDepNotAvailable` for missing).
 - **`scheduler_test.go`** (mock context): readiness/topological order; `maxConcurrency` throttling (assert peak in-flight ≤ N); skip propagation; `runIf`; threshold + custom completion; drain-vs-fail-fast; **`-race` clean**.
-- **`result_test.go`**: `Result`/`Status` for succeeded/failed/skipped/not-started; `Err()`; JSON round-trip incl. error reconstruction and `json.RawMessage` lazy typing; nested batch/dag recursive restore; serialized-result shape (§8.1).
+- **`result_test.go`**: `Result`/`Status` for succeeded/failed/skipped/not-started; `ThrowIfError()`; JSON round-trip incl. error reconstruction and `json.RawMessage` lazy typing; nested batch/dag recursive restore; serialized-result shape (§8.1).
 - **Entity-ID tests**: `taskID` for prefixed/unprefixed; nested recursion `…-DAG_NODE_T_a-DAG_NODE_T_b`; disjoint from counter IDs.
 - **Replay tests** (real runner, both branches ship one): order-independence (force differing completion orders via the runner; assert identical `DagResult`, no replay-consistency error); interruption/resume (completed tasks hit fast paths, count side effects); skip determinism across replay; large-payload reconstruction via `ReplayChildren` re-execution (assert the oversize `DagResult` survives a suspend/resume cycle; a malformed-`summary` regression guard that must neither change the result nor hang).
 - **Verification bar**: `go build ./...`, `go vet ./...`, `go test -race ./...`, `golangci-lint`.

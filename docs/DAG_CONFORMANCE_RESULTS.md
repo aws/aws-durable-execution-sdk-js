@@ -1,6 +1,6 @@
 # Cross-Language DAG Conformance — Reconciliation Results
 
-> **Status:** Reconciliation report (re-reconciled after `counts.total` fix) · **Inputs:** `dag-conformance-out/{ts,python,java,go}.json` · **Contract:** [`DAG_CONFORMANCE.md`](./DAG_CONFORMANCE.md)
+> **Status:** Reconciliation report (re-reconciled after `counts.total` fix; **re-verified after the C1–C9 API-review renames, 2026-07** — semantic records unchanged by the renames) · **Inputs:** `dag-conformance-out/{ts,python,java,go}.json` · **Contract:** [`DAG_CONFORMANCE.md`](./DAG_CONFORMANCE.md)
 >
 > **Verdict: CONFORMANT** — 18 shared scenarios compared (+1 TS+Go-only). All 18 shared scenarios are now fully conformant and byte-identical across all four SDKs, and the TS+Go-only scenario (DAG-18) is byte-identical between TS and Go. **Zero field-level divergences.** The previous three `counts.total` divergences (DAG-16, DAG-17, DAG-18) under early completion are resolved: Python, Java, and Go now report `total` = number of **registered** tasks (spec §2.8), matching TS and the catalog. All statuses, results, error types, skip reasons, completion reasons, and all four counters match everywhere.
 
