@@ -712,6 +712,27 @@ export class DurableContextImpl<
     return createPromiseHandler(this.runInChildContext.bind(this));
   }
 
+  dag(
+    name: string,
+    register: (dagCtx: DagContext<Logger>) => void | Promise<void>,
+    config?: DagConfig,
+  ): DurablePromise<DagResult> {
+    validateContextUsage(
+      this._stepPrefix,
+      "dag",
+      this._executionContext.terminationManager,
+    );
+    // Top-level DAG container is a real counter slot in this context, so it is
+    // wired with the counter-based runInChildContext. Tasks run under the
+    // explicit-ID variants on the child (parent) context created inside.
+    return createDagHandler<Logger>(
+      this.runInChildContext.bind(
+        this,
+      ) as DurableContext<Logger>["runInChildContext"],
+      this._executionContext,
+    )(name, register, config);
+  }
+
   // ───────────────────────────────────────────────────────────────────────
   // DAG explicit-ID variants (@internal)
   //

@@ -25,6 +25,7 @@ import {
 } from "./batch";
 import { DurablePromise } from "./durable-promise";
 import { DurableContextLogger, DurableLogger } from "./durable-logger";
+import { DagConfig, DagContext, DagResult } from "./dag";
 
 /**
  * @public
@@ -595,6 +596,23 @@ export interface DurableContext<TLogger extends DurableLogger = DurableLogger> {
           : never
     >
   >;
+
+  /**
+   * Declares and runs a directed-acyclic-graph of tasks with dependencies.
+   *
+   * Tasks are declared in the `register` callback (registration only — nothing
+   * executes until it returns), then scheduled topologically: independent
+   * chains run concurrently, per-task trigger rules and `runIf` predicates gate
+   * execution, and results aggregate into a {@link DagResult}. Runs as a single
+   * child-context node; each task keeps its native operation subtype.
+   *
+   * @experimental This method is experimental and may be changed or removed in future releases.
+   */
+  dag(
+    name: string,
+    register: (dagCtx: DagContext<TLogger>) => void | Promise<void>,
+    config?: DagConfig,
+  ): DurablePromise<DagResult>;
 
   promise: {
     /**
