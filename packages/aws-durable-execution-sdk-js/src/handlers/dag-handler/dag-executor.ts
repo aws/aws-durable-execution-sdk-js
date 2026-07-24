@@ -21,7 +21,10 @@ import {
 } from "../../errors/durable-error/durable-error";
 import { TaskDef } from "./task-handle";
 import { triggerRuleEvaluators } from "./trigger-rules";
-import { DagResultImpl } from "./dag-result";
+import { DagResultImpl, restoreDagResult } from "./dag-result";
+import { ExecutionContext } from "../../types/core";
+import { ErrorObject } from "@aws-sdk/client-lambda";
+import { restoreBatchResult } from "../concurrent-execution-handler/batch-result";
 
 const toDurableError = (error: unknown): DurableOperationError => {
   if (error instanceof DurableOperationError) {
@@ -315,14 +318,131 @@ export class DagExecutor {
  * trigger recomputation, reads per-task results from checkpoints, and sources
  * counts/reason/started-set from the SDK-owned {@link DagSummary} envelope.
  *
- * Body implemented in T12.
- *
  * @internal
  */
 export async function reconstructDagResult(
-  _ctx: DurableContextImpl<DurableLogger>,
-  _tasks: TaskDef[],
-  _envelope: DagSummary | null,
+  ctx: DurableContextImpl<DurableLogger>,
+  tasks: TaskDef[],
+  envelope: DagSummary | null,
+  executionContext: ExecutionContext,
 ): Promise<DagResult> {
-  throw new Error("reconstructDagResult not yet implemented (T12)");
+  const results = new Map<string, TaskExecution>();
+  const startedSet = new Set(envelope?.startedTaskNames ?? []);
+
+  const buildDepsMap = (task: TaskDef): Record<string, unknown> => {
+    const map: Record<string, unknown> = {};
+    for (const dep of task.inlineDeps) {
+      const exec = results.get(dep._name);
+      map[dep._name] =
+        exec && exec.status === "SUCCEEDED" ? exec.result : undefined;
+    }
+    return map;
+  };
+
+  const readResult = (task: TaskDef, payload: string | undefined): unknown => {
+    if (payload === undefined) {
+      return undefined;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(payload);
+    } catch {
+      return payload;
+    }
+    if (task.kind === "map" || task.kind === "parallel") {
+      return restoreBatchResult(parsed);
+    }
+    if (task.kind === "dag") {
+      return restoreDagResult(parsed);
+    }
+    return parsed;
+  };
+
+  let progressed = true;
+  while (progressed) {
+    progressed = false;
+    for (const task of tasks) {
+      if (results.has(task.name)) {
+        continue;
+      }
+      if (!task.allDeps.every((d) => results.has(d._name))) {
+        continue;
+      }
+      const entityId = ctx.createTaskId(task.name);
+      const stepData = executionContext.getStepData(entityId);
+      const detail = stepData as
+        | {
+            Status?: string;
+            StepDetails?: { Result?: string; Error?: ErrorObject };
+            ContextDetails?: { Result?: string; Error?: ErrorObject };
+            ChainedInvokeDetails?: { Result?: string; Error?: ErrorObject };
+            CallbackDetails?: { Result?: string; Error?: ErrorObject };
+            WaitDetails?: { Result?: string; Error?: ErrorObject };
+          }
+        | undefined;
+      const status = detail?.Status;
+      const resultPayload =
+        detail?.StepDetails?.Result ??
+        detail?.ContextDetails?.Result ??
+        detail?.ChainedInvokeDetails?.Result ??
+        detail?.CallbackDetails?.Result ??
+        detail?.WaitDetails?.Result;
+      const errorObject =
+        detail?.StepDetails?.Error ??
+        detail?.ContextDetails?.Error ??
+        detail?.ChainedInvokeDetails?.Error ??
+        detail?.CallbackDetails?.Error;
+
+      if (status === "SUCCEEDED") {
+        results.set(task.name, {
+          name: task.name,
+          status: "SUCCEEDED",
+          result: readResult(task, resultPayload),
+        });
+      } else if (status === "FAILED") {
+        results.set(task.name, {
+          name: task.name,
+          status: "FAILED",
+          error: errorObject
+            ? DurableOperationError.fromErrorObject(errorObject)
+            : new StepError("Unknown error"),
+        });
+      } else if (startedSet.has(task.name)) {
+        results.set(task.name, { name: task.name, status: "STARTED" });
+      } else {
+        // No checkpoint: recompute skip vs never-started deterministically.
+        const rule = task.triggerRule ?? "ALL_SUCCESS";
+        const depStatuses = task.allDeps.map(
+          (d) => (results.get(d._name) as TaskExecution).status,
+        );
+        if (!triggerRuleEvaluators[rule](depStatuses)) {
+          results.set(task.name, {
+            name: task.name,
+            status: "SKIPPED",
+            skipReason: "TRIGGER_RULE",
+          });
+        } else if (task.runIf && !task.runIf(buildDepsMap(task))) {
+          results.set(task.name, {
+            name: task.name,
+            status: "SKIPPED",
+            skipReason: "RUN_IF_PREDICATE",
+          });
+        }
+        // else: would-run but no checkpoint and not STARTED => never started
+        // (early completion). Leave absent from results.
+      }
+      if (results.has(task.name)) {
+        progressed = true;
+      }
+    }
+  }
+
+  const failureCount = [...results.values()].filter(
+    (e) => e.status === "FAILED",
+  ).length;
+  const completionReason: DagCompletionReason =
+    envelope?.completionReason ??
+    (failureCount > 0 ? "COMPLETED_WITH_FAILURES" : "ALL_COMPLETED");
+  const totalCount = envelope?.totalCount ?? tasks.length;
+  return new DagResultImpl(results, completionReason, totalCount);
 }
