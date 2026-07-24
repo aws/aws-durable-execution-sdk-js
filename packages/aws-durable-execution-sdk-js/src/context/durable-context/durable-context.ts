@@ -65,6 +65,7 @@ import {
   AnySerdesDeserializer,
 } from "../../utils/serdes/serdes";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
+import { DagConfig, DagContext, DagResult } from "../../types/dag";
 
 export interface DurableExecution {
   checkpointManager: CheckpointManager;
@@ -941,6 +942,18 @@ export class DurableContextImpl<
       this._executeConcurrentlyWithExplicitId.bind(this),
     );
     return parallelHandler(name, branches, options);
+  }
+
+  /**
+   * Nested DAG task variant. Wired to `createDagHandler` in T13/T14.
+   * @internal
+   */
+  runDagWithExplicitId(
+    _name: string,
+    _register: (dagCtx: DagContext<Logger>) => void | Promise<void>,
+    _config?: DagConfig,
+  ): DurablePromise<DagResult> {
+    throw new Error("runDagWithExplicitId not yet wired");
   }
 }
 

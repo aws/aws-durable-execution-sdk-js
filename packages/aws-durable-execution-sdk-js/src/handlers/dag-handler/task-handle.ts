@@ -1,5 +1,4 @@
 import { AnyTaskHandle, TaskHandle, TriggerRule } from "../../types/dag";
-import { DurablePromise } from "../../types/durable-promise";
 import { DurableLogger } from "../../types/durable-logger";
 import type { DurableContextImpl } from "../../context/durable-context/durable-context";
 
@@ -41,7 +40,7 @@ export interface TaskDef {
   executor: (
     ctx: DurableContextImpl<DurableLogger>,
     depsMap: Record<string, unknown>,
-  ) => DurablePromise<unknown>;
+  ) => Promise<unknown>;
 }
 
 /**
