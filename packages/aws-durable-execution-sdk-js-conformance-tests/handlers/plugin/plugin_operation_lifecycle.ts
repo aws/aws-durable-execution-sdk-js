@@ -12,11 +12,11 @@ import {
 const operationLifecyclePlugin: DurableInstrumentationPlugin = {
   async onOperationStart(info) {
     if (info.subType !== "Step") return;
-    console.log(`CONFPLUGIN operation-start`);
+    console.log(`CONFPLUGIN operation-start op=${info.id}`);
   },
   async onOperationEnd(info) {
     if (info.subType !== "Step") return;
-    console.log(`CONFPLUGIN operation-end status=${info.status}`);
+    console.log(`CONFPLUGIN operation-end op=${info.id} status=${info.status}`);
   },
 };
 
