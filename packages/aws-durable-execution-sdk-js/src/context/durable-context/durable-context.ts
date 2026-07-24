@@ -66,6 +66,7 @@ import {
 } from "../../utils/serdes/serdes";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
 import { DagConfig, DagContext, DagResult } from "../../types/dag";
+import { createDagHandler } from "../../handlers/dag-handler/dag-handler";
 
 export interface DurableExecution {
   checkpointManager: CheckpointManager;
@@ -945,15 +946,21 @@ export class DurableContextImpl<
   }
 
   /**
-   * Nested DAG task variant. Wired to `createDagHandler` in T13/T14.
+   * Nested DAG task variant. The nested container gets `DAG_NODE_T_{name}` via
+   * the explicit-ID child-context binding.
    * @internal
    */
   runDagWithExplicitId(
-    _name: string,
-    _register: (dagCtx: DagContext<Logger>) => void | Promise<void>,
-    _config?: DagConfig,
+    name: string,
+    register: (dagCtx: DagContext<Logger>) => void | Promise<void>,
+    config?: DagConfig,
   ): DurablePromise<DagResult> {
-    throw new Error("runDagWithExplicitId not yet wired");
+    return createDagHandler<Logger>(
+      this.runInChildContextWithExplicitId.bind(
+        this,
+      ) as DurableContext<Logger>["runInChildContext"],
+      this._executionContext,
+    )(name, register, config);
   }
 }
 
