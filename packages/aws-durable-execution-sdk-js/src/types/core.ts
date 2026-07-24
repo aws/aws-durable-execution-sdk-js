@@ -235,6 +235,31 @@ export enum OperationSubType {
 }
 
 /**
+ * Reason why a batch or DAG operation completed.
+ *
+ * This is the neutral, shared completion vocabulary that both batch
+ * (`map`/`parallel`, see {@link BatchResult.completionReason}) and DAG
+ * (`context.dag`, extended by `DagCompletionReason`) build on. Neither feature
+ * depends on the other's completion type — both import this base from `core`.
+ *
+ * - `ALL_COMPLETED`: every item finished.
+ * - `MIN_SUCCESSFUL_REACHED`: a `minSuccessful` threshold was reached.
+ * - `FAILURE_TOLERANCE_EXCEEDED`: a failure threshold was exceeded.
+ * - `CUSTOM_COMPLETION_SUCCEEDED`: a custom `shouldComplete` predicate signalled
+ *   completion with a `SUCCEEDED` outcome before all items finished.
+ * - `CUSTOM_COMPLETION_FAILED`: a custom `shouldComplete` predicate signalled
+ *   completion with a `FAILED` outcome before all items finished.
+ *
+ * @public
+ */
+export type CompletionReason =
+  | "ALL_COMPLETED"
+  | "MIN_SUCCESSFUL_REACHED"
+  | "FAILURE_TOLERANCE_EXCEEDED"
+  | "CUSTOM_COMPLETION_SUCCEEDED"
+  | "CUSTOM_COMPLETION_FAILED";
+
+/**
  * Response structure for failed durable execution invocations.
  * @public
  */

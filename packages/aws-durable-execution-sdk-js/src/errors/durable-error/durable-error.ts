@@ -1,7 +1,7 @@
 import { ErrorObject } from "@aws-sdk/client-lambda";
 import { STORE_STACK_TRACES } from "../../utils/constants/constants";
 // Type-only import to avoid a runtime circular dependency with types/batch.
-import type { CompletionReason } from "../../types/batch";
+import type { CompletionReason } from "../../types/core";
 
 /**
  * Base class for all durable operation errors

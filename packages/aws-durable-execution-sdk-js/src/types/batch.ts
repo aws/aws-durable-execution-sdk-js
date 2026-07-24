@@ -2,6 +2,7 @@ import { Serdes } from "../utils/serdes/serdes";
 import { DurableContext } from "./durable-context";
 import { ChildContextError } from "../errors/durable-error/durable-error";
 import { DurableLogger } from "./durable-logger";
+import { CompletionReason } from "./core";
 
 /**
  * Nesting type for batch operations (map and parallel)
@@ -62,27 +63,10 @@ export interface BatchItem<TResult> {
  * Reason why a batch operation (map, parallel, or concurrent execution)
  * completed.
  *
- * - `ALL_COMPLETED`: every item finished.
- * - `MIN_SUCCESSFUL_REACHED`: {@link CompletionConfig.minSuccessful} was reached.
- * - `FAILURE_TOLERANCE_EXCEEDED`: a failure threshold was exceeded.
- * - `CUSTOM_COMPLETION_SUCCEEDED`: a custom {@link CompletionConfig.shouldComplete}
- *   predicate signalled completion with a `SUCCEEDED` outcome before all items
- *   finished.
- * - `CUSTOM_COMPLETION_FAILED`: a custom {@link CompletionConfig.shouldComplete}
- *   predicate signalled completion with a `FAILED` outcome before all items
- *   finished.
- *
- * @public
- */
-export type CompletionReason =
-  | "ALL_COMPLETED"
-  | "MIN_SUCCESSFUL_REACHED"
-  | "FAILURE_TOLERANCE_EXCEEDED"
-  | "CUSTOM_COMPLETION_SUCCEEDED"
-  | "CUSTOM_COMPLETION_FAILED";
-
-/**
- * Result of a batch operation (map, parallel, or concurrent execution)
+ * @remarks
+ * Re-exported for callers via the shared core module ({@link CompletionReason});
+ * this type is defined once in `core.ts` as the neutral base shared by batch and
+ * DAG. Imported here for internal use in {@link BatchResult}.
  *
  * @public
  */
