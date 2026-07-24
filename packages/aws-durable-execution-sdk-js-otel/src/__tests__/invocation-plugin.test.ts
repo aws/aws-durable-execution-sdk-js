@@ -419,11 +419,10 @@ describe("InvocationOtelPlugin", () => {
 
       const spans = getExportedSpans();
       const opSpan = spans.find(
-        (s) =>
-          s.name === "my-step" && !s.attributes["durable.operation.attempt"],
+        (s) => s.name === "my-step" && !s.attributes["durable.attempt.number"],
       );
       const attemptSpan = spans.find(
-        (s) => s.attributes["durable.operation.attempt"] === 1,
+        (s) => s.attributes["durable.attempt.number"] === 1,
       );
       expect(opSpan).toBeDefined();
       expect(attemptSpan).toBeDefined();
@@ -454,7 +453,7 @@ describe("InvocationOtelPlugin", () => {
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
       const attemptSpan = getExportedSpans().find(
-        (s) => s.attributes["durable.operation.attempt"] === 2,
+        (s) => s.attributes["durable.attempt.number"] === 2,
       );
       expect(attemptSpan).toBeDefined();
       expect(attemptSpan!.attributes["durable.execution.arn"]).toBe(TEST_ARN);
@@ -462,7 +461,7 @@ describe("InvocationOtelPlugin", () => {
       expect(attemptSpan!.attributes["durable.operation.name"]).toBe(
         "attr-step",
       );
-      expect(attemptSpan!.attributes["durable.operation.attempt"]).toBe(2);
+      expect(attemptSpan!.attributes["durable.attempt.number"]).toBe(2);
     });
 
     it("attempt span has Link to deterministic span ID", async () => {
@@ -483,7 +482,7 @@ describe("InvocationOtelPlugin", () => {
 
       const expectedSpanId = deriveSpanIdFromOperationId("op-link", TEST_ARN);
       const attemptSpan = getExportedSpans().find(
-        (s) => s.attributes["durable.operation.attempt"] === 1,
+        (s) => s.attributes["durable.attempt.number"] === 1,
       );
       expect(attemptSpan).toBeDefined();
       expect(attemptSpan!.links.length).toBeGreaterThan(0);
@@ -507,7 +506,7 @@ describe("InvocationOtelPlugin", () => {
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
       const attemptSpan = getExportedSpans().find(
-        (s) => s.attributes["durable.operation.attempt"] === 1,
+        (s) => s.attributes["durable.attempt.number"] === 1,
       );
       expect(attemptSpan).toBeDefined();
       // Span should be ended (it's in the exported list)
@@ -536,7 +535,7 @@ describe("InvocationOtelPlugin", () => {
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
       const attemptSpan = getExportedSpans().find(
-        (s) => s.attributes["durable.operation.attempt"] === 3,
+        (s) => s.attributes["durable.attempt.number"] === 3,
       );
       expect(attemptSpan).toBeDefined();
       expect(attemptSpan!.name).toBe("my-step attempt 3");
@@ -561,7 +560,7 @@ describe("InvocationOtelPlugin", () => {
       const attemptSpan = getExportedSpans().find(
         (s) =>
           s.attributes["durable.operation.id"] === "op-type-fmt" &&
-          s.attributes["durable.operation.attempt"] === 1,
+          s.attributes["durable.attempt.number"] === 1,
       );
       expect(attemptSpan).toBeDefined();
       expect(attemptSpan!.name).toBe("step attempt 1");
@@ -627,12 +626,12 @@ describe("InvocationOtelPlugin", () => {
       const attemptA = spans.find(
         (s) =>
           s.attributes["durable.operation.id"] === "op-a" &&
-          s.attributes["durable.operation.attempt"] === 1,
+          s.attributes["durable.attempt.number"] === 1,
       );
       const attemptB = spans.find(
         (s) =>
           s.attributes["durable.operation.id"] === "op-b" &&
-          s.attributes["durable.operation.attempt"] === 1,
+          s.attributes["durable.attempt.number"] === 1,
       );
 
       expect(attemptA).toBeDefined();
@@ -651,12 +650,10 @@ describe("InvocationOtelPlugin", () => {
 
       // Each attempt should be parented to its own operation span
       const opASpan = spans.find(
-        (s) =>
-          s.name === "step-a" && !s.attributes["durable.operation.attempt"],
+        (s) => s.name === "step-a" && !s.attributes["durable.attempt.number"],
       );
       const opBSpan = spans.find(
-        (s) =>
-          s.name === "step-b" && !s.attributes["durable.operation.attempt"],
+        (s) => s.name === "step-b" && !s.attributes["durable.attempt.number"],
       );
       expect(attemptA!.parentSpanContext?.spanId).toBe(
         opASpan!.spanContext().spanId,
@@ -719,12 +716,12 @@ describe("InvocationOtelPlugin", () => {
       const attempt1 = spans.find(
         (s) =>
           s.attributes["durable.operation.id"] === "op-multi" &&
-          s.attributes["durable.operation.attempt"] === 1,
+          s.attributes["durable.attempt.number"] === 1,
       );
       const attempt2 = spans.find(
         (s) =>
           s.attributes["durable.operation.id"] === "op-multi" &&
-          s.attributes["durable.operation.attempt"] === 2,
+          s.attributes["durable.attempt.number"] === 2,
       );
 
       expect(attempt1).toBeDefined();
@@ -773,7 +770,7 @@ describe("InvocationOtelPlugin", () => {
       const attemptSpan = getExportedSpans().find(
         (s) =>
           s.attributes["durable.operation.id"] === "op-outcome-ok" &&
-          s.attributes["durable.operation.attempt"] === 1,
+          s.attributes["durable.attempt.number"] === 1,
       );
       expect(attemptSpan).toBeDefined();
       expect(attemptSpan!.attributes["durable.attempt.outcome"]).toBe(
@@ -814,7 +811,7 @@ describe("InvocationOtelPlugin", () => {
       const attemptSpan = getExportedSpans().find(
         (s) =>
           s.attributes["durable.operation.id"] === "op-outcome-fail" &&
-          s.attributes["durable.operation.attempt"] === 1,
+          s.attributes["durable.attempt.number"] === 1,
       );
       expect(attemptSpan).toBeDefined();
       expect(attemptSpan!.attributes["durable.attempt.outcome"]).toBe("FAILED");
@@ -863,6 +860,7 @@ describe("InvocationOtelPlugin", () => {
         makeAttemptEndInfo({
           id: "op-attemptErr",
           attempt: 1,
+          outcome: "FAILED" as any,
           error: testError,
         }),
       );
@@ -872,7 +870,7 @@ describe("InvocationOtelPlugin", () => {
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
       const attemptSpan = getExportedSpans().find(
-        (s) => s.attributes["durable.operation.attempt"] === 1,
+        (s) => s.attributes["durable.attempt.number"] === 1,
       );
       expect(attemptSpan).toBeDefined();
       expect(attemptSpan!.status.code).toBe(SpanStatusCode.ERROR);
@@ -1049,7 +1047,7 @@ describe("InvocationOtelPlugin", () => {
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
       const attemptSpan = getExportedSpans().find(
-        (s) => s.attributes["durable.operation.attempt"] === 1,
+        (s) => s.attributes["durable.attempt.number"] === 1,
       );
       expect(capturedSpanId).toBeDefined();
       expect(capturedSpanId).toBe(attemptSpan!.spanContext().spanId);
@@ -1263,7 +1261,7 @@ describe("InvocationOtelPlugin", () => {
       const attemptSpan = getExportedSpans().find(
         (s) =>
           s.attributes["durable.operation.id"] === "op-att-sub" &&
-          s.attributes["durable.operation.attempt"] === 1,
+          s.attributes["durable.attempt.number"] === 1,
       );
       expect(attemptSpan).toBeDefined();
       expect(attemptSpan!.attributes["durable.operation.subtype"]).toBe(

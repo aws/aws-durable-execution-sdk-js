@@ -117,9 +117,13 @@ describe("InvocationOtelPlugin - useDefaultTracerProvider mode", () => {
     // Operation spans are exported via the global provider
     const opSpan = spans.find((s) => s.name === "test-op");
     expect(opSpan).toBeDefined();
-    // No invocation or workflow span in default provider mode
+    // Invocation span is always created (with durable.execution.arn)
     const invocationSpan = spans.find((s) => s.name === "invocation");
-    expect(invocationSpan).toBeUndefined();
+    expect(invocationSpan).toBeDefined();
+    expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(
+      "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-123",
+    );
+    // No workflow span in default provider mode
     const workflowSpan = spans.find((s) => s.name === "Workflow");
     expect(workflowSpan).toBeUndefined();
   });

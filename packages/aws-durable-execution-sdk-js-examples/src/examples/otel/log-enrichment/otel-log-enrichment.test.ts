@@ -80,7 +80,7 @@ createTests({
             (s) =>
               s.attributes["durable.operation.name"] === "log-step-1" &&
               s.attributes["durable.operation.type"] === "STEP" &&
-              s.attributes["durable.operation.attempt"] === undefined,
+              s.attributes["durable.attempt.outcome"] === undefined,
           );
           expect(logStep1Op).toBeDefined();
 
@@ -88,7 +88,7 @@ createTests({
             (s) =>
               s.attributes["durable.operation.name"] === "log-step-2" &&
               s.attributes["durable.operation.type"] === "STEP" &&
-              s.attributes["durable.operation.attempt"] === undefined,
+              s.attributes["durable.attempt.outcome"] === undefined,
           );
           expect(logStep2Op).toBeDefined();
 
@@ -96,14 +96,14 @@ createTests({
           const logStep1Attempt = spans.find(
             (s) =>
               s.parentSpanId === logStep1Op!.spanId &&
-              s.attributes["durable.operation.attempt"] === 1,
+              s.attributes["durable.attempt.number"] === 1,
           );
           expect(logStep1Attempt).toBeDefined();
 
           const logStep2Attempt = spans.find(
             (s) =>
               s.parentSpanId === logStep2Op!.spanId &&
-              s.attributes["durable.operation.attempt"] === 1,
+              s.attributes["durable.attempt.number"] === 1,
           );
           expect(logStep2Attempt).toBeDefined();
 

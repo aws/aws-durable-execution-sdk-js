@@ -184,7 +184,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
 
     // Verify attempt span exists
     const attemptSpan = spans.find(
-      (s) => s.attributes["durable.operation.attempt"] === 1,
+      (s) => s.attributes["durable.attempt.number"] === 1,
     );
     expect(attemptSpan).toBeDefined();
   });
@@ -212,7 +212,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     expect(workflowSpan!.parentSpanContext).toBeUndefined();
   });
 
-  it("no Invocation_Span is created by the plugin", async () => {
+  it("Invocation_Span is created as child of ambient context", async () => {
     const plugin = new ExecutionOtelPlugin({
       useDefaultTracerProvider: true,
     });
@@ -235,7 +235,13 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     );
 
     const invocationSpans = findSpans(exporter, "Invocation");
-    expect(invocationSpans.length).toBe(0);
+    expect(invocationSpans.length).toBe(1);
+    expect(invocationSpans[0].attributes["durable.execution.arn"]).toBe(
+      TEST_ARN,
+    );
+    expect(invocationSpans[0].attributes["durable.invocation.first"]).toBe(
+      true,
+    );
   });
 
   it("operation and attempt spans have correct parent-child hierarchy under Workflow_Span", async () => {
@@ -266,7 +272,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     const workflowSpan = findSpan(exporter, "Workflow");
     const opSpan = findSpan(exporter, "process-item");
     const attemptSpan = getExportedSpans(exporter).find(
-      (s) => s.attributes["durable.operation.attempt"] === 1,
+      (s) => s.attributes["durable.attempt.number"] === 1,
     );
 
     expect(workflowSpan).toBeDefined();
@@ -284,7 +290,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     );
   });
 
-  it("span links are empty because there is no ambient invocation span in local environment", async () => {
+  it("span links point to the Invocation span when there is no ambient invocation span", async () => {
     const plugin = new ExecutionOtelPlugin({
       useDefaultTracerProvider: true,
     });
@@ -309,15 +315,23 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
 
     const opSpan = findSpan(exporter, "my-operation");
     const attemptSpan = getExportedSpans(exporter).find(
-      (s) => s.attributes["durable.operation.attempt"] === 1,
+      (s) => s.attributes["durable.attempt.number"] === 1,
     );
+    const invocationSpan = findSpan(exporter, "Invocation");
 
     expect(opSpan).toBeDefined();
     expect(attemptSpan).toBeDefined();
+    expect(invocationSpan).toBeDefined();
 
-    // No invocation links — there is no ambient invocation span locally
-    expect(opSpan!.links.length).toBe(0);
-    expect(attemptSpan!.links.length).toBe(0);
+    // Links point to the Invocation span we created
+    expect(opSpan!.links.length).toBe(1);
+    expect(opSpan!.links[0].context.spanId).toBe(
+      invocationSpan!.spanContext().spanId,
+    );
+    expect(attemptSpan!.links.length).toBe(1);
+    expect(attemptSpan!.links[0].context.spanId).toBe(
+      invocationSpan!.spanContext().spanId,
+    );
   });
 
   it("no shutdown is called on the globally registered provider", async () => {
@@ -398,8 +412,10 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     expect(validateSpan).toBeDefined();
     expect(processSpan).toBeDefined();
 
-    // No Invocation_Span
-    expect(findSpan(exporter, "Invocation")).toBeUndefined();
+    // No Invocation_Span — actually now we always create one
+    const invocationSpan = findSpan(exporter, "Invocation");
+    expect(invocationSpan).toBeDefined();
+    expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(TEST_ARN);
 
     // Workflow is root
     expect(workflowSpan!.parentSpanContext).toBeUndefined();
@@ -414,7 +430,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
 
     // Attempt spans are children of their respective operations
     const attemptSpans = spans.filter(
-      (s) => s.attributes["durable.operation.attempt"] === 1,
+      (s) => s.attributes["durable.attempt.number"] === 1,
     );
     expect(attemptSpans.length).toBe(2);
 
@@ -434,10 +450,13 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
       processSpan!.spanContext().spanId,
     );
 
-    // All span links are empty (no ambient invocation span locally)
+    // Operation and attempt spans link to the Invocation span (no ambient invocation span locally)
     for (const span of spans) {
-      if (span.name !== "Workflow") {
-        expect(span.links.length).toBe(0);
+      if (span.name !== "Workflow" && span.name !== "Invocation") {
+        expect(span.links.length).toBe(1);
+        expect(span.links[0].context.spanId).toBe(
+          invocationSpan!.spanContext().spanId,
+        );
       }
     }
 

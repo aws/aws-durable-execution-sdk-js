@@ -293,7 +293,7 @@ describe("ExecutionOtelPlugin integration - provider resolution", () => {
     globalProvider.shutdown();
   });
 
-  it("useDefaultTracerProvider=true does NOT create an Invocation span", async () => {
+  it("useDefaultTracerProvider=true creates an Invocation span with durable.execution.arn", async () => {
     const exporter = new InMemorySpanExporter();
     const globalProvider = new NodeTracerProvider({
       spanProcessors: [new SimpleSpanProcessor(exporter)],
@@ -327,7 +327,10 @@ describe("ExecutionOtelPlugin integration - provider resolution", () => {
 
     const spans = exporter.getFinishedSpans();
     const invocationSpan = spans.find((s) => s.name === "Invocation");
-    expect(invocationSpan).toBeUndefined();
+    expect(invocationSpan).toBeDefined();
+    expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(
+      "arn:aws:states:us-east-1:123456789012:execution:sm:exec-2",
+    );
 
     globalProvider.shutdown();
   });

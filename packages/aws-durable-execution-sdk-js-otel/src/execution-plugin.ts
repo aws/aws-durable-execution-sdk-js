@@ -19,6 +19,7 @@ import type {
 import {
   context,
   trace,
+  SpanKind,
   SpanStatusCode,
   ROOT_CONTEXT,
 } from "@opentelemetry/api";
@@ -139,9 +140,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       ROOT_CONTEXT,
     );
 
-    // Create Invocation_Span ONLY when NOT using default provider
+    // 7. Create Invocation_Span
     if (!this.useDefaultTracerProvider) {
-      // 7. Create the Invocation_Span as child of Workflow_Span with Lambda semantic attributes
+      // Non-default mode: child of Workflow_Span with Lambda semantic attributes
       const parentContext = trace.setSpan(context.active(), this.workflowSpan);
 
       const invocationAttributes: Record<string, string | number | boolean> = {
@@ -150,6 +151,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         "cloud.provider": "aws",
         "cloud.platform": "aws_lambda",
         "durable.execution.arn": info.executionArn,
+        "durable.invocation.first": info.isFirstInvocation,
       };
 
       // Set cloud.resource_id from Lambda environment variables
@@ -181,7 +183,24 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       this.invocationSpan = this.tracer.startSpan(
         "Invocation",
         {
+          kind: SpanKind.INTERNAL,
           attributes: invocationAttributes,
+        },
+        parentContext,
+      );
+    } else {
+      // Default provider mode: create invocation span as child of the ambient
+      // Lambda invocation span (from the ADOT layer or other auto-instrumentation)
+      const parentContext = this.savedInvocationContext ?? context.active();
+
+      this.invocationSpan = this.tracer.startSpan(
+        "Invocation",
+        {
+          kind: SpanKind.INTERNAL,
+          attributes: {
+            "durable.execution.arn": info.executionArn,
+            "durable.invocation.first": info.isFirstInvocation,
+          },
         },
         parentContext,
       );
@@ -204,6 +223,20 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   async onInvocationEnd(info: InvocationEndInfo): Promise<void> {
     // 1. Always end and export Invocation_Span
     if (this.invocationSpan) {
+      this.invocationSpan.setAttribute(
+        "durable.invocation.status",
+        info.status,
+      );
+
+      // Set span status ERROR when execution has failed
+      if (info.status === "FAILED") {
+        this.invocationSpan.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: info.executionError?.message ?? "Execution failed",
+        });
+      }
+      // Otherwise leave status as UNSET (default)
+
       this.invocationSpan.end();
     }
 
@@ -326,6 +359,19 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       // Operation was started in this invocation
       const span = this.spanMap.get(info.id)!;
 
+      // Set operation status attribute
+      if (info.status) {
+        span.setAttribute("durable.operation.status", info.status);
+      }
+
+      // Set durable.attempt.number for STEP and WAIT_FOR_CONDITION operations
+      if (
+        (info.type === "STEP" || info.subType === "WAIT_FOR_CONDITION") &&
+        info.attempt != null
+      ) {
+        span.setAttribute("durable.attempt.number", info.attempt);
+      }
+
       if (info.error) {
         span.setStatus({
           code: SpanStatusCode.ERROR,
@@ -352,7 +398,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         ? trace.setSpan(context.active(), parentSpan)
         : context.active();
 
-      const attributes: Record<string, string> = {
+      const attributes: Record<string, string | number> = {
         "durable.execution.arn": this.executionArn,
         "durable.operation.id": info.id,
         "durable.operation.type": info.type,
@@ -362,6 +408,16 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       }
       if (info.subType) {
         attributes["durable.operation.subtype"] = info.subType;
+      }
+      if (info.status) {
+        attributes["durable.operation.status"] = info.status;
+      }
+      // Set durable.attempt.number for STEP and WAIT_FOR_CONDITION operations
+      if (
+        (info.type === "STEP" || info.subType === "WAIT_FOR_CONDITION") &&
+        info.attempt != null
+      ) {
+        attributes["durable.attempt.number"] = info.attempt;
       }
 
       const links = this.buildInvocationLinks();
@@ -403,7 +459,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       "durable.execution.arn": this.executionArn,
       "durable.operation.id": info.id,
       "durable.operation.type": info.type,
-      "durable.operation.attempt": info.attempt,
+      "durable.attempt.number": info.attempt,
     };
     if (info.name) {
       attributes["durable.operation.name"] = info.name;
@@ -442,12 +498,14 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     const attemptSpan = this.spanMap.get(key);
     if (attemptSpan) {
       attemptSpan.setAttribute("durable.attempt.outcome", info.outcome);
-      if (info.error) {
+      if (info.outcome === "FAILED") {
         attemptSpan.setStatus({
           code: SpanStatusCode.ERROR,
-          message: info.error.message,
+          message: info.error?.message ?? "Attempt failed",
         });
-        attemptSpan.recordException(info.error);
+        if (info.error) {
+          attemptSpan.recordException(info.error);
+        }
       }
       attemptSpan.end(info.endTimestamp);
       this.spanMap.delete(key);
