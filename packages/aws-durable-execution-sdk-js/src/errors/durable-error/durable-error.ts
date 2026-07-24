@@ -95,6 +95,34 @@ export abstract class DurableOperationError extends Error {
           cause,
           errorObject.ErrorData,
         );
+      case "DagCyclicDependencyError":
+        return new DagCyclicDependencyError(
+          [],
+          errorObject.ErrorMessage || "DAG cyclic dependency",
+          cause,
+          errorObject.ErrorData,
+        );
+      case "DagInvalidTaskNameError":
+        return new DagInvalidTaskNameError(
+          "",
+          errorObject.ErrorMessage || "Invalid DAG task name",
+          cause,
+          errorObject.ErrorData,
+        );
+      case "DagDuplicateTaskError":
+        return new DagDuplicateTaskError(
+          "",
+          errorObject.ErrorMessage || "Duplicate DAG task name",
+          cause,
+          errorObject.ErrorData,
+        );
+      case "DagInvalidDependencyError":
+        return new DagInvalidDependencyError(
+          "",
+          errorObject.ErrorMessage || "Invalid DAG dependency",
+          cause,
+          errorObject.ErrorData,
+        );
       default:
         return new StepError(
           errorObject.ErrorMessage || "Unknown error",
@@ -297,5 +325,92 @@ export class DagExecutionError extends DurableOperationError {
 
   constructor(message?: string, cause?: Error, errorData?: string) {
     super(message || "DAG execution had failures", cause, errorData);
+  }
+}
+
+/**
+ * Error thrown at DAG registration when a cyclic dependency is detected.
+ *
+ * @experimental This error is experimental and may be changed or removed in future releases.
+ */
+export class DagCyclicDependencyError extends DurableOperationError {
+  readonly errorType = "DagCyclicDependencyError";
+
+  constructor(
+    public readonly cyclicTasks: string[] = [],
+    message?: string,
+    cause?: Error,
+    errorData?: string,
+  ) {
+    super(
+      message ||
+        `DAG contains a cyclic dependency among tasks: ${cyclicTasks.join(", ")}`,
+      cause,
+      errorData,
+    );
+  }
+}
+
+/**
+ * Error thrown at DAG registration when a task name is invalid.
+ *
+ * @experimental This error is experimental and may be changed or removed in future releases.
+ */
+export class DagInvalidTaskNameError extends DurableOperationError {
+  readonly errorType = "DagInvalidTaskNameError";
+
+  constructor(
+    public readonly taskName: string = "",
+    message?: string,
+    cause?: Error,
+    errorData?: string,
+  ) {
+    super(message || `Invalid DAG task name: "${taskName}"`, cause, errorData);
+  }
+}
+
+/**
+ * Error thrown at DAG registration when two tasks share a name in one scope.
+ *
+ * @experimental This error is experimental and may be changed or removed in future releases.
+ */
+export class DagDuplicateTaskError extends DurableOperationError {
+  readonly errorType = "DagDuplicateTaskError";
+
+  constructor(
+    public readonly taskName: string = "",
+    message?: string,
+    cause?: Error,
+    errorData?: string,
+  ) {
+    super(
+      message || `Duplicate DAG task name: "${taskName}"`,
+      cause,
+      errorData,
+    );
+  }
+}
+
+/**
+ * Error thrown at DAG registration when a task depends on a handle not
+ * registered in the current DAG scope.
+ *
+ * @experimental This error is experimental and may be changed or removed in future releases.
+ */
+export class DagInvalidDependencyError extends DurableOperationError {
+  readonly errorType = "DagInvalidDependencyError";
+
+  constructor(
+    public readonly taskName: string = "",
+    message?: string,
+    cause?: Error,
+    errorData?: string,
+  ) {
+    super(
+      message ||
+        `Task "${taskName}" depends on a task that is not registered in this DAG`,
+      cause,
+      errorData,
+    );
   }
 }
