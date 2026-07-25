@@ -15,4 +15,5 @@ export {
   DagDuplicateTaskError,
   DagInvalidDependencyError,
   DagExecutionError,
+  DagPredicateError,
 } from "../durable-error/durable-error";

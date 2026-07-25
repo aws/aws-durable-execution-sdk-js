@@ -1,6 +1,8 @@
 # Cross-Language DAG Conformance — Reconciliation Results
 
 > **This document has two parts.** **Part 1** (below) reconciles the **semantic** conformance suite (`DAG-1`..`DAG-19`, run inside each SDK). **Part 2** (at the end) records the **execution-history** conformance suite (`dag/10-1`..`10-11`, run against real AWS cloud through the language-neutral conformance runner). Part 1 proves identical outcomes; Part 2 proves identical checkpoint shapes.
+>
+> **Not yet covered by either part:** `DAG-20` (a throwing `runIf` aborts with `DagPredicateError`) was added to the catalog on 2026-07-25, after both reconciliations, to close the 2–2 divergence that the pre-launch review found in this behaviour. All four SDKs now implement the abort contract with unit and integration coverage, but no reconciled record or cloud history exists for it yet.
 
 ## Part 1 — Semantic conformance (DAG-1..DAG-19)
 

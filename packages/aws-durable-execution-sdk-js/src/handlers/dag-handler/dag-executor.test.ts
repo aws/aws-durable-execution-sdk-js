@@ -1,4 +1,5 @@
 import { DagExecutor, reconstructDagResult } from "./dag-executor";
+import { DagPredicateError } from "../../errors/durable-error/durable-error";
 import { TaskDef } from "./task-handle";
 import {
   AnyTaskHandle,
@@ -148,6 +149,102 @@ describe("DagExecutor", () => {
     expect(result.getResult("publish")).toBe("published");
     expect(result.getStatus("block")).toBe("SKIPPED");
     expect(result.skipped()[0].skipReason).toBe("RUN_IF_PREDICATE");
+  });
+
+  it("aborts the DAG with DagPredicateError when a runIf predicate throws", async () => {
+    const original = new Error("predicate boom");
+    const scheduled: string[] = [];
+    const gate = task("gate", { run: async () => "g" });
+    // Offending task: its runIf throws once `gate` resolves.
+    const decide = task("decide", {
+      deps: [gate],
+      runIf: () => {
+        throw original;
+      },
+      run: async () => {
+        scheduled.push("decide");
+        return "decided";
+      },
+    });
+    // Downstream compensation: MUST NOT fire off a predicate defect.
+    const refund = task("refund", {
+      deps: [decide],
+      triggerRule: "ALL_FAILED",
+      run: async () => {
+        scheduled.push("refund");
+        return "refunded";
+      },
+    });
+    const executor = new DagExecutor(
+      mockCtx,
+      [gate, decide, refund].map((b) => b.def),
+    );
+
+    let caught: unknown;
+    await executor.run().catch((e) => {
+      caught = e;
+    });
+
+    // (1) rejects with the typed error naming the offending task
+    expect(caught).toBeInstanceOf(DagPredicateError);
+    const err = caught as DagPredicateError;
+    expect(err.taskName).toBe("decide");
+    // (2) cause is the original error, unwrapped
+    expect(err.cause).toBe(original);
+
+    // (3) the offending task has NO terminal state (neither FAILED nor SKIPPED)
+    const results = (
+      executor as unknown as { results: Map<string, { status: string }> }
+    ).results;
+    expect(results.has("decide")).toBe(false);
+
+    // (4) no downstream ALL_FAILED task was scheduled, and the offending
+    // task's own body never ran
+    expect(scheduled).toEqual([]);
+    expect(results.has("refund")).toBe(false);
+  });
+
+  it("wraps a non-Error thrown from runIf as the DagPredicateError cause", async () => {
+    const gate = task("gate", { run: async () => "g" });
+    const decide = task("decide", {
+      deps: [gate],
+      runIf: () => {
+        throw "not-an-error";
+      },
+      run: async () => "decided",
+    });
+    const executor = new DagExecutor(
+      mockCtx,
+      [gate, decide].map((b) => b.def),
+    );
+
+    let caught: unknown;
+    await executor.run().catch((e) => {
+      caught = e;
+    });
+    expect(caught).toBeInstanceOf(DagPredicateError);
+    const err = caught as DagPredicateError;
+    expect(err.cause).toBeInstanceOf(Error);
+    expect(err.cause?.message).toBe("not-an-error");
+  });
+
+  it("aborts on a throwing runIf evaluated on the first scheduling pass (no upstream)", async () => {
+    const original = new Error("boom on first pass");
+    const solo = task("solo", {
+      runIf: () => {
+        throw original;
+      },
+      run: async () => "ran",
+    });
+    const executor = new DagExecutor(mockCtx, [solo.def]);
+
+    let caught: unknown;
+    await executor.run().catch((e) => {
+      caught = e;
+    });
+    expect(caught).toBeInstanceOf(DagPredicateError);
+    expect((caught as DagPredicateError).taskName).toBe("solo");
+    expect((caught as DagPredicateError).cause).toBe(original);
   });
 
   it("throttles concurrency to maxConcurrency", async () => {
@@ -343,6 +440,40 @@ describe("reconstructDagResult (design-B replay)", () => {
     expect(r.getStatus("c")).toBe("SKIPPED");
     expect(r.skipped()[0].skipReason).toBe("TRIGGER_RULE");
     expect(r.totalCount).toBe(3);
+  });
+
+  it("rejects with DagPredicateError if a runIf throws while recomputing a skip on replay", async () => {
+    // A no-checkpoint, envelope-terminal task forces computeSkipReason to
+    // re-evaluate runIf. A faithful replay of a SUCCEEDED container can never
+    // reach this with a throwing predicate (it would have aborted live), so a
+    // throw here signals non-determinism and must surface as the same typed
+    // error rather than being masked as SKIPPED.
+    const a = mk("a");
+    const original = new Error("non-deterministic predicate");
+    const gate: TaskDef = {
+      ...mk("gate", [a]),
+      runIf: () => {
+        throw original;
+      },
+    };
+    const exec = execCtxWith({
+      "1-2-DAG_NODE_T_a": { Status: "SUCCEEDED", result: 1 },
+      // no checkpoint for "gate"
+    });
+    await expect(
+      reconstructDagResult(
+        rcCtx,
+        [a, gate],
+        envelope({
+          totalCount: 2,
+          successCount: 1,
+          skippedCount: 1,
+          completedCount: 2,
+          terminalTaskNames: ["a", "gate"],
+        }),
+        exec,
+      ),
+    ).rejects.toBeInstanceOf(DagPredicateError);
   });
 
   it("leaves a skip-eligible task ABSENT when the envelope excludes it (early completion)", async () => {

@@ -588,7 +588,7 @@ Same empty-upstream semantics and the explicit `len>0` guard on `ALL_FAILED` as 
 
 ### 5.3 `runIf`, running, skip propagation
 
-Identical to JS §5.4–§5.6: after trigger rule passes, build `Deps` from `results` (inline deps only), evaluate `runIf(deps)`; `false` ⇒ `SKIPPED{RUN_IF_PREDICATE}`. Running a task invokes its explicit-ID operation; resolve ⇒ SUCCEEDED, error ⇒ FAILED (the returned `error` value is stored). Skips are terminal and cascade.
+Identical to JS §5.4–§5.6: after trigger rule passes, build `Deps` from `results` (inline deps only), evaluate `runIf(deps)`; `false` ⇒ `SKIPPED{RUN_IF_PREDICATE}`. A **panicking** predicate is recovered — it must never reach the runtime — and aborts the DAG with a typed `DagPredicateError`; it is not a task failure. Running a task invokes its explicit-ID operation; resolve ⇒ SUCCEEDED, error ⇒ FAILED (the returned `error` value is stored). Skips are terminal and cascade.
 
 ### 5.4 `maxConcurrency` for nested DAGs
 

@@ -257,7 +257,7 @@ class TriggerRule(Enum):
     NONE_FAILED = "NONE_FAILED"
 ```
 
-`run_if: Callable[[DepsMap], bool] | None` — **synchronous, deterministic** predicate over resolved upstream results. Returns `False` ⇒ task `SKIPPED` with `skip_reason="RUN_IF_PREDICATE"`. Ports directly from JS §2.6 (JS already mandates sync; Python is sync everywhere, so this is a natural fit). Evaluated after the trigger rule passes and before the operation runs. The full trigger-rule truth table (JS §5.3), including the empty-upstream row and the `ALL_FAILED` `len > 0` guard, ports verbatim.
+`run_if: Callable[[DepsMap], bool] | None` — **synchronous, deterministic** predicate over resolved upstream results. Returns `False` ⇒ task `SKIPPED` with `skip_reason="RUN_IF_PREDICATE"`. A predicate that **throws / raises / panics** aborts the DAG with a typed `DagPredicateError` (`DagPredicateException` in Java) naming the task and carrying the original error as its cause — the task gets **no terminal state** and the throw is neither a task `FAILED` nor a `SKIPPED` (`DAG_SPEC.md` §5.4, `DAG_SPEC_CROSS_LANGUAGE.md` §2.B.3). Ports directly from JS §2.6 (JS already mandates sync; Python is sync everywhere, so this is a natural fit). Evaluated after the trigger rule passes and before the operation runs. The full trigger-rule truth table (JS §5.3), including the empty-upstream row and the `ALL_FAILED` `len > 0` guard, ports verbatim.
 
 ### 2.6 `DagResult` / `TaskExecution`
 

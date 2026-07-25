@@ -350,7 +350,7 @@ export interface ConditionalConfig<TDeps extends readonly AnyTaskHandle[]> {
 }
 ```
 
-Sync-only by design (async predicates invite non-deterministic IO on replay). Evaluated **after** the trigger rule passes and **before** the operation runs.
+Sync-only by design (async predicates invite non-deterministic IO on replay). Evaluated **after** the trigger rule passes and **before** the operation runs. A predicate that **throws** aborts the whole DAG with a typed `DagPredicateError` — it is neither a task failure nor a skip (§5.4).
 
 ### 2.7 `TriggerRule`
 
@@ -646,6 +646,8 @@ Note the explicit `s.length > 0` guard on `ALL_FAILED`: without it, vacuous `eve
 
 If the trigger rule passed, build the `DepsMap` from `results` and evaluate `runIf(deps)` (sync). `false` ⇒ record `{status:"SKIPPED", skipReason:"RUN_IF_PREDICATE"}`, do not run, propagate downstream. `true`/absent ⇒ run.
 
+**A throwing predicate aborts the DAG.** `runIf` is a pure, deterministic predicate, so a throw is a **defect**, not an outcome. The scheduler records **no terminal state** for the offending task, starts no further tasks, and fails the `dag()` operation with a typed `DagPredicateError` naming the task and carrying the original error as its cause; the DAG container checkpoints the failure. It is _not_ recorded as a task `FAILED` and _not_ coerced to `false` ⇒ `SKIPPED`. Recording it as a task failure would silently rewrite the graph's meaning: every downstream `ALL_FAILED` / `ANY_FAILED` / `ALL_DONE` task would fire, so a null-pointer bug in a predicate would issue a refund. Note the contrast with §5.5, where a rejecting task **body** is a normal `FAILED`. Uniform across all four SDKs (`DAG_SPEC_CROSS_LANGUAGE.md` §2.B.3); on the large-payload success-replay path a throw can only mean a non-deterministic predicate, and surfaces as the same typed error rather than being masked.
+
 ### 5.5 Running a task
 
 Invoke `taskDef.executor(parentContext, depsMap)` which delegates to the operation's explicit-ID handler variant (§7). On resolve ⇒ `{status:"SUCCEEDED", result}`; on reject ⇒ `{status:"FAILED", error}`. Then `queueDownstream` and `tryStartNext`.
@@ -689,6 +691,7 @@ Zero registered tasks ⇒ resolve immediately with an empty `DagResult` (`totalC
 
 - `DagCyclicDependencyError` — cycle detected at registration.
 - `DagInvalidTaskNameError` — bad name at registration.
+- `DagPredicateError` — a `runIf` predicate threw at scheduling time (§5.4). Carries the offending task name and the original error as its cause. Unlike the registration errors above this is raised **during** execution, and it aborts the DAG.
 - `DagDuplicateTaskError` — duplicate name at registration.
 - `DagInvalidDependencyError` — dep handle not registered in this DAG.
 - `DagExecutionError extends DurableOperationError` (`errorType = "DagExecutionError"`) — thrown by `throwIfError()`; carries the first failed task's error as `cause`.

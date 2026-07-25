@@ -123,6 +123,19 @@ export abstract class DurableOperationError extends Error {
           cause,
           errorObject.ErrorData,
         );
+      case "DagPredicateError":
+        // The offending task name is not a serialized ErrorObject field, so
+        // (like the sibling registration errors above) it reconstructs empty;
+        // the name is preserved in ErrorMessage. Without this case the caller
+        // awaiting dag() would observe a StepError, not a DagPredicateError,
+        // because the child-context boundary always re-materialises the thrown
+        // error via fromErrorObject (see run-in-child-context-handler).
+        return new DagPredicateError(
+          "",
+          errorObject.ErrorMessage || "DAG runIf predicate threw",
+          cause,
+          errorObject.ErrorData,
+        );
       default:
         return new StepError(
           errorObject.ErrorMessage || "Unknown error",
@@ -409,6 +422,43 @@ export class DagInvalidDependencyError extends DurableOperationError {
     super(
       message ||
         `Task "${taskName}" depends on a task that is not registered in this DAG`,
+      cause,
+      errorData,
+    );
+  }
+}
+
+/**
+ * Error thrown when a task's `runIf` predicate throws during scheduling.
+ *
+ * `runIf` is specified as a synchronous, deterministic, pure predicate over
+ * resolved upstream results; it is re-evaluated on every replay and is never a
+ * checkpointed operation. A predicate that throws is therefore a defect in
+ * deterministic code, not a business outcome. When it throws, the task gets NO
+ * terminal state (neither `FAILED` nor `SKIPPED`), the scheduler aborts without
+ * starting any further tasks, and the `dag(...)` operation fails with this
+ * error. Aborting — rather than recording the task `FAILED` — prevents a
+ * predicate defect from silently driving downstream `ALL_FAILED` /
+ * `ANY_FAILED` / `ALL_DONE` compensation paths (e.g. issuing a refund because a
+ * predicate hit a `TypeError`).
+ *
+ * Carries the offending task's name (`taskName`) and the original thrown error
+ * as `cause`. This is distinct from a throwing task **body**, which remains a
+ * normal task `FAILED`.
+ *
+ * @experimental This error is experimental and may be changed or removed in future releases.
+ */
+export class DagPredicateError extends DurableOperationError {
+  readonly errorType = "DagPredicateError";
+
+  constructor(
+    public readonly taskName: string = "",
+    message?: string,
+    cause?: Error,
+    errorData?: string,
+  ) {
+    super(
+      message || `runIf predicate for DAG task "${taskName}" threw`,
       cause,
       errorData,
     );

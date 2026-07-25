@@ -92,6 +92,7 @@ export {
   DagDuplicateTaskError,
   DagInvalidDependencyError,
   DagExecutionError,
+  DagPredicateError,
 } from "./errors/dag-errors/dag-errors";
 export {
   defaultSerdes,

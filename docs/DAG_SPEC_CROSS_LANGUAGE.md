@@ -163,6 +163,12 @@ The failure-family rules (`ALL_FAILED`, `ANY_FAILED`) **MUST** carry an explicit
 
 `runIf` **MUST** be a **synchronous, deterministic** predicate over resolved upstream results. It is evaluated **after** the trigger rule passes and **before** the operation runs. `false` ⇒ task is `SKIPPED` with reason `RUN_IF_PREDICATE`. Async predicates are **forbidden** (they invite non-deterministic IO on replay). (This is trivially satisfied in Python/Go which are synchronous everywhere; JS/Java enforce it by typing the predicate as sync.)
 
+A predicate that **throws / raises / panics MUST abort the DAG** with a typed `DagPredicateError` (`DagPredicateException` in Java) naming the offending task and carrying the original error as its cause. It **MUST NOT** be recorded as a task `FAILED`, and **MUST NOT** be treated as `false` ⇒ `SKIPPED`. The offending task gets **no terminal state**, no further tasks are started, and the DAG container checkpoints a failure. In Go the panic MUST be recovered — it must never reach the runtime.
+
+> Rationale: `runIf` is a pure predicate, so a throw is a **defect**, not a business outcome. Recording it as a task failure silently rewrites the graph's meaning — every downstream `ALL_FAILED` / `ANY_FAILED` / `ALL_DONE` task would then fire, so a null-pointer bug in a predicate issues a refund. Compensation must be driven by real upstream outcomes only. `§5.5`'s "reject ⇒ FAILED" governs the task **body**, not the predicate; a throwing body is still a normal task failure.
+>
+> This was a 2–2 divergence before 2026-07 (JS/Java aborted untyped; Python/Go recorded a task failure) and is now uniform. `DAG_CONFORMANCE.md` scenario `DAG-20` covers it.
+
 #### 2.B.4 Skips are free and checkpoint nothing
 
 A skip (trigger-rule or `runIf`) is a **pure function** of upstream terminal statuses + a deterministic `runIf`, so it **MUST** be recomputed identically each run and **MUST NOT** mint an entity ID or write a checkpoint. Skips cascade: a skip is a terminal transition, and downstream tasks evaluate their own trigger rule against it.

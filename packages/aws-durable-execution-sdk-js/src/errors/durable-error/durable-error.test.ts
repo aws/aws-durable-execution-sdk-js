@@ -4,6 +4,7 @@ import {
   StepError,
   CallbackError,
   InvokeError,
+  DagPredicateError,
 } from "./durable-error";
 
 describe("DurableOperationError", () => {
@@ -98,6 +99,48 @@ describe("DurableOperationError", () => {
       expect(invokeError).toBeInstanceOf(DurableOperationError);
       expect(invokeError.errorType).toBe("InvokeError");
       expect(invokeError.cause).toBe(originalError);
+    });
+  });
+
+  describe("DagPredicateError", () => {
+    it("should carry the task name and the original error as cause", () => {
+      const originalError = new Error("predicate boom");
+      const predicateError = new DagPredicateError(
+        "decide",
+        undefined,
+        originalError,
+      );
+
+      expect(predicateError).toBeInstanceOf(DagPredicateError);
+      expect(predicateError).toBeInstanceOf(DurableOperationError);
+      expect(predicateError.errorType).toBe("DagPredicateError");
+      expect(predicateError.taskName).toBe("decide");
+      expect(predicateError.message).toContain("decide");
+      expect(predicateError.cause).toBe(originalError);
+    });
+
+    // The DAG container boundary re-materialises the thrown error via
+    // toErrorObject -> fromErrorObject (see run-in-child-context-handler), so a
+    // caller awaiting context.dag() only observes a DagPredicateError if the
+    // type survives that round-trip. errorMapper:(e)=>e alone is NOT enough.
+    it("should survive the toErrorObject -> fromErrorObject round-trip", () => {
+      const originalError = new Error("predicate boom");
+      const errorObject = new DagPredicateError(
+        "decide",
+        undefined,
+        originalError,
+      ).toErrorObject();
+
+      expect(errorObject.ErrorType).toBe("DagPredicateError");
+
+      const reconstructed = DurableOperationError.fromErrorObject(errorObject);
+
+      expect(reconstructed).toBeInstanceOf(DagPredicateError);
+      expect(reconstructed instanceof Error).toBe(true);
+      expect(reconstructed.errorType).toBe("DagPredicateError");
+      // Task name is not a serialized ErrorObject field (same as the sibling
+      // DAG registration errors); it survives in the message, not the field.
+      expect(reconstructed.message).toContain("decide");
     });
   });
 

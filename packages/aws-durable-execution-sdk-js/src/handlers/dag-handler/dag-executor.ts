@@ -19,6 +19,7 @@ import {
 } from "../../types/dag";
 import {
   DurableOperationError,
+  DagPredicateError,
   StepError,
 } from "../../errors/durable-error/durable-error";
 import { TaskDef } from "./task-handle";
@@ -36,6 +37,10 @@ const toDurableError = (error: unknown): DurableOperationError => {
   return new StepError(cause.message, cause);
 };
 
+/** Coerce an unknown thrown value into an `Error` for use as a `cause`. */
+const toCause = (error: unknown): Error =>
+  error instanceof Error ? error : new Error(String(error));
+
 /**
  * Topological scheduler for a registered DAG. Starts ready tasks concurrently
  * (bounded by `maxConcurrency`), evaluates per-task trigger rules and `runIf`
@@ -52,6 +57,7 @@ export class DagExecutor {
   private finished = false;
   private completionReason: DagCompletionReason = "ALL_COMPLETED";
   private resolveRun: (() => void) | undefined;
+  private rejectRun: ((error: Error) => void) | undefined;
 
   constructor(
     private readonly ctx: DurableContextImpl<DurableLogger>,
@@ -65,8 +71,9 @@ export class DagExecutor {
     if (this.tasks.length === 0) {
       return new DagResultImpl(new Map(), "ALL_COMPLETED", 0);
     }
-    await new Promise<void>((resolve) => {
+    await new Promise<void>((resolve, reject) => {
       this.resolveRun = resolve;
+      this.rejectRun = reject;
       this.tryStartNext();
     });
     return new DagResultImpl(
@@ -136,7 +143,23 @@ export class DagExecutor {
         // Trigger passed: evaluate runIf.
         if (task.runIf) {
           const depsMap = this.buildDepsMap(task);
-          if (!task.runIf(depsMap)) {
+          let shouldRun: boolean;
+          try {
+            shouldRun = task.runIf(depsMap);
+          } catch (error) {
+            // A throwing runIf is a defect in deterministic predicate code,
+            // not a business outcome. Abort the whole DAG with a typed error:
+            // record NO terminal state for this task and reject run() so
+            // dag(...) fails. This prevents a predicate defect from being
+            // reinterpreted as a task FAILED and driving downstream
+            // ALL_FAILED / ANY_FAILED / ALL_DONE compensation. We return from
+            // tryStartNext immediately (prompt abort, no draining).
+            this.abort(
+              new DagPredicateError(task.name, undefined, toCause(error)),
+            );
+            return;
+          }
+          if (!shouldRun) {
             this.recordSkip(task, "RUN_IF_PREDICATE");
             progressed = true;
             continue;
@@ -202,6 +225,25 @@ export class DagExecutor {
         failureCount > 0 ? "COMPLETED_WITH_FAILURES" : "ALL_COMPLETED",
       );
     }
+  }
+
+  /**
+   * Aborts the DAG with a typed error (a `runIf` predicate threw). Unlike
+   * {@link finish}, this does NOT record a terminal state for any task — the
+   * offending task is neither FAILED nor SKIPPED — and it rejects `run()`
+   * rather than resolving it, so `dag(...)` fails and no aggregate DagResult is
+   * built. Setting `finished` makes every later task settle a no-op: there is
+   * no cancellation in the execution model, so in-flight tasks are not
+   * cancelled and any work they already checkpointed stays checkpointed for a
+   * later invocation to replay — but their outcome can no longer downgrade or
+   * override this abort. The abort propagates immediately (no draining).
+   */
+  private abort(error: DurableOperationError): void {
+    if (this.finished) {
+      return;
+    }
+    this.finished = true;
+    this.rejectRun?.(error);
   }
 
   private finish(reason: DagCompletionReason): void {
@@ -437,8 +479,32 @@ export async function reconstructDagResult(
           if (!triggerRuleEvaluators[rule](depStatuses)) {
             return "TRIGGER_RULE";
           }
-          if (task.runIf && !task.runIf(buildDepsMap(task))) {
-            return "RUN_IF_PREDICATE";
+          if (task.runIf) {
+            let shouldRun: boolean;
+            try {
+              shouldRun = task.runIf(buildDepsMap(task));
+            } catch (error) {
+              // Reconstruct-path decision: this branch runs ONLY while
+              // replaying a DAG container the live run checkpointed as
+              // SUCCEEDED (large-payload completed replay). runIf is a pure,
+              // deterministic predicate, so re-evaluating it here must
+              // reproduce the live decision. A throw is therefore impossible
+              // in a faithful replay: had the predicate thrown live it would
+              // have aborted the DAG with DagPredicateError and the container
+              // would have checkpointed FAILURE — it would never have reached
+              // this success-replay path. A throw here thus signals a
+              // non-deterministic predicate. We surface it as the SAME typed
+              // error, staying loud and consistent with the live abort, rather
+              // than silently masking it as SKIPPED or never-started. Thrown
+              // (not aborted via a scheduler) because this is a plain function
+              // with no run() promise to reject; the throw rejects the
+              // reconstruct promise, which the child-context boundary maps the
+              // same way as the live path.
+              throw new DagPredicateError(task.name, undefined, toCause(error));
+            }
+            if (!shouldRun) {
+              return "RUN_IF_PREDICATE";
+            }
           }
           return undefined;
         };

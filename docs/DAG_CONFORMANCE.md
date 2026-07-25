@@ -437,6 +437,30 @@ A fan-out whose two branches complete in a **forced different order** across two
 
 **Harness requirement:** run the graph twice with `b`/`c` completion order swapped (and, where the runner supports it, across a replay) and assert **the two emitted records are byte-identical** and no `NonDeterministicExecutionError` (or per-language equivalent) is raised.
 
+### DAG-20 — A throwing `runIf` aborts the DAG (`DagPredicateError`)
+
+A predicate that throws is a **defect**, not an outcome: the DAG MUST abort with a typed error rather than recording the task as `FAILED` or coercing the throw to `false` ⇒ `SKIPPED`. This is the observable proof that a predicate defect cannot drive compensation (`DAG_SPEC.md` §5.4, `DAG_SPEC_CROSS_LANGUAGE.md` §2.B.3).
+
+**Graph**
+
+| task      | kind | deps        | triggerRule  | body                                     |
+| --------- | ---- | ----------- | ------------ | ---------------------------------------- |
+| `gate`    | step | `[]`        | —            | return `1`                               |
+| `guarded` | step | `[gate]`    | —            | `runIf` **throws**; body returns `"ran"` |
+| `refund`  | step | `[guarded]` | `ALL_FAILED` | return `"refunded"`                      |
+
+**Expected outcome:** the `dag(...)` call **raises** `DagPredicateError` (`DagPredicateException` in Java). The error names `guarded` and carries the original thrown error as its cause. No `DagResult` is produced.
+
+| task      | status                   | note                                |
+| --------- | ------------------------ | ----------------------------------- |
+| `gate`    | SUCCEEDED (checkpointed) | ran before the abort                |
+| `guarded` | **no terminal state**    | neither FAILED nor SKIPPED          |
+| `refund`  | **never started**        | the compensation path MUST NOT fire |
+
+**Harness requirement:** assert the raised error's normalized type token is `DagPredicateError`, that `refund`'s body was never invoked (an external counter, since a never-started task checkpoints nothing), and that the DAG container checkpointed a failure. Go additionally MUST prove the process survived — a recovered panic, not a crash.
+
+---
+
 ---
 
 ## Part B — Normalized conformance record (JSON schema)
@@ -481,6 +505,7 @@ Every SDK emits **one JSON file** at `/Users/parpooya/workplace/dag-conformance-
   | outcome                                                     | normalized token            | native examples                                                                            |
   | ----------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------ |
   | failed `step` task                                          | `StepError`                 | JS `StepError`, Python `StepError`, Java step `RuntimeException`→step-error, Go step error |
+  | throwing `runIf` predicate (aborts, DAG-20)                 | `DagPredicateError`         | JS/Python/Go `DagPredicateError`, Java `DagPredicateException`                             |
   | failed `invoke` task                                        | `InvokeError`               | (not in this catalog)                                                                      |
   | failed `runInChildContext`/`map`/`parallel`/`callback` task | `ChildContextError`         | (not in this catalog)                                                                      |
   | cycle at registration                                       | `DagCyclicDependencyError`  | per-language `Dag*` cyclic error                                                           |
