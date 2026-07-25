@@ -446,6 +446,19 @@ export class DagInvalidDependencyError extends DurableOperationError {
  * as `cause`. This is distinct from a throwing task **body**, which remains a
  * normal task `FAILED`.
  *
+ * The default message names the offending task **and** the cause's type and
+ * message — e.g. `runIf predicate for DAG task "decide" threw TypeError: boom`.
+ * This is deliberate: the structured `taskName` and `cause`
+ * fields do not survive the DAG container's child-context round-trip (a
+ * limitation shared by the whole `Dag*Error` family — see
+ * {@link DurableOperationError.fromErrorObject}), so a caller awaiting
+ * `dag(...)` after that boundary can only recover *which* task threw and
+ * *what* it threw by reading the message. Baking both into the message keeps
+ * JS on par with Java (`DagPredicateException` names the task plus the original
+ * error) and Go (`DagPredicateError.Error()` names the task and wraps the
+ * cause). In-process consumers (before the boundary) still get the structured
+ * `taskName` and `cause`.
+ *
  * @experimental This error is experimental and may be changed or removed in future releases.
  */
 export class DagPredicateError extends DurableOperationError {
@@ -458,9 +471,26 @@ export class DagPredicateError extends DurableOperationError {
     errorData?: string,
   ) {
     super(
-      message || `runIf predicate for DAG task "${taskName}" threw`,
+      message || DagPredicateError.buildMessage(taskName, cause),
       cause,
       errorData,
     );
+  }
+
+  /**
+   * Builds the default message, naming the offending task and — when a cause
+   * is present — the cause's type and message. Mirrors Java's
+   * `DagPredicateException.buildMessage`: append the cause type, then `": "` +
+   * message only when the cause carries a (non-empty) message.
+   */
+  private static buildMessage(taskName: string, cause?: Error): string {
+    const base = `runIf predicate for DAG task "${taskName}" threw`;
+    if (!cause) {
+      return base;
+    }
+    const type = cause.name || "Error";
+    return cause.message
+      ? `${base} ${type}: ${cause.message}`
+      : `${base} ${type}`;
   }
 }

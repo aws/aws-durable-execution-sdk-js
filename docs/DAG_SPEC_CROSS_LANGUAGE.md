@@ -169,6 +169,17 @@ A predicate that **throws / raises / panics MUST abort the DAG** with a typed `D
 >
 > This was a 2–2 divergence before 2026-07 (JS/Java aborted untyped; Python/Go recorded a task failure) and is now uniform. `DAG_CONFORMANCE.md` scenario `DAG-20` covers it.
 
+**Error fidelity across the container boundary is NOT uniform, and only the first two guarantees below are part of the contract.** MUST survive to the `dag()` caller: (a) the error's **typed identity**, and (b) a **message naming the offending task**. MAY be lost: the structured task-name field and the cause chain, because the DAG container's child-context boundary reconstructs the error from serialized type + message. Per SDK, measured:
+
+| SDK        | Typed identity | Structured task name   | Cause                                                                                        |
+| ---------- | -------------- | ---------------------- | -------------------------------------------------------------------------------------------- |
+| Java       | preserved      | `taskName()` preserved | preserved; the cause's **concrete class** degrades to `Throwable`, message and stack survive |
+| Go         | preserved      | `Name` preserved       | preserved (`errors.Is`/`As` reach it)                                                        |
+| TypeScript | preserved      | reconstructs as `""`   | not preserved; cause type + message are baked into the message                               |
+| Python     | preserved      | reconstructs as `None` | not preserved; cause type + message are baked into the message                               |
+
+In-process consumers — anything reading the error before it crosses the container boundary — get the structured fields in all four. This is the same erasure the entire `Dag*Error` family already has, not something specific to the predicate error.
+
 #### 2.B.4 Skips are free and checkpoint nothing
 
 A skip (trigger-rule or `runIf`) is a **pure function** of upstream terminal statuses + a deterministic `runIf`, so it **MUST** be recomputed identically each run and **MUST NOT** mint an entity ID or write a checkpoint. Skips cascade: a skip is a terminal transition, and downstream tasks evaluate their own trigger rule against it.

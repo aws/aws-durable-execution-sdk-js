@@ -191,6 +191,12 @@ describe("DagExecutor", () => {
     expect(err.taskName).toBe("decide");
     // (2) cause is the original error, unwrapped
     expect(err.cause).toBe(original);
+    // (2b) the message names both the task and the cause's type/message, so a
+    // customer reading it past the (lossy) container boundary still learns
+    // which predicate threw and what it threw.
+    expect(err.message).toBe(
+      'runIf predicate for DAG task "decide" threw Error: predicate boom',
+    );
 
     // (3) the offending task has NO terminal state (neither FAILED nor SKIPPED)
     const results = (
@@ -226,6 +232,11 @@ describe("DagExecutor", () => {
     const err = caught as DagPredicateError;
     expect(err.cause).toBeInstanceOf(Error);
     expect(err.cause?.message).toBe("not-an-error");
+    // A non-Error throw is coerced to Error, so the message names its type
+    // (Error) and the stringified value.
+    expect(err.message).toBe(
+      'runIf predicate for DAG task "decide" threw Error: not-an-error',
+    );
   });
 
   it("aborts on a throwing runIf evaluated on the first scheduling pass (no upstream)", async () => {

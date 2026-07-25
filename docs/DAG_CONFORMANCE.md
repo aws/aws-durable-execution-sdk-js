@@ -449,7 +449,7 @@ A predicate that throws is a **defect**, not an outcome: the DAG MUST abort with
 | `guarded` | step | `[gate]`    | —            | `runIf` **throws**; body returns `"ran"` |
 | `refund`  | step | `[guarded]` | `ALL_FAILED` | return `"refunded"`                      |
 
-**Expected outcome:** the `dag(...)` call **raises** `DagPredicateError` (`DagPredicateException` in Java). The error names `guarded` and carries the original thrown error as its cause. No `DagResult` is produced.
+**Expected outcome:** the `dag(...)` call **raises** `DagPredicateError` (`DagPredicateException` in Java), whose message names `guarded`. No `DagResult` is produced. The **cause is NOT asserted at the `dag()` boundary**: Java and Go preserve it there, TypeScript and Python do not (they carry the cause's type and message inside the message instead), and that fidelity difference is explicitly outside the contract — see `DAG_SPEC_CROSS_LANGUAGE.md` §2.B.3. Harnesses that inspect the error before the container boundary MAY assert the structured cause.
 
 | task      | status                   | note                                |
 | --------- | ------------------------ | ----------------------------------- |

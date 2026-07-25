@@ -115,8 +115,35 @@ describe("DurableOperationError", () => {
       expect(predicateError).toBeInstanceOf(DurableOperationError);
       expect(predicateError.errorType).toBe("DagPredicateError");
       expect(predicateError.taskName).toBe("decide");
-      expect(predicateError.message).toContain("decide");
+      // The message names BOTH the offending task and the cause's type and
+      // message, so it survives the lossy container round-trip (which drops
+      // the structured taskName and cause). Matches Java/Go phrasing.
+      expect(predicateError.message).toBe(
+        'runIf predicate for DAG task "decide" threw Error: predicate boom',
+      );
       expect(predicateError.cause).toBe(originalError);
+    });
+
+    it("names the cause's concrete type (not just Error) in the message", () => {
+      const predicateError = new DagPredicateError(
+        "decide",
+        undefined,
+        new TypeError("x is not a function"),
+      );
+      expect(predicateError.message).toBe(
+        'runIf predicate for DAG task "decide" threw TypeError: x is not a function',
+      );
+    });
+
+    it("omits the trailing ': message' when the cause has no message", () => {
+      const predicateError = new DagPredicateError(
+        "decide",
+        undefined,
+        new Error(""),
+      );
+      expect(predicateError.message).toBe(
+        'runIf predicate for DAG task "decide" threw Error',
+      );
     });
 
     // The DAG container boundary re-materialises the thrown error via
@@ -138,9 +165,15 @@ describe("DurableOperationError", () => {
       expect(reconstructed).toBeInstanceOf(DagPredicateError);
       expect(reconstructed instanceof Error).toBe(true);
       expect(reconstructed.errorType).toBe("DagPredicateError");
-      // Task name is not a serialized ErrorObject field (same as the sibling
-      // DAG registration errors); it survives in the message, not the field.
-      expect(reconstructed.message).toContain("decide");
+      // The structured taskName and cause do NOT survive the container
+      // boundary (taskName reconstructs to "", cause becomes a generic Error);
+      // this is a limitation shared by the whole Dag*Error family. What the
+      // customer awaiting dag() past that boundary CAN still read is the
+      // message — which now names both the task and the cause's type/message.
+      expect((reconstructed as DagPredicateError).taskName).toBe("");
+      expect(reconstructed.message).toBe(
+        'runIf predicate for DAG task "decide" threw Error: predicate boom',
+      );
     });
   });
 
