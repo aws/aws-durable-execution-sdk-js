@@ -16,22 +16,12 @@ describe("DagContextImpl config-default wiring", () => {
     const record =
       (method: string) =>
       (...args: unknown[]) => {
-        // config is always the LAST positional arg of every recorded call.
+        // config is always the LAST positional arg of every *WithExplicitId call.
         calls.push({ method, config: args[args.length - 1] });
         return Promise.resolve(undefined);
       };
-    // Step (and wait) tasks are materialized as a `DagTask` child context; the
-    // underlying op runs on the child context passed to the body. Invoke the
-    // body against a fake task context so the inner op's config is captured.
-    const taskCtx = {
-      step: record("step"),
-      wait: record("wait"),
-    };
     const ctx = {
-      runInChildContextWithExplicitId: (
-        _name: string,
-        body: (c: unknown) => unknown,
-      ) => Promise.resolve(body(taskCtx)),
+      runStepWithExplicitId: record("step"),
       runCallbackTaskWithExplicitId: record("callback"),
       runMapWithExplicitId: record("map"),
       runParallelWithExplicitId: record("parallel"),

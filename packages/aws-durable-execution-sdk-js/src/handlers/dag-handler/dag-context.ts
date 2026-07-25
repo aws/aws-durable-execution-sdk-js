@@ -1,6 +1,6 @@
 import type { DurableContextImpl } from "../../context/durable-context/durable-context";
 import { DurableLogger } from "../../types/durable-logger";
-import { Duration, OperationSubType } from "../../types/core";
+import { Duration } from "../../types/core";
 import {
   BatchResult,
   MapConfig,
@@ -157,38 +157,19 @@ export class DagContextImpl<
       deps,
       runIf,
       taskConfig,
-      (ctx, depsMap) => {
-        const innerFn = (
-          deps.length === 0
+      (ctx, depsMap) =>
+        ctx.runStepWithExplicitId(
+          name,
+          (deps.length === 0
             ? (stepCtx: unknown) =>
                 (fn as (c: unknown) => Promise<TResult>)(stepCtx)
             : (stepCtx: unknown) =>
                 (fn as (d: unknown, c: unknown) => Promise<TResult>)(
                   depsMap,
                   stepCtx,
-                )
-        ) as StepFunc<TResult, DurableLogger>;
-        // Materialize the task as a `DagTask` child context (§10 conformance)
-        // with the underlying step nested one level beneath it.
-        return ctx.runInChildContextWithExplicitId<TResult>(
-          name,
-          ((taskCtx) =>
-            (
-              taskCtx as unknown as {
-                step: (
-                  n: string,
-                  f: StepFunc<TResult, DurableLogger>,
-                  c?: StepConfig<TResult>,
-                ) => Promise<TResult>;
-              }
-            ).step(
-              name,
-              innerFn,
-              taskConfig as StepConfig<TResult> | undefined,
-            )) as ChildFunc<TResult, DurableLogger>,
-          { subType: OperationSubType.DAG_TASK } as ChildConfig<TResult>,
-        );
-      },
+                )) as StepFunc<TResult, DurableLogger>,
+          taskConfig as StepConfig<TResult> | undefined,
+        ),
     );
     this.register(name, def);
     return new TaskHandleImpl<TName, TResult>(name, def.id, def);
@@ -283,18 +264,7 @@ export class DagContextImpl<
   ): TaskHandle<TName, void> {
     const { runIf } = extractConditional(config);
     const def = this.makeDef(name, "wait", deps, runIf, undefined, (ctx) =>
-      // Materialize the wait task as a `DagTask` child context (§10
-      // conformance) with the underlying Wait nested one level beneath it.
-      ctx.runInChildContextWithExplicitId<void>(
-        name,
-        ((taskCtx) =>
-          (
-            taskCtx as unknown as {
-              wait: (n: string, d: Duration) => Promise<void>;
-            }
-          ).wait(name, duration)) as ChildFunc<void, DurableLogger>,
-        { subType: OperationSubType.DAG_TASK } as ChildConfig<void>,
-      ),
+      ctx.runWaitWithExplicitId(name, duration),
     );
     this.register(name, def);
     return new TaskHandleImpl<TName, void>(name, def.id, def);
