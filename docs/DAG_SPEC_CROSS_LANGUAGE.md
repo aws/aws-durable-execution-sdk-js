@@ -115,6 +115,24 @@ Normative contract:
 
 > This is the greenfield fix for [aws/aws-durable-execution-sdk-js#751](https://github.com/aws/aws-durable-execution-sdk-js/issues/751) (where a customer summary string is load-bearing on batch replay). **JS is the only SDK that implements the envelope** (envelope + design-B reconstruct). **Python, Java, and Go are documented exceptions:** all three **re-execute** the DAG child body on large-payload replay instead of reconstructing from an envelope — Python because its platform `ReplayChildren` re-executes; Java because [A-J3] is **falsified** (no summary-generator hook; large results reconstructed via native child-context re-execution + per-task checkpoints, exactly as `map` does); Go because **both** real SDKs offload oversize results via `ReplayChildren` (256KB) and re-execute the child body — **verified**, no `DagSummary` envelope exists in either branch (the aggregate is the DAG child context's own serialized result, e.g. firstcut-a's `batchCheckpointPayload`). Where an SDK re-executes, the envelope is optional / observability-only, but the **customer summary text MUST still never be load-bearing on replay** — see §2.B.6 and §3.
 
+#### 2.A.5 Per-task checkpoint shape (flat, with one documented exception)
+
+A task's operation is checkpointed **directly** under the DAG container with the task's name-based ID and its **native** operation subtype (`Step`, `ChainedInvoke`, `Wait`, `WaitForCondition`, `RunInChildContext`, `Map`, `Parallel`, `Dag`) — there is no per-task wrapper. Two consequences are normative and cross-language:
+
+1. A **nested `dag` task** MUST checkpoint its container with SubType **`Dag`**, not `RunInChildContext`. A nested DAG is a DAG.
+2. A **`callback` task** is the single exception to flatness. Because a callback operation cannot take an explicit (name-based) operation ID directly, the task materializes as a **container context with SubType `Callback`** carrying the task's name-based ID and the task name, whose body runs the SDK's **native wait-for-callback operation** (SubType `WaitForCallback`, which in turn emits the inner `CallbackStarted` and the submitter step). The resulting two-level shape is normative:
+
+   ```text
+   ContextStarted   SubType=Callback         Name=<task>  ParentId=<dag>
+     ContextStarted SubType=WaitForCallback  Name=<task>  ParentId=<callback container>
+       CallbackStarted  SubType=Callback     ParentId=<waitForCallback>
+       StepStarted      SubType=Step         ParentId=<waitForCallback>   # submitter
+   ```
+
+   A standalone (non-DAG) wait-for-callback emits only the `WaitForCallback` level; the outer `Callback` container is DAG-specific and exists to carry the name-based task ID.
+
+> Both rules were violated in production code and caught by the execution-history conformance suite: Java checkpointed nested DAGs as `RunInChildContext`, and Python, Java, and Go all emitted the callback task one level shallower than the reference. See `DAG_CONFORMANCE_RESULTS.md` Part 2.
+
 ### 2.B Behavioral invariants (MUST be semantically identical)
 
 #### 2.B.1 Replay-safe scheduler contract

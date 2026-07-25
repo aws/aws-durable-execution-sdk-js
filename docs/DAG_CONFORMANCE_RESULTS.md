@@ -1,5 +1,9 @@
 # Cross-Language DAG Conformance — Reconciliation Results
 
+> **This document has two parts.** **Part 1** (below) reconciles the **semantic** conformance suite (`DAG-1`..`DAG-19`, run inside each SDK). **Part 2** (at the end) records the **execution-history** conformance suite (`dag/10-1`..`10-11`, run against real AWS cloud through the language-neutral conformance runner). Part 1 proves identical outcomes; Part 2 proves identical checkpoint shapes.
+
+## Part 1 — Semantic conformance (DAG-1..DAG-19)
+
 > **Status:** Reconciliation report (re-reconciled after `counts.total` fix; **re-verified after the C1–C9 API-review renames, 2026-07** — semantic records unchanged by the renames) · **Inputs:** `dag-conformance-out/{ts,python,java,go}.json` · **Contract:** [`DAG_CONFORMANCE.md`](./DAG_CONFORMANCE.md)
 >
 > **Verdict: CONFORMANT** — 18 shared scenarios compared (+1 TS+Go-only). All 18 shared scenarios are now fully conformant and byte-identical across all four SDKs, and the TS+Go-only scenario (DAG-18) is byte-identical between TS and Go. **Zero field-level divergences.** The previous three `counts.total` divergences (DAG-16, DAG-17, DAG-18) under early completion are resolved: Python, Java, and Go now report `total` = number of **registered** tasks (spec §2.8), matching TS and the catalog. All statuses, results, error types, skip reasons, completion reasons, and all four counters match everywhere.
@@ -98,3 +102,57 @@ Java still reports the typed `Dag*Error` being **erased** to a generic `ChildCon
 The previously-flagged `counts.total` gap under early completion (DAG-16, DAG-17, DAG-18) is **resolved**: Python, Java, and Go now report `total` = registered-task count per spec §2.8, matching TS and the catalog, and TS↔Go now agree on DAG-18.
 
 Residual (non-blocking) follow-up: **Java validation-error type erasure** — populate `DagException.errorObject` so validation errors propagate with their typed identity through `dag()`/the runner instead of degrading to `ChildContextFailedException`. This does not affect any normalized conformance record.
+
+---
+
+# Part 2 — Cross-language execution-history conformance (suite `dag`, 10-1..10-11)
+
+> **Status:** All four SDKs **11/11** on real cloud executions (us-west-2, 2026-07) · **Requirements:** [`aws/aws-durable-execution-conformance-tests`](https://github.com/aws/aws-durable-execution-conformance-tests) branch `feature/dag-suite`, `test-requirements/dag/10-*.yaml` · **Verdict: CONFORMANT**
+
+Part 1 above proves **semantic** conformance: same statuses, results, counts, completion reasons. Part 2 proves **checkpoint-shape** conformance, which Part 1 cannot see. Each scenario deploys real Lambda functions via SAM, invokes them, pulls the actual execution history, and asserts every event — `EventType`, `SubType`, `Name`, `Id`/`ParentId` topology (via placeholder binding), and payloads — against one language-neutral YAML. One requirement file validates all four SDKs, so a shape difference in any language is a failure rather than a footnote.
+
+## Task-kind coverage
+
+`DAG_SPEC.md` §2 lists nine task kinds. All nine now have a cloud-validated history scenario:
+
+| Scenario | Task kind under test               | Handler               |
+| -------- | ---------------------------------- | --------------------- |
+| 10-1     | `step` (diamond fan-out/in)        | `DagDiamond`          |
+| 10-2     | `step` + trigger-rule compensation | `DagCompensation`     |
+| 10-3     | `step` + `runIf` skips (no events) | `DagRunIf`            |
+| 10-4     | `wait` (suspend / resume)          | `DagWaitResume`       |
+| 10-5     | `runInChildContext`                | `DagChild`            |
+| 10-6     | `map`                              | `DagMap`              |
+| 10-7     | `parallel`                         | `DagParallel`         |
+| 10-8     | `waitForCondition`                 | `DagWaitForCondition` |
+| 10-9     | nested `dag`                       | `DagNested`           |
+| 10-10    | `invoke` (chained invoke)          | `DagInvoke`           |
+| 10-11    | `callback`                         | `DagCallback`         |
+
+Results: **js 11/11, python 11/11, java 11/11, go 11/11.** The suite also exercises three suspend/resume boundaries inside a DAG (`wait`, `invoke`, `callback`) and confirms the flat N+1 op model holds for every kind.
+
+## Findings
+
+Four issues surfaced. Three were real SDK defects, all fixed; one was a contract decision.
+
+### F1 — Java checkpointed a nested DAG as `RunInChildContext` (fixed)
+
+`DagContextImpl`'s nested-`dag` executor called the explicit-ID child-context variant, which had no subtype parameter, while the top-level `dagAsync` passed `OperationSubType.DAG`. A nested DAG therefore appeared as a plain child context, making DAG nesting invisible to history consumers. Fixed by threading `OperationSubType` through the explicit-ID overload. Normative rule now recorded in `DAG_SPEC_CROSS_LANGUAGE.md` §2.A.5.
+
+### F2 — Python, Java and Go emitted the callback task one level too shallow (fixed)
+
+10-11 asserts the two-level shape `Callback` container → native `WaitForCallback` → {`CallbackStarted`, submitter step} (§2.A.5). Only JS produced it. Python and Go emitted a bare `WaitForCallback` directly under the DAG; Java hand-rolled a `RunInChildContext` container wrapping a raw `createCallback` plus its own submitter step, bypassing the native operation entirely. All three now delegate to their native wait-for-callback inside a `Callback`-subtype container. Java additionally needed a `DAG_CALLBACK` subtype constant (`OperationType.CONTEXT` with wire value `"Callback"`) because its enum couples operation type to wire value; Go reuses the DAG's own `dagMaterializeChild`/`dagFinishChild` container recipe.
+
+### F3 — 10-7 asserts the parallel task's aggregate only (contract decision)
+
+The scenario originally had the downstream `join` step read the parallel branches' **values**. Java cannot express that: `DurableFuture.get()` calls `validateCurrentThreadType()` unconditionally (`BaseDurableOperation.java:207`), so reading any durable operation from inside a step body throws `IllegalStateException` — a step is a leaf — and Java's `ParallelResult` is aggregate-only by design (branch types are heterogeneous), unlike the TS `BatchResult`. Rather than change base-SDK public API from the DAG branch, 10-7 now asserts `"<succeeded>/<size>"`, which every SDK exposes. Branch step payloads (`"L"`, `"R"`) are still asserted in history, and reading child values remains covered by 10-6 (`map`, where Java's `MapResult` does expose per-item results).
+
+**Open follow-up:** Java `ParallelResult` has no per-branch result accessor while the other three SDKs do. This is a base-SDK parity gap, not a DAG gap, and is out of scope for the DAG branch.
+
+### F4 — Default callback-payload deserialization is out of scope for the DAG contract
+
+With the default (documented "raw") callback deserializer, JS resolves a callback task to the raw payload **including** its surrounding quote characters. Whether an SDK's default returns raw or parsed text is base-SDK callback behavior that the DAG spec reuses verbatim, and the conformance runner's `ExpectedResult` requires exact equality with no wildcards. 10-11 therefore normalizes in the handler (strip one surrounding quote pair, then append `_done`) and asserts payload **identity** end-to-end plus the transport-level `CallbackSucceeded` payload, rather than per-language encoding.
+
+## Verdict
+
+**CONFORMANT.** All eleven scenarios pass in all four SDKs against real cloud executions, covering every DAG task kind in the spec. Combined with Part 1, the four SDKs are proven conformant both semantically (identical outcomes) and structurally (identical checkpoint shapes).
