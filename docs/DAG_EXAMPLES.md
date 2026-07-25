@@ -460,3 +460,115 @@ ExecutionSucceeded
 Five registered tasks, three operations plus the container. Counts come back `[3, 2, 5]`: three succeeded, two skipped, five registered — and `completionReason` is `ALL_COMPLETED`, because skipping is not failing.
 
 The history is also the reason the determinism rule on `runIf` is strict. Nothing in the checkpoint record says "autoApprove was skipped" — absence is the encoding. On replay the scheduler re-derives that decision by evaluating the predicate again, so a predicate that flip-flops would make the SDK expect a task it never finds, or find one it did not expect.
+
+## Example 5 — A task that is not a step: `map`
+
+Every example so far used `d.step`. But a task can be _any_ durable operation. Here one node in the graph is a `map` that fans out over a list.
+
+```text
+        ┌────────────┐
+        │  accounts  │  root → [101, 102, 103]
+        └─────┬──────┘
+              │ items
+              ▼
+    ┌──────────────────────┐
+    │         bill         │  ONE task, SubType=Map
+    │ ┌─────┐┌─────┐┌─────┐│  fans out internally, maxConcurrency 2
+    │ │ 101 ││ 102 ││ 103 ││
+    │ └─────┘└─────┘└─────┘│
+    └──────────┬───────────┘
+               │ BatchResult<number>
+               ▼
+        ┌────────────┐
+        │   total    │  3060
+        └────────────┘
+```
+
+```ts
+import {
+  DurableContext,
+  withDurableExecution,
+  BatchResult,
+} from "@aws/durable-execution-sdk-js";
+
+interface InvoiceEvent {
+  month: string;
+}
+
+export const handler = withDurableExecution(
+  async (event: InvoiceEvent, context: DurableContext) => {
+    const dagPromise = context.dag("invoices", (d) => {
+      const accounts = d.step("accounts", [], async (): Promise<number[]> => {
+        return [101, 102, 103];
+      });
+
+      // A map TASK: one node in the graph, but it fans out over the items.
+      // The item body gets a real DurableContext, so each item can run its
+      // own durable operations.
+      const bill = d.map(
+        "bill",
+        [accounts],
+        (deps) => deps.accounts,
+        async (ctx: DurableContext, accountId: number): Promise<number> =>
+          ctx.step(async (): Promise<number> => accountId * 10),
+        { maxConcurrency: 2 },
+      );
+
+      // The map task's result is a BatchResult, not a plain array.
+      d.step("total", [bill], async (deps): Promise<number> => {
+        const batch = deps.bill as BatchResult<number>;
+        return batch.getResults().reduce((acc, n) => acc + n, 0);
+      });
+    });
+
+    const dagResult = await dagPromise;
+
+    return {
+      reason: dagResult.completionReason,
+      total: dagResult.getResult("total"),
+    };
+  },
+);
+```
+
+### What's new here
+
+**A task delegates to the same operation handler the equivalent `context` method uses.** `d.map(...)` runs the SDK's real `map` operation — same retry semantics, same serdes, same batch completion behavior. The only difference from `context.map(...)` is that its entity ID comes from the task name instead of the context counter. There is no DAG-specific reimplementation of map, and the same holds for `invoke`, `callback`, `wait`, `waitForCondition`, `runInChildContext`, `parallel`, and a nested `dag`.
+
+**The item list can be computed from deps.** The third argument accepts either a literal array or a function of the resolved deps — here `(deps) => deps.accounts`. That is how a map task fans out over something the previous task discovered.
+
+**Two levels of concurrency, independently controlled.** `maxConcurrency: 2` in the map config limits items _within_ the task; a `maxConcurrency` on the DAG config limits how many _tasks_ run at once. They do not interact.
+
+**The result is a `BatchResult`, not an array.** It carries per-item status alongside values, so a partial failure is expressible: `getResults()` for the successful values, plus counts. The cast is needed because `deps.bill` widens to `unknown` — the same result-type inference limitation noted in example 1.
+
+**The item body gets a full `DurableContext`.** `ctx.step(...)` inside it is a real, separately checkpointed operation. You can nest further work per item rather than being limited to a pure function.
+
+### What gets checkpointed
+
+This is the first example where a task is _not_ flat — a map task is a container, so its items nest underneath it:
+
+```text
+ExecutionStarted
+└── ContextStarted   SubType=Dag  Name=invoices        id: 1
+    ├── StepStarted   SubType=Step  Name=accounts      id: 1-DAG_NODE_T_accounts
+    ├── StepSucceeded SubType=Step  Name=accounts      → [101,102,103]
+    ├── ContextStarted SubType=Map  Name=bill          id: 1-DAG_NODE_T_bill
+    │   ├── ContextStarted   SubType=MapIteration      id: 1-DAG_NODE_T_bill-1
+    │   │   ├── StepStarted   SubType=Step
+    │   │   └── StepSucceeded SubType=Step             → 1010
+    │   ├── ContextSucceeded SubType=MapIteration      → 1010
+    │   ├── ContextStarted   SubType=MapIteration      id: 1-DAG_NODE_T_bill-2
+    │   │   └── … → 1020
+    │   ├── ContextStarted   SubType=MapIteration      id: 1-DAG_NODE_T_bill-3
+    │   │   └── … → 1030
+    │   └── ContextSucceeded SubType=Map  Name=bill
+    ├── StepStarted   SubType=Step  Name=total         id: 1-DAG_NODE_T_total
+    ├── StepSucceeded SubType=Step  Name=total         → 3060
+    └── ContextSucceeded  SubType=Dag  Name=invoices
+InvocationCompleted
+ExecutionSucceeded
+```
+
+The important detail is the ID scheme at the boundary. The map container gets the **name-derived** task ID `1-DAG_NODE_T_bill`, but its iterations go back to **counter-based** IDs _within_ that container: `-1`, `-2`, `-3`. That is correct and deliberate — inside a map, item order is deterministic (array index), so a counter is safe there. Name-derivation is only needed at the DAG layer, where ready-task order genuinely varies. Task IDs are name-based; everything below a task is business as usual.
+
+The N+1 accounting is per DAG layer, not a global promise: three tasks give you three operations under the container, and whatever the map's own items cost is the normal cost of a map.
