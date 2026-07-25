@@ -572,3 +572,111 @@ ExecutionSucceeded
 The important detail is the ID scheme at the boundary. The map container gets the **name-derived** task ID `1-DAG_NODE_T_bill`, but its iterations go back to **counter-based** IDs _within_ that container: `-1`, `-2`, `-3`. That is correct and deliberate — inside a map, item order is deterministic (array index), so a counter is safe there. Name-derivation is only needed at the DAG layer, where ready-task order genuinely varies. Task IDs are name-based; everything below a task is business as usual.
 
 The N+1 accounting is per DAG layer, not a global promise: three tasks give you three operations under the container, and whatever the map's own items cost is the normal cost of a map.
+
+## Example 6 — A nested sub-DAG
+
+A task can be an entire DAG. This is how you compose reusable pieces of a workflow, and it is where task-name scoping starts to matter.
+
+```text
+        ┌────────────┐
+        │  validate  │  outer root
+        └─────┬──────┘
+              ▼
+   ┌─────────────────────────────────┐
+   │   provision   SubType=Dag       │  ONE outer task…
+   │                                 │
+   │   ┌──────────┐    ┌──────────┐  │  …that is a whole graph
+   │   │ database │───►│ validate │  │  ← same name as an outer task,
+   │   └──────────┘    └──────────┘  │    different scope
+   └─────────────┬───────────────────┘
+                 │ DagResult
+                 ▼
+          ┌────────────┐
+          │  welcome   │
+          └────────────┘
+```
+
+```ts
+import {
+  DurableContext,
+  withDurableExecution,
+  DagResult,
+} from "@aws/durable-execution-sdk-js";
+
+interface OnboardEvent {
+  tenantId: string;
+}
+
+export const handler = withDurableExecution(
+  async (event: OnboardEvent, context: DurableContext) => {
+    const dagPromise = context.dag("onboard", (d) => {
+      const validate = d.step("validate", [], async (): Promise<string> => {
+        return event.tenantId;
+      });
+
+      // A task that is itself a whole DAG. Its own tasks live in their own
+      // scope: names inside cannot collide with, or depend on, names outside.
+      const provision = d.dag("provision", [validate], (nd) => {
+        const database = nd.step("database", [], async (): Promise<string> => {
+          return "db-ready";
+        });
+
+        // Same name as a task in the OUTER graph — legal, different scope.
+        nd.step("validate", [database], async (deps): Promise<string> => {
+          return `checked ${deps.database}`;
+        });
+      });
+
+      d.step("welcome", [provision], async (deps): Promise<string> => {
+        const nested = deps.provision as DagResult;
+        return `provisioned: ${nested.getResult("validate") as string}`;
+      });
+    });
+
+    const dagResult = await dagPromise;
+
+    return {
+      reason: dagResult.completionReason,
+      welcome: dagResult.getResult("welcome"),
+      nestedReason: (dagResult.getResult("provision") as DagResult)
+        .completionReason,
+    };
+  },
+);
+```
+
+### What's new here
+
+**Scope isolation.** The inner graph gets its own `DagContext` (`nd`), its own name space, and its own validation pass. That is why `validate` can exist in both graphs without colliding. The flip side is enforced too: an inner task cannot declare a dependency on an outer handle, and vice versa — that is a `DagInvalidDependencyError` at registration, not a runtime surprise. The two graphs communicate only through the sub-DAG task's result.
+
+**A nested DAG resolves; it does not throw.** The sub-DAG's result is a full `DagResult`, so `welcome` can inspect per-task statuses, counts, and its own `completionReason`. If a task _inside_ `provision` fails, `provision` still resolves — with `failureCount > 0` — and the outer graph sees it as a _succeeded_ task. That is usually surprising the first time. If you want an inner failure to fail the outer task, call `throwIfError()` on the nested result, or check its counts and throw.
+
+**Registration-time errors surface unwrapped.** A nested DAG wires a pass-through error mapper on its own container, so a validation error from the inner `register` — a cycle, a duplicate name, a bad name — reaches you as the typed `Dag*Error`, not as a generic `ChildContextError`. That is a deliberate exception to how other container failures are wrapped.
+
+**Each level has its own concurrency.** `maxConcurrency` on the outer config bounds outer tasks; the nested `d.dag(..., config)` takes its own. An outer slot stays occupied for as long as the whole sub-DAG runs.
+
+### What gets checkpointed
+
+```text
+ExecutionStarted
+└── ContextStarted   SubType=Dag  Name=onboard          id: 1
+    ├── StepStarted   SubType=Step  Name=validate       id: 1-DAG_NODE_T_validate
+    ├── StepSucceeded SubType=Step  Name=validate       → "tenant-42"
+    ├── ContextStarted SubType=Dag  Name=provision      id: 1-DAG_NODE_T_provision
+    │   ├── StepStarted   SubType=Step Name=database    id: 1-DAG_NODE_T_provision-DAG_NODE_T_database
+    │   ├── StepSucceeded SubType=Step Name=database    → "db-ready"
+    │   ├── StepStarted   SubType=Step Name=validate    id: 1-DAG_NODE_T_provision-DAG_NODE_T_validate
+    │   ├── StepSucceeded SubType=Step Name=validate    → "checked db-ready"
+    │   └── ContextSucceeded SubType=Dag Name=provision
+    ├── StepStarted   SubType=Step  Name=welcome        id: 1-DAG_NODE_T_welcome
+    ├── StepSucceeded SubType=Step  Name=welcome        → "provisioned: checked db-ready"
+    └── ContextSucceeded  SubType=Dag  Name=onboard
+InvocationCompleted
+ExecutionSucceeded
+```
+
+Two things to notice.
+
+`SubType=Dag` appears **twice** — the nested container is a DAG, so it is checkpointed as one. This sounds obvious and was nonetheless a real bug: Java tagged nested DAGs as `RunInChildContext`, which conformance scenario 10-9 caught. It is now a normative cross-language rule (`DAG_SPEC_CROSS_LANGUAGE.md` §2.A.5).
+
+The ID scheme composes. Where a map's items fell back to counters (example 5), a nested DAG's tasks stay name-derived — one `DAG_NODE_T_` segment per level: `1-DAG_NODE_T_provision-DAG_NODE_T_validate`. That is what keeps the two `validate` tasks distinct on the wire, and it is why task names are restricted to `^[a-zA-Z0-9_]+$` with `DAG_NODE_T_` reserved: dashes and the reserved token are what make this composition unambiguously parseable.
