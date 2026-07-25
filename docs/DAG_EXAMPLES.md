@@ -339,3 +339,124 @@ ExecutionSucceeded
 Note the last two lines: the container **succeeds** and the execution **succeeds**, even though a task inside failed. The DAG's job was to drain the graph and report, and it did.
 
 Two details from real histories. `charge` exhausts the default retry policy before `StepFailed` — a step task's retry behavior inside a DAG is exactly the standalone step's, so with the default policy the failure lands in a later invocation after backoff. And the returned counts here are `[2, 1, 1, 4]`: two succeeded, one failed, one skipped, four registered. `totalCount` counts what you _registered_, not what ran.
+
+## Example 4 — Value-based branching with `runIf`
+
+Trigger rules look at upstream _statuses_. `runIf` looks at upstream _values_. Together they give you a switch statement over a graph.
+
+```text
+                 ┌──────────┐
+                 │  triage  │  root → "manual"
+                 └────┬─────┘
+                      │ value
+      ┌───────────────┼────────────────┐
+      ▼               ▼                ▼
+┌───────────────┐ ┌───────────────┐ ┌───────────┐
+│ autoApprove   │ │ manualReview  │ │  reject   │
+│runIf =="auto" │ │runIf=="manual"│ │=="reject" │
+└──────┬────────┘ └──────┬────────┘ └────┬──────┘
+    SKIPPED           SUCCEEDED       SKIPPED
+       └────────────────┼────────────────┘
+                        ▼
+                 ┌─────────────┐
+                 │    close    │  ANY_SUCCESS
+                 └─────────────┘
+```
+
+```ts
+import {
+  DurableContext,
+  withDurableExecution,
+} from "@aws/durable-execution-sdk-js";
+
+interface ClaimEvent {
+  claimId: string;
+}
+
+export const handler = withDurableExecution(
+  async (event: ClaimEvent, context: DurableContext) => {
+    const dagPromise = context.dag("claim", (d) => {
+      // Returns one of "auto" | "manual" | "reject".
+      const triage = d.step("triage", [], async (): Promise<string> => {
+        return "manual";
+      });
+
+      // Three mutually exclusive branches. `runIf` is a plain synchronous
+      // predicate over the resolved deps — no await, no side effects.
+      const auto = d.step(
+        "autoApprove",
+        [triage],
+        async (): Promise<string> => "approved automatically",
+        { runIf: (deps) => deps.triage === "auto" },
+      );
+
+      const manual = d.step(
+        "manualReview",
+        [triage],
+        async (): Promise<string> => "queued for an adjuster",
+        { runIf: (deps) => deps.triage === "manual" },
+      );
+
+      const reject = d.step(
+        "reject",
+        [triage],
+        async (): Promise<string> => "rejected",
+        { runIf: (deps) => deps.triage === "reject" },
+      );
+
+      // Whichever branch ran, close the claim. ANY_SUCCESS tolerates the two
+      // skipped siblings; the default ALL_SUCCESS would skip this too.
+      d.step("close", [], async (): Promise<string> => "closed")
+        .after(auto, manual, reject)
+        .triggerRule("ANY_SUCCESS");
+    });
+
+    const dagResult = await dagPromise;
+
+    return {
+      reason: dagResult.completionReason,
+      taken: ["autoApprove", "manualReview", "reject"].find(
+        (name) => dagResult.getStatus(name) === "SUCCEEDED",
+      ),
+      close: dagResult.getResult("close"),
+      counts: [
+        dagResult.successCount,
+        dagResult.skippedCount,
+        dagResult.totalCount,
+      ],
+    };
+  },
+);
+```
+
+### What's new here
+
+**`runIf` is a gate on data, evaluated by the scheduler.** It receives the same typed `deps` map the body would, and returns a boolean. `false` means the task is skipped with `skipReason: "RUN_IF_PREDICATE"` — again, no events, no cost. The predicate must be **synchronous and deterministic**: no `async`, no IO, no clock. It is re-evaluated on replay and has to reach the same verdict, and it is not a checkpointed operation, so anything it does is not durable.
+
+**`runIf` and trigger rules compose, in that order.** A task runs only if its trigger rule is satisfied _and_ its `runIf` returns true. Trigger rule first (do I like my upstreams' statuses?), then `runIf` (do I like their values?).
+
+**`ANY_SUCCESS` is what makes an exclusive fan-in work.** `close` waits on all three branches, but two of them skipped. Under the default `ALL_SUCCESS` a skipped upstream is not a success, so `close` would skip as well and the graph would quietly do nothing at the end. `ANY_SUCCESS` says "at least one worked, that is enough".
+
+**This is a genuine branch, not a filtered result.** The two untaken branches never execute. Contrast with computing all three and discarding two: here you pay nothing for the paths not taken, which is the point when a branch is an expensive API call.
+
+### What gets checkpointed
+
+```text
+ExecutionStarted
+└── ContextStarted   SubType=Dag  Name=claim          id: 1
+    ├── StepStarted   SubType=Step  Name=triage       id: 1-DAG_NODE_T_triage
+    ├── StepSucceeded SubType=Step  Name=triage       → "manual"
+    │   … autoApprove: SKIPPED (RUN_IF_PREDICATE) — no events
+    ├── StepStarted   SubType=Step  Name=manualReview id: 1-DAG_NODE_T_manualReview
+    ├── StepSucceeded SubType=Step  Name=manualReview → "queued for an adjuster"
+    │   … reject:      SKIPPED (RUN_IF_PREDICATE) — no events
+    ├── StepStarted   SubType=Step  Name=close        id: 1-DAG_NODE_T_close
+    ├── StepSucceeded SubType=Step  Name=close        → "closed"
+    └── ContextSucceeded  SubType=Dag  Name=claim
+InvocationCompleted
+ExecutionSucceeded
+```
+
+Five registered tasks, three operations plus the container. Counts come back `[3, 2, 5]`: three succeeded, two skipped, five registered — and `completionReason` is `ALL_COMPLETED`, because skipping is not failing.
+
+The history is also the reason the determinism rule on `runIf` is strict. Nothing in the checkpoint record says "autoApprove was skipped" — absence is the encoding. On replay the scheduler re-derives that decision by evaluating the predicate again, so a predicate that flip-flops would make the SDK expect a task it never finds, or find one it did not expect.
