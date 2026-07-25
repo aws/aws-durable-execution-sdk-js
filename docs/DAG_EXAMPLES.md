@@ -238,3 +238,104 @@ Still flat and still N+1: four tasks plus the container is five operations.
 The interleaving is the point. Both `StepStarted` events land before either `StepSucceeded`, and `billing` finishes before `usage` here purely because it happened to be quicker. On a retry the order could differ — and this is precisely why task IDs are name-derived rather than counter-assigned. A counter would hand out `-1`, `-2` in completion order, which varies between invocations; `1-DAG_NODE_T_usage` is stable no matter who wins the race.
 
 That stability is what makes partial progress safe. If `summary` throws and the invocation retries, the SDK finds `load`, `usage` and `billing` already checkpointed as `SUCCEEDED`, returns their stored results, and only re-runs `summary`.
+
+## Example 3 — Failure, compensation, and skips
+
+A failed task is a normal terminal state, not an abort. That single decision is what makes sagas expressible.
+
+```text
+              ┌──────────┐
+              │  charge  │  root — throws "payment declined"
+              └────┬─────┘
+                   │ FAILED
+      ┌────────────┼────────────┐
+      ▼            ▼            ▼
+┌───────────┐ ┌──────────┐ ┌──────────┐
+│   ship    │ │  refund  │ │  audit   │
+│ALL_SUCCESS│ │ALL_FAILED│ │ ALL_DONE │  ← trigger rules
+└───────────┘ └──────────┘ └──────────┘
+   SKIPPED      "refunded"    "logged"
+   no events
+```
+
+```ts
+import {
+  DurableContext,
+  withDurableExecution,
+} from "@aws/durable-execution-sdk-js";
+
+export const handler = withDurableExecution(
+  async (_event: unknown, context: DurableContext) => {
+    const dagPromise = context.dag("checkout", (d) => {
+      const charge = d.step("charge", [], async (): Promise<string> => {
+        throw new Error("payment declined");
+      });
+
+      // Default trigger rule is ALL_SUCCESS, so an upstream failure SKIPS this.
+      d.step("ship", [charge], async (deps): Promise<string> => {
+        return `shipped after ${deps.charge}`;
+      });
+
+      // Compensation: runs only because `charge` failed.
+      d.step("refund", [], async (): Promise<string> => "refunded")
+        .after(charge)
+        .triggerRule("ALL_FAILED");
+
+      // Runs either way — the audit trail should not care how it went.
+      d.step("audit", [], async (): Promise<string> => "logged")
+        .after(charge)
+        .triggerRule("ALL_DONE");
+    });
+
+    const dagResult = await dagPromise;
+
+    return {
+      reason: dagResult.completionReason,
+      statuses: {
+        charge: dagResult.getStatus("charge"),
+        ship: dagResult.getStatus("ship"),
+        refund: dagResult.getStatus("refund"),
+        audit: dagResult.getStatus("audit"),
+      },
+      counts: [
+        dagResult.successCount,
+        dagResult.failureCount,
+        dagResult.skippedCount,
+        dagResult.totalCount,
+      ],
+    };
+  },
+);
+```
+
+### What's new here
+
+**The DAG does not throw.** `charge` fails, yet `await dagPromise` resolves. You get a `DagResult` whose `completionReason` is `COMPLETED_WITH_FAILURES` and whose `failureCount` is 1. This is the pivot: if a failure aborted the graph, a compensating task downstream of that failure could never be scheduled. Call `dagResult.throwIfError()` if you want the throwing behavior at a point of your choosing.
+
+**Trigger rules decide whether a task runs, based on its upstream _statuses_.** The default is `ALL_SUCCESS`, which is why `ship` is skipped. `refund` uses `ALL_FAILED`, so it runs exactly in the case you want a refund. `audit` uses `ALL_DONE`, so it runs either way. There are six rules: `ALL_SUCCESS`, `ALL_FAILED`, `ALL_DONE`, `ANY_SUCCESS`, `ANY_FAILED`, `NONE_FAILED`.
+
+**`.after(x)` is an ordering-only edge; `[x]` is a data edge.** `refund` and `audit` pass an empty deps array and use `.after(charge)`, so they wait for `charge` and see its status, but get no `deps.charge` value — appropriate, since a failed task has no result to read. `ship` declares `[charge]` because it genuinely wants the value. Use `.after()` when you need sequencing without data.
+
+**A skipped task is free.** `ship` emits no events at all. It is not "run and discarded" — it never starts, so it costs nothing against the operation budget. Skips also cascade: anything downstream of `ship` with the default rule would skip too.
+
+### What gets checkpointed
+
+```text
+ExecutionStarted
+└── ContextStarted   SubType=Dag  Name=checkout       id: 1
+    ├── StepStarted   SubType=Step  Name=charge       id: 1-DAG_NODE_T_charge
+    ├── StepFailed    SubType=Step  Name=charge       ✗ "payment declined"
+    │                                                   (after retries are exhausted)
+    │   … ship: SKIPPED — no events whatsoever
+    ├── StepStarted   SubType=Step  Name=refund       id: 1-DAG_NODE_T_refund
+    ├── StepSucceeded SubType=Step  Name=refund       → "refunded"
+    ├── StepStarted   SubType=Step  Name=audit        id: 1-DAG_NODE_T_audit
+    ├── StepSucceeded SubType=Step  Name=audit        → "logged"
+    └── ContextSucceeded  SubType=Dag  Name=checkout
+InvocationCompleted
+ExecutionSucceeded
+```
+
+Note the last two lines: the container **succeeds** and the execution **succeeds**, even though a task inside failed. The DAG's job was to drain the graph and report, and it did.
+
+Two details from real histories. `charge` exhausts the default retry policy before `StepFailed` — a step task's retry behavior inside a DAG is exactly the standalone step's, so with the default policy the failure lands in a later invocation after backoff. And the returned counts here are `[2, 1, 1, 4]`: two succeeded, one failed, one skipped, four registered. `totalCount` counts what you _registered_, not what ran.
