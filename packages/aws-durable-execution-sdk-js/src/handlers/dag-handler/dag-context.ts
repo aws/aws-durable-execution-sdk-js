@@ -21,6 +21,12 @@ import {
   WaitForConditionConfig,
 } from "../../types/wait-condition";
 import {
+  StepContext,
+  WaitForCallbackContext,
+  WaitForConditionContext,
+} from "../../types/logger";
+import { DurableContext } from "../../types/durable-context";
+import {
   AnyTaskHandle,
   CheckTaskFn,
   ChildTaskFn,
@@ -148,6 +154,20 @@ export class DagContextImpl<
     deps: TDeps,
     fn: StepTaskFn<TDeps, TResult, TLogger>,
     config?: StepConfig<TResult> & ConditionalConfig<TDeps>,
+  ): TaskHandle<TName, TResult>;
+
+  step<TName extends string, TResult>(
+    name: TName,
+    deps: readonly [],
+    fn: (ctx: StepContext<TLogger>) => Promise<TResult>,
+    config?: StepConfig<TResult> & ConditionalConfig<readonly []>,
+  ): TaskHandle<TName, TResult>;
+
+  step<TName extends string, TDeps extends readonly AnyTaskHandle[], TResult>(
+    name: TName,
+    deps: TDeps,
+    fn: StepTaskFn<TDeps, TResult, TLogger>,
+    config?: StepConfig<TResult> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TResult> {
     const { runIf, rest } = extractConditional(config);
     const taskConfig = this.applyRetryDefault(rest);
@@ -186,6 +206,27 @@ export class DagContextImpl<
     deps: TDeps,
     payloadFn: PayloadTaskFn<TDeps, TIn>,
     config?: InvokeConfig<TIn, TOut> & ConditionalConfig<TDeps>,
+  ): TaskHandle<TName, TOut>;
+
+  invoke<TName extends string, TIn, TOut>(
+    name: TName,
+    funcId: string,
+    deps: readonly [],
+    payloadFn: () => TIn | Promise<TIn>,
+    config?: InvokeConfig<TIn, TOut> & ConditionalConfig<readonly []>,
+  ): TaskHandle<TName, TOut>;
+
+  invoke<
+    TName extends string,
+    TDeps extends readonly AnyTaskHandle[],
+    TIn,
+    TOut,
+  >(
+    name: TName,
+    funcId: string,
+    deps: TDeps,
+    payloadFn: PayloadTaskFn<TDeps, TIn>,
+    config?: InvokeConfig<TIn, TOut> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TOut> {
     const { runIf, rest } = extractConditional(config);
     const def = this.makeDef(
@@ -209,6 +250,27 @@ export class DagContextImpl<
     this.register(name, def);
     return new TaskHandleImpl<TName, TOut>(name, def.id, def);
   }
+
+  callback<
+    TName extends string,
+    TDeps extends readonly AnyTaskHandle[],
+    TResult = string,
+  >(
+    name: TName,
+    deps: TDeps,
+    submitter: SubmitterTaskFn<TDeps, TLogger>,
+    config?: WaitForCallbackConfig<TResult> & ConditionalConfig<TDeps>,
+  ): TaskHandle<TName, TResult>;
+
+  callback<TName extends string, TResult = string>(
+    name: TName,
+    deps: readonly [],
+    submitter: (
+      callbackId: string,
+      ctx: WaitForCallbackContext<TLogger>,
+    ) => Promise<void>,
+    config?: WaitForCallbackConfig<TResult> & ConditionalConfig<readonly []>,
+  ): TaskHandle<TName, TResult>;
 
   callback<
     TName extends string,
@@ -279,6 +341,27 @@ export class DagContextImpl<
     deps: TDeps,
     check: CheckTaskFn<TDeps, TState, TLogger>,
     config: WaitForConditionConfig<TState> & ConditionalConfig<TDeps>,
+  ): TaskHandle<TName, TState>;
+
+  waitForCondition<TName extends string, TState>(
+    name: TName,
+    deps: readonly [],
+    check: (
+      state: TState,
+      ctx: WaitForConditionContext<TLogger>,
+    ) => Promise<TState>,
+    config: WaitForConditionConfig<TState> & ConditionalConfig<readonly []>,
+  ): TaskHandle<TName, TState>;
+
+  waitForCondition<
+    TName extends string,
+    TDeps extends readonly AnyTaskHandle[],
+    TState,
+  >(
+    name: TName,
+    deps: TDeps,
+    check: CheckTaskFn<TDeps, TState, TLogger>,
+    config: WaitForConditionConfig<TState> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TState> {
     const { runIf, rest } = extractConditional(config);
     const def = this.makeDef(
@@ -323,6 +406,24 @@ export class DagContextImpl<
     deps: TDeps,
     fn: ChildTaskFn<TDeps, TResult, TLogger>,
     config?: ChildConfig<TResult> & ConditionalConfig<TDeps>,
+  ): TaskHandle<TName, TResult>;
+
+  runInChildContext<TName extends string, TResult>(
+    name: TName,
+    deps: readonly [],
+    fn: (ctx: DurableContext<TLogger>) => Promise<TResult>,
+    config?: ChildConfig<TResult> & ConditionalConfig<readonly []>,
+  ): TaskHandle<TName, TResult>;
+
+  runInChildContext<
+    TName extends string,
+    TDeps extends readonly AnyTaskHandle[],
+    TResult,
+  >(
+    name: TName,
+    deps: TDeps,
+    fn: ChildTaskFn<TDeps, TResult, TLogger>,
+    config?: ChildConfig<TResult> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TResult> {
     const { runIf, rest } = extractConditional(config);
     const def = this.makeDef(
@@ -355,6 +456,22 @@ export class DagContextImpl<
     items: TIn[] | ((deps: DepsMap<TDeps>) => TIn[]),
     mapFunc: MapFunc<TIn, TOut, TLogger>,
     config?: MapConfig<TIn, TOut> & ConditionalConfig<TDeps>,
+  ): TaskHandle<TName, BatchResult<TOut>>;
+
+  map<TName extends string, TIn, TOut>(
+    name: TName,
+    deps: readonly [],
+    items: TIn[] | (() => TIn[]),
+    mapFunc: MapFunc<TIn, TOut, TLogger>,
+    config?: MapConfig<TIn, TOut> & ConditionalConfig<readonly []>,
+  ): TaskHandle<TName, BatchResult<TOut>>;
+
+  map<TName extends string, TDeps extends readonly AnyTaskHandle[], TIn, TOut>(
+    name: TName,
+    deps: TDeps,
+    items: TIn[] | ((deps: DepsMap<TDeps>) => TIn[]),
+    mapFunc: MapFunc<TIn, TOut, TLogger>,
+    config?: MapConfig<TIn, TOut> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, BatchResult<TOut>> {
     const { runIf, rest } = extractConditional(config);
     const taskConfig = this.applyNestingDefault(rest);
@@ -380,6 +497,26 @@ export class DagContextImpl<
     this.register(name, def);
     return new TaskHandleImpl<TName, BatchResult<TOut>>(name, def.id, def);
   }
+
+  parallel<TName extends string, TDeps extends readonly AnyTaskHandle[], TOut>(
+    name: TName,
+    deps: TDeps,
+    branches: (
+      | ParallelFunc<TOut, TLogger>
+      | NamedParallelBranch<TOut, TLogger>
+    )[],
+    config?: ParallelConfig<TOut> & ConditionalConfig<TDeps>,
+  ): TaskHandle<TName, BatchResult<TOut>>;
+
+  parallel<TName extends string, TOut>(
+    name: TName,
+    deps: readonly [],
+    branches: (
+      | ParallelFunc<TOut, TLogger>
+      | NamedParallelBranch<TOut, TLogger>
+    )[],
+    config?: ParallelConfig<TOut> & ConditionalConfig<readonly []>,
+  ): TaskHandle<TName, BatchResult<TOut>>;
 
   parallel<TName extends string, TDeps extends readonly AnyTaskHandle[], TOut>(
     name: TName,

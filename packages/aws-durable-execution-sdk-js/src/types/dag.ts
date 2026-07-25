@@ -361,12 +361,38 @@ export type NestedDagConfig = DagConfig;
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface DagContext<TLogger extends DurableLogger = DurableLogger> {
+  // Each task kind carries a no-deps overload ahead of its generic signature.
+  // The generic form derives the callback shape from `TDeps` through a
+  // conditional type (`StepTaskFn` and friends), but a bare `[]` argument does
+  // not infer as the empty tuple `readonly []` — TypeScript widens it to an
+  // array type, whose `length` is `number` — so the conditional always resolves
+  // to the deps-bearing branch and the native no-deps callback shape is
+  // rejected (or silently mis-typed where the parameter counts happen to line
+  // up). Overload resolution matches on the parameter type instead of relying
+  // on inference, so `deps: readonly []` selects the native shape without the
+  // caller writing `[] as const` or spelling out every type argument.
+
+  step<TName extends string, TResult>(
+    name: TName,
+    deps: readonly [],
+    fn: (ctx: StepContext<TLogger>) => Promise<TResult>,
+    config?: StepConfig<TResult> & ConditionalConfig<readonly []>,
+  ): TaskHandle<TName, TResult>;
+
   step<TName extends string, TDeps extends readonly AnyTaskHandle[], TResult>(
     name: TName,
     deps: TDeps,
     fn: StepTaskFn<TDeps, TResult, TLogger>,
     config?: StepConfig<TResult> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TResult>;
+
+  invoke<TName extends string, TIn, TOut>(
+    name: TName,
+    funcId: string,
+    deps: readonly [],
+    payloadFn: () => TIn | Promise<TIn>,
+    config?: InvokeConfig<TIn, TOut> & ConditionalConfig<readonly []>,
+  ): TaskHandle<TName, TOut>;
 
   invoke<
     TName extends string,
@@ -380,6 +406,16 @@ export interface DagContext<TLogger extends DurableLogger = DurableLogger> {
     payloadFn: PayloadTaskFn<TDeps, TIn>,
     config?: InvokeConfig<TIn, TOut> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TOut>;
+
+  callback<TName extends string, TResult = string>(
+    name: TName,
+    deps: readonly [],
+    submitter: (
+      callbackId: string,
+      ctx: WaitForCallbackContext<TLogger>,
+    ) => Promise<void>,
+    config?: WaitForCallbackConfig<TResult> & ConditionalConfig<readonly []>,
+  ): TaskHandle<TName, TResult>;
 
   callback<
     TName extends string,
@@ -399,6 +435,16 @@ export interface DagContext<TLogger extends DurableLogger = DurableLogger> {
     config?: ConditionalConfig<TDeps>,
   ): TaskHandle<TName, void>;
 
+  waitForCondition<TName extends string, TState>(
+    name: TName,
+    deps: readonly [],
+    check: (
+      state: TState,
+      ctx: WaitForConditionContext<TLogger>,
+    ) => Promise<TState>,
+    config: WaitForConditionConfig<TState> & ConditionalConfig<readonly []>,
+  ): TaskHandle<TName, TState>;
+
   waitForCondition<
     TName extends string,
     TDeps extends readonly AnyTaskHandle[],
@@ -409,6 +455,13 @@ export interface DagContext<TLogger extends DurableLogger = DurableLogger> {
     check: CheckTaskFn<TDeps, TState, TLogger>,
     config: WaitForConditionConfig<TState> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TState>;
+
+  runInChildContext<TName extends string, TResult>(
+    name: TName,
+    deps: readonly [],
+    fn: (ctx: DurableContext<TLogger>) => Promise<TResult>,
+    config?: ChildConfig<TResult> & ConditionalConfig<readonly []>,
+  ): TaskHandle<TName, TResult>;
 
   runInChildContext<
     TName extends string,
@@ -421,12 +474,30 @@ export interface DagContext<TLogger extends DurableLogger = DurableLogger> {
     config?: ChildConfig<TResult> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TResult>;
 
+  map<TName extends string, TIn, TOut>(
+    name: TName,
+    deps: readonly [],
+    items: TIn[] | (() => TIn[]),
+    mapFunc: MapFunc<TIn, TOut, TLogger>,
+    config?: MapConfig<TIn, TOut> & ConditionalConfig<readonly []>,
+  ): TaskHandle<TName, BatchResult<TOut>>;
+
   map<TName extends string, TDeps extends readonly AnyTaskHandle[], TIn, TOut>(
     name: TName,
     deps: TDeps,
     items: TIn[] | ((deps: DepsMap<TDeps>) => TIn[]),
     mapFunc: MapFunc<TIn, TOut, TLogger>,
     config?: MapConfig<TIn, TOut> & ConditionalConfig<TDeps>,
+  ): TaskHandle<TName, BatchResult<TOut>>;
+
+  parallel<TName extends string, TOut>(
+    name: TName,
+    deps: readonly [],
+    branches: (
+      | ParallelFunc<TOut, TLogger>
+      | NamedParallelBranch<TOut, TLogger>
+    )[],
+    config?: ParallelConfig<TOut> & ConditionalConfig<readonly []>,
   ): TaskHandle<TName, BatchResult<TOut>>;
 
   parallel<TName extends string, TDeps extends readonly AnyTaskHandle[], TOut>(

@@ -14,7 +14,7 @@ export const handler = withDurableExecution(
         // DAG task whose native op is a parallel of two named branches, each
         // running one step. Checkpointed directly under the Dag container
         // (flat). maxConcurrency 1 keeps branches sequential.
-        const fork = d.parallel<"fork", [], string>(
+        const fork = d.parallel(
           "fork",
           [],
           [
