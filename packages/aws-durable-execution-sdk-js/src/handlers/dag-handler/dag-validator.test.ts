@@ -48,6 +48,12 @@ describe("validateTaskName", () => {
       DagInvalidTaskNameError,
     );
   });
+
+  it("rejects prototype-pollution names (__proto__, constructor, prototype)", () => {
+    for (const n of ["__proto__", "constructor", "prototype"]) {
+      expect(() => validateTaskName(n)).toThrow(DagInvalidTaskNameError);
+    }
+  });
 });
 
 describe("detectCycle", () => {
@@ -86,6 +92,12 @@ describe("validateDag", () => {
     const a = makeTask("dup");
     const b = makeTask("dup");
     expect(() => validateDag([a, b])).toThrow(DagDuplicateTaskError);
+  });
+
+  it("rejects a task named __proto__/constructor/prototype at registration", () => {
+    for (const n of ["__proto__", "constructor", "prototype"]) {
+      expect(() => validateDag([makeTask(n)])).toThrow(DagInvalidTaskNameError);
+    }
   });
 
   it("throws on foreign/missing dependency", () => {

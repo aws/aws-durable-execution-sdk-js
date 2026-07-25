@@ -87,7 +87,11 @@ export class DagExecutor {
   }
 
   private buildDepsMap(task: TaskDef): Record<string, unknown> {
-    const map: Record<string, unknown> = {};
+    // Null-prototype: the map is keyed by customer-chosen task names. A dep
+    // named `__proto__` would otherwise hit the prototype setter instead of
+    // creating an own property (silent wrong/undefined dep). The task-name
+    // validator also blocklists these names; this is defense-in-depth.
+    const map: Record<string, unknown> = Object.create(null);
     for (const dep of task.inlineDeps) {
       const exec = this.results.get(dep.name);
       map[dep.name] =
@@ -329,7 +333,9 @@ export async function reconstructDagResult(
   const terminalSet = new Set(envelope?.terminalTaskNames ?? []);
 
   const buildDepsMap = (task: TaskDef): Record<string, unknown> => {
-    const map: Record<string, unknown> = {};
+    // Null-prototype: keyed by customer-chosen task names (see the live
+    // buildDepsMap). Defense-in-depth alongside the task-name validator.
+    const map: Record<string, unknown> = Object.create(null);
     for (const dep of task.inlineDeps) {
       const exec = results.get(dep.name);
       map[dep.name] =
@@ -393,7 +399,18 @@ export async function reconstructDagResult(
         detail?.CallbackDetails?.Error ??
         detail?.WaitDetails?.Error;
 
-      if (status === "SUCCEEDED") {
+      if (startedSet.has(task.name)) {
+        // The envelope is AUTHORITATIVE (§7.7/§8.1). A task the live run
+        // recorded as STARTED — in-flight at early completion and excluded
+        // from the authoritative success/failure counts — MUST reconstruct as
+        // STARTED even if its underlying durable op happened to checkpoint
+        // SUCCEEDED/FAILED before the invocation unwound. Consulting the
+        // checkpoint status first (as this branch used to) would materialize
+        // it SUCCEEDED/FAILED, making the `results` map disagree with the
+        // envelope-sourced counts it is required to stay consistent with, and
+        // making getStatus() differ live-vs-replay.
+        results.set(task.name, { name: task.name, status: "STARTED" });
+      } else if (status === "SUCCEEDED") {
         results.set(task.name, {
           name: task.name,
           status: "SUCCEEDED",
@@ -407,8 +424,6 @@ export async function reconstructDagResult(
             ? DurableOperationError.fromErrorObject(errorObject)
             : new StepError("Unknown error"),
         });
-      } else if (startedSet.has(task.name)) {
-        results.set(task.name, { name: task.name, status: "STARTED" });
       } else {
         // No checkpoint and not in the STARTED set. The task was either
         // SKIPPED live (a skip checkpoints nothing, §9.5) or NEVER STARTED

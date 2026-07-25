@@ -187,15 +187,27 @@ describe("DagExecutor", () => {
     expect(result.completionReason).toBe("CUSTOM_COMPLETION_FAILED");
   });
 
-  it("threshold minSuccessful stops early", async () => {
-    const tasks = ["a", "b", "c"].map((n) => task(n, { run: async () => n }));
-    const result = await run(tasks, {
-      completionConfig: { minSuccessful: 1 },
+  it("builds the deps map with a null prototype (no inherited keys)", async () => {
+    // B3: the deps map is keyed by customer task names, so it must not expose
+    // Object.prototype members (or a prototype setter) via those keys.
+    let captured: Record<string, unknown> | undefined;
+    const up = task("up", { run: async () => "v" });
+    const down = task("down", {
+      deps: [up],
+      run: async (d) => {
+        captured = d;
+        return "d";
+      },
     });
-    expect(["MIN_SUCCESSFUL_REACHED", "ALL_COMPLETED"]).toContain(
-      result.completionReason,
-    );
-    expect(result.successCount).toBeGreaterThanOrEqual(1);
+    await run([up, down]);
+    expect(captured).toBeDefined();
+    expect(Object.getPrototypeOf(captured!)).toBeNull();
+    // No inherited keys are reachable (on a plain {} these would be truthy).
+    expect(captured!["__proto__"]).toBeUndefined();
+    expect(captured!["constructor"]).toBeUndefined();
+    expect(captured!["toString"]).toBeUndefined();
+    // Declared deps still resolve.
+    expect(captured!.up).toBe("v");
   });
 });
 
@@ -403,17 +415,36 @@ describe("reconstructDagResult (design-B replay)", () => {
     expect(r.completionReason).toBe("COMPLETED_WITH_FAILURES");
   });
 
-  it("null/malformed envelope: derives skips greedily from per-task checkpoints", async () => {
-    // §8.1 contract 3: with no authoritative envelope, reconstruction derives
-    // what it can (empty STARTED set) and recomputes skips deterministically.
+  it("startedSet takes precedence over a checkpoint (envelope is authoritative)", async () => {
+    // H4: a task in-flight at early completion is recorded STARTED live, listed
+    // in the envelope's startedTaskNames, and EXCLUDED from the authoritative
+    // counts — but its underlying op may have checkpointed SUCCEEDED before the
+    // invocation unwound. Reconstruction must honor the envelope and report
+    // STARTED, not SUCCEEDED, so the results map agrees with the counts.
     const a = mk("a");
-    const c = mk("c", [a], "ALL_FAILED"); // a SUCCEEDED => c skips greedily
+    const b = mk("b", [a]);
     const exec = execCtxWith({
       "1-2-DAG_NODE_T_a": { Status: "SUCCEEDED", result: 1 },
+      "1-2-DAG_NODE_T_b": { Status: "SUCCEEDED", result: 2 }, // checkpointed...
     });
-    const r = await reconstructDagResult(rcCtx, [a, c], null, exec);
+    const r = await reconstructDagResult(
+      rcCtx,
+      [a, b],
+      envelope({
+        totalCount: 2,
+        successCount: 1, // b is NOT counted as a success
+        completedCount: 1,
+        completionReason: "MIN_SUCCESSFUL_REACHED",
+        startedTaskNames: ["b"], // ...but authoritatively STARTED
+        terminalTaskNames: ["a"],
+      }),
+      exec,
+    );
     expect(r.getStatus("a")).toBe("SUCCEEDED");
-    expect(r.getStatus("c")).toBe("SKIPPED");
-    expect(r.skipped()[0].skipReason).toBe("TRIGGER_RULE");
+    // Regression guard: checkpoint says SUCCEEDED, envelope says STARTED — the
+    // envelope wins.
+    expect(r.getStatus("b")).toBe("STARTED");
+    expect(r.getResult("b")).toBeUndefined();
+    expect(r.successCount).toBe(1);
   });
 });

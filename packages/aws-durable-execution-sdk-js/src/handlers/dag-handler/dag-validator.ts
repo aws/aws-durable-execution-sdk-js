@@ -11,9 +11,20 @@ const RESERVED_TOKEN = "DAG_NODE_T_";
 const MAX_NAME_LENGTH = 100;
 
 /**
+ * Prototype-pollution keys. These all match `^[a-zA-Z0-9_]+$`, so the charset
+ * check alone lets them through; as a customer-chosen task name they would be
+ * used to key plain objects downstream (e.g. the per-task deps map), where
+ * assigning `map["__proto__"] = value` hits the prototype setter instead of
+ * creating an own property. We reject them at registration. Mirrors the
+ * `DANGEROUS_KEYS` guard in `utils/serdes/preview.ts`.
+ */
+const DANGEROUS_NAMES = new Set(["__proto__", "constructor", "prototype"]);
+
+/**
  * Validates a single task name eagerly at registration. Names must be
- * non-empty, at most 100 chars, match `^[a-zA-Z0-9_]+$` (no dash), and must not
- * embed the reserved `DAG_NODE_T_` token.
+ * non-empty, at most 100 chars, match `^[a-zA-Z0-9_]+$` (no dash), must not
+ * embed the reserved `DAG_NODE_T_` token, and must not be one of the
+ * prototype-pollution reserved names (`__proto__`, `constructor`, `prototype`).
  *
  * @internal
  */
@@ -23,7 +34,8 @@ export function validateTaskName(name: string): void {
     name.length === 0 ||
     name.length > MAX_NAME_LENGTH ||
     !TASK_NAME_PATTERN.test(name) ||
-    name.includes(RESERVED_TOKEN)
+    name.includes(RESERVED_TOKEN) ||
+    DANGEROUS_NAMES.has(name)
   ) {
     throw new DagInvalidTaskNameError(name);
   }
