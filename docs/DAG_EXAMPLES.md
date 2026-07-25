@@ -8,6 +8,13 @@
 
 Three steps, each depending on the one before.
 
+```text
+┌───────────┐   100    ┌──────────┐  "charged 100"  ┌──────────┐
+│  reserve  │ ───────► │  charge  │ ──────────────► │  notify  │
+└───────────┘          └──────────┘                 └──────────┘
+   root                 reads deps.reserve           reads deps.charge
+```
+
 ```ts
 import {
   DurableContext,
@@ -118,3 +125,116 @@ Every task is checkpointed **directly inside** that container as its _native_ op
 Task IDs are derived from the task **name**, not from a counter: `{containerId}-DAG_NODE_T_{name}`. This is the central design decision. A counter would be fragile, because a DAG legitimately runs its ready tasks in different orders across invocations — concurrency, retries, resumes — so counter-assigned IDs would not line up on replay. Name-derived IDs always do. On the wire the pre-images are hashed, so you would actually see `Id: dace6e26094653f7` rather than the readable form above.
 
 Replay then works per task. If `charge` is already checkpointed as `SUCCEEDED`, the SDK returns its stored result and never calls your function again. So if `notify` fails and the invocation retries, `reserve` and `charge` are free — no recomputation, no duplicate side effects.
+
+## Example 2 — Fan-out and fan-in
+
+The shape you actually use a DAG for: two independent branches off one root, merged by a task that reads both.
+
+```text
+        ┌──────────┐
+        │   load   │  root: no deps
+        └────┬─────┘
+             │ 10
+      ┌──────┴──────┐
+      ▼             ▼
+┌───────────┐ ┌───────────┐
+│   usage   │ │  billing  │  independent → run concurrently
+│ load * 3  │ │ load + 5  │
+└─────┬─────┘ └─────┬─────┘
+      │ 30          │ 15
+      └──────┬──────┘
+             ▼
+      ┌─────────────┐
+      │   summary   │  fan-in: reads deps.usage + deps.billing
+      └─────────────┘
+        "usage=30 billing=15"
+```
+
+```ts
+import {
+  DurableContext,
+  withDurableExecution,
+} from "@aws/durable-execution-sdk-js";
+
+interface ReportEvent {
+  customerId: string;
+}
+
+export const handler = withDurableExecution(
+  async (event: ReportEvent, context: DurableContext) => {
+    const dagPromise = context.dag("report", (d) => {
+      const load = d.step("load", [], async (): Promise<number> => {
+        return 10;
+      });
+
+      // Both depend only on `load`, so nothing orders them relative to
+      // each other: the scheduler starts both as soon as `load` succeeds.
+      const usage = d.step("usage", [load], async (deps): Promise<number> => {
+        return deps.load * 3;
+      });
+
+      const billing = d.step(
+        "billing",
+        [load],
+        async (deps): Promise<number> => {
+          return deps.load + 5;
+        },
+      );
+
+      // Fan-in: two deps, so `deps` carries both, each typed and keyed by name.
+      d.step("summary", [usage, billing], async (deps): Promise<string> => {
+        return `usage=${deps.usage} billing=${deps.billing}`;
+      });
+    });
+
+    const dagResult = await dagPromise;
+
+    return {
+      reason: dagResult.completionReason,
+      summary: dagResult.getResult("summary"),
+      statuses: {
+        usage: dagResult.getStatus("usage"),
+        billing: dagResult.getStatus("billing"),
+      },
+    };
+  },
+);
+```
+
+### What's new here
+
+**Concurrency is a consequence of the graph, not a call you make.** `usage` and `billing` both list only `load`, so they have no ordering relationship — the scheduler starts both the moment `load` settles. Compare this with example 1, where the chain forced strict sequencing. You did not write `Promise.all`; you wrote down dependencies and the scheduler derived the parallelism.
+
+**`deps` is a map, not a list.** `summary` declares `[usage, billing]` and reads `deps.usage` and `deps.billing` — keyed by task name, each with its own type (`number` here). Order in the array does not matter to the body.
+
+**You can cap the width.** Add a config argument to bound how many tasks run at once:
+
+```ts
+context.dag("report", (d) => { … }, { maxConcurrency: 1 });
+```
+
+With `maxConcurrency: 1` this same graph runs strictly sequentially in topological order — which is how the conformance scenarios pin down a deterministic history. Leave it unset for unlimited.
+
+### What gets checkpointed
+
+```text
+ExecutionStarted
+└── ContextStarted   SubType=Dag  Name=report        id: 1
+    ├── StepStarted   SubType=Step  Name=load        id: 1-DAG_NODE_T_load
+    ├── StepSucceeded SubType=Step  Name=load        → 10
+    ├── StepStarted   SubType=Step  Name=usage       id: 1-DAG_NODE_T_usage     ┐ both in
+    ├── StepStarted   SubType=Step  Name=billing     id: 1-DAG_NODE_T_billing   ┘ flight
+    ├── StepSucceeded SubType=Step  Name=billing     → 15
+    ├── StepSucceeded SubType=Step  Name=usage       → 30
+    ├── StepStarted   SubType=Step  Name=summary     id: 1-DAG_NODE_T_summary
+    ├── StepSucceeded SubType=Step  Name=summary     → "usage=30 billing=15"
+    └── ContextSucceeded  SubType=Dag  Name=report
+InvocationCompleted
+ExecutionSucceeded
+```
+
+Still flat and still N+1: four tasks plus the container is five operations.
+
+The interleaving is the point. Both `StepStarted` events land before either `StepSucceeded`, and `billing` finishes before `usage` here purely because it happened to be quicker. On a retry the order could differ — and this is precisely why task IDs are name-derived rather than counter-assigned. A counter would hand out `-1`, `-2` in completion order, which varies between invocations; `1-DAG_NODE_T_usage` is stable no matter who wins the race.
+
+That stability is what makes partial progress safe. If `summary` throws and the invocation retries, the SDK finds `load`, `usage` and `billing` already checkpointed as `SUCCEEDED`, returns their stored results, and only re-runs `summary`.
