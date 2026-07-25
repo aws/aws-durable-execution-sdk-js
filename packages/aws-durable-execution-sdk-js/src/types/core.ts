@@ -237,12 +237,24 @@ export enum OperationSubType {
    * A DAG container operation (`context.dag`).
    *
    * Represents a directed-acyclic-graph of tasks scheduled topologically within
-   * a single child context. Individual tasks keep their native subtypes
-   * (`STEP`, `CHAINED_INVOKE`, `RUN_IN_CHILD_CONTEXT`, `MAP`, `PARALLEL`, ...).
+   * a single child context. Each scheduled task runs inside its own
+   * {@link OperationSubType.DAG_TASK} child context nested under this container.
    *
    * @experimental This member is experimental and may be changed or removed in future releases.
    */
   DAG = "Dag",
+
+  /**
+   * An individual task within a DAG (`context.dag`).
+   *
+   * Each scheduled DAG task runs inside its own child context tagged with this
+   * subtype, parented to the enclosing {@link OperationSubType.DAG} container.
+   * The task's underlying operation (`STEP`, `WAIT`, ...) is nested one level
+   * beneath this `DagTask` op. Skipped tasks are never entered and emit no ops.
+   *
+   * @experimental This member is experimental and may be changed or removed in future releases.
+   */
+  DAG_TASK = "DagTask",
 }
 
 /**
