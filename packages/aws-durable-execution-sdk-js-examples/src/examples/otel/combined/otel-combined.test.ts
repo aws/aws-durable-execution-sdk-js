@@ -96,14 +96,14 @@ createTests({
           (s) =>
             s.attributes["durable.operation.name"] === "sequential-step" &&
             s.attributes["durable.operation.type"] === "STEP" &&
-            s.attributes["durable.operation.attempt"] === undefined,
+            s.attributes["durable.attempt.outcome"] === undefined,
         );
         expect(sequentialStepOp).toBeDefined();
 
         const sequentialStepAttempt = spans.find(
           (s) =>
             s.parentSpanId === sequentialStepOp!.spanId &&
-            s.attributes["durable.operation.attempt"] === 1,
+            s.attributes["durable.attempt.number"] === 1,
         );
         expect(sequentialStepAttempt).toBeDefined();
 

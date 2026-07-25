@@ -71,14 +71,14 @@ createTests({
           (s) =>
             s.attributes["durable.operation.name"] === "before-wait" &&
             s.attributes["durable.operation.type"] === "STEP" &&
-            s.attributes["durable.operation.attempt"] === undefined,
+            s.attributes["durable.attempt.outcome"] === undefined,
         );
         expect(beforeWaitOp).toBeDefined();
 
         const beforeWaitAttempt = spans.find(
           (s) =>
             s.parentSpanId === beforeWaitOp!.spanId &&
-            s.attributes["durable.operation.attempt"] === 1,
+            s.attributes["durable.attempt.number"] === 1,
         );
         expect(beforeWaitAttempt).toBeDefined();
 
@@ -95,14 +95,14 @@ createTests({
           (s) =>
             s.attributes["durable.operation.name"] === "after-wait" &&
             s.attributes["durable.operation.type"] === "STEP" &&
-            s.attributes["durable.operation.attempt"] === undefined,
+            s.attributes["durable.attempt.outcome"] === undefined,
         );
         expect(afterWaitOp).toBeDefined();
 
         const afterWaitAttempt = spans.find(
           (s) =>
             s.parentSpanId === afterWaitOp!.spanId &&
-            s.attributes["durable.operation.attempt"] === 1,
+            s.attributes["durable.attempt.number"] === 1,
         );
         expect(afterWaitAttempt).toBeDefined();
 

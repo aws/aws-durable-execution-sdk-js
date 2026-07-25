@@ -57,7 +57,7 @@ createTests({
           (s) =>
             s.attributes["durable.operation.name"] === "retry-step" &&
             s.attributes["durable.operation.type"] === "STEP" &&
-            s.attributes["durable.operation.attempt"] === undefined,
+            s.attributes["durable.attempt.outcome"] === undefined,
         );
         expect(retryStepOps).toHaveLength(3);
 
@@ -67,15 +67,15 @@ createTests({
 
         // --- Attempt spans ---
         const attemptSpans = spans.filter(
-          (s) => s.attributes["durable.operation.attempt"] !== undefined,
+          (s) => s.attributes["durable.attempt.outcome"] !== undefined,
         );
         expect(attemptSpans).toHaveLength(3);
 
         // Sort by attempt number
         const sorted = attemptSpans.sort(
           (a, b) =>
-            (a.attributes["durable.operation.attempt"] as number) -
-            (b.attributes["durable.operation.attempt"] as number),
+            (a.attributes["durable.attempt.number"] as number) -
+            (b.attributes["durable.attempt.number"] as number),
         );
 
         // All attempts should be children of their respective operation spans
@@ -93,9 +93,9 @@ createTests({
         }
 
         // Verify attempt numbers
-        expect(sorted[0].attributes["durable.operation.attempt"]).toBe(1);
-        expect(sorted[1].attributes["durable.operation.attempt"]).toBe(2);
-        expect(sorted[2].attributes["durable.operation.attempt"]).toBe(3);
+        expect(sorted[0].attributes["durable.attempt.number"]).toBe(1);
+        expect(sorted[1].attributes["durable.attempt.number"]).toBe(2);
+        expect(sorted[2].attributes["durable.attempt.number"]).toBe(3);
 
         // --- Invocation spans ---
         const invocationSpans = spans.filter((s) => s.name === "invocation");

@@ -66,7 +66,7 @@ createTests({
         const stepOp = spans.find(
           (s) =>
             s.attributes["durable.operation.type"] === "STEP" &&
-            s.attributes["durable.operation.attempt"] === undefined,
+            s.attributes["durable.attempt.outcome"] === undefined,
         );
         expect(stepOp).toBeDefined();
 
@@ -74,7 +74,7 @@ createTests({
         const attemptSpan = spans.find(
           (s) =>
             s.parentSpanId === stepOp!.spanId &&
-            s.attributes["durable.operation.attempt"] === 1,
+            s.attributes["durable.attempt.number"] === 1,
         );
         expect(attemptSpan).toBeDefined();
       }
@@ -129,7 +129,7 @@ createTests({
           const stepOps = spans.filter(
             (s) =>
               s.attributes["durable.operation.type"] === "STEP" &&
-              s.attributes["durable.operation.attempt"] === undefined,
+              s.attributes["durable.attempt.outcome"] === undefined,
           );
           expect(stepOps).toHaveLength(3);
 
@@ -138,7 +138,7 @@ createTests({
             const attemptSpan = spans.find(
               (s) =>
                 s.parentSpanId === stepOp.spanId &&
-                s.attributes["durable.operation.attempt"] !== undefined,
+                s.attributes["durable.attempt.outcome"] !== undefined,
             );
             expect(attemptSpan).toBeDefined();
           }
@@ -146,23 +146,17 @@ createTests({
           // Attempt numbers increment across polls (1, 2, 3)
           const attemptSpans = spans
             .filter(
-              (s) => s.attributes["durable.operation.attempt"] !== undefined,
+              (s) => s.attributes["durable.attempt.outcome"] !== undefined,
             )
             .sort(
               (a, b) =>
-                (a.attributes["durable.operation.attempt"] as number) -
-                (b.attributes["durable.operation.attempt"] as number),
+                (a.attributes["durable.attempt.number"] as number) -
+                (b.attributes["durable.attempt.number"] as number),
             );
           expect(attemptSpans).toHaveLength(3);
-          expect(attemptSpans[0].attributes["durable.operation.attempt"]).toBe(
-            1,
-          );
-          expect(attemptSpans[1].attributes["durable.operation.attempt"]).toBe(
-            2,
-          );
-          expect(attemptSpans[2].attributes["durable.operation.attempt"]).toBe(
-            3,
-          );
+          expect(attemptSpans[0].attributes["durable.attempt.number"]).toBe(1);
+          expect(attemptSpans[1].attributes["durable.attempt.number"]).toBe(2);
+          expect(attemptSpans[2].attributes["durable.attempt.number"]).toBe(3);
 
           // 3 invocation spans
           const invocationSpans = spans.filter((s) => s.name === "invocation");

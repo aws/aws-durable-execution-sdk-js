@@ -129,7 +129,7 @@ createTests({
         const operationSpans = spans.filter(
           (s) =>
             s.attributes["durable.operation.type"] !== undefined &&
-            s.attributes["durable.operation.attempt"] === undefined &&
+            s.attributes["durable.attempt.outcome"] === undefined &&
             s.attributes["durable.operation.subtype"] !== undefined &&
             s.name !== "Workflow" &&
             s.name !== "Invocation",
@@ -176,7 +176,7 @@ createTests({
 
         // Verify attempt spans exist
         const attemptSpans = spans.filter(
-          (s) => s.attributes["durable.operation.attempt"] !== undefined,
+          (s) => s.attributes["durable.attempt.outcome"] !== undefined,
         );
         expect(attemptSpans.length).toBeGreaterThanOrEqual(3);
 
