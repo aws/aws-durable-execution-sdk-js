@@ -4,6 +4,23 @@
 >
 > Worked examples of `context.dag(...)`, each with the execution history it produces. Every snippet is typechecked against the SDK on this branch. Where behavior differs between SDKs it is called out; the normative cross-language rules live in [`DAG_SPEC_CROSS_LANGUAGE.md`](./DAG_SPEC_CROSS_LANGUAGE.md).
 
+## Contents
+
+| Example                                                                                 | Shows                                                                                 | Task kinds                   |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------- |
+| [1 — A linear chain](#example-1--a-linear-chain)                                        | the register callback, task handles, when tasks run, the flat N+1 checkpoint tree     | `step`                       |
+| [2 — Fan-out and fan-in](#example-2--fan-out-and-fan-in)                                | concurrency as a consequence of the graph, `maxConcurrency`, why ids are name-derived | `step`                       |
+| [3 — Failure, compensation, skips](#example-3--failure-compensation-and-skips)          | a failed task is a terminal state, trigger rules, `.after()` versus data edges        | `step`                       |
+| [4 — Value branching](#example-4--value-based-branching-with-runif)                     | `runIf`, how it composes with trigger rules, exclusive fan-in                         | `step`                       |
+| [5 — A map task](#example-5--a-task-that-is-not-a-step-map)                             | a task can be any operation, `BatchResult`, nested containers                         | `map`                        |
+| [6 — A nested sub-DAG](#example-6--a-nested-sub-dag)                                    | scope isolation, composed ids, nested `DagResult`                                     | nested `dag`                 |
+| [7 — Suspend and resume](#example-7--suspend-and-resume-invoke-callback-wait)           | a DAG spanning four invocations, the callback container exception                     | `invoke`, `callback`, `wait` |
+| [8 — Parallel and early completion](#example-8--parallel-branches-and-early-completion) | `parallel` versus `map`, `completionConfig`, absent versus skipped                    | `parallel`                   |
+| [9 — Retries and replay](#example-9--retries-and-replay-what-re-runs-what-does-not)     | what re-executes across a retry, and what does not                                    | `step`                       |
+| [Common pitfalls](#common-pitfalls)                                                     | ten things that bite people                                                           | —                            |
+
+`waitForCondition` and `runInChildContext` are the two kinds without a dedicated example; both follow the same shape as their neighbours — `runInChildContext` like `map` (a container whose body gets a real `DurableContext`), `waitForCondition` like `wait` (it suspends and resumes).
+
 ## Example 1 — A linear chain
 
 Three steps, each depending on the one before.
@@ -1069,3 +1086,29 @@ ExecutionSucceeded
 Two mechanics worth naming. The ID is what makes this work: replay matching is by ID, and because the ID comes from the task **name**, it is identical on every invocation regardless of what order tasks ran in. And `audit` never started until attempt 3 succeeded, so a task downstream of a flaky one is never speculatively executed.
 
 One caveat on at-least-once semantics: a step is guaranteed to be checkpointed once it _succeeds_, but a body that throws after performing a side effect will have that side effect repeated on retry. `semantics: "AT_MOST_ONCE"` on the step config changes that trade-off — the SDK will not retry a step whose outcome it cannot determine, at the cost of surfacing the failure to you instead.
+
+## Common pitfalls
+
+Ten things that bite people, each traceable to something in the examples above.
+
+**Non-deterministic registration.** The register callback re-runs on every invocation and the graph must come out identical. `if (Math.random() > 0.5) d.step(...)`, reading a clock, or `await`-ing something to decide the shape all break replay — the scheduler will look for a task that is not there, or find one it did not expect. Compute the shape _before_ the DAG, from the event or from an earlier task's result.
+
+**Async or side-effecting `runIf`.** The predicate is synchronous, deterministic, and not a checkpointed operation. It is re-evaluated on replay and must reach the same verdict. Anything it does — a log, a counter, an API call — is not durable and may happen a different number of times than you expect.
+
+**Expecting the DAG to throw when a task fails.** It resolves. `completionReason` becomes `COMPLETED_WITH_FAILURES` and the execution _succeeds_. If you want the throw, call `dagResult.throwIfError()` yourself. This surprises everyone once.
+
+**Forgetting the callback's return-type annotation.** Without `async (deps): Promise<number> =>`, `TResult` widens to `unknown` and every downstream `deps.x` becomes unusable. The task callbacks are typed through conditional types, which TypeScript cannot use as inference sites.
+
+**Confusing skipped with absent.** A skip is a decision — trigger rule or `runIf` said no — and counts toward `skippedCount`. An absence means the scheduler never reached the task, only possible under early completion; it counts toward nothing but `totalCount`. Both emit zero events, so you cannot tell them apart from the history alone.
+
+**Forgetting that `ALL_SUCCESS` treats a skip as not-success.** A fan-in after mutually exclusive branches will silently skip itself unless you use `ANY_SUCCESS`. The graph then "completes" having done nothing at the end, with no error anywhere.
+
+**Reading per-branch values from a `parallel` task.** Only the aggregate (`successCount`/`totalCount`) is portable. Java's `ParallelResult` is aggregate-only by design, and in every SDK a step body cannot read another operation's value at all. If you need the values, use `map`, or have each branch write somewhere a later task can fetch it.
+
+**Task names.** `^[a-zA-Z0-9_]+$`, 100 characters, and `DAG_NODE_T_` is reserved. No dashes — they are the separator in the composed entity ID (`1-DAG_NODE_T_provision-DAG_NODE_T_validate`), so a dash in a name would make the ID ambiguous. A duplicate name in the same scope is a registration error; the same name in a nested DAG is fine.
+
+**Cross-scope dependencies.** A task in a nested DAG cannot depend on a handle from the outer graph, or vice versa. The two communicate only through the sub-DAG task's result. This is caught at registration, not at run time.
+
+**The operation budget.** One execution allows 3,000 operations. A DAG costs N+1 at its own layer, but a `map` or `parallel` task adds a container plus one per item or branch, and a nested DAG adds its own N+1. A 500-item map inside a DAG task is 500+ operations, not one.
+
+One more, since it cost a debugging session: a callback task's result is the **raw** payload text under the default deserializer — quotes included, so `"approved"` rather than `approved`. Pass a serdes if you want it parsed.
