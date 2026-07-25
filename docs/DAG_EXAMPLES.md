@@ -950,3 +950,122 @@ ExecutionSucceeded
 Like a map, a parallel task is a container whose branches nest underneath it with counter-based IDs (`-1`, `-2`) — branch order is array order, so a counter is safe below the task boundary.
 
 The counts come back `[3, 0, 5]`: `probe`, `quoteA` and `quoteB` succeeded, nothing failed, five tasks registered. `quoteC` and `summary` are simply not in the results map. Note that `summary` is a casualty here — early completion does not respect "but this one was going to aggregate everything", so a graph with a meaningful terminal task and a `minSuccessful` threshold is usually a design mistake.
+
+## Example 9 — Retries and replay: what re-runs, what does not
+
+The reason to reach for this instead of `Promise.all`. One task is flaky; nothing else pays for it.
+
+```text
+   ┌───────────┐
+   │  extract  │  expensive API call — runs EXACTLY ONCE
+   └─────┬─────┘  ✔ checkpointed, then replayed from the checkpoint
+         ▼
+   ┌───────────┐
+   │   load    │  attempt 1 ✗ 503   ─ retry ─┐
+   │           │  attempt 2 ✗ 503   ─ retry ─┤ retries stay inside
+   │           │  attempt 3 ✔ "loaded"       │ this one task
+   └─────┬─────┘ ◄────────────────────────────┘
+         ▼
+   ┌───────────┐
+   │   audit   │  runs once, after load finally succeeds
+   └───────────┘
+```
+
+```ts
+import {
+  DurableContext,
+  withDurableExecution,
+} from "@aws/durable-execution-sdk-js";
+
+interface SyncEvent {
+  recordId: string;
+}
+
+export const handler = withDurableExecution(
+  async (event: SyncEvent, context: DurableContext) => {
+    const dagPromise = context.dag("sync", (d) => {
+      // Expensive and side-effecting: we want this to happen exactly once,
+      // even though a later task will fail and force a replay.
+      const extract = d.step("extract", [], async (ctx): Promise<string> => {
+        ctx.logger.info("calling the upstream API");
+        return `payload for ${event.recordId}`;
+      });
+
+      // Flaky. Retries stay INSIDE this task: `extract` is never re-run.
+      const load = d.step(
+        "load",
+        [extract],
+        async (_deps, ctx): Promise<string> => {
+          if (ctx.attempt < 3) {
+            throw new Error("downstream 503");
+          }
+          return "loaded";
+        },
+        {
+          retryStrategy: (_error, attemptCount) => ({
+            shouldRetry: attemptCount < 3,
+            delay: { seconds: 2 },
+          }),
+        },
+      );
+
+      d.step("audit", [load], async (deps): Promise<string> => {
+        return `audited: ${deps.load}`;
+      });
+    });
+
+    const dagResult = await dagPromise;
+
+    return {
+      reason: dagResult.completionReason,
+      audit: dagResult.getResult("audit"),
+    };
+  },
+);
+```
+
+### What's new here
+
+**Retry is per task, and it is the ordinary step retry.** `retryStrategy` on a task's config is the same one a standalone `context.step` takes — the DAG adds nothing. `ctx.attempt` tells the body which attempt it is on. You can also set `defaultRetryStrategy` on the DAG config to apply to every task that does not declare its own.
+
+**Note the parameter order.** `async (_deps, ctx)` — with deps declared, `deps` comes first and the native `StepContext` follows. `extract` has no deps, so its callback is just `(ctx)`. That is the argument-order rule, and the reason the SDK carries a no-deps overload per task kind.
+
+**Replay is per task, keyed on the task's name-derived ID.** When the invocation resumes after a retry delay, the register callback runs again and the scheduler asks each task: are you already checkpointed? `extract` is `SUCCEEDED`, so its stored result is returned and **your function is not called**. The log line "calling the upstream API" appears exactly once in CloudWatch, across all three attempts of `load`.
+
+**A retry of one task does not restart the graph.** This is the difference from writing the same logic by hand. If you had `await extract(); await load(); await audit();` in a plain handler and the invocation retried, `extract` would run again unless you built your own idempotency layer. Here it is the default.
+
+### What gets checkpointed
+
+```text
+── invocation 1 ─────────────────────────────────────────────────────────
+ExecutionStarted
+└── ContextStarted   SubType=Dag  Name=sync           id: 1
+    ├── StepStarted   SubType=Step Name=extract       id: 1-DAG_NODE_T_extract
+    ├── StepSucceeded SubType=Step Name=extract       → "payload for r-1"
+    ├── StepStarted   SubType=Step Name=load          id: 1-DAG_NODE_T_load
+    │                                                   RetryDetails attempt 1
+    └── (attempt 1 threw; retry scheduled in 2s)
+InvocationCompleted                                   ← suspended for backoff
+
+── invocation 2 ─────────────────────────────────────────────────────────
+    │   extract:  NOT re-executed — replayed from its checkpoint
+    ├── StepStarted   SubType=Step Name=load          RetryDetails attempt 2
+    └── (attempt 2 threw; retry scheduled)
+InvocationCompleted                                   ← suspended for backoff
+
+── invocation 3 ─────────────────────────────────────────────────────────
+    │   extract:  NOT re-executed
+    ├── StepStarted   SubType=Step Name=load          RetryDetails attempt 3
+    ├── StepSucceeded SubType=Step Name=load          → "loaded"
+    ├── StepStarted   SubType=Step Name=audit         id: 1-DAG_NODE_T_audit
+    ├── StepSucceeded SubType=Step Name=audit         → "audited: loaded"
+    └── ContextSucceeded  SubType=Dag  Name=sync
+InvocationCompleted
+ExecutionSucceeded
+```
+
+`extract` has exactly one `StepStarted`/`StepSucceeded` pair in the entire history. On invocations 2 and 3 the scheduler reaches it, finds `1-DAG_NODE_T_extract` already `SUCCEEDED`, deserializes the stored value, and moves on — no event, no execution, no cost.
+
+Two mechanics worth naming. The ID is what makes this work: replay matching is by ID, and because the ID comes from the task **name**, it is identical on every invocation regardless of what order tasks ran in. And `audit` never started until attempt 3 succeeded, so a task downstream of a flaky one is never speculatively executed.
+
+One caveat on at-least-once semantics: a step is guaranteed to be checkpointed once it _succeeds_, but a body that throws after performing a side effect will have that side effect repeated on retry. `semantics: "AT_MOST_ONCE"` on the step config changes that trade-off — the SDK will not retry a step whose outcome it cannot determine, at the cost of surfacing the failure to you instead.
