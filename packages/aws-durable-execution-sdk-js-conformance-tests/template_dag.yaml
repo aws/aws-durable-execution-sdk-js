@@ -99,3 +99,88 @@ Resources:
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
+  DagChild:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-5"]
+    Properties:
+      CodeUri: ./dist
+      Handler: dag_child.handler
+      Description: DAG task that is a runInChildContext with inner steps (ALL_COMPLETED)
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  DagMap:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-6"]
+    Properties:
+      CodeUri: ./dist
+      Handler: dag_map.handler
+      Description: DAG task that is a map over a fixed item list (ALL_COMPLETED)
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  DagParallel:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-7"]
+    Properties:
+      CodeUri: ./dist
+      Handler: dag_parallel.handler
+      Description: DAG task that is a parallel of two named branches (ALL_COMPLETED)
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  DagWaitForCondition:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-8"]
+    Properties:
+      CodeUri: ./dist
+      Handler: dag_wait_for_condition.handler
+      Description: DAG task that is a waitForCondition polling to threshold (ALL_COMPLETED)
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  DagNested:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-9"]
+    Properties:
+      CodeUri: ./dist
+      Handler: dag_nested.handler
+      Description: DAG task that is itself a nested DAG / sub-dag (ALL_COMPLETED)
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
