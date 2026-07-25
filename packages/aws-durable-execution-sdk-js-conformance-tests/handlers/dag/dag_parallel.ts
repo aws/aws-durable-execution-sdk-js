@@ -1,4 +1,5 @@
-// 10-7: DAG task that is a parallel of two named branches, plus a dependent step
+// 10-7: DAG task that is a parallel of two named branches, plus a dependent
+// step that reads ONLY the aggregate ParallelResult (no per-branch values).
 import {
   DurableContext,
   withDurableExecution,
@@ -13,7 +14,7 @@ export const handler = withDurableExecution(
         // DAG task whose native op is a parallel of two named branches, each
         // running one step. Checkpointed directly under the Dag container
         // (flat). maxConcurrency 1 keeps branches sequential.
-        const fork = d.parallel<string>(
+        const fork = d.parallel<"fork", [], string>(
           "fork",
           [],
           [
@@ -23,10 +24,12 @@ export const handler = withDurableExecution(
           { maxConcurrency: 1 },
         );
 
-        // Downstream step depending on the parallel task's aggregated results.
+        // Downstream step depending on the parallel task. It reads ONLY the
+        // aggregate result (success count / total branch count) and never
+        // touches individual branch values — the shape all four SDKs express.
         d.step("join", [fork], async (deps): Promise<string> => {
           const batch = deps.fork as BatchResult<string>;
-          return batch.getResults().join("-");
+          return `${batch.successCount}/${batch.totalCount}`;
         });
       },
       { maxConcurrency: 1 },

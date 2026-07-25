@@ -30,7 +30,23 @@ Resources:
             Action:
             - lambda:CheckpointDurableExecution
             - lambda:GetDurableExecutionState
+            - lambda:InvokeFunction
             Resource: '*'
+  TargetEcho:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    Properties:
+      CodeUri: ./dist
+      Handler: target_echo.handler
+      Description: Echo target function — returns whatever it receives
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
   DagDiamond:
     Type: AWS::Serverless::Function
     Metadata:
@@ -177,6 +193,43 @@ Resources:
       CodeUri: ./dist
       Handler: dag_nested.handler
       Description: DAG task that is itself a nested DAG / sub-dag (ALL_COMPLETED)
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  DagInvoke:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-10"]
+    Properties:
+      CodeUri: ./dist
+      Handler: dag_invoke.handler
+      Description: DAG task that is an invoke of the echo target (ALL_COMPLETED)
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+      Environment:
+        Variables:
+          TARGET_FUNCTION_NAME: !Sub "${TargetEcho.Arn}:$LATEST"
+  DagCallback:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-11"]
+    Properties:
+      CodeUri: ./dist
+      Handler: dag_callback.handler
+      Description: DAG task that is a waitForCallback completed externally (ALL_COMPLETED)
       Role:
         Fn::GetAtt:
         - DurableFunctionRole
