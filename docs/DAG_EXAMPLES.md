@@ -820,3 +820,133 @@ ExecutionSucceeded
 Notice that the DAG container's `ContextStarted` is written once, in invocation 1, and its `ContextSucceeded` only in invocation 4. Everything between is one logical DAG spread across four Lambda invocations, stitched together by the checkpoints. Each resume re-runs the register callback (which is why it must be deterministic), then the scheduler consults the checkpoints, sees `submit` and `score` already succeeded, and picks up at the next ready task without re-executing anything.
 
 The `approval` task is also the one place a task is _not_ flat and _not_ simply its native operation: it is a `Callback`-subtype container wrapping the native `WaitForCallback`. The extra level exists because a callback operation cannot take an explicit name-derived ID directly, so the container carries the task identity instead. This is the documented exception to the flat model (`DAG_SPEC_CROSS_LANGUAGE.md` §2.A.5) — and getting it wrong in three of the four SDKs is what conformance scenario 10-11 caught.
+
+## Example 8 — `parallel` branches and early completion
+
+The last task kind, plus the one config that lets a DAG finish before its graph is drained.
+
+```text
+        ┌────────────────────────────┐
+        │  probe   SubType=Parallel  │  ONE task, named branches
+        │  ┌───────────┐┌──────────┐ │
+        │  │ warehouse ││ carrier  │ │
+        │  └───────────┘└──────────┘ │
+        └──────────┬─────────────────┘
+       ┌───────┬───┴────┬──────────┐
+       ▼       ▼        ▼          ▼
+  ┌────────┐┌────────┐┌────────┐┌─────────┐
+  │ quoteA ││ quoteB ││ quoteC ││ summary │
+  └────────┘└────────┘└────────┘└─────────┘
+   SUCCEEDED SUCCEEDED  absent     absent
+            └── minSuccessful: 2 reached ──┘
+                scheduler stops starting new tasks
+```
+
+```ts
+import {
+  DurableContext,
+  withDurableExecution,
+  BatchResult,
+} from "@aws/durable-execution-sdk-js";
+
+interface QuoteEvent {
+  shipmentId: string;
+}
+
+export const handler = withDurableExecution(
+  async (event: QuoteEvent, context: DurableContext) => {
+    const dagPromise = context.dag(
+      "quotes",
+      (d) => {
+        // A parallel task: named, heterogeneous branches inside one node.
+        // Use this when the branches are different work, not the same work
+        // over different items (that is map).
+        const probe = d.parallel(
+          "probe",
+          [],
+          [
+            {
+              name: "warehouse",
+              func: async (ctx) => ctx.step(async () => "warehouse-ok"),
+            },
+            {
+              name: "carrier",
+              func: async (ctx) => ctx.step(async () => "carrier-ok"),
+            },
+          ],
+          { maxConcurrency: 2 },
+        );
+
+        // Three independent carrier quotes. The DAG stops as soon as two of
+        // them succeed — see completionConfig below.
+        d.step("quoteA", [], async (): Promise<number> => 100).after(probe);
+        d.step("quoteB", [], async (): Promise<number> => 110).after(probe);
+        d.step("quoteC", [], async (): Promise<number> => 120).after(probe);
+
+        d.step("summary", [probe], async (deps): Promise<string> => {
+          const batch = deps.probe as BatchResult<string>;
+          return `${batch.successCount}/${batch.totalCount} probes ok`;
+        });
+      },
+      {
+        maxConcurrency: 1,
+        // Early completion: stop starting new tasks once 2 have succeeded.
+        completionConfig: { minSuccessful: 2 },
+      },
+    );
+
+    const dagResult = await dagPromise;
+
+    return {
+      reason: dagResult.completionReason,
+      counts: [
+        dagResult.successCount,
+        dagResult.failureCount,
+        dagResult.totalCount,
+      ],
+      quoteA: dagResult.getStatus("quoteA"),
+      quoteC: dagResult.getStatus("quoteC"),
+    };
+  },
+);
+```
+
+### What's new here
+
+**`parallel` versus `map`.** Both fan out inside a single task. `map` runs _the same_ body over a list of items; `parallel` runs _different_ named branches. Use parallel when the work differs — probe two systems, warm two caches — and map when it is the same work per item.
+
+**Read only the aggregate from a parallel task.** `batch.successCount` / `batch.totalCount` are safe everywhere. Per-branch _values_ are not portable: Java's `ParallelResult` is aggregate-only because branch types are heterogeneous, and a step task cannot read another operation's value at all in any SDK (a step is a leaf). This is exactly why conformance scenario 10-7 asserts `"2/2"` rather than joined branch values.
+
+**Early completion stops _starting_, not _running_.** With `minSuccessful: 2`, once two tasks have succeeded the scheduler launches nothing further. Anything already in flight is allowed to finish — it is not cancelled. `completionReason` comes back as `MIN_SUCCESSFUL_REACHED` rather than `ALL_COMPLETED`.
+
+**Never-started tasks are _absent_, not skipped.** This is the subtle part. `quoteC` has no status at all — `getStatus("quoteC")` reports "not present", and it counts toward neither `successCount` nor `skippedCount`. A skip is a decision the scheduler made about a task (trigger rule or `runIf`); an absence means the scheduler never got there. Only `totalCount` counts it, because `totalCount` is the number of tasks you **registered**.
+
+That last point caused a real cross-language divergence: Python, Java and Go each derived `totalCount` from the size of their settled-task map, which silently excluded never-started tasks, so an early-completed DAG reported `total: 3` where TypeScript reported `5`. All four now thread the registered count through.
+
+**Other completion shapes.** `toleratedFailureCount` / `toleratedFailurePercentage` stop the graph once failures exceed a budget (`FAILURE_TOLERANCE_EXCEEDED`). Or supply `shouldComplete`, a deterministic predicate over live DAG progress, for result-based stopping — "I have a quote under $105, stop asking".
+
+### What gets checkpointed
+
+```text
+ExecutionStarted
+└── ContextStarted   SubType=Dag  Name=quotes           id: 1
+    ├── ContextStarted SubType=Parallel Name=probe      id: 1-DAG_NODE_T_probe
+    │   ├── ContextStarted   SubType=ParallelBranch     id: 1-DAG_NODE_T_probe-1
+    │   │   └── … → "warehouse-ok"
+    │   ├── ContextStarted   SubType=ParallelBranch     id: 1-DAG_NODE_T_probe-2
+    │   │   └── … → "carrier-ok"
+    │   └── ContextSucceeded SubType=Parallel Name=probe
+    ├── StepStarted   SubType=Step Name=quoteA          id: 1-DAG_NODE_T_quoteA
+    ├── StepSucceeded SubType=Step Name=quoteA          → 100
+    ├── StepStarted   SubType=Step Name=quoteB          id: 1-DAG_NODE_T_quoteB
+    ├── StepSucceeded SubType=Step Name=quoteB          → 110
+    │   … quoteC:  never started — no events
+    │   … summary: never started — no events
+    └── ContextSucceeded  SubType=Dag  Name=quotes
+InvocationCompleted
+ExecutionSucceeded
+```
+
+Like a map, a parallel task is a container whose branches nest underneath it with counter-based IDs (`-1`, `-2`) — branch order is array order, so a counter is safe below the task boundary.
+
+The counts come back `[3, 0, 5]`: `probe`, `quoteA` and `quoteB` succeeded, nothing failed, five tasks registered. `quoteC` and `summary` are simply not in the results map. Note that `summary` is a casualty here — early completion does not respect "but this one was going to aggregate everything", so a graph with a meaningful terminal task and a `minSuccessful` threshold is usually a design mistake.
