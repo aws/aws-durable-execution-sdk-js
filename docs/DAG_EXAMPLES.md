@@ -680,3 +680,143 @@ Two things to notice.
 `SubType=Dag` appears **twice** — the nested container is a DAG, so it is checkpointed as one. This sounds obvious and was nonetheless a real bug: Java tagged nested DAGs as `RunInChildContext`, which conformance scenario 10-9 caught. It is now a normative cross-language rule (`DAG_SPEC_CROSS_LANGUAGE.md` §2.A.5).
 
 The ID scheme composes. Where a map's items fell back to counters (example 5), a nested DAG's tasks stay name-derived — one `DAG_NODE_T_` segment per level: `1-DAG_NODE_T_provision-DAG_NODE_T_validate`. That is what keeps the two `validate` tasks distinct on the wire, and it is why task names are restricted to `^[a-zA-Z0-9_]+$` with `DAG_NODE_T_` reserved: dashes and the reserved token are what make this composition unambiguously parseable.
+
+## Example 7 — Suspend and resume: `invoke`, `callback`, `wait`
+
+The three task kinds that stop the invocation entirely. The DAG survives across invocations; you are not billed for compute while it waits.
+
+```text
+   ┌──────────┐
+   │  submit  │  step
+   └────┬─────┘
+        ▼
+   ┌──────────┐
+   │  score   │  invoke   ─ ─ ─► suspends until the target function returns
+   └────┬─────┘
+        ▼
+   ┌──────────┐
+   │ approval │  callback ─ ─ ─► suspends until an external system answers
+   └────┬─────┘                  (minutes, hours, days)
+        ▼
+   ┌──────────┐
+   │ cooldown │  wait     ─ ─ ─► suspends for 30s, no compute billed
+   └────┬─────┘
+        ▼
+   ┌──────────┐
+   │  settle  │  step
+   └──────────┘
+```
+
+```ts
+import {
+  DurableContext,
+  withDurableExecution,
+} from "@aws/durable-execution-sdk-js";
+
+interface ExpenseEvent {
+  reportId: string;
+  amount: number;
+}
+
+export const handler = withDurableExecution(
+  async (event: ExpenseEvent, context: DurableContext) => {
+    const reviewerFn = process.env.REVIEWER_FUNCTION_NAME!;
+
+    const dagPromise = context.dag("expense", (d) => {
+      const submit = d.step("submit", [], async (): Promise<number> => {
+        return event.amount;
+      });
+
+      // invoke task: calls another durable function and suspends until it
+      // returns. deps feed the payload function.
+      const score = d.invoke<"score", [typeof submit], number, number>(
+        "score",
+        reviewerFn,
+        [submit],
+        (deps) => deps.submit,
+      );
+
+      // callback task: suspends until an external system completes it.
+      // The submitter receives the callback id — hand it to whoever will
+      // answer (an email, a ticket, a queue message).
+      const approval = d.callback<"approval", [typeof score], string>(
+        "approval",
+        [score],
+        async (callbackId) => {
+          console.log(`awaiting approval, token=${callbackId}`);
+        },
+      );
+
+      // wait task: a durable timer, no compute billed while it sleeps.
+      const cooldown = d.wait("cooldown", [], { seconds: 30 }).after(approval);
+
+      d.step("settle", [approval], async (deps): Promise<string> => {
+        return `settled with ${deps.approval}`;
+      }).after(cooldown);
+    });
+
+    const dagResult = await dagPromise;
+
+    return {
+      reason: dagResult.completionReason,
+      settle: dagResult.getResult("settle"),
+    };
+  },
+);
+```
+
+### What's new here
+
+**Suspension is not the DAG's concern.** Each of these three kinds already knows how to suspend as a standalone operation, and a task delegates to that same handler. The scheduler's contribution is simply to not lose the rest of the graph: when the invocation stops, everything already settled stays checkpointed, and on resume the scheduler rebuilds its state from those checkpoints and continues.
+
+**Other branches keep running.** Nothing here is single-file — if this graph had an independent branch alongside `approval`, it would keep making progress while `approval` waits. Suspension happens when there is nothing left to do but wait.
+
+**`invoke` needs explicit type arguments.** `d.invoke<"score", [typeof submit], number, number>` spells out name, deps, payload type and result type. Unlike a step, the result type cannot be inferred from a payload function, so it must be pinned — otherwise it widens to `unknown`.
+
+**The callback submitter is where you hand out the token.** It receives the generated callback id and runs as a durable step, so it runs exactly once. Whatever you do with the id — email it, put it in a ticket, publish it — an external actor later completes the callback with a payload, and that payload becomes the task's result. With the default deserializer the result is the **raw** payload text, quotes included; supply a serdes if you want it parsed.
+
+**`d.wait` takes a duration, not a callback.** It is the one kind with no body. Here it uses an ordering-only `.after(approval)` edge, because a timer has no interest in the approval's value.
+
+### What gets checkpointed
+
+Three suspend/resume boundaries, so the history spans four invocations:
+
+```text
+── invocation 1 ─────────────────────────────────────────────────────────
+ExecutionStarted
+└── ContextStarted   SubType=Dag  Name=expense       id: 1
+    ├── StepStarted   SubType=Step Name=submit       id: 1-DAG_NODE_T_submit
+    ├── StepSucceeded SubType=Step Name=submit       → 250
+    └── ChainedInvokeStarted  SubType=ChainedInvoke  Name=score
+                                                     id: 1-DAG_NODE_T_score
+InvocationCompleted                                  ← suspended
+
+── invocation 2 ─ target function returned ──────────────────────────────
+    ├── ChainedInvokeSucceeded  Name=score           → 250
+    ├── ContextStarted  SubType=Callback  Name=approval
+    │                                                id: 1-DAG_NODE_T_approval
+    │   ├── ContextStarted SubType=WaitForCallback  Name=approval
+    │   │   ├── CallbackStarted  SubType=Callback    (the token)
+    │   │   ├── StepStarted   SubType=Step           (your submitter)
+    │   │   └── StepSucceeded SubType=Step
+InvocationCompleted                                  ← suspended
+
+── invocation 3 ─ external system approved ──────────────────────────────
+    │   │   ├── CallbackSucceeded  SubType=Callback  → "approved by dana"
+    │   │   └── ContextSucceeded SubType=WaitForCallback
+    │   └── ContextSucceeded SubType=Callback  Name=approval
+    ├── WaitStarted  SubType=Wait  Name=cooldown     id: 1-DAG_NODE_T_cooldown
+InvocationCompleted                                  ← suspended 30s
+
+── invocation 4 ─ timer fired ───────────────────────────────────────────
+    ├── WaitSucceeded  SubType=Wait  Name=cooldown
+    ├── StepStarted   SubType=Step Name=settle       id: 1-DAG_NODE_T_settle
+    ├── StepSucceeded SubType=Step Name=settle       → "settled with approved by dana"
+    └── ContextSucceeded  SubType=Dag  Name=expense
+InvocationCompleted
+ExecutionSucceeded
+```
+
+Notice that the DAG container's `ContextStarted` is written once, in invocation 1, and its `ContextSucceeded` only in invocation 4. Everything between is one logical DAG spread across four Lambda invocations, stitched together by the checkpoints. Each resume re-runs the register callback (which is why it must be deterministic), then the scheduler consults the checkpoints, sees `submit` and `score` already succeeded, and picks up at the next ready task without re-executing anything.
+
+The `approval` task is also the one place a task is _not_ flat and _not_ simply its native operation: it is a `Callback`-subtype container wrapping the native `WaitForCallback`. The extra level exists because a callback operation cannot take an explicit name-derived ID directly, so the container carries the task identity instead. This is the documented exception to the flat model (`DAG_SPEC_CROSS_LANGUAGE.md` §2.A.5) — and getting it wrong in three of the four SDKs is what conformance scenario 10-11 caught.
