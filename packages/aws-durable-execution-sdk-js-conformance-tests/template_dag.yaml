@@ -288,3 +288,20 @@ Resources:
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
+  DagLargePayload:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-15"]
+    Properties:
+      CodeUri: ./dist
+      Handler: dag_large_payload.handler
+      Description: DAG large-payload offload survives a completed-container replay (digest identical before/after suspend)
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
