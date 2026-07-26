@@ -133,6 +133,18 @@ A task's operation is checkpointed **directly** under the DAG container with the
 
 > Both rules were violated in production code and caught by the execution-history conformance suite: Java checkpointed nested DAGs as `RunInChildContext`, and Python, Java, and Go all emitted the callback task one level shallower than the reference. See `DAG_CONFORMANCE_RESULTS.md` Part 2.
 
+> **Measured on real cloud, 2026-07-25 (scenario `dag/10-15`).** Both strategies cost the **same
+> number of operations** — all four SDKs emit exactly 26 events for the same 8-task ~410KB graph, and
+> the JS envelope rides _inside_ the container's `ContextSucceeded` payload (287 bytes) rather than
+> emitting an event of its own. Two further findings: (i) the `ReplayChildren` flag is **not
+> observable** in the returned execution history at all — it is a checkpoint-request field, and its
+> only visible effect is the container's payload being absent, so conformance can assert the empty
+> payload but never the marker; (ii) **Go sets `ReplayChildren` unconditionally** for every succeeded
+> DAG container (`dagFinishChild`), with no 256KB gate, so Go re-executes the child body on _every_
+> container replay regardless of aggregate size. Task bodies still fast-path from their own
+> checkpoints, so this is side-effect-safe, but it is a genuine divergence from a size-gated model
+> and is recorded here rather than left to be rediscovered.
+
 ### 2.B Behavioral invariants (MUST be semantically identical)
 
 #### 2.B.1 Replay-safe scheduler contract
