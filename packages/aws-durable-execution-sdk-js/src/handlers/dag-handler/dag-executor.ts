@@ -42,11 +42,27 @@ const toCause = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error));
 
 /**
+ * Default cap on the number of top-level DAG tasks the scheduler runs
+ * concurrently when a {@link DagConfig} does not set `maxConcurrency`. Applies
+ * to the DAG scheduler only — one level, the top-level tasks of this DAG. It is
+ * NOT inherited by a task's own internal fan-out: a `map` or `parallel` task
+ * keeps its own default (unlimited) unless separately configured, and a nested
+ * `dag` task gets its own independent default of 40. An explicit
+ * `maxConcurrency` always wins, including a value above 40. Shared across all
+ * four SDKs so a graph behaves the same way in every language; 40 is high
+ * enough that realistic graphs are unaffected, low enough to keep thread and
+ * socket usage sane in the smallest Lambda configurations.
+ */
+export const DEFAULT_DAG_MAX_CONCURRENCY = 40;
+
+/**
  * Topological scheduler for a registered DAG. Starts ready tasks concurrently
- * (bounded by `maxConcurrency`), evaluates per-task trigger rules and `runIf`
- * predicates, propagates skips, and aggregates task outcomes into a
- * {@link DagResult}. Failed tasks are terminal states (not aborts): by default
- * the reachable graph is drained; a `completionConfig` can stop it early.
+ * (bounded by `maxConcurrency`, defaulting to
+ * {@link DEFAULT_DAG_MAX_CONCURRENCY} when unset), evaluates per-task trigger
+ * rules and `runIf` predicates, propagates skips, and aggregates task outcomes
+ * into a {@link DagResult}. Failed tasks are terminal states (not aborts): by
+ * default the reachable graph is drained; a `completionConfig` can stop it
+ * early.
  *
  * @experimental This class is experimental and may be changed or removed in future releases.
  */
@@ -64,7 +80,7 @@ export class DagExecutor {
     private readonly tasks: TaskDef[],
     private readonly config?: DagConfig,
   ) {
-    this.maxConcurrency = config?.maxConcurrency ?? Infinity;
+    this.maxConcurrency = config?.maxConcurrency ?? DEFAULT_DAG_MAX_CONCURRENCY;
   }
 
   async run(): Promise<DagResult> {

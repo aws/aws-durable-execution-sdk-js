@@ -18,7 +18,11 @@ import { TerminationManager } from "../../termination-manager/termination-manage
 import { TerminationReason } from "../../termination-manager/types";
 import { DagContextImpl } from "./dag-context";
 import { validateDag } from "./dag-validator";
-import { DagExecutor, reconstructDagResult } from "./dag-executor";
+import {
+  DEFAULT_DAG_MAX_CONCURRENCY,
+  DagExecutor,
+  reconstructDagResult,
+} from "./dag-executor";
 import {
   buildDagSummaryEnvelope,
   createDagResultSerdes,
@@ -91,7 +95,7 @@ export const createDagHandler =
         config.maxConcurrency <= 0
       ) {
         throw new Error(
-          `Invalid maxConcurrency: ${config.maxConcurrency}. Must be a positive number or undefined for unlimited concurrency.`,
+          `Invalid maxConcurrency: ${config.maxConcurrency}. Must be a positive number or undefined to use the default (${DEFAULT_DAG_MAX_CONCURRENCY}).`,
         );
       }
       if (

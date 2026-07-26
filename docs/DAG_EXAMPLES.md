@@ -230,7 +230,9 @@ export const handler = withDurableExecution(
 context.dag("report", (d) => { … }, { maxConcurrency: 1 });
 ```
 
-With `maxConcurrency: 1` this same graph runs strictly sequentially in topological order — which is how the conformance scenarios pin down a deterministic history. Leave it unset for unlimited.
+With `maxConcurrency: 1` this same graph runs strictly sequentially in topological order — which is how the conformance scenarios pin down a deterministic history.
+
+Left unset, a DAG runs at most **40** top-level tasks at once. Two things to know about that default. It bounds this DAG's own tasks only — it is not inherited by a task's internal fan-out, so a `map` task still processes its items unbounded unless you configure it, and a nested `dag` task gets its own independent 40. And if you combine a graph wider than 40 with `completionConfig` early completion, the cap changes which tasks ever get started, so more of them end up _absent_ rather than reaching a terminal state (example 8 covers that distinction).
 
 ### What gets checkpointed
 

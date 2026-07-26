@@ -334,7 +334,7 @@ public enum DagCompletionReason {
 
 ```java
 public record DagConfig(
-    Optional<Integer> maxConcurrency,          // default: unlimited; must be >= 1 if present (matches map/parallel)
+    Optional<Integer> maxConcurrency,          // default: 40 (DEFAULT_MAX_CONCURRENCY); must be >= 1 if present
     Optional<DagCompletionConfig> completionConfig,
     Optional<RetryStrategy> defaultRetryStrategy,
     Optional<TriggerRule> defaultTriggerRule,   // default ALL_SUCCESS

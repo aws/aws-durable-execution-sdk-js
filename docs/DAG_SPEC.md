@@ -442,7 +442,7 @@ export type DagCompletionReason = CompletionReason | "COMPLETED_WITH_FAILURES";
 
 ```ts
 export interface DagConfig {
-  maxConcurrency?: number; // default: unlimited (Infinity)
+  maxConcurrency?: number; // default: 40 (DEFAULT_DAG_MAX_CONCURRENCY); must be > 0
   completionConfig?: DagCompletionConfig; // DAG-specific (see below); NOT batch CompletionConfig
   defaultRetryStrategy?: RetryStrategy; // applied to tasks with no own retryStrategy
   defaultTriggerRule?: TriggerRule; // default "ALL_SUCCESS"
@@ -610,7 +610,7 @@ A task is **ready** when every dep (inline + builder) is present in `results` (i
 
 ### 5.2 Concurrency
 
-`tryStartNext()` starts ready tasks while `inFlight.size < (config.maxConcurrency ?? Infinity)`. Because each operation handler kicks off its work **eagerly** when invoked (e.g. `step-handler.ts` builds `phase1Promise` immediately and attaches `.catch(()=>{})`), the scheduler controls concurrency by _deferring the handler call itself_ until the task is both ready and under the concurrency cap.
+`tryStartNext()` starts ready tasks while `inFlight.size < (config.maxConcurrency ?? DEFAULT_DAG_MAX_CONCURRENCY)` — **40** when unset (§2.9). Because each operation handler kicks off its work **eagerly** when invoked (e.g. `step-handler.ts` builds `phase1Promise` immediately and attaches `.catch(()=>{})`), the scheduler controls concurrency by _deferring the handler call itself_ until the task is both ready and under the concurrency cap.
 
 ### 5.3 Trigger-rule evaluation
 
@@ -972,7 +972,7 @@ export const createDagHandler =
         config.maxConcurrency <= 0
       ) {
         throw new Error(
-          `Invalid maxConcurrency: ${config.maxConcurrency}. Must be a positive number or undefined for unlimited concurrency.`,
+          `Invalid maxConcurrency: ${config.maxConcurrency}. Must be a positive number or undefined to use the default (${DEFAULT_DAG_MAX_CONCURRENCY}).`,
         );
       }
       // 2. Mutually-exclusive completionConfig => TERMINATE (non-retryable), return a

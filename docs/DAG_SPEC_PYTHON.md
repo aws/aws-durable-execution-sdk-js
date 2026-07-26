@@ -335,7 +335,7 @@ Python `Enum`s cannot be "extended" by subclassing with new members, so — unli
 ```python
 @dataclass(frozen=True)
 class DagConfig:
-    max_concurrency: int | None = None                    # None => unlimited
+    max_concurrency: int | None = None                    # None => DEFAULT_DAG_MAX_CONCURRENCY (40)
     completion_config: CompletionConfig | None = None     # REUSED from config.py (threshold-only)
     default_retry_strategy: Callable[[Exception, int], RetryDecision] | None = None
     default_trigger_rule: TriggerRule = TriggerRule.ALL_SUCCESS

@@ -1,4 +1,8 @@
-import { DagExecutor, reconstructDagResult } from "./dag-executor";
+import {
+  DEFAULT_DAG_MAX_CONCURRENCY,
+  DagExecutor,
+  reconstructDagResult,
+} from "./dag-executor";
 import { DagPredicateError } from "../../errors/durable-error/durable-error";
 import { TaskDef } from "./task-handle";
 import {
@@ -371,6 +375,72 @@ describe("DagExecutor", () => {
     const result = await run(tasks, { maxConcurrency: 2 });
     expect(peak).toBeLessThanOrEqual(2);
     expect(result.successCount).toBe(4);
+  });
+
+  describe("default maxConcurrency", () => {
+    // Instrumented top-level tasks that observe the true simultaneous in-flight
+    // count. Each holds its slot across an awaited macrotask so the scheduler's
+    // cap is exercised at a real peak rather than a synchronous fall-through.
+    const makeGraph = (
+      count: number,
+    ): { tasks: Built[]; state: { inFlight: number; peak: number } } => {
+      const state = { inFlight: 0, peak: 0 };
+      const tasks = Array.from(
+        { length: count },
+        (_, i): Built =>
+          task(`t${i}`, {
+            run: async (): Promise<number> => {
+              state.inFlight += 1;
+              state.peak = Math.max(state.peak, state.inFlight);
+              await new Promise((r) => setTimeout(r, 5));
+              state.inFlight -= 1;
+              return i;
+            },
+          }),
+      );
+      return { tasks, state };
+    };
+
+    it("caps a graph wider than 40 at 40 in flight when unset (peak observed)", async () => {
+      // Sensitive test: 100 independent top-level tasks, no maxConcurrency.
+      // Assert the OBSERVED simultaneous peak — not a config value — never
+      // exceeds 40. If the default regressed to unbounded, peak would climb to
+      // 100 and this fails.
+      const { tasks, state } = makeGraph(100);
+      const result = await run(tasks);
+      expect(result.successCount).toBe(100);
+      expect(state.peak).toBeLessThanOrEqual(DEFAULT_DAG_MAX_CONCURRENCY);
+      // And the bound genuinely binds: with 100 ready tasks the scheduler
+      // should saturate the cap, so the peak must actually reach 40. A peak
+      // well below 40 would mean the cap wasn't the thing limiting overlap.
+      expect(state.peak).toBe(DEFAULT_DAG_MAX_CONCURRENCY);
+    });
+
+    it("an explicit value BELOW 40 still wins over the default", async () => {
+      const { tasks, state } = makeGraph(60);
+      const result = await run(tasks, { maxConcurrency: 5 });
+      expect(result.successCount).toBe(60);
+      expect(state.peak).toBeLessThanOrEqual(5);
+      expect(state.peak).toBe(5);
+    });
+
+    it("an explicit value ABOVE 40 still wins over the default", async () => {
+      const { tasks, state } = makeGraph(80);
+      const result = await run(tasks, { maxConcurrency: 60 });
+      expect(result.successCount).toBe(80);
+      // The default (40) must NOT clamp an explicit larger bound: the peak is
+      // free to exceed 40, proving the default did not silently win.
+      expect(state.peak).toBeGreaterThan(DEFAULT_DAG_MAX_CONCURRENCY);
+      expect(state.peak).toBeLessThanOrEqual(60);
+    });
+
+    it("a graph no wider than 40 is unaffected by the default", async () => {
+      const { tasks, state } = makeGraph(6);
+      const result = await run(tasks);
+      expect(result.successCount).toBe(6);
+      // All 6 can run at once; 40 never binds (mirrors conformance 10-13/10-14).
+      expect(state.peak).toBe(6);
+    });
   });
 
   it("custom completion can fail early on a result value", async () => {

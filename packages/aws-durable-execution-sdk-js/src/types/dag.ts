@@ -325,7 +325,15 @@ export type DagCompletionConfig =
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface DagConfig {
-  /** Maximum number of concurrent top-level tasks (default: unlimited). */
+  /**
+   * Maximum number of top-level tasks the DAG scheduler runs concurrently.
+   * When unset, defaults to 40. This bound applies to the DAG scheduler only
+   * (the top-level tasks of this DAG); it is NOT inherited by a task's own
+   * internal fan-out — a `map` or `parallel` task keeps its own default
+   * (unlimited) unless separately configured, and a nested `dag` task gets its
+   * own independent default of 40. An explicit value always wins, including a
+   * value above 40. Must be `> 0`.
+   */
   maxConcurrency?: number;
   /** DAG-specific early-completion config (NOT the batch `CompletionConfig`). */
   completionConfig?: DagCompletionConfig;

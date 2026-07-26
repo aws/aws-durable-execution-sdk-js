@@ -180,6 +180,24 @@ A predicate that **throws / raises / panics MUST abort the DAG** with a typed `D
 
 In-process consumers — anything reading the error before it crosses the container boundary — get the structured fields in all four. This is the same erasure the entire `Dag*Error` family already has, not something specific to the predicate error.
 
+#### 2.B.3a Default concurrency bound
+
+A DAG whose config omits a concurrency bound **MUST** run at most **40** top-level tasks
+concurrently. Every SDK exposes the value as a named constant. The bound applies to the **DAG
+scheduler only, one level**: it is **NOT** inherited by a task's internal fan-out (a `map` or
+`parallel` task keeps its own default, which remains unlimited) and a nested `dag` task resolves
+its **own independent** default of 40. An explicit value always wins, including a value above 40;
+`<= 0` remains a registration error.
+
+> Rationale: this is a resource bound, not a scheduling preference. In Python the pool is sized
+> from the same number, so an unbounded 500-task DAG spawned 500 OS threads inside a Lambda
+> sandbox. JS (promises on one event loop) and Go (goroutines) are cheaper, but a single shared
+> value is chosen over per-language tuning so a graph behaves identically in every language.
+>
+> Two consequences are deliberate: it **diverges from `map`/`parallel`**, which still default to
+> unlimited; and for a graph wider than 40 under `completionConfig`, capping concurrency shifts
+> tasks from a terminal state to **absent** (never started), which count only toward `totalCount`.
+
 #### 2.B.4 Skips are free and checkpoint nothing
 
 A skip (trigger-rule or `runIf`) is a **pure function** of upstream terminal statuses + a deterministic `runIf`, so it **MUST** be recomputed identically each run and **MUST NOT** mint an entity ID or write a checkpoint. Skips cascade: a skip is a terminal transition, and downstream tasks evaluate their own trigger rule against it.
