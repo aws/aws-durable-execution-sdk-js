@@ -158,3 +158,40 @@ With the default (documented "raw") callback deserializer, JS resolves a callbac
 ## Verdict
 
 **CONFORMANT.** All eleven scenarios pass in all four SDKs against real cloud executions, covering every DAG task kind in the spec. Combined with Part 1, the four SDKs are proven conformant both semantically (identical outcomes) and structurally (identical checkpoint shapes).
+
+---
+
+# Part 3 — Concurrency coverage and what the negative control proved (2026-07-25)
+
+Scenarios `10-12`..`10-14` were added to close review findings H7 (every prior scenario pinned `maxConcurrency: 1`) and H8 (nothing asserted operation count). All four SDKs are **14/14** on real cloud runs.
+
+## The negative control
+
+Claims about a regression guard are worthless unless the guard is shown to fail when the thing it guards is broken. So the JS SDK was deliberately patched to mint **counter-based** task IDs — the scheme name-based IDs replaced — and the full suite was re-run in the cloud. Result:
+
+| Scenario family                                | Behaviour against the deliberately-broken SDK       |
+| ---------------------------------------------- | --------------------------------------------------- |
+| `10-1`..`10-12` (serial)                       | **all PASSED** — 12 scenarios green on a broken SDK |
+| `10-13` concurrent overlap, single invocation  | **PASSED** — does NOT discriminate                  |
+| `10-14` concurrent suspend, inverted readiness | **FAILED** — the discriminator                      |
+
+Two conclusions, one reassuring and one not.
+
+**The old suite was blind.** Twelve serial scenarios passed against an SDK whose task IDs were counter-based. At `maxConcurrency: 1` the scheduler visits tasks in registration order, so both schemes emit identical histories. Before `10-14` existed, a regression on the single invariant the whole DAG design rests on would have shipped green.
+
+**`10-13` does not guard what it was designed to guard.** It runs entirely within one invocation, so counter IDs are assigned once and stay internally consistent; there is no replay boundary to expose them. It is retained because it guards genuine concurrency _semantics_ — that tasks really do overlap (asserted via `peakConcurrency`), and that results and counts are correct under concurrency — but it must not be cited as protecting ID determinism. **Only `10-14` does that.**
+
+`10-14`'s failure mode against the broken SDK: normal through the suspend and first resume, then the resumed context mints counter IDs in a different order than the first invocation checkpointed them, the scheduler can no longer match checkpointed entity IDs to pending tasks, and the execution fails with `InvalidParameterValue: Cannot return PENDING status with no pending operations` after four retries. Not a subtle diff — a dead execution.
+
+## Two defects the new scenarios caught immediately
+
+Both on `10-12`, the abort path, whose `Dag` container FAILED checkpoint had never been diffed across SDKs:
+
+- **JS**: the abort escaped to the Lambda runtime as an unhandled promise rejection and the container was never marked failed. The scheduler dispatches every task on a detached promise; only the `runIf` call site was guarded, which covers a root task's predicate but not a non-root one evaluated in a settle continuation. Any scheduling-time throw shared the hole. Fixed structurally.
+- **Java**: the history shape was right but the top-level `ExecutionFailed` carried no error payload, because `DagException` constructs with a null `ErrorObject` and the executor returned it verbatim. Fixed, scoped to the DAG family.
+
+Neither was reachable by any pre-existing test, in any SDK, at any level.
+
+## Verified event counts
+
+`ExpectedEventCount` (new, and the H8 fix) is asserted for all three scenarios: `10-12` = 7, `10-13` = 17, `10-14` = 19. The `10-14` figure had been derived rather than measured when authored; three independent language lanes confirmed it from captured histories, with `InvocationCompleted` at three distinct event IDs — the initial invocation plus two resumes.
