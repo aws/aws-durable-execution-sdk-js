@@ -210,6 +210,102 @@ describe("DagExecutor", () => {
     expect(results.has("refund")).toBe(false);
   });
 
+  it("non-root throwing runIf aborts WITHOUT leaking an unhandled rejection (H5 cloud regression)", async () => {
+    // The 10-12 cloud defect: `guarded`'s runIf depends on `gate`, so it is
+    // evaluated in a `.then` continuation after `gate` settles — on the
+    // scheduler's DETACHED task promise, a chain the container body never
+    // awaits. A throw there must fail the DAG on the run() promise, NOT escape
+    // as an unhandled rejection to the runtime (which the cloud reported as
+    // `Runtime.UnhandledPromiseRejection` with the raw `Error: predicate boom`,
+    // Lambda retrying and the container never marked failed).
+    //
+    // This distinguishes "the DAG aborted" (run() rejects) from "the error
+    // escaped to the runtime" (an unhandled rejection): merely asserting that
+    // run() rejects is not enough, because the escape happens on a SEPARATE
+    // detached promise while run() may still reject.
+    const unhandled: unknown[] = [];
+    const onUnhandled = (r: unknown): void => {
+      unhandled.push(r);
+    };
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      const original = new Error("predicate boom");
+      // `gate` resolves after a microtask so its settlement — and therefore the
+      // predicate evaluation — runs in a continuation, not the first pass.
+      const gate = task("gate", {
+        run: async () => {
+          await Promise.resolve();
+          return "g";
+        },
+      });
+      const guarded = task("guarded", {
+        deps: [gate],
+        runIf: () => {
+          throw original;
+        },
+        run: async () => "ran",
+      });
+
+      let caught: unknown;
+      await run([gate, guarded]).catch((e) => {
+        caught = e;
+      });
+      // Flush the microtask + macrotask queues so any leaked rejection would be
+      // surfaced by the process listener before we assert.
+      await new Promise((r) => setTimeout(r, 20));
+
+      expect(caught).toBeInstanceOf(DagPredicateError);
+      expect((caught as DagPredicateError).taskName).toBe("guarded");
+      expect((caught as DagPredicateError).cause).toBe(original);
+      // The distinguishing assertion: nothing escaped to the runtime.
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+  });
+
+  it("converts ANY scheduling-time throw in a continuation into a DAG abort (structural guard, not just runIf)", async () => {
+    // Defense-in-depth for the exact escape hatch above: the point try/catch on
+    // runIf only converts that one throw site. The scheduler runs on a detached
+    // promise, so ANY other scheduling-time throw in a settlement continuation
+    // would likewise escape (or hang run() forever). Here a downstream task is
+    // made ready in a continuation with an unknown trigger rule, so
+    // `triggerRuleEvaluators[rule]` is undefined and the scheduler throws inside
+    // the detached promise. The terminal `.catch` must convert it into an
+    // abort so run() rejects deterministically and nothing escapes.
+    const unhandled: unknown[] = [];
+    const onUnhandled = (r: unknown): void => {
+      unhandled.push(r);
+    };
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      const up = task("up", {
+        run: async () => {
+          await Promise.resolve();
+          return "u";
+        },
+      });
+      const down = task("down", {
+        deps: [up],
+        triggerRule: "NOT_A_REAL_RULE" as unknown as TriggerRule,
+        run: async () => "d",
+      });
+
+      let caught: unknown;
+      await run([up, down]).catch((e) => {
+        caught = e;
+      });
+      await new Promise((r) => setTimeout(r, 20));
+
+      // run() rejected (the container is failed) rather than hanging, and
+      // nothing escaped to the runtime.
+      expect(caught).toBeDefined();
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+  });
+
   it("wraps a non-Error thrown from runIf as the DagPredicateError cause", async () => {
     const gate = task("gate", { run: async () => "g" });
     const decide = task("decide", {

@@ -180,24 +180,45 @@ export class DagExecutor {
     this.inFlight.add(task.name);
     const startedAt = new Date();
     const depsMap = this.buildDepsMap(task);
-    Promise.resolve(task.executor(this.ctx, depsMap)).then(
-      (result) =>
-        this.onSettled(task, {
-          name: task.name,
-          status: "SUCCEEDED",
-          result,
-          startedAt,
-          completedAt: new Date(),
-        }),
-      (error) =>
-        this.onSettled(task, {
-          name: task.name,
-          status: "FAILED",
-          error: toDurableError(error),
-          startedAt,
-          completedAt: new Date(),
-        }),
-    );
+    // Tasks are driven on a DETACHED promise: nothing ever awaits the promise
+    // this `.then()` produces. The container body awaits a DIFFERENT chain —
+    // the `run()` promise, rejected via `rejectRun` in `abort()`. Crucially, a
+    // non-root task's `runIf` is evaluated inside this settlement continuation
+    // (`onSettled` -> `tryStartNext`, in a `.then` that only runs once the
+    // upstream has settled — not on the first synchronous scheduling pass). A
+    // throw there rejects THIS detached promise, which has no handler, so it
+    // surfaces as an unhandled promise rejection that escapes straight to the
+    // Lambda runtime (`Runtime.UnhandledPromiseRejection`, carrying the raw
+    // error) — Lambda then retries the invocation and the DAG container is
+    // never marked failed. The per-call-site `try/catch` on `runIf` converts
+    // that one known throw into a typed abort, but it leaves the detached
+    // dispatch itself unguarded, so the scheduler is only ever one un-converted
+    // throw away from leaking again. The terminal `.catch` below is the
+    // STRUCTURAL guarantee: any scheduling-time throw on this chain is funneled
+    // into `abort()`, which rejects the `run()` promise the container body
+    // awaits, so the container is deterministically failed instead of the
+    // error escaping. This is scoped to the scheduler's own promise — it is NOT
+    // a process-global `unhandledRejection` handler.
+    void Promise.resolve(task.executor(this.ctx, depsMap))
+      .then(
+        (result) =>
+          this.onSettled(task, {
+            name: task.name,
+            status: "SUCCEEDED",
+            result,
+            startedAt,
+            completedAt: new Date(),
+          }),
+        (error) =>
+          this.onSettled(task, {
+            name: task.name,
+            status: "FAILED",
+            error: toDurableError(error),
+            startedAt,
+            completedAt: new Date(),
+          }),
+      )
+      .catch((error: unknown) => this.abort(toDurableError(error)));
   }
 
   private onSettled(task: TaskDef, exec: TaskExecution): void {
