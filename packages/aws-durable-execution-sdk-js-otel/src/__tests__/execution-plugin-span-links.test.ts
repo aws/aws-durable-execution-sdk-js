@@ -122,12 +122,13 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
     propagation.disable();
   });
 
-  describe("buildInvocationLinks() returns link to ambient span in default-provider mode", () => {
+  describe("buildInvocationLinks() returns link to the plugin-created Invocation_Span in default-provider mode", () => {
     /**
-     * When useDefaultTracerProvider=true, the plugin captures the ambient
-     * context and builds span links pointing to the ambient invocation span.
+     * When useDefaultTracerProvider=true, the plugin still creates its own
+     * Invocation_Span (as a child of the ambient context) and builds span
+     * links pointing to that plugin-created span.
      */
-    it("Operation_Span has a link to the ambient invocation span", async () => {
+    it("Operation_Span has a link to the plugin-created Invocation_Span", async () => {
       const plugin = new ExecutionOtelPlugin({
         tracerProvider: provider,
         useDefaultTracerProvider: true,
@@ -155,16 +156,20 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
       ambientSpan.end();
 
       const opSpan = findSpan(exporter, "link-op");
+      const invocationSpan = findSpan(exporter, "Invocation");
       expect(opSpan).toBeDefined();
+      expect(invocationSpan).toBeDefined();
       expect(opSpan!.links.length).toBeGreaterThan(0);
 
-      // The link should point to the ambient span's context
+      // The link should point to the plugin-created Invocation_Span, not the ambient span
       const linkSpanContext = opSpan!.links[0].context;
-      expect(linkSpanContext.traceId).toBe(ambientSpan.spanContext().traceId);
-      expect(linkSpanContext.spanId).toBe(ambientSpan.spanContext().spanId);
+      expect(linkSpanContext.traceId).toBe(
+        invocationSpan!.spanContext().traceId,
+      );
+      expect(linkSpanContext.spanId).toBe(invocationSpan!.spanContext().spanId);
     });
 
-    it("Attempt_Span has a link to the ambient invocation span", async () => {
+    it("Attempt_Span has a link to the plugin-created Invocation_Span", async () => {
       const plugin = new ExecutionOtelPlugin({
         tracerProvider: provider,
         useDefaultTracerProvider: true,
@@ -204,12 +209,16 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
       const attemptSpan = getExportedSpans(exporter).find(
         (s) => s.attributes["durable.attempt.number"] === 1,
       );
+      const invocationSpan = findSpan(exporter, "Invocation");
       expect(attemptSpan).toBeDefined();
+      expect(invocationSpan).toBeDefined();
       expect(attemptSpan!.links.length).toBeGreaterThan(0);
 
       const linkSpanContext = attemptSpan!.links[0].context;
-      expect(linkSpanContext.traceId).toBe(ambientSpan.spanContext().traceId);
-      expect(linkSpanContext.spanId).toBe(ambientSpan.spanContext().spanId);
+      expect(linkSpanContext.traceId).toBe(
+        invocationSpan!.spanContext().traceId,
+      );
+      expect(linkSpanContext.spanId).toBe(invocationSpan!.spanContext().spanId);
     });
   });
 
