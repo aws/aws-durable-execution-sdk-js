@@ -564,6 +564,23 @@ Cross-invocation operations are correlated via span links to deterministic span 
 - **Operation_Span**: `durable.execution.arn`, `durable.operation.id`, `durable.operation.type`, `durable.operation.name`, `durable.operation.subtype`, `durable.operation.status`, `durable.attempt.number`
 - **Attempt_Span**: all operation attributes plus `durable.attempt.number`, `durable.attempt.outcome`
 
+### Span Status
+
+The **Workflow_Span** OTel status is derived from the terminal `PluginInvocationStatus`:
+
+| `PluginInvocationStatus` | Workflow_Span status |
+| ------------------------ | -------------------- |
+| `SUCCEEDED`              | `OK`                 |
+| `FAILED`                 | `ERROR` (with the execution error message) |
+| `PENDING`                | `UNSET` (span not ended/exported) |
+| `RETRYING`               | `UNSET` (span not ended/exported) |
+
+For non-terminal outcomes (`PENDING`/`RETRYING`) the Workflow_Span is intentionally left un-ended, so it is never exported and its status stays `UNSET`.
+
+> **Note:** the OTel plugin does **not** know whether a failed workflow was `TIMED_OUT` or `STOPPED`. `PluginInvocationStatus` — the only status the plugin receives at `onInvocationEnd` — distinguishes just `SUCCEEDED`/`FAILED`/`PENDING`/`RETRYING`. `TIMED_OUT` and `STOPPED` are operation-level states (`PluginOperationStatus`) and are not surfaced at the invocation/workflow level, so any such outcome is reported as `FAILED` → span status `ERROR`.
+
+The **Invocation_Span** follows the same mapping (`FAILED` → `ERROR`, otherwise `UNSET`) and additionally records the raw value in the `durable.invocation.status` attribute.
+
 ---
 
 ## Additional npm Dependencies

@@ -161,6 +161,52 @@ describe("InvocationOtelPlugin", () => {
     });
   });
 
+  describe("Workflow span status mapping (PluginInvocationStatus -> OTel span status)", () => {
+    it("maps SUCCEEDED -> Workflow span status OK", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
+      );
+
+      const workflowSpan = findSpan("Workflow");
+      expect(workflowSpan).toBeDefined();
+      expect(workflowSpan!.status.code).toBe(SpanStatusCode.OK);
+      expect(workflowSpan!.attributes["durable.execution.status"]).toBe(
+        "SUCCEEDED",
+      );
+    });
+
+    it("maps FAILED -> Workflow span status ERROR with the execution error message", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({
+          status: "FAILED" as any,
+          executionError: new Error("kaboom"),
+        }),
+      );
+
+      const workflowSpan = findSpan("Workflow");
+      expect(workflowSpan).toBeDefined();
+      expect(workflowSpan!.status.code).toBe(SpanStatusCode.ERROR);
+      expect(workflowSpan!.status.message).toBe("kaboom");
+      expect(workflowSpan!.attributes["durable.execution.status"]).toBe(
+        "FAILED",
+      );
+    });
+
+    it.each(["PENDING", "RETRYING"])(
+      "leaves the Workflow span un-ended (UNSET, never exported) for non-terminal status %s",
+      async (status) => {
+        await plugin.onInvocationStart(makeInvocationInfo());
+        await plugin.onInvocationEnd(
+          makeInvocationEndInfo({ status: status as any }),
+        );
+
+        expect(findSpan("Workflow")).toBeUndefined();
+      },
+    );
+  });
+
   describe("onInvocationEnd", () => {
     it("ends all open operation spans and invocation span", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());

@@ -171,10 +171,22 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     // 3. Handle Workflow span based on terminal status (community collector mode only)
     if (this.workflowSpan) {
       if (info.status === "SUCCEEDED" || info.status === "FAILED") {
+        // PluginInvocationStatus only distinguishes SUCCEEDED/FAILED/PENDING/RETRYING,
+        // so the plugin cannot tell whether a failed workflow was TIMED_OUT or STOPPED
+        // — those are collapsed into FAILED -> ERROR here.
         this.workflowSpan.setAttribute("durable.execution.status", info.status);
+        if (info.status === "FAILED") {
+          this.workflowSpan.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: info.executionError?.message ?? "Execution failed",
+          });
+        } else {
+          this.workflowSpan.setStatus({ code: SpanStatusCode.OK });
+        }
         this.workflowSpan.end();
       }
-      // Non-terminal: do NOT end — span is dropped without export
+      // Non-terminal (PENDING/RETRYING): do NOT end — status stays UNSET and the
+      // span is dropped without export
     }
 
     // 4. Force flush the tracer provider

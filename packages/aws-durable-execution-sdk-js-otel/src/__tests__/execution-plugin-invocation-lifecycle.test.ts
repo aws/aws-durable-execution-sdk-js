@@ -3,7 +3,13 @@ import {
   SimpleSpanProcessor,
   NodeTracerProvider,
 } from "@opentelemetry/sdk-trace-node";
-import { context, trace, propagation, ROOT_CONTEXT } from "@opentelemetry/api";
+import {
+  context,
+  trace,
+  propagation,
+  ROOT_CONTEXT,
+  SpanStatusCode,
+} from "@opentelemetry/api";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
 import type {
   InvocationInfo,
@@ -456,5 +462,58 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
         }),
       );
     });
+  });
+
+  describe("Workflow_Span status mapping (PluginInvocationStatus -> OTel span status)", () => {
+    it("maps SUCCEEDED -> span status OK", async () => {
+      const plugin = new ExecutionOtelPlugin({ useDefaultTracerProvider: true });
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
+      );
+
+      const workflowSpan = findSpan(exporter, "Workflow");
+      expect(workflowSpan).toBeDefined();
+      expect(workflowSpan!.status.code).toBe(SpanStatusCode.OK);
+      expect(workflowSpan!.attributes["durable.execution.status"]).toBe(
+        "SUCCEEDED",
+      );
+    });
+
+    it("maps FAILED -> span status ERROR with the execution error message", async () => {
+      const plugin = new ExecutionOtelPlugin({ useDefaultTracerProvider: true });
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({
+          status: "FAILED" as any,
+          executionError: new Error("boom"),
+        }),
+      );
+
+      const workflowSpan = findSpan(exporter, "Workflow");
+      expect(workflowSpan).toBeDefined();
+      expect(workflowSpan!.status.code).toBe(SpanStatusCode.ERROR);
+      expect(workflowSpan!.status.message).toBe("boom");
+      expect(workflowSpan!.attributes["durable.execution.status"]).toBe(
+        "FAILED",
+      );
+    });
+
+    it.each(["PENDING", "RETRYING"])(
+      "leaves the Workflow_Span un-ended (UNSET, never exported) for non-terminal status %s",
+      async (status) => {
+        const plugin = new ExecutionOtelPlugin({
+          useDefaultTracerProvider: true,
+        });
+        await plugin.onInvocationStart(makeInvocationInfo());
+        await plugin.onInvocationEnd(
+          makeInvocationEndInfo({ status: status as any }),
+        );
+
+        // Non-terminal: the Workflow_Span is intentionally never ended, so it is
+        // never exported and its status stays UNSET.
+        expect(findSpan(exporter, "Workflow")).toBeUndefined();
+      },
+    );
   });
 });

@@ -235,14 +235,26 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
     // 2. Handle Workflow_Span based on terminal status
     if (info.status === "SUCCEEDED" || info.status === "FAILED") {
-      // Terminal: set status attribute, end (causes export)
+      // Terminal: set status attribute, map to span status, end (causes export).
+      // PluginInvocationStatus only distinguishes SUCCEEDED/FAILED/PENDING/RETRYING,
+      // so the plugin cannot tell whether a failed workflow was TIMED_OUT or STOPPED
+      // — those are collapsed into FAILED -> ERROR here.
       if (this.workflowSpan) {
         this.workflowSpan.setAttribute("durable.execution.status", info.status);
+        if (info.status === "FAILED") {
+          this.workflowSpan.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: info.executionError?.message ?? "Execution failed",
+          });
+        } else {
+          this.workflowSpan.setStatus({ code: SpanStatusCode.OK });
+        }
         this.workflowSpan.end();
       }
     }
     // Non-terminal (PENDING/RETRYING): do NOT end workflowSpan — just drop the reference.
-    // Spans that are never .end()'d are never exported by the OTel SDK.
+    // Its status stays UNSET and the span is never exported (spans that are never
+    // .end()'d are never exported by the OTel SDK).
 
     // 3. Discard open Operation_Spans without ending (they won't be exported)
 
