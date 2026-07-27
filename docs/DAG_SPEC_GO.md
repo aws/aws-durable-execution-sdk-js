@@ -428,7 +428,6 @@ func WithCondition[S any](pred func(S) bool) Option  // waitForCondition; REQUIR
 func WithMaxConcurrency(n int) Option
 func WithDefaultTriggerRule(r TriggerRule) Option
 func WithCompletion(c DagCompletionConfig) Option
-func WithSummaryGenerator(f func(*DagResult) string) Option   // observability-only (§8.1)
 func WithNesting(n durable.NestingType) Option
 ```
 
@@ -696,7 +695,13 @@ type serializedDagResult struct {
 }
 ```
 
-`WithSummaryGenerator` output goes only into `Summary`; a missing/malformed value never changes the result and never hangs, because the authoritative data is the per-task `Tasks` array (each backed by its own checkpoint).
+`WithSummaryGenerator` was removed (post-launch-review) to match the cross-language
+normative core: `DAG_SPEC_CROSS_LANGUAGE.md` §2.A.4 requires that no customer-supplied
+summary generator exist in any SDK, since the DAG container checkpoints a single
+SDK-owned envelope. Go was the only SDK still exposing this option; the authoritative
+data is the per-task `Tasks` array (each backed by its own checkpoint), which is
+sufficient for observability without a customer-generated string riding along on the
+in-memory result.
 
 ---
 
