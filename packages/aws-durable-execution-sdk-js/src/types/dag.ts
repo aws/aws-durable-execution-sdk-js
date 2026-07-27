@@ -18,7 +18,7 @@ import {
   WaitForConditionContext,
   WaitForCallbackContext,
 } from "./logger";
-import { StepConfig, RetryDecision } from "./step";
+import { StepConfig } from "./step";
 import { InvokeConfig } from "./invoke";
 import { ChildConfig } from "./child-context";
 import { WaitForCallbackConfig } from "./callback";
@@ -338,8 +338,6 @@ export interface DagConfig {
   maxConcurrency?: number;
   /** DAG-specific early-completion config (NOT the batch `CompletionConfig`). */
   completionConfig?: DagCompletionConfig;
-  /** Retry strategy applied to tasks that do not declare their own. */
-  defaultRetryStrategy?: (error: Error, attemptCount: number) => RetryDecision;
   /** Default trigger rule for tasks (default `"ALL_SUCCESS"`). */
   defaultTriggerRule?: TriggerRule;
   /** Serdes for the aggregated {@link DagResult} container payload. */

@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-# DAG conformance suite (10-1..10-4). Each function maps to a requirement id via
+# DAG conformance suite (10-1..10-16). Each function maps to a requirement id via
 # TestingMetadata.TestDescription and is exercised by the language-neutral
 # conformance runner against the shared test-requirements/dag/*.yaml contract.
 Globals:
@@ -298,6 +298,23 @@ Resources:
       CodeUri: ./dist
       Handler: dag_large_payload.handler
       Description: DAG large-payload offload survives a completed-container replay (digest identical before/after suspend)
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  DagRetry:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-16"]
+    Properties:
+      CodeUri: ./dist
+      Handler: dag_retry.handler
+      Description: DAG task retries and eventually succeeds; retried result flows downstream (ALL_COMPLETED)
       Role:
         Fn::GetAtt:
         - DurableFunctionRole

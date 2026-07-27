@@ -336,7 +336,6 @@ public enum DagCompletionReason {
 public record DagConfig(
     Optional<Integer> maxConcurrency,          // default: 40 (DEFAULT_MAX_CONCURRENCY); must be >= 1 if present
     Optional<DagCompletionConfig> completionConfig,
-    Optional<RetryStrategy> defaultRetryStrategy,
     Optional<TriggerRule> defaultTriggerRule,   // default ALL_SUCCESS
     Optional<SerDes<DagResult>> serDes,
     Optional<Function<DagResult, String>> summaryGenerator  // NON-NATIVE, v1-DROP CANDIDATE — no SDK precedent (§8.1)

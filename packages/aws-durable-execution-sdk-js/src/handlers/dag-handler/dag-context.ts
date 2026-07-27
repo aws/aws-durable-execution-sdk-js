@@ -84,25 +84,6 @@ export class DagContextImpl<
   }
 
   /**
-   * Applies the DAG-level {@link DagConfig.defaultRetryStrategy} to a task
-   * config that does not declare its own `retryStrategy`. Only meaningful for
-   * task kinds whose config carries a `retryStrategy` (step, callback).
-   */
-  private applyRetryDefault<O>(rest: O | undefined): O | undefined {
-    const dr = this.config?.defaultRetryStrategy;
-    if (dr === undefined) {
-      return rest;
-    }
-    if (
-      rest &&
-      (rest as { retryStrategy?: unknown }).retryStrategy !== undefined
-    ) {
-      return rest;
-    }
-    return { ...(rest as object), retryStrategy: dr } as O;
-  }
-
-  /**
    * Applies the DAG-level {@link DagConfig.nesting} default to a task config
    * that does not declare its own `nesting`. Only meaningful for task kinds
    * whose config carries a `nesting` (map, parallel).
@@ -170,26 +151,19 @@ export class DagContextImpl<
     config?: StepConfig<TResult> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TResult> {
     const { runIf, rest } = extractConditional(config);
-    const taskConfig = this.applyRetryDefault(rest);
-    const def = this.makeDef(
-      name,
-      "step",
-      deps,
-      runIf,
-      taskConfig,
-      (ctx, depsMap) =>
-        ctx.runStepWithExplicitId(
-          name,
-          (deps.length === 0
-            ? (stepCtx: unknown) =>
-                (fn as (c: unknown) => Promise<TResult>)(stepCtx)
-            : (stepCtx: unknown) =>
-                (fn as (d: unknown, c: unknown) => Promise<TResult>)(
-                  depsMap,
-                  stepCtx,
-                )) as StepFunc<TResult, DurableLogger>,
-          taskConfig as StepConfig<TResult> | undefined,
-        ),
+    const def = this.makeDef(name, "step", deps, runIf, rest, (ctx, depsMap) =>
+      ctx.runStepWithExplicitId(
+        name,
+        (deps.length === 0
+          ? (stepCtx: unknown) =>
+              (fn as (c: unknown) => Promise<TResult>)(stepCtx)
+          : (stepCtx: unknown) =>
+              (fn as (d: unknown, c: unknown) => Promise<TResult>)(
+                depsMap,
+                stepCtx,
+              )) as StepFunc<TResult, DurableLogger>,
+        rest as StepConfig<TResult> | undefined,
+      ),
     );
     this.register(name, def);
     return new TaskHandleImpl<TName, TResult>(name, def.id, def);
@@ -283,13 +257,12 @@ export class DagContextImpl<
     config?: WaitForCallbackConfig<TResult> & ConditionalConfig<TDeps>,
   ): TaskHandle<TName, TResult> {
     const { runIf, rest } = extractConditional(config);
-    const taskConfig = this.applyRetryDefault(rest);
     const def = this.makeDef(
       name,
       "callback",
       deps,
       runIf,
-      taskConfig,
+      rest,
       (ctx, depsMap) =>
         ctx.runCallbackTaskWithExplicitId<TResult>(
           name,
@@ -311,7 +284,7 @@ export class DagContextImpl<
                   cbId,
                   cbCtx,
                 )) as WaitForCallbackSubmitterFunc<DurableLogger>,
-          taskConfig as WaitForCallbackConfig<TResult> | undefined,
+          rest as WaitForCallbackConfig<TResult> | undefined,
         ),
     );
     this.register(name, def);

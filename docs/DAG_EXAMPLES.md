@@ -1045,7 +1045,7 @@ export const handler = withDurableExecution(
 
 ### What's new here
 
-**Retry is per task, and it is the ordinary step retry.** `retryStrategy` on a task's config is the same one a standalone `context.step` takes — the DAG adds nothing. `ctx.attempt` tells the body which attempt it is on. You can also set `defaultRetryStrategy` on the DAG config to apply to every task that does not declare its own.
+**Retry is per task, and it is the ordinary step retry.** `retryStrategy` on a task's config is the same one a standalone `context.step` takes — the DAG adds nothing. `ctx.attempt` tells the body which attempt it is on.
 
 **Note the parameter order.** `async (_deps, ctx)` — with deps declared, `deps` comes first and the native `StepContext` follows. `extract` has no deps, so its callback is just `(ctx)`. That is the argument-order rule, and the reason the SDK carries a no-deps overload per task kind.
 

@@ -427,7 +427,6 @@ func WithCondition[S any](pred func(S) bool) Option  // waitForCondition; REQUIR
 // DAG-level (passed to dag.Dag / nested dag.Dag)
 func WithMaxConcurrency(n int) Option
 func WithDefaultTriggerRule(r TriggerRule) Option
-func WithDefaultRetry(s durable.RetryStrategy) Option
 func WithCompletion(c DagCompletionConfig) Option
 func WithSummaryGenerator(f func(*DagResult) string) Option   // observability-only (§8.1)
 func WithNesting(n durable.NestingType) Option

@@ -337,7 +337,6 @@ Python `Enum`s cannot be "extended" by subclassing with new members, so — unli
 class DagConfig:
     max_concurrency: int | None = None                    # None => DEFAULT_DAG_MAX_CONCURRENCY (40)
     completion_config: CompletionConfig | None = None     # REUSED from config.py (threshold-only)
-    default_retry_strategy: Callable[[Exception, int], RetryDecision] | None = None
     default_trigger_rule: TriggerRule = TriggerRule.ALL_SUCCESS
     serdes: SerDes | None = None                          # for the DagResult container payload
     summary_generator: Callable[[DagResult], str] | None = None   # OBSERVABILITY-ONLY (§8.1)

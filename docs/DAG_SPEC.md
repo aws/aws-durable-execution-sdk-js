@@ -444,7 +444,6 @@ export type DagCompletionReason = CompletionReason | "COMPLETED_WITH_FAILURES";
 export interface DagConfig {
   maxConcurrency?: number; // default: 40 (DEFAULT_DAG_MAX_CONCURRENCY); must be > 0
   completionConfig?: DagCompletionConfig; // DAG-specific (see below); NOT batch CompletionConfig
-  defaultRetryStrategy?: RetryStrategy; // applied to tasks with no own retryStrategy
   defaultTriggerRule?: TriggerRule; // default "ALL_SUCCESS"
   serdes?: Serdes<DagResult>; // for the DagResult container payload
   summaryGenerator?: (result: DagResult) => string; // OBSERVABILITY-ONLY text for the large-payload fallback; stored verbatim under DagSummary.summary and NEVER read on replay (§8.1). Cannot override the SDK-owned count/reason/started fields. Contrast batch, where this string is load-bearing on replay (issue #751).
