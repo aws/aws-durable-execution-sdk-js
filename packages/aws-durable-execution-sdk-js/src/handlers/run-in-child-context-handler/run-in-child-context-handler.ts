@@ -389,6 +389,21 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       name,
     )) as T;
 
+    // Close the descendant-checkpoint gate NOW — synchronously, before the
+    // safeSerialize await below yields the event loop. `fn` has returned, so
+    // this context is logically finished; for a map/parallel that completed
+    // early (e.g. minSuccessful) some child branches may still be in flight.
+    // Marking finished here makes their later terminal checkpoints
+    // deterministically no-op, closing the race where a child that settles
+    // during serialization would otherwise checkpoint SUCCEEDED after the batch
+    // completed — which replay would then reconstruct as a completed item the
+    // live BatchResult never observed (issue #751). Descendant checkpoints are
+    // the only thing this gate affects; this context's own SUCCEED checkpoint
+    // below is unaffected (hasFinishedAncestor only inspects ancestors).
+    if (!isVirtual) {
+      checkpoint.markAncestorFinished(entityId);
+    }
+
     // Serialize the result for consistency
     const serializedResult = await safeSerialize(
       serdes,
@@ -438,10 +453,12 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       replayChildren = true;
     }
 
-    // Mark this run-in-child-context as finished to prevent descendant operations (only for non-virtual)
+    // Checkpoint this run-in-child-context as finished (only for non-virtual).
+    // The descendant-checkpoint gate was already closed via
+    // markAncestorFinished immediately after `fn` returned (see above), before
+    // the safeSerialize await, so no in-flight child can slip a terminal
+    // checkpoint through during serialization.
     if (!isVirtual) {
-      checkpoint.markAncestorFinished(entityId);
-
       const subType = options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT;
       checkpoint.checkpoint(entityId, {
         Id: entityId,

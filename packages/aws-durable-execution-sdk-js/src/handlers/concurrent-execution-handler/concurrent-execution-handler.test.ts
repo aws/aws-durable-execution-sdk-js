@@ -33,7 +33,6 @@ describe("Concurrent Execution Handler", () => {
     concurrentExecutionHandler = createConcurrentExecutionHandler(
       mockExecutionContext,
       mockRunInChildContext,
-      jest.fn(),
     );
   });
 
@@ -581,7 +580,7 @@ describe("ConcurrencyController", () => {
   let mockParentContext: jest.Mocked<DurableContext<DurableLogger>>;
 
   beforeEach(() => {
-    controller = new ConcurrencyController("test-operation", jest.fn());
+    controller = new ConcurrencyController("test-operation");
     mockParentContext = {
       runInChildContext: jest.fn(),
     } as any;
@@ -1066,10 +1065,7 @@ describe("ConcurrencyController", () => {
     });
 
     it("should handle verbose logging", async () => {
-      const verboseController = new ConcurrencyController(
-        "verbose-test",
-        jest.fn(),
-      );
+      const verboseController = new ConcurrencyController("verbose-test");
       const items = [{ id: "item-0", data: "data1", index: 0 }];
       const executor = jest.fn();
 
@@ -1199,10 +1195,7 @@ describe("ConcurrencyController", () => {
 
     it("should execute with iterationSubType and cover the actual execution path", async () => {
       // Create a new controller for this test to ensure clean state
-      const testController = new ConcurrencyController(
-        "test-operation",
-        jest.fn(),
-      );
+      const testController = new ConcurrencyController("test-operation");
       const items = [{ id: "item-0", data: "data1", index: 0 }];
       const executor = jest.fn().mockResolvedValue("test-result");
       const config = { iterationSubType: "TEST_ITERATION_TYPE" };
