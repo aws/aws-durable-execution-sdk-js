@@ -11,10 +11,22 @@ import {
 // invocation-end hook fires with the FAILED terminal status.
 const terminalFailurePlugin: DurableInstrumentationPlugin = {
   async onInvocationStart(info) {
-    console.log(`CONFPLUGIN invocation-start first=${info.isFirstInvocation}`);
+    console.log(
+      JSON.stringify({
+        plugin: "CONFPLUGIN",
+        hook: "invocation-start",
+        first: info.isFirstInvocation,
+      }),
+    );
   },
   async onInvocationEnd(info) {
-    console.log(`CONFPLUGIN invocation-end status=${info.status}`);
+    console.log(
+      JSON.stringify({
+        plugin: "CONFPLUGIN",
+        hook: "invocation-end",
+        status: info.status,
+      }),
+    );
   },
 };
 

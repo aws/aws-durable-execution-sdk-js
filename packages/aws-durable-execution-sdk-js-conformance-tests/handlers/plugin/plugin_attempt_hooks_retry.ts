@@ -13,12 +13,25 @@ import {
 const attemptHooksPlugin: DurableInstrumentationPlugin = {
   async onOperationAttemptStart(info) {
     if (info.subType !== "Step") return;
-    console.log(`CONFPLUGIN attempt-start n=${info.attempt} op=${info.id}`);
+    console.log(
+      JSON.stringify({
+        plugin: "CONFPLUGIN",
+        hook: "attempt-start",
+        n: info.attempt,
+        op: info.id,
+      }),
+    );
   },
   async onOperationAttemptEnd(info) {
     if (info.subType !== "Step") return;
     console.log(
-      `CONFPLUGIN attempt-end n=${info.attempt} outcome=${info.outcome} op=${info.id}`,
+      JSON.stringify({
+        plugin: "CONFPLUGIN",
+        hook: "attempt-end",
+        n: info.attempt,
+        outcome: info.outcome,
+        op: info.id,
+      }),
     );
   },
 };

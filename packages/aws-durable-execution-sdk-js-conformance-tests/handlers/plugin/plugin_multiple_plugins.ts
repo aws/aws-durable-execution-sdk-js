@@ -10,19 +10,35 @@ import {
 // registered plugin.
 const pluginA: DurableInstrumentationPlugin = {
   async onInvocationStart() {
-    console.log(`CONFPLUGIN-A invocation-start`);
+    console.log(
+      JSON.stringify({ plugin: "CONFPLUGIN-A", hook: "invocation-start" }),
+    );
   },
   async onInvocationEnd(info) {
-    console.log(`CONFPLUGIN-A invocation-end status=${info.status}`);
+    console.log(
+      JSON.stringify({
+        plugin: "CONFPLUGIN-A",
+        hook: "invocation-end",
+        status: info.status,
+      }),
+    );
   },
 };
 
 const pluginB: DurableInstrumentationPlugin = {
   async onInvocationStart() {
-    console.log(`CONFPLUGIN-B invocation-start`);
+    console.log(
+      JSON.stringify({ plugin: "CONFPLUGIN-B", hook: "invocation-start" }),
+    );
   },
   async onInvocationEnd(info) {
-    console.log(`CONFPLUGIN-B invocation-end status=${info.status}`);
+    console.log(
+      JSON.stringify({
+        plugin: "CONFPLUGIN-B",
+        hook: "invocation-end",
+        status: info.status,
+      }),
+    );
   },
 };
 
