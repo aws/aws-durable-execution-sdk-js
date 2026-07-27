@@ -530,6 +530,13 @@ export class DagContextImpl<
         rest as NestedDagConfig | undefined,
       ),
     );
+    // Retain the register callback + config so the offloaded-replay reconstruct
+    // path can recover the inner task graph and recurse into the inner
+    // container's own child checkpoints (nested-offload contract rule 2).
+    def.nestedDagRegister = register as (
+      dagCtx: DagContext<DurableLogger>,
+    ) => void | Promise<void>;
+    def.nestedDagConfig = rest as NestedDagConfig | undefined;
     this.register(name, def);
     return new TaskHandleImpl<TName, DagResult>(name, def.id, def);
   }

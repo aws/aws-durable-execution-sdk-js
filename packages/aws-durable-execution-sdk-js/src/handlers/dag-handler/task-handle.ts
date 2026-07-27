@@ -1,4 +1,10 @@
-import { AnyTaskHandle, TaskHandle, TriggerRule } from "../../types/dag";
+import {
+  AnyTaskHandle,
+  DagContext,
+  NestedDagConfig,
+  TaskHandle,
+  TriggerRule,
+} from "../../types/dag";
 import { DurableLogger } from "../../types/durable-logger";
 import type { DurableContextImpl } from "../../context/durable-context/durable-context";
 
@@ -41,6 +47,22 @@ export interface TaskDef {
     ctx: DurableContextImpl<DurableLogger>,
     depsMap: Record<string, unknown>,
   ) => Promise<unknown>;
+  /**
+   * For a nested `dag` task ONLY: the registration callback and its config,
+   * retained so the offloaded-replay reconstruct path can re-run the inner
+   * `register` to recover the inner task graph and recurse into the inner
+   * container's own child checkpoints (nested-offload contract rule 2).
+   *
+   * Without this the register callback is captured only inside `executor`'s
+   * closure and is unreachable from `reconstructDagResult`, so an offloaded
+   * (tasks-less) inner envelope could be restored to honest aggregates but an
+   * empty per-task map. `register` is a deterministic, declarative callback, so
+   * re-running it on replay reproduces the same graph the live run built.
+   */
+  nestedDagRegister?: (
+    dagCtx: DagContext<DurableLogger>,
+  ) => void | Promise<void>;
+  nestedDagConfig?: NestedDagConfig;
 }
 
 /**

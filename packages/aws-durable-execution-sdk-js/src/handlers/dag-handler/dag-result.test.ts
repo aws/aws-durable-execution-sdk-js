@@ -271,4 +271,67 @@ describe("restoreDagResult", () => {
     const r = restoreDagResult({ nonsense: true });
     expect(r.totalCount).toBe(0);
   });
+
+  // Nested-offload contract rule 1. The OFFLOADED envelope has NO `tasks`
+  // array by design. The pre-fix fallthrough discarded the counts and
+  // completionReason the envelope DID carry and fabricated
+  // `new DagResultImpl(new Map(), "ALL_COMPLETED", 0)` — telling a caller a DAG
+  // succeeded with zero tasks when the checkpoint said it failed.
+  it("preserves counts + completionReason from a tasks-less (offloaded) failing envelope, never fabricating ALL_COMPLETED (rule 1)", () => {
+    const offloaded = {
+      type: "DagResult",
+      totalCount: 5,
+      successCount: 2,
+      failureCount: 2,
+      skippedCount: 1,
+      completionReason: "COMPLETED_WITH_FAILURES",
+      startedTaskNames: [],
+      failedTaskNames: ["b", "d"],
+      // NOTE: no `tasks` — this is exactly the offloaded shape.
+    };
+    const r = restoreDagResult(offloaded);
+    expect(r.completionReason).toBe("COMPLETED_WITH_FAILURES");
+    expect(r.completionReason).not.toBe("ALL_COMPLETED");
+    expect(r.totalCount).toBe(5);
+    expect(r.successCount).toBe(2);
+    expect(r.failureCount).toBe(2);
+    expect(r.skippedCount).toBe(1);
+    // The per-task map may legitimately be empty for the tasks-less envelope.
+    expect(r.results.size).toBe(0);
+    // A caller must never be told the DAG succeeded when it did not.
+    expect(() => r.throwIfError()).toThrow(DagExecutionError);
+  });
+
+  it("round-trips buildDagOffloadPayload through restoreDagResult with an honest aggregate", () => {
+    const failing = new DagResultImpl(
+      results([
+        { name: "a", status: "SUCCEEDED", result: 1 },
+        { name: "b", status: "FAILED", error: new StepError("boom") },
+      ]),
+      "COMPLETED_WITH_FAILURES",
+    );
+    const offloaded = JSON.parse(buildDagOffloadPayload(failing));
+    expect("tasks" in offloaded).toBe(false); // offloaded shape
+    const r = restoreDagResult(offloaded);
+    expect(r.completionReason).toBe("COMPLETED_WITH_FAILURES");
+    expect(r.successCount).toBe(1);
+    expect(r.failureCount).toBe(1);
+    expect(r.totalCount).toBe(2);
+  });
+
+  it("derives a non-success reason for a tasks-less envelope that omits completionReason but has failures", () => {
+    const offloaded = {
+      type: "DagResult",
+      totalCount: 2,
+      successCount: 1,
+      failureCount: 1,
+      skippedCount: 0,
+      startedTaskNames: [],
+      // completionReason intentionally absent
+    };
+    const r = restoreDagResult(offloaded);
+    // Never fabricate success over a failing envelope.
+    expect(r.completionReason).toBe("COMPLETED_WITH_FAILURES");
+    expect(r.failureCount).toBe(1);
+  });
 });

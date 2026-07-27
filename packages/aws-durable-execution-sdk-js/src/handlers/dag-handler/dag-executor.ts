@@ -24,7 +24,8 @@ import {
 } from "../../errors/durable-error/durable-error";
 import { TaskDef } from "./task-handle";
 import { triggerRuleEvaluators } from "./trigger-rules";
-import { DagResultImpl, restoreDagResult } from "./dag-result";
+import { DagResultImpl, readDagEnvelope, restoreDagResult } from "./dag-result";
+import { DagContextImpl } from "./dag-context";
 import { ExecutionContext } from "../../types/core";
 import { ErrorObject } from "@aws-sdk/client-lambda";
 import { restoreBatchResult } from "../concurrent-execution-handler/batch-result";
@@ -422,7 +423,60 @@ export async function reconstructDagResult(
     return map;
   };
 
-  const readResult = (task: TaskDef, payload: string | undefined): unknown => {
+  // Nested-offload contract rule 2. A nested `dag` task is both a task of this
+  // DAG and its own child CONTAINER: its per-task detail is checkpointed under
+  // `${entityId}-DAG_NODE_T_<innerName>`, exactly the way this DAG's own tasks
+  // are checkpointed under `${thisPrefix}-DAG_NODE_T_<name>`. When the inner
+  // container's own aggregate also exceeded the checkpoint limit, its envelope
+  // is OFFLOADED too — it carries no `tasks` — so restoreDagResult alone would
+  // yield honest aggregates (rule 1) but an EMPTY per-task map. Recover the
+  // inner per-task detail by recursing into the inner container's OWN child
+  // checkpoints, reusing this very function. Reachable because (a) the inner
+  // container id is `entityId`, already derived from this context, and its
+  // children ids are a pure `-DAG_NODE_T_<name>` suffix of it, and (b) the
+  // inner register callback is retained on the TaskDef, so re-running it
+  // reproduces the inner graph deterministically. Recurses to arbitrary depth.
+  const reconstructNestedDag = async (
+    task: TaskDef,
+    parsed: unknown,
+    entityId: string,
+  ): Promise<DagResult> => {
+    const innerHasTasks =
+      !!parsed &&
+      typeof parsed === "object" &&
+      Array.isArray((parsed as DagResultEnvelope).tasks);
+    // Inline inner envelope (small) already carries full per-task detail; or no
+    // retained register to rebuild the inner graph. Either way restoreDagResult
+    // is correct — and under rule 1 it preserves the inner counts + reason even
+    // for the offloaded (tasks-less) shape.
+    if (innerHasTasks || !task.nestedDagRegister) {
+      return restoreDagResult(parsed);
+    }
+    const innerDagCtx = new DagContextImpl(task.nestedDagConfig);
+    await task.nestedDagRegister(innerDagCtx);
+    const innerTasks = innerDagCtx.getTasks();
+    const innerEnvelope = readDagEnvelope(executionContext, entityId);
+    // A minimal context whose createTaskId derives the inner container's child
+    // ids. This mirrors a real child DurableContext whose stepPrefix is the
+    // inner container id (`entityId`): createTaskId(name) =>
+    // `${stepPrefix}-DAG_NODE_T_${name}`.
+    const innerCtx = {
+      createTaskId: (innerName: string): string =>
+        `${entityId}-DAG_NODE_T_${innerName}`,
+    } as unknown as DurableContextImpl<DurableLogger>;
+    return reconstructDagResult(
+      innerCtx,
+      innerTasks,
+      innerEnvelope,
+      executionContext,
+    );
+  };
+
+  const readResult = async (
+    task: TaskDef,
+    payload: string | undefined,
+    entityId: string,
+  ): Promise<unknown> => {
     if (payload === undefined) {
       return undefined;
     }
@@ -436,7 +490,7 @@ export async function reconstructDagResult(
       return restoreBatchResult(parsed);
     }
     if (task.kind === "dag") {
-      return restoreDagResult(parsed);
+      return reconstructNestedDag(task, parsed, entityId);
     }
     return parsed;
   };
@@ -492,7 +546,7 @@ export async function reconstructDagResult(
         results.set(task.name, {
           name: task.name,
           status: "SUCCEEDED",
-          result: readResult(task, resultPayload),
+          result: await readResult(task, resultPayload, entityId),
         });
       } else if (status === "FAILED") {
         results.set(task.name, {

@@ -321,6 +321,37 @@ export function restoreDagResult(data: unknown): DagResult {
       authoritativeCounts,
     );
   }
+  // Nested-offload contract rule 1: an envelope WITHOUT a `tasks` array is the
+  // OFFLOADED shape written by buildDagOffloadPayload (its absence is the
+  // signal to reconstruct). It legitimately carries no per-task map, but it
+  // DOES carry the authoritative aggregate — `totalCount`, the three counts and
+  // `completionReason`. Preserve them. The previous fallthrough fabricated
+  // `new DagResultImpl(new Map(), "ALL_COMPLETED", 0)`, which told callers a
+  // DAG succeeded with zero tasks when the checkpoint said otherwise — a nested
+  // DAG that failed tasks reported ALL_COMPLETED with totalCount 0. A caller
+  // must never be told a DAG succeeded when the checkpoint says it did not.
+  if (
+    data &&
+    typeof data === "object" &&
+    (data as Partial<DagResultEnvelope>).type === "DagResult"
+  ) {
+    const s = data as Partial<DagResultEnvelope>;
+    if (
+      typeof s.totalCount === "number" &&
+      typeof s.successCount === "number" &&
+      typeof s.failureCount === "number" &&
+      typeof s.skippedCount === "number"
+    ) {
+      const completionReason: DagCompletionReason =
+        s.completionReason ??
+        (s.failureCount > 0 ? "COMPLETED_WITH_FAILURES" : "ALL_COMPLETED");
+      return new DagResultImpl(new Map(), completionReason, s.totalCount, {
+        successCount: s.successCount,
+        failureCount: s.failureCount,
+        skippedCount: s.skippedCount,
+      });
+    }
+  }
   return new DagResultImpl(new Map(), "ALL_COMPLETED", 0);
 }
 
