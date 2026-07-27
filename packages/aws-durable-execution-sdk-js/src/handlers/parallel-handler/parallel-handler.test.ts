@@ -377,31 +377,38 @@ describe("Parallel Handler", () => {
   });
 
   describe("summaryGenerator", () => {
-    it("should forward a user-provided summaryGenerator", async () => {
+    it("should compose a user-provided summaryGenerator with the SDK record", async () => {
       const branch1: ParallelFunc<string, DurableLogger> = jest
         .fn()
         .mockResolvedValue("result1");
       const branches = [branch1];
       const customSummaryGenerator = jest.fn(() => "custom-summary");
 
-      mockExecuteConcurrently.mockResolvedValue(
-        new MockBatchResult([
-          { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
-        ]) as any,
-      );
+      const mockResult = new MockBatchResult([
+        { index: 0, result: "result1", status: BatchItemStatus.SUCCEEDED },
+      ]);
+      mockExecuteConcurrently.mockResolvedValue(mockResult as any);
 
       await parallelHandler("test-name", branches, {
         summaryGenerator: customSummaryGenerator,
       });
 
-      expect(mockExecuteConcurrently).toHaveBeenCalledWith(
-        "test-name",
-        expect.any(Array),
-        expect.any(Function),
-        expect.objectContaining({
-          summaryGenerator: customSummaryGenerator,
-        }),
-      );
+      // The handler no longer forwards the raw custom generator. It forwards a
+      // composed generator that always writes the SDK's load-bearing record and
+      // stores the customer output verbatim under `summary` (observability-only).
+      const forwarded = mockExecuteConcurrently.mock.calls[0][3];
+      expect(typeof forwarded.summaryGenerator).toBe("function");
+
+      const payload = JSON.parse(forwarded.summaryGenerator(mockResult));
+      expect(payload).toMatchObject({
+        type: "ParallelResult",
+        totalCount: 1,
+        successCount: 1,
+        failureCount: 0,
+        completionReason: "ALL_COMPLETED",
+        summary: "custom-summary",
+      });
+      expect(customSummaryGenerator).toHaveBeenCalledWith(mockResult);
     });
 
     it("should fall back to the default generator when none is provided", async () => {

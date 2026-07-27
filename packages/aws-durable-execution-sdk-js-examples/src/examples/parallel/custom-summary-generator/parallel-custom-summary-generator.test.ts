@@ -23,18 +23,25 @@ createTests({
       expect(result.successCount).toBe(3);
       expect(result.resultLengths).toEqual([120000, 120000, 120000]);
 
-      // The CONTEXT operation's checkpointed result is the summaryGenerator
-      // output. Asserting the custom marker proves the user-supplied generator
-      // was used instead of the SDK's default parallel generator (issue #500).
+      // The checkpointed CONTEXT result is now the SDK envelope (issue #751):
+      // it always carries the load-bearing metadata (totalCount/successCount/
+      // ...), and the user-provided generator's output is preserved verbatim
+      // under `summary`. The customer here returns JSON, so `summary` is that
+      // JSON string — asserting the marker inside it proves the user-supplied
+      // generator was used (issue #500) while the SDK metadata is intact.
       const contextResult = runner
         .getOperation("parallel-large")
         .getContextDetails()?.result as {
-        marker: string;
         totalCount: number;
         successCount: number;
+        summary: string;
       };
 
       expect(contextResult).toMatchObject({
+        totalCount: 3,
+        successCount: 3,
+      });
+      expect(JSON.parse(contextResult.summary)).toMatchObject({
         marker: CUSTOM_SUMMARY_MARKER,
         totalCount: 3,
         successCount: 3,

@@ -11,7 +11,10 @@ import {
   DurableLogger,
 } from "../../types";
 import { log } from "../../utils/logger/logger";
-import { createMapSummaryGenerator } from "../../utils/summary-generators/summary-generators";
+import {
+  createMapSummaryGenerator,
+  composeSummaryGenerator,
+} from "../../utils/summary-generators/summary-generators";
 
 export const createMapHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -87,8 +90,10 @@ export const createMapHandler = <Logger extends DurableLogger>(
         maxConcurrency: config?.maxConcurrency,
         topLevelSubType: OperationSubType.MAP,
         iterationSubType: OperationSubType.MAP_ITERATION,
-        summaryGenerator:
-          config?.summaryGenerator ?? createMapSummaryGenerator(),
+        summaryGenerator: composeSummaryGenerator(
+          createMapSummaryGenerator(),
+          config?.summaryGenerator,
+        ),
         completionConfig: config?.completionConfig,
         serdes: config?.serdes,
         itemSerdes: config?.itemSerdes,

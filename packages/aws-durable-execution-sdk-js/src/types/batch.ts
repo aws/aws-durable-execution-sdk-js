@@ -39,6 +39,11 @@ export enum NestingType {
 export enum BatchItemStatus {
   SUCCEEDED = "SUCCEEDED",
   FAILED = "FAILED",
+  /**
+   * Item was still in flight when the batch completed early. Observability
+   * only and not guaranteed to survive suspend/resume reconstruction — see
+   * {@link BatchResult.started}.
+   */
   STARTED = "STARTED",
 }
 
@@ -95,13 +100,34 @@ export interface BatchResult<TResult> {
    * filtered views ({@link BatchResult.succeeded}, {@link BatchResult.failed},
    * {@link BatchResult.started}) are computed once and will not reflect
    * mutations made to this array after construction.
+   *
+   * The completed (SUCCEEDED/FAILED) items are stable across suspend/resume.
+   * Any STARTED (in-flight) entries are not guaranteed to be reproduced on
+   * replay — see {@link BatchResult.started}.
    */
   all: Array<BatchItem<TResult>>;
   /** Returns only the items that succeeded */
   succeeded(): Array<BatchItem<TResult> & { result: TResult }>;
   /** Returns only the items that failed */
   failed(): Array<BatchItem<TResult> & { error: ChildContextError }>;
-  /** Returns only the items that are still in progress */
+  /**
+   * Returns only the items that are still in progress (STARTED) — items that
+   * were in flight when the batch completed early (e.g. via
+   * {@link CompletionConfig.minSuccessful} or a custom
+   * {@link CompletionConfig.shouldComplete}).
+   *
+   * @remarks
+   * The STARTED set is observability-only and is **not guaranteed to be stable
+   * across suspend/resume**. On a resumed invocation the batch result is
+   * reconstructed, and when the aggregate result was large enough to be
+   * checkpointed as a summary only the completed (SUCCEEDED/FAILED) items are
+   * rebuilt — in-flight items may be absent, so {@link BatchResult.started},
+   * {@link BatchResult.startedCount} and {@link BatchResult.totalCount} can
+   * differ from what the live run observed (and from a smaller result that fit
+   * in a single checkpoint). Do not branch on the started set across replay;
+   * the completed items and {@link BatchResult.completionReason} are the
+   * stable, deterministic parts of the result.
+   */
   started(): Array<BatchItem<TResult> & { status: BatchItemStatus.STARTED }>;
   /** Overall status of the batch (SUCCEEDED if no failures, FAILED otherwise) */
   status: BatchItemStatus.SUCCEEDED | BatchItemStatus.FAILED;
@@ -119,7 +145,12 @@ export interface BatchResult<TResult> {
   successCount: number;
   /** Number of failed items */
   failureCount: number;
-  /** Number of started but not completed items */
+  /**
+   * Number of started but not completed items.
+   *
+   * Not guaranteed to be stable across suspend/resume — see
+   * {@link BatchResult.started}.
+   */
   startedCount: number;
   /** Total number of items */
   totalCount: number;

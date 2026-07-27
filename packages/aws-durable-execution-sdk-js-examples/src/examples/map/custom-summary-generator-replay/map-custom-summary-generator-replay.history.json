@@ -1,0 +1,149 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "d4548a00-203a-44a0-a07d-8480dc6408ed",
+    "EventTimestamp": "2026-07-24T19:13:36.435Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"itemPayloadSize\":16}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "Map",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "summarized-map",
+    "EventTimestamp": "2026-07-24T19:13:36.539Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MapIteration",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "item-0",
+    "EventTimestamp": "2026-07-24T19:13:36.539Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MapIteration",
+    "EventId": 4,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "item-1",
+    "EventTimestamp": "2026-07-24T19:13:36.539Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "MapIteration",
+    "EventId": 5,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "item-0",
+    "EventTimestamp": "2026-07-24T19:13:36.539Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"xxxxxxxxxxxxxxxx\""
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MapIteration",
+    "EventId": 6,
+    "Id": "13cee27a2bd93915",
+    "Name": "item-2",
+    "EventTimestamp": "2026-07-24T19:13:36.539Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "MapIteration",
+    "EventId": 7,
+    "Id": "13cee27a2bd93915",
+    "Name": "item-2",
+    "EventTimestamp": "2026-07-24T19:13:36.539Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"xxxxxxxxxxxxxxxx\""
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "Map",
+    "EventId": 8,
+    "Id": "c4ca4238a0b92382",
+    "Name": "summarized-map",
+    "EventTimestamp": "2026-07-24T19:13:36.539Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"all\":[{\"result\":\"xxxxxxxxxxxxxxxx\",\"index\":0,\"status\":\"SUCCEEDED\"},{\"index\":1,\"status\":\"STARTED\"},{\"result\":\"xxxxxxxxxxxxxxxx\",\"index\":2,\"status\":\"SUCCEEDED\"}],\"completionReason\":\"MIN_SUCCESSFUL_REACHED\"}"
+      }
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 9,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "after-map",
+    "EventTimestamp": "2026-07-24T19:13:36.539Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2026-07-24T19:13:37.539Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 10,
+    "EventTimestamp": "2026-07-24T19:13:36.561Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-07-24T19:13:36.435Z",
+      "EndTimestamp": "2026-07-24T19:13:36.561Z",
+      "Error": {},
+      "RequestId": "fa363b65-c8c6-4fc4-b3e6-d34b046b096e"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 11,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "after-map",
+    "EventTimestamp": "2026-07-24T19:13:37.540Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 12,
+    "EventTimestamp": "2026-07-24T19:13:37.541Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-07-24T19:13:37.540Z",
+      "EndTimestamp": "2026-07-24T19:13:37.541Z",
+      "Error": {},
+      "RequestId": "7a9cc5d0-a26d-40df-915c-17150946f240"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 13,
+    "Id": "d4548a00-203a-44a0-a07d-8480dc6408ed",
+    "EventTimestamp": "2026-07-24T19:13:37.541Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"totalCount\":3,\"successCount\":2,\"startedCount\":1,\"completionReason\":\"MIN_SUCCESSFUL_REACHED\",\"itemIndexes\":[0,1,2]}"
+      }
+    }
+  }
+]
