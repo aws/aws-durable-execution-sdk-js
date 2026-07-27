@@ -8,7 +8,7 @@ import { TaskDef } from "./task-handle";
 import {
   AnyTaskHandle,
   DagConfig,
-  DagSummary,
+  DagResultEnvelope,
   TriggerRule,
 } from "../../types/dag";
 import { DurableLogger } from "../../types/durable-logger";
@@ -578,16 +578,15 @@ describe("reconstructDagResult (design-B replay)", () => {
         };
       },
     }) as unknown as ExecutionContext;
-  const envelope = (over: Partial<DagSummary>): DagSummary => ({
+  const envelope = (over: Partial<DagResultEnvelope>): DagResultEnvelope => ({
     type: "DagResult",
     totalCount: 0,
     successCount: 0,
     failureCount: 0,
     skippedCount: 0,
-    completedCount: 0,
     completionReason: "ALL_COMPLETED",
     startedTaskNames: [],
-    terminalTaskNames: [],
+    failedTaskNames: [],
     ...over,
   });
 
@@ -606,9 +605,8 @@ describe("reconstructDagResult (design-B replay)", () => {
         totalCount: 3,
         successCount: 2,
         skippedCount: 1,
-        completedCount: 3,
         completionReason: "ALL_COMPLETED",
-        terminalTaskNames: ["a", "b", "c"],
+        failedTaskNames: [],
       }),
       exec,
     );
@@ -645,22 +643,28 @@ describe("reconstructDagResult (design-B replay)", () => {
           totalCount: 2,
           successCount: 1,
           skippedCount: 1,
-          completedCount: 2,
-          terminalTaskNames: ["a", "gate"],
         }),
         exec,
       ),
     ).rejects.toBeInstanceOf(DagPredicateError);
   });
 
-  it("leaves a skip-eligible task ABSENT when the envelope excludes it (early completion)", async () => {
-    // Repro for the design-B replay-fidelity bug: under early completion the
-    // live scheduler halts on the completing settle BEFORE the skip pass, so a
-    // skip-eligible task downstream of the completing task is ABSENT live.
-    // Reconstruction must NOT re-materialize it as SKIPPED, and must source
-    // counts from the (authoritative) envelope rather than recomputing.
+  it("recomputes a downstream skip greedily once terminalTaskNames is gone (convergence tradeoff)", async () => {
+    // CONVERGENCE NOTE. The cross-language envelope contract drops
+    // `terminalTaskNames`. That field was the ONLY signal that distinguished,
+    // on the offloaded replay path, a task that was SKIPPED live from one that
+    // was never started because early completion halted the scheduler before
+    // its skip pass. Without it, reconstruction recomputes skip/trigger
+    // decisions deterministically (the contract's stated replay rule), which
+    // materializes a skip-eligible task downstream of a TERMINAL task as
+    // SKIPPED — even if, under early completion, the live run left it absent.
+    //
+    // This is an accepted tradeoff, not a silent bug: the counts and
+    // completionReason are still sourced from the (authoritative) envelope, so
+    // the aggregate the console renders stays correct; only the per-task map
+    // may carry an extra skip in the narrow offload + early-completion case.
     const a = mk("a");
-    const c = mk("c", [a], "ALL_FAILED"); // a SUCCEEDED => c would greedily skip
+    const c = mk("c", [a], "ALL_FAILED"); // a SUCCEEDED => c greedily skips
     const exec = execCtxWith({
       "1-2-DAG_NODE_T_a": { Status: "SUCCEEDED", result: 1 },
     });
@@ -670,17 +674,16 @@ describe("reconstructDagResult (design-B replay)", () => {
       envelope({
         totalCount: 2,
         successCount: 1,
-        skippedCount: 0,
-        completedCount: 1,
+        skippedCount: 0, // envelope-authoritative: live never counted c
         completionReason: "MIN_SUCCESSFUL_REACHED",
-        terminalTaskNames: ["a"], // c is NOT terminal — it never started
       }),
       exec,
     );
     expect(r.getStatus("a")).toBe("SUCCEEDED");
-    // Regression guard: c must stay ABSENT, not SKIPPED.
-    expect(r.getStatus("c")).toBeUndefined();
-    // Counts come from the envelope, not a divergent recompute.
+    // Greedy recompute now materializes c as SKIPPED (was ABSENT under the old
+    // terminalTaskNames-carrying envelope).
+    expect(r.getStatus("c")).toBe("SKIPPED");
+    // Counts remain envelope-authoritative, NOT a recompute over the map.
     expect(r.successCount).toBe(1);
     expect(r.skippedCount).toBe(0);
     expect(r.completionReason).toBe("MIN_SUCCESSFUL_REACHED");
@@ -699,10 +702,8 @@ describe("reconstructDagResult (design-B replay)", () => {
       envelope({
         totalCount: 3,
         successCount: 1,
-        completedCount: 1,
         completionReason: "MIN_SUCCESSFUL_REACHED",
         startedTaskNames: ["b"],
-        terminalTaskNames: ["a"],
       }),
       exec,
     );
@@ -741,10 +742,8 @@ describe("reconstructDagResult (design-B replay)", () => {
       envelope({
         totalCount: 2,
         successCount: 1, // b is NOT counted as a success
-        completedCount: 1,
         completionReason: "MIN_SUCCESSFUL_REACHED",
         startedTaskNames: ["b"], // ...but authoritatively STARTED
-        terminalTaskNames: ["a"],
       }),
       exec,
     );

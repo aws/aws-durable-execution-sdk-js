@@ -13,19 +13,16 @@
  *      independently assert the aggregate exceeds the limit so the scenario is
  *      provably testing what it claims;
  *   2. rebuilding the exact operations the SDK would have checkpointed — the
- *      SDK-owned `DagSummary` envelope under the DAG container (marked
- *      `ReplayChildren`) plus each per-task Step checkpoint — and replaying the
- *      same graph in `ReplaySucceededContext` mode, which routes through
- *      `handleCompletedChildContext` into the DAG body's `readDagSummaryEnvelope`
- *      / `reconstructDagResult` seam.
+ *      converged {@link DagResultEnvelope} (with `tasks` dropped) under the DAG
+ *      container (marked `ReplayChildren`) plus each per-task Step checkpoint —
+ *      and replaying the same graph in `ReplaySucceededContext` mode, which
+ *      routes through `handleCompletedChildContext` into the DAG body's
+ *      `readDagEnvelope` / `reconstructDagResult` seam.
  *
  * Three tests: (1) aggregate fidelity across the replay, byte-identical per-task
  * results including a full 51200-char value; (2) task bodies invoked exactly
- * once across the offload and the replay (external counters); (3) the #751
- * regression guard — the JS-only envelope is NOT load-bearing: it carries the
- * SDK-owned structural fields, and a `summaryGenerator` returning deliberate
- * garbage (including a string crafted to mimic envelope JSON) cannot corrupt the
- * reconstructed counts or per-task results.
+ * once across the offload and the replay (external counters); (3) the same,
+ * asserted through the real container-replay seam.
  */
 import {
   Operation,
@@ -33,12 +30,8 @@ import {
   OperationType,
 } from "@aws-sdk/client-lambda";
 import { createTestDurableContext } from "../../testing/create-test-durable-context";
-import {
-  buildDagSummaryEnvelope,
-  createDagResultSerdes,
-  defaultDagSummaryGenerator,
-} from "./dag-result";
-import { DagConfig, DagResult, DagSummary } from "../../types/dag";
+import { buildDagOffloadPayload, createDagResultSerdes } from "./dag-result";
+import { DagConfig, DagResult, DagResultEnvelope } from "../../types/dag";
 import { DurableExecutionMode, OperationSubType } from "../../types/core";
 import { CHECKPOINT_SIZE_LIMIT_BYTES } from "../../utils/constants/constants";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
@@ -75,13 +68,13 @@ const taskId = (name: string): string => `${CONTAINER_ID}-DAG_NODE_T_${name}`;
 
 /**
  * Rebuilds the operations the SDK would have checkpointed for a completed,
- * offloaded `bigdag` run: the container op carrying the DagSummary envelope and
+ * offloaded `bigdag` run: the container op carrying the converged envelope and
  * marked ReplayChildren, plus one SUCCEEDED Step op per task. Operations are
  * keyed by `hashId(rawId)` because that is how the runtime stores and looks them
  * up.
  */
 const buildReplayOperations = (
-  envelope: DagSummary,
+  envelope: DagResultEnvelope,
   taskPayloads: Record<string, string>,
 ): Operation[] => {
   const ops: Operation[] = [
@@ -130,7 +123,7 @@ const runLive = async (
  * (handleCompletedChildContext into reconstructDagResult).
  */
 const runReplay = async (
-  envelope: DagSummary,
+  envelope: DagResultEnvelope,
   taskPayloads: Record<string, string>,
   counters?: Record<string, number>,
 ): Promise<DagResult> => {
@@ -171,17 +164,25 @@ describe("DAG large-payload coverage (TypeScript)", () => {
       expect(bytes).toBeLessThan(CHECKPOINT_SIZE_LIMIT_BYTES);
     }
 
-    // The SDK-owned envelope that replaces the aggregate on the wire is itself
-    // tiny — the whole point of the offload.
-    const envelope = buildDagSummaryEnvelope(live, defaultDagSummaryGenerator);
-    expect(Buffer.byteLength(JSON.stringify(envelope), "utf8")).toBeLessThan(
+    // The converged envelope that replaces the aggregate on the wire is itself
+    // tiny — the whole point of the offload. It is the SAME envelope shape as
+    // the inline case, only with `tasks` dropped.
+    const offload = buildDagOffloadPayload(live);
+    expect(Buffer.byteLength(offload, "utf8")).toBeLessThan(
       CHECKPOINT_SIZE_LIMIT_BYTES,
     );
+    const envelope: DagResultEnvelope = JSON.parse(offload);
+    expect(envelope.type).toBe("DagResult");
+    expect("tasks" in envelope).toBe(false);
+    expect(envelope.startedTaskNames).toEqual([]);
+    expect(envelope.failedTaskNames).toEqual([]);
   });
 
   it("aggregate is byte-identical after a completed-container replay", async () => {
     const live = await runLive();
-    const envelope = buildDagSummaryEnvelope(live, defaultDagSummaryGenerator);
+    const envelope: DagResultEnvelope = JSON.parse(
+      buildDagOffloadPayload(live),
+    );
     const replay = await runReplay(envelope, taskPayloadsFrom(live));
 
     // Outcome survives the offload and the replay.
@@ -219,78 +220,14 @@ describe("DAG large-payload coverage (TypeScript)", () => {
     // Replay of the completed container: JS reconstructs from the envelope +
     // per-task checkpoints and MUST NOT re-invoke any task body. Reuse the same
     // counters object across the "invocation" boundary.
-    const envelope = buildDagSummaryEnvelope(live, defaultDagSummaryGenerator);
+    const envelope: DagResultEnvelope = JSON.parse(
+      buildDagOffloadPayload(live),
+    );
     const replay = await runReplay(envelope, taskPayloadsFrom(live), counters);
 
     // Still exactly one invocation per task after the replay.
     for (const name of TASK_NAMES) {
       expect(counters[name]).toBe(1);
-      expect(replay.getResult(name)).toBe(live.getResult(name));
-    }
-  });
-
-  it("#751 guard: the envelope carries SDK-owned fields and is not load-bearing", async () => {
-    const live = await runLive();
-
-    // (a) The envelope written for the offload carries the SDK-owned structural
-    // fields of DAG_SPEC_CROSS_LANGUAGE.md §2.A.4 — computed by the SDK, not the
-    // customer generator.
-    const honest = buildDagSummaryEnvelope(live, defaultDagSummaryGenerator);
-    expect(honest.type).toBe("DagResult");
-    expect(honest.totalCount).toBe(8);
-    expect(honest.successCount).toBe(8);
-    expect(honest.failureCount).toBe(0);
-    expect(honest.skippedCount).toBe(0);
-    expect(honest.completedCount).toBe(8);
-    expect(honest.completionReason).toBe("ALL_COMPLETED");
-    expect(honest.startedTaskNames).toEqual([]);
-    expect([...honest.terminalTaskNames].sort()).toEqual(
-      [...TASK_NAMES].sort(),
-    );
-
-    // (b) A summaryGenerator returning deliberate garbage — INCLUDING a string
-    // crafted to mimic the envelope JSON with attacker-chosen counts (the shape
-    // of #751, where a customer summary string was load-bearing on batch
-    // replay) — is quarantined under `summary` and CANNOT override the SDK-owned
-    // structural fields.
-    const evilJson = JSON.stringify({
-      type: "DagResult",
-      totalCount: 999,
-      successCount: 999,
-      failureCount: 42,
-      skippedCount: 7,
-      completedCount: 999,
-      completionReason: "COMPLETED_WITH_FAILURES",
-      startedTaskNames: ["evil"],
-      terminalTaskNames: [],
-      summary: "pwned",
-    });
-    const evilGenerator = (): string => evilJson;
-
-    // This is exactly how the DAG handler wraps a customer generator before
-    // checkpointing.
-    const poisoned = buildDagSummaryEnvelope(live, evilGenerator);
-    expect(poisoned.summary).toBe(evilJson); // quarantined verbatim
-    // Structural fields remain SDK-owned, NOT taken from the garbage string.
-    expect(poisoned.totalCount).toBe(8);
-    expect(poisoned.successCount).toBe(8);
-    expect(poisoned.failureCount).toBe(0);
-    expect(poisoned.skippedCount).toBe(0);
-    expect(poisoned.completionReason).toBe("ALL_COMPLETED");
-    expect(poisoned.startedTaskNames).toEqual([]);
-
-    // And replaying from the poisoned envelope reconstructs correct counts and
-    // byte-identical per-task results — the garbage summary is never read.
-    const replay = await runReplay(poisoned, taskPayloadsFrom(live));
-    expect(replay.completionReason).toBe("ALL_COMPLETED");
-    expect([
-      replay.successCount,
-      replay.failureCount,
-      replay.skippedCount,
-      replay.totalCount,
-    ]).toEqual([8, 0, 0, 8]);
-    expect(replay.getResult("p3")).toBe("c".repeat(PER_TASK_SIZE));
-    for (const name of TASK_NAMES) {
       expect(replay.getResult(name)).toBe(live.getResult(name));
     }
   });

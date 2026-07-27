@@ -68,7 +68,8 @@ export {
   DagCompletionItemStatus,
   DagCompletionStatus,
   DagCustomCompletionConfig,
-  DagSummary,
+  DagResultEnvelope,
+  SerializedDagTask,
   DagFn,
 } from "./types/dag";
 export { DurablePromise } from "./types/durable-promise";

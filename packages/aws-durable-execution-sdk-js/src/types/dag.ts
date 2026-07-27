@@ -25,6 +25,7 @@ import { WaitForCallbackConfig } from "./callback";
 import { WaitForConditionConfig } from "./wait-condition";
 import { Serdes } from "../utils/serdes/serdes";
 import { DurableOperationError } from "../errors/durable-error/durable-error";
+import { ErrorObject } from "@aws-sdk/client-lambda";
 
 /**
  * A registration-time reference to a DAG task, returned by every
@@ -343,12 +344,6 @@ export interface DagConfig {
   defaultTriggerRule?: TriggerRule;
   /** Serdes for the aggregated {@link DagResult} container payload. */
   serdes?: Serdes<DagResult>;
-  /**
-   * Observability-only text generator for the large-payload fallback. Its
-   * output is stored verbatim under `DagSummary.summary` and is NEVER read on
-   * replay. It cannot override the SDK-owned count/reason/started fields.
-   */
-  summaryGenerator?: (result: DagResult) => string;
   /** Nesting type for task child contexts. */
   nesting?: NestingType;
 }
@@ -527,26 +522,71 @@ export interface DagContext<TLogger extends DurableLogger = DurableLogger> {
 }
 
 /**
- * SDK-owned compact envelope checkpointed for a DAG whose serialized result
- * exceeds the checkpoint size limit. The customer `summaryGenerator` output is
- * quarantined under `summary` and is never read on replay.
+ * A single task's entry inside the serialized {@link DagResultEnvelope} `tasks`
+ * array. Every field is ALWAYS present; unset values are `null`, never omitted
+ * (cross-language envelope contract rule 1). Timestamps are ISO 8601, UTC,
+ * millisecond precision with a `Z` suffix, or `null` when genuinely unknown.
  *
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
-export interface DagSummary {
+export interface SerializedDagTask {
+  name: string;
+  status: TaskStatus;
+  /** `TRIGGER_RULE` | `RUN_IF_PREDICATE`; `null` unless `status === "SKIPPED"`. */
+  skipReason: SkipReason | null;
+  /** `plain` | `batch` | `dag` (lowercase); `null` unless `status === "SUCCEEDED"`. */
+  resultKind: "plain" | "batch" | "dag" | null;
+  /** The task result; `null` unless `status === "SUCCEEDED"`. */
+  result: unknown | null;
+  /** Canonical PascalCase error object; `null` unless `status === "FAILED"`. */
+  error: ErrorObject | null;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+/**
+ * The single, cross-language DAG container checkpoint payload — returned by
+ * `GetExecutionHistory` and rendered in the console. All four SDKs emit this
+ * exact envelope for BOTH the inline and the offloaded case; the two differ
+ * only in whether `tasks` is present.
+ *
+ * Normative rules (see `ENVELOPE_CONVERGENCE_CONTRACT.md`):
+ * 1. Every canonical field is always present; absent values are `null`, never
+ *    omitted.
+ * 2. `tasks` is the only optional field. Its absence is the signal that the
+ *    per-task detail was too large and lives in the retained child operations
+ *    (the container was checkpointed with `ReplayChildren = true`).
+ * 3. The aggregate fields are present even when `tasks` is; the redundancy buys
+ *    one shape instead of two.
+ * 4. Evolution is additive only (no `schemaVersion`); readers MUST ignore
+ *    unknown fields and treat a missing field as absent.
+ *
+ * @experimental This interface is experimental and may be changed or removed in future releases.
+ */
+export interface DagResultEnvelope {
   type: "DagResult";
   totalCount: number;
   successCount: number;
   failureCount: number;
   skippedCount: number;
-  completedCount: number;
   completionReason: DagCompletionReason;
-  /** Task names STARTED-but-not-terminal at an early completion. */
+  /**
+   * Task names STARTED-but-not-terminal at an early completion. Bounded by
+   * `maxConcurrency` (default 40), so it survives every degradation step and is
+   * never dropped.
+   */
   startedTaskNames: string[];
-  /** Terminal task names (SUCCEEDED/FAILED/SKIPPED), for diagnostics. */
-  terminalTaskNames: string[];
-  /** Observability-only text from the customer generator; never read on replay. */
-  summary?: string;
+  /**
+   * Task names that FAILED, for diagnostics. `null` when dropped at the final
+   * degradation step (still too large after `tasks` was dropped) — it is not
+   * read on replay (failed tasks are recovered from their child checkpoints).
+   */
+  failedTaskNames: string[] | null;
+  /**
+   * Per-task detail. ABSENT (not `null`) when offloaded — its absence is the
+   * signal to reconstruct from the retained child operations.
+   */
+  tasks?: SerializedDagTask[];
 }
 
 /**

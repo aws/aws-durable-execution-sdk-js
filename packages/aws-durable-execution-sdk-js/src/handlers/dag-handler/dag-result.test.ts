@@ -2,10 +2,9 @@ import {
   DagResultImpl,
   createDagResultSerdes,
   restoreDagResult,
-  buildDagSummaryEnvelope,
-  defaultDagSummaryGenerator,
+  buildDagOffloadPayload,
 } from "./dag-result";
-import { TaskExecution } from "../../types/dag";
+import { DagResultEnvelope, TaskExecution } from "../../types/dag";
 import {
   StepError,
   DagExecutionError,
@@ -13,6 +12,7 @@ import {
 import { BatchResultImpl } from "../concurrent-execution-handler/batch-result";
 import { BatchItemStatus } from "../../types/batch";
 import { SerdesContext } from "../../utils/serdes/serdes";
+import { CHECKPOINT_SIZE_LIMIT_BYTES } from "../../utils/constants/constants";
 
 const ctx: SerdesContext = {
   entityId: "1-2",
@@ -127,29 +127,129 @@ describe("createDagResultSerdes", () => {
   });
 });
 
-describe("buildDagSummaryEnvelope", () => {
-  it("produces SDK-owned fields and quarantines customer text", () => {
-    const r = new DagResultImpl(
+describe("converged DagResultEnvelope (inline)", () => {
+  it("serializes one envelope shape with explicit nulls and aggregate fields", async () => {
+    const serdes = createDagResultSerdes();
+    const original = new DagResultImpl(
       results([
-        { name: "a", status: "SUCCEEDED", result: 1 },
-        { name: "b", status: "STARTED" },
+        {
+          name: "a",
+          status: "SUCCEEDED",
+          result: 1,
+          startedAt: new Date("2026-07-26T03:19:01.884Z"),
+          completedAt: new Date("2026-07-26T03:19:01.885Z"),
+        },
+        { name: "b", status: "FAILED", error: new StepError("boom") },
+        { name: "c", status: "SKIPPED", skipReason: "TRIGGER_RULE" },
       ]),
-      "MIN_SUCCESSFUL_REACHED",
+      "COMPLETED_WITH_FAILURES",
     );
-    const env = buildDagSummaryEnvelope(r, () => "custom text");
+    const env = JSON.parse((await serdes.serialize(original, ctx))!);
+
+    // Aggregate fields are always present, even alongside `tasks`.
     expect(env.type).toBe("DagResult");
+    expect(env.totalCount).toBe(3);
     expect(env.successCount).toBe(1);
-    expect(env.startedTaskNames).toEqual(["b"]);
-    expect(env.terminalTaskNames).toEqual(["a"]);
-    expect(env.summary).toBe("custom text");
+    expect(env.failureCount).toBe(1);
+    expect(env.skippedCount).toBe(1);
+    expect(env.completionReason).toBe("COMPLETED_WITH_FAILURES");
+    expect(env.startedTaskNames).toEqual([]);
+    expect(env.failedTaskNames).toEqual(["b"]);
+    expect(Array.isArray(env.tasks)).toBe(true);
+
+    // Every canonical task field is present; unset values are explicit null.
+    const [a, b, c] = env.tasks;
+    expect(a).toEqual({
+      name: "a",
+      status: "SUCCEEDED",
+      skipReason: null,
+      resultKind: "plain",
+      result: 1,
+      error: null,
+      startedAt: "2026-07-26T03:19:01.884Z",
+      completedAt: "2026-07-26T03:19:01.885Z",
+    });
+    expect(b.status).toBe("FAILED");
+    expect(b.skipReason).toBeNull();
+    expect(b.resultKind).toBeNull();
+    expect(b.result).toBeNull();
+    expect(b.error).not.toBeNull();
+    expect(b.error.ErrorMessage).toBe("boom"); // PascalCase error object
+    expect(c).toEqual({
+      name: "c",
+      status: "SKIPPED",
+      skipReason: "TRIGGER_RULE",
+      resultKind: null,
+      result: null,
+      error: null,
+      startedAt: null,
+      completedAt: null,
+    });
   });
 
-  it("defaultDagSummaryGenerator is descriptive", () => {
-    const r = new DagResultImpl(
-      results([{ name: "a", status: "SUCCEEDED", result: 1 }]),
+  it("deserializes ignoring unknown extra fields (contract rule 4)", async () => {
+    const serdes = createDagResultSerdes();
+    const original = new DagResultImpl(
+      results([{ name: "a", status: "SUCCEEDED", result: 7 }]),
       "ALL_COMPLETED",
     );
-    expect(defaultDagSummaryGenerator(r)).toContain("succeeded");
+    const env = JSON.parse((await serdes.serialize(original, ctx))!);
+    // Inject a field a future SDK version might add.
+    env.unknownFutureField = { nested: true };
+    env.tasks[0].alsoUnknown = 123;
+    const restored = restoreDagResult(env);
+    expect(restored.getResult("a")).toBe(7);
+    expect(restored.successCount).toBe(1);
+  });
+});
+
+describe("buildDagOffloadPayload (offloaded / tasks-dropped)", () => {
+  const started = new DagResultImpl(
+    results([
+      { name: "a", status: "SUCCEEDED", result: 1 },
+      { name: "b", status: "FAILED", error: new StepError("boom") },
+      { name: "c", status: "STARTED" },
+    ]),
+    "MIN_SUCCESSFUL_REACHED",
+  );
+
+  it("emits the SAME envelope as inline but WITHOUT tasks", () => {
+    const env: DagResultEnvelope = JSON.parse(buildDagOffloadPayload(started));
+    expect(env.type).toBe("DagResult");
+    expect("tasks" in env).toBe(false); // absence is the offload signal
+    expect(env.totalCount).toBe(3);
+    expect(env.successCount).toBe(1);
+    expect(env.failureCount).toBe(1);
+    expect(env.skippedCount).toBe(0);
+    expect(env.completionReason).toBe("MIN_SUCCESSFUL_REACHED");
+    expect(env.startedTaskNames).toEqual(["c"]);
+    expect(env.failedTaskNames).toEqual(["b"]);
+  });
+
+  it("degradation ladder: drops failedTaskNames when still too large, never the started set/counts", () => {
+    // Force step 3 by making failedTaskNames alone exceed the size limit.
+    const manyFailures: TaskExecution[] = [];
+    const failName = (i: number): string => `fail_${"x".repeat(200)}_${i}`;
+    const count = Math.ceil(CHECKPOINT_SIZE_LIMIT_BYTES / 210) + 10;
+    for (let i = 0; i < count; i++) {
+      manyFailures.push({
+        name: failName(i),
+        status: "FAILED",
+        error: new StepError("e"),
+      });
+    }
+    manyFailures.push({ name: "running", status: "STARTED" });
+    const big = new DagResultImpl(
+      new Map(manyFailures.map((e) => [e.name, e])),
+      "COMPLETED_WITH_FAILURES",
+    );
+    const env: DagResultEnvelope = JSON.parse(buildDagOffloadPayload(big));
+    // failedTaskNames dropped to null; started set + counts + reason survive.
+    expect(env.failedTaskNames).toBeNull();
+    expect(env.startedTaskNames).toEqual(["running"]);
+    expect(env.failureCount).toBe(count);
+    expect(env.completionReason).toBe("COMPLETED_WITH_FAILURES");
+    expect("tasks" in env).toBe(false);
   });
 });
 

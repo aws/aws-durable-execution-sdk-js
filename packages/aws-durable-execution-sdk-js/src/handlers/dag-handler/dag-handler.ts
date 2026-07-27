@@ -24,10 +24,9 @@ import {
   reconstructDagResult,
 } from "./dag-executor";
 import {
-  buildDagSummaryEnvelope,
+  buildDagOffloadPayload,
   createDagResultSerdes,
-  defaultDagSummaryGenerator,
-  readDagSummaryEnvelope,
+  readDagEnvelope,
 } from "./dag-result";
 
 /**
@@ -110,13 +109,12 @@ export const createDagHandler =
       const childOptions: ChildConfig<DagResult> = {
         subType: OperationSubType.DAG,
         serdes: config?.serdes ?? createDagResultSerdes(),
-        summaryGenerator: (result: DagResult) =>
-          JSON.stringify(
-            buildDagSummaryEnvelope(
-              result,
-              config?.summaryGenerator ?? defaultDagSummaryGenerator,
-            ),
-          ),
+        // Offloaded (large-payload) fallback: the SAME converged envelope as
+        // the inline serdes, only with `tasks` dropped (its absence signals
+        // reconstruct). The ordered degradation ladder lives in
+        // buildDagOffloadPayload. There is no customer summary generator — the
+        // whole envelope is human-readable.
+        summaryGenerator: (result: DagResult) => buildDagOffloadPayload(result),
         errorMapper: (e) => e,
       };
 
@@ -138,7 +136,7 @@ export const createDagHandler =
             modeHost.durableExecutionMode ===
             DurableExecutionMode.ReplaySucceededContext
           ) {
-            const envelope = readDagSummaryEnvelope(
+            const envelope = readDagEnvelope(
               executionContext,
               modeHost._stepPrefix,
             );

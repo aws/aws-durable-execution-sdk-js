@@ -2,14 +2,13 @@ import {
   AnyTaskHandle,
   DagCompletionReason,
   DagResult,
-  DagSummary,
-  SkipReason,
+  DagResultEnvelope,
+  SerializedDagTask,
   TaskExecution,
   TaskHandle,
   TaskStatus,
 } from "../../types/dag";
 import { DagExecutionError } from "../../errors/dag-errors/dag-errors";
-import { ErrorObject } from "@aws-sdk/client-lambda";
 import { DurableOperationError } from "../../errors/durable-error/durable-error";
 import { Serdes, SerdesContext } from "../../utils/serdes/serdes";
 import {
@@ -18,6 +17,7 @@ import {
   restoreBatchResult,
 } from "../concurrent-execution-handler/batch-result";
 import { ExecutionContext } from "../../types/core";
+import { CHECKPOINT_SIZE_LIMIT_BYTES } from "../../utils/constants/constants";
 
 /**
  * Concrete {@link DagResult}. Computes counts once at construction and resolves
@@ -46,11 +46,12 @@ export class DagResultImpl implements DagResult {
     this.results = results;
     this.completionReason = completionReason;
     if (authoritativeCounts) {
-      // Design-B replay: counts are sourced from the SDK-owned DagSummary
-      // envelope (§7.7/§8.1), NOT recomputed from the reconstructed results
-      // map — under early completion the two can legitimately differ (a
-      // never-started skip-eligible task is absent from `results` but was
-      // never counted live either).
+      // Offloaded replay: counts are sourced from the converged
+      // DagResultEnvelope (authoritative), NOT recomputed from the
+      // reconstructed results map — under early completion the two can
+      // legitimately differ, and once terminalTaskNames was dropped the greedy
+      // skip recompute may materialize a skip the live run left absent, so the
+      // envelope counts remain the source of truth for the aggregate.
       this.successCount = authoritativeCounts.successCount;
       this.failureCount = authoritativeCounts.failureCount;
       this.skippedCount = authoritativeCounts.skippedCount;
@@ -119,73 +120,126 @@ export class DagResultImpl implements DagResult {
   }
 }
 
-type SerializedResultKind = "plain" | "batch" | "dag";
-
-interface SerializedTaskExecution {
-  name: string;
-  status: TaskStatus;
-  skipReason?: SkipReason;
-  resultKind?: SerializedResultKind;
-  result?: unknown;
-  error?: ErrorObject;
-  startedAt?: string;
-  completedAt?: string;
-}
-
-interface SerializedDagResult {
-  tasks: SerializedTaskExecution[];
-  completionReason: DagCompletionReason;
-  totalCount: number;
-}
-
 const batchSerdes = createBatchResultSerdes<unknown>();
 
-async function serializeDagResultObject(
-  value: DagResult,
-  context: SerdesContext,
-): Promise<SerializedDagResult> {
-  const tasks: SerializedTaskExecution[] = [];
-  for (const exec of value.results.values()) {
-    const s: SerializedTaskExecution = { name: exec.name, status: exec.status };
-    if (exec.skipReason) {
-      s.skipReason = exec.skipReason;
+/** Task names currently in `status`, in registration (results-map) order. */
+function taskNamesByStatus(result: DagResult, status: TaskStatus): string[] {
+  const names: string[] = [];
+  for (const exec of result.results.values()) {
+    if (exec.status === status) {
+      names.push(exec.name);
     }
-    if (exec.startedAt) {
-      s.startedAt = exec.startedAt.toISOString();
-    }
-    if (exec.completedAt) {
-      s.completedAt = exec.completedAt.toISOString();
-    }
-    if (exec.status === "FAILED" && exec.error) {
-      s.error = exec.error.toErrorObject();
-    }
-    if (exec.status === "SUCCEEDED") {
-      const r = exec.result;
-      if (r instanceof DagResultImpl) {
-        s.resultKind = "dag";
-        s.result = await serializeDagResultObject(r, context);
-      } else if (r instanceof BatchResultImpl) {
-        s.resultKind = "batch";
-        const str = await batchSerdes.serialize(r, context);
-        s.result = str ? JSON.parse(str) : undefined;
-      } else {
-        s.resultKind = "plain";
-        s.result = r;
-      }
-    }
-    tasks.push(s);
   }
+  return names;
+}
+
+/**
+ * Builds the aggregate (task-less) portion of the {@link DagResultEnvelope} —
+ * the fields shared, byte-for-byte, by the inline and the offloaded payload.
+ * `failedTaskNames` starts as an array; the offload degradation ladder may
+ * later null it. Field order matches the cross-language listing for console
+ * readability (conformance compares parsed structures, not order).
+ */
+function buildEnvelopeAggregate(result: DagResult): DagResultEnvelope {
   return {
-    tasks,
-    completionReason: value.completionReason,
-    totalCount: value.totalCount,
+    type: "DagResult",
+    totalCount: result.totalCount,
+    successCount: result.successCount,
+    failureCount: result.failureCount,
+    skippedCount: result.skippedCount,
+    completionReason: result.completionReason,
+    startedTaskNames: taskNamesByStatus(result, "STARTED"),
+    failedTaskNames: taskNamesByStatus(result, "FAILED"),
   };
 }
 
 /**
- * Restores a deserialized (plain) DAG result — or an already-methoded
+ * Serializes one {@link TaskExecution} into the canonical, explicit-null task
+ * shape. Every field is ALWAYS present; unset values are `null`, never omitted
+ * (envelope contract rule 1). `resultKind` is lowercase.
+ */
+async function serializeTask(
+  exec: TaskExecution,
+  context: SerdesContext,
+): Promise<SerializedDagTask> {
+  let resultKind: SerializedDagTask["resultKind"] = null;
+  let result: unknown = null;
+  if (exec.status === "SUCCEEDED") {
+    const r = exec.result;
+    if (r instanceof DagResultImpl) {
+      resultKind = "dag";
+      result = await serializeDagResultEnvelope(r, context);
+    } else if (r instanceof BatchResultImpl) {
+      resultKind = "batch";
+      const str = await batchSerdes.serialize(r, context);
+      result = str ? JSON.parse(str) : null;
+    } else {
+      resultKind = "plain";
+      result = r ?? null;
+    }
+  }
+  return {
+    name: exec.name,
+    status: exec.status,
+    skipReason: exec.status === "SKIPPED" ? (exec.skipReason ?? null) : null,
+    resultKind,
+    result,
+    error:
+      exec.status === "FAILED" && exec.error
+        ? exec.error.toErrorObject()
+        : null,
+    startedAt: exec.startedAt ? exec.startedAt.toISOString() : null,
+    completedAt: exec.completedAt ? exec.completedAt.toISOString() : null,
+  };
+}
+
+/**
+ * Serializes the full INLINE {@link DagResultEnvelope}: the shared aggregate
+ * fields plus the per-task `tasks` array. This is the same envelope the
+ * offloaded path emits, only WITH `tasks`.
+ */
+async function serializeDagResultEnvelope(
+  value: DagResult,
+  context: SerdesContext,
+): Promise<DagResultEnvelope> {
+  const tasks: SerializedDagTask[] = [];
+  for (const exec of value.results.values()) {
+    tasks.push(await serializeTask(exec, context));
+  }
+  return { ...buildEnvelopeAggregate(value), tasks };
+}
+
+/**
+ * Builds the OFFLOADED container payload: the SAME {@link DagResultEnvelope} as
+ * the inline case with `tasks` DROPPED (its absence is the signal to
+ * reconstruct from the retained child operations). Applies the ordered
+ * degradation ladder — if the tasks-dropped envelope is STILL over the
+ * checkpoint size limit, drop `failedTaskNames` (set to `null`). Counts,
+ * `completionReason` and `startedTaskNames` are never dropped, so a DAG can
+ * never fail to checkpoint because its own summary did not fit.
+ *
+ * @experimental This function is experimental and may be changed or removed in future releases.
+ */
+export function buildDagOffloadPayload(result: DagResult): string {
+  const envelope = buildEnvelopeAggregate(result);
+  const withFailed = JSON.stringify(envelope);
+  if (Buffer.byteLength(withFailed, "utf8") <= CHECKPOINT_SIZE_LIMIT_BYTES) {
+    return withFailed;
+  }
+  // Ladder step 3: the tasks-dropped envelope is still too large. Drop the
+  // unbounded `failedTaskNames` (it is diagnostic-only and never read on
+  // replay — failed tasks are recovered from their own child checkpoints).
+  envelope.failedTaskNames = null;
+  return JSON.stringify(envelope);
+}
+
+/**
+ * Restores a deserialized (plain) DAG envelope — or an already-methoded
  * {@link DagResultImpl} — into a fully-methoded {@link DagResult}, recursively
- * restoring `batch`/`dag` task results by their `resultKind`.
+ * restoring `batch`/`dag` task results by their `resultKind`. Handles the
+ * explicit-null task shape (unset fields are `null`, not omitted). Only the
+ * INLINE envelope (with `tasks`) is restored here; the offloaded envelope is
+ * handled by the reconstruct path.
  *
  * @experimental This function is experimental and may be changed or removed in future releases.
  */
@@ -197,11 +251,11 @@ export function restoreDagResult(data: unknown): DagResult {
     data &&
     typeof data === "object" &&
     "tasks" in data &&
-    Array.isArray((data as SerializedDagResult).tasks)
+    Array.isArray((data as DagResultEnvelope).tasks)
   ) {
-    const s = data as SerializedDagResult;
+    const s = data as DagResultEnvelope;
     const map = new Map<string, TaskExecution>();
-    for (const t of s.tasks) {
+    for (const t of s.tasks ?? []) {
       const exec: TaskExecution = { name: t.name, status: t.status };
       if (t.skipReason) {
         exec.skipReason = t.skipReason;
@@ -226,14 +280,34 @@ export function restoreDagResult(data: unknown): DagResult {
       }
       map.set(t.name, exec);
     }
-    return new DagResultImpl(map, s.completionReason, s.totalCount);
+    // Aggregate fields are authoritative (envelope contract rule 3); under
+    // early completion they can legitimately differ from a recompute over the
+    // reconstructed map. Fall back to deriving only if a malformed envelope
+    // omits them.
+    const authoritativeCounts =
+      typeof s.successCount === "number" &&
+      typeof s.failureCount === "number" &&
+      typeof s.skippedCount === "number"
+        ? {
+            successCount: s.successCount,
+            failureCount: s.failureCount,
+            skippedCount: s.skippedCount,
+          }
+        : undefined;
+    return new DagResultImpl(
+      map,
+      s.completionReason ?? "ALL_COMPLETED",
+      s.totalCount,
+      authoritativeCounts,
+    );
   }
   return new DagResultImpl(new Map(), "ALL_COMPLETED", 0);
 }
 
 /**
- * Serdes for the aggregated {@link DagResult} container payload. Tags each
- * task's result with a `resultKind` discriminator so heterogeneous,
+ * Serdes for the aggregated {@link DagResult} container payload. Serializes the
+ * single converged {@link DagResultEnvelope} (with `tasks`) and tags each
+ * task's result with a lowercase `resultKind` discriminator so heterogeneous,
  * method-bearing results (`batch`/nested `dag`) survive the round-trip.
  *
  * @experimental This function is experimental and may be changed or removed in future releases.
@@ -245,7 +319,7 @@ export function createDagResultSerdes(): Serdes<DagResult> {
       context: SerdesContext,
     ): Promise<string | undefined> =>
       value
-        ? JSON.stringify(await serializeDagResultObject(value, context))
+        ? JSON.stringify(await serializeDagResultEnvelope(value, context))
         : undefined,
     deserialize: async (
       data: string | undefined,
@@ -255,71 +329,18 @@ export function createDagResultSerdes(): Serdes<DagResult> {
 }
 
 /**
- * Default observability-only summary text for a DAG result.
+ * Reads and validates the checkpointed offloaded {@link DagResultEnvelope} for
+ * a DAG container (the payload written by {@link buildDagOffloadPayload}).
+ * Returns `null` if missing or malformed, in which case reconstruction derives
+ * greedily from per-task checkpoints with an empty STARTED set. Unknown extra
+ * fields are ignored (envelope contract rule 4).
  *
  * @experimental This function is experimental and may be changed or removed in future releases.
  */
-export function defaultDagSummaryGenerator(result: DagResult): string {
-  return (
-    `${result.successCount}/${result.totalCount} succeeded, ` +
-    `${result.failureCount} failed, ${result.skippedCount} skipped ` +
-    `(${result.completionReason})`
-  );
-}
-
-/**
- * Builds the SDK-owned {@link DagSummary} envelope for the large-payload
- * fallback. SDK-owned count/reason/started fields are authoritative; the
- * customer generator output is quarantined under `summary` (never read on
- * replay).
- *
- * @experimental This function is experimental and may be changed or removed in future releases.
- */
-export function buildDagSummaryEnvelope(
-  result: DagResult,
-  generator: (result: DagResult) => string,
-): DagSummary {
-  const startedTaskNames: string[] = [];
-  const terminalTaskNames: string[] = [];
-  for (const [name, exec] of result.results) {
-    if (exec.status === "STARTED") {
-      startedTaskNames.push(name);
-    } else {
-      terminalTaskNames.push(name);
-    }
-  }
-  let summary: string | undefined;
-  try {
-    summary = generator(result);
-  } catch {
-    summary = undefined;
-  }
-  return {
-    type: "DagResult",
-    totalCount: result.totalCount,
-    successCount: result.successCount,
-    failureCount: result.failureCount,
-    skippedCount: result.skippedCount,
-    completedCount:
-      result.successCount + result.failureCount + result.skippedCount,
-    completionReason: result.completionReason,
-    startedTaskNames,
-    terminalTaskNames,
-    summary,
-  };
-}
-
-/**
- * Reads and validates the checkpointed {@link DagSummary} envelope for a DAG
- * container. Returns `null` if missing or malformed (reconstruction then
- * derives from per-task checkpoints with an empty STARTED set — never hangs).
- *
- * @experimental This function is experimental and may be changed or removed in future releases.
- */
-export function readDagSummaryEnvelope(
+export function readDagEnvelope(
   executionContext: ExecutionContext,
   entityId: string | undefined,
-): DagSummary | null {
+): DagResultEnvelope | null {
   if (!entityId) {
     return null;
   }
@@ -329,13 +350,12 @@ export function readDagSummaryEnvelope(
     return null;
   }
   try {
-    const parsed = JSON.parse(payload) as Partial<DagSummary>;
+    const parsed = JSON.parse(payload) as Partial<DagResultEnvelope>;
     const counts = [
       parsed.totalCount,
       parsed.successCount,
       parsed.failureCount,
       parsed.skippedCount,
-      parsed.completedCount,
     ];
     if (
       parsed &&
@@ -345,7 +365,7 @@ export function readDagSummaryEnvelope(
       ) &&
       Array.isArray(parsed.startedTaskNames)
     ) {
-      return parsed as DagSummary;
+      return parsed as DagResultEnvelope;
     }
   } catch {
     // fall through to null

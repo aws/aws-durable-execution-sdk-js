@@ -11,7 +11,7 @@ import {
   DagConfig,
   DagCustomCompletionConfig,
   DagResult,
-  DagSummary,
+  DagResultEnvelope,
   SkipReason,
   TaskExecution,
   TaskStatus,
@@ -394,22 +394,21 @@ export class DagExecutor {
 }
 
 /**
- * Reconstructs a {@link DagResult} on the large-payload completed-replay path
- * WITHOUT re-scheduling: re-runs only the deterministic register graph + skip/
- * trigger recomputation, reads per-task results from checkpoints, and sources
- * counts/reason/started-set from the SDK-owned {@link DagSummary} envelope.
+ * Reconstructs a {@link DagResult} on the offloaded (`tasks`-absent) replay
+ * path WITHOUT re-scheduling: re-runs only the deterministic register graph +
+ * skip/trigger recomputation, reads per-task results from checkpoints, and
+ * sources counts/reason/started-set from the offloaded {@link DagResultEnvelope}.
  *
  * @internal
  */
 export async function reconstructDagResult(
   ctx: DurableContextImpl<DurableLogger>,
   tasks: TaskDef[],
-  envelope: DagSummary | null,
+  envelope: DagResultEnvelope | null,
   executionContext: ExecutionContext,
 ): Promise<DagResult> {
   const results = new Map<string, TaskExecution>();
   const startedSet = new Set(envelope?.startedTaskNames ?? []);
-  const terminalSet = new Set(envelope?.terminalTaskNames ?? []);
 
   const buildDepsMap = (task: TaskDef): Record<string, unknown> => {
     // Null-prototype: keyed by customer-chosen task names (see the live
@@ -545,43 +544,31 @@ export async function reconstructDagResult(
           }
           return undefined;
         };
-        if (envelope) {
-          // The envelope's terminal set is AUTHORITATIVE (§7.7/§8.1). A
-          // no-checkpoint task is SKIPPED iff the envelope lists it as
-          // terminal; otherwise it was never started under early completion
-          // and MUST stay absent. Greedily re-materializing it as SKIPPED
-          // would diverge from the live run, because live scheduling halts on
-          // the completing settle BEFORE the settle-triggered skip pass runs,
-          // so a skip-eligible task downstream of the completing task is
-          // absent live — it must be absent on replay too.
-          if (terminalSet.has(task.name)) {
+        // Single greedy skip recompute, whether or not an envelope is present.
+        // With `terminalTaskNames` removed by the cross-language convergence
+        // contract, the SKIPPED-vs-never-started distinction is derived purely
+        // from the deterministic register graph plus the per-task checkpoints:
+        // recompute the skip/trigger decision and, if it resolves to a skip,
+        // materialize SKIPPED. Respect the in-flight guard — a task downstream
+        // of a STARTED (non-terminal) dep was never evaluated live, so a skip
+        // recomputed against that non-terminal status would diverge; leave it
+        // absent. Counts and completionReason remain sourced from the envelope
+        // (below), so the aggregate stays authoritative even when this greedy
+        // recompute materializes a skip the live run left absent under early
+        // completion. See CONVERGENCE NOTE at reconstructDagResult's callers.
+        if (depStatuses.some((s) => s === "STARTED")) {
+          // Downstream of an in-flight task: never started. Leave absent.
+        } else {
+          const reason = computeSkipReason();
+          if (reason) {
             results.set(task.name, {
               name: task.name,
               status: "SKIPPED",
-              skipReason: computeSkipReason() ?? "TRIGGER_RULE",
+              skipReason: reason,
             });
           }
-          // else: never started — leave absent.
-        } else {
-          // No/malformed envelope (§8.1 contract 3): derive greedily from the
-          // per-task checkpoints with an empty STARTED set. Respect the
-          // in-flight guard — a task downstream of a STARTED (non-terminal)
-          // dep was never evaluated live, so recomputing a skip against that
-          // non-terminal status would diverge.
-          if (depStatuses.some((s) => s === "STARTED")) {
-            // Downstream of an in-flight task: never started. Leave absent.
-          } else {
-            const reason = computeSkipReason();
-            if (reason) {
-              results.set(task.name, {
-                name: task.name,
-                status: "SKIPPED",
-                skipReason: reason,
-              });
-            }
-            // else: would-run but no checkpoint and not STARTED => never
-            // started (early completion). Leave absent from results.
-          }
+          // else: would-run but no checkpoint and not STARTED => never started
+          // (early completion). Leave absent from results.
         }
       }
       if (results.has(task.name)) {
