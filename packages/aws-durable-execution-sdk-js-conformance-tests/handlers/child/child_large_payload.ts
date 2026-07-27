@@ -9,7 +9,10 @@ export const handler = withDurableExecution(
     const largeDataResult = await context.runInChildContext(
       "large-data-processor",
       async (childContext: DurableContext) => {
-        console.log(event);
+        // Replay logging: the child body legitimately re-executes in
+        // ReplaySucceededContext mode, and both executions must be observable.
+        childContext.configureLogger({ modeAware: false });
+        childContext.logger.info(event);
 
         // Step returns a small seed value (under 256KB limit)
         const seed = await childContext.step(async () => {
