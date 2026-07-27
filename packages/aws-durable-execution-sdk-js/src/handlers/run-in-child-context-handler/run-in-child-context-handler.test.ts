@@ -77,6 +77,49 @@ describe("Run In Child Context Handler", () => {
     );
   });
 
+  describe("Descendant checkpoint gate (issue #751)", () => {
+    test("marks the context finished BEFORE serialization yields the event loop", async () => {
+      // Regression guard: the descendant-checkpoint gate must close synchronously
+      // after fn returns, before the safeSerialize await. Otherwise an in-flight
+      // child of a map/parallel that completed early could settle during
+      // serialization and checkpoint SUCCEEDED after the batch completed.
+      const childFn = jest
+        .fn()
+        .mockResolvedValue(TEST_CONSTANTS.CHILD_CONTEXT_RESULT);
+
+      let markedWhenSerializeRan: boolean | undefined;
+      const orderTrackingSerdes = {
+        serialize: jest.fn(async (value: unknown) => {
+          // Capture whether the gate was already closed at serialize time.
+          markedWhenSerializeRan =
+            (mockCheckpoint.markAncestorFinished as jest.Mock).mock.calls
+              .length > 0;
+          return JSON.stringify(value);
+        }),
+        deserialize: jest.fn(async (data?: string) =>
+          data ? JSON.parse(data) : undefined,
+        ),
+      };
+
+      await runInChildContextHandler(
+        TEST_CONSTANTS.CHILD_CONTEXT_NAME,
+        childFn,
+        {
+          serdes: orderTrackingSerdes as never,
+        },
+      );
+
+      expect(orderTrackingSerdes.serialize).toHaveBeenCalled();
+      // The gate was closed before serialization ran, not after.
+      expect(markedWhenSerializeRan).toBe(true);
+      expect(mockCheckpoint.markAncestorFinished).toHaveBeenCalledWith(
+        TEST_CONSTANTS.CHILD_CONTEXT_ID,
+      );
+      // And it is closed exactly once (not re-marked after serialization).
+      expect(mockCheckpoint.markAncestorFinished).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe("Virtual Context", () => {
     test("should not checkpoint when virtualContext is true", async () => {
       const childFn = jest
