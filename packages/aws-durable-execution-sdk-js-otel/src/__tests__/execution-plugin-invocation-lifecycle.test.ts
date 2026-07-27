@@ -464,6 +464,51 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     });
   });
 
+  describe("Invocation_Span status mapping (PluginInvocationStatus -> OTel span status)", () => {
+    it.each([
+      ["SUCCEEDED", SpanStatusCode.OK],
+      ["PENDING", SpanStatusCode.OK],
+    ])("maps %s -> Invocation_Span status OK", async (status, expected) => {
+      const plugin = new ExecutionOtelPlugin({ useDefaultTracerProvider: true });
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: status as any }),
+      );
+
+      const invocationSpan = findSpan(exporter, "Invocation");
+      expect(invocationSpan).toBeDefined();
+      expect(invocationSpan!.status.code).toBe(expected);
+    });
+
+    it("maps RETRYING -> Invocation_Span status ERROR", async () => {
+      const plugin = new ExecutionOtelPlugin({ useDefaultTracerProvider: true });
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: "RETRYING" as any }),
+      );
+
+      const invocationSpan = findSpan(exporter, "Invocation");
+      expect(invocationSpan).toBeDefined();
+      expect(invocationSpan!.status.code).toBe(SpanStatusCode.ERROR);
+    });
+
+    it("maps FAILED -> Invocation_Span status ERROR with the execution error message", async () => {
+      const plugin = new ExecutionOtelPlugin({ useDefaultTracerProvider: true });
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({
+          status: "FAILED" as any,
+          executionError: new Error("invocation boom"),
+        }),
+      );
+
+      const invocationSpan = findSpan(exporter, "Invocation");
+      expect(invocationSpan).toBeDefined();
+      expect(invocationSpan!.status.code).toBe(SpanStatusCode.ERROR);
+      expect(invocationSpan!.status.message).toBe("invocation boom");
+    });
+  });
+
   describe("Workflow_Span status mapping (PluginInvocationStatus -> OTel span status)", () => {
     it("maps SUCCEEDED -> span status OK", async () => {
       const plugin = new ExecutionOtelPlugin({ useDefaultTracerProvider: true });

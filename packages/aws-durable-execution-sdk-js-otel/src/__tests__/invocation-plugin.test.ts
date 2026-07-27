@@ -161,6 +161,48 @@ describe("InvocationOtelPlugin", () => {
     });
   });
 
+  describe("Invocation span status mapping (PluginInvocationStatus -> OTel span status)", () => {
+    it.each([
+      ["SUCCEEDED", SpanStatusCode.OK],
+      ["PENDING", SpanStatusCode.OK],
+    ])("maps %s -> invocation span status OK", async (status, expected) => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: status as any }),
+      );
+
+      const invocationSpan = findSpan("invocation");
+      expect(invocationSpan).toBeDefined();
+      expect(invocationSpan!.status.code).toBe(expected);
+    });
+
+    it("maps RETRYING -> invocation span status ERROR", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: "RETRYING" as any }),
+      );
+
+      const invocationSpan = findSpan("invocation");
+      expect(invocationSpan).toBeDefined();
+      expect(invocationSpan!.status.code).toBe(SpanStatusCode.ERROR);
+    });
+
+    it("maps FAILED -> invocation span status ERROR with the execution error message", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({
+          status: "FAILED" as any,
+          executionError: new Error("invocation boom"),
+        }),
+      );
+
+      const invocationSpan = findSpan("invocation");
+      expect(invocationSpan).toBeDefined();
+      expect(invocationSpan!.status.code).toBe(SpanStatusCode.ERROR);
+      expect(invocationSpan!.status.message).toBe("invocation boom");
+    });
+  });
+
   describe("Workflow span status mapping (PluginInvocationStatus -> OTel span status)", () => {
     it("maps SUCCEEDED -> Workflow span status OK", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());

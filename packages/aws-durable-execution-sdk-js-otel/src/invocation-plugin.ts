@@ -156,14 +156,22 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         info.status,
       );
 
-      // Set span status ERROR when execution has failed
-      if (info.status === "FAILED") {
+      // Map PluginInvocationStatus to span status:
+      //   FAILED / RETRYING -> ERROR (the handler threw; RETRYING means Lambda will retry)
+      //   SUCCEEDED / PENDING -> OK (PENDING is a normal suspension, not an error)
+      if (info.status === "FAILED" || info.status === "RETRYING") {
         this.invocationSpan.setStatus({
           code: SpanStatusCode.ERROR,
-          message: info.executionError?.message ?? "Execution failed",
+          message:
+            info.executionError?.message ??
+            (info.status === "RETRYING"
+              ? "Invocation retrying"
+              : "Execution failed"),
         });
+      } else {
+        // SUCCEEDED / PENDING
+        this.invocationSpan.setStatus({ code: SpanStatusCode.OK });
       }
-      // Otherwise leave status as UNSET (default)
 
       this.invocationSpan.end();
     }

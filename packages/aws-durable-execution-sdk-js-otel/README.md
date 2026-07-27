@@ -579,7 +579,16 @@ For non-terminal outcomes (`PENDING`/`RETRYING`) the Workflow_Span is intentiona
 
 > **Note:** the OTel plugin does **not** know whether a failed workflow was `TIMED_OUT` or `STOPPED`. `PluginInvocationStatus` — the only status the plugin receives at `onInvocationEnd` — distinguishes just `SUCCEEDED`/`FAILED`/`PENDING`/`RETRYING`. `TIMED_OUT` and `STOPPED` are operation-level states (`PluginOperationStatus`) and are not surfaced at the invocation/workflow level, so any such outcome is reported as `FAILED` → span status `ERROR`.
 
-The **Invocation_Span** follows the same mapping (`FAILED` → `ERROR`, otherwise `UNSET`) and additionally records the raw value in the `durable.invocation.status` attribute.
+The **Invocation_Span** uses a slightly different mapping, because a `PENDING` suspension is a normal outcome for an individual invocation and a `RETRYING` invocation means the handler threw:
+
+| `PluginInvocationStatus` | Invocation_Span status |
+| ------------------------ | ---------------------- |
+| `SUCCEEDED`              | `OK`                   |
+| `PENDING`                | `OK`                   |
+| `FAILED`                 | `ERROR` (with the execution error message) |
+| `RETRYING`               | `ERROR`                |
+
+Unlike the Workflow_Span, the Invocation_Span is **always** ended and exported (one per Lambda invocation), so `PENDING`/`RETRYING` invocations are exported with the mapping above. The raw value is also recorded in the `durable.invocation.status` attribute.
 
 ---
 
