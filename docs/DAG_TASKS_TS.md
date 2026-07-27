@@ -10,7 +10,7 @@
 
 ## T1 — Core completion-reason extraction (`core.ts`) + base-type layering
 
-- **Spec:** §7.2, Appendix C
+- **Spec:** §7.2
 - **Files changed:**
   - `src/types/core.ts` — add the 5-member `CompletionReason` (extracted here as the neutral base).
   - `src/types/batch.ts` — remove local `CompletionReason`; `import { CompletionReason } from "./core"` for internal use; do NOT re-export (barrel already surfaces via `export * from "./core"`).
@@ -120,10 +120,10 @@
   2. `maxConcurrency` throttles top-level task starts; in-flight tasks not cancelled at early completion (appear `STARTED`); never-started tasks absent from `results`.
   3. Empty DAG resolves immediately with `totalCount: 0`, `ALL_COMPLETED`.
 
-## T12 — `DagResult` + serdes + `DagSummary` envelope + design-B reconstruction
+## T12 — `DagResult` + serdes + container envelope + reconstruction
 
-- **Spec:** §2.8, §8, §8.1, §7.7, Appendix F, F5
-- **Files created:** `src/handlers/dag-handler/dag-result.ts` — `DagResultImpl` (`getResult`/`getStatus`/`succeeded`/`failed`/`skipped`/counts/`completionReason`/`throwIfError`), `createDagResultSerdes` with `resultKind` discriminator (`plain`/`batch`/`dag`, recursive restore via `restoreBatchResult`/`restoreDagResult`), `buildDagSummaryEnvelope`/`readDagSummaryEnvelope`/`defaultDagSummaryGenerator`.
+- **Spec:** §2.8, §8, §8.1, §7.7
+- **Files created:** `src/handlers/dag-handler/dag-result.ts` — `DagResultImpl` (`getResult`/`getStatus`/`succeeded`/`failed`/`skipped`/counts/`completionReason`/`throwIfError`), `createDagResultSerdes` with `resultKind` discriminator (`plain`/`batch`/`dag`, recursive restore via `restoreBatchResult`/`restoreDagResult`), `buildDagOffloadPayload`/`readDagEnvelope`.
 - **Files changed:** `src/handlers/dag-handler/dag-executor.ts` — implement `reconstructDagResult` (re-run deterministic register + skip/trigger recompute, read per-task checkpoints, source counts/reason/`startedTaskNames` from envelope; empty STARTED set on missing/malformed envelope, never hang).
 - **Depends on:** T11.
 - **Acceptance:**

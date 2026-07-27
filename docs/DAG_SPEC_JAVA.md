@@ -2,150 +2,121 @@
 
 > ## ⚠️ EXPERIMENTAL
 >
-> **DAG support is an experimental feature** and may be changed or removed in future releases without a major-version bump. Do not depend on it in production until promoted to stable.
+> **DAG support is an experimental feature** and may be changed or removed in future releases without a major-version bump. Do not depend on it in production until it is promoted to stable.
 >
-> **Required API annotation (Java).** The SDK has no existing preview/experimental annotation, so introduce a marker annotation (e.g. `software.amazon.lambda.durable.annotations.Experimental`, `@Retention(CLASS)`, `@Documented`) and apply it to every public DAG type/method, plus a Javadoc `@apiNote`:
+> **API annotation (Java).** Every public DAG type and method is annotated `@software.amazon.lambda.durable.annotations.Experimental` (`@Retention(CLASS)`, `@Documented`) and carries a Javadoc `@apiNote`:
 >
 > ```java
 > /**
 >  * Declares and runs a DAG of tasks. ...
 >  *
 >  * @apiNote <b>Experimental.</b> This API is experimental and may be changed
->  *          or removed in future releases.
+>  *          or removed in future releases without a major-version bump.
 >  */
 > @Experimental
 > DagResult dag(String name, Consumer<DagContext> register, DagConfig config);
 > ```
 
-Status: Draft (design proposal) · **Stability: Experimental** · Target: `aws-durable-execution-sdk-java` (`software.amazon.lambda.durable`) · Canonical source: [`DAG_SPEC.md`](./DAG_SPEC.md) (JS/TS)
+Stability: **Experimental** · Target: `aws-durable-execution-sdk-java` (`software.amazon.lambda.durable`) · Canonical semantics source: [`DAG_SPEC.md`](./DAG_SPEC.md) (JS/TS)
 
-> This document adapts the **canonical JS/TS DAG design** ([`DAG_SPEC.md`](./DAG_SPEC.md)) to the AWS Lambda Durable Execution **Java** SDK. The JS spec is the source of truth for _semantics_; this spec proposes an _idiomatic Java surface_ that preserves the normative core (name-based entity IDs, reserved delimiter, trigger rules, `runIf`, replay-safe reconstruction) while diverging where Java's type system, concurrency model, and large-result handling demand it (notably: no JS-style summary envelope — see §8.1).
->
-> See [`DAG_SPEC_CROSS_LANGUAGE.md`](./DAG_SPEC_CROSS_LANGUAGE.md) for the shared normative core vs. per-language divergence matrix.
+> This document specifies the AWS Lambda Durable Execution **Java** DAG surface. The [JS/TS spec](./DAG_SPEC.md) is the source of truth for _semantics_; this document defines the _idiomatic Java surface_ that preserves the normative core (name-based entity IDs, reserved delimiter, trigger rules, `runIf`, replay-safe reconstruction) while expressing it in Java's type system and concurrency model. See [`DAG_SPEC_CROSS_LANGUAGE.md`](./DAG_SPEC_CROSS_LANGUAGE.md) for the shared normative core and the per-language divergence matrix; the Java-specific sections here conform to its checkpoint-visible envelope contract (§2 of that doc).
 
 ---
 
-## 0. SDK existence & grounding
+## 0. Java SDK primitives the DAG builds on
 
-**The Java SDK exists and is GA** (AWS Lambda Durable Execution SDK for Java, GA April 2026 — [whats-new](https://aws.amazon.com/about-aws/whats-new/2026/04/lambda-durable-execution-java-ga/), repo [`aws/aws-durable-execution-sdk-java`](https://github.com/aws/aws-durable-execution-sdk-java)). This spec is therefore grounded in the **real, shipped Java API surface**, not a hypothetical one. Confirmed primitives (from the repo README, the AWS docs, and the `docs/core/*.md` reference pages):
+The DAG surface lives in `software.amazon.lambda.durable.dag` and reuses the SDK's existing operation, config, and concurrency primitives verbatim. The primitives it composes:
 
-| Concern                | Java surface (verified)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Handler                | `abstract class DurableHandler<I, O>` → `O handleRequest(I input, DurableContext ctx)`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| Package                | `software.amazon.lambda.durable`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| Step (sync)            | `<T> T step(String name, Class<T> type, StepFunction<T> fn[, StepConfig])`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| Step (generic type)    | `<T> T step(String name, TypeToken<T> type, StepFunction<T> fn[, StepConfig])`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| Step (async)           | `<T> DurableFuture<T> stepAsync(String name, Class<T>\|TypeToken<T> type, StepFunction<T> fn[, StepConfig])`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| Wait                   | `void wait(String name, Duration duration)`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| Invoke                 | `<T> T invoke(String name, String functionName, Object payload, Class<T> type[, InvokeConfig])`; `invokeAsync(...)`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| Callback               | `<T> DurableCallbackFuture<T> createCallback(String name, Class<T> type[, CallbackConfig])`; `<T> T waitForCallback(String name, Class<T> type, BiConsumer<String,StepContext> fn[, WaitForCallbackConfig])` (submitter is `BiConsumer<callbackId, StepContext>` — **verified** `docs/design.md`)                                                                                                                                                                                                                                                                                                                                                                                       |
-| Child context          | `<T> T runInChildContext(String name, ChildFunction<T> fn[, ...])`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| Map                    | `<I,O> MapResult<O> map(String name, Collection<I> items, Class<O>\|TypeToken<O> type, MapFunction<I,O> fn[, MapConfig])`; `mapAsync(...)` → `DurableFuture<MapResult<O>>`. `MapFunction<I,O>` = `O apply(I item, int index, DurableContext ctx)` (item-first). Input must have **deterministic iteration order** (`List`/`LinkedList`/`TreeSet` OK; `HashSet` → `IllegalArgumentException`).                                                                                                                                                                                                                                                                                           |
-| Parallel               | `ParallelDurableFuture parallel(String name[, ParallelConfig])`; `.branch(String name, Class<T> type, BranchFunction<T> fn[, ParallelBranchConfig])` → `DurableFuture<T>`; `.get()` → `ParallelResult` (**verified** `docs/core/parallel.md`; branch fn is `Function<DurableContext,T>`)                                                                                                                                                                                                                                                                                                                                                                                                |
-| Wait-for-condition     | `<T> T waitForCondition(String name, Class<T>\|TypeToken<T> type, BiFunction<T,StepContext,WaitForConditionResult<T>> check[, WaitForConditionConfig<T>])` (**verified** `docs/design.md`: check is `BiFunction<state,StepContext>`; there is **no** `WaitForConditionContext` type)                                                                                                                                                                                                                                                                                                                                                                                                    |
-| **Concurrency model**  | **`DurableFuture<T>`** — a durable, replay-safe future returned by every `*Async`/branch call; `.get()` blocks (and may suspend the execution). Statics `DurableFuture.allOf(...)`/`anyOf(...)` aggregate. **It is _not_ thread-free**: internally each `*Async` op runs on the **user executor** (`CompletableFuture.runAsync(fn, userExecutor)`; default cached daemon pool, configurable via `DurableConfig.withExecutorService`), and suspension is driven by an active-thread-count race in `ExecutionManager` (verified in `docs/design.md`). `DurableFuture` is the durable/replay-safe _wrapper_ over that threaded substrate — the correct fan-out primitive for the DAG (§9). |
-| Result typing          | `Class<T>` (simple) and `TypeToken<T>` (parameterized, `new TypeToken<List<X>>(){}`) — reified type tokens, the Java answer to type erasure.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| Config                 | Builders: `StepConfig.builder()`, `MapConfig.builder()`, `ParallelConfig.builder()`, `InvokeConfig.builder()`, `CallbackConfig.builder()`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| Retry                  | `RetryStrategies.exponentialBackoff(maxAttempts, initial, max, mult, JitterStrategy.FULL)`, `RetryStrategies.Presets.NO_RETRY`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| Completion             | `CompletionConfig.allCompleted()/allSuccessful()/firstSuccessful()/minSuccessful(n)/toleratedFailureCount(n)/toleratedFailurePercentage(p)`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| Completion status enum | `ConcurrencyCompletionStatus { ALL_COMPLETED, MIN_SUCCESSFUL_REACHED, FAILURE_TOLERANCE_EXCEEDED }` — **only 3 members; no `CUSTOM_COMPLETION_*`** (a hard divergence, §6).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| Batch result           | `MapResult<O>` / `MapResultItem<O>` / `MapError` (record: `errorType`, `errorMessage`, `stackTrace`); item status `SUCCEEDED\|FAILED\|SKIPPED`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| Exceptions             | Rich hierarchy rooted at `DurableExecutionException` (RuntimeException); see §7.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| Runtime                | Java 17+ (Corretto 21 in examples) → **records and sealed interfaces are available**.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Concern                | Java surface                                                                                                                                                                                                     |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Handler                | `abstract class DurableHandler<I, O>` → `O handleRequest(I input, DurableContext ctx)`                                                                                                                           |
+| Package                | `software.amazon.lambda.durable`                                                                                                                                                                                 |
+| Step                   | `<T> T step(String name, Class<T>\|TypeToken<T> type, StepFunction<T> fn[, StepConfig])`; `stepAsync(...)` → `DurableFuture<T>`                                                                                  |
+| Wait                   | `void wait(String name, Duration duration)`                                                                                                                                                                      |
+| Invoke                 | `<T> T invoke(String name, String functionName, Object payload, Class<T> type[, InvokeConfig])`; `invokeAsync(...)`                                                                                              |
+| Callback               | `<T> T waitForCallback(String name, Class<T> type, BiConsumer<String, StepContext> submitter[, WaitForCallbackConfig])`                                                                                          |
+| Child context          | `<T> T runInChildContext(String name, ChildFunction<T> fn[, ...])`                                                                                                                                               |
+| Map                    | `<I, O> MapResult<O> map(String name, Collection<I> items, Class<O>\|TypeToken<O> type, MapFunction<I, O> fn[, MapConfig])`; `MapFunction<I, O>` = `O apply(I item, int index, DurableContext ctx)` (item-first) |
+| Parallel               | `ParallelDurableFuture parallel(String name[, ParallelConfig])`; `.branch(String name, Class<T> type, BranchFunction<T> fn)` → `DurableFuture<T>`; `.get()` → `ParallelResult`                                   |
+| Wait-for-condition     | `<T> T waitForCondition(String name, Class<T>\|TypeToken<T> type, BiFunction<T, StepContext, WaitForConditionResult<T>> check[, WaitForConditionConfig<T>])`                                                     |
+| Concurrency            | `DurableFuture<T>` — a durable, replay-safe future returned by every `*Async`/branch call; `.get()` blocks and may suspend the execution. Statics `DurableFuture.allOf(...)`/`anyOf(...)` aggregate.             |
+| Result typing          | `Class<T>` (simple) and `TypeToken<T>` (parameterized, `new TypeToken<List<X>>(){}`) — reified type tokens for erasure-safe serde                                                                                |
+| Config                 | Builders: `StepConfig.builder()`, `MapConfig.builder()`, `ParallelConfig.builder()`, `InvokeConfig.builder()`, `WaitForCallbackConfig.builder()`, `RunInChildContextConfig.builder()`                            |
+| Completion             | `CompletionConfig.allCompleted()/allSuccessful()/firstSuccessful()/minSuccessful(n)/toleratedFailureCount(n)/toleratedFailurePercentage(p)`                                                                      |
+| Completion status enum | `ConcurrencyCompletionStatus { ALL_COMPLETED, MIN_SUCCESSFUL_REACHED, FAILURE_TOLERANCE_EXCEEDED }` (three members)                                                                                              |
+| Batch result           | `MapResult<O>` / `MapResultItem<O>` / `MapError`; item status `SUCCEEDED\|FAILED\|SKIPPED`                                                                                                                       |
+| Exceptions             | Rich hierarchy rooted at `DurableExecutionException` (a `RuntimeException`), with `DurableOperationException` for operation errors; see §7                                                                       |
+| Runtime                | Java 17+ — records and sealed interfaces are used throughout                                                                                                                                                     |
 
-**`context.dag()` does NOT exist in the Java SDK today** (no `dag` in the operations list, README, or docs reference as of authoring). This spec proposes it as a **pure addition**, exactly as the JS spec proposes it for JS.
-
-> **✅ VERIFICATION STATUS — NOW GROUNDED IN PRIVATE SOURCE (flagged prominently).** These were originally carried from the JS design, then checked against the Java SDK's public docs, and have **now been verified line-by-line against the real private source** at `aws-durable-execution-sdk-java/sdk/src/main/java/software/amazon/lambda/durable/**` (224 `.java` files). **All six are resolved.** The single load-bearing blocker **[A-J2] is resolved as `CAN-BE-ADDED`** (a trivial, surgical seam — the caller-supplied-ID path is already threaded through the entire operation/execution stack; only _name-based minting_ is missing). File:line citations below and in §4.3 / Appendix A.
->
-> - **[A-J1] — ✅ SOURCE-VERIFIED.** `OperationIdGenerator` (`execution/OperationIdGenerator.java:12-13,44-47`) owns an `AtomicInteger operationCounter` and an `operationIdPrefix = contextId + "-"`; `nextOperationId()` returns `hashOperationId(operationIdPrefix + counter)` (SHA-256, `:20-35`). `DurableContextImpl` holds one `OperationIdGenerator` per context (`context/DurableContextImpl.java:59,66`), seeded with the child's `contextId`. So IDs are per-context monotonic counters, hashed + context-path-prefixed (`hash("execId-1")` at root, `hash("<parentHash>-2")` nested). Counter-based IDs are real ⇒ the name-based-ID motivation (§4) holds.
-> - **[A-J2] — ✅ RESOLVED · VERDICT: `CAN-BE-ADDED` (minimal, surgical).** The caller-supplied-ID seam is **already present through the whole stack below `DurableContextImpl`**: `OperationIdentifier.operationId` is an **opaque String** (`model/OperationIdentifier.java:16-24`); every `*Operation` constructor accepts an arbitrary `OperationIdentifier` and uses `getOperationId()` verbatim as the checkpoint/replay key (`operation/BaseDurableOperation.java:56-92,155` → `executionManager.getOperationAndUpdateReplayState(getOperationId())`); `ExecutionManager` keys `operationStorage`/`registeredOperations` purely by that string (`execution/ExecutionManager.java:98-101,207-217`); child contexts already **run under a supplied ID** (`operation/ChildContextOperation.java:118-135` → `contextId = getOperationId(); createChildContext(contextId, getName())`); and `validateReplay` compares **type/name/subType only — never ID format** (`operation/BaseDurableOperation.java:298-330`). The counter is coupled to operations at **exactly one line per method** in `DurableContextImpl` (`var operationId = nextOperationId();`, e.g. `:138,150,171,195,231,283,301` → private `nextOperationId()` `:335`). **Precedent that operations already run under an explicitly-supplied, non-top-level prefix:** `ConcurrencyOperation` constructs `new OperationIdGenerator(getOperationId())` and `durableContext.createChildContext(getOperationId(), getName())` (`operation/ConcurrencyOperation.java:73-86`) and `createItem(...)` takes an explicit `operationId` param (`:96-118`) — proving the machinery runs ops under a caller-controlled prefix; it simply mints per-item IDs by _counter_ (`operationIdGenerator.nextOperationId()`, `:137`), deterministic by **order**, not by **name**. ⇒ The only missing piece is a name→id minting function + internal entry points that use it. Minimal change specified in §4.3 and Appendix A (one new method on `OperationIdGenerator`; explicit-ID internal variants on `DurableContextImpl`; **zero** changes to `BaseDurableOperation`/`ExecutionManager`/`OperationIdentifier`/replay validation/serde).
-> - **[A-J3] — ✅ SOURCE-VERIFIED (FALSIFIED · §8.1 rewritten).** `ChildContextOperation` (`operation/ChildContextOperation.java:39,88-107,150-176`) implements the large-result path: `LARGE_RESULT_THRESHOLD = 256*1024`; large success checkpoints an **empty payload + `ContextOptions.replayChildren(true)`**, and on replay of a `SUCCEEDED` child with `replayChildren==true` it **re-executes the child body** (`:90-98`). `map` reconstructs from per-item child checkpoints. `RunInChildContextConfig` (`config/RunInChildContextConfig.java`) exposes **only `serDes`** — **no customer summary-generator hook** and no `*Summary` envelope anywhere. The JS `DagSummary`/`summaryGenerator` design does **not** map to Java; §8.1 and §10-row-f are corrected accordingly.
-> - **[A-J4] — ✅ SOURCE-VERIFIED (REFINED).** Replay mode is **execution-global**: `ExecutionMode {REPLAY, EXECUTION}` (`execution/ExecutionMode.java`), one-way REPLAY→EXECUTION transition in `ExecutionManager.getOperationAndUpdateReplayState` (`execution/ExecutionManager.java:207-217`). Note: `BaseContextImpl` _also_ tracks a **per-context** `isReplaying` flag (`context/BaseContextImpl.java:41,~140`, seeded from `hasOperationsForContext`) flipped one-way via `setExecutionMode()`. Both are one-way and monotone; neither blocks the design; only the reconstruction-path detail in §8.1 changes.
-> - **[A-J5] — ✅ SOURCE-VERIFIED (CORRECTED).** `DurableFuture` is **backed by real threads** on the user executor: `BaseDurableOperation.runUserHandler` runs work via `CompletableFuture.runAsync(wrapped, getContext().getDurableConfig().getExecutorService())` (`operation/BaseDurableOperation.java:~230-260`). Suspension is driven by an **active-thread-count race**: `ExecutionManager.deregisterActiveThread` calls `suspendExecution()` when `activeThreads.isEmpty()` (`execution/ExecutionManager.java:~250-275`). Determinism comes from operation-ID-keyed replay + the one-way `ExecutionMode` transition, **not** from avoiding threads. The DAG scheduler still controls concurrency by **deferring the `*Async` call**; §9's earlier "threads would break replay" framing was wrong and is rewritten.
-> - **[A-J6] — ✅ SOURCE-VERIFIED.** `ConcurrencyCompletionStatus` is closed at **exactly 3 members** (`ALL_COMPLETED`, `MIN_SUCCESSFUL_REACHED`, `FAILURE_TOLERANCE_EXCEEDED` — `model/ConcurrencyCompletionStatus.java:6-9`, plus a helper `isSucceeded()`). Completion is **factory-method-only**: `CompletionConfig` is a record with `allSuccessful/allCompleted/firstSuccessful/minSuccessful/toleratedFailureCount/toleratedFailurePercentage` (`config/CompletionConfig.java:15-52`) and `ConcurrencyOperation.canComplete` hardcodes the three outcomes (`operation/ConcurrencyOperation.java:~250-280`) — **no customer predicate hook**. ⇒ v1 should **defer custom completion (§6 Option B)**; Option A is feasible _only_ because the DAG owns its own scheduler.
+The concurrency substrate is thread-backed: the handler and each `*Async` operation run on the user executor (`DurableConfig.executorService`; a cached daemon pool by default, configurable via `DurableConfig.builder().withExecutorService(...)`). Suspension is driven by an active-thread-count race in `ExecutionManager` — when no thread is runnable the execution suspends and re-invokes later. Determinism comes from operation-ID-keyed checkpoint/replay and the one-way `ExecutionMode` REPLAY→EXECUTION transition, not from avoiding threads. `DurableFuture` is the replay-safe, checkpoint-participating wrapper over that substrate, and it is the fan-out primitive the DAG uses (§9).
 
 ---
 
 ## 1. Overview
 
-`ctx.dag(...)` adds a first-class primitive for declaring a **directed acyclic graph of tasks** with typed dependencies. Customers describe the graph once in a declarative _registration phase_ (a `Consumer<DagContext>`); the runtime schedules tasks topologically, runs independent chains concurrently via `DurableFuture`, evaluates per-task trigger rules and `runIf` predicates, and aggregates results into a `DagResult`.
+`ctx.dag(...)` is a first-class primitive for declaring a **directed acyclic graph of tasks** with typed dependencies. A DAG is described once in a declarative _registration phase_ (a `Consumer<DagContext>`); the runtime then schedules tasks topologically, runs independent chains concurrently via `DurableFuture`, evaluates per-task trigger rules and `runIf` predicates, and aggregates results into a `DagResult`.
 
-As in JS, a DAG is a **child context** (one `runInChildContext` node in the parent tree) whose body runs a **name-based scheduler**. Each task delegates to the **same operation machinery** the equivalent `DurableContext` method uses; the only difference is the task's entity ID is derived from its **name** (`{parentId}-DAG_NODE_T_{name}`) instead of the monotonic counter — the property that makes arbitrary graph shapes replay-safe.
+A DAG is a **child context** — one `runInChildContext` node in the parent's operation tree — whose body runs a **name-based scheduler**. Each task delegates to the **same operation machinery** the equivalent `DurableContext` method uses; the only difference is that a task's entity ID is derived from its **name** (`{parentId}-DAG_NODE_T_{name}`) rather than from the monotonic operation counter. That is the property that makes arbitrary graph shapes replay-safe.
 
-### 1.1 Motivation (identical to JS)
+### 1.1 Motivation
 
-Counter-based IDs are assigned at operation _start_. `map`/`parallel` are replay-safe because items start in deterministic order. In an arbitrary DAG a downstream task starts when its upstream deps _complete_, and completion order can vary across replays — so counter IDs would diverge and trigger `NonDeterministicExecutionException`. Name-based IDs (§4) solve this. Per [A-J1] (**source-verified**), Java does use per-context counter IDs, so this motivation holds; the explicit-ID seam that lets a task run under `idOf(name)` ([A-J2]) is **resolved as `CAN-BE-ADDED`** — a minimal, surgical addition (§4.3, Appendix A), because the caller-supplied-ID path is already threaded through the whole operation/execution stack.
+Counter-based operation IDs are assigned at operation _start_. `map`/`parallel` are replay-safe because their items start in deterministic index order. In an arbitrary DAG a downstream task starts when its upstream dependencies _complete_, and completion order can vary across replays — so counter-based IDs would diverge and trip the replay-consistency guard (`NonDeterministicExecutionException`). Name-based IDs (§4) remove the dependence on completion order: a task's ID is a pure function of its name and DAG-context prefix, so it is identical on every replay.
 
 ### 1.2 Goals / Non-goals
 
-Same as JS §1.2/§1.3: declarative typed data-flow, replay-safe for any shape, reuse existing checkpoint/replay/retry/serdes, per-task `triggerRule`+`runIf`, heterogeneous task kinds + nested DAGs, backward compatible (pure addition). Non-goals: dedicated branch operator, dynamic task creation, cross-task semaphores, pre-built operators/cron/UI.
+**Goals:** declarative typed data-flow; replay-safety for any graph shape; reuse of the existing checkpoint/replay/retry/serdes machinery; per-task `triggerRule` and `runIf`; heterogeneous task kinds and nested DAGs; a pure additive surface. **Non-goals:** a dedicated branch operator, dynamic task creation, cross-task semaphores, pre-built operators/cron/UI.
 
 ---
 
-## 2. Public API (proposed Java surface)
+## 2. Public API
 
-New public types live in `software.amazon.lambda.durable.dag`. Only `DurableContext.dag(...)` is added to the existing interface.
+New public types live in `software.amazon.lambda.durable.dag`. Only `DurableContext.dag(...)` / `dagAsync(...)` are added to the existing interface.
 
-### 2.1 Entry point (added to `DurableContext`)
+### 2.1 Entry point (`DurableContext`)
 
 ```java
-// Addition to interface DurableContext
 DagResult dag(String name, Consumer<DagContext> register);
 DagResult dag(String name, Consumer<DagContext> register, DagConfig config);
 
-// Async variant, consistent with stepAsync/mapAsync:
 DurableFuture<DagResult> dagAsync(String name, Consumer<DagContext> register);
 DurableFuture<DagResult> dagAsync(String name, Consumer<DagContext> register, DagConfig config);
 ```
 
-`register` is **registration-only**: tasks are _declared_ but do not execute until it returns. Unlike JS (which returns a `DurablePromise` for every op), Java's existing style is **sync-by-default with an explicit `*Async` twin** (cf. `step`/`stepAsync`, `map`/`mapAsync`). We follow that convention: `dag(...)` blocks and returns `DagResult`; `dagAsync(...)` returns `DurableFuture<DagResult>`.
+`register` is **registration-only**: tasks are _declared_ but do not execute until it returns. Consistent with the SDK's sync-by-default-with-an-`*Async`-twin convention (`step`/`stepAsync`, `map`/`mapAsync`), `dag(...)` blocks and returns `DagResult`, while `dagAsync(...)` returns `DurableFuture<DagResult>`.
 
-> **[CODE NOTE — divergence from JS]** JS `register` may be `void | Promise<void>`. Java uses a plain `Consumer<DagContext>` (synchronous). Async registration (JS open question §11.3) is intentionally **not** offered: Java registration is pure graph-building and has no idiomatic async need. If a customer needs to `await` config, they compute it _before_ calling `dag()`.
+Registration is a plain synchronous `Consumer<DagContext>` — it is pure graph-building with no asynchronous need. Configuration that must be computed asynchronously is computed _before_ calling `dag()`.
 
-### 2.2 The typed-dependency problem — Java's answer to `DepsMap`
+### 2.2 Typed dependencies — `Deps` keyed by handle
 
-**This is the central adaptation.** JS expresses data-flow with a mapped type `DepsMap<TDeps>` keyed on _literal task-name string types_ — `deps.fetch` is statically typed as `fetch`'s result. **Java generics cannot express this**: there are no literal-string type keys and no heterogeneous typed maps. Three JS features collapse into this problem:
-
-1. `deps: [a, b]` inline array with per-name typed access `deps.a`, `deps.b`.
-2. `TaskHandle<TName, TResult>` carrying both the name literal and result type.
-3. `DepsMap<TDeps>` reconstructing `{ a: Ra, b: Rb }`.
-
-**Java resolution: typed `TaskHandle<T>` + a `Deps` accessor keyed by handle (not by name-string).** A task's function receives a `Deps` object; it reads an upstream result by passing that upstream's _handle_, which carries the result type via generics:
+Java generics cannot express the JS `DepsMap<TDeps>` mapped type, which keys result access on literal task-name string types. The Java surface instead uses a typed `TaskHandle<T>` plus a `Deps` accessor keyed by the handle (not by a name-string). A task's function receives a `Deps` object and reads an upstream result by passing that upstream's handle, which carries the result type via generics:
 
 ```java
 public interface Deps {
-    /** Typed result of an upstream task, as an Optional. Returns the checkpointed result of `handle`.
-     *  Throws IllegalStateException if `handle` is not an inline dependency of this task
-     *  (ordering-only deps added via .after(...) are NOT retrievable here — mirrors JS
-     *  "only inline deps populate DepsMap"). Returns Optional.empty() if the upstream did
-     *  not SUCCEED (see the non-ALL_SUCCESS caveat, §2.6); on the default ALL_SUCCESS
-     *  trigger rule the value is always present, so callers may unwrap with orElseThrow(). */
+    /**
+     * Returns the checkpointed result of an upstream inline dependency as an Optional.
+     * The result is Optional.empty() whenever the upstream did not produce a success value
+     * (it FAILED or was SKIPPED) — possible under non-ALL_SUCCESS trigger rules. On the default
+     * ALL_SUCCESS trigger rule the value is always present, so callers may unwrap with orElseThrow().
+     * Throws IllegalStateException if the handle was not declared as an inline dependency
+     * of this task via reads(...).
+     */
     <T> Optional<T> get(TaskHandle<T> handle);
 }
 ```
 
-> **[UPDATED, post-launch-review]** An earlier draft of this API split `get`/`getOptional`
-> into two methods (`<T> T get(TaskHandle<T>)` returning possibly-`null`, plus a separate
-> `<T> Optional<T> getOptional(TaskHandle<T>)`). That shipped a real footgun: the raw-`T`
-> `get` was statically typed as always-present while it silently returned `null` for any
-> upstream that FAILED or was SKIPPED under a non-`ALL_SUCCESS` trigger rule — exactly the
-> compensation-task case where a caller most needs to check. The two methods were
-> collapsed into the single `Optional`-returning `get` shown above before GA so the type
-> honestly reflects the runtime behavior it always had.
+`deps.get(fetchHandle)` returns exactly `fetchHandle`'s `T`, wrapped in `Optional`. This is the direct Java analog of the JS spec's `DepsAccessor.getResult(TaskHandle<T>)` fallback, and it matches the ergonomics Java developers already know from `parallel().branch(...).get()`.
 
-This is **type-safe without literal-string types**: `deps.get(fetchHandle)` returns exactly `fetchHandle`'s `T`. It is the direct Java analog of the JS spec's own fallback suggestion (`DepsAccessor.getResult(TaskHandle<T>) -> T`) and matches the ergonomics Java developers already know from `parallel().branch(...).get()` (a `DurableFuture<T>` typed by its declared class).
+> **Type-soundness.** `<T> Optional<T> get(TaskHandle<T> handle)` is the standard **typed-key heterogeneous container** pattern (`ClassToInstanceMap<T>`, Netty `AttributeKey<T>`, gRPC `Context.Key<T>`). Internally, results are stored in a map keyed by `handle.name()`, and `get` performs one contained, provably-safe unchecked cast to `T` because the `(handle → result type)` binding is fixed at registration and handles are unique per task — no unchecked warning or `ClassCastException` risk reaches the caller. This is the same reified-type discipline the SDK already uses via `TypeToken<T>` for serde.
 
-> **Type-soundness note (✅ source-verified pattern).** `<T> Optional<T> get(TaskHandle<T> handle)` is fully sound: it is the same **typed-key heterogeneous container** pattern proven in the JDK/ecosystem — `ClassToInstanceMap<T>`, Netty `AttributeMap`/`AttributeKey<T>`, and gRPC `Context.Key<T>`. Internally the results are stored in a `Map<String, Object>` keyed by `handle.name()`, and `get` performs one **contained, provably-safe** unchecked cast to `T` because the `(handle → result type)` binding is fixed at registration and handles are unique per task. No unchecked warning or `ClassCastException` risk leaks to the caller. The Java SDK itself relies on the same reified-type discipline via `TypeToken<T>` for serde — **verified in source**: `SerializableDurableOperation.deserializeResult` calls `resultSerDes.deserialize(result, resultTypeToken)` and `deserializeException` uses `TypeToken.get(exceptionClass.asSubclass(Throwable.class))` (`operation/SerializableDurableOperation.java`), and every `DurableContextImpl.*Async` op carries a `TypeToken<T>`/`Class<T>` result type. So `Deps.get(handle)` is idiomatic and consistent with the existing API.
-
-> **Why not a positional-arity `zip` overload (`.after(a, b) -> (A, B) -> R`)?** Considered (Reactor `Mono.zip` / Airflow-style). Rejected as the _primary_ API because: (a) it caps at a fixed arity (typically 2–8 overloads) and degrades to `Object[]`/`Tuple` past that; (b) it does not compose with the _ordering-only_ deps distinction; (c) it forces a different call shape per dep count. It is offered as **optional sugar** for the common 1–3 typed-dep case (§2.7), but `Deps.get(handle)` (returning `Optional<T>`) is the canonical, arity-unbounded form.
+> **Why not positional-arity `zip`.** A positional overload (`.after(a, b) -> (A, B) -> R`, à la Reactor `Mono.zip`) is offered only as optional sugar (§2.7): it caps at a fixed arity, degrades to `Object[]`/tuples past that, does not compose with the ordering-only-deps distinction, and forces a different call shape per dependency count. `Deps.get(handle)` is the canonical, arity-unbounded form.
 
 ### 2.3 `TaskHandle<T>`
 
-Registration-time reference + builder. Carries the result type `T` via generics (this part of JS `TaskHandle<TName, TResult>` **ports directly** — Java generics handle `TResult` fine; only the `TName` _literal_ is dropped, since Java has no use for a name-as-type).
+A registration-time reference and builder. It carries the result type `T` via generics; the task name is a runtime `String`, not a type-level literal.
 
 ```java
 public interface TaskHandle<T> {
-    /** Task name (runtime string; NOT a type-level literal). */
+    /** Task name (runtime string; not a type-level literal). */
     String name();
 
     /** Inline (typed) deps: wait for these AND receive their results via Deps.get(...).
@@ -158,113 +129,107 @@ public interface TaskHandle<T> {
     /** Trigger rule (default from DagConfig.defaultTriggerRule, else ALL_SUCCESS). */
     TaskHandle<T> triggerRule(TriggerRule rule);
 
-    /** Conditional skip predicate over resolved upstream results (§2.6). */
+    /** Conditional-skip predicate over resolved upstream results (§2.6). */
     TaskHandle<T> runIf(Predicate<Deps> predicate);
 }
 ```
 
-The in-memory identity is an SDK-internal object reference (Java's answer to JS's `symbol _id`) — never serialized. `TaskHandle` is used only during registration/scheduling.
-
-> **[CODE NOTE]** Builder methods return `this` (typed `TaskHandle<T>`) for chaining, e.g. `d.step(...).after(a).triggerRule(TriggerRule.ALL_DONE)`. This matches the fluent `parallel().branch(...)` and `*Config.builder()` styles already in the Java SDK.
+Builder methods return `this` for fluent chaining, e.g. `d.step(...).after(a).triggerRule(TriggerRule.ALL_DONE)`, matching the fluent `parallel().branch(...)` and `*Config.builder()` styles. The handle's in-memory identity — not its name — is the scheduler's key, and it is never serialized.
 
 ### 2.4 `DagContext` — declarative task registration
 
-Separate interface (does **not** extend `DurableContext`), so only declarative task methods are visible inside `register`. Each method registers one task and returns a `TaskHandle<T>`. Result typing uses the SDK's existing `Class<T>` / `TypeToken<T>` convention.
+A separate interface (it does **not** extend `DurableContext`), so only declarative task methods are visible inside `register`. Each method registers one task and returns a `TaskHandle<T>`; result typing uses the SDK's existing `Class<T>` / `TypeToken<T>` convention.
 
 ```java
 public interface DagContext {
 
-    // ── step ────────────────────────────────────────────────────────────────
+    // ── step ──────────────────────────────────────────────────────────────────
     <T> TaskHandle<T> step(String name, Class<T> type, DagStepFunction<T> fn);
     <T> TaskHandle<T> step(String name, TypeToken<T> type, DagStepFunction<T> fn);
     <T> TaskHandle<T> step(String name, Class<T> type, DagStepFunction<T> fn, StepConfig config);
     <T> TaskHandle<T> step(String name, TypeToken<T> type, DagStepFunction<T> fn, StepConfig config);
 
-    // ── invoke ───────────────────────────────────────────────────────────────
-    <T> TaskHandle<T> invoke(String name, String functionName, Class<T> type,
-                             DagPayloadFunction payloadFn);
-    <T> TaskHandle<T> invoke(String name, String functionName, Class<T> type,
-                             DagPayloadFunction payloadFn, InvokeConfig config);
+    // ── step: positional-arity typed-deps sugar (§2.7) ──────────────────────────
+    <A, T>       TaskHandle<T> step(String name, Class<T> type, TaskHandle<A> a, DagStep1Function<A, T> fn);
+    <A, B, T>    TaskHandle<T> step(String name, Class<T> type, TaskHandle<A> a, TaskHandle<B> b, DagStep2Function<A, B, T> fn);
+    <A, B, C, T> TaskHandle<T> step(String name, Class<T> type, TaskHandle<A> a, TaskHandle<B> b, TaskHandle<C> c, DagStep3Function<A, B, C, T> fn);
 
-    // ── callback (submitter-based) ────────────────────────────────────────────
+    // ── invoke ─────────────────────────────────────────────────────────────────
+    <T> TaskHandle<T> invoke(String name, String functionName, Class<T> type, DagPayloadFunction payloadFn);
+    <T> TaskHandle<T> invoke(String name, String functionName, Class<T> type, DagPayloadFunction payloadFn, InvokeConfig config);
+
+    // ── callback (submitter-based) ───────────────────────────────────────────────
     <T> TaskHandle<T> callback(String name, Class<T> type, DagCallbackSubmitter submitter);
-    <T> TaskHandle<T> callback(String name, Class<T> type, DagCallbackSubmitter submitter,
-                               WaitForCallbackConfig config);
+    <T> TaskHandle<T> callback(String name, Class<T> type, DagCallbackSubmitter submitter, WaitForCallbackConfig config);
 
-    // ── wait ──────────────────────────────────────────────────────────────────
+    // ── wait ────────────────────────────────────────────────────────────────────
     TaskHandle<Void> wait(String name, Duration duration);
 
-    // ── waitForCondition ───────────────────────────────────────────────────────
-    <S> TaskHandle<S> waitForCondition(String name, Class<S> type,
-                                       DagConditionFunction<S> check, WaitForConditionConfig<S> config);
+    // ── waitForCondition ──────────────────────────────────────────────────────────
+    <S> TaskHandle<S> waitForCondition(String name, Class<S> type, DagConditionFunction<S> check, WaitForConditionConfig<S> config);
 
-    // ── runInChildContext ──────────────────────────────────────────────────────
+    // ── runInChildContext ─────────────────────────────────────────────────────────
     <T> TaskHandle<T> runInChildContext(String name, Class<T> type, DagChildFunction<T> fn);
     <T> TaskHandle<T> runInChildContext(String name, TypeToken<T> type, DagChildFunction<T> fn);
 
-    // ── map ─────────────────────────────────────────────────────────────────────
-    // NOTE: `MapFunction<I,O>` is the existing SDK type `O apply(I item, int index, DurableContext ctx)`
-    // (item-first, no Deps). Upstream data enters a map task via the `Function<Deps, Collection<I>>`
+    // ── map ───────────────────────────────────────────────────────────────────────
+    // MapFunction<I, O> is the existing SDK type `O apply(I item, int index, DurableContext ctx)`
+    // (item-first, no Deps). Upstream data enters a map task via the Function<Deps, Collection<I>>
     // items-producer overload. `items` must have deterministic iteration order (List/LinkedList/TreeSet).
-    <I, O> TaskHandle<MapResult<O>> map(String name, Collection<I> items, Class<O> type,
-                                        MapFunction<I, O> fn);
-    <I, O> TaskHandle<MapResult<O>> map(String name, Collection<I> items, Class<O> type,
-                                        MapFunction<I, O> fn, MapConfig config);
-    <I, O> TaskHandle<MapResult<O>> map(String name, Function<Deps, Collection<I>> items, Class<O> type,
-                                        MapFunction<I, O> fn);
-    <I, O> TaskHandle<MapResult<O>> map(String name, Function<Deps, Collection<I>> items, Class<O> type,
-                                        MapFunction<I, O> fn, MapConfig config);
+    <I, O> TaskHandle<MapResult<O>> map(String name, Collection<I> items, Class<O> type, MapFunction<I, O> fn);
+    <I, O> TaskHandle<MapResult<O>> map(String name, Collection<I> items, Class<O> type, MapFunction<I, O> fn, MapConfig config);
+    <I, O> TaskHandle<MapResult<O>> map(String name, Function<Deps, Collection<I>> items, Class<O> type, MapFunction<I, O> fn);
+    <I, O> TaskHandle<MapResult<O>> map(String name, Function<Deps, Collection<I>> items, Class<O> type, MapFunction<I, O> fn, MapConfig config);
 
-    // ── parallel ──────────────────────────────────────────────────────────────
-    TaskHandle<ParallelResult> parallel(String name, Consumer<ParallelBuilder> branches);
-    TaskHandle<ParallelResult> parallel(String name, Consumer<ParallelBuilder> branches, ParallelConfig config);
+    // ── parallel ──────────────────────────────────────────────────────────────────
+    // Branches are declared against the SDK's existing ParallelDurableFuture (reused verbatim, no new
+    // builder type): the scheduler launches the parallel future and applies the consumer to it.
+    TaskHandle<ParallelResult> parallel(String name, Consumer<ParallelDurableFuture> branches);
+    TaskHandle<ParallelResult> parallel(String name, Consumer<ParallelDurableFuture> branches, ParallelConfig config);
 
-    // ── nested dag ──────────────────────────────────────────────────────────────
+    // ── nested dag ─────────────────────────────────────────────────────────────────
     TaskHandle<DagResult> dag(String name, Consumer<DagContext> register);
     TaskHandle<DagResult> dag(String name, Consumer<DagContext> register, DagConfig config);
 }
 ```
 
-`StepConfig`, `InvokeConfig`, `WaitForCallbackConfig`, `WaitForConditionConfig`, `MapConfig`, `ParallelConfig`, `MapFunction`, `MapResult`, `ParallelResult`, `TypeToken`, `Duration` are the **existing** Java SDK types, reused verbatim so per-task retry/serdes/semantics are identical to standalone operations.
+`StepConfig`, `InvokeConfig`, `WaitForCallbackConfig`, `WaitForConditionConfig`, `MapConfig`, `ParallelConfig`, `MapFunction`, `MapResult`, `ParallelResult`, `ParallelDurableFuture`, `TypeToken`, and `Duration` are the **existing** Java SDK types, reused verbatim so per-task retry/serdes/semantics are identical to standalone operations.
 
 ### 2.5 Task functional interfaces (deps-first rule)
 
-JS varies the function shape based on whether `TDeps` is empty (conditional types). **Java cannot do conditional signatures**, and overloading on erased functional interfaces is ambiguous. Resolution: **every DAG task function takes a `Deps` as its first parameter, always** — even for root tasks (where `Deps` is empty and `.get()` on any non-dep throws). This trades JS's zero-arg ergonomics for a _single uniform, unambiguous_ signature, which is the idiomatic Java choice. `Deps` for a root task is simply empty.
+Every DAG task function takes a `Deps` as its first parameter, uniformly — even for root tasks, where `Deps` is empty and `get()` on any non-declared handle throws. A single non-conditional signature is the idiomatic Java choice (Java cannot express JS's conditional zero-arg-when-`deps:[]` signatures, and overloading on erased functional interfaces is ambiguous).
 
 ```java
-@FunctionalInterface public interface DagStepFunction<T>   { T apply(Deps deps, StepContext ctx); }
-@FunctionalInterface public interface DagPayloadFunction    { Object apply(Deps deps); }
-@FunctionalInterface public interface DagCallbackSubmitter  { void apply(Deps deps, String callbackId, StepContext ctx); }
-@FunctionalInterface public interface DagConditionFunction<S>{ WaitForConditionResult<S> apply(Deps deps, S state, StepContext ctx); }
-@FunctionalInterface public interface DagChildFunction<T>   { T apply(Deps deps, DurableContext childCtx); }
+@FunctionalInterface public interface DagStepFunction<T>     { T apply(Deps deps, StepContext ctx); }
+@FunctionalInterface public interface DagPayloadFunction      { Object apply(Deps deps); }
+@FunctionalInterface public interface DagCallbackSubmitter    { void apply(Deps deps, String callbackId, StepContext ctx); }
+@FunctionalInterface public interface DagConditionFunction<S> { WaitForConditionResult<S> apply(Deps deps, S state, StepContext ctx); }
+@FunctionalInterface public interface DagChildFunction<T>     { T apply(Deps deps, DurableContext childCtx); }
 ```
 
-Each interface's non-`Deps` parameters preserve the **native** shape of the underlying operation — all verified against `docs/design.md`: step `StepContext ctx`; callback `(String callbackId, StepContext ctx)` (native `BiConsumer<String,StepContext>`); waitForCondition `(S state, StepContext ctx)` returning `WaitForConditionResult<S>` = value + isDone (native `BiFunction<S,StepContext,WaitForConditionResult<S>>`); child `DurableContext` — so per-op behavior is unchanged; the DAG only prepends `Deps`. The polling/backoff strategy for `waitForCondition` comes from the native `WaitForConditionConfig` (`WaitStrategies`/`initialState`), not from the function.
+Each interface's non-`Deps` parameters preserve the native shape of the underlying operation: step `StepContext ctx`; callback `(String callbackId, StepContext ctx)` (native `BiConsumer<String, StepContext>`); waitForCondition `(S state, StepContext ctx)` returning `WaitForConditionResult<S>` (native `BiFunction<S, StepContext, WaitForConditionResult<S>>`); child `DurableContext`. Per-operation behavior is therefore unchanged — the DAG only prepends `Deps`. The polling/backoff strategy for `waitForCondition` comes from the native `WaitForConditionConfig`, not from the function.
 
-> **[CODE NOTE — divergence from JS]** JS collapses the deps parameter away entirely when `deps: []`. Java keeps `Deps` as a mandatory first parameter uniformly (empty for roots). This is a deliberate ergonomic tradeoff: a single non-conditional signature is far more idiomatic and tractable in Java than trying to fake conditional arity via overloads.
+### 2.6 `runIf` and the non-`ALL_SUCCESS` typing caveat
 
-### 2.6 `runIf` and non-`ALL_SUCCESS` typing caveat
+`runIf` is a `Predicate<Deps>`, synchronous and deterministic (async predicates would invite non-deterministic IO on replay). It is evaluated **after** the trigger rule passes and **before** the operation runs; `false` ⇒ the task is `SKIPPED` with `skipReason = RUN_IF_PREDICATE`. A `runIf` predicate that _throws_ aborts the DAG with `DagPredicateException` rather than recording a failure (§5.4, §7) — a throw is a defect in deterministic code, not a business outcome.
 
-`runIf` is a `Predicate<Deps>` (§2.3), synchronous and deterministic (async predicates invite non-deterministic IO on replay). Evaluated **after** the trigger rule passes, **before** the operation runs; `false` ⇒ task is `SKIPPED` with `skipReason = RUN_IF_PREDICATE`.
+Under trigger rules other than `ALL_SUCCESS`, an upstream can be `FAILED` or `SKIPPED` and still let this task run, so `deps.get(handle)` returns `Optional.empty()` in that case. On the common `ALL_SUCCESS` path the value is always present, so callers may unwrap with `.orElseThrow()`.
 
-Same runtime caveat as JS §2.5: under trigger rules other than `ALL_SUCCESS`, an upstream can be `FAILED`/`SKIPPED` and still let this task run, so `deps.get(handle)` returns `Optional.empty()` in that case. `Deps.get` returns a present `Optional` wrapping the declared `T` on the common `ALL_SUCCESS` path, where callers may unwrap with `.orElseThrow()`.
+### 2.7 Positional-arity typed-deps sugar
 
-### 2.7 Positional-arity typed-deps sugar (implemented, non-normative)
-
-For the common 1–3 typed-dep case, `DagContext` ships typed convenience overloads that avoid the `Deps` accessor, mirroring `Mono.zip`:
+For the common 1–3 typed-dependency case, `DagContext` ships typed convenience overloads that avoid the `Deps` accessor:
 
 ```java
-// Sugar layer — desugars to step(...).reads(...) + Deps.get() internally; capped at arity 3.
 <A, T>       TaskHandle<T> step(String name, Class<T> type, TaskHandle<A> a, DagStep1Function<A, T> fn);
 <A, B, T>    TaskHandle<T> step(String name, Class<T> type, TaskHandle<A> a, TaskHandle<B> b, DagStep2Function<A, B, T> fn);
 <A, B, C, T> TaskHandle<T> step(String name, Class<T> type, TaskHandle<A> a, TaskHandle<B> b, TaskHandle<C> c, DagStep3Function<A, B, C, T> fn);
 ```
 
-This is **additive sugar**, not the canonical path (§2.2), shipped in v1 backed by the `@Experimental` `DagStep1Function`/`DagStep2Function`/`DagStep3Function` interfaces. `Deps.get(handle)` (via `.reads(...)`) remains the arity-unbounded form and the one this spec normatively describes.
+Each overload desugars to `step(...).reads(...)` and passes each upstream result to the body directly, unwrapping the `Optional` with `orElse(null)` — so a body reached under a non-`ALL_SUCCESS` trigger rule with a non-succeeded upstream receives `null` for that argument. This is additive sugar backed by the `@Experimental` `DagStep1Function`/`DagStep2Function`/`DagStep3Function` interfaces; `Deps.get(handle)` (via `.reads(...)`) remains the arity-unbounded canonical form for more than three dependencies, ordering-only edges, or explicit `Optional` handling.
 
 ### 2.8 `TriggerRule`, `TaskStatus`, `SkipReason`
 
-Java enums (JS uses string-literal unions). Direct port — enums are the idiomatic Java form and serialize cleanly.
+Java enums (JS uses string-literal unions):
 
 ```java
 public enum TriggerRule { ALL_SUCCESS, ALL_FAILED, ALL_DONE, ANY_SUCCESS, ANY_FAILED, NONE_FAILED }
@@ -272,7 +237,7 @@ public enum TaskStatus  { SUCCEEDED, FAILED, SKIPPED, STARTED }
 public enum SkipReason  { TRIGGER_RULE, RUN_IF_PREDICATE }
 ```
 
-Default is `ALL_SUCCESS` (or `DagConfig.defaultTriggerRule`). Empty-upstream semantics identical to JS §5.3 (success/done-family run vacuously; failure-family skip). The evaluator table (§5) is ported verbatim.
+The default trigger rule is `ALL_SUCCESS` (or `DagConfig.defaultTriggerRule`). `TriggerRule` is a pure value type; the scheduler's `TriggerRuleEvaluator` applies the truth function, including the empty-upstream/vacuous case for roots. The truth table is ported verbatim from JS §5.3 (§5).
 
 ### 2.9 `DagResult` and `TaskExecution`
 
@@ -280,17 +245,17 @@ Default is `ALL_SUCCESS` (or `DagConfig.defaultTriggerRule`). Empty-upstream sem
 public record TaskExecution<T>(
     String name,
     TaskStatus status,
-    Optional<SkipReason> skipReason,      // present only when status == SKIPPED
-    Optional<T> result,                   // present only when status == SUCCEEDED
-    Optional<DagTaskError> error,         // present only when status == FAILED
-    Optional<Instant> startedAt,
+    Optional<SkipReason> skipReason,   // present only when status == SKIPPED
+    Optional<T> result,                // present only when status == SUCCEEDED
+    Optional<DagTaskError> error,      // present only when status == FAILED
+    Optional<Instant> startedAt,       // backend-recorded operation timestamp; empty when unknown (e.g. a skip)
     Optional<Instant> completedAt
 ) {}
 
 public interface DagResult {
-    /** Typed accessor by handle — Java's answer to JS getResult<T>(handle). */
+    /** Typed result by handle. Empty if the task was skipped, never started, or did not succeed. */
     <T> Optional<T> getResult(TaskHandle<T> handle);
-    /** Untyped accessor by name. */
+    /** Untyped result by name. */
     Optional<Object> getResult(String name);
 
     Optional<TaskStatus> getStatus(TaskHandle<?> handle);
@@ -305,56 +270,61 @@ public interface DagResult {
     int successCount();
     int failureCount();
     int skippedCount();
+    /** Number of registered tasks; fixed at registration, independent of early completion. */
     int totalCount();
 
     DagCompletionReason completionReason();
 
-    /** Throws DagExecutionException if failureCount > 0. (Custom-predicate completion is deferred
-     *  to v2 in Java, so there is no CUSTOM_COMPLETION_FAILED reason to also key off — §6.) */
+    /** Tasks launched but not terminal when the DAG stopped early (bounded by maxConcurrency);
+     *  empty on a full drain. These are excluded from results(). */
+    List<String> startedTaskNames();
+    /** Names of the failed() tasks, in registration order. */
+    default List<String> failedTaskNames() { return failed().stream().map(TaskExecution::name).toList(); }
+
+    /** Throws DagExecutionException if failureCount() > 0. */
     void throwIfError();
 }
 ```
 
-`DagTaskError` is a serializable record analogous to `MapError` (`errorType`, `errorMessage`, `stackTrace`, and an optional reconstructed cause). Reusing the `MapError` shape keeps error serialization consistent with the existing batch machinery.
+`TaskExecution.startedAt`/`completedAt` are sourced from each task's backend-recorded operation timestamps, so they are stable and deterministic across replay (a scheduler-side wall clock would recompute on re-run). A skipped task checkpoints no operation and therefore has empty timings.
 
-> **[CODE NOTE — divergence from JS]** JS uses `getResult(): T | undefined`. Java uses `Optional<T>` throughout, matching modern Java conventions and avoiding `null` ambiguity (a `null` result vs. absent task). `MapResult` in the Java SDK returns bare `null` for failed items, but `DagResult` deliberately prefers `Optional` for the _aggregate_ accessor because a DAG additionally distinguishes SKIPPED/never-started (both absent) from a genuine `null` success value.
+`DagResult` uses `Optional<T>` throughout rather than JS's `T | undefined`, matching modern Java conventions and distinguishing a skipped/never-started task (absent) from a genuine `null` success value. `getResult`/`getStatus` resolve by `handle.name()`; a never-started task is absent from `results()`, so `getStatus(name)` disambiguates it from a settled task. `throwIfError()` keys off `failureCount()`, not the completion reason.
 
-### 2.10 Completion-reason: core enum + Java-side superset
+`DagTaskError` is a serializable record (`errorType`, `errorMessage`, `stackTrace`, plus an optional non-serialized reconstructed `cause`). It serializes to the cross-language canonical error-object shape — PascalCase `ErrorType` / `ErrorMessage` / `StackTrace` (`StackTrace` is `null` when unavailable). `errorType` carries the thrown exception's fully qualified class name (built via `DagTaskError.of(Throwable)`).
 
-JS layers a shared `CompletionReason` (5 members) in `core.ts` and defines `DagCompletionReason = CompletionReason | "COMPLETED_WITH_FAILURES"`. **Java cannot union enums.** The Java SDK's existing enum is `ConcurrencyCompletionStatus` with **only 3 members** (`ALL_COMPLETED`, `MIN_SUCCESSFUL_REACHED`, `FAILURE_TOLERANCE_EXCEEDED`) — it has **no `CUSTOM_COMPLETION_*`** members at all (verified in map/parallel docs). This is a **material divergence** from the JS 5-member core.
+### 2.10 `DagCompletionReason`
 
-Resolution: define a **dedicated DAG enum** that is a _conceptual superset_ of the batch enum (Java has no enum inheritance, so it is a fresh enum whose members are a deliberate superset):
+Java cannot union enums, so `DagCompletionReason` is a dedicated DAG-local enum that is a conceptual superset of the base SDK's 3-member `ConcurrencyCompletionStatus`:
 
 ```java
 public enum DagCompletionReason {
-    ALL_COMPLETED,                 // default drain, all reachable tasks succeeded/skipped
-    COMPLETED_WITH_FAILURES,       // DAG-specific: default drain, >=1 task FAILED (resolves the JS F13 footgun)
-    MIN_SUCCESSFUL_REACHED,        // via completionConfig
-    FAILURE_TOLERANCE_EXCEEDED     // via completionConfig
+    ALL_COMPLETED,               // default drain: every reachable task succeeded or was skipped
+    COMPLETED_WITH_FAILURES,     // default drain: the graph fully drained but >= 1 task FAILED
+    MIN_SUCCESSFUL_REACHED,      // early completion via completionConfig
+    FAILURE_TOLERANCE_EXCEEDED   // early completion via completionConfig
 }
 ```
 
-> **[CODE NOTE — divergence]** Because the Java batch enum lacks `CUSTOM_COMPLETION_*`, `DagCompletionReason` is NOT a strict extension of an existing Java enum — it is a new DAG-local enum. Semantics match JS: default drain distinguishes clean (`ALL_COMPLETED`) from drained-with-failures (`COMPLETED_WITH_FAILURES`), so the reason itself disambiguates. `throwIfError()` keys off `failureCount`, not the reason. **Custom-predicate completion (§6) is deferred to v2 in Java, so the `CUSTOM_COMPLETION_SUCCEEDED/FAILED` members are NOT declared** (they were dropped rather than shipped reserved-but-unreachable); they will be added when Option A ships. (Go, which implements custom completion, keeps its `CUSTOM_COMPLETION_*` reasons.)
+Semantics match JS: a default drain distinguishes clean (`ALL_COMPLETED`) from drained-with-failures (`COMPLETED_WITH_FAILURES`), so the reason itself disambiguates and `throwIfError()` keys off `failureCount()`. Custom-predicate completion is deferred to v2 (§6), so no `CUSTOM_COMPLETION_*` members are defined. The string values of the shared members are identical across SDKs, which is what keeps checkpoints diagnosable cross-language (cross-language doc §2.A.3).
 
 ### 2.11 `DagConfig`
 
 ```java
 public record DagConfig(
-    Optional<Integer> maxConcurrency,          // default: 40 (DEFAULT_MAX_CONCURRENCY); must be >= 1 if present
+    Optional<Integer> maxConcurrency,          // default 40; must be >= 1 if present
     Optional<DagCompletionConfig> completionConfig,
     Optional<TriggerRule> defaultTriggerRule,   // default ALL_SUCCESS
-    Optional<SerDes<DagResult>> serDes,
-    Optional<Function<DagResult, String>> summaryGenerator  // NON-NATIVE, v1-DROP CANDIDATE — no SDK precedent (§8.1)
+    Optional<SerDes> serDes                     // custom serializer for the aggregate DagResult
 ) {
     public static Builder builder() { ... }
 }
 ```
 
-Built via `DagConfig.builder()` to match the SDK's pervasive builder style. `maxConcurrency` validation mirrors `MapConfig`/`ParallelConfig`: **must be ≥ 1** if set (note: the Java SDK docs say map/parallel require `>= 1`, a slightly different guard shape than JS's `<= 0 throws` — Java throws `IllegalArgumentException`, §7/§9).
+Built via `DagConfig.builder()`, matching the SDK's pervasive builder style. `maxConcurrency` must be `>= 1` if present (validated in both the compact constructor and the builder, throwing `IllegalArgumentException`); when unset the DAG scheduler defaults to `40` (`DagExecutor.DEFAULT_MAX_CONCURRENCY`). `maxConcurrency` bounds the DAG scheduler's top-level tasks only — it is not inherited by a task's own internal fan-out: a `map` or `parallel` task keeps its own unlimited default unless configured, and a nested `dag` gets its own independent default of 40. An explicit value always wins, including one above the default.
+
+There is deliberately no `summaryGenerator` field. The DAG container checkpoints a single SDK-owned envelope that is readable on its own (§8, §8.1), so no customer-supplied string is ever written into a payload the SDK parses back on replay.
 
 ### 2.12 Two ways to declare dependencies
-
-Identical model to JS §3, expressed with handles:
 
 ```java
 ctx.dag("etl", d -> {
@@ -362,57 +332,44 @@ ctx.dag("etl", d -> {
     var b = d.step("b", B.class, (deps, s) -> fetchB());
     var c = d.step("c", C.class, (deps, s) ->                          // inline deps => typed access
                 process(deps.get(a).orElseThrow(), deps.get(b).orElseThrow()))
-             .reads(a, b);                                             // declare inline (typed) deps: retrievable via Deps.get
+             .reads(a, b);                                             // declare inline (typed) deps
     d.step("notify", Void.class, (deps, s) -> notifyDone())
-             .after(c);                                            // ordering-only: waits for c, no result access
+             .after(c);                                                // ordering-only: waits for c, no result access
 });
 ```
 
-Inline deps are declared explicitly via `.reads(...)`; only those handles are retrievable via `Deps.get(...)` inside the fn. `.after(...)` adds ordering-only edges (scheduling/trigger/cycle only, not in `Deps`).
-
-> **[CODE NOTE — divergence from JS]** JS distinguishes inline deps (`deps: [a,b]` array param) from builder deps (`.after(...)`) _syntactically_. Java has no separate deps array param and cannot introspect a lambda body to discover which handles it calls `deps.get(...)` on; instead **a task's inline deps must be declared explicitly on the builder via `.reads(a, b)`**, so the scheduler knows the full graph (and the retrievable-deps set) without executing the body. Only handles passed to `.reads(...)` are retrievable via `Deps.get`; passing an undeclared handle throws `IllegalStateException` (§3). See §3 for the concrete `TaskDef`/registration mechanics.
+Inline dependencies are declared explicitly via `.reads(...)`; only those handles are retrievable via `Deps.get(...)` inside the function. `.after(...)` adds ordering-only edges (scheduling, trigger-rule evaluation, and cycle detection only — not `Deps`). Because Java cannot introspect a lambda body to discover which handles it reads, a task's inline dependencies must be declared on the builder so the scheduler knows the full graph without executing the body; passing an undeclared handle to `Deps.get(...)` throws `IllegalStateException` (§3).
 
 ---
 
 ## 3. Registration mechanics & the explicit-inline-deps rule
 
-**Reconciliation of the §2.12 wrinkle.** Java cannot introspect a lambda body to learn which handles it calls `deps.get(...)` on. So — unlike JS, where `deps: [a,b]` is a literal array param feeding the type system — **Java requires inline deps to be declared explicitly** on the builder, and only declared handles are retrievable via `Deps.get`. The canonical, statically-analyzable form:
+Java requires inline dependencies to be declared explicitly on the builder, and only declared handles are retrievable via `Deps.get`. The canonical, statically-analyzable form:
 
 ```java
 var c = d.step("c", C.class, (deps, s) -> process(deps.get(a).orElseThrow(), deps.get(b).orElseThrow()))
-         .reads(a, b);         // <-- inline (typed) deps: retrievable via Deps.get, populate DepsMap-equivalent
+         .reads(a, b);   // inline (typed) deps: retrievable via Deps.get
 ```
 
-- `.reads(TaskHandle<?>... deps)` — declares **inline** deps: they gate scheduling AND are retrievable via `Deps.get`. (Runtime guard: `Deps.get(h)` throws `IllegalStateException` if `h` was not declared via `.reads(...)`.)
-- `.after(TaskHandle<?>... deps)` — declares **ordering-only** deps: gate scheduling but NOT retrievable via `Deps`.
+- `.reads(TaskHandle<?>... deps)` — declares **inline** deps: they gate scheduling AND are retrievable via `Deps.get`. Runtime guard: `Deps.get(h)` throws `IllegalStateException` if `h` was not declared via `.reads(...)`.
+- `.after(TaskHandle<?>... deps)` — declares **ordering-only** deps: they gate scheduling but are NOT retrievable via `Deps`.
 
-`TaskDef` (internal) stores both sets, exactly like JS `inlineDeps` vs `allDeps`:
+Each registered task is recorded as an internal `TaskHandleImpl` that stores both dependency sets and a `TaskExecutor` closure binding the operation kind and the deps-first rule:
 
-```java
-record TaskDef<T>(
-    String name,
-    TaskKind kind,                       // STEP, INVOKE, CALLBACK, WAIT, WAIT_FOR_CONDITION, CHILD, MAP, PARALLEL, DAG
-    List<TaskHandle<?>> inlineDeps,      // from .reads(...)  -> drives Deps
-    List<TaskHandle<?>> allDeps,         // inlineDeps ∪ .after(...) -> readiness, trigger, cycle, missing-dep
-    Optional<TriggerRule> triggerRule,
-    Optional<Predicate<Deps>> runIf,
-    Object options,
-    TaskExecutor<T> executor             // closure binding op kind + deps-first rule
-) {}
-```
+| Field                             | Source                          | Drives                                                                  |
+| --------------------------------- | ------------------------------- | ----------------------------------------------------------------------- |
+| `inlineDeps`                      | `.reads(...)`                   | `Deps` construction (typed result access)                               |
+| `allDeps` (`inlineDeps ∪ .after`) | `.reads(...)` and `.after(...)` | Readiness, trigger-rule status, cycle detection, missing-dep validation |
 
-| Consumer                                                                   | Uses         |
-| -------------------------------------------------------------------------- | ------------ |
-| `Deps` construction (typed result access)                                  | `inlineDeps` |
-| Readiness / trigger-rule status / cycle detection / missing-dep validation | `allDeps`    |
+`Deps` for a task is built from an **immutable per-task snapshot** of its inline dependencies' terminal executions, taken by the scheduler at launch time (all inline deps are terminal before launch). The snapshot is private to the task, so a body's `deps.get(...)` calls — which run on user-executor threads — never race the scheduler thread's writes to its live results map.
 
-> **[CODE NOTE — the cleaner alternative + why not]** A deps-in-signature form (`d.step("c", C.class, List.of(a,b), (deps,s)->...)`) makes inline deps a required positional argument (closest to JS). Rejected as canonical because it fixes an awkward `List<TaskHandle<?>>` param in every overload and reads worse than fluent `.reads(...)`. The `.reads(...)`/`.after(...)` builder pair is the idiomatic Java choice and keeps the method overload set small. The positional-arity sugar (§2.7) is the escape hatch for those who want the deps _and_ their types inline.
+A deps-in-signature form (`d.step("c", C.class, List.of(a, b), (deps, s) -> ...)`) was considered but not adopted as canonical: it fixes an awkward `List<TaskHandle<?>>` parameter into every overload and reads worse than the fluent `.reads(...)`/`.after(...)` pair. The positional-arity sugar (§2.7) is the escape hatch for callers who want the dependencies and their types inline.
 
 ---
 
 ## 4. Entity-ID strategy & replay correctness
 
-**Ports directly from JS §4** ([A-J1] source-verified: Java uses per-context counter IDs, hashed + context-path-prefixed; [A-J2] resolved `CAN-BE-ADDED` — the explicit-ID seam is a minimal addition, §4.3). The design is language-agnostic: IDs are opaque strings, hashed before checkpoint storage; a task's ID is `{parentId}-DAG_NODE_T_{name}`.
+IDs are opaque strings, hashed before checkpoint storage; a task's ID is `{parentId}-DAG_NODE_T_{name}`.
 
 ### 4.1 Name-based task IDs
 
@@ -423,282 +380,219 @@ context.dag(...) child context:   1-2
     sub-task "rule_a":            1-2-DAG_NODE_T_validation-DAG_NODE_T_rule_a
 ```
 
-### 4.2 Charset rules (ported verbatim — normative core)
+The scheduler mints a task's ID via `DurableContextImpl.operationIdForName("DAG_NODE_T_" + name)`, which applies the context's existing prefix-plus-hash discipline (the same one used for counter IDs) to a caller-supplied name suffix instead of the monotonic counter. Java re-hashes at each child-context boundary, so a nested sub-task's `parentId` is the parent DAG container's already-hashed id.
 
-- Name pattern `^[a-zA-Z0-9_]+$`, ≤ 100 chars. **No `-`** (dash is structural-only in IDs).
+### 4.2 Charset rules (normative core)
+
+- Name pattern `^[a-zA-Z0-9_]+$`, non-empty, ≤ 100 chars. **No `-`** (dash is structural-only in IDs).
 - Name MUST NOT contain the reserved sequence `DAG_NODE_T_` (defense-in-depth).
 
-> **Source note (SDK base vs DAG rule).** The base SDK validation is _looser_: `ParameterValidator.validateOperationName` allows **any printable ASCII up to `MAX_OPERATION_NAME_LENGTH = 256`** and does **not** forbid `-` (`util/ParameterValidator.java:22,~150-185`). The DAG's `^[a-zA-Z0-9_]+$` / ≤100 / no-`DAG_NODE_T_` rule is therefore a **stricter DAG-layer constraint** enforced additionally at registration (via `DagInvalidTaskNameException`), not a restatement of the SDK guard — this is exactly what the injectivity proof requires (no `-` in names ⇒ the `-DAG_NODE_T_` delimiter is unforgeable).
+The base SDK's operation-name validation is looser (any printable ASCII up to 256 chars, `-` allowed). The DAG's `^[a-zA-Z0-9_]+$` / ≤100 / no-`DAG_NODE_T_` rule is a stricter DAG-layer constraint enforced additionally at registration by `DagValidator`, raising `DagInvalidTaskNameException`. Because Java re-hashes per level, per-level charset injectivity plus hash collision-resistance (SHA-256) is the load-bearing injectivity guarantee, and the no-dash / no-`DAG_NODE_T_` rules are defense-in-depth and debug hygiene (greppable IDs, cross-language name parity). See cross-language doc §2.A.2 for the full injectivity argument.
 
-The injectivity argument (no `-` in names ⇒ the `-DAG_NODE_T_` delimiter is unforgeable ⇒ the `(scope-path, name) → entityId` map is a bijection) is **identical to JS §4.2** and language-independent. Enforced at registration via `DagInvalidTaskNameException`. This is part of the **shared normative core** (see cross-language doc).
+### 4.3 Replay-correctness argument
 
-### 4.3 Replay-correctness argument (Java-specific grounding — [A-J2] resolved `CAN-BE-ADDED`)
+The scheduler's traversal order may vary run-to-run; correctness depends only on (a) stable IDs and (b) topological ordering.
 
-The scheduler's traversal order may vary run-to-run; correctness depends only on (a) stable IDs and (b) topological ordering. Concretely, the Java analog of the JS argument:
+1. Each task's ID is a pure function of its name plus DAG-context prefix — identical every run.
+2. When the scheduler runs task `X`, it launches `X`'s underlying operation under the explicit ID `idOf(X)` via the operation's `*AsyncWithId` entry point (§9). If `X` already completed, the operation's replay fast-path returns the checkpointed result (or rethrows the checkpointed error) without re-executing — the same fast path `step`/`invoke`/`runInChildContext` use, keyed on the entity ID.
+3. Replay-consistency validation compares operation type/name/subtype against the checkpoint (never the ID format); the same name always maps to the same operation type, so it passes.
+4. The scheduler rebuilds its in-memory results map each run via the fast path; `Deps` is reconstructed identically; topological order guarantees dependencies are present before a task runs.
 
-1. Each task's ID is a pure function of its name + DAG context prefix — identical every run.
-2. When the scheduler runs task `X`, it invokes `X`'s underlying operation **under the explicit ID `idOf(X)`** ([A-J2], resolved — via `OperationIdGenerator.operationIdForName("DAG_NODE_T_"+name)` feeding the explicit-ID `*AsyncWithId` variant, §4.3). If `X` already completed, the operation's replay fast-path returns the checkpointed result (or rethrows the checkpointed error) without re-executing — the same fast path `step`/`invoke`/`runInChildContext` already use, keyed on the entity ID (`BaseDurableOperation.getOperation()` → `ExecutionManager.getOperationAndUpdateReplayState(getOperationId())`).
-3. Replay-consistency validation (Java's `NonDeterministicExecutionException` guard) compares operation type/name/subtype against the checkpoint; the same name always maps to the same op type, so it passes. It does not inspect ID format.
-4. The scheduler rebuilds its in-memory `results` map each run via the fast path; `Deps` is reconstructed identically; topological order guarantees deps are present before a task runs.
-
-The **only** new requirement over `map`/`parallel` is ID derivation; everything downstream (checkpoint, retry, serdes, replay validation, termination) is existing machinery.
-
-> **[CODE NOTE — Java mode-management coupling, cf. JS §7.3.1 — ✅ SOURCE-VERIFIED].** JS's core risk is that `withDurableModeManagement` is coupled to the counter via `peekStepId()`. **Verified Java analog:** the one-way `ExecutionMode` REPLAY→EXECUTION transition is driven by `ExecutionManager.getOperationAndUpdateReplayState(operationId)` (`execution/ExecutionManager.java:207-217`), which is keyed **purely on the operation-ID string** — it flips to EXECUTION when the id is absent or non-terminal, and is agnostic to _how_ the id was produced. `BaseDurableOperation.getOperation()` (`operation/BaseDurableOperation.java:155`) calls it with `getOperationId()`. So a DAG task launched under an explicit `idOf(name)` slots into this lookup with **no change to the replay/mode machinery**. `map`/`parallel`/child per-item ops already run under **non-top-level, explicitly-_prefixed_ IDs** (`ConcurrencyOperation` seeds `new OperationIdGenerator(getOperationId())` and `createChildContext(getOperationId(), ...)`, `operation/ConcurrencyOperation.java:73-86,96-118,137`) — proving the stack runs ops under a caller-controlled prefix; they simply mint the _suffix_ by counter, not by name.
->
-> **✅ [A-J2] VERDICT — `CAN-BE-ADDED` (minimal, surgical; names given).** The caller-supplied-ID seam is already threaded through the entire stack (opaque `OperationIdentifier.operationId`; ID-agnostic `BaseDurableOperation`/`ExecutionManager`/`validateReplay`; child contexts run under `getOperationId()`). The **only** missing piece is a name→id minting function and internal entry points that use it in place of the counter. Precise minimal change:
->
-> 1. **`OperationIdGenerator`** (`execution/OperationIdGenerator.java`): add one method reusing the existing prefix + SHA-256 discipline, counter untouched —
->    ```java
->    /** Mints an operation ID from a caller-supplied name suffix instead of the monotonic counter. */
->    public String operationIdForName(String name) {
->        return hashOperationId(operationIdPrefix + name);   // operationIdPrefix already == contextId + "-"
->    }
->    ```
->    The DAG passes `"DAG_NODE_T_" + taskName`, yielding `hash(dagContextId + "-DAG_NODE_T_" + taskName)` — exactly the normative `{parentId}-DAG_NODE_T_{name}` scheme (pre-hash).
-> 2. **`DurableContextImpl`** (`context/DurableContextImpl.java`): add internal explicit-ID variants of the op-launch methods (`stepAsyncWithId`, `invokeAsyncWithId`, `runInChildContextAsyncWithId`, `mapAsyncWithId`, `parallelWithId`, `callbackWithId`, `waitForConditionAsyncWithId`, `waitAsyncWithId`) — each **identical** to the existing method except it takes a precomputed `operationId` (from `operationIdGenerator.operationIdForName(...)`) instead of calling the private `nextOperationId()` (`:335`). Cleanest form: extract a private helper per op that both the public method (passing `nextOperationId()`) and the DAG (passing the name-derived id) call. These live on the concrete `DurableContextImpl` as an **internal SPI**, _not_ on the public `DurableContext` interface.
-> 3. **Zero changes** to `BaseDurableOperation`, `ExecutionManager`, `OperationIdentifier`, any `*Operation` subclass, `validateReplay`, or serde — they already accept and thread an arbitrary caller-controlled `operationId`.
->
-> **Packaging caveat (not a semantic blocker).** The scheduler (`DagExecutor`) must reach these internal methods. Either place it in the `software.amazon.lambda.durable.context`/`operation` package (package-internal access) or give the explicit-ID variants wider-but-internal visibility. The proposed public `software.amazon.lambda.durable.dag` package for the _surface_ types is unaffected.
+The only requirement over `map`/`parallel` is name-based ID derivation. Everything downstream — checkpoint, retry, serdes, replay validation, termination — is the existing machinery: the explicit-ID seam is threaded through the whole operation/execution stack (an opaque `OperationIdentifier.operationId`; ID-agnostic `BaseDurableOperation`, `ExecutionManager`, and replay validation; child contexts already run under a supplied ID). The DAG launches each task through the internal `*AsyncWithId` variants on `DurableContextImpl` (`stepAsyncWithId`, `invokeAsyncWithId`, `runInChildContextAsyncWithId`, `mapAsyncWithId`, `parallelWithId`, `waitAsyncWithId`, `waitForConditionAsyncWithId`), each identical to the public method except that it takes a precomputed `operationId` from `operationIdForName(...)` instead of the monotonic counter. These are an internal SPI on the concrete `DurableContextImpl`, not on the public `DurableContext` interface. The one-way `ExecutionMode` REPLAY→EXECUTION transition is keyed purely on the operation-ID string and is agnostic to how the id was produced, so a task launched under `idOf(name)` slots into the lookup with no change to the replay/mode machinery.
 
 ---
 
 ## 5. Scheduler semantics
 
-Ported from JS §5. The Java scheduler (`DagExecutor`) is a topological scheduler over `List<TaskDef>` maintaining `Map<String, TaskExecution<?>> results`, `Set<String> inFlight`, and a ready set.
+The Java scheduler (`DagExecutor`) is a topological scheduler over the registered `List<TaskHandleImpl>`, maintaining a `Map<String, TaskExecution<?>> results`, an in-flight map keyed by task name (insertion order = launch order), and a ready set. It runs on the DAG child-context thread and owns no threads or executor of its own.
 
-- **Readiness (§5.1):** a task is ready when every dep in `allDeps` is terminal (`SUCCEEDED`/`FAILED`/`SKIPPED`) in `results`. Roots are ready immediately.
-- **Concurrency (§5.2):** start ready tasks while `inFlight.size() < maxConcurrency`. The scheduler controls concurrency by **deferring the `*Async` call** (which returns a `DurableFuture`) until the task is ready and under the cap — the Java analog of JS deferring the handler call ([A-J5]).
-- **Trigger-rule evaluation (§5.3):** the six-rule truth table and the empty-upstream semantics are **ported verbatim**. Java evaluator:
-  ```java
-  enum TriggerRule {
-      ALL_SUCCESS  { boolean eval(List<TaskStatus> s){ return s.stream().allMatch(x->x==SUCCEEDED); } },      // [] -> true (Run)
-      ALL_FAILED   { boolean eval(List<TaskStatus> s){ return !s.isEmpty() && s.stream().allMatch(x->x==FAILED); } }, // [] -> false (Skip)
-      ALL_DONE     { boolean eval(List<TaskStatus> s){ return true; } },                                        // [] -> true (Run)
-      ANY_SUCCESS  { boolean eval(List<TaskStatus> s){ return s.stream().anyMatch(x->x==SUCCEEDED); } },        // [] -> false (Skip)
-      ANY_FAILED   { boolean eval(List<TaskStatus> s){ return s.stream().anyMatch(x->x==FAILED); } },           // [] -> false (Skip)
-      NONE_FAILED  { boolean eval(List<TaskStatus> s){ return s.stream().noneMatch(x->x==FAILED); } };          // [] -> true (Run)
-      abstract boolean eval(List<TaskStatus> statuses);
-  }
-  ```
-  Not satisfied ⇒ record `SKIPPED / TRIGGER_RULE`, propagate downstream.
-- **`runIf` (§5.4):** if trigger rule passed, build `Deps` from `results` and evaluate `Predicate<Deps>`. `false` ⇒ `SKIPPED / RUN_IF_PREDICATE`.
-- **Running a task (§5.5):** invoke `taskDef.executor(childCtx, deps)` → the explicit-ID `*Async` op → `SUCCEEDED{result}` / `FAILED{error}`, then queue downstream.
-- **Skip propagation (§5.6):** a skip is terminal; downstream evaluates its own rule against the skip. Skips cascade.
-- **Failure semantics (§5.8):** a failed task is a **normal terminal state, not an abort**. Default (no `completionConfig`): scheduler **drains the reachable graph** so compensation tasks (`ALL_FAILED`/`ALL_DONE`) run; `completionReason` = `ALL_COMPLETED` (all ok) or `COMPLETED_WITH_FAILURES` (≥1 failed). `dag()` does **not** throw; caller opts in via `throwIfError()`. This intentionally diverges from the Java batch default — see §6.
-- **Empty DAG (§5.9):** resolve immediately, `totalCount=0`, `ALL_COMPLETED`.
+- **Readiness (§5.1):** a task is ready when every dependency in `allDeps` is terminal (`SUCCEEDED`/`FAILED`/`SKIPPED`) in `results`. Roots are ready immediately.
+- **Concurrency (§5.2):** ready tasks are launched while the in-flight count is below `maxConcurrency`. The scheduler controls concurrency by **deferring the `*Async` launch** until a task is both ready and under the cap.
+- **Trigger-rule evaluation (§5.3):** `TriggerRuleEvaluator.eval(rule, statuses)` applies the six-rule truth table, with empty-upstream semantics ported verbatim:
 
-### 5.1 SKIPPED tasks checkpoint nothing (§9.5)
+  | Rule          | Runs when                       | Empty upstream |
+  | ------------- | ------------------------------- | -------------- |
+  | `ALL_SUCCESS` | every upstream SUCCEEDED        | run            |
+  | `ALL_FAILED`  | every upstream FAILED           | skip           |
+  | `ALL_DONE`    | every upstream is terminal      | run            |
+  | `ANY_SUCCESS` | at least one upstream SUCCEEDED | skip           |
+  | `ANY_FAILED`  | at least one upstream FAILED    | skip           |
+  | `NONE_FAILED` | no upstream FAILED              | run            |
 
-A skip is a pure function of upstream terminal statuses + deterministic `runIf`, recomputed identically each run — no entity ID, no checkpoint. Ported verbatim (zero-cost skips, replay-safe).
+  When the rule is not satisfied the task is recorded `SKIPPED / TRIGGER_RULE` and the skip propagates downstream.
+
+- **`runIf` (§5.4):** if the trigger rule passed, the scheduler builds `Deps` from the per-task snapshot and evaluates the `Predicate<Deps>`. `false` ⇒ `SKIPPED / RUN_IF_PREDICATE`. If the predicate **throws**, the scheduler aborts the DAG with `DagPredicateException` (the offending task is left with no terminal state and no further tasks are launched) rather than recording a failure that would fire compensation paths — a `runIf` throw is a defect in deterministic code, not a business outcome.
+- **Running a task (§5.5):** the task's `TaskExecutor` closure launches the underlying operation through its `*AsyncWithId` entry point under `idOf(name)`, returning a `DurableFuture`. On resolution the scheduler records `SUCCEEDED{result}` or `FAILED{error}` and re-runs readiness. `SuspendExecutionException` from a `DurableFuture.get()` propagates for suspend/replay.
+- **Skip propagation (§5.6):** a skip is terminal; downstream tasks evaluate their own rule against it. Skips cascade.
+- **Failure semantics (§5.8):** a failed task is a **normal terminal state, not an abort**. With no `completionConfig` the scheduler **drains the reachable graph** so compensation tasks (`ALL_FAILED`/`ALL_DONE`) run, and `completionReason` is `ALL_COMPLETED` (no failures) or `COMPLETED_WITH_FAILURES` (≥1 failed). `dag()` does not throw; the caller opts in via `throwIfError()`. This drain-by-default aligns with the Java batch default of `allCompleted()` (§6).
+- **Early completion:** when a `completionConfig` threshold is reached, the scheduler stops launching and awaiting, captures the still-in-flight task names (in launch order) as `startedTaskNames`, and abandons those tasks. This is replay-safe: each in-flight operation was launched under its name-based ID, so any late checkpoint it writes is inert — on replay the scheduler re-evaluates completion deterministically, reaches the identical stop point, and never reads a checkpoint past it.
+- **Empty DAG (§5.9):** resolves immediately with `totalCount = 0` and `ALL_COMPLETED`.
+
+### 5.1 Skipped tasks checkpoint nothing
+
+A skip is a pure function of upstream terminal statuses plus a deterministic `runIf`, recomputed identically each run — no entity ID, no checkpoint (zero-cost, replay-safe skips).
 
 ---
 
-## 6. Completion config & the Java custom-completion gap
+## 6. Completion config
 
-`DagCompletionConfig` reuses the Java SDK's threshold factories where possible:
+`DagCompletionConfig` is a sealed interface exposing the SDK's threshold factories, wrapping the base SDK's `CompletionConfig`:
 
 ```java
-public sealed interface DagCompletionConfig
-    permits ThresholdDagCompletion, CustomDagCompletion {
-
-    // Threshold path — maps to existing CompletionConfig factories (verified names):
+public sealed interface DagCompletionConfig permits ThresholdDagCompletion {
     static DagCompletionConfig allCompleted();
     static DagCompletionConfig allSuccessful();
-    static DagCompletionConfig firstSuccessful();               // = minSuccessful(1); present in the SDK
+    static DagCompletionConfig firstSuccessful();               // = minSuccessful(1)
     static DagCompletionConfig minSuccessful(int n);
     static DagCompletionConfig toleratedFailureCount(int n);
-    static DagCompletionConfig toleratedFailurePercentage(double p);   // see caveat below
+    static DagCompletionConfig toleratedFailurePercentage(double p);
 }
+
+public record ThresholdDagCompletion(CompletionConfig completionConfig) implements DagCompletionConfig {}
 ```
 
-> **Verified factory-name parity.** These six mirror the SDK's `CompletionConfig` factories exactly (`allCompleted`, `allSuccessful`, `firstSuccessful`, `minSuccessful`, `toleratedFailureCount`, `toleratedFailurePercentage`). **Caveat (VERIFIED, `docs/core/parallel.md`):** that doc states verbatim _"`toleratedFailurePercentage` is not supported for parallel operations"_ (it is available for `map`). The DAG owns its own scheduler, so it _can_ implement percentage semantics itself — but implementers should treat percentage as a DAG-scheduler computation, not a delegation to a native parallel config.
+These six factories mirror the base SDK's `CompletionConfig` factories exactly. The DAG owns its own scheduler, so it evaluates the thresholds itself in `DagExecutor`: `minSuccessful` maps to `MIN_SUCCESSFUL_REACHED`; `toleratedFailureCount` and `toleratedFailurePercentage` map to `FAILURE_TOLERANCE_EXCEEDED`. `SKIPPED` counts toward neither success nor failure. `toleratedFailurePercentage` is computed against `totalCount` by the DAG scheduler (the base parallel operation does not support percentage completion, but the DAG's own scheduler does).
 
-> **Status→reason translation.** The threshold path delegates counting to the SDK's `ConcurrencyCompletionStatus` (3 members), which the DAG maps into `DagCompletionReason` (§2.10): `MIN_SUCCESSFUL_REACHED`→`MIN_SUCCESSFUL_REACHED`, `FAILURE_TOLERANCE_EXCEEDED`→`FAILURE_TOLERANCE_EXCEEDED`, and `ALL_COMPLETED`→`ALL_COMPLETED` _or_ `COMPLETED_WITH_FAILURES` depending on `failureCount` (the DAG-local distinction the batch enum cannot express).
+**Custom-predicate completion is deferred to v2.** The base SDK's completion surface has no custom-predicate hook and no `CUSTOM_COMPLETION_*` status (`ConcurrencyCompletionStatus` is closed at three members; completion is factory-method-only), so result-based short-circuit (JS §13.4) is a net-new DAG-owned feature. v1 ships threshold completion only, and the sealed `DagCompletionConfig` permits only `ThresholdDagCompletion`. Because the DAG scheduler is a separate component, a custom `Predicate<DagCompletionSnapshot>` variant remains addable later without touching the batch layer.
 
-**Threshold path (Ports):** `minSuccessful`/`toleratedFailureCount`/`toleratedFailurePercentage` map onto the SDK's existing `CompletionConfig` factories and `ConcurrencyCompletionStatus`. `SKIPPED` counts toward neither success nor failure. Reason ⇒ `MIN_SUCCESSFUL_REACHED` / `FAILURE_TOLERANCE_EXCEEDED`.
-
-**Custom-predicate path (Adapts, DAG-owned; JS ships it in v1, Java should defer to v2 — [A-J6] VERIFIED):** JS exposes `shouldComplete(status: DagCompletionStatus): CompletionDecision` with per-task **results** for value-based short-circuit (e.g. "stop when any rule returns REJECT"). **The Java SDK's public completion surface has no custom-predicate hook and no `CUSTOM_COMPLETION_*` status** — this is now **verified**, not assumed (`ConcurrencyCompletionStatus` is closed at 3 members; completion is factory-method-only). Two options:
-
-- **Option A (recommended if a source seam exists):** define a DAG-specific custom-completion interface (the batch layer need not gain it), because the DAG scheduler is a **separate component** and can evaluate a predicate itself:
-  ```java
-  public sealed interface DagCompletionConfig permits ThresholdDagCompletion, CustomDagCompletion {}
-  public record CustomDagCompletion(Predicate<DagCompletionSnapshot> shouldComplete,
-                                    CompletionOutcomeOnStop outcome) implements DagCompletionConfig {}
-  public record DagCompletionSnapshot(int successCount, int failureCount, int skippedCount,
-                                      int completedCount, int totalCount,
-                                      Map<String, TaskExecution<?>> results) {}   // results = value-based short-circuit
-  ```
-  This is feasible **without touching the batch enum** because the DAG owns its scheduler and its own `DagCompletionReason` (§2.10) can add `CUSTOM_COMPLETION_*` when Option A ships (they are **not** declared in v1 — dropped rather than reserved, per C4b).
-- **Option B (recommended for v1):** ship only the threshold path in v1 and mark result-based short-circuit (JS §13.4) as **deferred**. Since [A-J6] is verified (the SDK has no custom-completion machinery to reuse), custom completion is a **net-new DAG-owned feature** either way; deferring it keeps v1 minimal and avoids committing to Option A before the scheduler internals are built.
-
-> **[CODE NOTE — divergence]** This is the single largest _feature_ divergence from JS: JS ships value-based custom completion in v1; Java should ship threshold completion in v1 and gate custom completion on verifying an internal predicate seam. The DAG-owned scheduler makes Option A tractable, but it is flagged as an assumption.
-
-**Deliberate divergence from Java batch default (ported from JS §5.8 [CODE NOTE]).** The Java `map`/`parallel` default is `allCompleted()` (run all) — but note the JS spec's concern is fail-fast; the Java batch default is already drain-all (`allCompleted`), so the DAG's drain-by-default is **more naturally aligned with Java than with JS**. The DAG still treats a failed task as terminal (not abort) and reports `COMPLETED_WITH_FAILURES`, which the Java batch enum cannot express — hence the DAG-local enum.
+The DAG's drain-by-default failure handling (§5.8) is more naturally aligned with Java's batch default (`allCompleted`) than with JS's fail-fast concern. The DAG still treats a failed task as terminal (not an abort) and reports `COMPLETED_WITH_FAILURES`, which the base batch enum cannot express — hence the DAG-local `DagCompletionReason`.
 
 ---
 
 ## 7. Validation & exceptions
 
-Validation runs once, **after** `register` returns, **before** the scheduler starts (JS §6). Java exceptions slot into the existing hierarchy (rooted at `DurableExecutionException extends RuntimeException`, with `DurableOperationException` for operation errors — verified §0):
+Registration and validation run **eagerly at the `dag(...)` call site** (`DagContextImpl.registerAndValidate`): registration only declares tasks and validation is pure graph analysis, so both are deterministic and run before the child-context body starts. This lets a registration-time `DagException` propagate **unwrapped** to the `dag()` caller rather than being erased into a generic `ChildContextFailedException` inside the `runInChildContext` boundary. Nested DAGs are registered and validated eagerly during the parent's registration phase for the same reason.
+
+DAG exceptions slot into the existing hierarchy (rooted at `DurableExecutionException extends RuntimeException`, via `DurableOperationException`):
 
 ```
 DurableExecutionException (RuntimeException)
  └── DurableOperationException
-      └── DagException (new, general DAG operation exception)
+      └── DagException                          // base for DAG operations
            ├── DagCyclicDependencyException      // cycle at registration
-           ├── DagInvalidTaskNameException        // bad name (charset / DAG_NODE_T_ / length)
-           ├── DagDuplicateTaskException          // duplicate name
-           ├── DagInvalidDependencyException      // dep handle not registered in this scope
-           └── DagExecutionException              // thrown by throwIfError(); wraps first failed task's cause
+           ├── DagInvalidTaskNameException       // bad name (charset / DAG_NODE_T_ / length)
+           ├── DagDuplicateTaskException         // duplicate name
+           ├── DagInvalidDependencyException     // dep handle not registered in this scope
+           ├── DagPredicateException             // a runIf predicate threw (aborts the DAG)
+           └── DagExecutionException             // thrown by throwIfError(); wraps first failed task's cause
 ```
 
-- **Name/duplicate/missing-dep/cycle** — deterministic registration-time checks. Cycle detection = Kahn's algorithm over `allDeps`, `O(V+E)`, ported verbatim from JS §6.4. Throw the corresponding `Dag*Exception` from inside the DAG child-context body.
-- **`maxConcurrency`** — mirror the Java batch guard: `map`/`parallel` require `>= 1` and throw `IllegalArgumentException`. The DAG throws `IllegalArgumentException` for `maxConcurrency < 1` (this is a _cleaner_ alignment than JS, which throws `Error` for `<= 0` and terminates only for the completion-config union; Java's uniform `IllegalArgumentException` for bad config is idiomatic).
-- **Mutually-exclusive completion config** — Java's `sealed interface DagCompletionConfig` + factory methods make the threshold-vs-custom union **statically exclusive** (you cannot construct an ambiguous config), so the JS runtime `validateCompletionConfig` terminate-path is **largely unnecessary** in Java — the type system enforces it. A residual runtime guard (e.g. `minSuccessful(-1)`) throws `IllegalArgumentException`.
-- **`NonDeterministicExecutionException`** on a task ID terminates the whole execution (unrecoverable), same as any operation.
-- A task's **normal failure** is not a termination — it is a terminal task state (§5.8).
+- **Name / duplicate / missing-dep / cycle** — deterministic registration-time checks in `DagValidator`. Cycle detection is Kahn's algorithm over `allDeps`, `O(V+E)`; a diamond is not a cycle.
+- **`maxConcurrency`** — `< 1` throws `IllegalArgumentException`, mirroring the base `map`/`parallel` guard.
+- **Mutually-exclusive completion config** — the `sealed` `DagCompletionConfig` plus factory methods make configuration statically well-formed, so no runtime union-validation is needed; a residual guard (e.g. `minSuccessful(-1)`) throws `IllegalArgumentException`.
+- **`DagPredicateException`** — a throwing `runIf` predicate aborts the DAG (§5.4). It carries the offending `taskName()` and the original error as its cause.
+- **`NonDeterministicExecutionException`** on a task ID terminates the whole execution (unrecoverable), as for any operation. A task's **normal failure** is not a termination — it is a terminal task state (§5.8).
 
-> **[CODE NOTE — ✅ SOURCE-VERIFIED, simplification over JS]** JS relies on an `errorMapper: (e) => e` pass-through wired into `runInChildContext` so raw `Dag*Error`s escape the automatic `ChildContextError` re-wrap. **Java needs no such hook.** Verified in source: `ChildContextOperation.get()` (`operation/ChildContextOperation.java:~215-245`) on a `FAILED` child calls `deserializeException(errorObject)`; **if the original reconstructs, it is re-thrown transparently** via `ExceptionHelper.sneakyThrow(original)`, and **only if reconstruction returns `null`** does it fall back to `throw new ChildContextFailedException(op)`. `SerializableDurableOperation.deserializeException` (`operation/SerializableDurableOperation.java:~120-160`) reconstructs by `Class.forName(errorType)` → `resultSerDes.deserialize(errorData, TypeToken.get(...))` → `setStackTrace(...)`, returning `null` (⇒ `ChildContextFailedException`) on `ClassNotFoundException` or `SerDesException`. `ChildContextFailedException` (`exception/ChildContextFailedException.java`) extends `DurableOperationException` and carries `errorType` + `errorMessage`. Because the `Dag*Exception` classes are ordinary `RuntimeException` subclasses on the classpath, they reconstruct and propagate out of the DAG child body — the JS pass-through problem does not exist in Java. **Fidelity caveat (source-grounded):** reconstruction preserves the exception **type, message, and stack trace**, and requires the class on the classpath plus SerDes-deserializable error data; **custom fields survive only if they are serialized into `errorData` and are Jackson-reconstructible by the SerDes** (e.g. `DagCyclicDependencyException`'s cyclic-name list may be lost otherwise). Implementers should carry any diagnostic detail that must survive replay **in the exception message**, not in bespoke fields. If the original cannot be reconstructed, the SDK falls back to `ChildContextFailedException` (type/message-only). (The DAG should still throw its validation `Dag*Exception`s _before_ launching any task so they surface at the `dag(...)` call site, not from inside a task's child context.)
+**Error reconstruction across the child-context boundary.** A DAG runs inside a `runInChildContext` node, so a failed DAG body's exception is checkpointed and reconstructed. `ChildContextOperation` re-throws the original exception transparently when it can be reconstructed (`Class.forName(errorType)` → SerDes deserialize → `setStackTrace`), and falls back to `ChildContextFailedException` (type + message only) when it cannot. Because the `Dag*Exception` classes are ordinary `RuntimeException` subclasses on the classpath, they reconstruct and propagate out of the DAG body — no JS-style `errorMapper` pass-through hook is needed. `DagPredicateException` and `DagExecutionException` set their cause at construction (via a `@JsonCreator`) so a cause-carrying exception survives the round-trip rather than degrading to a bare `ChildContextFailedException`. Reconstruction preserves the exception **type, message, and stack trace**; custom fields survive only if serialized into the error data and reconstructible by the SerDes, so diagnostic detail that must survive replay is carried in the exception message.
 
 ---
 
 ## 8. Serialization of `DagResult`
 
-Mirror the `MapResult` serialization machinery. `DagResultImpl` serializes to a JSON-safe shape with each task's result tagged by a `resultKind` discriminator so heterogeneous, method-bearing results (`MapResult` from map/parallel tasks, `DagResult` from nested-dag tasks) survive the round-trip (JS §8 F5):
+`DagResultSerDes` (de)serializes the aggregate to the single cross-language DAG container envelope, `SerializedDagResult` — the same envelope shape written by all four SDKs (cross-language doc §2.A.4). Field names and presence rules are normative:
 
 ```java
-enum SerializedResultKind { PLAIN, MAP, DAG }
+record SerializedDagResult(
+    String type,                              // always "DagResult"
+    int totalCount,
+    int successCount,
+    int failureCount,
+    int skippedCount,
+    DagCompletionReason completionReason,
+    List<String> startedTaskNames,            // always present
+    List<String> failedTaskNames,             // droppable (last degradation step); omitted when dropped
+    List<SerializedTaskExecution> tasks        // droppable; ABSENCE is the offload signal
+) {}
 
 record SerializedTaskExecution(
-    String name, TaskStatus status, SkipReason skipReason,
-    SerializedResultKind resultKind, Object result, DagTaskError error,
-    String startedAt, String completedAt) {}
+    String name,
+    TaskStatus status,
+    SkipReason skipReason,                     // null unless SKIPPED
+    SerializedResultKind resultKind,           // null unless SUCCEEDED
+    Object result,                             // null unless SUCCEEDED
+    DagTaskError error,                        // null unless FAILED
+    String startedAt,                          // ISO-8601 UTC, or null
+    String completedAt
+) {}
 
-record SerializedDagResult(List<SerializedTaskExecution> tasks, DagCompletionReason completionReason) {}
+enum SerializedResultKind { PLAIN, BATCH, DAG }   // wire values: "plain" | "batch" | "dag"
 ```
 
-- `resultKind` from the task's `TaskKind`: `MAP`/`PARALLEL` ⇒ `MAP`, nested `DAG` ⇒ `DAG`, else `PLAIN`.
-- On restore, `MAP`/`DAG` results are recursively rehydrated to fully-methoded `MapResult`/`DagResult` instances (the "completed DAG" replay path returns the deserialized container without re-running the scheduler, so results must be reconstructable). `TaskHandle` identity is not serialized; `DagResult.getResult(handle)` resolves by `handle.name()`.
-- Errors serialize via the `MapError`-style record (`errorType`/`errorMessage`/`stackTrace`), reusing the batch cause-serialization path.
+- **`resultKind`** tags how a task's result is rehydrated: a `map`/`parallel` task's `MapResult` ⇒ `BATCH` (wire `"batch"`), a nested-`dag` task's `DagResult` ⇒ `DAG` (wire `"dag"`), otherwise `PLAIN`. On restore, `BATCH` rehydrates to `MapResult` and `DAG` recurses; a `PLAIN` result rehydrates to the task's **declared** type.
+- **No `resultType` field.** A `PLAIN` result's type is recovered from the registered graph by task name (`DagResultTypes`, a `taskName → TypeToken<?>` graph collected during registration and carried recursively for nested DAGs), never from a class name persisted in the checkpoint. This keeps the payload free of a `resultType` field, eliminates any `Class.forName` on checkpoint-supplied input, and lets generic element types (e.g. `List<Pojo>`) rehydrate faithfully. An unknown/undeclared task falls back to a generic JSON tree.
+- **Errors** serialize via `DagTaskError`'s canonical `ErrorType` / `ErrorMessage` / `StackTrace` keys (§2.9).
+- **Evolution is additive-only** (no `schemaVersion`): the reader ignores unknown fields and treats a missing field as absent.
+- The DAG child context's result SerDes is this `DagResultSerDes`, so it is also asked to serialize a `Throwable` when the DAG body fails (e.g. a `DagPredicateException`). It delegates any non-`DagResult` value verbatim to the underlying SerDes so error serialization is never reshaped by the aggregate envelope.
 
-### 8.1 Large-`DagResult` handling — Java uses re-execution / per-task reconstruction (NOT a summary envelope)
+### 8.1 Large-`DagResult` handling — SDK-owned envelope with a degradation ladder
 
-> **⚠️ CORRECTION ([A-J3] falsified — ✅ now source-verified).** The original draft ported the JS `DagSummary` **SDK-owned summary envelope** + customer `summaryGenerator` hook. **Verification against the real source shows the Java SDK does not work this way and has no such hook.** Java's large-result strategy is:
->
-> - **Child contexts:** `ChildContextOperation` (`operation/ChildContextOperation.java:39,88-107,150-176`) defines `LARGE_RESULT_THRESHOLD = 256*1024`; a large success is checkpointed with an **empty payload + `ContextOptions.replayChildren(true)`**, and `replay()` on a `SUCCEEDED` child whose `contextDetails().replayChildren()==TRUE` **re-executes the child body** (`replayChildren.set(true); executeChildContext();`) to reconstruct the result in memory rather than storing it in the checkpoint payload.
-> - **Map:** large results are **reconstructed from individual child-context checkpoints** on replay (`MapOperation`, same per-item `ChildContextOperation` machinery).
-> - There is **no** customer summary-generator hook on `runInChildContext`/`RunInChildContextConfig` — `RunInChildContextConfig` (`config/RunInChildContextConfig.java`) exposes **only `serDes`** — and **no** SDK-owned `*Summary` envelope anywhere in the package listing.
+The DAG container checkpoints one SDK-owned envelope that is readable on its own; there is no customer-facing summary hook. Oversize aggregates degrade by dropping detail from the envelope, never by writing a customer string the SDK must parse back:
 
-**Java-native design (what the DAG should actually do).** A DAG _is_ a child context, so it inherits the child-context large-result behavior for free — and this is **strictly simpler** than the JS envelope:
+1. **Small aggregate (fits the checkpoint limit):** the full envelope is checkpointed inline, including the `tasks` array, using the `resultKind`-tagged shape so nested `MapResult`/`DagResult` results survive the round-trip.
+2. **Large aggregate:** `DagResultSerDes.offloadPayloads(...)` produces an ordered degradation ladder, largest first: (i) drop `tasks`; (ii) additionally drop `failedTaskNames`. `ChildContextOperation` selects the first candidate that fits and sets `ReplayChildren` on the container. The counts, `completionReason`, and `startedTaskNames` are **never** dropped, so a DAG can never fail to checkpoint because its own summary did not fit. `startedTaskNames` is bounded by `maxConcurrency`.
+3. **The absence of `tasks` is the offload signal.** When `tasks` is dropped, the per-task detail lives in the retained child operations (via `ReplayChildren`); a reader must treat absence as the signal and must not infer an empty task set.
 
-1. **Small aggregate `DagResult` (< 256KB):** serialized and checkpointed directly (§8), using the `resultKind`-tagged shape so nested `MapResult`/`DagResult` survive the round-trip.
-2. **Large aggregate `DagResult` (≥ 256KB):** the SDK **re-executes the DAG child body on replay** (the native child-context path). This is safe and deterministic precisely because of the name-based IDs (§4): re-running the scheduler causes **every task to hit its per-task replay fast-path** and return its still-checkpointed result under `idOf(name)` — nothing re-executes, and `DagResult` is rebuilt in memory identically. This is Java's native equivalent of "design A (reconstruct by re-running the deterministic body)", which for a DAG collapses into a no-op-scheduler pass. The per-task child checkpoints are the reconstruction source, exactly as `map` reconstructs from per-item checkpoints.
-3. **STARTED-but-not-terminal tasks at early completion (`completionConfig`):** their checkpoints may have been dropped. On re-execution, a task with no terminal checkpoint that is _not scheduled to run_ (because completion was already reached) is simply recomputed as `SKIPPED`/not-started by the scheduler — the deterministic completion evaluation reproduces the same stop point. No separate `startedTaskNames` envelope field is needed.
-
-**Consequence for `DagConfig.summaryGenerator` (§2.11).** This field has **no native precedent** in the Java SDK. Recommendation: **drop it from v1.** If a human-readable observability string is still desired, it must be documented as a **pure, non-native, observability-only add-on that is never read on replay and never influences results** — and even then it should be emitted via `context.logger`/OTel rather than persisted in a bespoke envelope, to stay consistent with how the Java SDK actually surfaces observability (`DurableLogger`, the `otel-plugin`).
-
-> **[CODE NOTE — net divergence from JS]** JS's §8.1 (`DagSummary`, `summaryGenerator`, `reconstructDagResult`, the #751-avoidance envelope contract) is a JS-specific mechanism that **does not port**. Java gets the same guarantee ("customer text can never corrupt replayed structural results") _for free_ by simply **not having** a customer-writable envelope and relying on the native re-execution/per-task-checkpoint reconstruction. This is a genuine simplification, now grounded in verified SDK behavior rather than assumption.
+On restore of an offloaded (tasks-less) envelope, `DagResultImpl` preserves the aggregate counts the envelope carried (rather than re-deriving them from the empty per-task map), so `successCount`/`failureCount`/`skippedCount`/`totalCount`/`completionReason` remain accurate and `throwIfError()` still throws when the aggregate recorded failures (with an aggregate message, since per-task detail is unavailable). This is the child-context large-result behavior the DAG inherits for free by being a child context; a custom user `SerDes` on `DagConfig` cannot produce the reduced envelope, so a DAG configured with one falls back to the child context's generic empty-payload offload.
 
 ---
 
-## 9. Concurrency model (Java-specific)
+## 9. Concurrency model
 
-**The DAG scheduler drives concurrency by launching ready tasks through the SDK's `*Async` variants and awaiting their `DurableFuture`s.** The scheduler itself owns no threads and no `ExecutorService`; but — correcting the earlier draft — **`DurableFuture` is _not_ a thread-free abstraction.** Per `docs/design.md`:
+The DAG scheduler drives concurrency by launching ready tasks through the SDK's `*AsyncWithId` variants and awaiting their `DurableFuture`s. It owns no threads and no `ExecutorService`; it reuses the SDK's thread-backed substrate (§0):
 
-- The SDK runs a **threaded execution model**: the handler and each `*Async` operation execute on the **user executor** (`DurableConfig.executorService`; default a cached daemon pool, configurable via `DurableConfig.builder().withExecutorService(...)`). Steps run user code via `CompletableFuture.runAsync(fn, userExecutor)`; child contexts likewise.
-- **Suspension** is driven by an **active-thread-count race** in `ExecutionManager`: when a thread calls `get()` on an operation that has not completed, it deregisters; when `activeThreads` becomes empty the whole Lambda suspends (returns `PENDING`) and re-invokes later. A `wait`/callback/invoke inside a task therefore suspends the **entire** execution when nothing else is runnable — and on replay every completed operation returns its checkpointed result via the operation-ID fast path.
-- **Determinism does not come from avoiding threads.** It comes from (a) operation-ID-keyed checkpoint/replay (`getOperationAndUpdateReplayState`) and (b) the one-way `ExecutionMode` REPLAY→EXECUTION transition. Real threads are already used throughout `map`/`parallel`/`stepAsync` and are fully compatible with replay.
+- Each `*Async` operation runs user code on the user executor (`DurableConfig.executorService`); the handler and child contexts likewise.
+- **Suspension** is an active-thread-count race in `ExecutionManager`: when a thread blocks on a `get()` for an operation that has not completed it deregisters, and when no thread is runnable the whole execution suspends (returns `PENDING`) and re-invokes later. A `wait`/callback/invoke inside a task therefore suspends the entire execution when nothing else is runnable; on replay every completed operation returns its checkpointed result via the operation-ID fast path.
+- **Determinism** comes from operation-ID-keyed checkpoint/replay and the one-way `ExecutionMode` transition, not from avoiding threads. Real threads are already used throughout `map`/`parallel`/`stepAsync` and are fully compatible with replay.
 
 How the DAG uses this substrate:
 
-- Each ready task is launched with the **`*Async` explicit-ID variant** of its operation — all verified to exist: `stepAsync`, `invokeAsync`, `mapAsync`, `runInChildContextAsync`, `waitAsync`, `waitForCallbackAsync`, `waitForConditionAsync`, plus `parallel()` (branches are inherently concurrent) and nested `dagAsync`. Each returns a `DurableFuture<T>` ([A-J2] adds the explicit-ID seam on top of these).
-- The scheduler holds `Map<String, DurableFuture<?>> inFlight` and enforces `maxConcurrency` purely by **deferring the `*Async` call** until a task is ready AND `inFlight.size() < maxConcurrency`. It does not itself create threads — it lets the SDK's user executor back the futures it launches.
-- Completion is awaited with `DurableFuture.get()` and aggregated with the SDK-provided statics **`DurableFuture.allOf(...)`** / **`anyOf(...)`** (verified). When a future resolves, the scheduler records the terminal state and re-runs readiness.
+- Each ready task is launched with the `*AsyncWithId` variant of its operation (`stepAsyncWithId`, `invokeAsyncWithId`, `mapAsyncWithId`, `runInChildContextAsyncWithId`, `waitAsyncWithId`, `waitForConditionAsyncWithId`, `parallelWithId`, plus nested `dag`), each returning a `DurableFuture<T>` under the task's name-based ID. A `callback` task materializes as a container context (operation subtype `Callback`) carrying the name-based ID, whose body delegates to the native `waitForCallback` operation — the two-level shape required by the cross-language callback checkpoint contract (§2.A.5 of the cross-language doc).
+- The scheduler holds the in-flight futures and enforces `maxConcurrency` purely by deferring the `*Async` launch until a task is ready and under the cap.
+- Completion is awaited with `DurableFuture.get()`; the SDK-provided statics `DurableFuture.allOf(...)`/`anyOf(...)` are available for aggregation. When a future resolves, the scheduler records the terminal state and re-runs readiness.
 
-> **Why `DurableFuture` and not raw `CompletableFuture` / virtual threads?** Not because threads are forbidden — the SDK is explicitly thread-backed. The reason is that `DurableFuture` is the SDK's **replay-safe, checkpoint-participating** wrapper: its completion is coordinated with the checkpoint response and the suspend/resume machinery, so a fan-out survives interruption and re-invocation. A bare `CompletableFuture` would run the work but would not checkpoint, would not suspend cost-efficiently across `wait`s, and would not replay. Reusing `DurableFuture` means the DAG inherits the exact concurrency + durability substrate the SDK already ships for `map`/`parallel`/`stepAsync` — no new concurrency machinery.
+`DurableFuture` — not a raw `CompletableFuture` — is used because it is the SDK's replay-safe, checkpoint-participating wrapper: its completion is coordinated with the checkpoint response and the suspend/resume machinery, so a fan-out survives interruption and re-invocation. A bare `CompletableFuture` would run the work but would not checkpoint, suspend cost-efficiently across `wait`s, or replay. Reusing `DurableFuture` means the DAG inherits the exact concurrency-plus-durability substrate the SDK already ships for `map`/`parallel`/`stepAsync`, with no new concurrency machinery.
 
 ### 9.1 Nested DAG concurrency
 
-Parent `maxConcurrency` limits only top-level tasks; each nested DAG has its own scope/limit (JS §9.2, ported). Nested-dag container gets `DAG_NODE_T_{name}` and recurses.
+A parent's `maxConcurrency` limits only its top-level tasks; each nested DAG has its own scope and its own limit. A nested-DAG container is checkpointed with operation subtype `Dag` (not `RunInChildContext`) under `DAG_NODE_T_{name}` and recurses.
 
 ---
 
-## 10. Per-decision mapping table (Ports / Adapts / Infeasible-deferred)
+## 10. Per-decision mapping (Ports / Adapts)
 
-| #   | JS decision                                                              | Java disposition                     | How                                                                                                                                                                                                                                                                                                                                                |
-| --- | ------------------------------------------------------------------------ | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| a   | `DepsMap` literal-name typed access                                      | **Adapts**                           | `Deps.get(TaskHandle<T>) -> Optional<T>` accessor keyed by handle (not name-string); empty when the upstream did not SUCCEED (non-ALL_SUCCESS trigger rules); optional positional-arity sugar (§2.2, §2.7). Java generics cannot express literal-string keys/heterogeneous maps.                                                                   |
-| b   | `TaskHandle<TName, TResult>`                                             | **Ports (partial)**                  | `TaskHandle<T>` carries `TResult` via generics fine; the `TName` _literal_ is dropped (Java has no name-as-type) — name is a runtime `String`.                                                                                                                                                                                                     |
-| c   | Name-based entity IDs + reserved `DAG_NODE_T_` delimiter + no-dash names | **Ports (normative core)**           | Language-independent; identical injectivity proof (§4). [A-J2] explicit-ID seam **resolved `CAN-BE-ADDED`** — minimal `OperationIdGenerator.operationIdForName` + internal `*AsyncWithId` entry points (§4.3).                                                                                                                                     |
-| d   | Trigger rules                                                            | **Ports**                            | `enum TriggerRule` with per-constant `eval()` (§5); truth table verbatim.                                                                                                                                                                                                                                                                          |
-| d   | `runIf`                                                                  | **Ports**                            | `Predicate<Deps>` on the builder (§2.6).                                                                                                                                                                                                                                                                                                           |
-| e   | Completion-reason core/superset layering                                 | **Adapts**                           | Java can't union enums; define DAG-local `enum DagCompletionReason` (§2.10) as a superset of the 3-member `ConcurrencyCompletionStatus` + `COMPLETED_WITH_FAILURES` (`CUSTOM_COMPLETION_*` deferred to v2 — added when custom completion ships, not declared in v1 per C4b).                                                                       |
-| e   | Custom completion predicate w/ result-based short-circuit                | **Adapts (defer to v2)**             | [A-J6] **verified**: Java batch has no custom-predicate hook / no `CUSTOM_COMPLETION_*`. Custom completion is net-new either way; v1 ships threshold only (§6 Option B). Option A (DAG-owned `Predicate<DagCompletionSnapshot>`) remains possible later because the scheduler is separate. §6.                                                     |
-| f   | SDK-owned summary envelope + design-B reconstruction                     | **Does NOT port ([A-J3] falsified)** | Java has no summary-generator hook / `*Summary` envelope. Large `DagResult` handled by **native child-context re-execution** + **per-task checkpoint reconstruction** (like `map`); customer `summaryGenerator` dropped as non-native (§8.1).                                                                                                      |
-| g   | Concurrency model                                                        | **Adapts**                           | `DurableFuture`-driven scheduler: launch ready tasks via `*Async`, await with `DurableFuture.get()`/`allOf`/`anyOf`, enforce `maxConcurrency` by deferring the `*Async` call (§9). **Correction:** `DurableFuture` is thread-backed (user executor); determinism is from op-ID replay + active-thread-count suspension, not from avoiding threads. |
-| h   | Heterogeneous task types + nested DAGs                                   | **Ports**                            | All op kinds as tasks via `*Async` explicit-ID variants; `resultKind`-tagged recursive serialization (§8) preserves `MapResult`/`DagResult` instances.                                                                                                                                                                                             |
-| —   | Sync-by-default entry + `*Async` twin                                    | **Adapts**                           | `dag()` returns `DagResult`; `dagAsync()` returns `DurableFuture<DagResult>` (JS returns a promise always). Matches `step`/`stepAsync`.                                                                                                                                                                                                            |
-| —   | `register` may be async                                                  | **Adapts (drop)**                    | Java `Consumer<DagContext>` is synchronous; compute config before `dag()`.                                                                                                                                                                                                                                                                         |
-| —   | `Optional` vs `T                                                         | undefined`                           | **Adapts**                                                                                                                                                                                                                                                                                                                                         | `DagResult`/`TaskExecution` use `Optional<T>`; distinguishes skipped/never-started from `null` success. |
-| —   | Config objects                                                           | **Adapts**                           | `DagConfig`/records + `builder()`; reuse existing `StepConfig`/`MapConfig`/etc. verbatim.                                                                                                                                                                                                                                                          |
-| —   | Error surfacing (`errorMapper` pass-through)                             | **No hook needed (VERIFIED)**        | `ChildContextFailedException` is thrown only when the original exception can't be reconstructed; reconstructable `RuntimeException` subclasses (incl. `Dag*Exception`) propagate transparently through `runInChildContext` (§7).                                                                                                                   |
+| #   | JS decision                                                              | Java disposition           | How                                                                                                                                                                                                                                 |
+| --- | ------------------------------------------------------------------------ | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a   | `DepsMap` literal-name typed access                                      | **Adapts**                 | `Deps.get(TaskHandle<T>) -> Optional<T>` keyed by handle (not name-string); empty when the upstream did not SUCCEED under a non-`ALL_SUCCESS` rule; optional positional-arity sugar (§2.2, §2.7).                                   |
+| b   | `TaskHandle<TName, TResult>`                                             | **Ports (partial)**        | `TaskHandle<T>` carries `TResult` via generics; the `TName` literal is dropped (name is a runtime `String`).                                                                                                                        |
+| c   | Name-based entity IDs + reserved `DAG_NODE_T_` delimiter + no-dash names | **Ports (normative core)** | Language-independent; `operationIdForName("DAG_NODE_T_"+name)` feeds the `*AsyncWithId` entry points (§4).                                                                                                                          |
+| d   | Trigger rules + `runIf`                                                  | **Ports**                  | `enum TriggerRule` via `TriggerRuleEvaluator` (truth table verbatim, §5); `runIf` is a `Predicate<Deps>` (§2.6), and a throwing predicate aborts the DAG with `DagPredicateException`.                                              |
+| e   | Completion-reason core/superset layering                                 | **Adapts**                 | Java cannot union enums; a DAG-local `DagCompletionReason` (§2.10) is a superset of the 3-member `ConcurrencyCompletionStatus` plus `COMPLETED_WITH_FAILURES`. Custom-completion members deferred to v2.                            |
+| e   | Custom completion predicate w/ result-based short-circuit                | **Adapts (v2)**            | Base batch has no custom-predicate hook / `CUSTOM_COMPLETION_*`; v1 ships threshold only (§6). A DAG-owned predicate variant remains addable because the scheduler is separate.                                                     |
+| f   | SDK-owned container envelope + degradation ladder                        | **Ports (converged)**      | `DagResultSerDes` writes the shared `SerializedDagResult` envelope; oversize degrades by dropping `tasks` (offload signal) then `failedTaskNames` (§8.1). No customer `summaryGenerator`.                                           |
+| g   | Concurrency model                                                        | **Adapts**                 | `DurableFuture`-driven scheduler: launch ready tasks via `*AsyncWithId`, await with `DurableFuture.get()`, enforce `maxConcurrency` by deferring the launch (§9). The substrate is thread-backed; determinism is from op-ID replay. |
+| h   | Heterogeneous task types + nested DAGs                                   | **Ports**                  | All operation kinds as tasks via `*AsyncWithId`; `resultKind`-tagged recursive serialization (§8) preserves `MapResult`/`DagResult` instances.                                                                                      |
+| —   | Sync-by-default entry + `*Async` twin                                    | **Adapts**                 | `dag()` returns `DagResult`; `dagAsync()` returns `DurableFuture<DagResult>` (matches `step`/`stepAsync`).                                                                                                                          |
+| —   | `register` may be async                                                  | **Adapts (drop)**          | Java `Consumer<DagContext>` is synchronous; configuration is computed before `dag()`.                                                                                                                                               |
+| —   | `Optional` vs `T \| undefined`                                           | **Adapts**                 | `DagResult`/`TaskExecution` use `Optional<T>`, distinguishing skipped/never-started from a `null` success value.                                                                                                                    |
+| —   | Config objects                                                           | **Adapts**                 | `DagConfig` record + `builder()`; existing `StepConfig`/`MapConfig`/etc. reused verbatim.                                                                                                                                           |
+| —   | Error surfacing (`errorMapper` pass-through)                             | **No hook needed**         | Reconstructable `RuntimeException` subclasses (including `Dag*Exception`) propagate transparently through `runInChildContext`; only unreconstructable exceptions fall back to `ChildContextFailedException` (§7).                   |
 
 ---
 
 ## 11. Testing outline
 
-Mirror the Java SDK's testing utilities (`sdk-testing`, local runner) and the JS §12 structure:
-
-- **`DagValidatorTest`** (JUnit 5): cycle detection (self-loop, 2-cycle, deep, diamond=no-cycle); invalid names (empty, >100, dash, `DAG_NODE_T_` substring); duplicates across op kinds; missing/foreign-scope deps → `Dag*Exception` assertions via `assertThrows`.
-- **`TriggerRuleTest`**: full truth table (§5) × {all-succ, all-fail, mixed, includes-skip, empty} for all six rules (parameterized test).
-- **`TaskHandleTest`**: `.reads()`/`.after()`/`.triggerRule()`/`.runIf()` mutate `TaskDef`; `Deps.get(handle)` returns `Optional<T>` (present on success, `Optional.empty()` for a non-SUCCEEDED upstream under non-`ALL_SUCCESS` trigger rules — see `depsGetReturnsEmptyForNonSucceededUpstream`); `Deps.get` on undeclared handle throws `IllegalStateException`.
-- **`DagExecutorTest`** (mock context): readiness/topological order, `maxConcurrency` throttling, skip propagation, `runIf` skip, threshold completion, drain-with-compensation.
-- **`DagResultTest`**: typed `getResult(handle)` for succeeded/failed/skipped/not-run (`Optional.empty()`); `throwIfError()` → `DagExecutionException`; serdes round-trip incl. error reconstruction and recursive `MapResult`/`DagResult` restore (no `DagSummary` envelope exists — §8.1).
-- **Entity-ID tests**: `DAG_NODE_T_{name}` for prefixed/unprefixed; nested recursion; no collision with counter IDs.
-- **Local-runner integration** (`DurableTestRunner`): diamond `A→{B,C}→D` (B,C concurrent via `DurableFuture`); mixed op-type tasks (each appears as its native subtype under a `DAG_NODE_T_`-derived id); compensation (`charge` fails → `refund`/`ALL_FAILED` runs, `fulfill`/`ALL_SUCCESS` skips, `audit`/`ALL_DONE` runs); `runIf` branching; nested DAG scope isolation.
-- **Replay tests**: order-independence (force B-before-C then C-before-B; assert identical `DagResult`, no `NonDeterministicExecutionException` — proves name-based IDs); interruption/resume (completed tasks hit fast path, not re-executed — count side effects); skip determinism (no checkpoint); **large-`DagResult` handling** — force an aggregate result ≥ 256KB and assert the DAG child body **re-executes on replay** with every task hitting its per-task checkpoint fast-path (no re-execution of task bodies), reconstructing an identical `DagResult` (the Java-native path; there is no `DagSummary` envelope — §8.1).
-- **Verification bar**: `mvn verify` (compile + Spotless + tests) green; type-level correctness enforced by the compiler (no `tsd`-equivalent needed — Java generics are checked at compile time).
+- **`DagValidatorTest`** (JUnit 5): cycle detection (self-loop, 2-cycle, deep, diamond = no cycle); invalid names (empty, >100, dash, `DAG_NODE_T_` substring); duplicates across operation kinds; missing/foreign-scope deps → `Dag*Exception` via `assertThrows`.
+- **`TriggerRuleTest`**: the full truth table (§5) × {all-succeeded, all-failed, mixed, includes-skip, empty} for all six rules (parameterized).
+- **`TaskHandleTest`**: `.reads()`/`.after()`/`.triggerRule()`/`.runIf()` mutate the task definition; `Deps.get(handle)` returns `Optional<T>` (present on success, empty for a non-succeeded upstream under a non-`ALL_SUCCESS` rule); `Deps.get` on an undeclared handle throws `IllegalStateException`.
+- **`DagExecutorTest`** (mock context): readiness/topological order, `maxConcurrency` throttling, skip propagation, `runIf` skip, throwing-`runIf` → `DagPredicateException` abort, threshold completion, drain-with-compensation.
+- **`DagResultTest`**: typed `getResult(handle)` for succeeded/failed/skipped/not-run; `throwIfError()` → `DagExecutionException`; serde round-trip including error reconstruction and recursive `MapResult`/`DagResult` restore; offloaded (tasks-less) envelope restore preserves counts and `throwIfError()`.
+- **Entity-ID tests**: `DAG_NODE_T_{name}` for prefixed/unprefixed and nested recursion; no collision with counter IDs.
+- **Local-runner integration** (`DurableTestRunner`): diamond `A→{B,C}→D` (B, C concurrent via `DurableFuture`); mixed operation-type tasks (each appears as its native subtype under a `DAG_NODE_T_`-derived id); compensation (`charge` fails → `refund`/`ALL_FAILED` runs, `fulfill`/`ALL_SUCCESS` skips, `audit`/`ALL_DONE` runs); `runIf` branching; nested-DAG scope isolation and `Dag` subtype.
+- **Replay tests**: order-independence (force B-before-C then C-before-B; assert identical `DagResult`, no `NonDeterministicExecutionException`); interruption/resume (completed tasks hit the fast path — count side effects); skip determinism (no checkpoint); large-`DagResult` handling — force an aggregate that exceeds the checkpoint limit and assert the degradation ladder drops `tasks` (and, if needed, `failedTaskNames`) while counts, `completionReason`, and `startedTaskNames` survive, and the restored `DagResult` reports accurate aggregates.
+- **Verification bar**: `mvn verify` (compile + Spotless + tests) green; generic correctness is checked by the compiler.
 
 ---
 
 ## 12. Backward compatibility
 
-Pure addition. `DurableContext` gains `dag(...)`/`dagAsync(...)`; no existing type changes. `DagContext`/`TaskHandle`/`DagResult`/`Deps`/`DagConfig` and the `Dag*Exception` classes are new. Existing applications unaffected; `dag()` is strictly opt-in.
-
----
-
-## Appendix A. Assumptions register (verification status)
-
-Checked against the **real private source** at `aws-durable-execution-sdk-java/sdk/src/main/java/software/amazon/lambda/durable/**` (read line-by-line: `execution/OperationIdGenerator.java`, `model/OperationIdentifier.java`, `operation/{BaseDurableOperation,ChildContextOperation,ConcurrencyOperation,SerializableDurableOperation}.java`, `execution/{ExecutionManager,ExecutionMode}.java`, `context/{DurableContextImpl,BaseContextImpl}.java`, `model/{ConcurrencyCompletionStatus,MapResult,OperationSubType,WaitForConditionResult}.java`, `config/{CompletionConfig,MapConfig,RunInChildContextConfig}.java`, `DurableFuture.java`, `util/ParameterValidator.java`, `exception/ChildContextFailedException.java`). **All assumptions are now resolved against source.**
-
-| ID   | Original assumption                                                             | Status                             | Finding (file:line)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| ---- | ------------------------------------------------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A-J1 | Java uses per-context monotonic counter IDs, hashed before storage              | ✅ **SOURCE-VERIFIED**             | `OperationIdGenerator` holds `AtomicInteger operationCounter` + `operationIdPrefix = contextId+"-"`; `nextOperationId()` = `hashOperationId(prefix+counter)` (SHA-256). One generator per context in `DurableContextImpl:59,66`. `OperationIdGenerator.java:12-13,20-47`.                                                                                                                                                                                                                                                                                                                                                                                                               |
-| A-J2 | An explicit-ID seam exists/can be added (Java analog of `createStepId`)         | ✅ **RESOLVED · `CAN-BE-ADDED`**   | Caller-supplied-ID path already threaded through the whole stack — opaque `OperationIdentifier.operationId` (`OperationIdentifier.java:16-24`); ID-agnostic `BaseDurableOperation` (`:56-92,155,298-330`); `ExecutionManager` keys by string only (`:98-101,207-217`); child ctx runs under `getOperationId()` (`ChildContextOperation.java:118-135`); precedent `ConcurrencyOperation.java:73-86,96-118,137`. Counter coupled at one line/method in `DurableContextImpl` (`:335`). **Minimal change:** add `OperationIdGenerator.operationIdForName(String)` + internal `*AsyncWithId` variants on `DurableContextImpl`; **zero** changes to operations/ExecutionManager/replay. §4.3. |
-| A-J3 | `runInChildContext` has large-payload split + summary hook + replay-mode signal | ❌ **FALSIFIED (source-verified)** | No summary hook / envelope. Large results: **re-execution** of child (`ChildContextOperation.java:39,88-107,150-176`, `replayChildren` + `ContextOptions.replayChildren(true)`), **per-item checkpoint reconstruction** for map. `RunInChildContextConfig` exposes only `serDes`. §8.1 rewritten; `summaryGenerator` dropped.                                                                                                                                                                                                                                                                                                                                                           |
-| A-J4 | Child-context replay mode determined independently per child                    | 🔧 **REFINED (source-verified)**   | Execution-global `ExecutionMode` REPLAY→EXECUTION one-way (`ExecutionManager.java:207-217`, `ExecutionMode.java`); _also_ a per-context one-way `isReplaying` flag (`BaseContextImpl.java:41`, `setExecutionMode()`). Both monotone; does not block the design.                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| A-J5 | `DurableFuture` completion is SDK-scheduler-driven (not customer-threaded)      | 🔧 **CORRECTED (source-verified)** | `DurableFuture` is **thread-backed**: `runUserHandler` → `CompletableFuture.runAsync(wrapped, durableConfig.getExecutorService())` (`BaseDurableOperation.java:~230-260`); suspension via active-thread-count race (`ExecutionManager.deregisterActiveThread` → `suspendExecution` when empty). §9 rewritten. Scheduler controls concurrency by deferring the `*Async` call. `DurableFuture.allOf/anyOf` verified (`DurableFuture.java:36-77`).                                                                                                                                                                                                                                         |
-| A-J6 | Completion status enum is closed at 3 members; no customer predicate seam       | ✅ **SOURCE-VERIFIED**             | `ConcurrencyCompletionStatus` = exactly 3 members (`ConcurrencyCompletionStatus.java:6-9`); `CompletionConfig` factory-only, 6 factories (`CompletionConfig.java:15-52`); `ConcurrencyOperation.canComplete` hardcodes the 3 outcomes — no predicate hook. ⇒ defer custom completion to v2 (§6 Option B).                                                                                                                                                                                                                                                                                                                                                                               |
-
-**Pre-implementation work — CLEARED.** [A-J2] is resolved as `CAN-BE-ADDED`: the seam is already present in `operation/BaseDurableOperation.java`, `execution/ExecutionManager.java`, `model/OperationIdentifier.java`, and `operation/ChildContextOperation.java` (all accept/thread a caller-controlled opaque `operationId`); the base SDK needs only (1) `OperationIdGenerator.operationIdForName(String)` and (2) internal explicit-ID `*AsyncWithId` entry points on `DurableContextImpl` that mirror the existing methods minus the `nextOperationId()` call — a bounded, additive change touching two files, with no modification to the operation, execution-manager, replay-validation, or serde layers. All other assumptions are resolved above.
-
----
-
-## Appendix B. Review resolutions (java_review — loop iteration 1)
-
-| #   | Severity | Finding                                                                                                                                                                                                                                             | Resolution                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| --- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | MAJOR    | Inline-dep declaration inconsistent: §2.3 omitted the method; §3 used `.reads(...)` while §2.12 used `.dependsOnTyped(...)`; §2.12 prose implied closure introspection; flagship example never declared `c`'s inline deps ⇒ would throw at runtime. | **Fixed.** Added `reads(TaskHandle<?>... deps)` to the §2.3 `TaskHandle` interface; standardized the name on `.reads(...)` everywhere (removed `.dependsOnTyped`); rewrote the §2.12 prose to state inline deps must be **declared explicitly** (no closure introspection); added `.reads(a, b)` to task `c` in the flagship example so it is consistent with the §3 runtime guard.                                                                                                          |
-| 2   | MINOR    | §2.4 map overloads asymmetric (static-`Collection` had no-config only; deps-producer had config only).                                                                                                                                              | **Fixed.** Provided the full 2×2 matrix: `{Collection, Function<Deps,Collection>} × {no-config, config}`.                                                                                                                                                                                                                                                                                                                                                                                    |
-| 3   | MINOR    | "`toleratedFailurePercentage` not supported by parallel" flagged as unverified/likely-wrong.                                                                                                                                                        | **Refuted with evidence (claim retained).** `docs/core/parallel.md` states verbatim _"`toleratedFailurePercentage` is not supported for parallel operations."_ The original claim was correct; §6 now cites the source and marks it VERIFIED rather than dropping it.                                                                                                                                                                                                                        |
-| 4   | MINOR    | §0/§2.5 presented inferred native types as verified (callback submitter, waitForCondition context, parallel shapes).                                                                                                                                | **Fixed with verification.** `docs/design.md` confirms: callback submitter is `BiConsumer<String,StepContext>` (§0 corrected); waitForCondition check is `BiFunction<T,StepContext,WaitForConditionResult<T>>` — **there is no `WaitForConditionContext` type**, so §2.5 `DagConditionFunction` now uses `StepContext` and §2.4 uses `WaitForConditionConfig<S>`. `docs/core/parallel.md` confirms `.branch(...)→DurableFuture<T>` / `.get()→ParallelResult`, so those are labeled verified. |
-| 5   | MINOR    | §2.9 `throwIfError` referenced `CUSTOM_COMPLETION_FAILED`, unreachable under §6 Option B.                                                                                                                                                           | **Fixed.** Annotated the clause as inert unless Option A ships; the method keys off `failureCount`.                                                                                                                                                                                                                                                                                                                                                                                          |
-| 6   | MINOR    | §7 "propagate unchanged" overstated reconstruction fidelity.                                                                                                                                                                                        | **Fixed.** Softened to: reconstruction preserves **type + message** (needs classpath + serializable error data); **custom fields are not guaranteed to survive**; diagnostic detail that must survive replay should be carried in the message; falls back to `ChildContextFailedException` when unreconstructable.                                                                                                                                                                           |
-
-Also cleaned a stale `DagSummary` reference in the §11 `DagResultTest` bullet (the envelope was removed in §8.1 per [A-J3]).
-
----
-
-## Appendix C. Java readiness verdict (source-grounded)
-
-**Ready to implement — yes, with one small, additive base-SDK change first.** The entire replay-safety design rests on [A-J2], now resolved as **`CAN-BE-ADDED`**: the caller-supplied-ID path is _already_ threaded through the whole operation/execution stack (opaque `OperationIdentifier.operationId`; ID-agnostic `BaseDurableOperation` + `ExecutionManager` + `validateReplay`; child contexts already run under a supplied ID; `ConcurrencyOperation` already runs children under an explicit prefix). The **only** base-SDK addition required is (1) `OperationIdGenerator.operationIdForName(String)` (name→id, reusing the existing prefix+SHA-256) and (2) internal `*AsyncWithId` entry points on `DurableContextImpl` that mirror the existing `*Async` methods minus the counter call — a bounded change to **two files**, with **zero** changes to operations, execution manager, replay validation, or serde. Everything else (threading/`DurableFuture`, 3-member completion enum, transparent error reconstruction, native large-result re-execution) is verified as-is; the DAG surface (`Deps.get(handle)`, typed `TaskHandle<T>`, reused `StepConfig`/`MapResult`/`ParallelResult`/`TypeToken`) matches the real SDK types. v1 defers only custom completion (§6 Option B).
+Pure addition. `DurableContext` gains `dag(...)`/`dagAsync(...)`; no existing type changes. `DagContext`, `TaskHandle`, `DagResult`, `Deps`, `DagConfig`, and the `Dag*Exception` classes are new. Existing applications are unaffected; `dag()` is strictly opt-in and marked `@Experimental`.

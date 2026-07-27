@@ -11,7 +11,7 @@
 ## Task 1 — 🚪 GATING PREREQUISITE: name-based operation-ID seam ([A-J2])
 
 - **Title:** Add explicit-ID minting + internal `*AsyncWithId` entry points (base-SDK, pure addition)
-- **Spec:** §4.3, Appendix A [A-J2], Appendix C
+- **Spec:** §4.3
 - **Files (2, no more):**
   - `execution/OperationIdGenerator.java` — add `public String operationIdForName(String name)` returning `hashOperationId(operationIdPrefix + name)` (reuse existing `operationIdPrefix == contextId + "-"` + SHA-256; `AtomicInteger operationCounter` untouched).
   - `context/DurableContextImpl.java` — add internal explicit-ID variants (`stepAsyncWithId`, `invokeAsyncWithId`, `runInChildContextAsyncWithId`, `mapAsyncWithId`, `parallelWithId`, `callbackWithId`, `waitForConditionAsyncWithId`, `waitAsyncWithId`) that accept a precomputed `operationId` instead of calling private `nextOperationId()` (`:335`). Prefer extracting a private per-op helper called by both the public method (`nextOperationId()`) and the DAG path (name-derived id). Internal SPI only — **NOT** added to the public `DurableContext` interface.
