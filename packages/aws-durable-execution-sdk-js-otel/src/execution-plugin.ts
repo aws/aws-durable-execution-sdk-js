@@ -278,16 +278,10 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   /**
    * Builds span links to the invocation span for child spans.
    *
-   * In default-provider mode, links to the ambient invocation span captured
-   * from the active context. Otherwise, links to the explicit Invocation_Span.
+   * Always links to the plugin-created Invocation_Span (this.invocationSpan),
+   * which is created in both default-provider and non-default modes.
    */
   private buildInvocationLinks(): Link[] {
-    if (this.useDefaultTracerProvider && this.savedInvocationContext) {
-      const invocationSpan = trace.getSpan(this.savedInvocationContext);
-      if (invocationSpan) {
-        return [{ context: invocationSpan.spanContext() }];
-      }
-    }
     if (this.invocationSpan) {
       return [{ context: this.invocationSpan.spanContext() }];
     }
