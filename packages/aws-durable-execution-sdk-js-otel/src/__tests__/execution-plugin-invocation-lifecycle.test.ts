@@ -175,11 +175,17 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
 
       ambientSpan.end();
 
-      // The operation span should have a link to the ambient invocation span
+      // The operation span should link to the plugin-created Invocation span,
+      // which is itself parented under the captured ambient invocation span.
       const opSpan = findSpan(exporter, "test-op");
+      const invocationSpan = findSpan(exporter, "Invocation");
       expect(opSpan).toBeDefined();
+      expect(invocationSpan).toBeDefined();
       expect(opSpan!.links.length).toBe(1);
       expect(opSpan!.links[0].context.spanId).toBe(
+        invocationSpan!.spanContext().spanId,
+      );
+      expect(invocationSpan!.parentSpanContext?.spanId).toBe(
         ambientSpan.spanContext().spanId,
       );
     });
@@ -285,7 +291,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
   });
 
   describe("Per-invocation state is cleared after onInvocationEnd", () => {
-    it("clears savedInvocationContext after onInvocationEnd", async () => {
+    it("does not leak invocation state across invocations (no ambient context on second)", async () => {
       const plugin = new ExecutionOtelPlugin({
         useDefaultTracerProvider: true,
       });
@@ -307,7 +313,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       exporter.reset();
 
       // Second invocation WITHOUT ambient context
-      // The savedInvocationContext from the first invocation should be cleared
+      // No state from the first invocation should leak into the second
       await plugin.onInvocationStart(
         makeInvocationInfo({ executionArn: "arn:second" }),
       );
