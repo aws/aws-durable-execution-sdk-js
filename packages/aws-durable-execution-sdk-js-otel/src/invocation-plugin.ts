@@ -102,6 +102,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       this.workflowSpan = this.tracer.startSpan(
         this.workflowSpanName,
         {
+          kind: SpanKind.INTERNAL,
           attributes: {
             "durable.execution.arn": info.executionArn,
           },

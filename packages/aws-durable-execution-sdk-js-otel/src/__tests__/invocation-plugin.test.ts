@@ -7,6 +7,7 @@ import {
   context,
   trace,
   SpanStatusCode,
+  SpanKind,
   propagation,
 } from "@opentelemetry/api";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
@@ -204,6 +205,17 @@ describe("InvocationOtelPlugin", () => {
   });
 
   describe("Workflow span status mapping (PluginInvocationStatus -> OTel span status)", () => {
+    it("creates the Workflow span with SpanKind.INTERNAL", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
+      );
+
+      const workflowSpan = findSpan("Workflow");
+      expect(workflowSpan).toBeDefined();
+      expect(workflowSpan!.kind).toBe(SpanKind.INTERNAL);
+    });
+
     it("maps SUCCEEDED -> Workflow span status OK", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onInvocationEnd(

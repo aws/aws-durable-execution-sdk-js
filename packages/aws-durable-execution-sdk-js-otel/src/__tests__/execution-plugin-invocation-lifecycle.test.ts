@@ -9,6 +9,7 @@ import {
   propagation,
   ROOT_CONTEXT,
   SpanStatusCode,
+  SpanKind,
 } from "@opentelemetry/api";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
 import type {
@@ -510,6 +511,18 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
   });
 
   describe("Workflow_Span status mapping (PluginInvocationStatus -> OTel span status)", () => {
+    it("creates the Workflow_Span with SpanKind.INTERNAL", async () => {
+      const plugin = new ExecutionOtelPlugin({ useDefaultTracerProvider: true });
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
+      );
+
+      const workflowSpan = findSpan(exporter, "Workflow");
+      expect(workflowSpan).toBeDefined();
+      expect(workflowSpan!.kind).toBe(SpanKind.INTERNAL);
+    });
+
     it("maps SUCCEEDED -> span status OK", async () => {
       const plugin = new ExecutionOtelPlugin({ useDefaultTracerProvider: true });
       await plugin.onInvocationStart(makeInvocationInfo());
