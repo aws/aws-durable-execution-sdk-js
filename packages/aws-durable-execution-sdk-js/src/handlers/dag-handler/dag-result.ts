@@ -8,6 +8,7 @@ import {
   TaskHandle,
   TaskStatus,
 } from "../../types/dag";
+import { ErrorObject } from "@aws-sdk/client-lambda";
 import { DagExecutionError } from "../../errors/dag-errors/dag-errors";
 import { DurableOperationError } from "../../errors/durable-error/durable-error";
 import { Serdes, SerdesContext } from "../../utils/serdes/serdes";
@@ -186,11 +187,30 @@ async function serializeTask(
     result,
     error:
       exec.status === "FAILED" && exec.error
-        ? exec.error.toErrorObject()
+        ? canonicalTaskError(exec.error.toErrorObject())
         : null,
     startedAt: exec.startedAt ? exec.startedAt.toISOString() : null,
     completedAt: exec.completedAt ? exec.completedAt.toISOString() : null,
   };
+}
+
+/**
+ * Normalizes an error object to the canonical cross-language shape: `ErrorType`,
+ * `ErrorMessage` and `StackTrace` are ALWAYS present, `null` when unset (envelope
+ * contract rule 1). Extra platform fields such as `ErrorData` are preserved.
+ *
+ * Needed because `toErrorObject()` leaves `StackTrace` and `ErrorData`
+ * `undefined` when stack-trace capture is disabled, and `JSON.stringify` drops
+ * undefined keys, which silently omitted them from the checkpointed envelope
+ * where the other three SDKs emit explicit nulls.
+ */
+function canonicalTaskError(error: ErrorObject): ErrorObject {
+  return {
+    ...error,
+    ErrorType: error.ErrorType ?? null,
+    ErrorMessage: error.ErrorMessage ?? null,
+    StackTrace: error.StackTrace ?? null,
+  } as ErrorObject;
 }
 
 /**

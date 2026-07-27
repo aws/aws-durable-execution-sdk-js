@@ -173,6 +173,14 @@ describe("converged DagResultEnvelope (inline)", () => {
     expect(b.skipReason).toBeNull();
     expect(b.resultKind).toBeNull();
     expect(b.result).toBeNull();
+    // The error object's canonical keys survive JSON.stringify. StackTrace is
+    // `undefined` on the source error when stack capture is off, and stringify
+    // DROPS undefined keys, which silently omitted it from the checkpointed
+    // envelope where the other three SDKs emit explicit null.
+    expect(Object.keys(b.error)).toEqual(
+      expect.arrayContaining(["ErrorType", "ErrorMessage", "StackTrace"]),
+    );
+    expect(b.error.StackTrace).toBeNull();
     expect(b.error).not.toBeNull();
     expect(b.error.ErrorMessage).toBe("boom"); // PascalCase error object
     expect(c).toEqual({
