@@ -55,7 +55,7 @@
 - **Files:** `DagContext.java`, `TaskHandle.java`, `Deps.java`, `DagConfig.java` (record + `builder()`), `DagCompletionConfig.java` (sealed; **threshold factories only** in v1), functional interfaces `DagStepFunction/DagPayloadFunction/DagCallbackSubmitter/DagConditionFunction/DagChildFunction.java`. Optional §2.7 arity sugar may be a follow-up PR.
 - **Dependencies:** Task 3
 - **Acceptance criteria:**
-  1. `<T> T Deps.get(TaskHandle<T> h)` compiles type-safely (one contained unchecked cast internally, keyed by `handle.name()`); `getOptional` returns `Optional<T>`; every DAG task fn takes `Deps` as first param (uniform, incl. roots).
+  1. `<T> Optional<T> Deps.get(TaskHandle<T> h)` compiles type-safely (one contained unchecked cast internally, keyed by `handle.name()`); returns `Optional.empty()` for a non-SUCCEEDED upstream under a non-ALL_SUCCESS trigger rule, present on the default ALL_SUCCESS path; every DAG task fn takes `Deps` as first param (uniform, incl. roots).
   2. `TaskHandle<T>` exposes fluent `reads(...)` (typed/inline), `after(...)` (ordering-only), `triggerRule(...)`, `runIf(Predicate<Deps>)`; reuses existing `StepConfig`/`MapConfig`/`ParallelConfig`/`InvokeConfig`/`WaitForConditionConfig`/`TypeToken`/`Duration`/`MapResult`/`ParallelResult` verbatim.
   3. All types/methods annotated `@Experimental`; `DagConfig.builder()` present; `maxConcurrency` documented ≥ 1; `summaryGenerator` **omitted** (non-native, §8.1); `DagCompletionConfig` exposes only the 6 threshold factories (custom path v2-deferred).
 
@@ -120,7 +120,7 @@
 - **Files:** `sdk/src/test/java/software/amazon/lambda/durable/dag/*Test.java`.
 - **Dependencies:** Task 8
 - **Acceptance criteria:**
-  1. Validator (cycles: self/2-cycle/deep/diamond-ok; bad names; duplicates; foreign deps), full parameterized trigger-rule truth table, `TaskHandle` mutation + `Deps.get` typed return + undeclared-handle `IllegalStateException`.
+  1. Validator (cycles: self/2-cycle/deep/diamond-ok; bad names; duplicates; foreign deps), full parameterized trigger-rule truth table, `TaskHandle` mutation + `Deps.get` typed `Optional<T>` return (empty for non-SUCCEEDED upstream) + undeclared-handle `IllegalStateException`.
   2. `DagExecutor` (readiness/topo order, `maxConcurrency` throttle, skip propagation, `runIf` skip, threshold completion, drain-with-compensation); `DagResult` typed accessors + `throwIfError` + serde round-trip incl. error reconstruction and recursive `MapResult`/`DagResult` restore.
   3. Entity-ID tests: `DAG_NODE_T_{name}` prefixed/unprefixed + nested recursion + no collision with counter IDs; suite green under `mvn verify`.
 

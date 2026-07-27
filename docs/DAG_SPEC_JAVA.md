@@ -114,24 +114,30 @@ DurableFuture<DagResult> dagAsync(String name, Consumer<DagContext> register, Da
 
 ```java
 public interface Deps {
-    /** Typed result of an upstream task. Returns the checkpointed result of `handle`.
+    /** Typed result of an upstream task, as an Optional. Returns the checkpointed result of `handle`.
      *  Throws IllegalStateException if `handle` is not an inline dependency of this task
      *  (ordering-only deps added via .after(...) are NOT retrievable here — mirrors JS
-     *  "only inline deps populate DepsMap"). Returns null if the upstream did not SUCCEED
-     *  (see the non-ALL_SUCCESS caveat, §2.6). */
-    <T> T get(TaskHandle<T> handle);
-
-    /** Optional<T> convenience for non-ALL_SUCCESS trigger rules where an upstream
-     *  may be FAILED/SKIPPED and thus have no result. */
-    <T> Optional<T> getOptional(TaskHandle<T> handle);
+     *  "only inline deps populate DepsMap"). Returns Optional.empty() if the upstream did
+     *  not SUCCEED (see the non-ALL_SUCCESS caveat, §2.6); on the default ALL_SUCCESS
+     *  trigger rule the value is always present, so callers may unwrap with orElseThrow(). */
+    <T> Optional<T> get(TaskHandle<T> handle);
 }
 ```
 
+> **[UPDATED, post-launch-review]** An earlier draft of this API split `get`/`getOptional`
+> into two methods (`<T> T get(TaskHandle<T>)` returning possibly-`null`, plus a separate
+> `<T> Optional<T> getOptional(TaskHandle<T>)`). That shipped a real footgun: the raw-`T`
+> `get` was statically typed as always-present while it silently returned `null` for any
+> upstream that FAILED or was SKIPPED under a non-`ALL_SUCCESS` trigger rule — exactly the
+> compensation-task case where a caller most needs to check. The two methods were
+> collapsed into the single `Optional`-returning `get` shown above before GA so the type
+> honestly reflects the runtime behavior it always had.
+
 This is **type-safe without literal-string types**: `deps.get(fetchHandle)` returns exactly `fetchHandle`'s `T`. It is the direct Java analog of the JS spec's own fallback suggestion (`DepsAccessor.getResult(TaskHandle<T>) -> T`) and matches the ergonomics Java developers already know from `parallel().branch(...).get()` (a `DurableFuture<T>` typed by its declared class).
 
-> **Type-soundness note (✅ source-verified pattern).** `<T> T get(TaskHandle<T> handle)` is fully sound: it is the same **typed-key heterogeneous container** pattern proven in the JDK/ecosystem — `ClassToInstanceMap<T>`, Netty `AttributeMap`/`AttributeKey<T>`, and gRPC `Context.Key<T>`. Internally the results are stored in a `Map<String, Object>` keyed by `handle.name()`, and `get` performs one **contained, provably-safe** unchecked cast to `T` because the `(handle → result type)` binding is fixed at registration and handles are unique per task. No unchecked warning or `ClassCastException` risk leaks to the caller. The Java SDK itself relies on the same reified-type discipline via `TypeToken<T>` for serde — **verified in source**: `SerializableDurableOperation.deserializeResult` calls `resultSerDes.deserialize(result, resultTypeToken)` and `deserializeException` uses `TypeToken.get(exceptionClass.asSubclass(Throwable.class))` (`operation/SerializableDurableOperation.java`), and every `DurableContextImpl.*Async` op carries a `TypeToken<T>`/`Class<T>` result type. So `Deps.get(handle)` is idiomatic and consistent with the existing API.
+> **Type-soundness note (✅ source-verified pattern).** `<T> Optional<T> get(TaskHandle<T> handle)` is fully sound: it is the same **typed-key heterogeneous container** pattern proven in the JDK/ecosystem — `ClassToInstanceMap<T>`, Netty `AttributeMap`/`AttributeKey<T>`, and gRPC `Context.Key<T>`. Internally the results are stored in a `Map<String, Object>` keyed by `handle.name()`, and `get` performs one **contained, provably-safe** unchecked cast to `T` because the `(handle → result type)` binding is fixed at registration and handles are unique per task. No unchecked warning or `ClassCastException` risk leaks to the caller. The Java SDK itself relies on the same reified-type discipline via `TypeToken<T>` for serde — **verified in source**: `SerializableDurableOperation.deserializeResult` calls `resultSerDes.deserialize(result, resultTypeToken)` and `deserializeException` uses `TypeToken.get(exceptionClass.asSubclass(Throwable.class))` (`operation/SerializableDurableOperation.java`), and every `DurableContextImpl.*Async` op carries a `TypeToken<T>`/`Class<T>` result type. So `Deps.get(handle)` is idiomatic and consistent with the existing API.
 
-> **Why not a positional-arity `zip` overload (`.after(a, b) -> (A, B) -> R`)?** Considered (Reactor `Mono.zip` / Airflow-style). Rejected as the _primary_ API because: (a) it caps at a fixed arity (typically 2–8 overloads) and degrades to `Object[]`/`Tuple` past that; (b) it does not compose with the _ordering-only_ deps distinction; (c) it forces a different call shape per dep count. It is offered as **optional sugar** for the common 1–3 typed-dep case (§2.7), but `Deps.get(handle)` is the canonical, arity-unbounded form.
+> **Why not a positional-arity `zip` overload (`.after(a, b) -> (A, B) -> R`)?** Considered (Reactor `Mono.zip` / Airflow-style). Rejected as the _primary_ API because: (a) it caps at a fixed arity (typically 2–8 overloads) and degrades to `Object[]`/`Tuple` past that; (b) it does not compose with the _ordering-only_ deps distinction; (c) it forces a different call shape per dep count. It is offered as **optional sugar** for the common 1–3 typed-dep case (§2.7), but `Deps.get(handle)` (returning `Optional<T>`) is the canonical, arity-unbounded form.
 
 ### 2.3 `TaskHandle<T>`
 
@@ -241,7 +247,7 @@ Each interface's non-`Deps` parameters preserve the **native** shape of the unde
 
 `runIf` is a `Predicate<Deps>` (§2.3), synchronous and deterministic (async predicates invite non-deterministic IO on replay). Evaluated **after** the trigger rule passes, **before** the operation runs; `false` ⇒ task is `SKIPPED` with `skipReason = RUN_IF_PREDICATE`.
 
-Same runtime caveat as JS §2.5: under trigger rules other than `ALL_SUCCESS`, an upstream can be `FAILED`/`SKIPPED` and still let this task run, so `deps.get(handle)` may be `null`. Java offers `deps.getOptional(handle)` for those paths. `Deps.get` returns the declared `T` on the common `ALL_SUCCESS` path.
+Same runtime caveat as JS §2.5: under trigger rules other than `ALL_SUCCESS`, an upstream can be `FAILED`/`SKIPPED` and still let this task run, so `deps.get(handle)` returns `Optional.empty()` in that case. `Deps.get` returns a present `Optional` wrapping the declared `T` on the common `ALL_SUCCESS` path, where callers may unwrap with `.orElseThrow()`.
 
 ### 2.7 Positional-arity typed-deps sugar (implemented, non-normative)
 
@@ -355,7 +361,7 @@ ctx.dag("etl", d -> {
     var a = d.step("a", A.class, (deps, s) -> fetchA());              // root: empty Deps
     var b = d.step("b", B.class, (deps, s) -> fetchB());
     var c = d.step("c", C.class, (deps, s) ->                          // inline deps => typed access
-                process(deps.get(a), deps.get(b)))
+                process(deps.get(a).orElseThrow(), deps.get(b).orElseThrow()))
              .reads(a, b);                                             // declare inline (typed) deps: retrievable via Deps.get
     d.step("notify", Void.class, (deps, s) -> notifyDone())
              .after(c);                                            // ordering-only: waits for c, no result access
@@ -373,7 +379,7 @@ Inline deps are declared explicitly via `.reads(...)`; only those handles are re
 **Reconciliation of the §2.12 wrinkle.** Java cannot introspect a lambda body to learn which handles it calls `deps.get(...)` on. So — unlike JS, where `deps: [a,b]` is a literal array param feeding the type system — **Java requires inline deps to be declared explicitly** on the builder, and only declared handles are retrievable via `Deps.get`. The canonical, statically-analyzable form:
 
 ```java
-var c = d.step("c", C.class, (deps, s) -> process(deps.get(a), deps.get(b)))
+var c = d.step("c", C.class, (deps, s) -> process(deps.get(a).orElseThrow(), deps.get(b).orElseThrow()))
          .reads(a, b);         // <-- inline (typed) deps: retrievable via Deps.get, populate DepsMap-equivalent
 ```
 
@@ -621,7 +627,7 @@ Parent `maxConcurrency` limits only top-level tasks; each nested DAG has its own
 
 | #   | JS decision                                                              | Java disposition                     | How                                                                                                                                                                                                                                                                                                                                                |
 | --- | ------------------------------------------------------------------------ | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| a   | `DepsMap` literal-name typed access                                      | **Adapts**                           | `Deps.get(TaskHandle<T>) -> T` accessor keyed by handle (not name-string); optional positional-arity sugar (§2.2, §2.7). Java generics cannot express literal-string keys/heterogeneous maps.                                                                                                                                                      |
+| a   | `DepsMap` literal-name typed access                                      | **Adapts**                           | `Deps.get(TaskHandle<T>) -> Optional<T>` accessor keyed by handle (not name-string); empty when the upstream did not SUCCEED (non-ALL_SUCCESS trigger rules); optional positional-arity sugar (§2.2, §2.7). Java generics cannot express literal-string keys/heterogeneous maps.                                                                   |
 | b   | `TaskHandle<TName, TResult>`                                             | **Ports (partial)**                  | `TaskHandle<T>` carries `TResult` via generics fine; the `TName` _literal_ is dropped (Java has no name-as-type) — name is a runtime `String`.                                                                                                                                                                                                     |
 | c   | Name-based entity IDs + reserved `DAG_NODE_T_` delimiter + no-dash names | **Ports (normative core)**           | Language-independent; identical injectivity proof (§4). [A-J2] explicit-ID seam **resolved `CAN-BE-ADDED`** — minimal `OperationIdGenerator.operationIdForName` + internal `*AsyncWithId` entry points (§4.3).                                                                                                                                     |
 | d   | Trigger rules                                                            | **Ports**                            | `enum TriggerRule` with per-constant `eval()` (§5); truth table verbatim.                                                                                                                                                                                                                                                                          |
@@ -645,7 +651,7 @@ Mirror the Java SDK's testing utilities (`sdk-testing`, local runner) and the JS
 
 - **`DagValidatorTest`** (JUnit 5): cycle detection (self-loop, 2-cycle, deep, diamond=no-cycle); invalid names (empty, >100, dash, `DAG_NODE_T_` substring); duplicates across op kinds; missing/foreign-scope deps → `Dag*Exception` assertions via `assertThrows`.
 - **`TriggerRuleTest`**: full truth table (§5) × {all-succ, all-fail, mixed, includes-skip, empty} for all six rules (parameterized test).
-- **`TaskHandleTest`**: `.reads()`/`.after()`/`.triggerRule()`/`.runIf()` mutate `TaskDef`; `Deps.get(handle)` returns typed result; `Deps.get` on undeclared handle throws `IllegalStateException`.
+- **`TaskHandleTest`**: `.reads()`/`.after()`/`.triggerRule()`/`.runIf()` mutate `TaskDef`; `Deps.get(handle)` returns `Optional<T>` (present on success, `Optional.empty()` for a non-SUCCEEDED upstream under non-`ALL_SUCCESS` trigger rules — see `depsGetReturnsEmptyForNonSucceededUpstream`); `Deps.get` on undeclared handle throws `IllegalStateException`.
 - **`DagExecutorTest`** (mock context): readiness/topological order, `maxConcurrency` throttling, skip propagation, `runIf` skip, threshold completion, drain-with-compensation.
 - **`DagResultTest`**: typed `getResult(handle)` for succeeded/failed/skipped/not-run (`Optional.empty()`); `throwIfError()` → `DagExecutionException`; serdes round-trip incl. error reconstruction and recursive `MapResult`/`DagResult` restore (no `DagSummary` envelope exists — §8.1).
 - **Entity-ID tests**: `DAG_NODE_T_{name}` for prefixed/unprefixed; nested recursion; no collision with counter IDs.

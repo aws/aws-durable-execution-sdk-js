@@ -45,7 +45,7 @@ Verified against the local checkout; a few spec paths are aspirational and are c
 - **Files:** `dag.py` (public `DagContext` protocol, `TaskHandle`, `DepsMap`); `operation/dag_context.py` (new — `DagContextImpl`, `TaskDef`).
 - **Deps:** T1, T2.
 - **Acceptance:**
-  1. `DepsMap(Mapping[str, Any]).__getitem__` dispatches at runtime on `isinstance(key, TaskHandle)` (extract `_name`) vs. `str`, with `@overload`s so `deps[handle] -> T` type-checks and `deps["name"] -> Any`.
+  1. `DepsMap(Mapping[str, Any]).__getitem__` dispatches at runtime on `isinstance(key, TaskHandle)` (extract `_name`) vs. `str`, with `@overload`s so `deps[handle] -> T | None` type-checks (`None` for a non-SUCCEEDED upstream under non-ALL_SUCCESS trigger rules) and `deps["name"] -> Any`.
   2. `TaskHandle` is `@dataclass(eq=False)` with `__hash__ = hash(self._name)`; `.after(*handles)` and `.trigger_rule(rule)` mutate the backing `TaskDef` (`all_deps` / `trigger_rule`) and return `self` for chaining.
   3. Each `DagContext` method resolves the name via the real `_resolve_step_name` semantics (`name or func._original_name`), raises `DagInvalidTaskNameError` when it resolves to `None`, stores a `TaskDef` (`inline_deps` vs. `all_deps = inline_deps ∪ after`, native `config`, bound explicit-ID `executor`), and returns a `TaskHandle`; `invoke` accepts the deferred `payload_fn: Callable[[DepsMap], P] | P`.
 

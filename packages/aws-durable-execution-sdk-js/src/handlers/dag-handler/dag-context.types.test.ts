@@ -122,17 +122,19 @@ describe("DagContext task-kind callback typing", () => {
       "withDeps",
       [root],
       async (deps, ctx): Promise<number> => {
-        assignable<number>(deps.root);
+        // A dependency's result is `R | undefined` (present only when the
+        // upstream SUCCEEDED); narrow before use.
+        assignable<number | undefined>(deps.root);
         assignable<StepContext<DurableLogger>>(ctx);
-        return deps.root + 1;
+        return (deps.root ?? 0) + 1;
       },
     );
     const childWithDeps = d.runInChildContext(
       "childWithDeps",
       [root, withDeps],
       async (deps, ctx): Promise<string> => {
-        assignable<number>(deps.root);
-        assignable<number>(deps.withDeps);
+        assignable<number | undefined>(deps.root);
+        assignable<number | undefined>(deps.withDeps);
         assignable<DurableContext<DurableLogger>>(ctx);
         return `${deps.root}`;
       },
@@ -144,22 +146,22 @@ describe("DagContext task-kind callback typing", () => {
     d.waitForCondition(
       "pollWithDeps",
       [root],
-      async (deps, state: number): Promise<number> => deps.root + state,
+      async (deps, state: number): Promise<number> => (deps.root ?? 0) + state,
       { initialState: 0, waitStrategy: () => ({ shouldContinue: false }) },
     );
     d.callback(
       "cbWithDeps",
       [root],
       async (deps, callbackId): Promise<void> => {
-        assignable<number>(deps.root);
+        assignable<number | undefined>(deps.root);
         assignable<string>(callbackId);
       },
     );
-    d.invoke("callWithDeps", "fn:prod", [root], (deps) => deps.root);
+    d.invoke("callWithDeps", "fn:prod", [root], (deps) => deps.root ?? 0);
     d.map(
       "itemsWithDeps",
       [root],
-      (deps) => [deps.root],
+      (deps) => [deps.root ?? 0],
       async (_ctx, item: number): Promise<number> => item * 2,
     );
   });
@@ -173,5 +175,37 @@ describe("DagContext task-kind callback typing", () => {
       const value: number = deps.other;
       return value;
     });
+  });
+
+  it("types a dependency's result as `R | undefined` (present only on upstream SUCCESS)", () => {
+    // A compensation/cleanup task under a non-`ALL_SUCCESS` trigger rule (here
+    // `ALL_DONE`) can run while an upstream dependency FAILED or was SKIPPED,
+    // in which case that dependency's result is `undefined` at runtime
+    // (`dag-executor.ts` `buildDepsMap`). The type must reflect that: reading
+    // the value without narrowing is a compile error, and the narrowed value
+    // is the declared result type.
+    const d = new DagContextImpl();
+
+    // `flaky` is designed to fail at runtime; its declared result type is still
+    // `number`, so downstream deps see `number | undefined`.
+    const flaky = d.step("flaky", [], async (): Promise<number> => {
+      throw new Error("boom");
+    });
+
+    d.step("audit", [flaky], async (deps): Promise<number> => {
+      // The honest type: the upstream result may be absent.
+      assignable<number | undefined>(deps.flaky);
+
+      // @ts-expect-error `deps.flaky` is `number | undefined`; must narrow
+      // before using it as a `number` (this is exactly the footgun the fix
+      // surfaces at compile time).
+      const unsafe: number = deps.flaky;
+      void unsafe;
+
+      // Narrowing (nullish coalescing / truthy check / optional chaining)
+      // yields the declared result type, so compensation logic still works.
+      const safe: number = deps.flaky ?? -1;
+      return safe;
+    }).triggerRule("ALL_DONE");
   });
 });

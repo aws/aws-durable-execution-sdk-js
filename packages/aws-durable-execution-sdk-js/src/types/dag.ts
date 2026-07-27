@@ -80,11 +80,18 @@ export type AnyTaskHandle = TaskHandle<string, unknown>;
  * Maps an array of {@link TaskHandle}s to an object keyed by task name whose
  * values are the tasks' declared result types. Empty deps resolve to `{}`.
  *
+ * Each value is `R | undefined`: a dependency's result is only present when
+ * that upstream task SUCCEEDED. Under a non-`ALL_SUCCESS` trigger rule (e.g.
+ * `ALL_DONE`, `ANY_FAILED`, `NONE_FAILED`, `ALL_FAILED`) a task body can run
+ * while an upstream dependency FAILED or was SKIPPED, in which case its result
+ * is `undefined` at runtime — the type reflects that. This matches what
+ * `buildDepsMap` in `dag-executor.ts` has always produced.
+ *
  * @experimental This type is experimental and may be changed or removed in future releases.
  */
 export type DepsMap<TDeps extends readonly AnyTaskHandle[]> = {
   [K in TDeps[number] as K["name"]]: K extends TaskHandle<string, infer R>
-    ? R
+    ? R | undefined
     : never;
 };
 

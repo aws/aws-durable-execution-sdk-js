@@ -60,6 +60,40 @@ describe("context.dag() composed integration", () => {
     expect(() => result.throwIfError()).toThrow();
   });
 
+  it("passes a FAILED dependency's result as undefined into a downstream task (deps value is R | undefined at runtime)", async () => {
+    const { context } = createTestDurableContext();
+    // Captured from inside the task body to prove the executor actually handed
+    // `undefined` to the running task (not just that the result type allows it).
+    let observedChargeUndefined: boolean | undefined;
+    const result = await context.dag("payment-nullability", (d) => {
+      // `charge` declares a `number` result but fails at runtime.
+      const charge = d.step(
+        "charge",
+        [],
+        async (): Promise<number> => {
+          throw new Error("declined");
+        },
+        { retryStrategy: () => ({ shouldRetry: false }) },
+      );
+      // `audit` depends on `charge` (so `deps.charge` is in its deps map, typed
+      // `number | undefined`) and runs under ALL_DONE, so it executes even
+      // though `charge` FAILED. At runtime the failed dependency's result is
+      // absent — `deps.charge` is `undefined` — which is exactly what the
+      // `R | undefined` type on `DepsMap` encodes.
+      d.step("audit", [charge], async (deps): Promise<boolean> => {
+        observedChargeUndefined = deps.charge === undefined;
+        return observedChargeUndefined;
+      }).triggerRule("ALL_DONE");
+    });
+
+    expect(result.getStatus("charge")).toBe("FAILED");
+    expect(result.getStatus("audit")).toBe("SUCCEEDED");
+    // The audit body observed the failed dependency's result as `undefined`.
+    expect(observedChargeUndefined).toBe(true);
+    expect(result.getResult("audit")).toBe(true);
+    expect(result.completionReason).toBe("COMPLETED_WITH_FAILURES");
+  });
+
   it("branches with runIf, skipping non-matching tasks", async () => {
     const { context } = createTestDurableContext();
     const result = await context.dag("moderation", (d) => {

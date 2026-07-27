@@ -190,7 +190,7 @@ class DepsMap(Mapping[str, Any]):
         self._by_name = by_name
 
     @overload
-    def __getitem__(self, key: "TaskHandle[T]") -> T: ...
+    def __getitem__(self, key: "TaskHandle[T]") -> "T | None": ...
     @overload
     def __getitem__(self, key: str) -> Any: ...
     def __getitem__(self, key: "str | TaskHandle") -> Any:
@@ -198,7 +198,7 @@ class DepsMap(Mapping[str, Any]):
         return self._by_name[name]
 ```
 
-The `@overload`s recover the static type for `deps[handle] -> T` at type-check time; the `isinstance` branch is what actually makes it work at run time. `deps["fetch_source"]` remains available but is typed `Any`.
+The `@overload`s recover the static type for `deps[handle] -> T | None` at type-check time; the `isinstance` branch is what actually makes it work at run time. The result is `None` whenever the upstream did not SUCCEED — possible under any non-`ALL_SUCCESS` trigger rule (`ALL_DONE`, `ANY_FAILED`, `NONE_FAILED`, `ALL_FAILED`), where a task can run even though one of its inline dependencies FAILED or was SKIPPED. `deps["fetch_source"]` remains available but is typed `Any`.
 
 ```python
 # handle-keyed access recovers the static type (recommended):
@@ -647,7 +647,7 @@ Validation errors are **registration-time and deterministic** (§10), so they re
 
 1. **Custom result-based completion (JS §13.4).** No Python counterpart exists (`CompletionConfig` is threshold-only). _Recommendation:_ defer; introduce a `shouldComplete` predicate + `DagCompletionStatus` + `CompletionDecision` factories as a **cross-cutting** SDK feature (map/parallel + dag), not DAG-only, to avoid drift.
 2. **Faithful STARTED set under large-payload early completion (§8.2).** Python's re-execute model cannot reproduce the in-flight set. _Recommendation:_ match existing `map`/`parallel` behavior in v1; revisit with a cross-SDK envelope if fidelity is required.
-3. **Handle-keyed `DepsMap` typing (§2.3).** `deps[handle] -> T` recovers static types; `deps["name"] -> Any`. _Recommendation:_ ship both, document handle-keying as the typed path.
+3. **Handle-keyed `DepsMap` typing (§2.3).** `deps[handle] -> T | None` recovers static types (`None` for a non-SUCCEEDED upstream under non-ALL*SUCCESS trigger rules); `deps["name"] -> Any`. \_Recommendation:* ship both, document handle-keying as the typed path.
 4. **`error_mapper` on `child_handler` (§7.3).** v1 unwraps `ChildContextError.__cause__` at the `dag()` boundary (no shared-code change). _Recommendation:_ revisit adding `error_mapper` to `ChildConfig` if other callers want it.
 5. **Async registration.** Not applicable — the SDK has no asyncio surface. `register` stays sync.
 
@@ -671,8 +671,8 @@ Follows the repo's `conformance-tests/handlers/<op>/` + pytest pattern (mirrors 
 ## Appendix A. JS-decision → Python mapping (Ports directly / Adapts / Infeasible-deferred)
 
 | #   | JS design decision                                                      | Python disposition      | How / why                                                                                                                                                                                                                                                                                                                                                                                                       |
-| --- | ----------------------------------------------------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| a   | Type-level `DepsMap` / literal-string name capture                      | **Adapts**              | No Python type machinery for value-captured keys. Use a runtime name-keyed `Mapping` (`deps["name"]`) + handle-keyed overload `deps[handle] -> T` for static typing. §2.3                                                                                                                                                                                                                                       |
+| --- | ----------------------------------------------------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| a   | Type-level `DepsMap` / literal-string name capture                      | **Adapts**              | No Python type machinery for value-captured keys. Use a runtime name-keyed `Mapping` (`deps["name"]`) + handle-keyed overload `deps[handle] -> T                                                                                                                                                                                                                                                                | None` for static typing (`None` when the upstream did not SUCCEED, under non-ALL_SUCCESS trigger rules). §2.3 |
 | b   | `TaskHandle` as reference + builder                                     | **Ports**               | `@dataclass(eq=False)`, hashable by name; `.after()`/`.trigger_rule()` chaining. §2.4                                                                                                                                                                                                                                                                                                                           |
 | c   | Name-based entity IDs + reserved `DAG_NODE_T_` + no-dash names          | **Adapts**              | Same _shape_ (a `DAG_NODE_T_` token per level) but different mechanics: Python re-hashes at **each** child-context boundary (prefix = already-hashed container id), so injectivity rests on per-level charset injectivity + blake2b collision-resistance, **not** unique decomposition of one raw multi-level string. Name charset rules become defense-in-depth / debug hygiene, not the primary guarantee. §4 |
 | d   | Trigger rules + `run_if` (sync predicate)                               | **Ports verbatim**      | Full truth table + evaluators; Python is sync everywhere, so `run_if` is a natural fit. §2.5, §5                                                                                                                                                                                                                                                                                                                |
