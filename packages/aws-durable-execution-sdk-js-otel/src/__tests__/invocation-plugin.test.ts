@@ -160,6 +160,21 @@ describe("InvocationOtelPlugin", () => {
       expect(invocationSpan).toBeDefined();
       expect(invocationSpan!.name).toBe("invocation");
     });
+
+    it("honors custom invocationSpanName and workflowSpanName from config", async () => {
+      const customPlugin = new InvocationOtelPlugin({
+        tracerProvider: provider,
+        invocationSpanName: "my-invocation",
+        workflowSpanName: "my-workflow",
+      });
+      await customPlugin.onInvocationStart(makeInvocationInfo());
+      await customPlugin.onInvocationEnd(makeInvocationEndInfo());
+
+      expect(findSpan("my-invocation")).toBeDefined();
+      expect(findSpan("my-workflow")).toBeDefined();
+      expect(findSpan("invocation")).toBeUndefined();
+      expect(findSpan("Workflow")).toBeUndefined();
+    });
   });
 
   describe("Invocation span status mapping (PluginInvocationStatus -> OTel span status)", () => {

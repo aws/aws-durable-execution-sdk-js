@@ -234,7 +234,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
       makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
     );
 
-    const invocationSpans = findSpans(exporter, "Invocation");
+    const invocationSpans = findSpans(exporter, "invocation");
     expect(invocationSpans.length).toBe(1);
     expect(invocationSpans[0].attributes["durable.execution.arn"]).toBe(
       TEST_ARN,
@@ -317,7 +317,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     const attemptSpan = getExportedSpans(exporter).find(
       (s) => s.attributes["durable.attempt.number"] === 1,
     );
-    const invocationSpan = findSpan(exporter, "Invocation");
+    const invocationSpan = findSpan(exporter, "invocation");
 
     expect(opSpan).toBeDefined();
     expect(attemptSpan).toBeDefined();
@@ -413,7 +413,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     expect(processSpan).toBeDefined();
 
     // No Invocation_Span — actually now we always create one
-    const invocationSpan = findSpan(exporter, "Invocation");
+    const invocationSpan = findSpan(exporter, "invocation");
     expect(invocationSpan).toBeDefined();
     expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(TEST_ARN);
 
@@ -452,7 +452,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
 
     // Operation and attempt spans link to the Invocation span (no ambient invocation span locally)
     for (const span of spans) {
-      if (span.name !== "Workflow" && span.name !== "Invocation") {
+      if (span.name !== "Workflow" && span.name !== "invocation") {
         expect(span.links.length).toBe(1);
         expect(span.links[0].context.spanId).toBe(
           invocationSpan!.spanContext().spanId,

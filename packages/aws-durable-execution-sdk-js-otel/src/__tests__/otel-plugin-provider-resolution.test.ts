@@ -326,7 +326,7 @@ describe("ExecutionOtelPlugin integration - provider resolution", () => {
     });
 
     const spans = exporter.getFinishedSpans();
-    const invocationSpan = spans.find((s) => s.name === "Invocation");
+    const invocationSpan = spans.find((s) => s.name === "invocation");
     expect(invocationSpan).toBeDefined();
     expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(
       "arn:aws:states:us-east-1:123456789012:execution:sm:exec-2",

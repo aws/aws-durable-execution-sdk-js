@@ -4,7 +4,7 @@
  * These tests mirror the execution-plugin-default-provider-integration tests
  * but verify InvocationOtelPlugin-specific behavior:
  * - Uses the globally registered TracerProvider by default
- * - Creates "invocation" span (not "Workflow" + "Invocation" like ExecutionOtelPlugin)
+ * - Creates "invocation" span (not "Workflow" + "invocation" like ExecutionOtelPlugin)
  * - Custom instrumentationName support
  * - forceFlush error handling
  */

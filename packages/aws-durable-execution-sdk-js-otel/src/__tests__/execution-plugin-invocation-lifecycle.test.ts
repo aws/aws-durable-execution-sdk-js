@@ -94,7 +94,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       );
 
       const spans = getExportedSpans(exporter);
-      const invocationSpan = findSpan(exporter, "Invocation");
+      const invocationSpan = findSpan(exporter, "invocation");
       expect(invocationSpan).toBeDefined();
       expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(
         TEST_ARN,
@@ -116,7 +116,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
         makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
       );
 
-      const invocationSpan = findSpan(exporter, "Invocation");
+      const invocationSpan = findSpan(exporter, "invocation");
       expect(invocationSpan).toBeDefined();
     });
   });
@@ -185,7 +185,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       // The operation span should link to the plugin-created Invocation span,
       // which is itself parented under the captured ambient invocation span.
       const opSpan = findSpan(exporter, "test-op");
-      const invocationSpan = findSpan(exporter, "Invocation");
+      const invocationSpan = findSpan(exporter, "invocation");
       expect(opSpan).toBeDefined();
       expect(invocationSpan).toBeDefined();
       expect(opSpan!.links.length).toBe(1);
@@ -226,7 +226,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       const opSpan = findSpan(exporter, "test-op");
       expect(opSpan).toBeDefined();
       // Links to the Invocation span we always create
-      const invocationSpan = findSpan(exporter, "Invocation");
+      const invocationSpan = findSpan(exporter, "invocation");
       expect(invocationSpan).toBeDefined();
       expect(opSpan!.links.length).toBe(1);
       expect(opSpan!.links[0].context.spanId).toBe(
@@ -349,7 +349,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       const opSpan = findSpan(exporter, "second-op");
       expect(opSpan).toBeDefined();
       // Should link to the new Invocation span (not the previous ambient context)
-      const invocationSpan = findSpan(exporter, "Invocation");
+      const invocationSpan = findSpan(exporter, "invocation");
       expect(invocationSpan).toBeDefined();
       expect(opSpan!.links.length).toBe(1);
       expect(opSpan!.links[0].context.spanId).toBe(
@@ -396,7 +396,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       );
 
       // Invocation span is created for the second invocation
-      const invocationSpans = spans.filter((s) => s.name === "Invocation");
+      const invocationSpans = spans.filter((s) => s.name === "invocation");
       expect(invocationSpans.length).toBe(1);
       expect(invocationSpans[0].attributes["durable.execution.arn"]).toBe(
         "arn:second",
@@ -466,6 +466,23 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
   });
 
   describe("Invocation_Span status mapping (PluginInvocationStatus -> OTel span status)", () => {
+    it("honors custom invocationSpanName and workflowSpanName from config", async () => {
+      const plugin = new ExecutionOtelPlugin({
+        useDefaultTracerProvider: true,
+        invocationSpanName: "my-invocation",
+        workflowSpanName: "my-workflow",
+      });
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
+      );
+
+      expect(findSpan(exporter, "my-invocation")).toBeDefined();
+      expect(findSpan(exporter, "my-workflow")).toBeDefined();
+      expect(findSpan(exporter, "invocation")).toBeUndefined();
+      expect(findSpan(exporter, "Workflow")).toBeUndefined();
+    });
+
     it.each([
       ["SUCCEEDED", SpanStatusCode.OK],
       ["PENDING", SpanStatusCode.OK],
@@ -476,7 +493,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
         makeInvocationEndInfo({ status: status as any }),
       );
 
-      const invocationSpan = findSpan(exporter, "Invocation");
+      const invocationSpan = findSpan(exporter, "invocation");
       expect(invocationSpan).toBeDefined();
       expect(invocationSpan!.status.code).toBe(expected);
     });
@@ -488,7 +505,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
         makeInvocationEndInfo({ status: "RETRYING" as any }),
       );
 
-      const invocationSpan = findSpan(exporter, "Invocation");
+      const invocationSpan = findSpan(exporter, "invocation");
       expect(invocationSpan).toBeDefined();
       expect(invocationSpan!.status.code).toBe(SpanStatusCode.UNSET);
     });
@@ -503,7 +520,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
         }),
       );
 
-      const invocationSpan = findSpan(exporter, "Invocation");
+      const invocationSpan = findSpan(exporter, "invocation");
       expect(invocationSpan).toBeDefined();
       expect(invocationSpan!.status.code).toBe(SpanStatusCode.ERROR);
       expect(invocationSpan!.status.message).toBe("invocation boom");

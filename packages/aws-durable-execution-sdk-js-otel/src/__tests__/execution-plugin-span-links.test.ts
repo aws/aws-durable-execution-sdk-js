@@ -156,7 +156,7 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
       ambientSpan.end();
 
       const opSpan = findSpan(exporter, "link-op");
-      const invocationSpan = findSpan(exporter, "Invocation");
+      const invocationSpan = findSpan(exporter, "invocation");
       expect(opSpan).toBeDefined();
       expect(invocationSpan).toBeDefined();
       expect(opSpan!.links.length).toBeGreaterThan(0);
@@ -209,7 +209,7 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
       const attemptSpan = getExportedSpans(exporter).find(
         (s) => s.attributes["durable.attempt.number"] === 1,
       );
-      const invocationSpan = findSpan(exporter, "Invocation");
+      const invocationSpan = findSpan(exporter, "invocation");
       expect(attemptSpan).toBeDefined();
       expect(invocationSpan).toBeDefined();
       expect(attemptSpan!.links.length).toBeGreaterThan(0);
@@ -243,7 +243,7 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
       const opSpan = findSpan(exporter, "explicit-op");
-      const invocationSpan = findSpan(exporter, "Invocation");
+      const invocationSpan = findSpan(exporter, "invocation");
       expect(opSpan).toBeDefined();
       expect(invocationSpan).toBeDefined();
       expect(opSpan!.links.length).toBeGreaterThan(0);
@@ -287,7 +287,7 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
       const attemptSpan = getExportedSpans(exporter).find(
         (s) => s.attributes["durable.attempt.number"] === 1,
       );
-      const invocationSpan = findSpan(exporter, "Invocation");
+      const invocationSpan = findSpan(exporter, "invocation");
       expect(attemptSpan).toBeDefined();
       expect(invocationSpan).toBeDefined();
       expect(attemptSpan!.links.length).toBeGreaterThan(0);
@@ -323,7 +323,7 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
       const opSpan = findSpan(exporter, "no-link-op");
-      const invocationSpan = findSpan(exporter, "Invocation");
+      const invocationSpan = findSpan(exporter, "invocation");
       expect(opSpan).toBeDefined();
       expect(invocationSpan).toBeDefined();
       expect(opSpan!.links.length).toBe(1);
@@ -369,7 +369,7 @@ describe("ExecutionOtelPlugin - Span Link Construction", () => {
       const attemptSpan = getExportedSpans(exporter).find(
         (s) => s.attributes["durable.attempt.number"] === 1,
       );
-      const invocationSpan = findSpan(exporter, "Invocation");
+      const invocationSpan = findSpan(exporter, "invocation");
       expect(attemptSpan).toBeDefined();
       expect(invocationSpan).toBeDefined();
       expect(attemptSpan!.links.length).toBe(1);
