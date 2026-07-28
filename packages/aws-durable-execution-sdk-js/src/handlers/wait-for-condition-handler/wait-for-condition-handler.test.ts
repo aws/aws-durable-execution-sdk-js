@@ -565,4 +565,49 @@ describe("WaitForCondition Handler", () => {
       );
     });
   });
+
+  describe("Serdes error handling", () => {
+    it("should bubble up Serdes errors during state deserialization", async () => {
+      const stepId = "step-1";
+      const hashedStepId = hashId(stepId);
+
+      (mockContext as any)._stepData[hashedStepId] = {
+        Id: hashedStepId,
+        Status: OperationStatus.STARTED,
+        StepDetails: {
+          Result: JSON.stringify("checkpointed-state"),
+        },
+      };
+
+      (mockContext.getStepData as jest.Mock).mockReturnValue(
+        (mockContext as any)._stepData[hashedStepId],
+      );
+
+      // Force safeDeserialize to fail for state deserialization
+      mockSafeDeserialize.mockImplementationOnce(async () => {
+        throw new Error("Deserialization failed");
+      });
+
+      const handler = createWaitForConditionHandler(
+        mockContext,
+        mockCheckpoint,
+        createStepId,
+        createDefaultLogger(),
+        undefined,
+      );
+
+      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = jest
+        .fn()
+        .mockResolvedValue("new-result");
+      const config: WaitForConditionConfig<string> = {
+        waitStrategy: () => ({ shouldContinue: false }),
+        initialState: "initial",
+      };
+
+      await expect(handler(checkFunc, config)).rejects.toThrow(
+        "Deserialization failed",
+      );
+      expect(checkFunc).not.toHaveBeenCalled();
+    });
+  });
 });
