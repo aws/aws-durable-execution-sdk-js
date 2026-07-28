@@ -177,6 +177,35 @@ describe("withDurableExecution", () => {
     );
   });
 
+  it("should return FAILED response for CONFIG_VALIDATION_ERROR reason", async () => {
+    // Setup: a deterministic, non-retryable caller mistake (e.g. an invalid
+    // maxConcurrency) must surface as FAILED, not fall through to the
+    // generic PENDING handling used for genuine suspends/pauses.
+    const mockHandler = jest.fn().mockReturnValue(new Promise(() => {})); // Never resolves
+    const configError = new Error("Invalid maxConcurrency: 0");
+    mockTerminationManager.getTerminationPromise.mockResolvedValue({
+      reason: TerminationReason.CONFIG_VALIDATION_ERROR,
+      message: configError.message,
+      error: configError,
+    });
+
+    // Execute
+    const wrappedHandler = withDurableExecution(mockHandler);
+    const response = await wrappedHandler(mockEvent, mockContext);
+
+    // Verify
+    expect(response).toEqual({
+      Status: InvocationStatus.FAILED,
+      Error: expect.objectContaining({
+        ErrorMessage: configError.message,
+      }),
+    });
+    expect(mockHandler).toHaveBeenCalledWith(
+      mockCustomerHandlerEvent,
+      mockDurableContext,
+    );
+  });
+
   it("should return PENDING response for non-checkpoint termination", async () => {
     // Setup
     const mockHandler = jest.fn().mockReturnValue(new Promise(() => {})); // Never resolves

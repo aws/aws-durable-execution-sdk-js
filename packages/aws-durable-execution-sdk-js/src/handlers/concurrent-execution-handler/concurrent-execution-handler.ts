@@ -83,6 +83,34 @@ function validateCompletionConfig(
   return true;
 }
 
+/**
+ * Validates `maxConcurrency` is a positive number (or unset, for unlimited
+ * concurrency). An invalid value is a deterministic, non-retryable
+ * configuration error: terminates the execution rather than throwing, so a
+ * misconfigured call fails cleanly instead of being retried by Lambda only
+ * to fail identically again. Returns `true` when the config is valid, or
+ * `false` when it terminated the execution (the caller must then stop).
+ */
+function validateMaxConcurrency(
+  maxConcurrency: number | undefined | null,
+  terminationManager: TerminationManager,
+): boolean {
+  if (
+    maxConcurrency !== undefined &&
+    maxConcurrency !== null &&
+    maxConcurrency <= 0
+  ) {
+    const message = `Invalid maxConcurrency: ${maxConcurrency}. Must be a positive number or undefined for unlimited concurrency.`;
+    terminationManager.terminate({
+      reason: TerminationReason.CONFIG_VALIDATION_ERROR,
+      message,
+      error: new Error(message),
+    });
+    return false;
+  }
+  return true;
+}
+
 export class ConcurrencyController<Logger extends DurableLogger> {
   constructor(
     private readonly operationName: string,
@@ -722,14 +750,17 @@ export const createConcurrentExecutionHandler = <Logger extends DurableLogger>(
         throw new Error("Concurrent execution requires an executor function");
       }
 
+      // Invalid maxConcurrency is a deterministic, non-retryable
+      // configuration error: terminate the execution rather than throwing.
+      // If it terminated, stop here with a never-resolving promise so we
+      // don't proceed.
       if (
-        config?.maxConcurrency !== undefined &&
-        config.maxConcurrency !== null &&
-        config.maxConcurrency <= 0
+        !validateMaxConcurrency(
+          config?.maxConcurrency,
+          context.terminationManager,
+        )
       ) {
-        throw new Error(
-          `Invalid maxConcurrency: ${config.maxConcurrency}. Must be a positive number or undefined for unlimited concurrency.`,
-        );
+        return new Promise<BatchResult<TResult>>(() => {});
       }
 
       // Mutually-exclusive completion config is a non-retryable configuration
