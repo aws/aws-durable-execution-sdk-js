@@ -159,7 +159,7 @@ createTests({
           expect(attemptSpans[2].attributes["durable.attempt.number"]).toBe(3);
 
           // 3 invocation spans
-          const invocationSpans = spans.filter((s) => s.name === "invocation");
+          const invocationSpans = spans.filter((s) => s.name === "Invocation");
           expect(invocationSpans).toHaveLength(3);
 
           // Verify continuation spans with links exist (proves multi-invocation replay)

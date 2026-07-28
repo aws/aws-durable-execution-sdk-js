@@ -76,8 +76,8 @@ createTests({
         const spans = getSerializedSpans();
         // With exporter reset at the test level (not inside the handler), we capture
         // all spans across all invocations:
-        // Invocation 1: "before-invoke" (operation + attempt), "invoke-target" (CHAINED_INVOKE), "invocation"
-        // Invocation 2: "invoke-target" (continuation), "after-invoke" (operation + attempt), "invocation"
+        // Invocation 1: "before-invoke" (operation + attempt), "invoke-target" (CHAINED_INVOKE), "Invocation"
+        // Invocation 2: "invoke-target" (continuation), "after-invoke" (operation + attempt), "Invocation"
         // + 1 Workflow span
         expect(spans).toHaveLength(8);
 
@@ -111,7 +111,7 @@ createTests({
         expect(invokeSpan).toBeDefined();
 
         // --- invocation span ---
-        const invocationSpan = spans.find((s) => s.name === "invocation");
+        const invocationSpan = spans.find((s) => s.name === "Invocation");
         expect(invocationSpan).toBeDefined();
 
         // --- after-invoke step ---

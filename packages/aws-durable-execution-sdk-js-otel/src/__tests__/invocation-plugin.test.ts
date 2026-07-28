@@ -145,20 +145,34 @@ describe("InvocationOtelPlugin", () => {
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
       const spans = getExportedSpans();
-      const invocationSpan = findSpan("invocation");
+      const invocationSpan = findSpan("Invocation");
       expect(invocationSpan).toBeDefined();
       expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(
         TEST_ARN,
       );
     });
 
-    it('creates invocation span with correct name "invocation"', async () => {
+    it('creates invocation span with correct name "Invocation"', async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
-      const invocationSpan = findSpan("invocation");
+      const invocationSpan = findSpan("Invocation");
       expect(invocationSpan).toBeDefined();
-      expect(invocationSpan!.name).toBe("invocation");
+      expect(invocationSpan!.name).toBe("Invocation");
+    });
+
+    it("honors custom workflowSpanName from config; invocation span name is fixed", async () => {
+      const customPlugin = new InvocationOtelPlugin({
+        tracerProvider: provider,
+        workflowSpanName: "my-workflow",
+      });
+      await customPlugin.onInvocationStart(makeInvocationInfo());
+      await customPlugin.onInvocationEnd(makeInvocationEndInfo());
+
+      expect(findSpan("my-workflow")).toBeDefined();
+      expect(findSpan("Workflow")).toBeUndefined();
+      // Invocation span name is not configurable; always "Invocation"
+      expect(findSpan("Invocation")).toBeDefined();
     });
   });
 
@@ -172,7 +186,7 @@ describe("InvocationOtelPlugin", () => {
         makeInvocationEndInfo({ status: status as any }),
       );
 
-      const invocationSpan = findSpan("invocation");
+      const invocationSpan = findSpan("Invocation");
       expect(invocationSpan).toBeDefined();
       expect(invocationSpan!.status.code).toBe(expected);
     });
@@ -183,7 +197,7 @@ describe("InvocationOtelPlugin", () => {
         makeInvocationEndInfo({ status: "RETRYING" as any }),
       );
 
-      const invocationSpan = findSpan("invocation");
+      const invocationSpan = findSpan("Invocation");
       expect(invocationSpan).toBeDefined();
       expect(invocationSpan!.status.code).toBe(SpanStatusCode.UNSET);
     });
@@ -197,7 +211,7 @@ describe("InvocationOtelPlugin", () => {
         }),
       );
 
-      const invocationSpan = findSpan("invocation");
+      const invocationSpan = findSpan("Invocation");
       expect(invocationSpan).toBeDefined();
       expect(invocationSpan!.status.code).toBe(SpanStatusCode.ERROR);
       expect(invocationSpan!.status.message).toBe("invocation boom");
@@ -271,7 +285,7 @@ describe("InvocationOtelPlugin", () => {
       const spans = getExportedSpans();
       // Should have: op-1, op-2, invocation, Workflow (all ended)
       expect(spans.length).toBe(4);
-      expect(findSpan("invocation")).toBeDefined();
+      expect(findSpan("Invocation")).toBeDefined();
       expect(findSpan("Workflow")).toBeDefined();
     });
 
@@ -300,7 +314,7 @@ describe("InvocationOtelPlugin", () => {
       );
 
       const spans = getExportedSpans();
-      const invocationSpan = findSpan("invocation");
+      const invocationSpan = findSpan("Invocation");
       expect(invocationSpan).toBeDefined();
       expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(
         "arn:second",
@@ -471,7 +485,7 @@ describe("InvocationOtelPlugin", () => {
       );
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
-      const invocationSpan = findSpan("invocation");
+      const invocationSpan = findSpan("Invocation");
       const orphanSpan = findSpan("orphan");
       expect(invocationSpan).toBeDefined();
       expect(orphanSpan).toBeDefined();
@@ -490,7 +504,7 @@ describe("InvocationOtelPlugin", () => {
       );
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
-      const invocationSpan = findSpan("invocation");
+      const invocationSpan = findSpan("Invocation");
       const rootOpSpan = findSpan("root-child");
       expect(invocationSpan).toBeDefined();
       expect(rootOpSpan).toBeDefined();
@@ -1018,7 +1032,7 @@ describe("InvocationOtelPlugin", () => {
       await plugin.wrapInvocation(makeInvocationInfo(), fn);
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
-      const invocationSpan = findSpan("invocation");
+      const invocationSpan = findSpan("Invocation");
       expect(capturedSpanId).toBeDefined();
       expect(capturedSpanId).toBe(invocationSpan!.spanContext().spanId);
     });
@@ -1631,12 +1645,12 @@ describe("InvocationOtelPlugin", () => {
       // --- Verify correct parenting ---
       const parentInvocationSpan = allSpans.find(
         (s) =>
-          s.name === "invocation" &&
+          s.name === "Invocation" &&
           s.attributes["durable.execution.arn"] === PARENT_ARN,
       );
       const childInvocationSpan = allSpans.find(
         (s) =>
-          s.name === "invocation" &&
+          s.name === "Invocation" &&
           s.attributes["durable.execution.arn"] === CHILD_ARN,
       );
 
