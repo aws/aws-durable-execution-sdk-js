@@ -137,7 +137,7 @@ ExecutionSucceeded
 
 The DAG itself is **one** operation: a container with subtype `Dag`, whose ID comes from the enclosing handler's operation counter (`1` here, if it is the first operation in your handler).
 
-Every task is checkpointed **directly inside** that container as its _native_ operation type — a step task is just a `Step`, with no per-task wrapper. Three tasks plus the container is four operations: N+1. That matters because a single execution has a ceiling of 3,000 operations, and a wrapper-per-task design would cost 2N+1.
+Every task is checkpointed **directly inside** that container as its _native_ operation type — a step task is just a `Step`, with no per-task wrapper. Three tasks plus the container is four operations: N+1, rather than a wrapper-per-task design costing 2N+1.
 
 Task IDs are derived from the task **name**, not from a counter: `{containerId}-DAG_NODE_T_{name}`. This is the central design decision. A counter would be fragile, because a DAG legitimately runs its ready tasks in different orders across invocations — concurrency, retries, resumes — so counter-assigned IDs would not line up on replay. Name-derived IDs always do. On the wire the pre-images are hashed, so you would actually see `Id: dace6e26094653f7` rather than the readable form above.
 
@@ -1110,7 +1110,5 @@ Ten things that bite people, each traceable to something in the examples above.
 **Task names.** `^[a-zA-Z0-9_]+$`, 100 characters, and `DAG_NODE_T_` is reserved. No dashes — they are the separator in the composed entity ID (`1-DAG_NODE_T_provision-DAG_NODE_T_validate`), so a dash in a name would make the ID ambiguous. A duplicate name in the same scope is a registration error; the same name in a nested DAG is fine.
 
 **Cross-scope dependencies.** A task in a nested DAG cannot depend on a handle from the outer graph, or vice versa. The two communicate only through the sub-DAG task's result. This is caught at registration, not at run time.
-
-**The operation budget.** One execution allows 3,000 operations. A DAG costs N+1 at its own layer, but a `map` or `parallel` task adds a container plus one per item or branch, and a nested DAG adds its own N+1. A 500-item map inside a DAG task is 500+ operations, not one.
 
 One more, since it cost a debugging session: a callback task's result is the **raw** payload text under the default deserializer — quotes included, so `"approved"` rather than `approved`. Pass a serdes if you want it parsed.
