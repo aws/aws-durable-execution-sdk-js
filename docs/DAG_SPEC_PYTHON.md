@@ -113,7 +113,7 @@ class DagContext(ABC):
 
     def wait(
         self,
-        seconds: int,
+        duration: Duration,
         deps: Sequence[TaskHandle[Any]] | None = None,
         name: str | None = None,
         *, trigger_rule=..., run_if=...,
