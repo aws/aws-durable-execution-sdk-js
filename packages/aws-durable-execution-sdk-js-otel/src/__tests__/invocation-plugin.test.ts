@@ -177,7 +177,7 @@ describe("InvocationOtelPlugin", () => {
       expect(invocationSpan!.status.code).toBe(expected);
     });
 
-    it("maps RETRYING -> invocation span status ERROR", async () => {
+    it("maps RETRYING -> invocation span status UNSET (STOPPED/TIMED_OUT indistinguishable from RETRYING)", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onInvocationEnd(
         makeInvocationEndInfo({ status: "RETRYING" as any }),
@@ -185,7 +185,7 @@ describe("InvocationOtelPlugin", () => {
 
       const invocationSpan = findSpan("invocation");
       expect(invocationSpan).toBeDefined();
-      expect(invocationSpan!.status.code).toBe(SpanStatusCode.ERROR);
+      expect(invocationSpan!.status.code).toBe(SpanStatusCode.UNSET);
     });
 
     it("maps FAILED -> invocation span status ERROR with the execution error message", async () => {

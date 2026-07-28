@@ -158,21 +158,20 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       );
 
       // Map PluginInvocationStatus to span status:
-      //   FAILED / RETRYING -> ERROR (the handler threw; RETRYING means Lambda will retry)
+      //   FAILED -> ERROR
       //   SUCCEEDED / PENDING -> OK (PENDING is a normal suspension, not an error)
-      if (info.status === "FAILED" || info.status === "RETRYING") {
+      //   RETRYING -> UNSET. The plugin interface cannot distinguish a STOPPED or
+      //   TIMED_OUT invocation from a RETRYING one at onInvocationEnd, so RETRYING
+      //   is intentionally left UNSET rather than reported as ERROR.
+      if (info.status === "FAILED") {
         this.invocationSpan.setStatus({
           code: SpanStatusCode.ERROR,
-          message:
-            info.executionError?.message ??
-            (info.status === "RETRYING"
-              ? "Invocation retrying"
-              : "Execution failed"),
+          message: info.executionError?.message ?? "Execution failed",
         });
-      } else {
-        // SUCCEEDED / PENDING
+      } else if (info.status === "SUCCEEDED" || info.status === "PENDING") {
         this.invocationSpan.setStatus({ code: SpanStatusCode.OK });
       }
+      // RETRYING: leave status UNSET (default)
 
       this.invocationSpan.end();
     }

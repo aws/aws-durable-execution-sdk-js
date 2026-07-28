@@ -481,7 +481,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       expect(invocationSpan!.status.code).toBe(expected);
     });
 
-    it("maps RETRYING -> Invocation_Span status ERROR", async () => {
+    it("maps RETRYING -> Invocation_Span status UNSET (STOPPED/TIMED_OUT indistinguishable from RETRYING)", async () => {
       const plugin = new ExecutionOtelPlugin({ useDefaultTracerProvider: true });
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onInvocationEnd(
@@ -490,7 +490,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
 
       const invocationSpan = findSpan(exporter, "Invocation");
       expect(invocationSpan).toBeDefined();
-      expect(invocationSpan!.status.code).toBe(SpanStatusCode.ERROR);
+      expect(invocationSpan!.status.code).toBe(SpanStatusCode.UNSET);
     });
 
     it("maps FAILED -> Invocation_Span status ERROR with the execution error message", async () => {

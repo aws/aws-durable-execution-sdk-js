@@ -579,16 +579,18 @@ For non-terminal outcomes (`PENDING`/`RETRYING`) the Workflow_Span is intentiona
 
 > **Note:** the OTel plugin does **not** know whether a failed workflow was `TIMED_OUT` or `STOPPED`. `PluginInvocationStatus` — the only status the plugin receives at `onInvocationEnd` — distinguishes just `SUCCEEDED`/`FAILED`/`PENDING`/`RETRYING`. `TIMED_OUT` and `STOPPED` are operation-level states (`PluginOperationStatus`) and are not surfaced at the invocation/workflow level, so any such outcome is reported as `FAILED` → span status `ERROR`.
 
-The **Invocation_Span** uses a slightly different mapping, because a `PENDING` suspension is a normal outcome for an individual invocation and a `RETRYING` invocation means the handler threw:
+The **Invocation_Span** uses a slightly different mapping, because a `PENDING` suspension is a normal outcome for an individual invocation:
 
 | `PluginInvocationStatus` | Invocation_Span status |
 | ------------------------ | ---------------------- |
 | `SUCCEEDED`              | `OK`                   |
 | `PENDING`                | `OK`                   |
 | `FAILED`                 | `ERROR` (with the execution error message) |
-| `RETRYING`               | `ERROR`                |
+| `RETRYING`               | `UNSET`                |
 
 Unlike the Workflow_Span, the Invocation_Span is **always** ended and exported (one per Lambda invocation), so `PENDING`/`RETRYING` invocations are exported with the mapping above. The raw value is also recorded in the `durable.invocation.status` attribute.
+
+> **Note:** the OTel plugin does **not** know whether an invocation/workflow was `STOPPED` or `TIMED_OUT`. `PluginInvocationStatus` — the only status the plugin receives at `onInvocationEnd` — distinguishes just `SUCCEEDED`/`FAILED`/`PENDING`/`RETRYING`; `STOPPED` and `TIMED_OUT` are operation-level states (`PluginOperationStatus`) that are not surfaced at the invocation/workflow level. This is also **why `RETRYING` maps to `UNSET`** rather than `ERROR`: the plugin cannot tell a genuine retry apart from a `STOPPED`/`TIMED_OUT` outcome, so it does not assert an error status for it.
 
 ---
 
