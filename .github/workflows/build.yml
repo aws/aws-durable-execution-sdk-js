@@ -22,7 +22,7 @@ jobs:
     # Note: To re-run `lint-commits` after fixing the PR title, close-and-reopen the PR.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@v7
       - name: Use Node.js 22.x
         uses: actions/setup-node@v7
         with:
@@ -36,7 +36,7 @@ jobs:
     needs: lint-commits
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@v7
       - name: Use Node.js 22.x
         uses: actions/setup-node@v7
         with:
