@@ -210,7 +210,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     expect(spans.length).toBeGreaterThanOrEqual(5);
 
     // Assertion 2: Workflow_Span has no parent (it's a root span — created with ROOT_CONTEXT)
-    const workflowSpan = findSpan(exporter, "Workflow");
+    const workflowSpan = findSpan(exporter, "workflow");
     expect(workflowSpan).toBeDefined();
     // A root span created with ROOT_CONTEXT has no valid parent
     expect(workflowSpan!.parentSpanContext).toBeUndefined();

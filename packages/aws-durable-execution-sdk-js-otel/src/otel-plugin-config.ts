@@ -79,7 +79,7 @@ export interface OtelPluginConfig {
 
   /**
    * Custom name for the root Workflow span.
-   * Defaults to `"Workflow"`.
+   * Defaults to `"workflow"`.
    */
   workflowSpanName?: string;
 

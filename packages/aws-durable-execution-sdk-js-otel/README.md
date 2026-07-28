@@ -311,7 +311,7 @@ interface OtelPluginConfig {
   /** Custom propagators. Replaces default [AWSXRay, W3CTraceContext]. */
   propagators?: TextMapPropagator[];
 
-  /** Custom Workflow span name. Defaults to "Workflow". */
+  /** Custom Workflow span name. Defaults to "workflow". */
   workflowSpanName?: string;
 
   /** Custom Invocation span name. Defaults to "invocation". */

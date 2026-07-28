@@ -82,7 +82,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     this.idGenerator = new DeterministicIdGenerator();
     this.contextExtractor = config?.contextExtractor ?? xRayContextExtractor;
     this.useDefaultTracerProvider = config?.useDefaultTracerProvider ?? false;
-    this.workflowSpanName = config?.workflowSpanName ?? "Workflow";
+    this.workflowSpanName = config?.workflowSpanName ?? "workflow";
     this.invocationSpanName = config?.invocationSpanName ?? "invocation";
 
     // Create or accept TracerProvider via the provider factory

@@ -4,7 +4,7 @@
  * These tests mirror the execution-plugin-default-provider-integration tests
  * but verify InvocationOtelPlugin-specific behavior:
  * - Uses the globally registered TracerProvider by default
- * - Creates "invocation" span (not "Workflow" + "invocation" like ExecutionOtelPlugin)
+ * - Creates "invocation" span (not "workflow" + "invocation" like ExecutionOtelPlugin)
  * - Custom instrumentationName support
  * - forceFlush error handling
  */
@@ -124,7 +124,7 @@ describe("InvocationOtelPlugin - useDefaultTracerProvider mode", () => {
       "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-123",
     );
     // No workflow span in default provider mode
-    const workflowSpan = spans.find((s) => s.name === "Workflow");
+    const workflowSpan = spans.find((s) => s.name === "workflow");
     expect(workflowSpan).toBeUndefined();
   });
 

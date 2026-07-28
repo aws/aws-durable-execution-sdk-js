@@ -173,7 +173,7 @@ describe("InvocationOtelPlugin", () => {
       expect(findSpan("my-invocation")).toBeDefined();
       expect(findSpan("my-workflow")).toBeDefined();
       expect(findSpan("invocation")).toBeUndefined();
-      expect(findSpan("Workflow")).toBeUndefined();
+      expect(findSpan("workflow")).toBeUndefined();
     });
   });
 
@@ -226,7 +226,7 @@ describe("InvocationOtelPlugin", () => {
         makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
       );
 
-      const workflowSpan = findSpan("Workflow");
+      const workflowSpan = findSpan("workflow");
       expect(workflowSpan).toBeDefined();
       expect(workflowSpan!.kind).toBe(SpanKind.INTERNAL);
     });
@@ -237,7 +237,7 @@ describe("InvocationOtelPlugin", () => {
         makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
       );
 
-      const workflowSpan = findSpan("Workflow");
+      const workflowSpan = findSpan("workflow");
       expect(workflowSpan).toBeDefined();
       expect(workflowSpan!.status.code).toBe(SpanStatusCode.OK);
       expect(workflowSpan!.attributes["durable.execution.status"]).toBe(
@@ -254,7 +254,7 @@ describe("InvocationOtelPlugin", () => {
         }),
       );
 
-      const workflowSpan = findSpan("Workflow");
+      const workflowSpan = findSpan("workflow");
       expect(workflowSpan).toBeDefined();
       expect(workflowSpan!.status.code).toBe(SpanStatusCode.ERROR);
       expect(workflowSpan!.status.message).toBe("kaboom");
@@ -271,7 +271,7 @@ describe("InvocationOtelPlugin", () => {
           makeInvocationEndInfo({ status: status as any }),
         );
 
-        expect(findSpan("Workflow")).toBeUndefined();
+        expect(findSpan("workflow")).toBeUndefined();
       },
     );
   });
@@ -287,7 +287,7 @@ describe("InvocationOtelPlugin", () => {
       // Should have: op-1, op-2, invocation, Workflow (all ended)
       expect(spans.length).toBe(4);
       expect(findSpan("invocation")).toBeDefined();
-      expect(findSpan("Workflow")).toBeDefined();
+      expect(findSpan("workflow")).toBeDefined();
     });
 
     it("flushes spans (they appear in exporter)", async () => {
