@@ -10,7 +10,6 @@ import { DurablePromise } from "../../types/durable-promise";
 describe("Concurrent Execution Handler Two-Phase Execution", () => {
   let mockContext: ExecutionContext;
   let mockRunInChildContext: jest.Mock;
-  let mockStep: jest.Mock;
   let executionStarted = false;
 
   beforeEach(() => {
@@ -39,17 +38,12 @@ describe("Concurrent Execution Handler Two-Phase Execution", () => {
         };
         return await fn(mockChildContext);
       });
-
-    mockStep = jest.fn().mockImplementation(async (name, fn) => {
-      return await fn();
-    });
   });
 
   it("should start execution in phase 1 immediately (before await)", async () => {
     const concurrentHandler = createConcurrentExecutionHandler(
       mockContext,
       mockRunInChildContext,
-      mockStep,
     );
 
     const items: ConcurrentExecutionItem<string>[] = [
@@ -85,7 +79,6 @@ describe("Concurrent Execution Handler Two-Phase Execution", () => {
     const concurrentHandler = createConcurrentExecutionHandler(
       mockContext,
       mockRunInChildContext,
-      mockStep,
     );
 
     const items: ConcurrentExecutionItem<string>[] = [
