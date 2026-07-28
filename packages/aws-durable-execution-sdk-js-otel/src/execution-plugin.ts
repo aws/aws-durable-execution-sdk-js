@@ -125,6 +125,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     this.workflowSpan = this.tracer.startSpan(
       this.workflowSpanName,
       {
+        kind: SpanKind.INTERNAL,
         attributes: {
           "durable.execution.arn": info.executionArn,
         },
@@ -221,28 +222,47 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         info.status,
       );
 
-      // Set span status ERROR when execution has failed
+      // Map PluginInvocationStatus to span status:
+      //   FAILED -> ERROR
+      //   SUCCEEDED / PENDING -> OK (PENDING is a normal suspension, not an error)
+      //   RETRYING -> UNSET. The plugin interface cannot distinguish a STOPPED or
+      //   TIMED_OUT invocation from a RETRYING one at onInvocationEnd, so RETRYING
+      //   is intentionally left UNSET rather than reported as ERROR.
       if (info.status === "FAILED") {
         this.invocationSpan.setStatus({
           code: SpanStatusCode.ERROR,
           message: info.executionError?.message ?? "Execution failed",
         });
+      } else if (info.status === "SUCCEEDED" || info.status === "PENDING") {
+        this.invocationSpan.setStatus({ code: SpanStatusCode.OK });
       }
-      // Otherwise leave status as UNSET (default)
+      // RETRYING: leave status UNSET (default)
 
       this.invocationSpan.end();
     }
 
     // 2. Handle Workflow_Span based on terminal status
     if (info.status === "SUCCEEDED" || info.status === "FAILED") {
-      // Terminal: set status attribute, end (causes export)
+      // Terminal: set status attribute, map to span status, end (causes export).
+      // PluginInvocationStatus only distinguishes SUCCEEDED/FAILED/PENDING/RETRYING,
+      // so the plugin cannot tell whether a failed workflow was TIMED_OUT or STOPPED
+      // — those are collapsed into FAILED -> ERROR here.
       if (this.workflowSpan) {
         this.workflowSpan.setAttribute("durable.execution.status", info.status);
+        if (info.status === "FAILED") {
+          this.workflowSpan.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: info.executionError?.message ?? "Execution failed",
+          });
+        } else {
+          this.workflowSpan.setStatus({ code: SpanStatusCode.OK });
+        }
         this.workflowSpan.end();
       }
     }
     // Non-terminal (PENDING/RETRYING): do NOT end workflowSpan — just drop the reference.
-    // Spans that are never .end()'d are never exported by the OTel SDK.
+    // Its status stays UNSET and the span is never exported (spans that are never
+    // .end()'d are never exported by the OTel SDK).
 
     // 3. Discard open Operation_Spans without ending (they won't be exported)
 

@@ -7,6 +7,7 @@ import {
   context,
   trace,
   SpanStatusCode,
+  SpanKind,
   propagation,
 } from "@opentelemetry/api";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
@@ -159,6 +160,105 @@ describe("InvocationOtelPlugin", () => {
       expect(invocationSpan).toBeDefined();
       expect(invocationSpan!.name).toBe("invocation");
     });
+  });
+
+  describe("Invocation span status mapping (PluginInvocationStatus -> OTel span status)", () => {
+    it.each([
+      ["SUCCEEDED", SpanStatusCode.OK],
+      ["PENDING", SpanStatusCode.OK],
+    ])("maps %s -> invocation span status OK", async (status, expected) => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: status as any }),
+      );
+
+      const invocationSpan = findSpan("invocation");
+      expect(invocationSpan).toBeDefined();
+      expect(invocationSpan!.status.code).toBe(expected);
+    });
+
+    it("maps RETRYING -> invocation span status UNSET (STOPPED/TIMED_OUT indistinguishable from RETRYING)", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: "RETRYING" as any }),
+      );
+
+      const invocationSpan = findSpan("invocation");
+      expect(invocationSpan).toBeDefined();
+      expect(invocationSpan!.status.code).toBe(SpanStatusCode.UNSET);
+    });
+
+    it("maps FAILED -> invocation span status ERROR with the execution error message", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({
+          status: "FAILED" as any,
+          executionError: new Error("invocation boom"),
+        }),
+      );
+
+      const invocationSpan = findSpan("invocation");
+      expect(invocationSpan).toBeDefined();
+      expect(invocationSpan!.status.code).toBe(SpanStatusCode.ERROR);
+      expect(invocationSpan!.status.message).toBe("invocation boom");
+    });
+  });
+
+  describe("Workflow span status mapping (PluginInvocationStatus -> OTel span status)", () => {
+    it("creates the Workflow span with SpanKind.INTERNAL", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
+      );
+
+      const workflowSpan = findSpan("Workflow");
+      expect(workflowSpan).toBeDefined();
+      expect(workflowSpan!.kind).toBe(SpanKind.INTERNAL);
+    });
+
+    it("maps SUCCEEDED -> Workflow span status OK", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
+      );
+
+      const workflowSpan = findSpan("Workflow");
+      expect(workflowSpan).toBeDefined();
+      expect(workflowSpan!.status.code).toBe(SpanStatusCode.OK);
+      expect(workflowSpan!.attributes["durable.execution.status"]).toBe(
+        "SUCCEEDED",
+      );
+    });
+
+    it("maps FAILED -> Workflow span status ERROR with the execution error message", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({
+          status: "FAILED" as any,
+          executionError: new Error("kaboom"),
+        }),
+      );
+
+      const workflowSpan = findSpan("Workflow");
+      expect(workflowSpan).toBeDefined();
+      expect(workflowSpan!.status.code).toBe(SpanStatusCode.ERROR);
+      expect(workflowSpan!.status.message).toBe("kaboom");
+      expect(workflowSpan!.attributes["durable.execution.status"]).toBe(
+        "FAILED",
+      );
+    });
+
+    it.each(["PENDING", "RETRYING"])(
+      "leaves the Workflow span un-ended (UNSET, never exported) for non-terminal status %s",
+      async (status) => {
+        await plugin.onInvocationStart(makeInvocationInfo());
+        await plugin.onInvocationEnd(
+          makeInvocationEndInfo({ status: status as any }),
+        );
+
+        expect(findSpan("Workflow")).toBeUndefined();
+      },
+    );
   });
 
   describe("onInvocationEnd", () => {
