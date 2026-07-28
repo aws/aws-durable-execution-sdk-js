@@ -1,0 +1,43 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "d153484d-8f5b-4479-8270-873fffdb03a2",
+    "EventTimestamp": "2026-07-28T02:32:42.567Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 2,
+    "EventTimestamp": "2026-07-28T02:32:42.571Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-07-28T02:32:42.567Z",
+      "EndTimestamp": "2026-07-28T02:32:42.571Z",
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Invalid maxConcurrency: 0. Must be a positive number or undefined to use the default (40).",
+          "ErrorType": "Error"
+        }
+      },
+      "RequestId": "e1ba5c1b-846f-408a-98a1-07ca5d319050"
+    }
+  },
+  {
+    "EventType": "ExecutionFailed",
+    "EventId": 3,
+    "Id": "d153484d-8f5b-4479-8270-873fffdb03a2",
+    "EventTimestamp": "2026-07-28T02:32:42.571Z",
+    "ExecutionFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Invalid maxConcurrency: 0. Must be a positive number or undefined to use the default (40).",
+          "ErrorType": "Error"
+        }
+      }
+    }
+  }
+]

@@ -27,14 +27,18 @@ export const handler = withDurableExecution(
   async (_event: unknown, context: DurableContext) => {
     const result = await context.dag("diamond", (d) => {
       const fetch = d.step("fetch", [], async (): Promise<number> => 10);
+      // a/b/merge run under the default ALL_SUCCESS trigger rule, so their
+      // inline dependencies are always present at runtime; the non-null
+      // assertion reflects that (DepsMap types every value as possibly
+      // undefined because a non-ALL_SUCCESS task could see an absent dep).
       const a = d.step("a", [fetch], async (deps): Promise<number> => {
-        return deps.fetch + 1;
+        return deps.fetch! + 1;
       });
       const b = d.step("b", [fetch], async (deps): Promise<number> => {
-        return deps.fetch + 2;
+        return deps.fetch! + 2;
       });
       d.step("merge", [a, b], async (deps): Promise<number> => {
-        return deps.a + deps.b;
+        return deps.a! + deps.b!;
       });
     });
 

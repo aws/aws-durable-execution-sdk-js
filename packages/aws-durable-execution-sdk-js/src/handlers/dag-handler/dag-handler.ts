@@ -30,6 +30,34 @@ import {
 } from "./dag-result";
 
 /**
+ * DAG-local copy of the batch `validateMaxConcurrency` guard (the DAG does
+ * not route through the concurrent-execution handler). A non-positive
+ * `maxConcurrency` is a deterministic, non-retryable configuration error:
+ * terminates the execution rather than throwing, so a misconfigured call
+ * fails cleanly instead of being retried by Lambda only to fail identically
+ * again. Returns `true` when valid.
+ */
+function validateDagMaxConcurrency(
+  maxConcurrency: number | undefined | null,
+  terminationManager: TerminationManager,
+): boolean {
+  if (
+    maxConcurrency !== undefined &&
+    maxConcurrency !== null &&
+    maxConcurrency <= 0
+  ) {
+    const message = `Invalid maxConcurrency: ${maxConcurrency}. Must be a positive number or undefined to use the default (${DEFAULT_DAG_MAX_CONCURRENCY}).`;
+    terminationManager.terminate({
+      reason: TerminationReason.CONFIG_VALIDATION_ERROR,
+      message,
+      error: new Error(message),
+    });
+    return false;
+  }
+  return true;
+}
+
+/**
  * DAG-local copy of the batch `validateCompletionConfig` guard (the DAG does
  * not route through the concurrent-execution handler). Terminates with a
  * non-retryable config error when a custom predicate is combined with the
@@ -88,14 +116,16 @@ export const createDagHandler =
   ): DurablePromise<DagResult> =>
     new DurablePromise<DagResult>(async () => {
       // Config guards (pure functions of `config`) run before the child context.
+      // Invalid maxConcurrency is a deterministic, non-retryable configuration
+      // error: terminate the execution rather than throwing. If it terminated,
+      // stop here with a never-resolving promise so we don't proceed.
       if (
-        config?.maxConcurrency !== undefined &&
-        config.maxConcurrency !== null &&
-        config.maxConcurrency <= 0
+        !validateDagMaxConcurrency(
+          config?.maxConcurrency,
+          executionContext.terminationManager,
+        )
       ) {
-        throw new Error(
-          `Invalid maxConcurrency: ${config.maxConcurrency}. Must be a positive number or undefined to use the default (${DEFAULT_DAG_MAX_CONCURRENCY}).`,
-        );
+        return new Promise<DagResult>(() => {});
       }
       if (
         !validateDagCompletionConfig(

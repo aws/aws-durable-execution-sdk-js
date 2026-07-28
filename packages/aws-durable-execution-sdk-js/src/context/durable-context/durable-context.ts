@@ -932,7 +932,6 @@ export class DurableContextImpl<
       this.runInChildContextWithExplicitId.bind(
         this,
       ) as DurableContext<Logger>["runInChildContext"],
-      this.skipNextOperation.bind(this),
       () => this._defaultSerdes,
     );
     const promise = concurrentExecutionHandler(
