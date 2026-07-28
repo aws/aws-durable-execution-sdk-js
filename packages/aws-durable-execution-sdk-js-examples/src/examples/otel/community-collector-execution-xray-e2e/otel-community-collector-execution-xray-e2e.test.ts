@@ -89,10 +89,9 @@ createTests({
           "durable.execution.status": "SUCCEEDED",
         });
 
-        // Verify Invocation span has Lambda semantic attributes
+        // Verify Invocation span has durable attributes
         assertSpanAttributes(trace, "Invocation", {
-          "cloud.provider": "aws",
-          "cloud.platform": "aws_lambda",
+          "durable.invocation.status": "SUCCEEDED",
         });
       } else {
         // Local mode: assert spans via InMemorySpanExporter
@@ -120,8 +119,10 @@ createTests({
         const invocationSpan = spans.find((s) => s.name === "Invocation");
         expect(invocationSpan).toBeDefined();
         expect(invocationSpan!.parentSpanId).toBe(workflowSpan!.spanId);
-        expect(invocationSpan!.attributes["cloud.provider"]).toBe("aws");
-        expect(invocationSpan!.attributes["cloud.platform"]).toBe("aws_lambda");
+        expect(invocationSpan!.attributes["durable.execution.arn"]).toBeDefined();
+        expect(invocationSpan!.attributes["durable.invocation.status"]).toBe(
+          "SUCCEEDED",
+        );
 
         // Verify operation spans exist with correct attributes.
         // Filter out Context_Execution spans (which have "execution" in name)
