@@ -82,12 +82,6 @@ export interface OtelPluginConfig {
    * Defaults to `"workflow"`.
    */
   workflowSpanName?: string;
-
-  /**
-   * Custom name for the per-invocation Invocation span.
-   * Defaults to `"invocation"`.
-   */
-  invocationSpanName?: string;
 }
 
 /**

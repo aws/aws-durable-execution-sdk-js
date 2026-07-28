@@ -69,9 +69,6 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   // Workflow span name (configurable)
   private readonly workflowSpanName: string;
 
-  // Invocation span name (configurable)
-  private readonly invocationSpanName: string;
-
   // Cold start tracking
   private isColdStart: boolean = true;
 
@@ -83,7 +80,6 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     this.contextExtractor = config?.contextExtractor ?? xRayContextExtractor;
     this.useDefaultTracerProvider = config?.useDefaultTracerProvider ?? false;
     this.workflowSpanName = config?.workflowSpanName ?? "workflow";
-    this.invocationSpanName = config?.invocationSpanName ?? "invocation";
 
     // Create or accept TracerProvider via the provider factory
     const { tracerProvider, ownsProvider } = createTracerProvider(config);
@@ -179,7 +175,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       }
 
       this.invocationSpan = this.tracer.startSpan(
-        this.invocationSpanName,
+        "invocation",
         {
           kind: SpanKind.INTERNAL,
           attributes: invocationAttributes,
@@ -192,7 +188,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       const parentContext = context.active();
 
       this.invocationSpan = this.tracer.startSpan(
-        this.invocationSpanName,
+        "invocation",
         {
           kind: SpanKind.INTERNAL,
           attributes: {
