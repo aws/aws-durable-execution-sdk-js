@@ -223,24 +223,28 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
       ambientSpanContext.spanId,
     );
 
-    // Assertion 4: Operation span has link to the ambient invocation span
+    // Assertion 4: Operation span has link to the plugin-created Invocation_Span
     const opSpan = findSpan(exporter, "fetch-data");
     expect(opSpan).toBeDefined();
     expect(opSpan!.links.length).toBeGreaterThan(0);
-    expect(opSpan!.links[0].context.traceId).toBe(ambientSpanContext.traceId);
-    expect(opSpan!.links[0].context.spanId).toBe(ambientSpanContext.spanId);
+    expect(opSpan!.links[0].context.traceId).toBe(
+      invocationSpan!.spanContext().traceId,
+    );
+    expect(opSpan!.links[0].context.spanId).toBe(
+      invocationSpan!.spanContext().spanId,
+    );
 
-    // Assertion 5: Attempt span has link to the ambient invocation span
+    // Assertion 5: Attempt span has link to the plugin-created Invocation_Span
     const attemptSpan = spans.find(
       (s) => s.attributes["durable.attempt.number"] === 1,
     );
     expect(attemptSpan).toBeDefined();
     expect(attemptSpan!.links.length).toBeGreaterThan(0);
     expect(attemptSpan!.links[0].context.traceId).toBe(
-      ambientSpanContext.traceId,
+      invocationSpan!.spanContext().traceId,
     );
     expect(attemptSpan!.links[0].context.spanId).toBe(
-      ambientSpanContext.spanId,
+      invocationSpan!.spanContext().spanId,
     );
 
     // Assertion 6: All child spans are parented under Workflow_Span or its descendants (not ambient)
@@ -343,13 +347,21 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     const secondOpSpan = spans.find((s) => s.name === "second-op");
     expect(secondOpSpan).toBeDefined();
 
-    // The link on second-op should point to ambientSpan2 (not ambientSpan1)
+    // Only the second invocation's Invocation span should be present (state cleared)
+    const secondInvocationSpan = spans.find((s) => s.name === "Invocation");
+    expect(secondInvocationSpan).toBeDefined();
+
+    // The link on second-op should point to the second invocation's plugin-created
+    // Invocation span (which is itself a child of ambientSpan2, not ambientSpan1)
     expect(secondOpSpan!.links.length).toBeGreaterThan(0);
     expect(secondOpSpan!.links[0].context.spanId).toBe(
+      secondInvocationSpan!.spanContext().spanId,
+    );
+    expect(secondInvocationSpan!.parentSpanContext?.spanId).toBe(
       ambientSpan2.spanContext().spanId,
     );
 
-    // No links to the first ambient span
+    // No leaked link to the first ambient span
     expect(secondOpSpan!.links[0].context.spanId).not.toBe(
       ambientSpan1.spanContext().spanId,
     );

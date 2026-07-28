@@ -263,8 +263,15 @@ export class DurableContextImpl<
   }
 
   /**
-   * Skips the next operation by incrementing the step counter.
-   * Used internally by concurrent execution handler during replay to skip incomplete items.
+   * Advances this context's step cursor by one without running an operation.
+   *
+   * Used by the concurrent-execution handler during summarized replay: when it
+   * reconstructs a batch it reaches this method on the map/parallel child
+   * context (via a narrow internal cast) to skip an item it does not
+   * re-execute — one that was never started, or an in-flight item rebuilt as
+   * STARTED. Advancing THIS context's cursor keeps the next terminal item's
+   * runInChildContext aligned with its own step, so the non-resolving-promise
+   * gate does not fire on the pending in-flight step (issue #751).
    * @internal
    */
   private skipNextOperation(): void {
@@ -693,7 +700,6 @@ export class DurableContextImpl<
       const concurrentExecutionHandler = createConcurrentExecutionHandler(
         this._executionContext,
         this.runInChildContext.bind(this),
-        this.skipNextOperation.bind(this),
         () => this._defaultSerdes,
       );
       const promise = concurrentExecutionHandler(

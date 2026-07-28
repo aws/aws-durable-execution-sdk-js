@@ -9,8 +9,9 @@ export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
     const result = await context.step(
       async (stepContext) => {
-        // Print input to stdout each time the step body executes.
-        console.log(event);
+        // Log input through the step context logger each time the step body
+        // executes so each record carries the execution ARN.
+        stepContext.logger.info(event);
 
         // Native per-step attempt counter (1-based, increments on each retry).
         if (stepContext.attempt < 2) {

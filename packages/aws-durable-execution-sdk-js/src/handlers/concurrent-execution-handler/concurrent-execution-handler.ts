@@ -24,10 +24,29 @@ import {
   restoreBatchResult,
   createBatchResultSerdes,
 } from "./batch-result";
-import { defaultSerdes, AnySerdes } from "../../utils/serdes/serdes";
+import { AnySerdes } from "../../utils/serdes/serdes";
 import { ChildContextError } from "../../errors/durable-error/durable-error";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
+
+/**
+ * Valid {@link CompletionReason} values, used to validate a reason read back
+ * from a checkpointed summary. Typed as `Record<CompletionReason, true>` so it
+ * is exhaustive by construction: adding a value to the {@link CompletionReason}
+ * union turns this into a compile error until the new value is listed here — the
+ * validator can never silently omit a reason (and no extra public API is
+ * exported to keep it in sync). A reason not present here (a malformed or
+ * hand-authored summary) is ignored so an arbitrary string can never leak into
+ * {@link BatchResult.completionReason}; replay re-infers the reason from the
+ * reconstructed items instead.
+ */
+const VALID_COMPLETION_REASONS: Record<CompletionReason, true> = {
+  ALL_COMPLETED: true,
+  MIN_SUCCESSFUL_REACHED: true,
+  FAILURE_TOLERANCE_EXCEEDED: true,
+  CUSTOM_COMPLETION_SUCCEEDED: true,
+  CUSTOM_COMPLETION_FAILED: true,
+};
 
 /**
  * Validates that a custom `shouldComplete` predicate is not combined with the
@@ -64,27 +83,59 @@ function validateCompletionConfig(
   return true;
 }
 
+/**
+ * Validates `maxConcurrency` is a positive number (or unset, for unlimited
+ * concurrency). An invalid value is a deterministic, non-retryable
+ * configuration error: terminates the execution rather than throwing, so a
+ * misconfigured call fails cleanly instead of being retried by Lambda only
+ * to fail identically again. Returns `true` when the config is valid, or
+ * `false` when it terminated the execution (the caller must then stop).
+ */
+function validateMaxConcurrency(
+  maxConcurrency: number | undefined | null,
+  terminationManager: TerminationManager,
+): boolean {
+  if (
+    maxConcurrency !== undefined &&
+    maxConcurrency !== null &&
+    maxConcurrency <= 0
+  ) {
+    const message = `Invalid maxConcurrency: ${maxConcurrency}. Must be a positive number or undefined for unlimited concurrency.`;
+    terminationManager.terminate({
+      reason: TerminationReason.CONFIG_VALIDATION_ERROR,
+      message,
+      error: new Error(message),
+    });
+    return false;
+  }
+  return true;
+}
+
 export class ConcurrencyController<Logger extends DurableLogger> {
   constructor(
     private readonly operationName: string,
-    private readonly skipNextOperation: () => void,
 
     private readonly getDefaultSerdes?: () => AnySerdes,
   ) {}
 
-  private isChildEntityCompleted(
-    executionContext: ExecutionContext,
-    parentEntityId: string,
-    completedCount: number,
-  ): boolean {
-    const childEntityId = `${parentEntityId}-${completedCount + 1}`;
-    const childStepData = executionContext.getStepData(childEntityId);
-
-    return !!(
-      childStepData &&
-      (childStepData.Status === OperationStatus.SUCCEEDED ||
-        childStepData.Status === OperationStatus.FAILED)
-    );
+  /**
+   * Advance the step cursor of the context that {@link replayItems} re-drives
+   * child operations on, for a non-terminal item that is NOT re-executed on
+   * replay (one that was in flight at suspension, or never started).
+   *
+   * This MUST advance the SAME context that runInChildContext runs on
+   * (`parentContext` — the map/parallel child context), not the outer context
+   * that owns the map/parallel call. If a skipped in-flight item does not
+   * advance this cursor, the next terminal item's runInChildContext peeks the
+   * pending non-terminal step, `checkForNonResolvingPromise` returns a
+   * never-resolving promise, and replay hangs (issue #751). `skipNextOperation`
+   * is internal to the durable context, so it is reached through a narrow cast
+   * (the same pattern used to read `_stepPrefix`/`durableExecutionMode`).
+   */
+  private skipReplayStep(parentContext: DurableContext<Logger>): void {
+    (
+      parentContext as unknown as { skipNextOperation: () => void }
+    ).skipNextOperation();
   }
 
   private getCompletionReason<T, R>(
@@ -170,53 +221,50 @@ export class ConcurrencyController<Logger extends DurableLogger> {
         itemCount: items.length,
       });
 
-      // Try to get the target count from step data
-      let targetTotalCount: number | undefined;
+      // Recover the recorded completion reason from the checkpointed summary.
+      // This is the ONLY field read back from the summary: counts, the started
+      // set, and per-item status are all derived from the child checkpoints in
+      // replayItems (the items array is the same deterministic input, so
+      // items.length is the authoritative total). The completion reason is the
+      // one value that cannot be safely re-derived — for a custom
+      // `shouldComplete` predicate, re-invoking it on the reconstructed
+      // (terminal-only) set is exactly what produced non-deterministic replay,
+      // so we read the value the live run recorded instead.
+      let recordedCompletionReason: CompletionReason | undefined;
       if (entityId && executionContext) {
         const stepData = executionContext.getStepData(entityId);
         const summaryPayload = stepData?.ContextDetails?.Result;
-
         if (summaryPayload) {
-          try {
-            const serdes =
-              config.serdes ||
-              (this.getDefaultSerdes ? this.getDefaultSerdes() : defaultSerdes);
-            const parsedSummary = await serdes.deserialize(summaryPayload, {
-              entityId: entityId,
-              durableExecutionArn: executionContext.durableExecutionArn,
-            });
-            if (
-              parsedSummary &&
-              typeof parsedSummary === "object" &&
-              "totalCount" in parsedSummary
-            ) {
-              // Read totalCount directly from summary metadata
-              targetTotalCount = parsedSummary.totalCount as number;
-              log("📊", "Found initial execution count:", {
-                targetTotalCount,
-              });
-            }
-          } catch (error) {
-            log("⚠️", "Could not parse initial result summary:", error);
-          }
+          recordedCompletionReason =
+            this.parseRecordedCompletionReason(summaryPayload);
+          log("📊", "Recovered completion reason from summary:", {
+            recordedCompletionReason,
+          });
         }
       }
 
-      // If we have target count and required context, use optimized replay; otherwise fallback to concurrent execution
-      if (targetTotalCount !== undefined && entityId && executionContext) {
+      // Always reconstruct from child checkpoints when we have the context to
+      // do so. Deriving from checkpoints — rather than falling back to
+      // concurrent execution while the context is in ReplaySucceededContext
+      // mode — is what prevents the replay hang: in that mode a non-terminal
+      // child yields a never-resolving promise, so any batch with a live
+      // in-flight item could never settle. The fallback below only applies
+      // when there is no context to reconstruct from (which does not happen for
+      // map/parallel).
+      if (entityId && executionContext) {
         return await this.replayItems(
           items,
           executor,
           parentContext,
           config,
-          targetTotalCount,
+          recordedCompletionReason,
           executionContext,
           entityId,
         );
       } else {
         log(
           "⚠️",
-          "No valid target count or context found, falling back to concurrent execution",
+          "No entity id or execution context found, falling back to concurrent execution",
         );
       }
     }
@@ -230,140 +278,188 @@ export class ConcurrencyController<Logger extends DurableLogger> {
     );
   }
 
+  /**
+   * Extracts a recorded `completionReason` from a checkpointed batch summary.
+   *
+   * The summary is stored as a raw JSON string (written by the composed summary
+   * generator), so it is parsed directly rather than routed through a
+   * BatchResult serdes. Returns `undefined` when the payload is missing,
+   * unparseable, or does not carry a string `completionReason` (e.g. an old
+   * checkpoint written by a pre-fix custom generator that returned a free-form
+   * string) — in that case replayItems re-infers the reason from the
+   * reconstructed items.
+   */
+  private parseRecordedCompletionReason(
+    summaryPayload: unknown,
+  ): CompletionReason | undefined {
+    if (typeof summaryPayload !== "string") {
+      return undefined;
+    }
+    try {
+      const parsed = JSON.parse(summaryPayload);
+      if (parsed && typeof parsed === "object") {
+        const reason = (parsed as Record<string, unknown>).completionReason;
+        // Only trust a recognised CompletionReason. An unknown/arbitrary value
+        // (malformed or hand-authored summary) is ignored so it cannot leak
+        // into BatchResult.completionReason; replayItems re-infers instead.
+        // hasOwnProperty (not `in`) so inherited keys like "constructor" or
+        // "toString" from a crafted summary are not treated as valid.
+        if (
+          typeof reason === "string" &&
+          Object.prototype.hasOwnProperty.call(VALID_COMPLETION_REASONS, reason)
+        ) {
+          return reason as CompletionReason;
+        }
+      }
+    } catch {
+      // Unparseable summary (e.g. a legacy free-form custom-generator string):
+      // fall through and let replayItems re-infer from child checkpoints.
+      log("⚠️", "Could not parse batch summary for completion reason");
+    }
+    return undefined;
+  }
+
   private async replayItems<T, R>(
     items: ConcurrentExecutionItem<T>[],
     executor: ConcurrentExecutor<T, R, Logger>,
     parentContext: DurableContext<Logger>,
     config: ConcurrencyConfig<R>,
-    targetTotalCount: number,
+    recordedCompletionReason: CompletionReason | undefined,
     executionContext: ExecutionContext,
     parentEntityId: string,
   ): Promise<BatchResult<R>> {
     const resultItems: Array<BatchItem<R>> = [];
 
-    log("🔄", `Replaying ${items.length} items sequentially`, {
-      targetTotalCount,
+    log("🔄", `Replaying ${items.length} items from child checkpoints`, {
+      recordedCompletionReason,
     });
 
-    let completedCount = 0;
     let stepCounter = 0;
 
-    // Replay items sequentially until we reach the target count
+    // Reconstruct the completed items from the child checkpoints. Items are
+    // started in strict index order (tryStartNext), so each item at position
+    // `stepCounter` maps to the child entity `${parent}-{n}`. A child that
+    // finished has a terminal checkpoint (its result/error is returned from
+    // cache); any non-terminal child (in flight at suspension, or never
+    // started) is skipped. The recorded completionReason carries the batch
+    // outcome, so the started set does not need to be persisted or rebuilt.
     for (const item of items) {
-      // Stop if we've replayed all items that completed in initial execution
-      if (completedCount >= targetTotalCount) {
-        log("✅", "Reached target count, stopping replay", {
-          completedCount,
-          targetTotalCount,
-        });
-        break;
-      }
-
-      // Calculate the child entity ID that runInChildContext will create
-      // It uses the parent's next step ID, which is parentEntityId-{counter}
       const childEntityId = `${parentEntityId}-${stepCounter + 1}`;
+      const childStepData = executionContext.getStepData(childEntityId);
+      const isTerminal =
+        !!childStepData &&
+        (childStepData.Status === OperationStatus.SUCCEEDED ||
+          childStepData.Status === OperationStatus.FAILED);
 
-      if (
-        !this.isChildEntityCompleted(
-          executionContext,
-          parentEntityId,
-          stepCounter,
-        )
-      ) {
-        log("⏭️", `Skipping incomplete item:`, {
+      if (isTerminal) {
+        // Terminal child: re-drive runInChildContext so it returns the cached
+        // checkpointed result (it is not re-executed) and consumes its step id.
+        try {
+          const result = await parentContext.runInChildContext(
+            item.name || item.id,
+            (childContext) => executor(item, childContext),
+            {
+              subType: config.iterationSubType,
+              serdes: config.itemSerdes,
+              virtualContext: config.nesting === NestingType.FLAT,
+            },
+          );
+
+          resultItems.push({
+            result,
+            index: item.index,
+            status: BatchItemStatus.SUCCEEDED,
+          });
+
+          log("✅", `Replayed ${this.operationName} item:`, {
+            index: item.index,
+            itemId: item.id,
+          });
+        } catch (error) {
+          const err =
+            error instanceof ChildContextError
+              ? error
+              : new ChildContextError(
+                  error instanceof Error ? error.message : String(error),
+                  error instanceof Error ? error : undefined,
+                );
+          resultItems.push({
+            error: err,
+            index: item.index,
+            status: BatchItemStatus.FAILED,
+          });
+
+          log("❌", `Replay failed for ${this.operationName} item:`, {
+            index: item.index,
+            itemId: item.id,
+            error: err.message,
+          });
+        }
+        stepCounter++;
+      } else {
+        // Non-terminal child at suspension (in flight, or never started). It is
+        // NOT re-executed and NOT added to the reconstructed result. Its step
+        // is skipped on THIS context so the next terminal item's
+        // runInChildContext peeks its own step rather than this pending one —
+        // this is what keeps replay from hanging on the non-resolving-promise
+        // gate (issue #751). In-flight items are intentionally not rebuilt as
+        // STARTED placeholders: summarized replay reports the completed items,
+        // and the recorded completionReason is used for the batch outcome.
+        this.skipReplayStep(parentContext);
+        stepCounter++;
+
+        log("⏭️", `Skipping non-terminal item during replay:`, {
           index: item.index,
           itemId: item.id,
           childEntityId,
         });
-        // Increment step counter to maintain consistency
-        this.skipNextOperation();
-        stepCounter++;
-        continue;
-      }
-
-      try {
-        const result = await parentContext.runInChildContext(
-          item.name || item.id,
-          (childContext) => executor(item, childContext),
-          {
-            subType: config.iterationSubType,
-            serdes: config.itemSerdes,
-            virtualContext: config.nesting === NestingType.FLAT,
-          },
-        );
-
-        resultItems.push({
-          result,
-          index: item.index,
-          status: BatchItemStatus.SUCCEEDED,
-        });
-        completedCount++;
-        stepCounter++;
-
-        log("✅", `Replayed ${this.operationName} item:`, {
-          index: item.index,
-          itemId: item.id,
-          completedCount,
-        });
-      } catch (error) {
-        const err =
-          error instanceof ChildContextError
-            ? error
-            : new ChildContextError(
-                error instanceof Error ? error.message : String(error),
-                error instanceof Error ? error : undefined,
-              );
-        resultItems.push({
-          error: err,
-          index: item.index,
-          status: BatchItemStatus.FAILED,
-        });
-        completedCount++;
-        stepCounter++;
-
-        log("❌", `Replay failed for ${this.operationName} item:`, {
-          index: item.index,
-          itemId: item.id,
-          error: err.message,
-          completedCount,
-        });
       }
     }
-
-    log("🎉", `${this.operationName} replay completed:`, {
-      completedCount,
-      totalCount: resultItems.length,
-    });
 
     const successCount = resultItems.filter(
       (item) => item.status === BatchItemStatus.SUCCEEDED,
     ).length;
-    const failureCount = completedCount - successCount;
+    const failureCount = resultItems.filter(
+      (item) => item.status === BatchItemStatus.FAILED,
+    ).length;
+    const completedCount = successCount + failureCount;
 
-    // Per-item snapshot ordered by original index, so shouldComplete can
-    // reason about which specific items/branches finished.
-    // Index results once (O(n)) instead of find() per item (O(n²)).
-    const statusByIndex = new Map<number, BatchItemStatus>();
-    for (const r of resultItems) {
-      statusByIndex.set(r.index, r.status);
-    }
-    const itemStatuses: CompletionItemStatus[] = items.map((item) => ({
-      index: item.index,
-      name: item.name,
-      status: statusByIndex.get(item.index),
-    }));
+    log("🎉", `${this.operationName} replay completed:`, {
+      successCount,
+      failureCount,
+      startedCount: resultItems.filter(
+        (item) => item.status === BatchItemStatus.STARTED,
+      ).length,
+      totalCount: resultItems.length,
+    });
 
-    return new BatchResultImpl(
-      resultItems,
-      this.getCompletionReason(
+    // Prefer the completion reason the live run recorded. Re-inferring it here
+    // would re-invoke a custom shouldComplete predicate against the
+    // reconstructed set, which is not guaranteed to match the live decision.
+    // Only fall back to inference for legacy/malformed summaries that carry no
+    // recorded reason.
+    let completionReason = recordedCompletionReason;
+    if (completionReason === undefined) {
+      const statusByIndex = new Map<number, BatchItemStatus>();
+      for (const r of resultItems) {
+        statusByIndex.set(r.index, r.status);
+      }
+      const itemStatuses: CompletionItemStatus[] = items.map((item) => ({
+        index: item.index,
+        name: item.name,
+        status: statusByIndex.get(item.index),
+      }));
+      completionReason = this.getCompletionReason(
         failureCount,
         successCount,
         completedCount,
         items,
         config,
         itemStatuses,
-      ),
-    );
+      );
+    }
+
+    return new BatchResultImpl(resultItems, completionReason);
   }
 
   private async executeItemsConcurrently<T, R>(
@@ -601,7 +697,6 @@ export class ConcurrencyController<Logger extends DurableLogger> {
 export const createConcurrentExecutionHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
   runInChildContext: DurableContext<Logger>["runInChildContext"],
-  skipNextOperation: () => void,
 
   getDefaultSerdes?: () => AnySerdes,
 ) => {
@@ -655,14 +750,17 @@ export const createConcurrentExecutionHandler = <Logger extends DurableLogger>(
         throw new Error("Concurrent execution requires an executor function");
       }
 
+      // Invalid maxConcurrency is a deterministic, non-retryable
+      // configuration error: terminate the execution rather than throwing.
+      // If it terminated, stop here with a never-resolving promise so we
+      // don't proceed.
       if (
-        config?.maxConcurrency !== undefined &&
-        config.maxConcurrency !== null &&
-        config.maxConcurrency <= 0
+        !validateMaxConcurrency(
+          config?.maxConcurrency,
+          context.terminationManager,
+        )
       ) {
-        throw new Error(
-          `Invalid maxConcurrency: ${config.maxConcurrency}. Must be a positive number or undefined for unlimited concurrency.`,
-        );
+        return new Promise<BatchResult<TResult>>(() => {});
       }
 
       // Mutually-exclusive completion config is a non-retryable configuration
@@ -682,7 +780,6 @@ export const createConcurrentExecutionHandler = <Logger extends DurableLogger>(
       ): Promise<BatchResult<TResult>> => {
         const concurrencyController = new ConcurrencyController<Logger>(
           "concurrent-execution",
-          skipNextOperation,
           getDefaultSerdes,
         );
 

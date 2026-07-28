@@ -12,7 +12,10 @@ import {
   DurableLogger,
 } from "../../types";
 import { log } from "../../utils/logger/logger";
-import { createParallelSummaryGenerator } from "../../utils/summary-generators/summary-generators";
+import {
+  createParallelSummaryGenerator,
+  composeSummaryGenerator,
+} from "../../utils/summary-generators/summary-generators";
 
 export const createParallelHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -121,8 +124,10 @@ export const createParallelHandler = <Logger extends DurableLogger>(
         maxConcurrency: config?.maxConcurrency,
         topLevelSubType: OperationSubType.PARALLEL,
         iterationSubType: OperationSubType.PARALLEL_BRANCH,
-        summaryGenerator:
-          config?.summaryGenerator ?? createParallelSummaryGenerator(),
+        summaryGenerator: composeSummaryGenerator(
+          createParallelSummaryGenerator(),
+          config?.summaryGenerator,
+        ),
         completionConfig: config?.completionConfig,
         serdes: config?.serdes,
         itemSerdes: config?.itemSerdes,

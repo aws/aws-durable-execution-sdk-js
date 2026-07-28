@@ -13,7 +13,6 @@ import type {
   TracerProvider,
   Tracer,
   Span,
-  Context,
   Link,
 } from "@opentelemetry/api";
 import {
@@ -66,7 +65,6 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
   // Default provider mode
   private readonly useDefaultTracerProvider: boolean;
-  private savedInvocationContext: Context | undefined;
 
   // Workflow span name (configurable)
   private readonly workflowSpanName: string;
@@ -122,11 +120,6 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
     // 5. Set it as the next span ID so the tracer uses it for the Workflow_Span
     this.idGenerator.setNextSpanId(workflowSpanId);
-
-    // Save ambient invocation context when using default provider
-    if (this.useDefaultTracerProvider) {
-      this.savedInvocationContext = context.active();
-    }
 
     // 6. Create the Workflow_Span with deterministic ID (always as root — no parent)
     this.workflowSpan = this.tracer.startSpan(
@@ -191,7 +184,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     } else {
       // Default provider mode: create invocation span as child of the ambient
       // Lambda invocation span (from the ADOT layer or other auto-instrumentation)
-      const parentContext = this.savedInvocationContext ?? context.active();
+      const parentContext = context.active();
 
       this.invocationSpan = this.tracer.startSpan(
         "Invocation",
@@ -271,23 +264,16 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     this.spanMap.clear();
     this.workflowSpan = undefined;
     this.invocationSpan = undefined;
-    this.savedInvocationContext = undefined;
     this.executionArn = "";
   }
 
   /**
    * Builds span links to the invocation span for child spans.
    *
-   * In default-provider mode, links to the ambient invocation span captured
-   * from the active context. Otherwise, links to the explicit Invocation_Span.
+   * Always links to the plugin-created Invocation_Span (this.invocationSpan),
+   * which is created in both default-provider and non-default modes.
    */
   private buildInvocationLinks(): Link[] {
-    if (this.useDefaultTracerProvider && this.savedInvocationContext) {
-      const invocationSpan = trace.getSpan(this.savedInvocationContext);
-      if (invocationSpan) {
-        return [{ context: invocationSpan.spanContext() }];
-      }
-    }
     if (this.invocationSpan) {
       return [{ context: this.invocationSpan.spanContext() }];
     }
