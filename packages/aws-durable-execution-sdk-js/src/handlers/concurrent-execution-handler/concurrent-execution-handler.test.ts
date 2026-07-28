@@ -33,7 +33,6 @@ describe("Concurrent Execution Handler", () => {
     concurrentExecutionHandler = createConcurrentExecutionHandler(
       mockExecutionContext,
       mockRunInChildContext,
-      jest.fn(),
     );
   });
 
@@ -95,14 +94,32 @@ describe("Concurrent Execution Handler", () => {
       ).rejects.toThrow("Concurrent execution requires an executor function");
     });
 
-    it("should throw for invalid maxConcurrency", async () => {
-      await expect(
-        concurrentExecutionHandler([], jest.fn(), { maxConcurrency: 0 }),
-      ).rejects.toThrow("Invalid maxConcurrency: 0");
+    it("should terminate execution for invalid maxConcurrency", async () => {
+      const terminate = jest.fn();
+      (mockExecutionContext as any).terminationManager = { terminate };
 
-      await expect(
-        concurrentExecutionHandler([], jest.fn(), { maxConcurrency: -1 }),
-      ).rejects.toThrow("Invalid maxConcurrency: -1");
+      // The returned promise never resolves (execution is terminated), so we
+      // don't await it -- just assert the termination was requested.
+      void concurrentExecutionHandler([], jest.fn(), { maxConcurrency: 0 });
+      await Promise.resolve();
+
+      expect(terminate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reason: "CONFIG_VALIDATION_ERROR",
+          message: expect.stringContaining("Invalid maxConcurrency: 0"),
+        }),
+      );
+
+      terminate.mockClear();
+      void concurrentExecutionHandler([], jest.fn(), { maxConcurrency: -1 });
+      await Promise.resolve();
+
+      expect(terminate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reason: "CONFIG_VALIDATION_ERROR",
+          message: expect.stringContaining("Invalid maxConcurrency: -1"),
+        }),
+      );
     });
 
     it("should terminate execution when shouldComplete is combined with threshold fields", async () => {
@@ -563,7 +580,7 @@ describe("ConcurrencyController", () => {
   let mockParentContext: jest.Mocked<DurableContext<DurableLogger>>;
 
   beforeEach(() => {
-    controller = new ConcurrencyController("test-operation", jest.fn());
+    controller = new ConcurrencyController("test-operation");
     mockParentContext = {
       runInChildContext: jest.fn(),
     } as any;
@@ -1048,10 +1065,7 @@ describe("ConcurrencyController", () => {
     });
 
     it("should handle verbose logging", async () => {
-      const verboseController = new ConcurrencyController(
-        "verbose-test",
-        jest.fn(),
-      );
+      const verboseController = new ConcurrencyController("verbose-test");
       const items = [{ id: "item-0", data: "data1", index: 0 }];
       const executor = jest.fn();
 
@@ -1181,10 +1195,7 @@ describe("ConcurrencyController", () => {
 
     it("should execute with iterationSubType and cover the actual execution path", async () => {
       // Create a new controller for this test to ensure clean state
-      const testController = new ConcurrencyController(
-        "test-operation",
-        jest.fn(),
-      );
+      const testController = new ConcurrencyController("test-operation");
       const items = [{ id: "item-0", data: "data1", index: 0 }];
       const executor = jest.fn().mockResolvedValue("test-result");
       const config = { iterationSubType: "TEST_ITERATION_TYPE" };

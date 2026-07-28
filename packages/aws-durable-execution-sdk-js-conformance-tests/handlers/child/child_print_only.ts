@@ -1,4 +1,4 @@
-// 3-17: Child context with print only (verify no re-execution on replay)
+// 3-17: Child context with durable logger only (verify no re-execution on replay)
 import {
   DurableContext,
   withDurableExecution,
@@ -9,7 +9,10 @@ export const handler = withDurableExecution(
     const result = await context.runInChildContext(
       "print-child",
       async (childContext: DurableContext) => {
-        console.log(event);
+        // Replay logging: mode-aware suppression is disabled so an incorrect
+        // second child execution would emit a second log and fail the count.
+        childContext.configureLogger({ modeAware: false });
+        childContext.logger.info(event);
         return event as string;
       },
     );

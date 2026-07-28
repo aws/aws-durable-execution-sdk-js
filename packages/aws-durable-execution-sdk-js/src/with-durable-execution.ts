@@ -255,6 +255,34 @@ async function runHandler<
           return response;
         }
 
+        // If termination was due to a config validation error (e.g. an
+        // invalid maxConcurrency or a mutually-exclusive completionConfig),
+        // return FAILED. This is a deterministic, non-retryable caller
+        // mistake -- same category as CONTEXT_VALIDATION_ERROR above, not a
+        // suspend/pause, so it must not fall through to the generic
+        // termination handling below (which returns PENDING).
+        if (
+          resultType === "termination" &&
+          result.reason === TerminationReason.CONFIG_VALIDATION_ERROR
+        ) {
+          log("🛑", "Config validation error - returning FAILED status");
+          const response = {
+            Status: InvocationStatus.FAILED,
+            Error: createErrorObjectFromError(
+              result.error || new Error(result.message),
+            ),
+          };
+          await plugin.onInvocationEnd?.({
+            ...invocationBaseInfo,
+            status: PluginInvocationStatus.FAILED,
+            executionInput: customerHandlerEvent,
+            executionError: result.error || new Error(result.message),
+            executionResult: undefined,
+            operations: toOperationInfoMap(executionContext._stepData),
+          });
+          return response;
+        }
+
         if (resultType === "termination") {
           log("🛑", "Returning termination response");
 

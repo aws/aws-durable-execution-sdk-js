@@ -926,6 +926,31 @@ Resources:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
+  MapCustomSummaryGeneratorReplay:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: MapCustomSummaryGeneratorReplay-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: map-custom-summary-generator-replay.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      Environment:
+        Variables:
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+    Metadata:
+      SkipBuild: "True"
   MapEmpty:
     Type: AWS::Serverless::Function
     Properties:
@@ -1328,6 +1353,35 @@ Resources:
         - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
     Metadata:
       SkipBuild: "True"
+  OtelAdotInvocationXrayE2e:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: OTelADOTInvocationXRayE2E-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: otel-adot-invocation-xray-e2e.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 120
+        RetentionPeriodInDays: 7
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      Environment:
+        Variables:
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+      Tracing: Active
+      Layers:
+        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
+    Metadata:
+      SkipBuild: "True"
   OtelBasicSteps:
     Type: AWS::Serverless::Function
     Properties:
@@ -1413,6 +1467,35 @@ Resources:
       Tracing: Active
       Layers:
         - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
+    Metadata:
+      SkipBuild: "True"
+  OtelCommunityCollectorExecutionXrayE2e:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: OTelCommunityCollectorExecutionXRayE2E-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: otel-community-collector-execution-xray-e2e.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 120
+        RetentionPeriodInDays: 7
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      Environment:
+        Variables:
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          OPENTELEMETRY_COLLECTOR_CONFIG_URI: /var/task/collector.yaml
+      Tracing: Active
+      Layers:
+        - arn:aws:lambda:us-west-2:184161586896:layer:opentelemetry-collector-amd64-0_22_0:1
     Metadata:
       SkipBuild: "True"
   OtelCommunityCollectorInvocationXrayE2e:
@@ -1502,35 +1585,6 @@ Resources:
         - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
     Metadata:
       SkipBuild: "True"
-  OtelCommunityCollectorExecutionXrayE2e:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: OTelCommunityCollectorExecutionXRayE2E-22x-NodeJS-Local
-      CodeUri: ./dist
-      Handler: otel-community-collector-execution-xray-e2e.handler
-      Runtime: nodejs22.x
-      Architectures:
-        - x86_64
-      MemorySize: 128
-      Timeout: 60
-      DurableConfig:
-        ExecutionTimeout: 120
-        RetentionPeriodInDays: 7
-      Role:
-        Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
-      Environment:
-        Variables:
-          DURABLE_VERBOSE_MODE: "false"
-          DURABLE_EXAMPLES_VERBOSE: "true"
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          OPENTELEMETRY_COLLECTOR_CONFIG_URI: /var/task/collector.yaml
-      Tracing: Active
-      Layers:
-        - arn:aws:lambda:us-west-2:184161586896:layer:opentelemetry-collector-amd64-0_22_0:1
-    Metadata:
-      SkipBuild: "True"
   OtelWaitAndResume:
     Type: AWS::Serverless::Function
     Properties:
@@ -1573,35 +1627,6 @@ Resources:
       Timeout: 60
       DurableConfig:
         ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
-      Role:
-        Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
-      Environment:
-        Variables:
-          DURABLE_VERBOSE_MODE: "false"
-          DURABLE_EXAMPLES_VERBOSE: "true"
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
-      Tracing: Active
-      Layers:
-        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
-    Metadata:
-      SkipBuild: "True"
-  OtelAdotInvocationXrayE2e:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: OTelADOTInvocationXRayE2E-22x-NodeJS-Local
-      CodeUri: ./dist
-      Handler: otel-adot-invocation-xray-e2e.handler
-      Runtime: nodejs22.x
-      Architectures:
-        - x86_64
-      MemorySize: 128
-      Timeout: 60
-      DurableConfig:
-        ExecutionTimeout: 120
         RetentionPeriodInDays: 7
       Role:
         Fn::GetAtt:
@@ -1774,6 +1799,31 @@ Resources:
       FunctionName: ParallelHeterogeneous-22x-NodeJS-Local
       CodeUri: ./dist
       Handler: parallel-heterogeneous.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      Environment:
+        Variables:
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+    Metadata:
+      SkipBuild: "True"
+  ParallelInvalidMaxConcurrency:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ParallelInvalidMaxConcurrency-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: parallel-invalid-max-concurrency.handler
       Runtime: nodejs22.x
       Architectures:
         - x86_64
