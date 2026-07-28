@@ -1,6 +1,7 @@
 import {
   createParallelSummaryGenerator,
   createMapSummaryGenerator,
+  composeSummaryGenerator,
 } from "./summary-generators";
 import { BatchResultImpl } from "../../handlers/concurrent-execution-handler/batch-result";
 import { BatchItemStatus } from "../../types";
@@ -155,6 +156,68 @@ describe("Summary Generators", () => {
         completionReason: "FAILURE_TOLERANCE_EXCEEDED",
         status: BatchItemStatus.FAILED,
       });
+    });
+  });
+
+  describe("composeSummaryGenerator", () => {
+    it("returns the internal record unchanged when no custom generator is given", () => {
+      const batchResult = new BatchResultImpl(
+        [{ index: 0, result: "r1", status: BatchItemStatus.SUCCEEDED }],
+        "ALL_COMPLETED",
+      );
+      const composed = composeSummaryGenerator(createMapSummaryGenerator());
+
+      expect(composed(batchResult)).toBe(
+        createMapSummaryGenerator()(batchResult),
+      );
+    });
+
+    it("always preserves the SDK record and nests custom output under `summary`", () => {
+      const batchResult = new BatchResultImpl(
+        [
+          { index: 0, result: "r1", status: BatchItemStatus.SUCCEEDED },
+          { index: 1, status: BatchItemStatus.STARTED },
+        ],
+        "MIN_SUCCESSFUL_REACHED",
+      );
+      const custom = (): string => "processed 1/2 items";
+      const composed = composeSummaryGenerator(
+        createMapSummaryGenerator(),
+        custom,
+      );
+
+      const parsed = JSON.parse(composed(batchResult));
+
+      // Load-bearing SDK fields survive regardless of the custom output...
+      expect(parsed).toMatchObject({
+        type: "MapResult",
+        totalCount: 2,
+        successCount: 1,
+        failureCount: 0,
+        completionReason: "MIN_SUCCESSFUL_REACHED",
+      });
+      // ...and the customer string is preserved verbatim, observability-only.
+      expect(parsed.summary).toBe("processed 1/2 items");
+    });
+
+    it("keeps a JSON-shaped custom output as a verbatim string under `summary`", () => {
+      const batchResult = new BatchResultImpl(
+        [{ index: 0, result: "r1", status: BatchItemStatus.SUCCEEDED }],
+        "ALL_COMPLETED",
+      );
+      // A custom generator that itself returns JSON must NOT collide with or
+      // overwrite the SDK metadata keys — it is stored as an opaque string.
+      const custom = (): string =>
+        JSON.stringify({ totalCount: 999, mine: true });
+      const composed = composeSummaryGenerator(
+        createParallelSummaryGenerator(),
+        custom,
+      );
+
+      const parsed = JSON.parse(composed(batchResult));
+
+      expect(parsed.totalCount).toBe(1); // SDK value, not the custom 999
+      expect(parsed.summary).toBe('{"totalCount":999,"mine":true}');
     });
   });
 
