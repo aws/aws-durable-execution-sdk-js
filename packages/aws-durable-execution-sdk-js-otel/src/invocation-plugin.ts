@@ -60,7 +60,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     this.idGenerator = new DeterministicIdGenerator();
     this.contextExtractor = config?.contextExtractor ?? xRayContextExtractor;
     this.useDefaultTracerProvider = config?.useDefaultTracerProvider ?? false;
-    this.workflowSpanName = config?.workflowSpanName ?? "workflow";
+    this.workflowSpanName = config?.workflowSpanName ?? "Workflow";
 
     // Pass config directly to createTracerProvider — when neither tracerProvider
     // nor useDefaultTracerProvider is set, option 3 creates an internal provider
@@ -118,7 +118,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       : context.active();
 
     this.invocationSpan = this.tracer.startSpan(
-      "invocation",
+      "Invocation",
       {
         kind: SpanKind.INTERNAL,
         attributes: {

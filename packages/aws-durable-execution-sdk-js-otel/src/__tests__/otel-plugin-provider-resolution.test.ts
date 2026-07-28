@@ -287,7 +287,7 @@ describe("ExecutionOtelPlugin integration - provider resolution", () => {
     expect(spans.length).toBeGreaterThan(0);
 
     // The Workflow span should exist (plugin still creates it)
-    const workflowSpan = spans.find((s) => s.name === "workflow");
+    const workflowSpan = spans.find((s) => s.name === "Workflow");
     expect(workflowSpan).toBeDefined();
 
     globalProvider.shutdown();
@@ -326,7 +326,7 @@ describe("ExecutionOtelPlugin integration - provider resolution", () => {
     });
 
     const spans = exporter.getFinishedSpans();
-    const invocationSpan = spans.find((s) => s.name === "invocation");
+    const invocationSpan = spans.find((s) => s.name === "Invocation");
     expect(invocationSpan).toBeDefined();
     expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(
       "arn:aws:states:us-east-1:123456789012:execution:sm:exec-2",

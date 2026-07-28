@@ -79,7 +79,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     this.idGenerator = new DeterministicIdGenerator();
     this.contextExtractor = config?.contextExtractor ?? xRayContextExtractor;
     this.useDefaultTracerProvider = config?.useDefaultTracerProvider ?? false;
-    this.workflowSpanName = config?.workflowSpanName ?? "workflow";
+    this.workflowSpanName = config?.workflowSpanName ?? "Workflow";
 
     // Create or accept TracerProvider via the provider factory
     const { tracerProvider, ownsProvider } = createTracerProvider(config);
@@ -175,7 +175,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       }
 
       this.invocationSpan = this.tracer.startSpan(
-        "invocation",
+        "Invocation",
         {
           kind: SpanKind.INTERNAL,
           attributes: invocationAttributes,
@@ -188,7 +188,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       const parentContext = context.active();
 
       this.invocationSpan = this.tracer.startSpan(
-        "invocation",
+        "Invocation",
         {
           kind: SpanKind.INTERNAL,
           attributes: {

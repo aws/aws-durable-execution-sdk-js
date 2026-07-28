@@ -210,13 +210,13 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     expect(spans.length).toBeGreaterThanOrEqual(5);
 
     // Assertion 2: Workflow_Span has no parent (it's a root span — created with ROOT_CONTEXT)
-    const workflowSpan = findSpan(exporter, "workflow");
+    const workflowSpan = findSpan(exporter, "Workflow");
     expect(workflowSpan).toBeDefined();
     // A root span created with ROOT_CONTEXT has no valid parent
     expect(workflowSpan!.parentSpanContext).toBeUndefined();
 
     // Assertion 3: Invocation_Span is created as child of the ambient Lambda span
-    const invocationSpan = findSpan(exporter, "invocation");
+    const invocationSpan = findSpan(exporter, "Invocation");
     expect(invocationSpan).toBeDefined();
     expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(TEST_ARN);
     expect(invocationSpan!.parentSpanContext?.spanId).toBe(
@@ -348,7 +348,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     expect(secondOpSpan).toBeDefined();
 
     // Only the second invocation's Invocation span should be present (state cleared)
-    const secondInvocationSpan = spans.find((s) => s.name === "invocation");
+    const secondInvocationSpan = spans.find((s) => s.name === "Invocation");
     expect(secondInvocationSpan).toBeDefined();
 
     // The link on second-op should point to the second invocation's plugin-created

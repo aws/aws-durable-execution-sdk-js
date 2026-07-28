@@ -94,7 +94,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       );
 
       const spans = getExportedSpans(exporter);
-      const invocationSpan = findSpan(exporter, "invocation");
+      const invocationSpan = findSpan(exporter, "Invocation");
       expect(invocationSpan).toBeDefined();
       expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(
         TEST_ARN,
@@ -102,7 +102,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       expect(invocationSpan!.attributes["durable.invocation.first"]).toBe(true);
 
       // Workflow_Span should also be created
-      const workflowSpan = findSpan(exporter, "workflow");
+      const workflowSpan = findSpan(exporter, "Workflow");
       expect(workflowSpan).toBeDefined();
     });
 
@@ -116,7 +116,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
         makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
       );
 
-      const invocationSpan = findSpan(exporter, "invocation");
+      const invocationSpan = findSpan(exporter, "Invocation");
       expect(invocationSpan).toBeDefined();
     });
   });
@@ -141,7 +141,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
 
       ambientSpan.end();
 
-      const workflowSpan = findSpan(exporter, "workflow");
+      const workflowSpan = findSpan(exporter, "Workflow");
       expect(workflowSpan).toBeDefined();
       expect(workflowSpan!.links.length).toBe(0);
     });
@@ -185,7 +185,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       // The operation span should link to the plugin-created Invocation span,
       // which is itself parented under the captured ambient invocation span.
       const opSpan = findSpan(exporter, "test-op");
-      const invocationSpan = findSpan(exporter, "invocation");
+      const invocationSpan = findSpan(exporter, "Invocation");
       expect(opSpan).toBeDefined();
       expect(invocationSpan).toBeDefined();
       expect(opSpan!.links.length).toBe(1);
@@ -226,7 +226,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       const opSpan = findSpan(exporter, "test-op");
       expect(opSpan).toBeDefined();
       // Links to the Invocation span we always create
-      const invocationSpan = findSpan(exporter, "invocation");
+      const invocationSpan = findSpan(exporter, "Invocation");
       expect(invocationSpan).toBeDefined();
       expect(opSpan!.links.length).toBe(1);
       expect(opSpan!.links[0].context.spanId).toBe(
@@ -349,7 +349,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       const opSpan = findSpan(exporter, "second-op");
       expect(opSpan).toBeDefined();
       // Should link to the new Invocation span (not the previous ambient context)
-      const invocationSpan = findSpan(exporter, "invocation");
+      const invocationSpan = findSpan(exporter, "Invocation");
       expect(invocationSpan).toBeDefined();
       expect(opSpan!.links.length).toBe(1);
       expect(opSpan!.links[0].context.spanId).toBe(
@@ -389,14 +389,14 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
 
       const spans = getExportedSpans(exporter);
       // Only second invocation's Workflow span - no leftover state
-      const workflowSpans = spans.filter((s) => s.name === "workflow");
+      const workflowSpans = spans.filter((s) => s.name === "Workflow");
       expect(workflowSpans.length).toBe(1);
       expect(workflowSpans[0].attributes["durable.execution.arn"]).toBe(
         "arn:second",
       );
 
       // Invocation span is created for the second invocation
-      const invocationSpans = spans.filter((s) => s.name === "invocation");
+      const invocationSpans = spans.filter((s) => s.name === "Invocation");
       expect(invocationSpans.length).toBe(1);
       expect(invocationSpans[0].attributes["durable.execution.arn"]).toBe(
         "arn:second",
@@ -477,9 +477,9 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       );
 
       expect(findSpan(exporter, "my-workflow")).toBeDefined();
-      expect(findSpan(exporter, "workflow")).toBeUndefined();
-      // Invocation span name is not configurable; always "invocation"
-      expect(findSpan(exporter, "invocation")).toBeDefined();
+      expect(findSpan(exporter, "Workflow")).toBeUndefined();
+      // Invocation span name is not configurable; always "Invocation"
+      expect(findSpan(exporter, "Invocation")).toBeDefined();
     });
 
     it.each([
@@ -492,7 +492,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
         makeInvocationEndInfo({ status: status as any }),
       );
 
-      const invocationSpan = findSpan(exporter, "invocation");
+      const invocationSpan = findSpan(exporter, "Invocation");
       expect(invocationSpan).toBeDefined();
       expect(invocationSpan!.status.code).toBe(expected);
     });
@@ -504,7 +504,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
         makeInvocationEndInfo({ status: "RETRYING" as any }),
       );
 
-      const invocationSpan = findSpan(exporter, "invocation");
+      const invocationSpan = findSpan(exporter, "Invocation");
       expect(invocationSpan).toBeDefined();
       expect(invocationSpan!.status.code).toBe(SpanStatusCode.UNSET);
     });
@@ -519,7 +519,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
         }),
       );
 
-      const invocationSpan = findSpan(exporter, "invocation");
+      const invocationSpan = findSpan(exporter, "Invocation");
       expect(invocationSpan).toBeDefined();
       expect(invocationSpan!.status.code).toBe(SpanStatusCode.ERROR);
       expect(invocationSpan!.status.message).toBe("invocation boom");
@@ -534,7 +534,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
         makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
       );
 
-      const workflowSpan = findSpan(exporter, "workflow");
+      const workflowSpan = findSpan(exporter, "Workflow");
       expect(workflowSpan).toBeDefined();
       expect(workflowSpan!.kind).toBe(SpanKind.INTERNAL);
     });
@@ -546,7 +546,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
         makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
       );
 
-      const workflowSpan = findSpan(exporter, "workflow");
+      const workflowSpan = findSpan(exporter, "Workflow");
       expect(workflowSpan).toBeDefined();
       expect(workflowSpan!.status.code).toBe(SpanStatusCode.OK);
       expect(workflowSpan!.attributes["durable.execution.status"]).toBe(
@@ -564,7 +564,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
         }),
       );
 
-      const workflowSpan = findSpan(exporter, "workflow");
+      const workflowSpan = findSpan(exporter, "Workflow");
       expect(workflowSpan).toBeDefined();
       expect(workflowSpan!.status.code).toBe(SpanStatusCode.ERROR);
       expect(workflowSpan!.status.message).toBe("boom");
@@ -586,7 +586,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
 
         // Non-terminal: the Workflow_Span is intentionally never ended, so it is
         // never exported and its status stays UNSET.
-        expect(findSpan(exporter, "workflow")).toBeUndefined();
+        expect(findSpan(exporter, "Workflow")).toBeUndefined();
       },
     );
   });
