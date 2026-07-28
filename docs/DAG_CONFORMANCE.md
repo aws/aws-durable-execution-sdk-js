@@ -393,9 +393,9 @@ Linear chain of `ALL_DONE` tasks (so each runs despite the prior failing), `maxC
 
 ---
 
-### DAG-18 — Custom result-based completion **[TS + Go ONLY]**
+### DAG-18 — Custom result-based completion
 
-A rules engine short-circuits the moment any task returns a `REJECT` verdict — expressible only where the custom-completion predicate can inspect task **results** (`DagCompletionStatus.items[].result`). Python and Java have **no** predicate hook in v1 (threshold-only) and MUST NOT implement this scenario (see `DAG_SPEC_CROSS_LANGUAGE.md` §4.2 and the applicability table below).
+A rules engine short-circuits the moment any task returns a `REJECT` verdict — expressible only where the custom-completion predicate can inspect task **results** (`DagCompletionStatus.items[].result`). All four SDKs implement this scenario (see `DAG_SPEC_CROSS_LANGUAGE.md` §4.2 for the history: Python and Java initially deferred it, then added it directly on the DAG module without needing a base-SDK predicate hook).
 
 **Graph:** `r1 → r2 → r3` (linear, `maxConcurrency = 1`), bodies return verdict objects: `r1`→`{verdict:"ACCEPT"}`, `r2`→`{verdict:"REJECT"}`, `r3`→`{verdict:"ACCEPT"}`. Config: `maxConcurrency: 1`, `completionConfig.shouldComplete`: if any SUCCEEDED item has `result.verdict == "REJECT"` ⇒ `completeBatch(FAILED)` else `continueBatch()`.
 
@@ -535,9 +535,9 @@ To make the four files cleanly **byte-diffable** (so a `diff ts.json python.json
 2. **Sort all object keys lexicographically** (ascending, byte/codepoint order) at every level — top-level scenario ids, the `tasks` map, each task object's keys, `counts`, and `structural_id_checks`. (Scenario ids sort lexicographically: `DAG-1, DAG-10, DAG-11, …, DAG-19, DAG-2, …`. This is fine — the requirement is _stable_ ordering, not numeric.)
 3. Emit **integers without decimals** (`10`, `0`) and **booleans** as `true`/`false`.
 4. Never emit `NaN`, `Infinity`, timestamps, durations, raw entity-ID hashes, or native class names.
-5. Emit **only the scenarios that apply to that language** (Part C). Shared scenarios MUST be byte-identical across languages; `ts.json` and `go.json` additionally contain `DAG-18`.
+5. Emit **all 19 scenarios** (Part C) — DAG-18 now applies to every language. Every scenario MUST be byte-identical across all four `<lang>.json` files.
 
-A record for a shared scenario (DAG-1..17, DAG-19) MUST be **byte-identical** across all four files. `DAG-18` appears only in `ts.json` and `go.json` and MUST be byte-identical between those two.
+A record for every scenario (DAG-1..19) MUST be **byte-identical** across all four files.
 
 ---
 
@@ -562,12 +562,19 @@ A record for a shared scenario (DAG-1..17, DAG-19) MUST be **byte-identical** ac
 | DAG-15   | Validation — missing/foreign dep           | ✅  |   ✅   |  ✅  | ✅  |
 | DAG-16   | Early completion — `minSuccessful`         | ✅  |   ✅   |  ✅  | ✅  |
 | DAG-17   | Early completion — `toleratedFailureCount` | ✅  |   ✅   |  ✅  | ✅  |
-| DAG-18   | **Custom result-based completion**         | ✅  |   ❌   |  ❌  | ✅  |
+| DAG-18   | **Custom result-based completion**         | ✅  |   ✅   |  ✅  | ✅  |
 | DAG-19   | Order-independence                         | ✅  |   ✅   |  ✅  | ✅  |
 
 **Legend:** ✅ = MUST implement and emit a record · ❌ = MUST NOT implement (feature absent in v1).
 
-**Rationale for the DAG-18 exclusion.** Custom, result-based completion (`shouldComplete` inspecting per-task results) is available only in TypeScript and Go per `DAG_SPEC_CROSS_LANGUAGE.md` §3.1 #15 and §4.2: Python has no predicate hook (threshold-only) and Java's completion is factory/threshold-only in v1 (a DAG-owned predicate is feasible later but deferred). Threshold-based early completion (DAG-16, DAG-17) **is** available in all four and is exercised for every language. So `python.json` and `java.json` carry **18** records; `ts.json` and `go.json` carry **19**.
+**DAG-18 now applies to all four languages.** Custom, result-based completion
+(`shouldComplete`/`ShouldComplete`/`should_complete`/`DagCompletionConfig.custom(...)`
+inspecting per-task results) originally shipped only in TypeScript and Go. Python and
+Java initially deferred it — both carried an in-source note calling it "v2-deferred,"
+which turned out to refer to the _base SDK's_ `map`/`parallel` completion feature, not
+DAG; DAG needed no such deferral, and both languages have since added it directly
+(see `DAG_SPEC_CROSS_LANGUAGE.md` §3.1 #15 and §4.2). All four SDKs now carry **19**
+records each.
 
 ---
 
@@ -576,12 +583,12 @@ A record for a shared scenario (DAG-1..17, DAG-19) MUST be **byte-identical** ac
 Each SDK implements the scenarios in its **existing** conformance/compliance harness idiomatically, asserts each scenario against this catalog, and writes its normalized `<lang>.json`. The four outputs are then reconciled in [`DAG_CONFORMANCE_RESULTS.md`](./DAG_CONFORMANCE_RESULTS.md).
 
 - **TypeScript** — `packages/aws-durable-execution-sdk-js-conformance-tests/`. One handler per scenario under `handlers/dag/dag_<n>_*.ts` exporting `handler = withDurableExecution(async (event, ctx) => …)`; scenarios use `ctx.dag(name, async (d) => { d.step(name, [deps], fn, opts) })`. A local (`LocalDurableTestRunner`) driver runs all scenarios, builds the normalized record from `DagResult`, and writes `ts.json`.
-- **Python** — `tests/e2e/dag_int_test.py` (+ `tests/dag_support`). Uses the in-memory `make_context(state).dag(register, name=…)` runner; `d.step(fn, deps=[…], name=…, run_if=…).trigger_rule(…)`; reads `result.get_status/get_result/completion_reason/success_count`. Emits `python.json` (18 records).
-- **Java** — `sdk-integration-tests/.../DagIntegrationTest.java`. Uses `LocalDurableTestRunner`; `ctx.dag("name", d -> { var a = d.step("a", T.class, (deps,s)->…); d.step("b",…).reads(a).dependsOn(w).triggerRule(…).runIf(…); })`; `Deps.get(handle)`, `r.getResult(name)`, `r.getStatus(name)`, `r.completionReason()`. Emits `java.json` (18 records).
+- **Python** — `tests/e2e/dag_int_test.py` (+ `tests/dag_support`). Uses the in-memory `make_context(state).dag(register, name=…)` runner; `d.step(fn, deps=[…], name=…, run_if=…).trigger_rule(…)`; reads `result.get_status/get_result/completion_reason/success_count`. Emits `python.json` (19 records).
+- **Java** — `sdk-integration-tests/.../DagIntegrationTest.java`. Uses `LocalDurableTestRunner`; `ctx.dag("name", d -> { var a = d.step("a", T.class, (deps,s)->…); d.step("b",…).reads(a).dependsOn(w).triggerRule(…).runIf(…); })`; `Deps.get(handle)`, `r.getResult(name)`, `r.getStatus(name)`, `r.completionReason()`. Emits `java.json` (19 records).
 - **Go** — `conformance/handlers/*.go`. Self-registering `init()`→`Register(id, factory)`; free-function registration `dag.Step[T](d, name, deps, fn)`, typed access `dag.Get[T](deps, handle)`. A driver iterates the DAG scenario ids, builds records, and writes `go.json` (19 records).
 
 ---
 
 ## Summary
 
-This catalog defines **19 numbered scenarios** (DAG-1 … DAG-19) forming the cross-language DAG conformance contract, plus a **normalized JSON record schema** (semantic outcome only, byte-diffable via lexicographic key-sorting) that each SDK emits to `dag-conformance-out/<lang>.json`. Coverage spans the diamond with typed deps, both compensation directions, `runIf` value-branching, the **complete** trigger-rule matrix (empty-upstream row with the `ALL_FAILED` len>0 guard, mixed, all-failed, all-succeeded, and includes-SKIPPED rows), skip cascade, nested DAGs with scope isolation, the empty DAG, all five validation-error types, threshold early-completion (`minSuccessful` + `toleratedFailureCount`), custom result-based completion (**TS + Go only**), and order-independence. **17 scenarios apply to all four languages**; DAG-18 (custom completion) applies to **TS + Go only** — so TS and Go emit **19** records each, Python and Java emit **18**. Semantic outcomes (statuses, results, completion reasons, counts, skip reasons, normalized error types) MUST match across languages; raw entity-ID hashes are NOT expected to match, but the four per-language **structural** ID checks MUST hold.
+This catalog defines **19 numbered scenarios** (DAG-1 … DAG-19) forming the cross-language DAG conformance contract, plus a **normalized JSON record schema** (semantic outcome only, byte-diffable via lexicographic key-sorting) that each SDK emits to `dag-conformance-out/<lang>.json`. Coverage spans the diamond with typed deps, both compensation directions, `runIf` value-branching, the **complete** trigger-rule matrix (empty-upstream row with the `ALL_FAILED` len>0 guard, mixed, all-failed, all-succeeded, and includes-SKIPPED rows), skip cascade, nested DAGs with scope isolation, the empty DAG, all five validation-error types, threshold early-completion (`minSuccessful` + `toleratedFailureCount`), custom result-based completion, and order-independence. **All 19 scenarios apply to all four languages** — DAG-18 (custom completion) originally shipped only in TS and Go, and now also ships in Python and Java, so every SDK emits **19** records. Semantic outcomes (statuses, results, completion reasons, counts, skip reasons, normalized error types) MUST match across languages; raw entity-ID hashes are NOT expected to match, but the four per-language **structural** ID checks MUST hold.

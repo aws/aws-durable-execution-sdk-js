@@ -356,3 +356,20 @@ Resources:
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
+  DagRulesEngine:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-19"]
+    Properties:
+      CodeUri: ./dist
+      Handler: dag_rules_engine.handler
+      Description: DAG custom result-based completion short-circuits on a rejected verdict
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300

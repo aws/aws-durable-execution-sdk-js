@@ -342,14 +342,14 @@ Python `Enum`s cannot be extended by subclassing with new members, so the DAG de
 @dataclass(frozen=True)
 class DagConfig:
     max_concurrency: int | None = None                 # None => DEFAULT_DAG_MAX_CONCURRENCY (40)
-    completion_config: CompletionConfig | None = None  # reused from config.py (threshold-only)
+    completion_config: CompletionConfig | DagCustomCompletionConfig | None = None  # threshold OR custom predicate
     default_trigger_rule: TriggerRule = TriggerRule.ALL_SUCCESS
     serdes: SerDes | None = None                       # for the DagResult container payload
 ```
 
 **`max_concurrency`.** When `None`, the scheduler caps concurrency at `DEFAULT_DAG_MAX_CONCURRENCY` (40, `operation/dag_executor.py`) rather than running unbounded; an explicit value always wins, including a value above 40. The only validation is that an explicit value must be `>= 1` (`<= 0` raises `ValidationError` at the top of the handler and in `DagExecutor.__init__`). The bound governs the **DAG scheduler only** — the top-level tasks of _this_ DAG. It is deliberately **not** inherited by a task's own internal fan-out: a `map` or `parallel` task keeps its own default (unlimited) unless configured on that task, and a nested `dag` task gets its own independent default of 40 (`DAG_SPEC_CROSS_LANGUAGE.md` §2.B.3a). This is a resource bound — in Python the `ThreadPoolExecutor` is sized from the same number, so an unbounded 500-task DAG would spawn 500 OS threads inside the Lambda sandbox.
 
-**`completion_config`.** The DAG reuses the existing threshold-only `CompletionConfig` (`config.py`: `min_successful`, `tolerated_failure_count`, `tolerated_failure_percentage`) verbatim for early completion. Python's `CompletionConfig` is threshold-only; there is no result-based custom-completion predicate in the Python SDK (no `shouldComplete` / `CompletionDecision` analog), so `DagConfig` exposes no such hook. Result-based short-circuit is expressible today by having a task inspect its deps and raise, or by `min_successful`.
+**`completion_config`.** Accepts either the base SDK's threshold-only `CompletionConfig` (`config.py`: `min_successful`, `tolerated_failure_count`, `tolerated_failure_percentage`), reused verbatim for early completion, or a `DagCustomCompletionConfig` — a DAG-owned, results-aware predicate (`should_complete: Callable[[DagCompletionStatus], DagCompletionDecision]`) with no base-SDK equivalent to build on, since `CompletionConfig` for `map`/`parallel` has no predicate hook either. After every task settlement, `DagExecutor` evaluates the custom predicate (if configured) with a live `DagCompletionStatus` snapshot — per-task status and result, in registration order — and a `complete` decision ends the DAG with `CUSTOM_COMPLETION_SUCCEEDED` or `CUSTOM_COMPLETION_FAILED` depending on the decision's outcome. This is the only way to short-circuit on a task's _result_, not just aggregate counts: `min_successful`/`tolerated_failure_count` can express "stop once N succeed" but never "stop once any succeeded task's result matches X."
 
 **Skip accounting.** Because the reused `CompletionConfig` is result-blind and skip-blind, the DAG scheduler computes `success_count`/`failure_count`/`skipped_count` itself (SKIPPED counts toward neither success nor failure, `DAG_SPEC_CROSS_LANGUAGE.md` §2.B.2) and feeds only success/failure counts into the threshold logic (§5.7). No change to `CompletionConfig` is needed.
 
@@ -676,9 +676,8 @@ Validation errors are registration-time and deterministic (§10), so they reprod
 
 ## 11. Scope notes (v1)
 
-1. **Result-based custom completion.** Python's `CompletionConfig` is threshold-only; there is no `shouldComplete`/`CompletionDecision` predicate in the Python SDK, so `DagConfig` reuses the threshold config and exposes no custom-completion hook. Result-based short-circuit is expressible via a task inspecting its deps and raising, or via `min_successful`. Cross-language disposition: `DAG_SPEC_CROSS_LANGUAGE.md` §3.1 row 15.
-2. **Async registration.** Not applicable — the SDK has no asyncio surface. `register` is synchronous.
-3. **Error fidelity across the container boundary.** The typed identity and a task-naming message survive; the structured `task_name` field reconstructs as `None` on replay and the cause chain is folded into the message (§7.3, `DAG_SPEC_CROSS_LANGUAGE.md` §2.B.3). This is the same erasure the whole `Dag*Error` family already has, not specific to the predicate error.
+1. **Async registration.** Not applicable — the SDK has no asyncio surface. `register` is synchronous.
+2. **Error fidelity across the container boundary.** The typed identity and a task-naming message survive; the structured `task_name` field reconstructs as `None` on replay and the cause chain is folded into the message (§7.3, `DAG_SPEC_CROSS_LANGUAGE.md` §2.B.3). This is the same erasure the whole `Dag*Error` family already has, not specific to the predicate error.
 
 ---
 
@@ -709,7 +708,7 @@ Legend: **Ports** = carries over essentially unchanged · **Adapts** = same obse
 | d   | Trigger rules + `run_if` (sync predicate)                      | **Ports verbatim**  | Full truth table + evaluators; Python is sync everywhere. `run_if`-raise ⇒ `DagPredicateError`. §2.5, §5                                                                                                    |
 | e   | Completion-reason core/superset                                | **Adapts**          | Python base enum has 3 members (no `CUSTOM_*`); DAG declares its own 4-member enum (adds `COMPLETED_WITH_FAILURES`), value-compatible with the base. §2.7                                                   |
 | f   | SDK-owned converged envelope + reconstruct-don't-re-execute    | **Ports**           | `DagResultImpl.to_dict`/`from_dict` write the converged envelope; `DagContainerExecutor` runs the degradation ladder and the reconstruct path, which fast-paths every task and seeds the STARTED set. §8    |
-| g   | Custom result-based completion                                 | **Adapts**          | Python `CompletionConfig` is threshold-only; the DAG reuses it and exposes no custom-completion predicate. §2.8, §11.1                                                                                      |
+| g   | Custom result-based completion                                 | **Ships (net-new)** | `DagCustomCompletionConfig`/`should_complete` — a DAG-owned predicate with no base-SDK equivalent to build on (`CompletionConfig` for map/parallel is threshold-only too). §5.7                             |
 | h   | Heterogeneous task types + nested DAGs                         | **Ports**           | Reuse existing per-op executors + `child_handler`; `resultKind` tagging for batch/dag results; nested container checkpoints as `Dag`. §6.3, §8.1                                                            |
 | —   | Return type `DurablePromise<DagResult>`                        | **Adapts**          | Python returns `DagResult` synchronously (blocking); no `DurablePromise`/`await`. §2.1                                                                                                                      |
 | —   | Family A/B handler split (`createStepId` vs `waitForCallback`) | **Ports (simpler)** | Python executors take a full `OperationIdentifier`; callbacks are already child-context-based. No split needed. §6.3                                                                                        |
