@@ -94,23 +94,31 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       this.idGenerator.setTraceId(derivedId);
     }
 
-    // 4. Create the Workflow span when using community collector (not default provider)
-    if (!this.useDefaultTracerProvider) {
-      const workflowSpanId = deriveWorkflowSpanId(info.executionArn);
-      this.idGenerator.setNextSpanId(workflowSpanId);
+    // 4. Create the Workflow root span.
+    //
+    // The Workflow span is the parentless root of the execution-scoped trace and
+    // is emitted in BOTH provider modes (default/ADOT and owned/community
+    // collector), matching ExecutionOtelPlugin and the Python/Java reference
+    // plugins. It is keyed to a deterministic span ID derived from the execution
+    // ARN so every invocation of the same durable execution shares one root, and
+    // it is finalized (stamped with a terminal execution status and ended) only
+    // once, at the terminal invocation (see onInvocationEnd). Emitting it only in
+    // community-collector mode previously left the invocation view without a root
+    // Workflow span under ADOT/X-Ray.
+    const workflowSpanId = deriveWorkflowSpanId(info.executionArn);
+    this.idGenerator.setNextSpanId(workflowSpanId);
 
-      this.workflowSpan = this.tracer.startSpan(
-        this.workflowSpanName,
-        {
-          kind: SpanKind.INTERNAL,
-          attributes: {
-            "durable.execution.arn": info.executionArn,
-          },
-          startTime: info.executionStartTimestamp ?? new Date(),
+    this.workflowSpan = this.tracer.startSpan(
+      this.workflowSpanName,
+      {
+        kind: SpanKind.INTERNAL,
+        attributes: {
+          "durable.execution.arn": info.executionArn,
         },
-        ROOT_CONTEXT,
-      );
-    }
+        startTime: info.executionStartTimestamp ?? new Date(),
+      },
+      ROOT_CONTEXT,
+    );
 
     // 5. Always create the invocation span (regardless of provider mode)
     const parentContext = this.workflowSpan
@@ -176,7 +184,9 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       this.invocationSpan.end();
     }
 
-    // 3. Handle Workflow span based on terminal status (community collector mode only)
+    // 3. Handle Workflow span based on terminal status. The Workflow span is
+    //    always created (both provider modes); it is finalized only on a
+    //    terminal invocation, and dropped un-exported while non-terminal.
     if (this.workflowSpan) {
       if (info.status === "SUCCEEDED" || info.status === "FAILED") {
         // PluginInvocationStatus only distinguishes SUCCEEDED/FAILED/PENDING/RETRYING,
