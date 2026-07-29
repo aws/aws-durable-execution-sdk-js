@@ -135,10 +135,15 @@ describe("InvocationOtelPlugin - useDefaultTracerProvider mode", () => {
     expect(workflowSpan!.attributes["durable.execution.status"]).toBe(
       "SUCCEEDED",
     );
-    // The Invocation span parents to the Workflow root
-    expect(invocationSpan!.parentSpanContext?.spanId).toBe(
-      workflowSpan!.spanContext().spanId,
-    );
+    // The Invocation span stays invocation-rooted: it is NOT a child of the
+    // Workflow span. With no active parent span in this test it is a root.
+    expect(invocationSpan!.parentSpanContext).toBeUndefined();
+    // Operation spans link to the Workflow span for execution correlation.
+    expect(
+      opSpan!.links.some(
+        (l) => l.context.spanId === workflowSpan!.spanContext().spanId,
+      ),
+    ).toBe(true);
   });
 
   it("creates its own internal provider when no config is provided", async () => {

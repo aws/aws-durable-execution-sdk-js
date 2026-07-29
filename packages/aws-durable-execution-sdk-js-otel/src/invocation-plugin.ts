@@ -9,7 +9,7 @@ import type {
   OperationChangeInfo,
 } from "@aws/durable-execution-sdk-js";
 import type { DurableExecutionInvocationOutput } from "@aws/durable-execution-sdk-js";
-import type { TracerProvider, Tracer, Span } from "@opentelemetry/api";
+import type { TracerProvider, Tracer, Span, SpanContext, Link } from "@opentelemetry/api";
 import {
   context,
   trace,
@@ -120,11 +120,15 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       ROOT_CONTEXT,
     );
 
-    // 5. Always create the invocation span (regardless of provider mode)
-    const parentContext = this.workflowSpan
-      ? trace.setSpan(context.active(), this.workflowSpan)
-      : context.active();
-
+    // 5. Create the invocation span, parented to the ACTIVE context. Under
+    //    ADOT/X-Ray the active context at onInvocationStart is the Lambda
+    //    execution-environment span, so the invocation span nests beneath it.
+    //    The invocation span is intentionally NOT a child of the Workflow span:
+    //    this plugin stays invocation-rooted. Execution-scoped correlation to
+    //    the Workflow span is expressed via links on the operation/attempt
+    //    spans (see onOperationStart / onOperationAttemptStart), matching the
+    //    Java (aws/aws-durable-execution-sdk-java#572) and Python
+    //    (aws/aws-durable-execution-sdk-python#593) reference plugins.
     this.invocationSpan = this.tracer.startSpan(
       "Invocation",
       {
@@ -134,7 +138,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
           "durable.invocation.first": info.isFirstInvocation,
         },
       },
-      parentContext,
+      context.active(),
     );
   }
 
@@ -267,6 +271,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         {
           attributes,
           startTime: info.startTimestamp,
+          links: this.workflowLinks(),
         },
         parentContext,
       );
@@ -280,10 +285,13 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         {
           attributes,
           startTime: info.startTimestamp,
+          // Self-link to the deterministic operation span first, then the
+          // Workflow link (order-significant per the conformance contract).
           links: [
             {
               context: { traceId, spanId: deterministicSpanId, traceFlags: 1 },
             },
+            ...this.workflowLinks(),
           ],
         },
         parentContext,
@@ -397,10 +405,13 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         {
           attributes,
           startTime: info.startTimestamp,
+          // Self-link to the deterministic operation span first, then the
+          // Workflow link (order-significant per the conformance contract).
           links: [
             {
               context: { traceId, spanId: deterministicSpanId, traceFlags: 1 },
             },
+            ...this.workflowLinks(),
           ],
         },
         parentContext,
@@ -458,6 +469,8 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       {
         attributes,
         startTime: info.startTimestamp,
+        // Self-link to the deterministic operation span first, then the
+        // Workflow link (order-significant per the conformance contract).
         links: [
           {
             context: {
@@ -466,6 +479,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
               traceFlags: 1,
             },
           },
+          ...this.workflowLinks(),
         ],
       },
       parentContext,
@@ -518,6 +532,19 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       spanId: spanContext.spanId,
       otelTraceSampled: (spanContext.traceFlags & 1) !== 0,
     };
+  }
+
+  /**
+   * Link(s) to the execution-scoped Workflow span. Operation and attempt spans
+   * carry this link so they correlate to the one Workflow span for the durable
+   * execution while remaining parented to the invocation/operation hierarchy.
+   * The invocation span itself does NOT carry this link. Returns an empty array
+   * if the Workflow span was not created.
+   */
+  private workflowLinks(): Link[] {
+    const workflowContext: SpanContext | undefined =
+      this.workflowSpan?.spanContext();
+    return workflowContext ? [{ context: workflowContext }] : [];
   }
 
   private attemptSpanKey(operationId: string, attempt: number): string {
