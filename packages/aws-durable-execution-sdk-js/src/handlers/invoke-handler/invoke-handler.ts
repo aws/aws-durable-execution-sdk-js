@@ -196,6 +196,9 @@ export const createInvokeHandler = (
           ChainedInvokeOptions: {
             FunctionName: funcId,
             ...(config?.tenantId && { TenantId: config.tenantId }),
+            ...(config?.clientContext && {
+              ClientContext: config.clientContext,
+            }),
           },
         });
         stepData = context.getStepData(stepId);

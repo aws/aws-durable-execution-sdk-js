@@ -11,4 +11,10 @@ export interface InvokeConfig<I, O> {
   resultSerdes?: Serdes<O>;
   /** Tenant identifier for invoking tenant-isolated Lambda functions */
   tenantId?: string;
+  /**
+   * Base64-encoded data about the invoking client to pass to the invoked
+   * function in its context object. Up to 3,583 bytes. Delivered to the
+   * invoked function's context object.
+   */
+  clientContext?: string;
 }

@@ -465,6 +465,106 @@ describe("InvokeHandler", () => {
       );
     });
 
+    it("should pass clientContext through ChainedInvokeOptions when provided", async () => {
+      (mockContext.getStepData as jest.Mock)
+        .mockReturnValueOnce(undefined)
+        .mockReturnValue({
+          Status: OperationStatus.SUCCEEDED,
+          ChainedInvokeDetails: { Result: '{"result":"success"}' },
+        });
+
+      mockSafeDeserialize.mockResolvedValue({ result: "success" });
+
+      const invokeHandler = createInvokeHandler(
+        mockContext,
+        mockCheckpoint,
+        mockCreateStepId,
+        "parent-123",
+      );
+
+      const result = await invokeHandler(
+        "test-function",
+        { test: "data" },
+        { clientContext: "eyJmb28iOiJiYXIifQ==" },
+      );
+
+      expect(result).toEqual({ result: "success" });
+      expect(mockCheckpoint.checkpoint).toHaveBeenCalledWith("test-step-1", {
+        Id: "test-step-1",
+        ParentId: "parent-123",
+        Action: OperationAction.START,
+        SubType: OperationSubType.CHAINED_INVOKE,
+        Type: OperationType.CHAINED_INVOKE,
+        Name: undefined,
+        Payload: '{"serialized":"data"}',
+        ChainedInvokeOptions: {
+          FunctionName: "test-function",
+          ClientContext: "eyJmb28iOiJiYXIifQ==",
+        },
+      });
+    });
+
+    it("should not include ClientContext in ChainedInvokeOptions when not provided", async () => {
+      (mockContext.getStepData as jest.Mock)
+        .mockReturnValueOnce(undefined)
+        .mockReturnValue({
+          Status: OperationStatus.SUCCEEDED,
+          ChainedInvokeDetails: { Result: '{"result":"success"}' },
+        });
+
+      mockSafeDeserialize.mockResolvedValue({ result: "success" });
+
+      const invokeHandler = createInvokeHandler(
+        mockContext,
+        mockCheckpoint,
+        mockCreateStepId,
+        "parent-123",
+      );
+
+      await invokeHandler("test-function", { test: "data" });
+
+      const checkpointCall = (mockCheckpoint.checkpoint as jest.Mock).mock
+        .calls[0][1];
+      expect(checkpointCall.ChainedInvokeOptions).toEqual({
+        FunctionName: "test-function",
+      });
+      expect(checkpointCall.ChainedInvokeOptions).not.toHaveProperty(
+        "ClientContext",
+      );
+    });
+
+    it("should pass both tenantId and clientContext when provided", async () => {
+      (mockContext.getStepData as jest.Mock)
+        .mockReturnValueOnce(undefined)
+        .mockReturnValue({
+          Status: OperationStatus.SUCCEEDED,
+          ChainedInvokeDetails: { Result: '{"result":"success"}' },
+        });
+
+      mockSafeDeserialize.mockResolvedValue({ result: "success" });
+
+      const invokeHandler = createInvokeHandler(
+        mockContext,
+        mockCheckpoint,
+        mockCreateStepId,
+        "parent-123",
+      );
+
+      await invokeHandler(
+        "test-function",
+        { test: "data" },
+        { tenantId: "tenant-abc-123", clientContext: "eyJmb28iOiJiYXIifQ==" },
+      );
+
+      const checkpointCall = (mockCheckpoint.checkpoint as jest.Mock).mock
+        .calls[0][1];
+      expect(checkpointCall.ChainedInvokeOptions).toEqual({
+        FunctionName: "test-function",
+        TenantId: "tenant-abc-123",
+        ClientContext: "eyJmb28iOiJiYXIifQ==",
+      });
+    });
+
     it("should handle invoke with custom serdes", async () => {
       (mockContext.getStepData as jest.Mock)
         .mockReturnValueOnce(undefined)
