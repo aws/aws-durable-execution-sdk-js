@@ -4,7 +4,7 @@
  * These tests mirror the execution-plugin-default-provider-integration tests
  * but verify InvocationOtelPlugin-specific behavior:
  * - Uses the globally registered TracerProvider by default
- * - Creates "invocation" span (not "Workflow" + "Invocation" like ExecutionOtelPlugin)
+ * - Creates "Invocation" span (not "Workflow" + "Invocation" like ExecutionOtelPlugin)
  * - Custom instrumentationName support
  * - forceFlush error handling
  */
@@ -118,7 +118,7 @@ describe("InvocationOtelPlugin - useDefaultTracerProvider mode", () => {
     const opSpan = spans.find((s) => s.name === "test-op");
     expect(opSpan).toBeDefined();
     // Invocation span is always created (with durable.execution.arn)
-    const invocationSpan = spans.find((s) => s.name === "invocation");
+    const invocationSpan = spans.find((s) => s.name === "Invocation");
     expect(invocationSpan).toBeDefined();
     expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(
       "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-123",
@@ -138,7 +138,7 @@ describe("InvocationOtelPlugin - useDefaultTracerProvider mode", () => {
 
     // The global exporter should NOT have any spans since the plugin uses its own provider
     const globalSpans = exporter.getFinishedSpans();
-    const invocationSpan = globalSpans.find((s) => s.name === "invocation");
+    const invocationSpan = globalSpans.find((s) => s.name === "Invocation");
     expect(invocationSpan).toBeUndefined();
   });
 
@@ -261,7 +261,7 @@ describe("InvocationOtelPlugin - custom instrumentationName", () => {
     await plugin.onInvocationEnd(makeInvocationEndInfo());
 
     const spans = exporter.getFinishedSpans();
-    const invSpan = spans.find((s) => s.name === "invocation");
+    const invSpan = spans.find((s) => s.name === "Invocation");
     expect(invSpan).toBeDefined();
     expect(invSpan!.instrumentationScope.name).toBe(
       "aws-durable-execution-sdk-js",
@@ -278,7 +278,7 @@ describe("InvocationOtelPlugin - custom instrumentationName", () => {
     await plugin.onInvocationEnd(makeInvocationEndInfo());
 
     const spans = exporter.getFinishedSpans();
-    const invSpan = spans.find((s) => s.name === "invocation");
+    const invSpan = spans.find((s) => s.name === "Invocation");
     expect(invSpan).toBeDefined();
     expect(invSpan!.instrumentationScope.name).toBe("my-custom-tracer");
   });
