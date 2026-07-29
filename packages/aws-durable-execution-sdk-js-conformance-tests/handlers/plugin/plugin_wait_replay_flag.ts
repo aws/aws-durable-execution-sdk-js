@@ -20,15 +20,15 @@ function makePlugin(): DurableInstrumentationPlugin {
     async onInvocationStart(info): Promise<void> {
       executionArn = info.executionArn;
     },
-    // Operation ids are deliberately not logged: branch event ids are
-    // nondeterministic under concurrency, and the wait type + replay flag
-    // alone identify the behavior under test.
+    // Correlate by stable wait name because branch event ids are
+    // nondeterministic under concurrency.
     async onOperationStart(info): Promise<void> {
       if (!isWait(info.type)) return;
       emit({
         plugin: PLUGIN,
         hook: "operation-start",
         type: (info.type || "").toUpperCase(),
+        name: info.name,
         replay: info.isReplay,
       });
     },
@@ -38,6 +38,7 @@ function makePlugin(): DurableInstrumentationPlugin {
         plugin: PLUGIN,
         hook: "operation-end",
         type: (info.type || "").toUpperCase(),
+        name: info.name,
         status: info.status,
       });
     },
@@ -47,17 +48,18 @@ function makePlugin(): DurableInstrumentationPlugin {
 export const handler = withDurableExecution(
   async (_event: any, context: DurableContext) => {
     // Both waits run concurrently (max-concurrency=2) so they pend
-    // simultaneously; the 2s wait completes first, the 8s wait stays
-    // non-terminal across the ~2s replay.
+    // simultaneously; the 2s "short" wait completes first, while the 8s
+    // "long" wait remains non-terminal across the first replay. Each wait uses
+    // the SDK's real wait naming parameter for stable correlation.
     const results = await context.parallel<string>(
       "waits",
       [
         async (ctx: DurableContext) => {
-          await ctx.wait({ seconds: 2 });
+          await ctx.wait("short", { seconds: 2 });
           return "short-done";
         },
         async (ctx: DurableContext) => {
-          await ctx.wait({ seconds: 8 });
+          await ctx.wait("long", { seconds: 8 });
           return "long-done";
         },
       ],
