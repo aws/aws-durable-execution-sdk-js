@@ -69,9 +69,6 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   // Workflow span name (configurable)
   private readonly workflowSpanName: string;
 
-  // Cold start tracking
-  private isColdStart: boolean = true;
-
   constructor(config?: OtelPluginConfig) {
     const instrumentationName =
       config?.instrumentationName ?? DEFAULT_INSTRUMENTATION_NAME;
@@ -140,10 +137,6 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       const parentContext = trace.setSpan(context.active(), this.workflowSpan);
 
       const invocationAttributes: Record<string, string | number | boolean> = {
-        "faas.invocation_id": info.requestId,
-        "faas.coldstart": this.isColdStart,
-        "cloud.provider": "aws",
-        "cloud.platform": "aws_lambda",
         "durable.execution.arn": info.executionArn,
         "durable.invocation.first": info.isFirstInvocation,
       };
@@ -199,9 +192,6 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         parentContext,
       );
     }
-
-    // Mark cold start as false after the first invocation
-    this.isColdStart = false;
   }
 
   wrapInvocation(
