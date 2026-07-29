@@ -466,6 +466,22 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
   });
 
   describe("Invocation_Span status mapping (PluginInvocationStatus -> OTel span status)", () => {
+    it("honors custom workflowSpanName from config; invocation span name is fixed", async () => {
+      const plugin = new ExecutionOtelPlugin({
+        useDefaultTracerProvider: true,
+        workflowSpanName: "my-workflow",
+      });
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
+      );
+
+      expect(findSpan(exporter, "my-workflow")).toBeDefined();
+      expect(findSpan(exporter, "Workflow")).toBeUndefined();
+      // Invocation span name is not configurable; always "Invocation"
+      expect(findSpan(exporter, "Invocation")).toBeDefined();
+    });
+
     it.each([
       ["SUCCEEDED", SpanStatusCode.OK],
       ["PENDING", SpanStatusCode.OK],

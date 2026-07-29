@@ -118,7 +118,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       : context.active();
 
     this.invocationSpan = this.tracer.startSpan(
-      "invocation",
+      "Invocation",
       {
         kind: SpanKind.INTERNAL,
         attributes: {

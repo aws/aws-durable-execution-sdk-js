@@ -78,7 +78,7 @@ createTests({
         );
 
         // The invocation span should now be present in the exported spans
-        const invocationSpan = spans.find((s) => s.name === "invocation");
+        const invocationSpan = spans.find((s) => s.name === "Invocation");
         expect(invocationSpan).toBeDefined();
         expect(invocationSpan!.spanId).toBe(invocationSpanId);
 

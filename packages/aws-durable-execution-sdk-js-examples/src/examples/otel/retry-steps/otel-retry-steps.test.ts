@@ -98,7 +98,7 @@ createTests({
         expect(sorted[2].attributes["durable.attempt.number"]).toBe(3);
 
         // --- Invocation spans ---
-        const invocationSpans = spans.filter((s) => s.name === "invocation");
+        const invocationSpans = spans.filter((s) => s.name === "Invocation");
         expect(invocationSpans).toHaveLength(3);
       }
 

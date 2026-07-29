@@ -96,7 +96,7 @@ createTests({
         expect(workflowSpan!.attributes["durable.execution.arn"]).toBeDefined();
 
         // Verify Invocation span exists and is child of Workflow
-        const invocationSpan = spans.find((s) => s.name === "invocation");
+        const invocationSpan = spans.find((s) => s.name === "Invocation");
         expect(invocationSpan).toBeDefined();
         expect(invocationSpan!.parentSpanId).toBe(workflowSpan!.spanId);
 
