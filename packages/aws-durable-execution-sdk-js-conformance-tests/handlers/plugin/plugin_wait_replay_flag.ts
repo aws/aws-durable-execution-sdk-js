@@ -1,4 +1,4 @@
-// 10-19: Plugin replay flag for a non-terminal wait
+// 10-18: Plugin replay flag for a non-terminal wait
 import {
   DurableContext,
   withDurableExecution,
