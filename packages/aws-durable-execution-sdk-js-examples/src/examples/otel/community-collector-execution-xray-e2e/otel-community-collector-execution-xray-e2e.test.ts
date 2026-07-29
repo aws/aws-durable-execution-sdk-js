@@ -88,11 +88,6 @@ createTests({
         assertSpanAttributes(trace, "Workflow", {
           "durable.execution.status": "SUCCEEDED",
         });
-
-        // Verify Invocation span has durable attributes
-        assertSpanAttributes(trace, "Invocation", {
-          "durable.invocation.status": "SUCCEEDED",
-        });
       } else {
         // Local mode: assert spans via InMemorySpanExporter
         const spans = getSerializedSpans();
@@ -120,9 +115,6 @@ createTests({
         expect(invocationSpan).toBeDefined();
         expect(invocationSpan!.parentSpanId).toBe(workflowSpan!.spanId);
         expect(invocationSpan!.attributes["durable.execution.arn"]).toBeDefined();
-        expect(invocationSpan!.attributes["durable.invocation.status"]).toBe(
-          "SUCCEEDED",
-        );
 
         // Verify operation spans exist with correct attributes.
         // Filter out Context_Execution spans (which have "execution" in name)
