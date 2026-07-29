@@ -253,6 +253,11 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       "durable.execution.arn": this.executionArn,
       "durable.operation.id": info.id,
       "durable.operation.type": info.type,
+      // Operations are STARTED when their span is created. Terminal operations
+      // (STEP / WAIT / CHAINED_INVOKE / CALLBACK) overwrite this with their
+      // terminal status at onOperationEnd; container CONTEXT operations and
+      // suspended (never-resumed) operations keep STARTED.
+      "durable.operation.status": "STARTED",
     };
     if (info.name) {
       attributes["durable.operation.name"] = info.name;
@@ -334,8 +339,11 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       // Operation was started in this invocation
       const span = this.spanMap.get(info.id)!;
 
-      // Set operation status attribute
-      if (info.status) {
+      // Finalize the operation status. Container CONTEXT operations (child
+      // context, parallel, parallel branch) have no terminal result of their
+      // own, so they keep the STARTED status stamped at span start. All other
+      // operations are overwritten with their terminal status.
+      if (info.type !== "CONTEXT" && info.status) {
         span.setAttribute("durable.operation.status", info.status);
       }
 
@@ -455,6 +463,9 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       "durable.operation.id": info.id,
       "durable.operation.type": info.type,
       "durable.attempt.number": info.attempt,
+      // Attempt spans always report STARTED; the attempt's own success/failure
+      // is carried by durable.attempt.outcome (set at onOperationAttemptEnd).
+      "durable.operation.status": "STARTED",
     };
     if (info.name) {
       attributes["durable.operation.name"] = info.name;
