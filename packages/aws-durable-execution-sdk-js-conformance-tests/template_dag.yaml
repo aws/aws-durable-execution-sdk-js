@@ -271,6 +271,23 @@ Resources:
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
+  DagIdStability:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-20"]
+    Properties:
+      CodeUri: ./dist
+      Handler: dag_id_stability.handler
+      Description: DAG task ids are name-based, verified by invoking twice with completion order swapped
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
   DagConcurrentSuspend:
     Type: AWS::Serverless::Function
     Metadata:
