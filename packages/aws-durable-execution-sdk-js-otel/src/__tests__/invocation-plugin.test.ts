@@ -488,6 +488,39 @@ describe("InvocationOtelPlugin", () => {
     });
   });
 
+  describe("operation span timing envelope", () => {
+    it("times operation spans with wall-clock so they nest within the Invocation span", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onOperationStart(
+        makeOperationInfo({
+          id: "op-t",
+          type: "STEP",
+          name: "timed-step",
+          // Durable timestamp deliberately predates this invocation.
+          startTimestamp: new Date(Date.now() - 60_000),
+        }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({
+          id: "op-t",
+          type: "STEP",
+          name: "timed-step",
+          status: "SUCCEEDED" as any,
+          endTimestamp: new Date(Date.now() + 60_000),
+        }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      const inv = findSpan("Invocation")!;
+      const op = findSpan("timed-step")!;
+      const toMs = (t: [number, number]): number => t[0] * 1000 + t[1] / 1e6;
+      // The op span is NOT backdated to the durable timestamp; it nests inside
+      // the Invocation span's wall-clock [start, end] window.
+      expect(toMs(op.startTime)).toBeGreaterThanOrEqual(toMs(inv.startTime));
+      expect(toMs(op.endTime)).toBeLessThanOrEqual(toMs(inv.endTime));
+    });
+  });
+
   describe("Continuation span for cross-invocation operations", () => {
     it("creates continuation span with Link when operation was started in prior invocation", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
