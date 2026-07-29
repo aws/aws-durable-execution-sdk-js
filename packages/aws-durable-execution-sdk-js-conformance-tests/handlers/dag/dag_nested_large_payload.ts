@@ -87,7 +87,7 @@ export const handler = withDurableExecution(
 
     // Force the invocation to end and the next one to replay BOTH completed
     // containers (outer + inner).
-    await context.wait({ seconds: 2 });
+    await context.wait("settle", { seconds: 2 });
 
     // After the resume, `result` is the REPLAYED outer DagResult and
     // `result.getResult("inner")` is the inner DagResult reconstructed by
