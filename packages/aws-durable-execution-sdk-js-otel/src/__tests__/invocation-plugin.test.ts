@@ -441,9 +441,9 @@ describe("InvocationOtelPlugin", () => {
           id: "c1",
           type: "CONTEXT",
           name: "my-ctx",
-          // Simulate a virtual child context: the core forwards STARTED rather
-          // than a terminal status. The plugin must synthesize SUCCEEDED.
-          status: "STARTED" as any,
+          // The core (run-in-child-context-handler) supplies the terminal
+          // status for containers on both the virtual and non-virtual paths.
+          status: "SUCCEEDED" as any,
         }),
       );
       await plugin.onInvocationEnd(makeInvocationEndInfo());
@@ -453,7 +453,7 @@ describe("InvocationOtelPlugin", () => {
       );
     });
 
-    it("synthesizes FAILED for a container CONTEXT operation that errors", async () => {
+    it("reports terminal FAILED for a container CONTEXT operation that errors", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onOperationStart(
         makeOperationInfo({
@@ -468,7 +468,7 @@ describe("InvocationOtelPlugin", () => {
           id: "c2",
           type: "CONTEXT",
           name: "bad-ctx",
-          status: "STARTED" as any,
+          status: "FAILED" as any,
           error: new Error("child context failed"),
         }),
       );
