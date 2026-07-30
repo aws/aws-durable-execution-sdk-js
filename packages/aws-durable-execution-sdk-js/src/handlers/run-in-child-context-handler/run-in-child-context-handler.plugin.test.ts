@@ -6,7 +6,10 @@ import {
   CheckpointFunction,
 } from "../../testing/mock-checkpoint";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
-import { DurableInstrumentationPlugin } from "../../types/plugin";
+import {
+  DurableInstrumentationPlugin,
+  PluginOperationStatus,
+} from "../../types/plugin";
 
 jest.mock("../../utils/logger/logger");
 
@@ -227,7 +230,10 @@ describe("RunInChildContext Handler - plugin hooks", () => {
 
       expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
       expect(mockPlugin.onOperationEnd).toHaveBeenCalledWith(
-        expect.objectContaining({ isReplay: true }),
+        expect.objectContaining({
+          isReplay: true,
+          status: PluginOperationStatus.SUCCEEDED,
+        }),
       );
     });
 
@@ -257,6 +263,7 @@ describe("RunInChildContext Handler - plugin hooks", () => {
       expect(mockPlugin.onOperationEnd).toHaveBeenCalledWith(
         expect.objectContaining({
           isReplay: true,
+          status: PluginOperationStatus.FAILED,
           error: expect.any(Error),
         }),
       );
@@ -290,7 +297,10 @@ describe("RunInChildContext Handler - plugin hooks", () => {
         expect.objectContaining({ isReplay: true }),
       );
       expect(mockPlugin.onOperationEnd).toHaveBeenCalledWith(
-        expect.objectContaining({ isReplay: true }),
+        expect.objectContaining({
+          isReplay: true,
+          status: PluginOperationStatus.SUCCEEDED,
+        }),
       );
     });
 
