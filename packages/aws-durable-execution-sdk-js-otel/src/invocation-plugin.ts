@@ -120,15 +120,22 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       ROOT_CONTEXT,
     );
 
-    // 5. Create the invocation span, parented to the ACTIVE context. Under
-    //    ADOT/X-Ray the active context at onInvocationStart is the Lambda
-    //    execution-environment span, so the invocation span nests beneath it.
-    //    The invocation span is intentionally NOT a child of the Workflow span:
-    //    this plugin stays invocation-rooted. Execution-scoped correlation to
-    //    the Workflow span is expressed via links on the operation/attempt
-    //    spans (see onOperationStart / onOperationAttemptStart), matching the
-    //    Java (aws/aws-durable-execution-sdk-java#572) and Python
-    //    (aws/aws-durable-execution-sdk-python#593) reference plugins.
+    // 5. Create the invocation span.
+    //    - Default tracer provider (ADOT/X-Ray): parent to the ACTIVE context,
+    //      which at onInvocationStart is the Lambda execution-environment span,
+    //      so the invocation span nests beneath it. It is NOT parented to the
+    //      Workflow span (the ambient Lambda span is the container).
+    //    - Owned / community-collector provider: there is no ambient Lambda
+    //      span, so parent the invocation span to the Workflow span we created
+    //      to give the trace a proper root.
+    //    In both modes, execution-scoped correlation is additionally expressed
+    //    via links on the operation/attempt spans (see onOperationStart /
+    //    onOperationAttemptStart).
+    const invocationParentContext =
+      !this.useDefaultTracerProvider && this.workflowSpan
+        ? trace.setSpan(context.active(), this.workflowSpan)
+        : context.active();
+
     this.invocationSpan = this.tracer.startSpan(
       "Invocation",
       {
@@ -138,7 +145,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
           "durable.invocation.first": info.isFirstInvocation,
         },
       },
-      context.active(),
+      invocationParentContext,
     );
   }
 
