@@ -45,7 +45,7 @@ export class TimerScheduler implements Scheduler {
           this.runningTimers.delete(timer);
           return startInvocation();
         })
-        .catch((err) => {
+        .catch((err: unknown) => {
           this.runningTimers.delete(timer);
           onError(err);
         });
