@@ -337,8 +337,13 @@ describe("InvocationOtelPlugin", () => {
       // When using internal provider with DeterministicIdGenerator, span ID is deterministic.
       // With external provider, we verify the durable.operation.id attribute is set correctly.
       expect(opSpan!.attributes["durable.operation.id"]).toBe("op-abc");
-      // Non-replay spans should NOT have links (unlike replay spans)
-      expect(opSpan!.links.length).toBe(0);
+      // Non-replay spans carry no self-link, but do link to the Workflow span
+      // for execution correlation.
+      const workflowSpan = findSpan("Workflow");
+      expect(opSpan!.links.length).toBe(1);
+      expect(opSpan!.links[0].context.spanId).toBe(
+        workflowSpan!.spanContext().spanId,
+      );
     });
 
     it("replay operation uses random span ID with Link to deterministic", async () => {

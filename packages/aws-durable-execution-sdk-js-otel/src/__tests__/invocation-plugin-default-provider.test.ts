@@ -4,7 +4,8 @@
  * These tests mirror the execution-plugin-default-provider-integration tests
  * but verify InvocationOtelPlugin-specific behavior:
  * - Uses the globally registered TracerProvider by default
- * - Creates "Invocation" span (not "Workflow" + "Invocation" like ExecutionOtelPlugin)
+ * - Emits the "Workflow" root span plus the "Invocation" span in both provider
+ *   modes (matching ExecutionOtelPlugin)
  * - Custom instrumentationName support
  * - forceFlush error handling
  */
@@ -123,9 +124,26 @@ describe("InvocationOtelPlugin - useDefaultTracerProvider mode", () => {
     expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(
       "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-123",
     );
-    // No workflow span in default provider mode
+    // The Workflow root span is now emitted in default provider mode too
+    // (matching ExecutionOtelPlugin and the Python/Java reference plugins).
     const workflowSpan = spans.find((s) => s.name === "Workflow");
-    expect(workflowSpan).toBeUndefined();
+    expect(workflowSpan).toBeDefined();
+    expect(workflowSpan!.parentSpanContext).toBeUndefined();
+    expect(workflowSpan!.attributes["durable.execution.arn"]).toBe(
+      "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-123",
+    );
+    expect(workflowSpan!.attributes["durable.execution.status"]).toBe(
+      "SUCCEEDED",
+    );
+    // The Invocation span stays invocation-rooted: it is NOT a child of the
+    // Workflow span. With no active parent span in this test it is a root.
+    expect(invocationSpan!.parentSpanContext).toBeUndefined();
+    // Operation spans link to the Workflow span for execution correlation.
+    expect(
+      opSpan!.links.some(
+        (l) => l.context.spanId === workflowSpan!.spanContext().spanId,
+      ),
+    ).toBe(true);
   });
 
   it("creates its own internal provider when no config is provided", async () => {
