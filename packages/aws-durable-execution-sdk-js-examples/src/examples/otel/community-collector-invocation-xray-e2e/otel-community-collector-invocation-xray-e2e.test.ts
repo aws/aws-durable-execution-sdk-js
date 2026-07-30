@@ -95,13 +95,14 @@ createTests({
         expect(workflowSpan).toBeDefined();
         expect(workflowSpan!.attributes["durable.execution.arn"]).toBeDefined();
 
-        // In community-collector (owned provider) mode the Invocation span is
-        // parented to the Workflow span we create (no ambient Lambda span to
-        // attach to). It carries no links itself; execution correlation is
-        // expressed via links on the operation/attempt spans.
+        // The Invocation span is invocation-rooted: it is NOT a child of the
+        // Workflow span. With no active parent span (community-collector local
+        // mode) it is a trace root. Execution correlation to the Workflow span
+        // is expressed via links on the operation/attempt spans instead.
         const invocationSpan = spans.find((s) => s.name === "Invocation");
         expect(invocationSpan).toBeDefined();
-        expect(invocationSpan!.parentSpanId).toBe(workflowSpan!.spanId);
+        expect(invocationSpan!.parentSpanId).toBeUndefined();
+        // The Invocation span itself carries no links.
         expect(invocationSpan!.links).toHaveLength(0);
 
         // Filter to operation spans: have durable.operation.type but NOT durable.attempt.outcome
