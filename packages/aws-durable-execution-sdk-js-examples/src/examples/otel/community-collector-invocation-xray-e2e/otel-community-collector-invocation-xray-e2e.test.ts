@@ -140,10 +140,21 @@ createTests({
         const childOpsSpan = operationSpans.find(
           (s) => s.attributes["durable.operation.name"] === "child-operations",
         );
+        // A completed child context reports a synthesized terminal status.
         expect(childOpsSpan).toBeDefined();
         expect(childOpsSpan!.attributes["durable.operation.type"]).toBe(
           "CONTEXT",
         );
+        // The child context is replayed across the top-level wait's
+        // suspend/resume, so it has an in-flight STARTED span plus a terminal
+        // span; the terminal one reports the synthesized SUCCEEDED status.
+        expect(
+          operationSpans.some(
+            (s) =>
+              s.attributes["durable.operation.name"] === "child-operations" &&
+              s.attributes["durable.operation.status"] === "SUCCEEDED",
+          ),
+        ).toBe(true);
 
         const innerStepSpan = operationSpans.find(
           (s) => s.attributes["durable.operation.name"] === "inner-step",

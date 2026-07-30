@@ -231,6 +231,16 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onOperationStart(info: OperationInfo): Promise<void> {
+    // Same-invocation replay of an operation we already started: the span
+    // already exists (e.g. a child context that is replayed after an internal
+    // step retry, or a retried step). Reuse it rather than emitting a duplicate
+    // span — the existing span is finalized at onOperationEnd. A genuine
+    // cross-invocation continuation has no span in the map and still creates
+    // its link span below.
+    if (info.isReplay && this.spanMap.has(info.id)) {
+      return;
+    }
+
     const deterministicSpanId = deriveSpanIdFromOperationId(
       info.id,
       this.executionArn,
@@ -253,10 +263,11 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       "durable.execution.arn": this.executionArn,
       "durable.operation.id": info.id,
       "durable.operation.type": info.type,
-      // Operations are STARTED when their span is created. Terminal operations
-      // (STEP / WAIT / CHAINED_INVOKE / CALLBACK) overwrite this with their
-      // terminal status at onOperationEnd; container CONTEXT operations and
-      // suspended (never-resumed) operations keep STARTED.
+      // Operations are STARTED when their span is created. Any operation that
+      // reaches a terminal status this invocation (STEP / WAIT /
+      // CHAINED_INVOKE / CALLBACK / CONTEXT) overwrites this with that terminal
+      // status at onOperationEnd. Only operations that suspend and are not
+      // resumed in this invocation keep STARTED.
       "durable.operation.status": "STARTED",
     };
     if (info.name) {
@@ -339,11 +350,20 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       // Operation was started in this invocation
       const span = this.spanMap.get(info.id)!;
 
-      // Finalize the operation status. Container CONTEXT operations (child
-      // context, parallel, parallel branch) have no terminal result of their
-      // own, so they keep the STARTED status stamped at span start. All other
-      // operations are overwritten with their terminal status.
-      if (info.type !== "CONTEXT" && info.status) {
+      // Finalize the operation status on completion.
+      //   - CONTEXT (child context / parallel / branch): the SDK core does not
+      //     reliably supply a terminal status for containers (virtual child
+      //     contexts forward STARTED), so synthesize it from success/failure:
+      //     FAILED when the context errored, otherwise SUCCEEDED.
+      //   - All other operations: use the core-supplied terminal status.
+      // Operations that suspend never reach here this invocation and keep
+      // STARTED.
+      if (info.type === "CONTEXT") {
+        span.setAttribute(
+          "durable.operation.status",
+          info.error ? "FAILED" : "SUCCEEDED",
+        );
+      } else if (info.status) {
         span.setAttribute("durable.operation.status", info.status);
       }
 
@@ -397,7 +417,11 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       if (info.subType) {
         attributes["durable.operation.subtype"] = info.subType;
       }
-      if (info.status) {
+      if (info.type === "CONTEXT") {
+        attributes["durable.operation.status"] = info.error
+          ? "FAILED"
+          : "SUCCEEDED";
+      } else if (info.status) {
         attributes["durable.operation.status"] = info.status;
       }
       // Set durable.attempt.number for STEP and WAIT_FOR_CONDITION operations
@@ -463,9 +487,9 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       "durable.operation.id": info.id,
       "durable.operation.type": info.type,
       "durable.attempt.number": info.attempt,
-      // Attempt spans always report STARTED; the attempt's own success/failure
-      // is carried by durable.attempt.outcome (set at onOperationAttemptEnd).
-      "durable.operation.status": "STARTED",
+      // Attempt spans do NOT carry durable.operation.status; the attempt's
+      // success/failure is carried solely by durable.attempt.outcome (set at
+      // onOperationAttemptEnd).
     };
     if (info.name) {
       attributes["durable.operation.name"] = info.name;
