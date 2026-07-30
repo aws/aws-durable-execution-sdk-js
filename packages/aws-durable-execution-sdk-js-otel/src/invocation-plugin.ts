@@ -357,20 +357,13 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       // Operation was started in this invocation
       const span = this.spanMap.get(info.id)!;
 
-      // Finalize the operation status on completion.
-      //   - CONTEXT (child context / parallel / branch): the SDK core does not
-      //     reliably supply a terminal status for containers (virtual child
-      //     contexts forward STARTED), so synthesize it from success/failure:
-      //     FAILED when the context errored, otherwise SUCCEEDED.
-      //   - All other operations: use the core-supplied terminal status.
-      // Operations that suspend never reach here this invocation and keep
-      // STARTED.
-      if (info.type === "CONTEXT") {
-        span.setAttribute(
-          "durable.operation.status",
-          info.error ? "FAILED" : "SUCCEEDED",
-        );
-      } else if (info.status) {
+      // Finalize the operation status from the core-supplied terminal status.
+      // Container CONTEXT ops receive a terminal status from the core too:
+      // run-in-child-context-handler passes SUCCEEDED/FAILED on both the
+      // virtual and non-virtual paths (parallel/map containers route through
+      // the same handler). Operations that suspend never reach here this
+      // invocation and keep the STARTED stamped at span start.
+      if (info.status) {
         span.setAttribute("durable.operation.status", info.status);
       }
 
@@ -424,11 +417,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       if (info.subType) {
         attributes["durable.operation.subtype"] = info.subType;
       }
-      if (info.type === "CONTEXT") {
-        attributes["durable.operation.status"] = info.error
-          ? "FAILED"
-          : "SUCCEEDED";
-      } else if (info.status) {
+      if (info.status) {
         attributes["durable.operation.status"] = info.status;
       }
       // Set durable.attempt.number for STEP and WAIT_FOR_CONDITION operations
