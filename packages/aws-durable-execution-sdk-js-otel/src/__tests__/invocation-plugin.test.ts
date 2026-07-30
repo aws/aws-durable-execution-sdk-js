@@ -426,7 +426,7 @@ describe("InvocationOtelPlugin", () => {
       );
     });
 
-    it("keeps STARTED for a container CONTEXT operation that completes", async () => {
+    it("reports terminal SUCCEEDED for a container CONTEXT operation that completes", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onOperationStart(
         makeOperationInfo({
@@ -441,17 +441,45 @@ describe("InvocationOtelPlugin", () => {
           id: "c1",
           type: "CONTEXT",
           name: "my-ctx",
-          status: "SUCCEEDED" as any,
+          // Simulate a virtual child context: the core forwards STARTED rather
+          // than a terminal status. The plugin must synthesize SUCCEEDED.
+          status: "STARTED" as any,
         }),
       );
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
       expect(findSpan("my-ctx")!.attributes["durable.operation.status"]).toBe(
-        "STARTED",
+        "SUCCEEDED",
       );
     });
 
-    it("reports operation.status STARTED on attempt spans (outcome via attempt.outcome)", async () => {
+    it("synthesizes FAILED for a container CONTEXT operation that errors", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onOperationStart(
+        makeOperationInfo({
+          id: "c2",
+          type: "CONTEXT",
+          name: "bad-ctx",
+          subType: "RunInChildContext",
+        }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({
+          id: "c2",
+          type: "CONTEXT",
+          name: "bad-ctx",
+          status: "STARTED" as any,
+          error: new Error("child context failed"),
+        }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      expect(findSpan("bad-ctx")!.attributes["durable.operation.status"]).toBe(
+        "FAILED",
+      );
+    });
+
+    it("attempt spans carry only durable.attempt.outcome, not durable.operation.status", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onOperationStart(
         makeOperationInfo({ id: "s2", type: "STEP", name: "retry-step" }),
@@ -479,11 +507,26 @@ describe("InvocationOtelPlugin", () => {
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
       const attemptSpan = findSpan("retry-step attempt 1");
-      expect(attemptSpan!.attributes["durable.operation.status"]).toBe(
-        "STARTED",
-      );
+      expect(
+        attemptSpan!.attributes["durable.operation.status"],
+      ).toBeUndefined();
       expect(attemptSpan!.attributes["durable.attempt.outcome"]).toBe(
         "SUCCEEDED",
+      );
+    });
+
+    it("keeps STARTED for a suspended (never-resumed) operation", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onOperationStart(
+        makeOperationInfo({ id: "w1", type: "WAIT", name: "my-wait" }),
+      );
+      // Operation suspends: no onOperationEnd fires this invocation.
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: "PENDING" as any }),
+      );
+
+      expect(findSpan("my-wait")!.attributes["durable.operation.status"]).toBe(
+        "STARTED",
       );
     });
   });
