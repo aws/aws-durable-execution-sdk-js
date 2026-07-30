@@ -37,18 +37,13 @@ export class TimerScheduler implements Scheduler {
       `Scheduling function to run in ${delayMs}ms - Scheduler ID: ${id}`,
     );
     const timer = setTimeout(() => {
+      this.runningTimers.delete(timer);
       defaultLogger.debug(
         `Running scheduled function after ${delayMs}ms - Scheduler ID: ${id}`,
       );
       (updateCheckpoint ? updateCheckpoint() : Promise.resolve())
-        .then(() => {
-          this.runningTimers.delete(timer);
-          return startInvocation();
-        })
-        .catch((err: unknown) => {
-          this.runningTimers.delete(timer);
-          onError(err);
-        });
+        .then(() => startInvocation())
+        .catch(onError);
     }, delayMs);
     this.runningTimers.add(timer);
   }
