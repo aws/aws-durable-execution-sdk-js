@@ -241,6 +241,15 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       return;
     }
 
+    // Operation, continuation, and attempt spans are timed with wall-clock
+    // (the tracer's current time) rather than the durable start/end
+    // timestamps. The Invocation span is a wall-clock span for the current
+    // invocation, and these spans parent to it; using durable timestamps
+    // (which can predate this invocation's start, e.g. an operation created in
+    // an earlier invocation of the same execution) would push a child outside
+    // its parent's [start, end] window and break the parent-timing envelope
+    // the conformance suite enforces. Only the root Workflow span keeps a
+    // backdated start (it is parentless). Matches the Python/Java reference.
     const deterministicSpanId = deriveSpanIdFromOperationId(
       info.id,
       this.executionArn,
@@ -286,7 +295,6 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         spanName,
         {
           attributes,
-          startTime: info.startTimestamp,
           links: this.workflowLinks(),
         },
         parentContext,
@@ -300,7 +308,6 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         spanName,
         {
           attributes,
-          startTime: info.startTimestamp,
           // Self-link to the deterministic operation span first, then the
           // Workflow link (order-significant per the conformance contract).
           links: [
@@ -378,7 +385,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       }
 
       // End the span
-      span.end(info.endTimestamp);
+      span.end();
 
       // Remove from map
       this.spanMap.delete(info.id);
@@ -425,7 +432,6 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         spanName,
         {
           attributes,
-          startTime: info.startTimestamp,
           // Self-link to the deterministic operation span first, then the
           // Workflow link (order-significant per the conformance contract).
           links: [
@@ -448,7 +454,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       }
 
       // Immediately end
-      continuationSpan.end(info.endTimestamp);
+      continuationSpan.end();
     }
   }
 
@@ -492,7 +498,6 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       spanName,
       {
         attributes,
-        startTime: info.startTimestamp,
         // Self-link to the deterministic operation span first, then the
         // Workflow link (order-significant per the conformance contract).
         links: [
@@ -536,7 +541,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
           attemptSpan.recordException(info.error);
         }
       }
-      attemptSpan.end(info.endTimestamp);
+      attemptSpan.end();
       this.spanMap.delete(key);
     }
   }
