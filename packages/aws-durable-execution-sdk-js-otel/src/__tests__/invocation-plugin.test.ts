@@ -405,6 +405,208 @@ describe("InvocationOtelPlugin", () => {
     });
   });
 
+  describe("durable.operation.status semantics", () => {
+    it("stamps STARTED at start and the terminal status on a completed STEP", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onOperationStart(
+        makeOperationInfo({ id: "s1", type: "STEP", name: "my-step" }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({
+          id: "s1",
+          type: "STEP",
+          name: "my-step",
+          status: "SUCCEEDED" as any,
+        }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      expect(findSpan("my-step")!.attributes["durable.operation.status"]).toBe(
+        "SUCCEEDED",
+      );
+    });
+
+    it("reports terminal SUCCEEDED for a container CONTEXT operation that completes", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onOperationStart(
+        makeOperationInfo({
+          id: "c1",
+          type: "CONTEXT",
+          name: "my-ctx",
+          subType: "RunInChildContext",
+        }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({
+          id: "c1",
+          type: "CONTEXT",
+          name: "my-ctx",
+          // The core (run-in-child-context-handler) supplies the terminal
+          // status for containers on both the virtual and non-virtual paths.
+          status: "SUCCEEDED" as any,
+        }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      expect(findSpan("my-ctx")!.attributes["durable.operation.status"]).toBe(
+        "SUCCEEDED",
+      );
+    });
+
+    it("reports terminal FAILED for a container CONTEXT operation that errors", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onOperationStart(
+        makeOperationInfo({
+          id: "c2",
+          type: "CONTEXT",
+          name: "bad-ctx",
+          subType: "RunInChildContext",
+        }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({
+          id: "c2",
+          type: "CONTEXT",
+          name: "bad-ctx",
+          status: "FAILED" as any,
+          error: new Error("child context failed"),
+        }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      expect(findSpan("bad-ctx")!.attributes["durable.operation.status"]).toBe(
+        "FAILED",
+      );
+    });
+
+    it("attempt spans carry only durable.attempt.outcome, not durable.operation.status", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onOperationStart(
+        makeOperationInfo({ id: "s2", type: "STEP", name: "retry-step" }),
+      );
+      await plugin.onOperationAttemptStart(
+        makeAttemptInfo({ id: "s2", type: "STEP", name: "retry-step", attempt: 1 }),
+      );
+      await plugin.onOperationAttemptEnd(
+        makeAttemptEndInfo({
+          id: "s2",
+          type: "STEP",
+          name: "retry-step",
+          attempt: 1,
+          outcome: "SUCCEEDED" as any,
+        }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({
+          id: "s2",
+          type: "STEP",
+          name: "retry-step",
+          status: "SUCCEEDED" as any,
+        }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      const attemptSpan = findSpan("retry-step attempt 1");
+      expect(
+        attemptSpan!.attributes["durable.operation.status"],
+      ).toBeUndefined();
+      expect(attemptSpan!.attributes["durable.attempt.outcome"]).toBe(
+        "SUCCEEDED",
+      );
+    });
+
+    it("keeps STARTED for a suspended (never-resumed) operation", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onOperationStart(
+        makeOperationInfo({ id: "w1", type: "WAIT", name: "my-wait" }),
+      );
+      // Operation suspends: no onOperationEnd fires this invocation.
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: "PENDING" as any }),
+      );
+
+      expect(findSpan("my-wait")!.attributes["durable.operation.status"]).toBe(
+        "STARTED",
+      );
+    });
+  });
+
+  describe("same-invocation replay deduplication", () => {
+    it("reuses the operation span across a non-replay then replay start (single terminal span, attempts share it)", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+
+      // Non-replay start creates the operation span.
+      await plugin.onOperationStart(
+        makeOperationInfo({
+          id: "op-r",
+          type: "STEP",
+          name: "retried-op",
+          isReplay: false,
+        }),
+      );
+      // Attempt 1 (fails) — child of the operation span.
+      await plugin.onOperationAttemptStart(
+        makeAttemptInfo({ id: "op-r", type: "STEP", name: "retried-op", attempt: 1 }),
+      );
+      await plugin.onOperationAttemptEnd(
+        makeAttemptEndInfo({
+          id: "op-r",
+          type: "STEP",
+          name: "retried-op",
+          attempt: 1,
+          outcome: "FAILED" as any,
+        }),
+      );
+      // Same-invocation replay start for the SAME operation id must NOT create
+      // a duplicate span (dedupe guard in onOperationStart).
+      await plugin.onOperationStart(
+        makeOperationInfo({
+          id: "op-r",
+          type: "STEP",
+          name: "retried-op",
+          isReplay: true,
+        }),
+      );
+      // Attempt 2 (succeeds) after the replay.
+      await plugin.onOperationAttemptStart(
+        makeAttemptInfo({ id: "op-r", type: "STEP", name: "retried-op", attempt: 2 }),
+      );
+      await plugin.onOperationAttemptEnd(
+        makeAttemptEndInfo({
+          id: "op-r",
+          type: "STEP",
+          name: "retried-op",
+          attempt: 2,
+          outcome: "SUCCEEDED" as any,
+        }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({
+          id: "op-r",
+          type: "STEP",
+          name: "retried-op",
+          status: "SUCCEEDED" as any,
+        }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      // Exactly one terminal operation span — the replay start did not
+      // duplicate it.
+      const opSpans = getExportedSpans().filter((s) => s.name === "retried-op");
+      expect(opSpans).toHaveLength(1);
+      expect(opSpans[0].attributes["durable.operation.status"]).toBe(
+        "SUCCEEDED",
+      );
+
+      // Both attempt spans parent to that single operation span.
+      const opSpanId = opSpans[0].spanContext().spanId;
+      const attempt1 = findSpan("retried-op attempt 1");
+      const attempt2 = findSpan("retried-op attempt 2");
+      expect(attempt1!.parentSpanContext?.spanId).toBe(opSpanId);
+      expect(attempt2!.parentSpanContext?.spanId).toBe(opSpanId);
+    });
+  });
+
   describe("Continuation span for cross-invocation operations", () => {
     it("creates continuation span with Link when operation was started in prior invocation", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());

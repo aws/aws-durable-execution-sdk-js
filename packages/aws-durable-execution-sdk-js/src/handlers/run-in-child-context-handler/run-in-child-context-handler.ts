@@ -488,7 +488,11 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         entityId,
         name,
       });
-      await plugin.onOperationEnd?.({ ...opInfo, isReplay: true });
+      await plugin.onOperationEnd?.({
+        ...opInfo,
+        status: PluginOperationStatus.SUCCEEDED,
+        isReplay: true,
+      });
     }
 
     // Return deserialize(serialize(result)) in every mode (small payload,
@@ -556,6 +560,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     } else {
       await plugin.onOperationEnd?.({
         ...opInfo,
+        status: PluginOperationStatus.FAILED,
         isReplay: true,
         error: reconstructedError,
       });
