@@ -147,3 +147,190 @@ Resources:
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
+  PluginOperationChange:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-8"]
+    Properties:
+      CodeUri: ./dist
+      Handler: plugin_operation_change.handler
+      Description: Plugin operation-change hook reports updated operations and the full map
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  PluginExternalUpdateOnInvoke:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-9"]
+    Properties:
+      CodeUri: ./dist
+      Handler: plugin_external_update_on_invoke.handler
+      Description: Plugin sees a wait completed externally between invocations as an updated operation
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  PluginWaitOperationHooks:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-10"]
+    Properties:
+      CodeUri: ./dist
+      Handler: plugin_wait_operation_hooks.handler
+      Description: Plugin operation-start and operation-end hooks fire for wait-type operations
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  PluginNestedParentLinkage:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-11"]
+    Properties:
+      CodeUri: ./dist
+      Handler: plugin_nested_parent_linkage.handler
+      Description: Plugin operation hooks report parent id for a step nested in a child context
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  PluginParallelBranchHooks:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-12"]
+    Properties:
+      CodeUri: ./dist
+      Handler: plugin_parallel_branch_hooks.handler
+      Description: Plugin user-function hooks fire per parallel branch with parent linkage
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  PluginReplayFlags:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-13"]
+    Properties:
+      CodeUri: ./dist
+      Handler: plugin_replay_flags.handler
+      Description: Non-terminal operations replay with replay=true; terminal operations are not re-emitted
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  PluginTerminalPayloads:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-14"]
+    Properties:
+      CodeUri: ./dist
+      Handler: plugin_terminal_payloads.handler
+      Description: Operation-end info carries the checkpointed result on success and the error on failure
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  PluginRetryExhaustion:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-15"]
+    Properties:
+      CodeUri: ./dist
+      Handler: plugin_retry_exhaustion.handler
+      Description: Attempt hooks fire for every attempt until exhaustion, then operation-end reports FAILED
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  PluginSuspensionInvocationEnd:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-16"]
+    Properties:
+      CodeUri: ./dist
+      Handler: plugin_suspension_invocation_end.handler
+      Description: Invocation-end fires for every invocation, non-terminal on suspension and terminal at completion
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  PluginFaultyAndHealthy:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-17"]
+    Properties:
+      CodeUri: ./dist
+      Handler: plugin_faulty_and_healthy.handler
+      Description: A plugin that throws in every hook never blocks another plugin's hooks or the execution
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  PluginWaitReplayFlag:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-18"]
+    Properties:
+      CodeUri: ./dist
+      Handler: plugin_wait_replay_flag.handler
+      Description: A wait still pending during a replay re-fires operation-start with replay=true
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
