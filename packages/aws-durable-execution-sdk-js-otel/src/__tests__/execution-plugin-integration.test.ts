@@ -3,7 +3,13 @@ import {
   SimpleSpanProcessor,
   NodeTracerProvider,
 } from "@opentelemetry/sdk-trace-node";
-import { context, trace, propagation, ROOT_CONTEXT } from "@opentelemetry/api";
+import {
+  context,
+  trace,
+  propagation,
+  ROOT_CONTEXT,
+  SpanStatusCode,
+} from "@opentelemetry/api";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
 import type {
   InvocationInfo,
@@ -461,5 +467,81 @@ describe("ExecutionOtelPlugin - Parent-child workflow span ID collision preventi
     expect(validateSpan!.spanContext().spanId).not.toBe(
       enrichSpan!.spanContext().spanId,
     );
+  });
+
+  // Regression: onOperationEnd can be reached with a terminal FAILURE status
+  // (TIMED_OUT/STOPPED/FAILED/CANCELLED) and NO error object (callback-timeout
+  // and chained-invoke cross-invocation fast paths). Those must NOT be labelled
+  // OTel OK — the OK branch is gated on SUCCEEDED, so a no-error failure leaves
+  // the span status at the default UNSET (code 0).
+  it("onOperationEnd terminal path: TIMED_OUT status with NO error leaves the operation span NOT OK (UNSET)", async () => {
+    const plugin = new ExecutionOtelPlugin({
+      useDefaultTracerProvider: true,
+    });
+
+    await plugin.onInvocationStart(makeInvocationInfo());
+    await plugin.onOperationStart(
+      makeOperationInfo({ id: "op-timeout", name: "timeout-op" }),
+    );
+    await plugin.onOperationEnd(
+      makeOperationEndInfo({
+        id: "op-timeout",
+        name: "timeout-op",
+        status: "TIMED_OUT" as any,
+        // no error object
+      }),
+    );
+    await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+    const opSpan = findSpan(exporter, "timeout-op");
+    expect(opSpan).toBeDefined();
+    expect(opSpan!.status.code).not.toBe(SpanStatusCode.OK);
+    expect(opSpan!.status.code).toBe(SpanStatusCode.UNSET);
+  });
+
+  it("onOperationEnd cross-invocation path: STOPPED status with NO error leaves the span NOT OK (UNSET)", async () => {
+    const plugin = new ExecutionOtelPlugin({
+      useDefaultTracerProvider: true,
+    });
+
+    await plugin.onInvocationStart(makeInvocationInfo());
+    // No prior onOperationStart -> spanMap miss -> cross-invocation span path.
+    await plugin.onOperationEnd(
+      makeOperationEndInfo({
+        id: "op-cross-stopped",
+        name: "cross-stopped",
+        status: "STOPPED" as any,
+        // no error object
+      }),
+    );
+    await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+    const opSpan = findSpan(exporter, "cross-stopped");
+    expect(opSpan).toBeDefined();
+    expect(opSpan!.status.code).not.toBe(SpanStatusCode.OK);
+    expect(opSpan!.status.code).toBe(SpanStatusCode.UNSET);
+  });
+
+  it("onOperationEnd terminal path: SUCCEEDED status with NO error stamps OK", async () => {
+    const plugin = new ExecutionOtelPlugin({
+      useDefaultTracerProvider: true,
+    });
+
+    await plugin.onInvocationStart(makeInvocationInfo());
+    await plugin.onOperationStart(
+      makeOperationInfo({ id: "op-ok", name: "ok-op" }),
+    );
+    await plugin.onOperationEnd(
+      makeOperationEndInfo({
+        id: "op-ok",
+        name: "ok-op",
+        status: "SUCCEEDED" as any,
+      }),
+    );
+    await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+    const opSpan = findSpan(exporter, "ok-op");
+    expect(opSpan).toBeDefined();
+    expect(opSpan!.status.code).toBe(SpanStatusCode.OK);
   });
 });
