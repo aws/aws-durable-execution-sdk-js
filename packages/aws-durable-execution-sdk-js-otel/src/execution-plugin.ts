@@ -374,6 +374,8 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
           message: info.error.message,
         });
         span.recordException(info.error);
+      } else {
+        span.setStatus({ code: SpanStatusCode.OK });
       }
 
       span.end(info.endTimestamp);
@@ -431,6 +433,8 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
           message: info.error.message,
         });
         span.recordException(info.error);
+      } else {
+        span.setStatus({ code: SpanStatusCode.OK });
       }
 
       span.end(info.endTimestamp);
@@ -502,6 +506,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         if (info.error) {
           attemptSpan.recordException(info.error);
         }
+      } else {
+        // Non-failed attempt: stamp explicit OK (matches Python OTel #604).
+        attemptSpan.setStatus({ code: SpanStatusCode.OK });
       }
       attemptSpan.end(info.endTimestamp);
       this.spanMap.delete(key);
