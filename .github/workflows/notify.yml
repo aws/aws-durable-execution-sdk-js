@@ -1,0 +1,19 @@
+name: Notify Slack
+
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review]
+  issues:
+    types: [opened, reopened]
+  release:
+    types: [published]
+
+permissions: {}
+
+jobs:
+  notify:
+    uses: aws/aws-durable-execution-ci/.github/workflows/notify.yml@38ae538ba1950755b0fe77bc1ca24b1b4fbbb104
+    secrets:
+      SLACK_WEBHOOK_URL_PR: ${{ secrets.SLACK_WEBHOOK_URL_PR }}
+      SLACK_WEBHOOK_URL_ISSUE: ${{ secrets.SLACK_WEBHOOK_URL_ISSUE }}
+      SLACK_WEBHOOK_URL_RELEASE: ${{ secrets.SLACK_WEBHOOK_URL_RELEASE }}
