@@ -564,6 +564,82 @@ describe("InvocationOtelPlugin", () => {
     });
   });
 
+  describe("same-invocation replay deduplication", () => {
+    it("reuses the operation span across a non-replay then replay start (single terminal span, attempts share it)", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+
+      // Non-replay start creates the operation span.
+      await plugin.onOperationStart(
+        makeOperationInfo({
+          id: "op-r",
+          type: "STEP",
+          name: "retried-op",
+          isReplay: false,
+        }),
+      );
+      // Attempt 1 (fails) — child of the operation span.
+      await plugin.onOperationAttemptStart(
+        makeAttemptInfo({ id: "op-r", type: "STEP", name: "retried-op", attempt: 1 }),
+      );
+      await plugin.onOperationAttemptEnd(
+        makeAttemptEndInfo({
+          id: "op-r",
+          type: "STEP",
+          name: "retried-op",
+          attempt: 1,
+          outcome: "FAILED" as any,
+        }),
+      );
+      // Same-invocation replay start for the SAME operation id must NOT create
+      // a duplicate span (dedupe guard in onOperationStart).
+      await plugin.onOperationStart(
+        makeOperationInfo({
+          id: "op-r",
+          type: "STEP",
+          name: "retried-op",
+          isReplay: true,
+        }),
+      );
+      // Attempt 2 (succeeds) after the replay.
+      await plugin.onOperationAttemptStart(
+        makeAttemptInfo({ id: "op-r", type: "STEP", name: "retried-op", attempt: 2 }),
+      );
+      await plugin.onOperationAttemptEnd(
+        makeAttemptEndInfo({
+          id: "op-r",
+          type: "STEP",
+          name: "retried-op",
+          attempt: 2,
+          outcome: "SUCCEEDED" as any,
+        }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({
+          id: "op-r",
+          type: "STEP",
+          name: "retried-op",
+          status: "SUCCEEDED" as any,
+        }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      // Exactly one terminal operation span — the replay start did not
+      // duplicate it.
+      const opSpans = getExportedSpans().filter((s) => s.name === "retried-op");
+      expect(opSpans).toHaveLength(1);
+      expect(opSpans[0].attributes["durable.operation.status"]).toBe(
+        "SUCCEEDED",
+      );
+
+      // Both attempt spans parent to that single operation span.
+      const opSpanId = opSpans[0].spanContext().spanId;
+      const attempt1 = findSpan("retried-op attempt 1");
+      const attempt2 = findSpan("retried-op attempt 2");
+      expect(attempt1!.parentSpanContext?.spanId).toBe(opSpanId);
+      expect(attempt2!.parentSpanContext?.spanId).toBe(opSpanId);
+    });
+  });
+
   describe("Continuation span for cross-invocation operations", () => {
     it("creates continuation span with Link when operation was started in prior invocation", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
