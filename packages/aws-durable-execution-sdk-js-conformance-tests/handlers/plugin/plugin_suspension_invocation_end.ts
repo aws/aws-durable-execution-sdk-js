@@ -10,12 +10,20 @@ const TERMINAL = new Set(["SUCCEEDED", "FAILED"]);
 
 function makePlugin(): DurableInstrumentationPlugin {
   let executionArn = "";
+  // Same-invocation flag: captured at invocation-start and stamped on the
+  // matching invocation-end record (start and end of one invocation run in the
+  // same process, so this carries no cross-invocation state). Unlike
+  // Python/Java, the JS InvocationEndInfo does not expose isFirstInvocation —
+  // only the start-hook InvocationInfo does — so start-capture is the only
+  // real API path.
+  let first = false;
   const emit = (rec: Record<string, unknown>): void =>
     process.stdout.write(JSON.stringify({ ...rec, durableExecutionArn: executionArn }) + "\n");
 
   return {
     async onInvocationStart(info): Promise<void> {
       executionArn = info.executionArn;
+      first = info.isFirstInvocation;
       emit({
         plugin: PLUGIN,
         hook: "invocation-start",
@@ -27,6 +35,7 @@ function makePlugin(): DurableInstrumentationPlugin {
       emit({
         plugin: PLUGIN,
         hook: "invocation-end",
+        first,
         // terminal := reported status is SUCCEEDED or FAILED.
         terminal: TERMINAL.has(status),
         status,

@@ -30,6 +30,9 @@ function makePlugin(): DurableInstrumentationPlugin {
         type: (info.type || "").toUpperCase(),
         name: info.name,
         replay: info.isReplay,
+        // Non-terminal at hook time, from the hook info's own operation state
+        // (no end timestamp yet) — no cross-invocation state.
+        pending: info.endTimestamp == null,
       });
     },
     async onOperationEnd(info): Promise<void> {
