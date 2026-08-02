@@ -33,9 +33,6 @@ const scopes = new Set([
   "deps",
   "deps-dev",
   "otel",
-  // Workflow Insight / Workflow Studio: the VS Code extension and the
-  // standalone desktop app that shares its UI and host.
-  "insight",
   // The .dar -> durable-handler code generator and its CDK construct.
   "cdk",
 ]);

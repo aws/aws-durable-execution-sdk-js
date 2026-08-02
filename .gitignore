@@ -36,17 +36,19 @@ mise.toml
 *.rollup.cache
 
 # Durable executions local emulator files
-# The emulator writes execution state here too, not just the SDK cache — the
-# narrower pattern un-ignored all of it.
+# All emulator output, not just its SDK cache.
 **/.durable-executions-local/
-# Reflection cache the Studio's awsSdkCall node builds at the repo root
+# SDK reflection cache written at the repo root. Same reason as the webview bundles
+# below: one shared working tree, so this must be ignored on every branch.
 /.aws-sdk-cache/
+# Built webview bundles (webview-ui's esbuild writes these, including a ~270k-line
+# Monaco worker). Ignored here rather than only alongside the code that produces them,
+# because the monorepo shares one working tree: without it, a `git add -A` on ANY
+# branch sweeps them in.
+packages/aws-durable-execution-sdk-js-insight-vscode/media/
 
 # CDK synth/deploy output
 **/cdk.out/
 packages/aws-durable-execution-sdk-js-cdk/deploy-verify/
 # Deploy outputs — contain real account ids and resource ARNs
 **/cdk-outputs.json
-
-# Bundled webview assets (built by webview-ui's esbuild into the extension)
-packages/aws-durable-execution-sdk-js-insight-vscode/media/
