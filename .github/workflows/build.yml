@@ -50,8 +50,14 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: built-artifacts
+          # `dist*/**`, not `dist*/*`: a trailing `*` does not cross a `/`, so the
+          # single-star form silently omitted nested build output. The only such file
+          # is visual-workflow-model's dist/generated/apiDirectory.json, and
+          # unit-tests downloads this artifact instead of rebuilding — so it was
+          # absent at test time and dist/apiVendors.js failed to load, taking down the
+          # whole cdk suite and every insight-vscode suite that imports it.
           path: |
-            packages/**/dist*/*
+            packages/**/dist*/**
             package.json
             package-lock.json
 

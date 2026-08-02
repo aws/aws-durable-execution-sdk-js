@@ -33,6 +33,11 @@ const scopes = new Set([
   "deps",
   "deps-dev",
   "otel",
+  // Workflow Insight / Workflow Studio: the VS Code extension and the
+  // standalone desktop app that shares its UI and host.
+  "insight",
+  // The .dar -> durable-handler code generator and its CDK construct.
+  "cdk",
 ]);
 
 /**
@@ -156,8 +161,12 @@ function _test() {
     "chore(deps): bump the aws-sdk group across 1 directory with 5 updates":
       undefined,
     "chore(deps-dev): bump flatted from 3.4.1 to 3.4.2": undefined,
-    "feat(foo): fix the types":
-      'invalid scope "foo" (valid scopes are testing-sdk, sdk, examples, eslint-plugin, deps, deps-dev)',
+    // Derived, not restated: this expectation had already drifted out of sync
+    // with `scopes` (it omitted `ci` and `otel`), which is exactly the failure
+    // adding a scope would reintroduce.
+    "feat(foo): fix the types": `invalid scope "foo" (valid scopes are ${Array.from(
+      scopes,
+    ).join(", ")})`,
   };
 
   let passed = 0;

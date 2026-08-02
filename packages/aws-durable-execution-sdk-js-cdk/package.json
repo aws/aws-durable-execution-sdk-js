@@ -1,0 +1,52 @@
+{
+  "name": "@aws/durable-execution-sdk-js-cdk",
+  "version": "0.1.0",
+  "description": "CDK construct that deploys a Workflow Studio .dar file as an AWS Lambda durable function (generates the handler at synth time).",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/aws/aws-durable-execution-sdk-js.git",
+    "directory": "packages/aws-durable-execution-sdk-js-cdk"
+  },
+  "homepage": "https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-cdk",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "clean": "rm -rf dist node_modules .tsbuildinfo"
+  },
+  "keywords": [
+    "aws-cdk",
+    "cdk",
+    "aws-lambda",
+    "durable-functions",
+    "workflow"
+  ],
+  "peerDependencies": {
+    "@aws/durable-execution-sdk-js": "^2.2.0",
+    "aws-cdk-lib": "^2.0.0",
+    "constructs": "^10.0.0"
+  },
+  "dependencies": {
+    "@aws/durable-execution-sdk-js-visual-workflow-model": "^0.1.0",
+    "source-map": "0.7.4",
+    "typescript": "^5.8.3"
+  },
+  "devDependencies": {
+    "@aws/durable-execution-sdk-js": "^2.2.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20.0.0",
+    "aws-cdk-lib": "^2.150.0",
+    "constructs": "^10.0.0",
+    "jest": "^30.0.3",
+    "ts-jest": "^29.4.0"
+  },
+  "files": [
+    "dist/**/*",
+    "README.md"
+  ],
+  "private": false
+}

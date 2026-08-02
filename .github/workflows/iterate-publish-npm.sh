@@ -29,6 +29,14 @@ else
     "packages/aws-durable-execution-sdk-js-eslint-plugin"
     "packages/aws-durable-execution-sdk-js-otel"
     "packages/aws-durable-execution-sdk-js-insight"
+    # Order matters: this list is published in sequence, and -cdk depends on
+    # -visual-workflow-model at ^0.1.0, so the dependency has to reach the
+    # registry first. Both are `private: false` — that intent was already
+    # declared — but neither was listed here, so -cdk could never actually be
+    # published, and publishing it without its dependency would have left it
+    # uninstallable.
+    "packages/aws-durable-execution-sdk-js-visual-workflow-model"
+    "packages/aws-durable-execution-sdk-js-cdk"
   )
 fi
 

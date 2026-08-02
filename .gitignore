@@ -36,4 +36,17 @@ mise.toml
 *.rollup.cache
 
 # Durable executions local emulator files
+# The emulator writes execution state here too, not just the SDK cache — the
+# narrower pattern un-ignored all of it.
 **/.durable-executions-local/
+# Reflection cache the Studio's awsSdkCall node builds at the repo root
+/.aws-sdk-cache/
+
+# CDK synth/deploy output
+**/cdk.out/
+packages/aws-durable-execution-sdk-js-cdk/deploy-verify/
+# Deploy outputs — contain real account ids and resource ARNs
+**/cdk-outputs.json
+
+# Bundled webview assets (built by webview-ui's esbuild into the extension)
+packages/aws-durable-execution-sdk-js-insight-vscode/media/
