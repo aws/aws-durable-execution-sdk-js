@@ -81,6 +81,12 @@ export function parseWorkflow(raw: unknown): DarWorkflow {
     throw new Error("Invalid .dar workflow: `edges` must be an array.");
   }
   return {
+    // Spread FIRST so unknown top-level fields survive, then override the validated
+    // ones. A fixed allowlist dropped layoutDirection, comment, and anything a newer
+    // Studio adds — and the construct re-serializes this object into the deployment
+    // package, so reopening a construct-deployed workflow lost canvas layout. Same
+    // forward-compatibility rule the Studio's own serializer follows.
+    ...obj,
     darVersion:
       typeof obj.darVersion === "string" ? obj.darVersion : DAR_VERSION,
     name: typeof obj.name === "string" ? obj.name : "workflow",

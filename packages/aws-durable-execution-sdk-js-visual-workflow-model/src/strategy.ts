@@ -63,7 +63,14 @@ export function normalizeStrategy(
     s.kind === "linear" || s.kind === "none" ? s.kind : "exponential";
   const jitter: JitterKind =
     s.jitter === "NONE" || s.jitter === "HALF" ? s.jitter : "FULL";
-  const num = (v: unknown, d: number) => (typeof v === "number" ? v : d);
+  // Number.isFinite, not typeof === "number": NaN and Infinity are both numbers and
+  // these values are interpolated directly into generated code, so a malformed `.dar`
+  // emitted `maxAttempts: NaN`. Requiring finiteness also makes the dataflow into the
+  // emitter provably numeric, which is what CodeQL's "code construction depends on an
+  // improperly sanitized value" is pointing at — `kind` and `jitter` beside them are
+  // already whitelisted, so a string could never reach the template.
+  const num = (v: unknown, d: number) =>
+    Number.isFinite(v) ? (v as number) : d;
   return {
     kind,
     maxAttempts: num(s.maxAttempts, fallback.maxAttempts),

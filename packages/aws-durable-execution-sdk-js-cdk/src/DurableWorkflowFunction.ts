@@ -186,6 +186,11 @@ export class DurableWorkflowFunction extends Construct {
       },
     };
 
+    // The runtime that will actually be used, since functionProps spreads over the
+    // default below. The esbuild target is derived from this so the two cannot diverge.
+    const effectiveRuntime =
+      props.functionProps?.runtime ?? Runtime.NODEJS_22_X;
+
     this.handler = new NodejsFunction(this, "Function", {
       runtime: Runtime.NODEJS_22_X,
       // The Lambda INVOCATION timeout, which is not the same thing as
@@ -207,7 +212,12 @@ export class DurableWorkflowFunction extends Construct {
       },
       bundling: {
         format: OutputFormat.CJS,
-        target: "node22",
+        // Derived from the EFFECTIVE runtime, not hardcoded. `runtime` is overridable
+        // (functionProps spreads after the default), so a consumer downgrading to
+        // NODEJS_20_X previously still got a bundle transpiled for node22 — surfacing
+        // as a cold-start SyntaxError rather than a synth error, because they would have
+        // had to remember to set bundling.target separately.
+        target: esbuildTargetFor(effectiveRuntime),
         ...props.functionProps?.bundling,
         commandHooks,
       },
@@ -284,6 +294,18 @@ export class DurableWorkflowFunction extends Construct {
       version: this.version,
     });
   }
+}
+
+/**
+ * The esbuild `target` matching a Lambda Node runtime.
+ *
+ * Hardcoding this while `runtime` stays overridable means a consumer who downgrades the
+ * runtime gets syntax their runtime cannot execute, and finds out at cold start rather
+ * than at synth. Falls back to the default when the runtime name is not a nodejs one.
+ */
+function esbuildTargetFor(runtime: Runtime): string {
+  const m = /^nodejs(\d+)\./.exec(runtime.name);
+  return m ? `node${m[1]}` : "node22";
 }
 
 /**

@@ -74,3 +74,46 @@ describe("migrateDar", () => {
     expect(wf.darVersion).toBe("0.9");
   });
 });
+
+/**
+ * The migration table is a plain object literal, so a bare `migrations[version]` lookup
+ * resolves inherited Object.prototype members. A `.dar` declaring `darVersion: "valueOf"`
+ * found Object.prototype.valueOf, "applied" it, and returned `{}` — the workflow silently
+ * replaced by an empty object instead of the intended "cannot read" error. `.dar`
+ * documents arrive from models, ASL imports and deployed functions, so that input is
+ * reachable rather than theoretical.
+ */
+describe("migration lookup is own-property and canonical", () => {
+  it.each(["valueOf", "toString", "hasOwnProperty", "constructor"])(
+    "does not treat inherited %s as a registered migration",
+    (name) => {
+      expect(() => migrateDar({ darVersion: name, nodes: [1] }, {})).toThrow(
+        /Cannot read this \.dar workflow/,
+      );
+    },
+  );
+
+  it("never returns a workflow stripped of its nodes", () => {
+    // The failure mode that mattered: not an exception, but silent garbage.
+    for (const name of ["valueOf", "toString"]) {
+      let out: unknown;
+      try {
+        out = migrateDar({ darVersion: name, nodes: [1] }, {});
+      } catch {
+        out = undefined;
+      }
+      expect(out).toBeUndefined();
+    }
+  });
+
+  it("matches a migration registered under an equivalent version spelling", () => {
+    // Keyed on the canonical form, so a table of { "1.0": fn } also matches a file
+    // declaring "1" — otherwise the documented "1" === "1.0" tolerance is defeated the
+    // moment a migration is registered.
+    const migrations: Record<string, DarMigration> = {
+      "0.9": (o) => ({ ...o, darVersion: DAR_VERSION, ran: true }),
+    };
+    const out = migrateDar({ darVersion: "0.9.0", nodes: [] }, migrations);
+    expect(out.ran).toBe(true);
+  });
+});

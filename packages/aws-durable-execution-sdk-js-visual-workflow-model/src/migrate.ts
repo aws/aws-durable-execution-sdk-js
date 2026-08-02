@@ -63,14 +63,33 @@ export function migrateDar(
     typeof obj.darVersion === "string" && obj.darVersion.length > 0
       ? obj.darVersion
       : OLDEST_DAR_VERSION;
+  /**
+   * Own-property lookup only, and keyed on the CANONICAL version.
+   *
+   * `migrations` is a plain object literal, so a bare `migrations[version]` resolves
+   * inherited Object.prototype members: a file declaring `darVersion: "valueOf"` found
+   * Object.prototype.valueOf, "applied" it, and produced `{}` — the workflow silently
+   * replaced by an empty object instead of the intended "cannot read" error. `.dar`
+   * documents arrive from models, ASL imports and deployed functions, so that input is
+   * reachable.
+   *
+   * Canonical keying matters for the same reason the comparisons use it: a table
+   * registered as { "1.0": fn } must also match a file declaring "1".
+   */
+  const lookup = (v: string): DarMigration | undefined => {
+    const target = canon(v);
+    for (const key of Object.keys(migrations)) {
+      if (canon(key) === target) return migrations[key];
+    }
+    return undefined;
+  };
   const seen = new Set<string>();
-  while (
-    canon(version) !== canon(DAR_VERSION) &&
-    migrations[version] &&
-    !seen.has(version)
-  ) {
-    seen.add(version); // guard against a migration that doesn't advance
-    obj = migrations[version](obj);
+  for (;;) {
+    if (canon(version) === canon(DAR_VERSION)) break;
+    const migration = lookup(version);
+    if (!migration || seen.has(canon(version))) break;
+    seen.add(canon(version)); // guard against a migration that doesn't advance
+    obj = migration(obj);
     version = typeof obj.darVersion === "string" ? obj.darVersion : DAR_VERSION;
   }
   // A version with no path to the current one is from a newer writer or corrupt.
