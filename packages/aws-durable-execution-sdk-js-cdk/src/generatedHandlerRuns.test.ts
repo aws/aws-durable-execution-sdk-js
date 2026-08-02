@@ -273,3 +273,86 @@ describe("a generated linear handler actually runs", () => {
     expect(result).toBe("recovered");
   });
 });
+
+/**
+ * Typed error routes matched with `err instanceof SomeError`, which could never work:
+ * the durable SDK reconstructs a failure as a StepError whose `cause` is a plain Error
+ * carrying the original type only in its `name`, so the original class is gone by the
+ * time a catch block sees it. Worse, the class is usually not in scope in the generated
+ * handler, making the emitted reference a latent ReferenceError.
+ *
+ * Routes now match by name along the cause chain. These run the handler against errors
+ * shaped the way the SDK actually produces them.
+ */
+describe("typed error routes match real durable errors", () => {
+  const routed = {
+    darVersion: "1.0",
+    name: "routed",
+    dependencyMode: "linear",
+    nodes: [
+      { id: "s", kind: "start", name: "start" },
+      { id: "a", kind: "step", name: "Risky", code: "return 1;" },
+      {
+        id: "r",
+        kind: "step",
+        name: "Recover",
+        code: "return 'recovered';",
+        terminal: true,
+      },
+    ],
+    edges: [
+      { id: "e1", source: "s", target: "a" },
+      {
+        id: "e2",
+        source: "a",
+        target: "r",
+        kind: "error",
+        errorType: "ValidationError",
+      },
+    ],
+  } as unknown as DarWorkflow;
+
+  /** A failure shaped as the SDK reconstructs it: StepError wrapping the real type. */
+  const reconstructed = () => {
+    const cause = new Error("bad input");
+    cause.name = "ValidationError";
+    const err = new Error("Step failed") as Error & { cause?: Error };
+    err.name = "StepError";
+    err.cause = cause;
+    return err;
+  };
+
+  const runWith = async (thrown: Error) => {
+    const handler = loadHandler(generateHandler(routed));
+    const ctx = {
+      step: async (n: string, fn: (c: unknown) => unknown) => {
+        if (n === "Risky") throw thrown;
+        return fn({ logger: { info() {}, debug() {} } });
+      },
+      logger: { info() {}, debug() {} },
+    };
+    return handler({}, ctx);
+  };
+
+  it("routes a reconstructed StepError by its original type", async () => {
+    await expect(runWith(reconstructed())).resolves.toBe("recovered");
+  });
+
+  it("routes an error thrown directly with that name", async () => {
+    const direct = new Error("bad");
+    direct.name = "ValidationError";
+    await expect(runWith(direct)).resolves.toBe("recovered");
+  });
+
+  it("does not route an unrelated error", async () => {
+    const other = new Error("nope");
+    other.name = "ThrottlingError";
+    await expect(runWith(other)).rejects.toThrow("nope");
+  });
+
+  it("emits no bare class reference that could ReferenceError", () => {
+    const code = generateHandler(routed);
+    expect(code).not.toContain("instanceof ValidationError");
+    expect(code).toContain('__darErrorIs(err, "ValidationError")');
+  });
+});

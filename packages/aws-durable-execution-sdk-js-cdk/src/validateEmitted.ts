@@ -25,6 +25,29 @@ import * as ts from "typescript";
 const IDENT_PATH_RE = /^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)*$/;
 
 /** Rejects a value that would escape the code position it is emitted into. */
+/**
+ * A single identifier with no dots, for a name that becomes an IMPORT BINDING.
+ *
+ * {@link requireIdentifier} allows dotted names because an error TYPE may legitimately
+ * be `Namespace.Error`. A `clientClass` or `command`, though, is emitted inside
+ * `import { … } from "@aws-sdk/client-x"`, where `Foo.Bar` is a syntax error — reported
+ * by esbuild, without naming the node.
+ */
+export function requireImportBinding(
+  value: string,
+  what: string,
+  where: string,
+): string {
+  const v = value.trim();
+  if (!/^[A-Za-z_$][\w$]*$/.test(v)) {
+    throw new Error(
+      `${where}: ${what} ${JSON.stringify(v)} is not a simple identifier, so it ` +
+        `cannot be used as an import binding.`,
+    );
+  }
+  return v;
+}
+
 export function requireIdentifier(
   value: string,
   what: string,
@@ -289,28 +312,39 @@ export function requireStatements(
  */
 export function returnsDurationObject(code: string): boolean {
   const DURATION_KEYS = new Set(["seconds", "minutes", "hours", "days"]);
-  const isDurationLiteral = (e: ts.Expression): boolean =>
-    ts.isObjectLiteralExpression(e) &&
-    e.properties.some((prop) => {
-      const name = prop.name;
-      if (!name) return false;
-      const text = ts.isIdentifier(name)
-        ? name.text
-        : ts.isStringLiteral(name)
+  const isDurationLiteral = (raw: ts.Expression): boolean => {
+    // Unwrap parentheses: `return ({ seconds: 30 });` is the same mistake as
+    // `return { seconds: 30 };`.
+    let e = raw;
+    while (ts.isParenthesizedExpression(e)) e = e.expression;
+    return (
+      ts.isObjectLiteralExpression(e) &&
+      e.properties.some((prop) => {
+        const name = prop.name;
+        if (!name) return false;
+        const text = ts.isIdentifier(name)
           ? name.text
-          : undefined;
-      return text !== undefined && DURATION_KEYS.has(text);
-    });
+          : ts.isStringLiteral(name)
+            ? name.text
+            : undefined;
+        return text !== undefined && DURATION_KEYS.has(text);
+      })
+    );
+  };
 
   const statements = blockStatements(code);
   if (statements) {
     // Same recursion as the return check: a conditional block that returns
     // `{ seconds: 30 }` from one arm is the same mistake, so looking only at the top
     // level would miss it.
-    return forEachOwnReturn(
+    const viaReturn = forEachOwnReturn(
       statements,
       (r) => r.expression !== undefined && isDurationLiteral(r.expression),
     );
+    if (viaReturn) return true;
+    // Fall through: `{ seconds: 30 }` on its own parses as a BLOCK containing a labeled
+    // statement, not as a return, so the block branch cannot see it. It is still the
+    // mistake, so the expression interpretation below must also be tried.
   }
   // Not a block — try it as a bare expression (`{ seconds: 30 }` on its own).
   const sf = ts.createSourceFile(

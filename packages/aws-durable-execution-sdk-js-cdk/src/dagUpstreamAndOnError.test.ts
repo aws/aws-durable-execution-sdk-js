@@ -155,6 +155,6 @@ describe("dag onError is not silently dropped", () => {
       }),
     );
     expect(code).toContain("try {");
-    expect(code).toContain("err instanceof TypeError");
+    expect(code).toContain('__darErrorIs(err, "TypeError")');
   });
 });

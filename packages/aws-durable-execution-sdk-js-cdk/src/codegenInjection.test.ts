@@ -121,13 +121,13 @@ describe("awsSdkCall clientClass and command", () => {
   it("rejects a clientClass that escapes the call and the import list", () => {
     expect(() =>
       generateHandler(sdkWf("S3Client(); (globalThis).X = 1; new S3Client")),
-    ).toThrow(/client class .* is not a valid identifier/);
+    ).toThrow(/client class .* is not a simple identifier/);
   });
 
   it("rejects a command that escapes", () => {
     expect(() =>
       generateHandler(sdkWf("S3Client", "GetObjectCommand; evil()")),
-    ).toThrow(/command .* is not a valid identifier/);
+    ).toThrow(/command .* is not a simple identifier/);
   });
 
   it("accepts real client/command names", () => {

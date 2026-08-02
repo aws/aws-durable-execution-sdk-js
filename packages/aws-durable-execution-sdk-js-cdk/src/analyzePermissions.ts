@@ -187,6 +187,8 @@ export function analyzeWorkflowPermissions(
 
   // chainInvoke -> lambda:InvokeFunction, grouped by target ARN.
   const invokeByArn = new Map<string, string[]>();
+  /** Targets we warned about and must NOT turn into a policy statement. */
+  const unresolved = new Set<string>();
   for (const inv of collected.invokes) {
     const key = inv.arn ?? "*";
     if (!invokeByArn.has(key)) invokeByArn.set(key, []);
@@ -204,13 +206,20 @@ export function analyzeWorkflowPermissions(
           `resulting lambda:InvokeFunction grant is not scoped to one function.`,
       );
     } else if (!/^arn:[a-z0-9-]+:lambda:/.test(inv.arn)) {
+      // A qualified NAME ("my-function:prod") is the documented invocation form, but it
+      // is not a valid IAM Resource — a policy naming it authorizes nothing. Resolving
+      // it needs the stack's account and region, which this pure analysis does not
+      // have, so withhold it and say so rather than emit a policy that cannot work.
       warnings.add(
-        `chainInvoke "${inv.name}" has a function ARN that is not a Lambda ARN ` +
-          `(${inv.arn}); no permission was inferred for it.`,
+        `chainInvoke "${inv.name}" targets "${inv.arn}", which is not a Lambda ARN. ` +
+          `No permission was inferred — grant lambda:InvokeFunction on the target's ` +
+          `full ARN yourself, or set functionArn to an ARN.`,
       );
+      unresolved.add(key);
     }
   }
   for (const [arn, names] of invokeByArn) {
+    if (unresolved.has(arn)) continue;
     statements.push({
       actions: ["lambda:InvokeFunction"],
       resources: [arn],

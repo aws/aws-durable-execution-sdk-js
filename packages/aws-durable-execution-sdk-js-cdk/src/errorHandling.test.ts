@@ -50,7 +50,7 @@ describe("error handling codegen (node.onError branches)", () => {
     const code = generateHandler(wf);
     expect(code).toContain("} catch (err) {");
     expect(code).toContain('const Handle = await context.step("Handle"');
-    expect(code).not.toContain("if (err instanceof");
+    expect(code).not.toContain("if (__darErrorIs(");
   });
 
   it("typed branches mixing route and fallback build an instanceof chain", () => {
@@ -88,9 +88,11 @@ describe("error handling codegen (node.onError branches)", () => {
       ],
     };
     const code = generateHandler(wf);
-    expect(code).toContain("if (err instanceof TimeoutError) {");
+    expect(code).toContain('if (__darErrorIs(err, "TimeoutError")) {');
     expect(code).toContain('const OnTimeout = await context.step("OnTimeout"');
-    expect(code).toContain("} else if (err instanceof ValidationError) {");
+    expect(code).toContain(
+      '} else if (__darErrorIs(err, "ValidationError")) {',
+    );
     expect(code).toContain("Call = await (async () => {");
     expect(code).toContain("return null;");
     expect(code).toContain("} else {");
@@ -124,7 +126,7 @@ describe("error handling codegen (node.onError branches)", () => {
       ],
     };
     const code = generateHandler(wf);
-    expect(code).toContain("if (err instanceof TimeoutError) {");
+    expect(code).toContain('if (__darErrorIs(err, "TimeoutError")) {');
     expect(code).toContain("} else {");
     expect(code).toContain("throw err;");
   });

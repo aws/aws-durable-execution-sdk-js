@@ -404,7 +404,7 @@ describe("error handling (P2.9, §4.3)", () => {
     expect(code).toContain('dag.step("Fetch", [], async (stepCtx) => {');
     expect(code).toContain("try {");
     expect(code).toContain("} catch (err) {");
-    expect(code).toContain("if (err instanceof TimeoutError) {");
+    expect(code).toContain('if (__darErrorIs(err, "TimeoutError")) {');
     expect(code).toContain("return null;");
     expect(code).toContain("} else {");
     expect(code).toContain("return { cached: true };");

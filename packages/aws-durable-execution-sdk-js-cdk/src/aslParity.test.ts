@@ -31,7 +31,9 @@ describe("ASL-parity features", () => {
       ),
     );
     expect(code).toContain(
-      "if (err instanceof TimeoutError || err instanceof ValidationError) {",
+      // Name-based: the durable SDK reconstructs a failure as StepError, so the original
+      // class is gone by the time a catch sees it and instanceof never matched.
+      'if (__darErrorIs(err, "TimeoutError", "ValidationError")) {',
     );
   });
 

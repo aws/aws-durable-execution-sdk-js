@@ -54,7 +54,15 @@ function selfWaitSeconds(node: DarNode): number {
       return toSeconds(node.durationValue, node.durationUnit);
     }
     case "callback":
-      return toSeconds(node.timeoutValue, node.timeoutUnit);
+      // Must mirror the EMITTER's defaults (generateHandler's callback arm defaults to
+      // 24 hours), or inference and emission disagree: an omitted timeout read as 0
+      // here while the generated code waits a day, so a callback-only workflow was
+      // given the 60-second floor and died waiting for a callback that had 24 hours
+      // to arrive.
+      return toSeconds(
+        typeof node.timeoutValue === "number" ? node.timeoutValue : 24,
+        typeof node.timeoutUnit === "string" ? node.timeoutUnit : "hours",
+      );
     case "waitForCondition": {
       const spec = waitSpecOf(node);
       return spec.maxAttempts * spec.maxDelaySeconds;

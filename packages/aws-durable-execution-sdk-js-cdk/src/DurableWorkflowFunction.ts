@@ -173,14 +173,15 @@ export class DurableWorkflowFunction extends Construct {
           findLockDir(darPath);
         const relFromRoot = relative(mountBase, darPath).split(sep).join("/");
         const src = `${i}/${relFromRoot}`;
-        // Fail loudly rather than leaving a function that looks deployed but cannot
-        // be reopened.
+        // Chosen for the BUNDLING environment, which is not necessarily the host: a
+        // Windows host using Docker bundling runs this inside Linux, where `copy` does
+        // not exist (and vice versa for `cp`). Node is guaranteed present in both,
+        // since the bundler itself runs on it, so shell out to Node instead of picking
+        // a shell builtin — and fail loudly rather than leaving a function that looks
+        // deployed but cannot be reopened.
         const copy =
-          process.platform === "win32"
-            ? `copy /Y "${src.split("/").join(sep)}" "${dest}" || exit /b 1`
-            : `cp "${src}" "${dest}" || { echo "durable-execution: could not ` +
-              `embed ${WORKFLOW_DAR_FILENAME} (looked for ${relFromRoot} under the ` +
-              `bundling input dir)" >&2; exit 1; }`;
+          `node -e "require('fs').copyFileSync(process.argv[1],process.argv[2])" ` +
+          `"${src}" "${dest}"`;
         return [...(userHooks?.afterBundling(i, o) ?? []), copy];
       },
     };

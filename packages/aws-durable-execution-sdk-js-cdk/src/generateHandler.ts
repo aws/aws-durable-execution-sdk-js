@@ -17,6 +17,7 @@ import {
   returnsDurationObject,
   requireTemplateLiteral,
   requireIdentifier,
+  requireImportBinding,
   requireTypeExpression,
 } from "./validateEmitted";
 import {
@@ -560,12 +561,12 @@ function emitNode(node: DarNode, scope: Scope): string {
       // Interpolated into a `new X()` call AND an import list. Today an injected
       // import list happens to break the parse, but that is an accident of
       // formatting, not a control.
-      const clientClass = requireIdentifier(
+      const clientClass = requireImportBinding(
         clientClassRaw,
         "client class",
         node.name,
       );
-      const command = requireIdentifier(commandRaw, "command", node.name);
+      const command = requireImportBinding(commandRaw, "command", node.name);
       imports.add(
         `@sdk|${requireSdkClientPackage(clientPackage, `node "${node.name}"`)}|${clientClass}|${command}`,
       );
@@ -941,6 +942,31 @@ function emitNode(node: DarNode, scope: Scope): string {
 }
 
 /**
+ * Runtime helper for typed error routes. Emitted once per handler that has any.
+ *
+ * `err instanceof SomeError` cannot work here, for two reasons:
+ *
+ *  - The durable SDK RECONSTRUCTS a failure as a StepError (or CallbackError, etc.)
+ *    whose `cause` is a plain Error carrying the original type only in its `name`. The
+ *    original class is gone by the time a catch block sees it, so an instanceof against
+ *    it never matches and the route is dead code.
+ *  - The class is usually not even in scope in the generated handler, so the emitted
+ *    reference is a ReferenceError waiting to be evaluated.
+ *
+ * So routes match by NAME, walking the cause chain. This covers the reconstructed shape,
+ * a plain `throw new ValidationError(...)` inside a step, and the SDK's own error types
+ * by their class name.
+ */
+const ERROR_MATCH_HELPER = `const __darErrorIs = (err, ...names) => {
+  for (let e = err; e != null; e = e.cause) {
+    const n = e.name ?? e.constructor?.name;
+    if (names.includes(n)) return true;
+    if (typeof e.errorType === "string" && names.includes(e.errorType)) return true;
+  }
+  return false;
+};`;
+
+/**
  * Emits the terminal statement for an `end` node: either a `return` (of the
  * node's code block, or the last result when blank) or a `throw` (of the node's
  * code block, or a default Error when blank), per the node's `endMode`.
@@ -1233,7 +1259,11 @@ function emitErrorCatch(
         );
       }
     }
-    const cond = classes.map((c) => `err instanceof ${c}`).join(" || ");
+    // Name-based, not instanceof — see ERROR_MATCH_HELPER for why the class is gone by
+    // the time this runs.
+    const cond = `__darErrorIs(err, ${classes
+      .map((c) => JSON.stringify(c))
+      .join(", ")})`;
     lines.push(`${innerPad}${kw} (${cond}) {`);
     lines.push(...emitBranch(h, deep));
   });
@@ -1759,7 +1789,11 @@ function dagOnErrorChain(
         );
       }
     }
-    const cond = classes.map((c) => `err instanceof ${c}`).join(" || ");
+    // Name-based, not instanceof — see ERROR_MATCH_HELPER for why the class is gone by
+    // the time this runs.
+    const cond = `__darErrorIs(err, ${classes
+      .map((c) => JSON.stringify(c))
+      .join(", ")})`;
     lines.push(`${pad}${kw} (${cond}) {`);
     lines.push(indent(fallbackCode(b), deep));
   });
@@ -2141,12 +2175,12 @@ function emitDagTask(
       // Interpolated into a `new X()` call AND an import list. Today an injected
       // import list happens to break the parse, but that is an accident of
       // formatting, not a control.
-      const clientClass = requireIdentifier(
+      const clientClass = requireImportBinding(
         clientClassRaw,
         "client class",
         node.name,
       );
-      const command = requireIdentifier(commandRaw, "command", node.name);
+      const command = requireImportBinding(commandRaw, "command", node.name);
       imports.add(
         `@sdk|${requireSdkClientPackage(clientPackage, `node "${node.name}"`)}|${clientClass}|${command}`,
       );
@@ -2701,6 +2735,12 @@ function generateHandlerMarked(
   const imports = new Set<string>();
   // Seeded into the root scope, which every emitter frame already receives.
   const body = emitBody(wf, { ctxVar: "context", indent: 4, imports, opts });
+  // Emitted only if the body actually calls it, decided from the assembled body rather
+  // than a flag threaded through the emitters — a flag can fall out of sync with the
+  // emission, this cannot.
+  const errorHelper = body.includes("__darErrorIs(")
+    ? `\n${ERROR_MATCH_HELPER}\n`
+    : "";
   // Separate AWS SDK v3 client imports (sentinel `@sdk|pkg|client|start|poll`,
   // emitted by awsJob nodes) from the durable-SDK named imports.
   const all = [...imports];
@@ -2746,7 +2786,7 @@ function generateHandlerMarked(
         "workflow input type",
         "Workflow",
       )};`,
-      ``,
+      errorHelper,
       `export const handler = withDurableExecution(`,
       `  async (event: WorkflowInput, context: DurableContext) => {`,
       `    const input = event;`,
