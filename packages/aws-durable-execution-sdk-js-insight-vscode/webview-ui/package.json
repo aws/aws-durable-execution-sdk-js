@@ -4,12 +4,14 @@
   "version": "0.0.0",
   "scripts": {
     "build": "node build.mjs",
-    "watch": "node build.mjs --watch"
+    "watch": "node build.mjs --watch",
+    "test": "jest"
   },
   "dependencies": {
     "@cloudscape-design/code-view": "^3.0.151",
     "@cloudscape-design/components": "^3.0.0",
     "@cloudscape-design/global-styles": "^1.0.0",
+    "monaco-editor": "^0.55.1",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "vega": "^6.2.0",

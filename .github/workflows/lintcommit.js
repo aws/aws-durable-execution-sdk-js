@@ -35,6 +35,9 @@ const scopes = new Set([
   "otel",
   // The .dar -> durable-handler code generator and its CDK construct.
   "cdk",
+  // Workflow Insight / Workflow Studio: the VS Code extension and the standalone
+  // desktop app that shares its UI and host.
+  "insight",
 ]);
 
 /**

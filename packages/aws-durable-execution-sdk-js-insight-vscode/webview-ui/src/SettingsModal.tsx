@@ -19,6 +19,8 @@ interface Props {
   visible: boolean;
   settings: Settings;
   modelDownloaded: boolean;
+  /** Whether the Copilot provider is offered (VS Code only). Default true. */
+  copilotAvailable?: boolean;
   downloadPercent: number;
   onDismiss: () => void;
   onSave: (settings: Settings) => void;
@@ -71,13 +73,21 @@ const LOCAL_MODEL_OPTIONS: SelectProps.Option[] = [
   },
 ];
 
-export function SettingsModal({ visible, settings, modelDownloaded, downloadPercent, onDismiss, onSave, testing, testResult, onTest, onClearTest, bedrockModels, bedrockModelsLoading, bedrockModelsError, onListModels }: Props) {
+export function SettingsModal({ visible, settings, modelDownloaded, copilotAvailable = true, downloadPercent, onDismiss, onSave, testing, testResult, onTest, onClearTest, bedrockModels, bedrockModelsLoading, bedrockModelsError, onListModels }: Props) {
   const [form, setForm] = useState<Settings>(settings);
   const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     setForm(settings);
   }, [settings, visible]);
+
+  // In hosts without Copilot (e.g. the standalone desktop app), fall back a
+  // persisted "copilot" provider to Bedrock so AI features keep working.
+  useEffect(() => {
+    if (!copilotAvailable && form.llmProvider === "copilot") {
+      setForm((f) => ({ ...f, llmProvider: "bedrock" }));
+    }
+  }, [copilotAvailable, form.llmProvider]);
 
   // Drop any prior test result when the modal (re)opens so a stale pass/fail
   // from a previous session isn't shown against freshly-loaded settings.
@@ -230,7 +240,7 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
                       <Input value={form.athenaOutputLocation} onChange={({ detail }) => update("athenaOutputLocation", detail.value)} placeholder="s3://my-insight-bucket/athena-results/" />
                     </FormField>
                     <Box color="text-body-secondary" fontSize="body-s">
-                      On Save, the Explorer checks whether the Glue table exists and, if not,
+                      On Save, Workflow Insight checks whether the Glue table exists and, if not,
                       creates it (matching the S3Exporter's JSON + Hive date partitioning) and
                       runs MSCK REPAIR TABLE to discover existing partitions.
                     </Box>
@@ -253,9 +263,9 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
                       Delete messages after displaying them
                     </Checkbox>
                     <Box color="text-body-secondary" fontSize="body-s">
-                      Off by default — the Explorer only observes the queue, so other
-                      consumers still receive every message. Enable only if this
-                      Explorer should be the sole consumer.
+                      Off by default — Workflow Insight only observes the queue, so
+                      other consumers still receive every message. Enable only if
+                      this app should be the sole consumer.
                     </Box>
                   </SpaceBetween>
                 )}
@@ -350,7 +360,14 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
                     }
                     options={[
                       { value: "bedrock", label: "Amazon Bedrock" },
-                      { value: "copilot", label: "GitHub Copilot (VS Code built-in)" },
+                      ...(copilotAvailable
+                        ? [
+                            {
+                              value: "copilot",
+                              label: "GitHub Copilot (VS Code built-in)",
+                            },
+                          ]
+                        : []),
                       { value: "local-server", label: "Local server (Ollama / OpenAI-compatible)" },
                       { value: "local", label: "Local LLM (offline, on-device)" },
                     ]}

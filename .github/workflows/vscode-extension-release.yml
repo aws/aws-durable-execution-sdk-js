@@ -289,6 +289,86 @@ jobs:
         run: |
           gh release upload "$TAG" vsix/*.vsix --clobber --repo "$REPO"
 
+  # The standalone Electron app, attached to the same draft release as the
+  # extension. Separate job (not another leg of build-and-attach) because it has
+  # a different matrix, a different artifact type, and must not be able to fail
+  # the .vsix release — the extension is the primary deliverable.
+  #
+  # UNSIGNED, deliberately, while this is in preview: macOS shows an
+  # "unidentified developer" warning on first launch (right-click -> Open).
+  # Signing and notarization need an Apple Developer ID certificate.
+  build-desktop-app:
+    needs: [check-version, create-draft-release]
+    # A desktop failure must not block or fail the extension release.
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # One arch per leg, on a runner matching it. esbuild is a RUNTIME
+          # dependency of the app (deploy bundles handlers with it) and ships a
+          # per-platform native binary, so an artifact built for the wrong arch
+          # would install fine and then fail every deploy. package-app.mjs pins
+          # the binary to the target and asserts only that arch was produced.
+          - target: mac
+            arch: arm64
+            os: macos-14
+          - target: mac
+            arch: x64
+            os: macos-13
+          - target: win
+            arch: x64
+            os: windows-latest
+          - target: linux
+            arch: x64
+            os: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write # required to upload a release asset
+    defaults:
+      run:
+        working-directory: packages/aws-durable-execution-sdk-js-insight-desktop
+    steps:
+      - uses: actions/checkout@v7
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+          cache: "npm"
+      - name: Install workspace dependencies
+        working-directory: .
+        run: npm ci --ignore-scripts
+      - name: Install electron-builder
+        # Not in the workspace lockfile (see this package's package.json
+        # `comment`), so install it into the isolated prefix the packaging script
+        # looks for. electron itself is only needed to RUN the app, not package it.
+        working-directory: .
+        run: npm install electron-builder@26.15.3 --no-save --legacy-peer-deps
+      - name: Package (${{ matrix.target }}/${{ matrix.arch }})
+        shell: bash
+        run: node scripts/package-app.mjs --target "${{ matrix.target }}" --arch "${{ matrix.arch }}"
+      - name: Upload desktop app to draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.check-version.outputs.tag_name }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          # Rename to include target/arch: electron-builder's default filenames
+          # collide across platforms once several legs upload to one release.
+          VER=$(node -p "require('./package.json').version")
+          mkdir -p upload
+          shopt -s nullglob
+          for f in release/*.dmg release/*.AppImage release/*.zip; do
+            ext="${f##*.}"
+            cp "$f" "upload/workflow-insight-desktop-${VER}-${{ matrix.target }}-${{ matrix.arch }}.${ext}"
+          done
+          if [ -z "$(ls -A upload)" ]; then
+            echo "no desktop artifact produced" >&2
+            exit 1
+          fi
+          gh release upload "$TAG" upload/* --clobber --repo "$REPO"
+
   verify-and-publish:
     needs: [check-version, build-and-attach]
     # !cancelled() (not the implicit if: success()) is required here: with

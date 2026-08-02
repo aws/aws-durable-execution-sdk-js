@@ -32,5 +32,14 @@ jobs:
           path: .
       - name: Install dependencies
         run: npm ci
+      - name: Install webview-ui dependencies
+        # webview-ui is a nested package outside the root workspaces glob
+        # (packages/*), so the root `npm ci` never installs it — and its suites
+        # need dependencies (monaco-editor) that exist only in its own list.
+        # Without this the root `test` script reaches it via `npm --prefix` and
+        # fails with "Cannot find module 'monaco-editor'".
+        # vscode-extension-release.yml already does the same for the same reason.
+        working-directory: packages/aws-durable-execution-sdk-js-insight-vscode/webview-ui
+        run: npm ci
       - name: Run tests
         run: npm run test

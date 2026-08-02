@@ -31,6 +31,10 @@
       {
         "command": "workflowInsight.openExplorer",
         "title": "Workflow Insight: Open Explorer"
+      },
+      {
+        "command": "workflowInsight.openWorkflowStudio",
+        "title": "Workflow Insight: Open Workflow Studio"
       }
     ],
     "configuration": {
@@ -181,6 +185,18 @@
           "default": "",
           "description": "Named AWS profile to use. Leave empty to use the default credential provider chain (env, SSO, default profile)."
         },
+        "workflowInsight.lambdaRoleArn": {
+          "type": "string",
+          "default": "",
+          "description": "Execution role ARN used when deploying a workflow from the Studio. Leave empty to auto-create a role named <function>-role with AWSLambdaBasicDurableExecutionRolePolicy."
+        },
+        "workflowInsight.deployRetentionDays": {
+          "type": "number",
+          "default": 7,
+          "minimum": 1,
+          "maximum": 90,
+          "description": "Durable execution history retention (days) applied when deploying a workflow from the Studio."
+        },
         "workflowInsight.llmProvider": {
           "type": "string",
           "default": "bedrock",
@@ -254,6 +270,48 @@
           "type": "string",
           "default": "",
           "description": "Records the version of the AI-usage disclosure you accepted. Set automatically when you agree to the in-app AI notice before first using an AI feature (Ask/Agent/Visualize); the notice is re-shown when the disclosure is updated. Clearing this value withdraws your consent and re-prompts you before the next AI use. The AI-free 'query' mode remains usable regardless."
+        },
+        "workflowInsight.dateFormat": {
+          "type": "string",
+          "enum": [
+            "relative",
+            "local",
+            "utc",
+            "iso",
+            "unix"
+          ],
+          "enumDescriptions": [
+            "Relative time ago (e.g. '8 hours, 23 seconds ago').",
+            "Local time with timezone.",
+            "UTC.",
+            "ISO 8601.",
+            "Unix timestamp (milliseconds)."
+          ],
+          "default": "local",
+          "description": "Preferred date/time display format, used by the date fields' hover popup. Change it by clicking the star next to a format in any date's popup."
+        },
+        "workflowInsight.dateVariant": {
+          "type": "string",
+          "enum": [
+            "short",
+            "long"
+          ],
+          "enumDescriptions": [
+            "Short/compact rendering (e.g. '11/15/23, 2:30 PM' or '8h 23s ago').",
+            "Long/verbose rendering (e.g. full weekday + timezone, or '8 hours, 23 seconds ago')."
+          ],
+          "default": "long",
+          "description": "Short vs. long rendering for date formats that support it (Relative and Local). Toggle it in any date's hover popup."
+        },
+        "workflowInsight.showWorkflowStudio": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Show the **Workflow Studio** view. Off by default while the Studio is still taking shape; there is deliberately no in-app toggle for it."
+        },
+        "workflowInsight.enableDagMode": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Permit `dag` dependency mode when generating and deploying workflows. Off by default: the generated code calls `context.dag(...)`, which the durable-execution SDK does not implement yet, so a deployed function would fail at invoke time. Enable only when building against an SDK that has the dag runtime."
         }
       }
     }
@@ -271,25 +329,47 @@
   "dependencies": {
     "@aws-crypto/sha256-js": "^5.2.0",
     "@aws-sdk/client-athena": "^3.658.0",
+    "@aws-sdk/client-batch": "3.658.0",
     "@aws-sdk/client-bedrock": "^3.1086.0",
     "@aws-sdk/client-bedrock-runtime": "^3.658.0",
+    "@aws-sdk/client-cloudformation": "3.658.0",
     "@aws-sdk/client-cloudwatch-logs": "^3.658.0",
+    "@aws-sdk/client-codebuild": "3.658.0",
     "@aws-sdk/client-dynamodb": "^3.658.0",
-    "@aws-sdk/client-glue": "^3.658.0",
+    "@aws-sdk/client-ecs": "3.658.0",
+    "@aws-sdk/client-glue": "3.658.0",
+    "@aws-sdk/client-iam": "^3.658.0",
+    "@aws-sdk/client-iotsecuretunneling": "3.658.0",
+    "@aws-sdk/client-lambda": "^3.658.0",
     "@aws-sdk/client-rds-data": "^3.658.0",
     "@aws-sdk/client-redshift-data": "^3.658.0",
+    "@aws-sdk/client-resource-groups-tagging-api": "3.658.0",
+    "@aws-sdk/client-sfn": "3.658.0",
     "@aws-sdk/client-sqs": "^3.658.0",
     "@aws-sdk/credential-providers": "^3.658.0",
     "@aws-sdk/util-dynamodb": "^3.658.0",
+    "@aws/durable-execution-sdk-js": "*",
+    "@aws/durable-execution-sdk-js-cdk": "*",
+    "@aws/durable-execution-sdk-js-visual-workflow-model": "*",
     "@jitl/quickjs-singlefile-cjs-release-sync": "^0.32.0",
     "@smithy/signature-v4": "^5.0.0",
+    "adm-zip": "^0.5.16",
+    "esbuild": "^0.24.0",
     "node-llama-cpp": "^3.18.1",
-    "quickjs-emscripten-core": "^0.32.0"
+    "protobufjs": "8.7.1",
+    "quickjs-emscripten-core": "^0.32.0",
+    "source-map": "0.7.4",
+    "typescript": "~5.8.0",
+    "uuid": "14.0.1",
+    "ws": "8.21.1",
+    "yaml": "2.8.3"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.7",
     "@types/jest": "^29.5.0",
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.90.0",
+    "@types/ws": "8.18.1",
     "esbuild": "^0.24.0",
     "jest": "^29.7.0",
     "ts-jest": "^29.2.0",

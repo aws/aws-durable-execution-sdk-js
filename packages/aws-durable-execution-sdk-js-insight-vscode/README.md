@@ -325,7 +325,7 @@ All settings are under the `workflowInsight.*` namespace.
 | `llmProvider`                 | `bedrock` (default), `copilot`, `local-server`, or `local`                      | No               |
 | `localServerUrl`              | OpenAI-compatible base URL for `local-server` (e.g. Ollama)                     | For local-server |
 | `localServerModel`            | Model name the local server should use (e.g. `llama3.1`)                        | For local-server |
-| `localModel`                  | On-device model for the `local` provider (source builds only)                   | For local        |
+| `localModel`                  | On-device model for the `local` provider                                        | For local        |
 | `queryMode`                   | Default composer mode: `query`, `ask`, or `agent`                               | No               |
 | `agenticMaxIterations`        | Max queries the agent runs per question (default 8)                             | No               |
 | `aiDisclosureAcceptedVersion` | Records the accepted AI disclosure version (set on consent; clear to re-prompt) | No               |
@@ -358,7 +358,7 @@ consent; you can review or withdraw it at any time (see below).
 | **Amazon Bedrock** | Amazon Bedrock in your configured AWS account/region; under your AWS agreement + Bedrock terms                           |
 | **GitHub Copilot** | GitHub Copilot via the VS Code Language Model API; under your Copilot subscription terms                                 |
 | **Local server**   | Only the OpenAI-compatible endpoint you run and control (e.g. Ollama on localhost) — no third-party cloud if self-hosted |
-| **On-device**      | Stays entirely on your machine; nothing leaves your computer (source builds only)                                        |
+| **On-device**      | Stays entirely on your machine; nothing leaves your computer                                                             |
 
 Data you send is subject to the terms and privacy policy of the provider you
 select — review them before sending sensitive data. AI-generated queries and

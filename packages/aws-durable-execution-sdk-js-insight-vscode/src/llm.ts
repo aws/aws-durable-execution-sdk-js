@@ -1,4 +1,3 @@
-import * as vscode from "vscode";
 import {
   BedrockRuntimeClient,
   type ContentBlock,
@@ -15,6 +14,32 @@ import {
   buildAnalysisPrompt,
   type ResultVerdict,
 } from "./verdict";
+
+/**
+ * The "copilot" provider uses VS Code's language-model API, which exists only
+ * in the VS Code extension host. To keep this module free of a static `vscode`
+ * import — so non-VS-Code hosts (e.g. the standalone desktop app) can reuse the
+ * Bedrock/local providers — the extension injects a Copilot bridge at activation
+ * via `registerCopilotBridge`. When none is registered, "copilot" is
+ * unavailable and callers should pick another provider.
+ */
+export interface CopilotBridge {
+  /** Single-turn completion: prompt in, full text out. */
+  complete(prompt: string): Promise<string>;
+}
+let copilotBridge: CopilotBridge | undefined;
+export function registerCopilotBridge(bridge: CopilotBridge | undefined): void {
+  copilotBridge = bridge;
+}
+function requireCopilot(): CopilotBridge {
+  if (!copilotBridge) {
+    throw new Error(
+      "The GitHub Copilot provider isn't available in this environment. " +
+        "Choose Amazon Bedrock or a local provider in Settings.",
+    );
+  }
+  return copilotBridge;
+}
 
 export interface GeneratedQuery {
   query: string;
@@ -251,27 +276,10 @@ export async function verifyResult(
     }
 
     if (opts.provider === "copilot") {
-      const models = await vscode.lm.selectChatModels({ vendor: "copilot" });
-      if (models.length === 0) {
-        return { satisfied: true, reason: "No judge model available." };
-      }
-      const cts = new vscode.CancellationTokenSource();
-      try {
-        const response = await models[0].sendRequest(
-          [
-            vscode.LanguageModelChatMessage.User(
-              `${instruction}\n\nRespond with ONLY JSON: {"satisfied": true|false, "reason": "...", "suggestion": "..."}`,
-            ),
-          ],
-          {},
-          cts.token,
-        );
-        let text = "";
-        for await (const chunk of response.text) text += chunk;
-        return parseVerdict(text);
-      } finally {
-        cts.dispose();
-      }
+      const text = await requireCopilot().complete(
+        `${instruction}\n\nRespond with ONLY JSON: {"satisfied": true|false, "reason": "...", "suggestion": "..."}`,
+      );
+      return parseVerdict(text);
     }
 
     if (opts.provider === "local-server") {
@@ -415,7 +423,7 @@ function buildChartPrompt(opts: ChartSpecOptions): string {
  * bounds the Bedrock and local (node-llama-cpp) responses; the Copilot path
  * has no simple per-request token knob and uses the model's own default.
  */
-async function completeText(
+export async function completeText(
   opts: {
     provider: LlmProvider;
     region: string;
@@ -445,23 +453,7 @@ async function completeText(
       .trim();
   }
   if (opts.provider === "copilot") {
-    const models = await vscode.lm.selectChatModels({ vendor: "copilot" });
-    if (models.length === 0) {
-      throw new Error("No Copilot chat model is available.");
-    }
-    const cts = new vscode.CancellationTokenSource();
-    try {
-      const response = await models[0].sendRequest(
-        [vscode.LanguageModelChatMessage.User(prompt)],
-        {},
-        cts.token,
-      );
-      let text = "";
-      for await (const chunk of response.text) text += chunk;
-      return text.trim();
-    } finally {
-      cts.dispose();
-    }
+    return (await requireCopilot().complete(prompt)).trim();
   }
   // local
   const { model } = await getLocalModel();
@@ -600,44 +592,13 @@ async function generateViaBedrock(
 async function generateViaCopilot(
   opts: GenerateOptions,
 ): Promise<GeneratedQuery> {
-  const models = await vscode.lm.selectChatModels({
-    vendor: "copilot",
-  });
-  if (models.length === 0) {
-    // Try without any filter to see what's available
-    const allModels = await vscode.lm.selectChatModels();
-    const available = allModels
-      .map((m) => `${m.vendor}/${m.family}/${m.id}`)
-      .join(", ");
-    throw new Error(
-      `No Copilot model found. Available models: [${available || "none"}]. Make sure GitHub Copilot is installed and you've signed in.`,
-    );
-  }
-
-  const model = models[0];
   const systemPrompt = buildSystemPrompt(opts.destinationType, {
     tableName: opts.tableName,
     agentic: opts.agentic,
   });
+  const prompt = `${systemPrompt}\n\nIMPORTANT: Respond with ONLY a JSON object in this exact format (no markdown, no code fences):\n{"query": "...", "explanation": "...", "timeRangeMs": ..., "suggestedCharts": ["...", "..."]}\n\nFor suggestedCharts, pick 2-4 from: bar, stacked-bar, line, area, scatter, heatmap, histogram, pie, boxplot.\nIf timeRangeMs is not relevant, omit it.\n\nUser question: ${opts.question}`;
 
-  const messages = [
-    vscode.LanguageModelChatMessage.User(
-      `${systemPrompt}\n\nIMPORTANT: Respond with ONLY a JSON object in this exact format (no markdown, no code fences):\n{"query": "...", "explanation": "...", "timeRangeMs": ..., "suggestedCharts": ["...", "..."]}\n\nFor suggestedCharts, pick 2-4 from: bar, stacked-bar, line, area, scatter, heatmap, histogram, pie, boxplot.\nIf timeRangeMs is not relevant, omit it.`,
-    ),
-    vscode.LanguageModelChatMessage.User(opts.question),
-  ];
-
-  const cts = new vscode.CancellationTokenSource();
-  // Collect the streamed response
-  let text = "";
-  try {
-    const response = await model.sendRequest(messages, {}, cts.token);
-    for await (const chunk of response.text) {
-      text += chunk;
-    }
-  } finally {
-    cts.dispose();
-  }
+  const text = await requireCopilot().complete(prompt);
 
   // Parse JSON from the response (handle potential markdown wrapping)
   const jsonMatch = text.match(/\{[\s\S]*"query"[\s\S]*\}/);

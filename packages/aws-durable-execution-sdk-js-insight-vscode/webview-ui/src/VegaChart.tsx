@@ -54,14 +54,14 @@ export function VegaChart({ spec, data }: Props) {
   const exportSVG = async () => {
     if (!viewRef.current) return;
     const svg = await viewRef.current.view.toSVG();
-    postMessage({ type: "exportChart", format: "svg", content: svg } as any);
+    postMessage({ type: "exportChart", format: "svg", content: svg });
   };
 
   const exportPNG = async () => {
     if (!viewRef.current) return;
     const canvas = await viewRef.current.view.toCanvas();
     const dataUrl = canvas.toDataURL("image/png");
-    postMessage({ type: "exportChart", format: "png", content: dataUrl } as any);
+    postMessage({ type: "exportChart", format: "png", content: dataUrl });
   };
 
   return (

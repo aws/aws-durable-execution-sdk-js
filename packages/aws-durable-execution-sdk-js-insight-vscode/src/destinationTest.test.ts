@@ -43,6 +43,8 @@ function baseCfg(overrides: Partial<InsightConfig>): InsightConfig {
     region: "us-east-1",
     logGroupNames: [],
     destinationType: "s3",
+    showWorkflowStudio: false,
+    enableDagMode: false,
     dynamodbTableName: "",
     auroraResourceArn: "",
     auroraSecretArn: "",
@@ -73,6 +75,8 @@ function baseCfg(overrides: Partial<InsightConfig>): InsightConfig {
     agenticMaxIterations: 8,
     queryMode: "agent",
     aiDisclosureAcceptedVersion: "",
+    dateFormat: "local",
+    dateVariant: "long",
     ...overrides,
   };
 }

@@ -1,0 +1,74 @@
+{
+  "name": "@aws/durable-execution-sdk-js-insight-desktop",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Standalone desktop app (Electron) for Workflow Insight — reuses the VS Code extension's webview UI and host logic, for customers who prefer not to run it inside VS Code.",
+  "license": "Apache-2.0",
+  "main": "dist/main.js",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "node esbuild.mjs",
+    "start": "npm run build && electron .",
+    "package:mac": "node scripts/package-app.mjs --target mac --arch arm64",
+    "package": "node scripts/package-app.mjs",
+    "package:mac-x64": "node scripts/package-app.mjs --target mac --arch x64",
+    "package:linux": "node scripts/package-app.mjs --target linux --arch x64",
+    "package:win": "node scripts/package-app.mjs --target win --arch x64"
+  },
+  "dependencies": {
+    "esbuild": "^0.24.0",
+    "jsonc-parser": "3.3.1",
+    "typescript": "~5.8.0"
+  },
+  "devDependencies": {
+    "electron": "^43.0.0",
+    "electron-builder": "26.15.3"
+  },
+  "comment": "electron/electron-builder are intentionally not committed to the workspace lockfile; install them once with `npm install electron@^43 electron-builder@26.15.3 --legacy-peer-deps` (see README). esbuild/typescript/jsonc-parser ARE real runtime deps (deploy.ts bundles handlers with esbuild; agent/darTs/inferTypes use the TS compiler; jsonc-parser locates .dar node positions for source maps), require()'d at module load - a packaged app has no workspace root to hoist-resolve them from, so they must be physically present in THIS package's own node_modules/. A plain `npm install` here still resolves through the npm workspace (hoists to the root), so instead: `npm install esbuild@0.24.2 typescript@5.8.3 jsonc-parser@3.3.1 --prefix .runtime` then copy `.runtime/node_modules/{esbuild,typescript,@esbuild,jsonc-parser}` into `./node_modules/` (gitignored, packaging-only) before running electron-builder. See README's packaging section.",
+  "build": {
+    "appId": "com.amazon.aws.durable-execution-sdk-js-insight-desktop",
+    "productName": "Workflow Insight",
+    "electronVersion": "43.2.0",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "assets/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../aws-durable-execution-sdk-js-insight-vscode/media",
+        "to": "media"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "assets/icon.icns",
+      "target": [
+        {
+          "target": "dmg"
+        }
+      ]
+    },
+    "dmg": {
+      "title": "Workflow Insight"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage"
+        }
+      ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "zip"
+        }
+      ]
+    }
+  }
+}

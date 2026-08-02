@@ -1,5 +1,9 @@
 import * as vscode from "vscode";
+// randomInt, not Math.random: this nonce backs the webview CSP.
+import { randomInt } from "node:crypto";
 import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
 import { randomUUID } from "crypto";
 import {
   readConfig,
@@ -7,6 +11,41 @@ import {
   configFromWireSettings,
 } from "./config";
 import { testDestination } from "./destinationTest";
+import {
+  deployWorkflow,
+  DeployCancelledError,
+  requireLambdaFunctionName,
+} from "./deploy";
+import {
+  startDebugRun,
+  type DebugRunnerHandle,
+} from "./remoteDebug/debugRunner";
+import {
+  listDurableFunctions,
+  getFunctionInfo,
+  listExecutions,
+  startExecution,
+  getExecution,
+  stopExecution,
+  listWorkflowStudioFunctions,
+  getWorkflowDar,
+} from "./functions";
+import { listResources } from "./resources";
+import { listActions, reflectAction } from "./awsSdkReflect";
+import {
+  listApiDirectory,
+  listApiOperations,
+  listApiVendors,
+  reflectApiOperation,
+} from "./openApiReflect";
+import { installCopilotBridge } from "./copilotBridge";
+import { inferResultTypes, type InferItem } from "./inferTypes";
+import {
+  parseWorkflow,
+  locateDarTsNodeLines,
+  darTsNodeIdForLine,
+  type PermissionAnalysis,
+} from "@aws/durable-execution-sdk-js-cdk";
 import { listBedrockModels } from "./bedrockModels";
 import {
   generateQuery,
@@ -19,6 +58,21 @@ import {
   setLocalServer,
   type GeneratedQuery,
 } from "./llm";
+import { generateNodeCode, generateWorkflowDar } from "./agent";
+import { importStateMachineFromArn } from "./aslImport";
+import {
+  deployStarterPackInfra,
+  STARTER_PACKS,
+  type StarterPackId,
+} from "./starterPacks/registry";
+import { CfnDeployCancelledError } from "./starterPacks/cfnDeploy";
+import {
+  QueryService,
+  MAX_SQL_ROWS,
+  JS_ROW_CAP,
+  REQUIRED_AI_DISCLOSURE_VERSION,
+  type QueryMode,
+} from "./queryService";
 import {
   runAgentLoop,
   type AgentQueryResult,
@@ -36,6 +90,13 @@ import {
   fetchAthenaRecord,
 } from "./athena";
 import { listenToQueue, type SqsMessageRow } from "./sqs";
+import { fetchDetailRecord } from "./detailService";
+import {
+  parseDarTs,
+  workflowFileToJsonText,
+  workflowToDarTs,
+  type JsonWorkflow,
+} from "./darTs";
 import { ensureLimit } from "./schema";
 import { assertReadOnly } from "./queryValidator";
 import {
@@ -51,11 +112,114 @@ type InboundMessage =
   | { type: "setMode"; mode: QueryMode }
   | { type: "setConsent"; version: string }
   | { type: "newSession" }
+  // Workflow Studio (kept in sync with OutboundMessage in
+  // webview-ui/src/types.ts): save the .dar JSON the webview built, or open one.
+  | { type: "saveWorkflow"; name: string; content: string }
+  | { type: "toggleBreakpoint"; path: string; line: number }
+  | { type: "toggleNodeBreakpoint"; path: string; nodeId: string }
+  | { type: "getBreakpoints"; path: string }
+  | { type: "workflowCode"; requestId: string; workflow: unknown }
+  | { type: "workflowFromCode"; requestId: string; text: string }
+  | { type: "openWorkflow" }
+  | { type: "listStateMachines"; requestId: string }
+  | { type: "listEditableFunctions"; requestId: string }
+  | {
+      type: "generateNodeCode";
+      requestId: string;
+      kind: string;
+      field: string;
+      name: string;
+      description: string;
+      scope: string[];
+      inputType?: string;
+      currentCode?: string;
+    }
+  | { type: "generateWorkflow"; requestId: string; description: string }
+  | {
+      type: "importStateMachine";
+      requestId: string;
+      arn: string;
+      inlineLambdas?: boolean;
+    }
+  | {
+      type: "deployStarterPackInfra";
+      requestId: string;
+      /** Starter pack id; see `./starterPacks/registry.ts`'s `StarterPackId`. */
+      packId: string;
+    }
+  | {
+      type: "cancelStarterPackDeploy";
+      requestId: string;
+    }
   | { type: "saveSettings"; settings: Record<string, string> }
+  | { type: "deployWorkflow"; functionName: string; workflow: unknown }
+  // Run the workflow's deployed Lambda (kept in sync with OutboundMessage
+  // in webview-ui/src/types.ts): plain async durable execution, or — with
+  // debug:true — a synchronous invoke held under an in-app debug run (LDK
+  // layer + tunnel + our own CDP client, streamed to the webview's debug
+  // panel via "debugEvent"). See onRunWorkflow.
+  | {
+      type: "runWorkflow";
+      functionName: string;
+      payload: string;
+      executionName?: string;
+      debug: boolean;
+    }
+  // In-Studio debugger (kept in sync with OutboundMessage in
+  // webview-ui/src/types.ts — see its "In-Studio debugger protocol"
+  // section): stepping/continue/stop for the active debug run, lazy
+  // variables expansion, and live breakpoint replacement.
+  | {
+      type: "debugCommand";
+      command: "continue" | "stepOver" | "stepInto" | "stepOut" | "stop";
+    }
+  | { type: "debugGetProperties"; requestId: string; objectId: string }
+  | { type: "debugSetBreakpoints"; darLines: number[] }
+  // The deploy modal's answer to a "deployPermissionsRequest" — the deploy is
+  // blocked until it arrives.
+  | { type: "deployPermissionsResponse"; requestId: string; approved: boolean }
+  // Stop the in-flight Studio deploy at its next step boundary.
+  | { type: "cancelDeploy" }
+  | { type: "listFunctions" }
+  | { type: "getFunctionInfo"; functionName: string }
+  | { type: "editFunctionWorkflow"; functionName: string }
+  | { type: "listSdkActions"; clientPackage: string }
+  | { type: "reflectSdkAction"; clientPackage: string; command: string }
+  | { type: "listApiVendors" }
+  | { type: "listApiOperations"; spec: string }
+  | { type: "reflectApiOperation"; spec: string; key: string }
+  | { type: "listResources"; requestId: string; resource: string }
+  | {
+      type: "inferTypes";
+      requestId: string;
+      items: InferItem[];
+      seedTypes?: Record<string, string>;
+      inputType?: string;
+    }
+  | {
+      type: "listExecutions";
+      functionName: string;
+      qualifier?: string;
+      marker?: string;
+    }
+  | {
+      type: "startExecution";
+      functionName: string;
+      payload: string;
+      executionName?: string;
+    }
+  | { type: "getExecution"; arn: string }
+  | { type: "stopExecution"; arn: string }
+  | { type: "getExecutionWorkflow"; arn: string; functionArn: string }
   | { type: "testDestination"; settings: Record<string, string> }
   | { type: "listModels"; settings: Record<string, string> }
   | { type: "downloadModel"; localModel?: string }
-  | { type: "exportChart"; format: "svg" | "png"; content: string }
+  | {
+      type: "exportChart";
+      format: "svg" | "png";
+      content: string;
+      filename?: string;
+    }
   | {
       type: "exportData";
       format: "csv" | "json";
@@ -93,17 +257,6 @@ type InboundMessage =
  * - "ask":   one LLM NL→query translation, run once, present (no agent loop).
  * - "agent": the full agentic explore→answer loop.
  */
-type QueryMode = "query" | "ask" | "agent";
-
-/**
- * Current AI-usage disclosure version the user must have accepted before any
- * LLM-backed action runs. Kept in sync with AI_DISCLOSURE_VERSION in
- * webview-ui/src/types.ts — bump both together when the disclosure wording
- * changes so consented users are re-prompted. The webview gates the UI; the
- * host re-checks (defense in depth) so a replayed/malformed message can't
- * bypass the disclosure.
- */
-const REQUIRED_AI_DISCLOSURE_VERSION = "2";
 
 /** A saved query (kept in sync with Favorite in webview-ui/src/types.ts). */
 interface Favorite {
@@ -114,46 +267,12 @@ interface Favorite {
 }
 
 /**
- * Normalized results payload: the body of a "results" message minus its
- * `type`. Produced by ExplorerPanel.executeQuery and shared by both basic and
- * advanced (agentic) generation paths.
- */
-interface QueryExecution {
-  columns: string[];
-  rows: string[][];
-  count?: number;
-  /** True if the result was capped at MAX_SQL_ROWS (more rows exist than returned). */
-  truncated?: boolean;
-  /** Per-column numeric-type flag (aligned with `columns`), for typed run_javascript input. */
-  numericColumns?: boolean[];
-  explanation?: string;
-  suggestedCharts?: string[];
-  finalQuery: string;
-  idColumn?: string;
-  partitionColumns?: { year?: string; month?: string; day?: string };
-  hiddenColumns?: string[];
-}
-
-/**
- * The query dialect for a destination, for shape checks like isAggregateQuery.
- * The two log-exporter destinations use CloudWatch Logs Insights; everything
- * else (DynamoDB PartiQL, Aurora PostgreSQL, S3/Athena Trino) is SQL-shaped.
- */
-function queryDialect(destinationType: string): "sql" | "logs-insights" {
-  return destinationType === "cloudwatch-logs-exporter" ||
-    destinationType === "lambda-log-exporter"
-    ? "logs-insights"
-    : "sql";
-}
-
-/**
  * Max rows handed to run_javascript. The model sees only a small sample, but
  * JS computes over this fuller set so aggregations aren't silently limited.
  * Bounded so a huge result can't overwhelm the sandbox/host; when the true
  * result exceeds it, the JS result reports the truncation so the model can
  * fall back to a SQL aggregate.
  */
-const JS_ROW_CAP = 5000;
 
 /**
  * Hard ceiling on rows loaded from a SQL destination (Athena/Aurora/DynamoDB)
@@ -168,14 +287,12 @@ const JS_ROW_CAP = 5000;
  * bounds host memory only; per-query scan cost is a separate concern (see the
  * Athena bytes_scanned_cutoff_per_query guidance).
  */
-const MAX_SQL_ROWS = 10000;
 
 /**
  * Default CloudWatch Logs Insights time window (24h) used for "query" mode,
  * where the user supplies the raw query but no time range (mirrors the
  * generator's own default).
  */
-const DEFAULT_TIME_RANGE_MS = 86_400_000;
 
 /**
  * Whether a query-execution error is worth asking the model to fix (a
@@ -183,26 +300,12 @@ const DEFAULT_TIME_RANGE_MS = 86_400_000;
  * permissions) that a retry can't help. Destination-agnostic, so every
  * provider path retries on exactly the same class of errors.
  */
-function isRetryableQueryError(msg: string): boolean {
-  return (
-    msg.includes("MalformedQueryException") ||
-    msg.includes("ValidationException") ||
-    msg.includes("Athena query failed") ||
-    msg.includes("INVALID_") ||
-    msg.includes("SYNTAX_ERROR")
-  );
-}
 
 /**
  * Extra guidance appended to a fix-it prompt when the failure is a
  * COLUMN_NOT_FOUND (the classic "referenced an input/output JSON field as a
  * bare column" mistake). Empty for any other error.
  */
-function columnNotFoundHint(msg: string): string {
-  return msg.includes("COLUMN_NOT_FOUND")
-    ? "\n\nThis is likely because a field that lives inside input/output was referenced as a bare column instead of via json_extract_scalar(input, '$.path') / json_extract_scalar(output, '$.path') — check every column reference (including in GROUP BY/ORDER BY) against the schema's actual top-level columns."
-    : "";
-}
 
 /**
  * Normalize a query for the agentic loop's "already tried this" check: trim,
@@ -210,15 +313,19 @@ function columnNotFoundHint(msg: string): string {
  * effectively-identical regenerations (reindented, recased) are recognized as
  * repeats and stop the loop instead of wasting an iteration.
  */
-function normalizeQuery(query: string): string {
-  return query.trim().replace(/\s+/g, " ").toLowerCase();
-}
 
 export function activate(context: vscode.ExtensionContext): void {
+  installCopilotBridge();
   context.subscriptions.push(
     vscode.commands.registerCommand("workflowInsight.openExplorer", () => {
       ExplorerPanel.show(context.extensionUri, context.globalState);
     }),
+    vscode.commands.registerCommand(
+      "workflowInsight.openWorkflowStudio",
+      () => {
+        ExplorerPanel.show(context.extensionUri, context.globalState, "studio");
+      },
+    ),
   );
 }
 
@@ -228,14 +335,54 @@ class ExplorerPanel {
   private static current: ExplorerPanel | undefined;
   private readonly disposables: vscode.Disposable[] = [];
   private listenController: AbortController | undefined;
-  // Summarized advanced-mode conversation (user questions + assistant answers),
-  // so follow-up questions continue the session. Cleared on "newSession".
-  private conversation: ConversationTurn[] = [];
+  // Aborts an in-flight starter-pack infra deploy, keyed by requestId (see
+  // onDeployStarterPackInfra/onCancelStarterPackDeploy).
+  private readonly starterPackControllers = new Map<string, AbortController>();
+  // View the webview should switch to once it signals "ready" (set when the
+  // panel is opened via the Workflow Studio command).
+  private pendingView: "explorer" | "studio" | undefined;
+  // The real on-disk path of the workflow currently open in Studio's code
+  // view, if any — set by onSaveWorkflow/onOpenWorkflow, mirrored from the
+  // webview's own tracking (see App.tsx's workflowFilePath). Used to scope
+  // onBreakpointsMaybeChanged's forwarding to the RIGHT file (VS Code's
+  // onDidChangeBreakpoints fires for every file, not just this one) and as
+  // the resolved target when the webview's own message omits it (defensive
+  // — the webview always sends its current path, but this guards against
+  // a race where the two get out of sync).
+  private workflowFilePath: string | undefined;
+  // The in-app debug run this panel currently owns, if any — an LDK debug
+  // session driven by our own CDP client (see ./remoteDebug/debugRunner.ts),
+  // streamed to the webview's debug panel; no vscode.debug session is
+  // involved. Exactly one run at a time in v1: the run mutates the
+  // function's $LATEST config, so two concurrent runs on any functions
+  // would still fight over the single tracked teardown path here.
+  private activeDebugRun: DebugRunnerHandle | undefined;
+  // Deploy permission reviews awaiting an answer from the deploy modal, keyed
+  // by requestId. A deploy is BLOCKED on its entry, so `dispose` must settle
+  // any leftovers or the deploy promise never resolves.
+  private readonly permissionsReqs = new Map<
+    string,
+    (approved: boolean) => void
+  >();
+  private permissionsReqSeq = 0;
+  // Aborts the in-flight Studio deploy at its next step boundary. There is no
+  // CloudFormation stack to roll back — the deploy is a sequence of direct
+  // Lambda/IAM calls — so this only stops further calls; see DeployOptions.signal.
+  private deployAbort: AbortController | undefined;
+  // The AI query pipeline (Ask/Agent/raw), extracted to a vscode-free service
+  // shared with the standalone app. It owns the conversation history.
+  private readonly query = new QueryService((m) => this.post(m));
 
-  static show(extensionUri: vscode.Uri, globalState: vscode.Memento): void {
+  static show(
+    extensionUri: vscode.Uri,
+    globalState: vscode.Memento,
+    initialView?: "explorer" | "studio",
+  ): void {
     const column = vscode.window.activeTextEditor?.viewColumn;
     if (ExplorerPanel.current) {
       ExplorerPanel.current.panel.reveal(column);
+      if (initialView)
+        ExplorerPanel.current.post({ type: "navigate", view: initialView });
       return;
     }
     const panel = vscode.window.createWebviewPanel(
@@ -249,6 +396,7 @@ class ExplorerPanel {
       },
     );
     ExplorerPanel.current = new ExplorerPanel(panel, extensionUri, globalState);
+    ExplorerPanel.current.pendingView = initialView;
   }
 
   private constructor(
@@ -263,27 +411,214 @@ class ExplorerPanel {
       null,
       this.disposables,
     );
+    // Keeps the Workflow Studio code view's gutter in sync with VS Code's
+    // REAL breakpoint list — fires for ANY change, from ANY source (a normal
+    // editor tab, this panel's own onToggleBreakpoint, or VS Code itself
+    // during an active debug session), so the webview never shows stale
+    // state. Only forwards changes for the currently-tracked workflow path
+    // (see onToggleBreakpoint/onGetBreakpoints — this.workflowFilePath).
+    vscode.debug.onDidChangeBreakpoints(
+      () => this.onBreakpointsMaybeChanged(),
+      null,
+      this.disposables,
+    );
+  }
+
+  /** Validate a required non-empty string field from an inbound message. */
+  private requireString(v: unknown, name: string): string {
+    if (typeof v !== "string" || v.trim() === "") {
+      throw new Error(`Invalid message: ${name} must be a non-empty string`);
+    }
+    return v;
   }
 
   private async handleMessage(msg: InboundMessage): Promise<void> {
+    // Defense-in-depth: the webview is our own (CSP-locked) code, but never
+    // trust the shape of an inbound message before acting on it.
+    if (
+      msg === null ||
+      typeof msg !== "object" ||
+      typeof (msg as { type?: unknown }).type !== "string"
+    ) {
+      return;
+    }
     try {
       switch (msg.type) {
         case "ready":
           this.sendConfig();
           this.post({ type: "favorites", favorites: this.getFavorites() });
+          if (this.pendingView) {
+            this.post({ type: "navigate", view: this.pendingView });
+            this.pendingView = undefined;
+          }
           return;
-        case "generate":
-          return await this.onGenerate(msg.question, msg.mode ?? "agent");
+        case "generate": {
+          const cfg = readConfig();
+          return await this.query.runGenerate(
+            msg.question,
+            msg.mode ?? "agent",
+            cfg,
+            resolveCredentials(cfg.awsProfile),
+          );
+        }
         case "setMode":
           return await this.onSetMode(msg.mode);
         case "setConsent":
           return await this.onSetConsent(msg.version);
         case "newSession":
-          this.conversation = [];
+          this.query.clearConversation();
           this.post({ type: "sessionCleared" });
           return;
+        case "saveWorkflow":
+          return await this.onSaveWorkflow(msg.name, msg.content);
+        case "toggleBreakpoint":
+          return this.onToggleBreakpoint(msg.path, msg.line);
+        case "toggleNodeBreakpoint":
+          return this.onToggleNodeBreakpoint(msg.path, msg.nodeId);
+        case "getBreakpoints":
+          return this.onGetBreakpoints(msg.path);
+        case "workflowCode":
+          try {
+            this.post({
+              type: "workflowCodeResult",
+              requestId: msg.requestId,
+              text: workflowToDarTs(msg.workflow as never),
+            });
+          } catch (e) {
+            this.post({
+              type: "workflowCodeResult",
+              requestId: msg.requestId,
+              error: e instanceof Error ? e.message : String(e),
+            });
+          }
+          return;
+        case "workflowFromCode":
+          try {
+            this.post({
+              type: "workflowFromCodeResult",
+              requestId: msg.requestId,
+              dar: JSON.stringify(parseDarTs(msg.text)),
+            });
+          } catch (e) {
+            this.post({
+              type: "workflowFromCodeResult",
+              requestId: msg.requestId,
+              error: e instanceof Error ? e.message : String(e),
+            });
+          }
+          return;
+        case "openWorkflow":
+          return await this.onOpenWorkflow();
+        case "generateNodeCode":
+          return await this.onGenerateNodeCode(msg);
+        case "generateWorkflow":
+          return await this.onGenerateWorkflow(msg.requestId, msg.description);
+        case "listStateMachines":
+          return await this.onListStateMachines(msg.requestId);
+        case "listEditableFunctions":
+          return await this.onListEditableFunctions(msg.requestId);
+        case "importStateMachine":
+          return await this.onImportStateMachine(
+            msg.requestId,
+            this.requireString(msg.arn, "arn"),
+            msg.inlineLambdas === true,
+          );
+        case "deployStarterPackInfra":
+          return await this.onDeployStarterPackInfra(msg.requestId, msg.packId);
+        case "cancelStarterPackDeploy":
+          return this.onCancelStarterPackDeploy(msg.requestId);
         case "saveSettings":
           return await this.onSaveSettings(msg.settings);
+        case "deployWorkflow": {
+          const fn = this.requireString(msg.functionName, "functionName");
+          if (!msg.workflow || typeof msg.workflow !== "object") {
+            throw new Error("Invalid message: workflow must be an object");
+          }
+          return await this.onDeployWorkflow(fn, msg.workflow);
+        }
+        case "runWorkflow":
+          return await this.onRunWorkflow(
+            this.requireString(msg.functionName, "functionName"),
+            // Empty payload is legal — treated as "{}" (matches the CLI).
+            typeof msg.payload === "string" ? msg.payload : "{}",
+            typeof msg.executionName === "string" && msg.executionName.trim()
+              ? msg.executionName.trim()
+              : undefined,
+            msg.debug === true,
+          );
+        case "debugCommand":
+          return await this.onDebugCommand(msg.command);
+        case "deployPermissionsResponse":
+          return this.onDeployPermissionsResponse(
+            this.requireString(msg.requestId, "requestId"),
+            msg.approved === true,
+          );
+        case "cancelDeploy":
+          return this.onCancelDeploy();
+        case "debugGetProperties":
+          return await this.onDebugGetProperties(
+            this.requireString(msg.requestId, "requestId"),
+            this.requireString(msg.objectId, "objectId"),
+          );
+        case "debugSetBreakpoints":
+          return await this.onDebugSetBreakpoints(
+            Array.isArray(msg.darLines) ? msg.darLines : [],
+          );
+        case "listFunctions":
+          return await this.onListFunctions();
+        case "getFunctionInfo":
+          return await this.onGetFunctionInfo(msg.functionName);
+        case "editFunctionWorkflow":
+          return await this.onEditFunctionWorkflow(
+            this.requireString(msg.functionName, "functionName"),
+          );
+        case "listSdkActions":
+          return await this.onListSdkActions(
+            this.requireString(msg.clientPackage, "clientPackage"),
+          );
+        case "reflectSdkAction":
+          return await this.onReflectSdkAction(
+            this.requireString(msg.clientPackage, "clientPackage"),
+            this.requireString(msg.command, "command"),
+          );
+        case "listApiVendors":
+          return this.onListApiVendors();
+        case "listApiOperations":
+          return await this.onListApiOperations(
+            this.requireString(msg.spec, "spec"),
+          );
+        case "reflectApiOperation":
+          return await this.onReflectApiOperation(
+            this.requireString(msg.spec, "spec"),
+            this.requireString(msg.key, "key"),
+          );
+        case "listResources":
+          return await this.onListResources(msg.requestId, msg.resource);
+        case "inferTypes":
+          return this.onInferTypes(
+            msg.requestId,
+            msg.items,
+            msg.seedTypes,
+            msg.inputType,
+          );
+        case "listExecutions":
+          return await this.onListExecutions(
+            msg.functionName,
+            msg.qualifier,
+            msg.marker,
+          );
+        case "startExecution":
+          return await this.onStartExecution(
+            this.requireString(msg.functionName, "functionName"),
+            msg.payload,
+            msg.executionName,
+          );
+        case "getExecution":
+          return await this.onGetExecution(msg.arn);
+        case "stopExecution":
+          return await this.onStopExecution(this.requireString(msg.arn, "arn"));
+        case "getExecutionWorkflow":
+          return await this.onGetExecutionWorkflow(msg.arn, msg.functionArn);
         case "testDestination":
           return await this.onTestDestination(msg.settings);
         case "listModels":
@@ -291,7 +626,11 @@ class ExplorerPanel {
         case "downloadModel":
           return await this.onDownloadModel(msg.localModel);
         case "exportChart":
-          return await this.onExportChart(msg.format, msg.content);
+          return await this.onExportChart(
+            msg.format,
+            msg.content,
+            msg.filename,
+          );
         case "exportData":
           return await this.onExportData(msg.format, msg.content, msg.filename);
         case "saveFavorite":
@@ -349,6 +688,7 @@ class ExplorerPanel {
         opensearchIndex: cfg.opensearchIndex,
         sqsQueueUrl: cfg.sqsQueueUrl,
         sqsDeleteAfterRead: cfg.sqsDeleteAfterRead,
+        showWorkflowStudio: cfg.showWorkflowStudio,
         athenaDatabase: cfg.athenaDatabase,
         athenaTable: cfg.athenaTable,
         athenaWorkgroup: cfg.athenaWorkgroup,
@@ -363,6 +703,8 @@ class ExplorerPanel {
         agenticMaxIterations: String(cfg.agenticMaxIterations),
         queryMode: cfg.queryMode,
         aiDisclosureAcceptedVersion: cfg.aiDisclosureAcceptedVersion,
+        dateFormat: cfg.dateFormat,
+        dateVariant: cfg.dateVariant,
       },
       modelDownloaded: isModelDownloaded(),
     });
@@ -376,19 +718,14 @@ class ExplorerPanel {
     // result payload — not the global `error` toast — so they render inline in
     // the modal next to the Test button.
     const cfg = configFromWireSettings(settings);
-    try {
-      const result = await testDestination(cfg);
-      this.post({ type: "destinationTestResult", result });
-    } catch (err) {
-      this.post({
+    await this.respond(
+      () => testDestination(cfg),
+      (result) => ({ type: "destinationTestResult", result }),
+      (summary) => ({
         type: "destinationTestResult",
-        result: {
-          ok: false,
-          summary: err instanceof Error ? err.message : String(err),
-          checks: [],
-        },
-      });
-    }
+        result: { ok: false, summary, checks: [] },
+      }),
+    );
   }
 
   private async onListModels(settings: Record<string, string>): Promise<void> {
@@ -396,21 +733,18 @@ class ExplorerPanel {
     // list matches what the user is about to save. Errors are reported inline
     // via the same payload rather than the global error toast.
     const cfg = configFromWireSettings(settings);
-    try {
-      const models = await listBedrockModels({
-        region: cfg.region,
-        credentials: resolveCredentials(cfg.awsProfile),
-      });
-      this.post({ type: "bedrockModels", models });
-    } catch (err) {
+    await this.respond(
+      () =>
+        listBedrockModels({
+          region: cfg.region,
+          credentials: resolveCredentials(cfg.awsProfile),
+        }),
+      (models) => ({ type: "bedrockModels", models }),
       // Omit `models` on failure so the webview keeps any previously-fetched
       // suggestions (e.g. after a retry with a typo'd profile) rather than
       // clearing the list.
-      this.post({
-        type: "bedrockModels",
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
+      (error) => ({ type: "bedrockModels", error }),
+    );
   }
 
   private async onSaveSettings(
@@ -424,7 +758,11 @@ class ExplorerPanel {
       // agenticMaxIterations is number-typed — coerce likewise (invalid/empty
       // falls back to undefined so the schema default applies).
       let coerced: string | boolean | number | undefined;
-      if (key === "sqsDeleteAfterRead") {
+      if (
+        key === "sqsDeleteAfterRead" ||
+        key === "showWorkflowStudio" ||
+        key === "enableDagMode"
+      ) {
         coerced = value === "true";
       } else if (key === "agenticMaxIterations") {
         const n = Number(value);
@@ -510,11 +848,13 @@ class ExplorerPanel {
   private async onExportChart(
     format: "svg" | "png",
     content: string,
+    filename?: string,
   ): Promise<void> {
     const ext = format === "svg" ? "svg" : "png";
+    const defaultName = filename || `chart.${ext}`;
     const uri = await vscode.window.showSaveDialog({
       filters: { [format.toUpperCase()]: [ext] },
-      defaultUri: vscode.Uri.file(`chart.${ext}`),
+      defaultUri: vscode.Uri.file(defaultName),
     });
     if (!uri) return;
 
@@ -542,6 +882,1159 @@ class ExplorerPanel {
     if (!uri) return;
     await vscode.workspace.fs.writeFile(uri, Buffer.from(content, "utf-8"));
     vscode.window.showInformationMessage(`Results saved to ${uri.fsPath}`);
+  }
+
+  /**
+   * Save a Workflow Studio graph as a `.dar.ts` file — the only user-facing
+   * format. The webview sends the JSON model text (the internal wire shape);
+   * the host converts via {@link workflowToDarTs}.
+   */
+  private async onSaveWorkflow(name: string, content: string): Promise<void> {
+    const safe =
+      (name || "workflow").replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "") ||
+      "workflow";
+    const uri = await vscode.window.showSaveDialog({
+      filters: { "Durable workflow": ["dar.ts"] },
+      defaultUri: vscode.Uri.file(`${safe}.dar.ts`),
+    });
+    if (!uri) return;
+    const out = workflowToDarTs(JSON.parse(content));
+    await vscode.workspace.fs.writeFile(uri, Buffer.from(out, "utf-8"));
+    // Reports the real saved path so the webview's code-view gutter can
+    // target real vscode.SourceBreakpoints against it (see
+    // onToggleBreakpoint/onGetBreakpoints) — a brand-new, never-saved
+    // workflow has no real file to target yet, by design (see this
+    // feature's design notes: breakpoints require a save first).
+    this.workflowFilePath = uri.fsPath;
+    this.post({ type: "workflowSaved", path: uri.fsPath });
+    vscode.window.showInformationMessage(`Workflow saved to ${uri.fsPath}`);
+  }
+
+  /** Every real VS Code breakpoint currently set on `path`, as 1-based line
+   *  numbers (deduplicated, ascending) — reads `vscode.debug.breakpoints`
+   *  directly, so this ALWAYS reflects reality (a breakpoint added via a
+   *  normal editor tab shows up here too, not just ones this panel set). */
+  private breakpointLinesFor(path: string): number[] {
+    const target = vscode.Uri.file(path).toString();
+    const lines = new Set<number>();
+    for (const bp of vscode.debug.breakpoints) {
+      if (!(bp instanceof vscode.SourceBreakpoint)) continue;
+      if (bp.location.uri.toString() !== target) continue;
+      lines.add(bp.location.range.start.line + 1); // 0-based -> 1-based
+    }
+    return [...lines].sort((a, b) => a - b);
+  }
+
+  /**
+   * Toggles a real `vscode.SourceBreakpoint` at `path`:`line` (1-based) —
+   * removes one if it already exists there, otherwise adds one. `path` must
+   * be a real file on disk (the webview only sends this once the workflow
+   * has been saved — see App.tsx's `workflowFilePath`/`handleToggleBreakpoint`
+   * — there is deliberately no "create the file first" fallback here: a
+   * breakpoint against a file that doesn't exist yet would silently do
+   * nothing useful once a real debug session tries to resolve it).
+   * `onBreakpointsMaybeChanged` (registered on `vscode.debug.onDidChangeBreakpoints`
+   * in the constructor) picks up the resulting change and reports the new
+   * list back to the webview — this method doesn't post anything itself, to
+   * keep exactly ONE code path (the event listener) responsible for keeping
+   * the webview in sync, regardless of who changed the breakpoints.
+   */
+  private onToggleBreakpoint(path: string, line: number): void {
+    const uri = vscode.Uri.file(path);
+    const target = uri.toString();
+    const existing = vscode.debug.breakpoints.find(
+      (bp) =>
+        bp instanceof vscode.SourceBreakpoint &&
+        bp.location.uri.toString() === target &&
+        bp.location.range.start.line === line - 1,
+    );
+    if (existing) {
+      vscode.debug.removeBreakpoints([existing]);
+    } else {
+      vscode.debug.addBreakpoints([
+        new vscode.SourceBreakpoint(
+          new vscode.Location(uri, new vscode.Position(line - 1, 0)),
+        ),
+      ]);
+    }
+  }
+
+  /**
+   * Toggles a NODE breakpoint: a node breakpoint IS a normal
+   * `vscode.SourceBreakpoint` on the node's `.dar.ts` DECLARATION line (its
+   * `"id": "…"` property line), so it lives in the SAME store as code
+   * (body-line) breakpoints and a single reverse lookup tells the canvas and
+   * the code-view gutter which lines are "node" breakpoints. Reads `path`,
+   * maps `nodeId` -> decl line via the cdk's `locateDarTsNodeLines` (static
+   * parse, never executed — same posture as the rest of the `.dar.ts`
+   * tooling), then reuses `onToggleBreakpoint`'s exact add/remove logic. A
+   * missing file or an unmapped node id is a silent no-op (there is nothing
+   * real to target — mirrors `onToggleBreakpoint`'s own contract).
+   * `onBreakpointsMaybeChanged` (the single sync path) posts the resulting
+   * `breakpointsChanged` with the recomputed `nodeIds`.
+   */
+  private onToggleNodeBreakpoint(path: string, nodeId: string): void {
+    let text: string;
+    try {
+      text = fs.readFileSync(path, "utf-8");
+    } catch {
+      return;
+    }
+    const line = locateDarTsNodeLines(text).get(nodeId);
+    if (line === undefined) return;
+    this.onToggleBreakpoint(path, line);
+  }
+
+  /** The node ids whose `.dar.ts` declaration line is currently a breakpoint
+   *  in `path` — the reverse of a node breakpoint (see
+   *  `onToggleNodeBreakpoint`). Reads `path`, runs `locateDarTsNodeLines`, and
+   *  keeps every node whose decl line is in the current breakpoint set. Empty
+   *  when the file can't be read (never-saved / deleted). */
+  private nodeIdsForBreakpoints(path: string): string[] {
+    let text: string;
+    try {
+      text = fs.readFileSync(path, "utf-8");
+    } catch {
+      return [];
+    }
+    const lineSet = new Set(this.breakpointLinesFor(path));
+    const nodeIds: string[] = [];
+    for (const [nodeId, line] of locateDarTsNodeLines(text)) {
+      if (lineSet.has(line)) nodeIds.push(nodeId);
+    }
+    return nodeIds;
+  }
+
+  /** The node that owns `darLine` — its `.dar.ts` declaration line OR any line
+   *  of its code body (the cdk's `darTsNodeIdForLine`), so the canvas can glow
+   *  the running node whether the pause landed on the node's operation entry or
+   *  on a statement inside its code. Undefined when `darLine` is null, belongs
+   *  to no node (blank lines, the workflow literal's own scaffolding), or the
+   *  tracked file can't be read. */
+  private pausedNodeIdFor(darLine: number | null): string | undefined {
+    if (darLine == null || !this.workflowFilePath) return undefined;
+    let text: string;
+    try {
+      text = fs.readFileSync(this.workflowFilePath, "utf-8");
+    } catch {
+      return undefined;
+    }
+    return darTsNodeIdForLine(text, darLine);
+  }
+
+  /**
+   * Asks the webview to approve the IAM permissions inferred for a deploy,
+   * resolving when the deploy modal answers. Replaces a native modal dialog
+   * that crammed every statement into its body text — unreadable past a
+   * handful, and it put the decision in a different surface from the deploy
+   * the user had just started.
+   *
+   * Resolves FALSE if the panel goes away while waiting (see `dispose`): the
+   * deploy then proceeds without the inline policy rather than hanging on a
+   * webview that can no longer answer.
+   */
+  private requestPermissionsApproval(
+    analysis: PermissionAnalysis,
+    roleName: string,
+  ): Promise<boolean> {
+    const requestId = `perm-${++this.permissionsReqSeq}`;
+    return new Promise<boolean>((resolve) => {
+      this.permissionsReqs.set(requestId, resolve);
+      this.post({
+        type: "deployPermissionsRequest",
+        requestId,
+        roleName,
+        statements: analysis.statements.map((s) => ({
+          actions: s.actions,
+          resources: s.resources,
+          source: s.source,
+        })),
+        warnings: analysis.warnings,
+      });
+    });
+  }
+
+  /** The deploy modal answered a permissions review. */
+  private onDeployPermissionsResponse(
+    requestId: string,
+    approved: boolean,
+  ): void {
+    const resolve = this.permissionsReqs.get(requestId);
+    if (!resolve) return; // Already answered, or a stale/unknown id.
+    this.permissionsReqs.delete(requestId);
+    resolve(approved);
+  }
+
+  /** Responds to the webview's initial "getBreakpoints" request — starts the
+   *  code view's gutter in sync with whatever VS Code already has. */
+  private onGetBreakpoints(path: string): void {
+    this.workflowFilePath = path;
+    this.post({
+      type: "breakpointsChanged",
+      path,
+      lines: this.breakpointLinesFor(path),
+      nodeIds: this.nodeIdsForBreakpoints(path),
+    });
+  }
+
+  /**
+   * Fires on EVERY breakpoint change anywhere in VS Code (added, removed, or
+   * moved, from any source — a normal editor tab, `onToggleBreakpoint`
+   * above, or VS Code itself during an active debug session). Only forwards
+   * to the webview when `this.workflowFilePath` is set — i.e. the currently
+   * open workflow has a real backing file — since without one there is
+   * nothing for the webview's gutter to stay in sync with.
+   */
+  private onBreakpointsMaybeChanged(): void {
+    if (!this.workflowFilePath) return;
+    this.post({
+      type: "breakpointsChanged",
+      path: this.workflowFilePath,
+      lines: this.breakpointLinesFor(this.workflowFilePath),
+      nodeIds: this.nodeIdsForBreakpoints(this.workflowFilePath),
+    });
+  }
+
+  /**
+   * Deploy the current workflow as a durable Lambda (generate → bundle →
+   * create/update → version → alias), streaming progress to the webview. Uses
+   * the same region/credentials as the Insight side; role ARN + retention come
+   * from settings (role auto-created when blank).
+   */
+  private async onDeployWorkflow(
+    functionName: string,
+    workflowJson: unknown,
+  ): Promise<void> {
+    this.deployAbort = new AbortController();
+    try {
+      const cfg = readConfig();
+      const raw = vscode.workspace.getConfiguration("workflowInsight");
+      const roleArn = (raw.get<string>("lambdaRoleArn") || "").trim();
+      const retentionDays = raw.get<number>("deployRetentionDays") ?? 7;
+      const workflow = parseWorkflow(workflowJson);
+      // `.dar.ts` is the current first-class format for both authoring and
+      // the deploy artifact (dar-ts-specification.md's Phase 2) — always
+      // built and embedded, not just when debugging. The webview's in-memory
+      // model has no backing file of its own, so this is generated fresh on
+      // every deploy from its current JSON wire-format state (same
+      // conversion `onSaveWorkflow`'s "Save" already applies when writing a
+      // `.dar.ts` file to disk).
+      //
+      // The deployment record is stamped into the model FIRST so the
+      // generated text's trailing `meta.deploy` block carries it — that's
+      // what lets a reopened file (after a VS Code restart) still know which
+      // Lambda it belongs to for one-click debugging. Injected BEFORE
+      // generation (not patched into the file afterwards) so the deployed
+      // text, the saved file, and the source map's sourcesContent are all
+      // the same bytes.
+      const workflowJsonWithDeploy = {
+        ...(workflowJson as JsonWorkflow),
+        deploy: {
+          functionName,
+          region: cfg.region,
+          deployedAt: new Date().toISOString(),
+        },
+      };
+      const darTsText = workflowToDarTs(workflowJsonWithDeploy);
+      // Persist the updated deployment record into the user's real saved
+      // file (when there is one) BEFORE deploying — the on-disk == deployed
+      // content invariant is exactly what the darSourceAbsolutePath check
+      // below relies on. `meta` sits at the file's very bottom, so this
+      // rewrite never shifts function-body lines (breakpoints stay valid).
+      if (this.workflowFilePath) {
+        try {
+          await vscode.workspace.fs.writeFile(
+            vscode.Uri.file(this.workflowFilePath),
+            Buffer.from(darTsText, "utf-8"),
+          );
+        } catch {
+          // Read-only/missing file — deploy proceeds; only the reopen
+          // convenience is lost (and darSourceAbsolutePath won't match).
+        }
+      }
+      this.post({
+        type: "deployStatus",
+        status: "progress",
+        message: `Deploying "${functionName}" to ${cfg.region}…`,
+      });
+      // Debug info (source map + local artifacts) is ALWAYS generated now —
+      // debugging a deployed workflow is a headline feature, the .dar.ts
+      // source is embedded in every deploy regardless, and the map's extra
+      // size/time is negligible. Persisted under the open workspace folder
+      // (or, with none open, the user's home directory — NOT an OS temp dir,
+      // which would defeat debugOutDir needing to outlive a single deploy
+      // call) — see DeployOptions.debugOutDir's doc comment in deploy.ts for
+      // the full "must be a stable location" rationale.
+      const debugOutDir = path.join(
+        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.homedir(),
+        ".workflow-studio-debug",
+        requireLambdaFunctionName(functionName),
+      );
+      const darSourceFileName = `${functionName}.dar.ts`;
+      // When the workflow open in Studio is backed by a REAL saved .dar.ts
+      // whose on-disk content is byte-identical to what we're deploying,
+      // record ITS absolute path as the source map's `sources` entry — the
+      // webview gutter registers vscode.SourceBreakpoints against that exact
+      // file, and a remote debug session only pauses on them if the mapped
+      // source resolves to the same path (see darSourceAbsolutePath's doc
+      // comment in deploy.ts). Content mismatch (file edited outside Studio,
+      // or unsaved graph changes) means the file's line numbers can't be
+      // trusted — fall back to the debugOutDir copy rather than binding
+      // breakpoints to lines that may no longer mean what the map says.
+      let darSourceAbsolutePath: string | undefined;
+      if (this.workflowFilePath) {
+        try {
+          const onDisk = Buffer.from(
+            await vscode.workspace.fs.readFile(
+              vscode.Uri.file(this.workflowFilePath),
+            ),
+          ).toString("utf-8");
+          if (onDisk === darTsText)
+            darSourceAbsolutePath = this.workflowFilePath;
+        } catch {
+          // File gone/unreadable — fall back to the debugOutDir copy.
+        }
+      }
+      const result = await deployWorkflow({
+        region: cfg.region,
+        credentials: resolveCredentials(cfg.awsProfile),
+        functionName,
+        roleArn: roleArn || undefined,
+        retentionDays,
+        workflow,
+        darTsText,
+        allowDagMode: cfg.enableDagMode,
+        debugOutDir,
+        darSourceFileName,
+        darSourceAbsolutePath,
+        onProgress: (message) =>
+          this.post({ type: "deployStatus", status: "progress", message }),
+        confirmOverwrite: async () => {
+          const choice = await vscode.window.showWarningMessage(
+            `A Lambda function named "${functionName}" already exists in ${cfg.region}. Deploying will update it and publish a new version.`,
+            { modal: true },
+            "Update",
+          );
+          return choice === "Update";
+        },
+        confirmPermissions: (analysis) =>
+          this.requestPermissionsApproval(analysis, `${functionName}-role`),
+        signal: this.deployAbort.signal,
+      });
+      this.post({ type: "deployStatus", status: "done", result });
+    } catch (e) {
+      if (e instanceof DeployCancelledError) {
+        this.post({
+          type: "deployStatus",
+          status: "error",
+          // The error's own message names what was already applied — never
+          // flatten it to a bare "Cancelled", which would imply a rollback.
+          message: e.message,
+        });
+        return;
+      }
+      this.post({
+        type: "deployStatus",
+        status: "error",
+        message: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      this.deployAbort = undefined;
+    }
+  }
+
+  /**
+   * Cancels the in-flight deploy. Cooperative: it stops the sequence at the
+   * next step boundary rather than undoing anything (no CloudFormation stack is
+   * involved). Also settles any outstanding permissions review — the deploy is
+   * parked awaiting that answer, so aborting alone would not wake it.
+   */
+  private onCancelDeploy(): void {
+    for (const resolve of this.permissionsReqs.values()) resolve(false);
+    this.permissionsReqs.clear();
+    this.deployAbort?.abort();
+  }
+
+  /**
+   * One-click remote debug of an already-deployed workflow: attaches the LDK
+   * debug layer to the function's $LATEST, invokes it, and drives the
+   * sandbox's V8 inspector with our own CDP client through the secure tunnel
+   * (see ./remoteDebug/debugRunner.ts — no vscode.debug / js-debug session),
+   * streaming the whole run to the webview's in-Studio debug panel as
+   * "debugEvent" messages. Breakpoints set in Studio's code view (or the
+   * `.dar.ts` file itself) seed the run; VS Code's real breakpoint list
+   * stays the store (see breakpointLinesFor).
+   */
+  private async onRunWorkflow(
+    functionName: string,
+    payload: string,
+    executionName: string | undefined,
+    debug: boolean,
+  ): Promise<void> {
+    payload = payload.trim() || "{}";
+    try {
+      JSON.parse(payload);
+    } catch {
+      // A debug run's webview panel already reset to "running" on the Run
+      // click — settle it with the error instead of a dialog it can't see.
+      if (debug) {
+        this.postDebugEvent({
+          kind: "error",
+          message: "The payload must be valid JSON.",
+        });
+      } else {
+        vscode.window.showErrorMessage("The payload must be valid JSON.");
+      }
+      return;
+    }
+
+    // Execute and Debug are ONE flow with a flag (the webview's Run modal
+    // sets it): execute = the pre-existing async durable invoke
+    // (startExecution — returns immediately with the execution ARN); debug =
+    // the same target function, but invoked synchronously under a remote
+    // debug session so breakpoints can hold it.
+    if (!debug) {
+      await this.onStartExecution(functionName, payload, executionName);
+      return;
+    }
+
+    // Source maps come from the last deploy-with-debug-info — computed the
+    // SAME way onDeployWorkflow does, so the two always agree on where the
+    // artifacts live (see debugOutDir's rationale there).
+    const debugOutDir = path.join(
+      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.homedir(),
+      ".workflow-studio-debug",
+      requireLambdaFunctionName(functionName),
+    );
+    // index.js.map is the deploy's own "debug info exists" marker: without
+    // it no breakpoint could ever bind, which looks like a silent failure —
+    // refuse up front with the fix instead (startDebugRun re-checks, but
+    // failing here keeps the error ahead of any progress noise).
+    if (!fs.existsSync(path.join(debugOutDir, "index.js.map"))) {
+      this.postDebugEvent({
+        kind: "error",
+        message:
+          `No debug info found for "${functionName}". Deploy the workflow ` +
+          `first (every deploy includes debug info), then try again.`,
+      });
+      return;
+    }
+    // One run at a time (see the activeDebugRun field's doc comment).
+    if (this.activeDebugRun) {
+      this.postDebugEvent({
+        kind: "error",
+        message:
+          "A debug session is already running. Stop it before starting another.",
+      });
+      return;
+    }
+
+    // Terminal-event bookkeeping: onDone/onError can fire BEFORE
+    // startDebugRun's own resolution reaches us (an invoke that settles
+    // instantly after the runtime is released), so the handle is only
+    // stored if the run hasn't already ended, and clearing checks identity.
+    let handle: DebugRunnerHandle | undefined;
+    let ended = false;
+    const endRun = (): void => {
+      ended = true;
+      if (handle && this.activeDebugRun === handle) {
+        this.activeDebugRun = undefined;
+      }
+    };
+
+    const cfg = readConfig();
+    try {
+      // Setup takes tens of seconds (config update + tunnel + attach) — the
+      // runner streams progress through onStatus, which the webview's debug
+      // panel renders live, so no separate VS Code progress UI is needed.
+      const started = await startDebugRun({
+        region: cfg.region,
+        credentials: resolveCredentials(cfg.awsProfile),
+        functionName,
+        payloadJson: payload,
+        executionName,
+        debugOutDir,
+        // Seed the run with the gutter's current breakpoints — VS Code's
+        // real breakpoint list is still the store (see breakpointLinesFor);
+        // debugSetBreakpoints pushes later gutter changes into the run.
+        initialBreakpointDarLines: this.workflowFilePath
+          ? this.breakpointLinesFor(this.workflowFilePath)
+          : [],
+        events: {
+          onStatus: (message) =>
+            this.postDebugEvent({ kind: "status", message }),
+          onPaused: (p) =>
+            this.postDebugEvent({
+              kind: "paused",
+              darLine: p.darLine,
+              functionName: p.functionName,
+              // If the paused `.dar.ts` line IS a node's declaration line,
+              // include that node id so the canvas can glow the paused node
+              // (reverse of a node breakpoint — see onToggleNodeBreakpoint).
+              pausedNodeId: this.pausedNodeIdFor(p.darLine),
+              // The protocol's frames carry no bundleLine (the UI never
+              // shows bundle coordinates) — drop it here.
+              callStack: p.callStack.map((f) => ({
+                functionName: f.functionName,
+                darLine: f.darLine,
+              })),
+              scopes: p.scopes,
+            }),
+          onResumed: () => this.postDebugEvent({ kind: "resumed" }),
+          onDone: (result) => {
+            this.postDebugEvent({
+              kind: "done",
+              statusCode: result.statusCode,
+              payload: result.payload,
+              logTail: result.logTail,
+            });
+            endRun();
+          },
+          onError: (message) => {
+            this.postDebugEvent({ kind: "error", message });
+            endRun();
+          },
+        },
+      });
+      handle = started;
+      if (!ended) {
+        this.activeDebugRun = handle;
+      }
+      this.postDebugEvent({ kind: "started", functionName });
+    } catch (e) {
+      // startDebugRun tears its own partial work down before rethrowing,
+      // so there is nothing to stop here.
+      this.postDebugEvent({
+        kind: "error",
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
+  /** Streams one event of the active in-app debug run to the webview (the
+   *  "In-Studio debugger protocol" section in webview-ui/src/types.ts). */
+  private postDebugEvent(event: Record<string, unknown>): void {
+    this.post({ type: "debugEvent", event });
+  }
+
+  /**
+   * A stepping/continue/stop command from the webview's debug toolbar. A
+   * command with no active run (a stale click racing the run's own
+   * completion) is a no-op, answered with a status line — the session is
+   * simply gone, not broken.
+   */
+  private async onDebugCommand(
+    command: "continue" | "stepOver" | "stepInto" | "stepOut" | "stop",
+  ): Promise<void> {
+    const handle = this.activeDebugRun;
+    if (!handle) {
+      this.postDebugEvent({
+        kind: "status",
+        message: `Ignored "${command}" — no debug session is active.`,
+      });
+      return;
+    }
+    if (command === "stop") {
+      // stop() tears everything down WITHOUT emitting onDone/onError (the
+      // runner treats the invoke's settle after a user stop as fallout,
+      // not a result) — synthesize the terminal event here so the webview
+      // panel leaves its running state.
+      this.activeDebugRun = undefined;
+      await handle.stop();
+      this.postDebugEvent({ kind: "error", message: "Debug session stopped." });
+      return;
+    }
+    try {
+      switch (command) {
+        case "continue":
+          return await handle.continue_();
+        case "stepOver":
+          return await handle.stepOver();
+        case "stepInto":
+          return await handle.stepInto();
+        case "stepOut":
+          return await handle.stepOut();
+      }
+    } catch (e) {
+      // "not paused"/"stopped" rejections from racing clicks — inform,
+      // don't fail the session over them.
+      this.postDebugEvent({
+        kind: "status",
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
+  /**
+   * Lazily expands a paused frame's scope (or a nested object) for the
+   * webview's variables tree — replies with "debugProperties" correlated by
+   * `requestId`, with `error` set when the fetch failed (session gone,
+   * stale objectId after a resume, ...).
+   */
+  private async onDebugGetProperties(
+    requestId: string,
+    objectId: string,
+  ): Promise<void> {
+    const handle = this.activeDebugRun;
+    if (!handle) {
+      this.post({
+        type: "debugProperties",
+        requestId,
+        properties: [],
+        error: "No debug session is active.",
+      });
+      return;
+    }
+    try {
+      const properties = await handle.getProperties(objectId);
+      this.post({ type: "debugProperties", requestId, properties });
+    } catch (e) {
+      this.post({
+        type: "debugProperties",
+        requestId,
+        properties: [],
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
+  /**
+   * The user toggled gutter breakpoints DURING an active run: retranslate
+   * and REPLACE the live set (the webview sends its full current line set),
+   * answering with the lines that actually bound. With no active run this
+   * is dropped silently — the gutter itself is owned by breakpointsChanged,
+   * which is unaffected.
+   */
+  private async onDebugSetBreakpoints(darLines: number[]): Promise<void> {
+    const handle = this.activeDebugRun;
+    if (!handle) return;
+    try {
+      const bound = await handle.setBreakpoints(
+        darLines.filter((l) => typeof l === "number" && Number.isFinite(l)),
+      );
+      this.postDebugEvent({ kind: "boundBreakpoints", darLines: bound });
+    } catch (e) {
+      this.postDebugEvent({
+        kind: "status",
+        message: `Couldn't update breakpoints: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      });
+    }
+  }
+
+  private awsContext() {
+    const cfg = readConfig();
+    return {
+      region: cfg.region,
+      credentials: resolveCredentials(cfg.awsProfile),
+    };
+  }
+
+  /**
+   * Runs `run`, posting the message built by `onSuccess` from its result, or
+   * (on throw) the message built by `onError` from the error's string
+   * message. Factors out the repeated try/catch/post-twice shape used by
+   * most simple request→response handlers; callers close over any fields
+   * (requestId, functionName, etc.) they need in both branches.
+   */
+  private async respond<T>(
+    run: () => Promise<T>,
+    onSuccess: (result: T) => Record<string, unknown>,
+    onError: (message: string) => Record<string, unknown>,
+  ): Promise<void> {
+    try {
+      this.post(onSuccess(await run()));
+    } catch (e) {
+      this.post(onError(e instanceof Error ? e.message : String(e)));
+    }
+  }
+
+  /** List durable functions in the region for the picker. */
+  private async onListFunctions(): Promise<void> {
+    await this.respond(
+      () =>
+        listDurableFunctions(this.awsContext(), (partial) =>
+          this.post({
+            type: "functionsList",
+            functions: partial,
+            loading: true,
+          }),
+        ),
+      (functions) => ({ type: "functionsList", functions, loading: false }),
+      (error) => ({
+        type: "functionsList",
+        functions: [],
+        loading: false,
+        error,
+      }),
+    );
+  }
+
+  /** Lists account resources of a kind for a Studio "Jobs" resource picker. */
+  private async onListResources(
+    requestId: string,
+    resource: string,
+  ): Promise<void> {
+    await this.respond(
+      () => listResources(this.awsContext(), resource),
+      (items) => ({ type: "resourceList", requestId, items }),
+      (error) => ({ type: "resourceList", requestId, items: [], error }),
+    );
+  }
+
+  /** Infer node result types (TS) from their code, in dependency order. */
+  private onInferTypes(
+    requestId: string,
+    items: InferItem[],
+    seedTypes?: Record<string, string>,
+    inputType?: string,
+  ): void {
+    try {
+      const types = inferResultTypes(items, seedTypes ?? {}, inputType);
+      this.post({ type: "inferTypesResult", requestId, types });
+    } catch (e) {
+      this.post({
+        type: "inferTypesResult",
+        requestId,
+        types: {},
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
+  /** Metadata for one durable function. */
+  private async onGetFunctionInfo(functionName: string): Promise<void> {
+    await this.respond(
+      () => getFunctionInfo(this.awsContext(), functionName),
+      (info) => ({ type: "functionInfo", info }),
+      (error) => ({ type: "functionInfo", info: null, error }),
+    );
+  }
+
+  /** A page of durable executions for a function. */
+  private async onListExecutions(
+    functionName: string,
+    qualifier?: string,
+    marker?: string,
+  ): Promise<void> {
+    await this.respond(
+      () =>
+        listExecutions(this.awsContext(), { functionName, qualifier, marker }),
+      ({ executions, nextMarker }) => ({
+        type: "executionsList",
+        functionName,
+        executions,
+        nextMarker,
+      }),
+      (error) => ({
+        type: "executionsList",
+        functionName,
+        executions: [],
+        error,
+      }),
+    );
+  }
+
+  /** Start a new execution (async invoke); returns the execution ARN. */
+  private async onStartExecution(
+    functionName: string,
+    payload: string,
+    executionName?: string,
+  ): Promise<void> {
+    await this.respond(
+      () =>
+        startExecution(this.awsContext(), {
+          functionName,
+          payload,
+          executionName,
+        }),
+      (res) => ({
+        type: "executionStarted",
+        functionName,
+        durableExecutionArn: res.durableExecutionArn,
+        statusCode: res.statusCode,
+      }),
+      (error) => ({ type: "executionStarted", functionName, error }),
+    );
+  }
+
+  /** Detail for one durable execution. */
+  private async onGetExecution(arn: string): Promise<void> {
+    await this.respond(
+      () => getExecution(this.awsContext(), arn),
+      (detail) => ({ type: "executionDetail", detail }),
+      (error) => ({ type: "executionDetail", detail: null, error }),
+    );
+  }
+
+  /**
+   * Stops a running durable execution (gated behind a confirmation prompt),
+   * then re-fetches its detail so the view reflects the STOPPED status.
+   */
+  private async onStopExecution(arn: string): Promise<void> {
+    const choice = await vscode.window.showWarningMessage(
+      "Stop this durable execution? It will be marked STOPPED and cannot resume.",
+      { modal: true },
+      "Stop execution",
+    );
+    if (choice !== "Stop execution") return;
+    try {
+      await stopExecution(this.awsContext(), arn);
+      vscode.window.showInformationMessage("Stop requested.");
+      const detail = await getExecution(this.awsContext(), arn);
+      this.post({ type: "executionDetail", detail });
+    } catch (e) {
+      vscode.window.showErrorMessage(
+        `Couldn't stop execution: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }
+
+  /**
+   * Generates the TypeScript for one node field from a natural-language
+   * description via the configured LLM provider (Studio "agent" buttons).
+   */
+  private async onGenerateNodeCode(msg: {
+    requestId: string;
+    kind: string;
+    field: string;
+    name: string;
+    description: string;
+    scope: string[];
+    inputType?: string;
+    currentCode?: string;
+  }): Promise<void> {
+    await this.respond(
+      () => {
+        const cfg = readConfig();
+        setLocalModel(cfg.localModel);
+        setLocalServer(cfg.localServerUrl, cfg.localServerModel);
+        return generateNodeCode(
+          {
+            provider: cfg.llmProvider,
+            region: cfg.region,
+            credentials: resolveCredentials(cfg.awsProfile),
+            modelId: cfg.bedrockModelId,
+          },
+          {
+            kind: msg.kind,
+            field: msg.field,
+            name: msg.name,
+            description: msg.description,
+            scope: msg.scope,
+            inputType: msg.inputType,
+            currentCode: msg.currentCode,
+          },
+        );
+      },
+      (code) => ({ type: "agentNodeCode", requestId: msg.requestId, code }),
+      (error) => ({
+        type: "agentNodeCode",
+        requestId: msg.requestId,
+        error,
+      }),
+    );
+  }
+
+  /**
+   * Generates a whole workflow `.dar` from a natural-language description via the
+   * configured LLM provider (Studio header "Agent" button). Returns the `.dar`
+   * JSON text, which the webview loads onto the canvas.
+   */
+  private async onGenerateWorkflow(
+    requestId: string,
+    description: string,
+  ): Promise<void> {
+    await this.respond(
+      () => {
+        const cfg = readConfig();
+        setLocalModel(cfg.localModel);
+        setLocalServer(cfg.localServerUrl, cfg.localServerModel);
+        return generateWorkflowDar(
+          {
+            provider: cfg.llmProvider,
+            region: cfg.region,
+            credentials: resolveCredentials(cfg.awsProfile),
+            modelId: cfg.bedrockModelId,
+          },
+          description,
+        );
+      },
+      (dar) => ({ type: "agentWorkflow", requestId, dar }),
+      (error) => ({ type: "agentWorkflow", requestId, error }),
+    );
+  }
+
+  /** Lists the account's Step Functions state machines for the import picker. */
+  private async onListStateMachines(requestId: string): Promise<void> {
+    await this.respond(
+      () => listResources(this.awsContext(), "stateMachineArn"),
+      (items) => ({ type: "resourceList", requestId, items }),
+      (error) => ({ type: "resourceList", requestId, items: [], error }),
+    );
+  }
+
+  /**
+   * Imports a Step Functions state machine: fetches its ASL definition and
+   * converts it to a `.dar` (hybrid skeleton + agent bodies + validate/judge
+   * loop). Returns the `.dar` via `agentWorkflow` so the webview loads it onto
+   * the canvas using the same path as AI generation. Notes/faithfulness are
+   * surfaced via the `dar`'s conversion notes shown by the webview.
+   */
+  private async onImportStateMachine(
+    requestId: string,
+    arn: string,
+    inlineLambdas: boolean,
+  ): Promise<void> {
+    try {
+      const cfg = readConfig();
+      setLocalModel(cfg.localModel);
+      setLocalServer(cfg.localServerUrl, cfg.localServerModel);
+      const result = await importStateMachineFromArn({
+        ctx: this.awsContext(),
+        arn,
+        llmOptions: {
+          provider: cfg.llmProvider,
+          region: cfg.region,
+          credentials: resolveCredentials(cfg.awsProfile),
+          modelId: cfg.bedrockModelId,
+        },
+        maxIterations: cfg.agenticMaxIterations,
+        inlineLambdas,
+        onEvent: (ev) =>
+          this.post({ type: "importProgress", requestId, ...ev }),
+      });
+      this.post({
+        type: "agentWorkflow",
+        requestId,
+        dar: result.dar,
+        notes: result.notes,
+        faithful: result.faithful,
+      });
+    } catch (e) {
+      this.post({
+        type: "agentWorkflow",
+        requestId,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
+  /**
+   * Deploys a Step Functions starter pack's supporting infra (a CFN stack)
+   * and resolves the pack's `.dar` workflow from the stack's outputs, posting
+   * `starterPackInfraProgress` for each phase (mirrors `onImportStateMachine`'s
+   * progress-then-result shape). Dispatches by `packId` to the right pack via
+   * `./starterPacks/registry.ts`'s `STARTER_PACKS`/`deployStarterPackInfra`.
+   * Does NOT deploy the resulting `.dar` as a durable Lambda; that's a
+   * separate `deployWorkflow` call the webview triggers afterward.
+   */
+  private async onDeployStarterPackInfra(
+    requestId: string,
+    packId: string,
+  ): Promise<void> {
+    const controller = new AbortController();
+    this.starterPackControllers.set(requestId, controller);
+    try {
+      if (!Object.prototype.hasOwnProperty.call(STARTER_PACKS, packId)) {
+        throw new Error(`Unknown starter pack id "${packId}".`);
+      }
+      const result = await deployStarterPackInfra(packId as StarterPackId, {
+        ...this.awsContext(),
+        signal: controller.signal,
+        onProgress: (progress) =>
+          this.post({
+            type: "starterPackInfraProgress",
+            requestId,
+            message: progress.message,
+            resources: progress.resources,
+          }),
+      });
+      this.post({
+        type: "starterPackInfraResult",
+        requestId,
+        dar: result.dar,
+      });
+    } catch (e) {
+      this.post({
+        type: "starterPackInfraResult",
+        requestId,
+        error: e instanceof Error ? e.message : String(e),
+        cancelled: e instanceof CfnDeployCancelledError,
+      });
+    } finally {
+      this.starterPackControllers.delete(requestId);
+    }
+  }
+
+  /** Cancels an in-flight starter-pack infra deploy (see `onDeployStarterPackInfra`). */
+  private onCancelStarterPackDeploy(requestId: string): void {
+    this.starterPackControllers.get(requestId)?.abort();
+  }
+
+  /**
+   * Fetches the `.dar` embedded in the execution's function (if it was deployed
+   * from Studio / the CDK construct) so the Execution Detail view can draw the
+   * workflow graph. Returns `null` dar when the function has no embedded shape.
+   */
+  private async onGetExecutionWorkflow(
+    arn: string,
+    functionArn: string,
+  ): Promise<void> {
+    await this.respond(
+      async () => {
+        const raw = await getWorkflowDar(this.awsContext(), functionArn);
+        // getWorkflowDar returns whichever format was embedded (.dar.ts or
+        // the legacy JSON .dar) as raw text — normalize to JSON-model text
+        // for the graph-drawing webview, same as onOpenWorkflow already does
+        // for a locally-opened file.
+        return raw == null ? null : workflowFileToJsonText(raw);
+      },
+      (dar) => ({ type: "executionWorkflow", arn, dar: dar ?? undefined }),
+      (error) => ({ type: "executionWorkflow", arn, error }),
+    );
+  }
+
+  /** Open a workflow file and hand JSON model text to the webview. */
+  private async onOpenWorkflow(): Promise<void> {
+    const uris = await vscode.window.showOpenDialog({
+      canSelectMany: false,
+      openLabel: "Open workflow",
+      filters: {
+        "Durable workflow": ["dar.ts", "dar"],
+        "All files": ["*"],
+      },
+    });
+    if (!uris || uris.length === 0) return;
+    const uri = uris[0];
+    const bytes = await vscode.workspace.fs.readFile(uri);
+    const raw = Buffer.from(bytes).toString("utf-8");
+    let content: string;
+    try {
+      // Sniffs content (legacy JSON vs .dar.ts) — static parse, never executed.
+      content = workflowFileToJsonText(raw);
+    } catch (e) {
+      vscode.window.showErrorMessage(
+        e instanceof Error ? e.message : String(e),
+      );
+      return;
+    }
+    const name =
+      uri.path
+        .split("/")
+        .pop()
+        ?.replace(/\.dar(\.ts)?$/i, "") ?? "workflow";
+    this.workflowFilePath = uri.fsPath;
+    this.post({ type: "workflowLoaded", name, content, path: uri.fsPath });
+  }
+
+  /**
+   * Loads a specific durable function's embedded `.dar` (by name) and hands it
+   * to the webview to edit in Workflow Studio — backs the "Edit" button on the
+   * Durable Functions view, shown only for editable (tagged) functions.
+   */
+  private async onEditFunctionWorkflow(functionName: string): Promise<void> {
+    try {
+      const raw = await getWorkflowDar(this.awsContext(), functionName);
+      if (raw == null) {
+        vscode.window.showErrorMessage(
+          `"${functionName}" has no embedded workflow.dar.ts to edit.`,
+        );
+        return;
+      }
+      // Normalize whichever format was embedded (.dar.ts or the legacy JSON
+      // .dar) to JSON-model text — same conversion onOpenWorkflow already
+      // applies for a locally-opened file.
+      const content = workflowFileToJsonText(raw);
+      // No real local file backs this content — clear the tracked path so
+      // the code view's breakpoint gutter correctly shows "save to set
+      // breakpoints" instead of stale state from whatever was open before.
+      this.workflowFilePath = undefined;
+      this.post({ type: "workflowLoaded", name: functionName, content });
+    } catch (e) {
+      vscode.window.showErrorMessage(
+        `Couldn't open "${functionName}" in Workflow Studio: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+    }
+  }
+
+  /** List an AWS SDK client's operations (loading it on demand). */
+  private async onListSdkActions(clientPackage: string): Promise<void> {
+    await this.respond(
+      () => listActions(clientPackage),
+      (info) => ({ type: "sdkActions", ...info }),
+      (error) => ({ type: "sdkActions", clientPackage, error }),
+    );
+  }
+
+  /** Reflect one AWS SDK operation's input shape into fields + a JSON skeleton. */
+  private async onReflectSdkAction(
+    clientPackage: string,
+    command: string,
+  ): Promise<void> {
+    await this.respond(
+      () => reflectAction(clientPackage, command),
+      (shape) => ({ type: "sdkActionShape", clientPackage, ...shape }),
+      (error) => ({
+        type: "sdkActionShape",
+        clientPackage,
+        command,
+        error,
+      }),
+    );
+  }
+
+  /** The static third-party API catalog + community directory (no network). */
+  private onListApiVendors(): void {
+    const dir = listApiDirectory();
+    this.post({
+      type: "apiVendors",
+      vendors: listApiVendors(),
+      directory: dir.entries,
+      directoryGeneratedAt: dir.generatedAt,
+    });
+  }
+
+  /** List a third-party API's operations from the vendor's own OpenAPI spec. */
+  private async onListApiOperations(spec: string): Promise<void> {
+    await this.respond(
+      () => listApiOperations(spec),
+      (info) => ({ type: "apiOperations", ...info }),
+      (error) => ({ type: "apiOperations", specId: spec, error }),
+    );
+  }
+
+  /** Reflect one API operation into url/params/body for a `httpCall` node. */
+  private async onReflectApiOperation(
+    spec: string,
+    key: string,
+  ): Promise<void> {
+    await this.respond(
+      () => reflectApiOperation(spec, key),
+      (shape) => ({ type: "apiOperationShape", specId: spec, ...shape }),
+      (error) => ({ type: "apiOperationShape", specId: spec, key, error }),
+    );
+  }
+
+  /**
+   * Lists durable functions with an embedded `.dar` for the webview's "Edit a
+   * durable function" modal (used by both hosts — desktop has no native
+   * scrollable/searchable picker, so this keeps the UI consistent and correct
+   * for accounts with more functions than fit in a handful of buttons).
+   */
+  private async onListEditableFunctions(requestId: string): Promise<void> {
+    await this.respond(
+      () => listWorkflowStudioFunctions(this.awsContext()),
+      (functions) => ({
+        type: "resourceList",
+        requestId,
+        items: functions.map((f) => ({ label: f.name, value: f.name })),
+      }),
+      (error) => ({ type: "resourceList", requestId, items: [], error }),
+    );
   }
 
   private readonly favoritesKey = "workflowInsight.favorites";
@@ -597,7 +2090,7 @@ class ExplorerPanel {
     // Visualize builds the chart spec with the LLM — enforce consent host-side
     // too (defense in depth); reply as a chartSpecError so the webview clears
     // its loading state.
-    if (!this.hasAiConsent(cfg)) {
+    if (cfg.aiDisclosureAcceptedVersion !== REQUIRED_AI_DISCLOSURE_VERSION) {
       this.post({
         type: "chartSpecError",
         message:
@@ -670,116 +2163,6 @@ class ExplorerPanel {
     this.post({ type: "sqsStatus", listening: false });
   }
 
-  private async onGenerate(question: string, mode: QueryMode): Promise<void> {
-    const q = question.trim();
-    if (!q) {
-      this.post({ type: "error", message: "Enter a question first." });
-      return;
-    }
-    const cfg = readConfig();
-    setLocalModel(cfg.localModel);
-    setLocalServer(cfg.localServerUrl, cfg.localServerModel);
-    const credentials = resolveCredentials(cfg.awsProfile);
-    const tableName =
-      cfg.destinationType === "dynamodb"
-        ? cfg.dynamodbTableName
-        : cfg.destinationType === "aurora"
-          ? cfg.auroraTable
-          : cfg.destinationType === "redshift"
-            ? `${cfg.redshiftSchema}.${cfg.redshiftTable}`
-            : cfg.destinationType === "opensearch"
-              ? cfg.opensearchIndex
-              : cfg.destinationType === "s3"
-                ? cfg.athenaTable
-                : undefined;
-
-    // Dispatch by the selected mode:
-    //  - query: run the text verbatim (no LLM)
-    //  - ask:   one NL→query translation, run once (no agent loop)
-    //  - agent: the full agentic explore→answer loop
-    if (mode === "query") {
-      return await this.onRunRawQuery(q, cfg, credentials);
-    }
-    // ask/agent use the LLM — enforce the AI-usage consent host-side too, so a
-    // replayed or malformed "generate" message can't bypass the disclosure the
-    // webview shows. query mode above is intentionally exempt (no LLM).
-    if (!this.hasAiConsent(cfg)) {
-      this.post({
-        type: "error",
-        message:
-          "AI features require accepting the AI-usage disclosure first. Please try again and accept the notice.",
-      });
-      return;
-    }
-    if (mode === "ask") {
-      return await this.onGenerateSingleShot(q, cfg, credentials, tableName);
-    }
-    return await this.onGenerateAgentic(q, cfg, credentials, tableName);
-  }
-
-  /**
-   * "query" mode: run the user's text verbatim as a read-only query. No LLM is
-   * involved — executeQuery still enforces read-only and caps rows, but the
-   * query is otherwise sent to the destination exactly as typed (no drill-down
-   * injection, no explanation, no verify/refine).
-   */
-  private async onRunRawQuery(
-    q: string,
-    cfg: ReturnType<typeof readConfig>,
-    credentials: ReturnType<typeof resolveCredentials>,
-  ): Promise<void> {
-    this.post({ type: "status", text: "Running query..." });
-    const exec = await this.executeQuery(
-      cfg,
-      credentials,
-      { query: q, explanation: "", timeRangeMs: DEFAULT_TIME_RANGE_MS },
-      { injectDrillDown: false },
-    );
-    // Query mode has no LLM prose, so post an explicit summary — otherwise a
-    // 0-row result (e.g. a query whose language doesn't match the configured
-    // destination) looks like nothing happened.
-    const n = exec.count ?? exec.rows.length;
-    this.post({
-      type: "agentAnswer",
-      text:
-        n > 0
-          ? `Ran your query — returned ${n} row${n === 1 ? "" : "s"}${exec.truncated ? " (capped)" : ""}.`
-          : `Ran your query — 0 rows returned. If you expected data, check that your query matches the configured destination's query language (${cfg.destinationType}).`,
-    });
-    this.post({ type: "results", ...exec });
-  }
-
-  /**
-   * "ask" mode: one LLM NL→query translation, run once, present. No agent
-   * loop, no verify/refine — a single query the model writes for the question.
-   */
-  private async onGenerateSingleShot(
-    q: string,
-    cfg: ReturnType<typeof readConfig>,
-    credentials: ReturnType<typeof resolveCredentials>,
-    tableName: string | undefined,
-  ): Promise<void> {
-    this.post({ type: "status", text: "Generating query..." });
-    const generated = await generateQuery({
-      provider: cfg.llmProvider,
-      region: cfg.region,
-      credentials,
-      modelId: cfg.bedrockModelId,
-      question: this.withConversationContext(q),
-      destinationType: cfg.destinationType,
-      tableName,
-    });
-    this.post({ type: "status", text: "Running query..." });
-    const exec = await this.executeQuery(cfg, credentials, generated);
-    this.post({ type: "results", ...exec });
-    this.recordTurn(
-      q,
-      generated.explanation ||
-        `Returned ${exec.count ?? exec.rows.length} row(s).`,
-    );
-  }
-
-  /** Persist the composer's query mode as the default for next time. */
   private async onSetMode(mode: QueryMode): Promise<void> {
     await vscode.workspace
       .getConfiguration("workflowInsight")
@@ -808,751 +2191,6 @@ class ExplorerPanel {
    * malformed message can't reach the LLM without accepted consent. Returns
    * true when the stored acceptance matches the current disclosure version.
    */
-  private hasAiConsent(cfg: { aiDisclosureAcceptedVersion: string }): boolean {
-    return cfg.aiDisclosureAcceptedVersion === REQUIRED_AI_DISCLOSURE_VERSION;
-  }
-
-  /**
-   * Agentic generation: run the query, then ask the model whether the results
-   * actually answer the question; if not, refine the query and try again, up
-   * to a small cap. Emits "agentStep" transcript messages so the webview can
-   * show the loop's progress. Read-only enforcement, identifier injection, and
-   * partition pruning all go through executeQuery. Dispatches to the Bedrock
-   * multi-step tool loop when available.
-   */
-  private async onGenerateAgentic(
-    q: string,
-    cfg: ReturnType<typeof readConfig>,
-    credentials: ReturnType<typeof resolveCredentials>,
-    tableName: string | undefined,
-  ): Promise<void> {
-    // The full multi-turn "explore then answer" agent loop (run_query/finish)
-    // needs Bedrock's Converse tool use. Use it for every queryable
-    // destination under Bedrock (SQS isn't queryable and never reaches here).
-    // Copilot/local keep the generate→verify→refine loop below.
-    if (cfg.llmProvider === "bedrock" && cfg.destinationType !== "sqs") {
-      return await this.onGenerateAgenticToolLoop(q, cfg, credentials);
-    }
-
-    const MAX_ITERATIONS = cfg.agenticMaxIterations;
-
-    this.post({ type: "status", text: "Generating query..." });
-    let generated = await generateQuery({
-      provider: cfg.llmProvider,
-      region: cfg.region,
-      credentials,
-      modelId: cfg.bedrockModelId,
-      question: this.withConversationContext(q),
-      destinationType: cfg.destinationType,
-      tableName,
-      agentic: true,
-    });
-
-    let lastExec: QueryExecution | undefined;
-    // Queries already attempted (normalized), so a loop that starts repeating
-    // itself stops early instead of burning the whole iteration budget on the
-    // same failing/unhelpful query — the higher the cap, the more this matters.
-    const tried = new Set<string>();
-
-    for (let iter = 1; iter <= MAX_ITERATIONS; iter++) {
-      const norm = normalizeQuery(generated.query);
-      if (tried.has(norm)) {
-        // Oscillation guard. This single-shot verify/refine loop BREAKS on a
-        // repeat: the model regenerated the same query, so further refine
-        // rounds would just repeat it. (The Bedrock tool loop instead feeds an
-        // error back and lets the model pick a different query or finish — see
-        // agentLoop.ts — because there the model has tool-driven agency to
-        // change course rather than re-emitting one query.)
-        this.post({
-          type: "agentStep",
-          iteration: iter,
-          query: generated.query,
-          outcome: "error",
-          detail:
-            "Stopped: the model repeated a query it had already tried, so more attempts won't help.",
-        });
-        break;
-      }
-      tried.add(norm);
-
-      this.post({
-        type: "status",
-        text: `Agentic step ${iter}/${MAX_ITERATIONS}: running query...`,
-      });
-
-      let exec: QueryExecution;
-      try {
-        // Inject drill-down/partition columns for row-level result sets so
-        // each row can be clicked for its full record. Skip it for aggregate
-        // queries (and post-process raw fetches); ensureIdentifierColumn also
-        // safely bails on DISTINCT/set-operator/derived shapes it can't
-        // rewrite without corrupting. Decided by query shape, not a model
-        // flag, so drill-down is consistent across providers.
-        exec = await this.executeQuery(cfg, credentials, generated, {
-          injectDrillDown:
-            !isAggregateQuery(
-              generated.query,
-              queryDialect(cfg.destinationType),
-            ) && !generated.postProcess,
-        });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        this.post({
-          type: "agentStep",
-          iteration: iter,
-          query: generated.query,
-          outcome: "error",
-          detail: msg,
-        });
-        if (isRetryableQueryError(msg) && iter < MAX_ITERATIONS) {
-          this.post({
-            type: "status",
-            text: "Query failed, asking the model to fix it...",
-          });
-          generated = await generateQuery({
-            provider: cfg.llmProvider,
-            region: cfg.region,
-            credentials,
-            modelId: cfg.bedrockModelId,
-            question: this.withConversationContext(
-              `${q}\n\nThe previous query failed with this error: ${msg}${columnNotFoundHint(msg)}\nPlease fix the query.`,
-            ),
-            destinationType: cfg.destinationType,
-            tableName,
-            agentic: true,
-          });
-          continue;
-        }
-        throw err;
-      }
-
-      lastExec = exec;
-
-      // If the model chose to fetch raw data for a post-processing step (it
-      // set postProcess=true because the answer was awkward to express in the
-      // query language), answer the question from those rows via an LLM
-      // analysis step instead of the verify/refine loop.
-      if (generated.postProcess) {
-        this.post({
-          type: "status",
-          text: `Agentic step ${iter}/${MAX_ITERATIONS}: analyzing results...`,
-        });
-        const answer = await analyzeResults({
-          provider: cfg.llmProvider,
-          region: cfg.region,
-          credentials,
-          modelId: cfg.bedrockModelId,
-          question: q,
-          goal: generated.postProcessGoal,
-          columns: exec.columns,
-          rows: exec.rows,
-        });
-        this.post({
-          type: "agentStep",
-          iteration: iter,
-          query: exec.finalQuery,
-          rowCount: exec.count ?? exec.rows.length,
-          outcome: "analyzed",
-          detail:
-            generated.postProcessGoal ??
-            "Post-processed the returned rows to answer the question.",
-        });
-        if (answer) this.post({ type: "agentAnswer", text: answer });
-        this.post({ type: "results", ...exec });
-        this.recordTurn(q, answer || "Post-processed the results to answer.");
-        return;
-      }
-
-      // Judge whether the results answer the question.
-      this.post({
-        type: "status",
-        text: `Agentic step ${iter}/${MAX_ITERATIONS}: checking results...`,
-      });
-      const rowCount = exec.count ?? exec.rows.length;
-      const verdict = await verifyResult({
-        provider: cfg.llmProvider,
-        region: cfg.region,
-        credentials,
-        modelId: cfg.bedrockModelId,
-        question: q,
-        query: exec.finalQuery,
-        columns: exec.columns,
-        rowCount,
-        sampleRows: exec.rows.slice(0, 5),
-      });
-
-      this.post({
-        type: "agentStep",
-        iteration: iter,
-        query: exec.finalQuery,
-        rowCount,
-        outcome: verdict.satisfied ? "satisfied" : "unsatisfied",
-        detail: verdict.reason,
-      });
-
-      if (verdict.satisfied || iter === MAX_ITERATIONS) {
-        // Produce a conversational prose answer (works on every provider) so
-        // the reply isn't just a table — parity with the Bedrock tool loop.
-        // analyzeResults is a second model call, so skip it for empty results:
-        // the verdict reason already explains an empty set well (e.g. "no
-        // failed executions") and it isn't worth the extra round-trip.
-        let answer = "";
-        if (rowCount > 0) {
-          this.post({ type: "status", text: "Writing the answer..." });
-          answer = await analyzeResults({
-            provider: cfg.llmProvider,
-            region: cfg.region,
-            credentials,
-            modelId: cfg.bedrockModelId,
-            question: q,
-            columns: exec.columns,
-            rows: exec.rows,
-          });
-        }
-        const prose = answer || verdict.reason;
-        if (prose) this.post({ type: "agentAnswer", text: prose });
-        this.post({ type: "results", ...exec });
-        // Record the turn so follow-ups have conversation context (threaded
-        // back in via withConversationContext on the next question).
-        this.recordTurn(q, prose || `Returned ${rowCount} row(s).`);
-        return;
-      }
-
-      // Refine and try again.
-      this.post({
-        type: "status",
-        text: `Refining query (step ${iter + 1}/${MAX_ITERATIONS})...`,
-      });
-      const suggestion = verdict.suggestion
-        ? `\nSuggested fix: ${verdict.suggestion}`
-        : "";
-      generated = await generateQuery({
-        provider: cfg.llmProvider,
-        region: cfg.region,
-        credentials,
-        modelId: cfg.bedrockModelId,
-        question: this.withConversationContext(
-          `${q}\n\nA previous attempt ran this query:\n${exec.finalQuery}\n\nIt returned ${rowCount} row(s), but that did not adequately answer the question because: ${verdict.reason}${suggestion}\nPlease produce an improved query.`,
-        ),
-        destinationType: cfg.destinationType,
-        tableName,
-        agentic: true,
-      });
-    }
-
-    // The loop returns as soon as it has an answer; reaching here means it
-    // stopped early (repeated query) or exhausted its iterations. Show the
-    // best result we got, or surface a clear error if we never got one.
-    if (lastExec) {
-      this.post({ type: "results", ...lastExec });
-    } else {
-      this.post({
-        type: "error",
-        message:
-          "The assistant couldn't produce a working query for this question within its iteration budget. Try rephrasing, or raise workflowInsight.agenticMaxIterations.",
-      });
-    }
-  }
-
-  /**
-   * Advanced mode, Bedrock + SQL destinations: the full "explore then answer"
-   * agent loop. The model uses run_query to discover the data's shape (e.g.
-   * which keys exist in input/output) and compute candidates — seeing real
-   * columns/rows each time — then calls finish with the query that answers the
-   * question. Exploration and the final presentation run use the SAME
-   * query-shape drill-down injection, so when the model finishes with a query
-   * it already explored, the executed SQL is identical and the result is
-   * reused from queryCache instead of being scanned (billed) a second time.
-   * The number of queries is bounded by agenticMaxIterations.
-   */
-  private async onGenerateAgenticToolLoop(
-    q: string,
-    cfg: ReturnType<typeof readConfig>,
-    credentials: ReturnType<typeof resolveCredentials>,
-  ): Promise<void> {
-    const tableName =
-      cfg.destinationType === "dynamodb"
-        ? cfg.dynamodbTableName
-        : cfg.destinationType === "aurora"
-          ? cfg.auroraTable
-          : cfg.destinationType === "redshift"
-            ? `${cfg.redshiftSchema}.${cfg.redshiftTable}`
-            : cfg.destinationType === "opensearch"
-              ? cfg.opensearchIndex
-              : cfg.destinationType === "s3"
-                ? cfg.athenaTable
-                : undefined;
-
-    let iteration = 0;
-    // The most recent successful query execution, so a turn that ends with a
-    // prose-only answer (the model explored with run_query, then answered
-    // without a distinct "final" query) still shows the data it fetched —
-    // matching the "every data question shows its table" expectation.
-    let lastExec: QueryExecution | undefined;
-    // Per-question cache of raw query results (keyed by executed query text),
-    // shared by the exploration run_query calls and the final presentation
-    // run — so the finish query, already scanned during exploration, isn't
-    // scanned again for presentation when the SQL is identical.
-    const queryCache = new Map<
-      string,
-      { columns: string[]; rows: string[][] }
-    >();
-
-    // Each run_query the model issues: run it read-only and return a bounded
-    // sample. Injection uses the SAME query-shape decision as the final
-    // presentation run, so when the model finishes with a query it already
-    // explored, the executed SQL is identical and the queryCache hits — no
-    // second Athena scan (see the final executeQuery call below). lookbackHours
-    // (log-based sources only) sets the search window. The number of queries
-    // is bounded by agenticMaxIterations.
-    const runQuery = async (
-      query: string,
-      lookbackHours?: number,
-    ): Promise<AgentQueryResult> => {
-      try {
-        const exec = await this.executeQuery(
-          cfg,
-          credentials,
-          {
-            query,
-            explanation: "",
-            timeRangeMs: (lookbackHours ?? 24) * 60 * 60 * 1000,
-          },
-          {
-            injectDrillDown: !isAggregateQuery(
-              query,
-              queryDialect(cfg.destinationType),
-            ),
-            queryCache,
-          },
-        );
-        // Remember the latest successful, row-bearing execution so a
-        // prose-only finish can still present it (see the answer-only branch).
-        if (exec.rows.length > 0) lastExec = exec;
-        return {
-          columns: exec.columns,
-          // Small sample for the model's context; run_javascript gets the
-          // fuller set (capped) so its aggregations aren't limited to 20 rows.
-          rows: exec.rows.slice(0, 20),
-          allRows: exec.rows.slice(0, JS_ROW_CAP),
-          rowCount: exec.count ?? exec.rows.length,
-          truncated: exec.truncated,
-          numericColumns: exec.numericColumns,
-        };
-      } catch (err) {
-        return {
-          columns: [],
-          rows: [],
-          rowCount: 0,
-          error: err instanceof Error ? err.message : String(err),
-        };
-      }
-    };
-
-    this.post({ type: "status", text: "Working on your question..." });
-
-    const final = await runAgentLoop({
-      region: cfg.region,
-      credentials,
-      modelId: cfg.bedrockModelId,
-      question: q,
-      destinationType: cfg.destinationType,
-      tableName,
-      maxIterations: cfg.agenticMaxIterations,
-      priorTurns: this.conversation,
-      runQuery,
-      onStep: (e) => {
-        iteration += 1;
-        this.post({
-          type: "agentStep",
-          iteration,
-          query: e.query ?? "",
-          rowCount: e.rowCount,
-          outcome:
-            e.kind === "error"
-              ? "error"
-              : e.kind === "finish"
-                ? "satisfied"
-                : e.kind === "note"
-                  ? "unsatisfied"
-                  : e.kind === "script"
-                    ? "script"
-                    : "ran",
-          detail: e.detail,
-        });
-        this.post({
-          type: "status",
-          text:
-            e.kind === "finish"
-              ? "Preparing the answer..."
-              : `Agent step ${iteration}: ${e.purpose ?? "running a query"}...`,
-        });
-      },
-    });
-
-    if (!final || !final.query) {
-      // No usable query. If the model produced any prose, still show it and
-      // record the turn so the conversation continues. If it explored real
-      // rows on the way to that answer, present the latest of those too so the
-      // turn still shows its data table.
-      const proseOnly = final?.answer || final?.explanation;
-      if (proseOnly) {
-        this.post({ type: "agentAnswer", text: proseOnly });
-        if (lastExec) this.post({ type: "results", ...lastExec });
-        this.recordTurn(q, proseOnly);
-        return;
-      }
-      this.post({
-        type: "error",
-        message:
-          "The assistant couldn't arrive at a query that answers this question. Try rephrasing, or raise workflowInsight.agenticMaxIterations.",
-      });
-      return;
-    }
-
-    // Run the final query for presentation, with the normal drill-down
-    // decision (row-level results get the identifier/partition columns).
-    this.post({ type: "status", text: "Running the final query..." });
-    const exec = await this.executeQuery(
-      cfg,
-      credentials,
-      {
-        query: final.query,
-        explanation: final.explanation,
-        timeRangeMs: (final.lookbackHours ?? 24) * 60 * 60 * 1000,
-        suggestedCharts: final.suggestedCharts,
-      },
-      {
-        injectDrillDown: !isAggregateQuery(
-          final.query,
-          queryDialect(cfg.destinationType),
-        ),
-        queryCache,
-      },
-    );
-    // The prose reply is the answer; fall back to the explanation so the
-    // conversation never shows a bare "here are the results" placeholder.
-    const prose = final.answer || final.explanation;
-    if (prose) this.post({ type: "agentAnswer", text: prose });
-    this.post({ type: "results", ...exec });
-    // Record the turn so follow-up questions have this exchange as context.
-    this.recordTurn(
-      q,
-      prose ||
-        `Returned ${exec.count ?? exec.rows.length} row(s) for: ${final.query}`,
-    );
-  }
-
-  /**
-   * Prefix a question with a compact transcript of the current conversation,
-   * so the single-shot verify/refine path (Copilot/local) gets the same
-   * follow-up context the Bedrock tool loop gets via priorTurns. Without it, a
-   * follow-up like "now only the failed ones" would generate cold, with no
-   * idea what "those" referred to. Returns the question unchanged when there's
-   * no history yet.
-   */
-  private withConversationContext(question: string): string {
-    if (this.conversation.length === 0) return question;
-    const history = this.conversation
-      .map((t) => `${t.role === "user" ? "User" : "Assistant"}: ${t.text}`)
-      .join("\n");
-    return `Earlier in this conversation:\n${history}\n\nCurrent question: ${question}`;
-  }
-
-  /**
-   * Append a completed exchange to the advanced-mode conversation history, so
-   * the next question continues the session. Trims the history to a bounded
-   * number of recent turns to keep prompt size (and cost) in check.
-   */
-  private recordTurn(question: string, answer: string): void {
-    this.conversation.push({ role: "user", text: question });
-    this.conversation.push({ role: "assistant", text: answer });
-    const MAX_TURNS = 12; // 6 user+assistant pairs
-    if (this.conversation.length > MAX_TURNS) {
-      this.conversation = this.conversation.slice(-MAX_TURNS);
-    }
-  }
-
-  /**
-   * Run a single generated query against the configured destination and return
-   * the normalized results payload (the body of a "results" message, minus the
-   * type). Shared by both provider paths (the Bedrock tool loop and the
-   * verify/refine loop) so there is exactly one place that enforces read-only
-   * access, injects the identifier/partition columns, and runs the
-   * per-destination query engine. Throws on execution errors
-   * (the caller decides whether to retry).
-   */
-  private async executeQuery(
-    cfg: ReturnType<typeof readConfig>,
-    credentials: ReturnType<typeof resolveCredentials>,
-    generated: GeneratedQuery,
-    opts?: {
-      injectDrillDown?: boolean;
-      /**
-       * Per-question cache of raw query results keyed by the exact executed
-       * query string. Lets the tool loop reuse a result it already scanned
-       * during exploration instead of re-running the same SQL for
-       * presentation — avoids double-billing the scan (esp. Athena). A cache
-       * hit only happens when the executed query text is identical, i.e. when
-       * drill-down injection added nothing; otherwise the SQL differs and we
-       * (correctly) run it. Not used for the time-windowed CloudWatch path,
-       * whose result depends on the wall-clock window, not just the query.
-       */
-      queryCache?: Map<string, { columns: string[]; rows: string[][] }>;
-    },
-  ): Promise<QueryExecution> {
-    // Whether to inject the drill-down identifier (and Athena partition)
-    // columns into the query. Callers pass false for exploration/analytical
-    // queries; the agentic paths decide by query shape (isAggregateQuery), so
-    // an analytical query (DISTINCT/UNNEST/aggregate/derived) runs exactly as
-    // written instead of being corrupted by columns that aren't in its scope.
-    // ensureIdentifierColumn is itself conservative and bails on shapes it
-    // can't rewrite safely, so injection is a no-op there even if requested.
-    const inject = opts?.injectDrillDown ?? true;
-    const queryCache = opts?.queryCache;
-    // Run a query unless its exact text was already run this question, in
-    // which case reuse the cached result (no second scan).
-    const runOnce = async <T extends { columns: string[]; rows: string[][] }>(
-      key: string,
-      run: () => Promise<T>,
-    ): Promise<T> => {
-      const hit = queryCache?.get(key);
-      if (hit) return hit as T;
-      const res = await run();
-      queryCache?.set(key, res);
-      return res;
-    };
-    // Enforce the host row ceiling uniformly. Athena's runner already stops
-    // paging at MAX_SQL_ROWS (and sets truncated); Aurora/DynamoDB return a
-    // single API response (bounded by the service's ~1 MB reply), but slice
-    // them too so the guarantee holds for every SQL destination.
-    const capRows = <
-      T extends { columns: string[]; rows: string[][]; truncated?: boolean },
-    >(
-      table: T,
-    ): { rows: string[][]; count: number; truncated: boolean } => {
-      const overCap = table.rows.length > MAX_SQL_ROWS;
-      const rows = overCap ? table.rows.slice(0, MAX_SQL_ROWS) : table.rows;
-      return {
-        rows,
-        count: rows.length,
-        truncated: !!table.truncated || overCap,
-      };
-    };
-    if (cfg.destinationType === "dynamodb") {
-      if (!cfg.dynamodbTableName)
-        throw new Error("No DynamoDB table configured.");
-      assertReadOnly(generated.query, "PartiQL");
-      const { query, idColumn, injectedColumns } = inject
-        ? ensureIdentifierColumn(generated.query, "pk", "sql")
-        : {
-            query: generated.query,
-            idColumn: undefined,
-            injectedColumns: [] as string[],
-          };
-      const table = await runOnce(query, () =>
-        runDynamoDBQuery({
-          region: cfg.region,
-          credentials,
-          tableName: cfg.dynamodbTableName,
-          statement: query,
-        }),
-      );
-      const capped = capRows(table);
-      return {
-        ...table,
-        ...capped,
-        explanation: generated.explanation,
-        suggestedCharts: generated.suggestedCharts,
-        finalQuery: query,
-        idColumn: resolveActualColumnCasing(idColumn, table.columns),
-        hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
-      };
-    }
-    if (cfg.destinationType === "aurora") {
-      if (!cfg.auroraResourceArn || !cfg.auroraSecretArn)
-        throw new Error("Aurora not configured.");
-      assertReadOnly(generated.query, "PostgreSQL");
-      const { query, idColumn, injectedColumns } = inject
-        ? ensureIdentifierColumn(generated.query, "execution_arn", "sql")
-        : {
-            query: generated.query,
-            idColumn: undefined,
-            injectedColumns: [] as string[],
-          };
-      const table = await runOnce(query, () =>
-        runAuroraQuery({
-          region: cfg.region,
-          credentials,
-          resourceArn: cfg.auroraResourceArn,
-          secretArn: cfg.auroraSecretArn,
-          database: cfg.auroraDatabase,
-          sql: query,
-        }),
-      );
-      const capped = capRows(table);
-      return {
-        ...table,
-        ...capped,
-        explanation: generated.explanation,
-        suggestedCharts: generated.suggestedCharts,
-        finalQuery: query,
-        idColumn: resolveActualColumnCasing(idColumn, table.columns),
-        hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
-      };
-    }
-    if (cfg.destinationType === "redshift") {
-      if (!cfg.redshiftWorkgroupName && !cfg.redshiftClusterIdentifier)
-        throw new Error("Redshift not configured.");
-      assertReadOnly(generated.query, "Redshift SQL");
-      const { query, idColumn, injectedColumns } = inject
-        ? ensureIdentifierColumn(generated.query, "execution_arn", "sql")
-        : {
-            query: generated.query,
-            idColumn: undefined,
-            injectedColumns: [] as string[],
-          };
-      const table = await runOnce(query, () =>
-        runRedshiftQuery({
-          region: cfg.region,
-          credentials,
-          database: cfg.redshiftDatabase,
-          workgroupName: cfg.redshiftWorkgroupName || undefined,
-          clusterIdentifier: cfg.redshiftClusterIdentifier || undefined,
-          dbUser: cfg.redshiftDbUser || undefined,
-          secretArn: cfg.redshiftSecretArn || undefined,
-          sql: query,
-        }),
-      );
-      const capped = capRows(table);
-      return {
-        ...table,
-        ...capped,
-        explanation: generated.explanation,
-        suggestedCharts: generated.suggestedCharts,
-        finalQuery: query,
-        idColumn: resolveActualColumnCasing(idColumn, table.columns),
-        hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
-      };
-    }
-    if (cfg.destinationType === "opensearch") {
-      if (!cfg.opensearchEndpoint)
-        throw new Error("OpenSearch not configured.");
-      assertReadOnly(generated.query, "OpenSearch SQL");
-      const { query, idColumn, injectedColumns } = inject
-        ? ensureIdentifierColumn(generated.query, "executionArn", "sql")
-        : {
-            query: generated.query,
-            idColumn: undefined,
-            injectedColumns: [] as string[],
-          };
-      const table = await runOnce(query, () =>
-        runOpenSearchQuery({
-          region: cfg.region,
-          credentials,
-          endpoint: cfg.opensearchEndpoint,
-          sql: query,
-        }),
-      );
-      const capped = capRows(table);
-      return {
-        ...table,
-        ...capped,
-        explanation: generated.explanation,
-        suggestedCharts: generated.suggestedCharts,
-        finalQuery: query,
-        idColumn: resolveActualColumnCasing(idColumn, table.columns),
-        hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
-      };
-    }
-    if (cfg.destinationType === "s3") {
-      if (!cfg.athenaDatabase) throw new Error("Athena not configured.");
-      assertReadOnly(generated.query, "Trino/Presto SQL");
-      // The openx JSON SerDe lowercases all keys, so the identifier column
-      // the LLM's SQL would reference is "executionarn", not "executionArn" —
-      // match that here too (see schema.ts's Athena dialect notes on key
-      // casing). Also carry the year/month/day partition columns through so
-      // the row-detail fetch can prune to one partition instead of scanning
-      // the whole table (see fetchAthenaRecord's doc comment).
-      const { query, idColumn, injectedColumns } = inject
-        ? ensureIdentifierColumn(generated.query, "executionarn", "sql", [
-            "year",
-            "month",
-            "day",
-          ])
-        : {
-            query: generated.query,
-            idColumn: undefined,
-            injectedColumns: [] as string[],
-          };
-      const table = await runOnce(query, () =>
-        runAthenaQuery({
-          region: cfg.region,
-          credentials,
-          database: cfg.athenaDatabase,
-          workgroup: cfg.athenaWorkgroup || undefined,
-          outputLocation: cfg.athenaOutputLocation || undefined,
-          query,
-          maxRows: MAX_SQL_ROWS,
-        }),
-      );
-      const capped = capRows(table);
-      return {
-        ...table,
-        ...capped,
-        explanation: generated.explanation,
-        suggestedCharts: generated.suggestedCharts,
-        finalQuery: query,
-        idColumn: resolveActualColumnCasing(idColumn, table.columns),
-        partitionColumns: {
-          year: resolveActualColumnCasing("year", table.columns),
-          month: resolveActualColumnCasing("month", table.columns),
-          day: resolveActualColumnCasing("day", table.columns),
-        },
-        hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
-      };
-    }
-    // CloudWatch Logs path
-    const limited = ensureLimit(generated.query);
-    const {
-      query: finalQuery,
-      idColumn,
-      injectedColumns,
-    } = inject
-      ? ensureIdentifierColumn(limited, "executionArn", "logs-insights")
-      : {
-          query: limited,
-          idColumn: undefined,
-          injectedColumns: [] as string[],
-        };
-    const endTimeMs = Date.now();
-    const startTimeMs = endTimeMs - generated.timeRangeMs;
-    const table = await runLogsInsightsQuery({
-      region: cfg.region,
-      credentials,
-      logGroupNames: cfg.logGroupNames,
-      queryString: finalQuery,
-      startTimeMs,
-      endTimeMs,
-    });
-    return {
-      ...table,
-      explanation: generated.explanation,
-      suggestedCharts: generated.suggestedCharts,
-      finalQuery,
-      idColumn: resolveActualColumnCasing(idColumn, table.columns),
-      hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
-    };
-  }
-
-  /**
-   * Fetch the full record for a single row, keyed by the identifier column
-   * ensureIdentifierColumn added to the query (idColumn/idValue from the
-   * webview's row-click). Dispatches to the destination-appropriate
-   * point-lookup. Aggregate query results never carry an idColumn (see
-   * queryShape.ts), so the webview never sends this message for those —
-   * this handler doesn't need to re-check that.
-   */
   private async onFetchDetail(
     idColumn: string,
     idValue: string,
@@ -1563,65 +2201,12 @@ class ExplorerPanel {
     const cfg = readConfig();
     const credentials = resolveCredentials(cfg.awsProfile);
     try {
-      let record: Record<string, string> | undefined;
-      if (cfg.destinationType === "dynamodb") {
-        record = await fetchDynamoDBRecord({
-          region: cfg.region,
-          credentials,
-          tableName: cfg.dynamodbTableName,
-          pk: idValue,
-        });
-      } else if (cfg.destinationType === "aurora") {
-        record = await fetchAuroraRecord({
-          region: cfg.region,
-          credentials,
-          resourceArn: cfg.auroraResourceArn,
-          secretArn: cfg.auroraSecretArn,
-          database: cfg.auroraDatabase,
-          table: cfg.auroraTable,
-          executionArn: idValue,
-        });
-      } else if (cfg.destinationType === "redshift") {
-        record = await fetchRedshiftRecord({
-          region: cfg.region,
-          credentials,
-          database: cfg.redshiftDatabase,
-          workgroupName: cfg.redshiftWorkgroupName || undefined,
-          clusterIdentifier: cfg.redshiftClusterIdentifier || undefined,
-          dbUser: cfg.redshiftDbUser || undefined,
-          secretArn: cfg.redshiftSecretArn || undefined,
-          table: `${cfg.redshiftSchema}.${cfg.redshiftTable}`,
-          executionArn: idValue,
-        });
-      } else if (cfg.destinationType === "opensearch") {
-        record = await fetchOpenSearchRecord({
-          region: cfg.region,
-          credentials,
-          endpoint: cfg.opensearchEndpoint,
-          index: cfg.opensearchIndex,
-          executionArn: idValue,
-        });
-      } else if (cfg.destinationType === "s3") {
-        record = await fetchAthenaRecord({
-          region: cfg.region,
-          credentials,
-          database: cfg.athenaDatabase,
-          table: cfg.athenaTable,
-          workgroup: cfg.athenaWorkgroup || undefined,
-          outputLocation: cfg.athenaOutputLocation || undefined,
-          executionArn: idValue,
-          year,
-          month,
-          day,
-        });
-      } else {
-        record = await fetchLogsInsightsRecord({
-          region: cfg.region,
-          credentials,
-          logGroupNames: cfg.logGroupNames,
-          executionArn: idValue,
-        });
-      }
+      const record = await fetchDetailRecord(cfg, credentials, {
+        idValue,
+        year,
+        month,
+        day,
+      });
 
       if (!record) {
         this.post({
@@ -1657,13 +2242,23 @@ class ExplorerPanel {
     const styleUri = webview
       .asWebviewUri(vscode.Uri.joinPath(extensionUri, "media", "webview.css"))
       .with({ query: `v=${version}` });
+    // Base URI for the bundled Monaco workers (media/monaco/*.worker.js),
+    // injected below so the webview can spawn them.
+    const monacoBase = webview.asWebviewUri(
+      vscode.Uri.joinPath(extensionUri, "media", "monaco"),
+    );
     const csp = [
       `default-src 'none'`,
       `style-src ${webview.cspSource} 'unsafe-inline'`,
-      `script-src 'nonce-${nonce}'`,
-      `font-src ${webview.cspSource}`,
+      // Monaco spawns its language workers via a same-origin blob that
+      // importScripts the bundled worker (served from cspSource).
+      `script-src 'nonce-${nonce}' ${webview.cspSource} blob:`,
+      `worker-src ${webview.cspSource} blob:`,
+      `font-src ${webview.cspSource} data:`,
       `img-src ${webview.cspSource} data: blob:`,
-      `connect-src data: blob:`,
+      // cspSource lets us fetch the bundled Monaco worker sources (wrapped in
+      // same-origin blobs) for the in-browser TS language service.
+      `connect-src ${webview.cspSource} data: blob:`,
     ].join("; ");
 
     return `<!DOCTYPE html>
@@ -1677,6 +2272,7 @@ class ExplorerPanel {
 </head>
 <body>
   <div id="root"></div>
+  <script nonce="${nonce}">globalThis.__MONACO_WORKER_BASE__ = ${JSON.stringify(String(monacoBase))};</script>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
@@ -1686,6 +2282,18 @@ class ExplorerPanel {
     ExplorerPanel.current = undefined;
     this.listenController?.abort();
     this.listenController = undefined;
+    // A live debug run holds AWS-side state (mutated function config +
+    // tunnel) — tear it down with the panel. stop() is idempotent and never
+    // throws; any events it would emit have nowhere to go anymore.
+    if (this.activeDebugRun) {
+      void this.activeDebugRun.stop();
+      this.activeDebugRun = undefined;
+    }
+    // A deploy awaiting a permissions review would otherwise never resolve —
+    // the webview that owed the answer is gone. Deny (deploy without the
+    // inline policy) rather than leave the promise dangling.
+    for (const resolve of this.permissionsReqs.values()) resolve(false);
+    this.permissionsReqs.clear();
     this.panel.dispose();
     while (this.disposables.length) this.disposables.pop()?.dispose();
   }
@@ -1715,7 +2323,6 @@ function getNonce(): string {
   const chars =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   let text = "";
-  for (let i = 0; i < 32; i++)
-    text += chars.charAt(Math.floor(Math.random() * chars.length));
+  for (let i = 0; i < 32; i++) text += chars.charAt(randomInt(chars.length));
   return text;
 }

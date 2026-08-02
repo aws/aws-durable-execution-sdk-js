@@ -21,3 +21,24 @@ jest.config.*
 *.tsbuildinfo
 plan.md
 TESTING.md
+# NOTE: `esbuild`, `typescript`, and `jsonc-parser` are esbuild `external`
+# (native binary / on-disk lib files / a UMD-bundling hazard — see esbuild.mjs's
+# own comment for jsonc-parser's specific reason) and are NOT shipped: the
+# `node_modules/**` rule above excludes them, and only node-llama-cpp is
+# un-ignored. So deploy (esbuild), on-host type inference (typescript), and
+# deploy's optional debug-source-map generation (jsonc-parser, reached only when
+# workflowInsight.deployWithDebugInfo is on) still work in F5/dev only.
+# Distribution of those needs a packaging step that vendors them (+ transitive
+# deps) into `dist/node_modules/`, validated by installing a real .vsix. Backlog.
+#
+# `node-llama-cpp` IS shipped, which is why it is un-ignored above. Releases are
+# built per platform (`vsce package --target <target>`, see
+# vscode-extension-release.yml) on a runner matching each target, so npm resolves
+# that platform's native binary and a getLlama() smoke test fails the build if it
+# didn't. The local (on-device) model provider therefore works in a released
+# .vsix, not just in dev.
+#
+# (An earlier version of this note said node-llama-cpp was excluded too, on the
+# grounds that `vsce package` ran with `--no-dependencies`. That flag was dropped
+# from the `package` scripts when per-target releases were introduced, so the note
+# had become wrong in a way that also made AI-DISCLOSURE-REVIEW.md wrong.)

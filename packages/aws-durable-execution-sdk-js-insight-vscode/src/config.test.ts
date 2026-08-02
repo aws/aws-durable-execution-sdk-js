@@ -105,3 +105,46 @@ describe("configFromWireSettings", () => {
     );
   });
 });
+
+/**
+ * The Workflow Studio view is opt-in and has no in-app toggle, so the default
+ * matters: a missing key must read as OFF, not as "unset and therefore shown".
+ */
+describe("showWorkflowStudio", () => {
+  it("defaults to false when unset", () => {
+    expect(configFromWireSettings({}).showWorkflowStudio).toBe(false);
+  });
+
+  it('is true only for the exact string "true"', () => {
+    expect(
+      configFromWireSettings({ showWorkflowStudio: "true" }).showWorkflowStudio,
+    ).toBe(true);
+    for (const v of ["false", "1", "yes", "TRUE", ""]) {
+      expect(
+        configFromWireSettings({ showWorkflowStudio: v }).showWorkflowStudio,
+      ).toBe(false);
+    }
+  });
+});
+
+/**
+ * Dag mode is opt-in because generated dag code calls a runtime the SDK does not
+ * implement. A missing key must therefore read as OFF, not as "unset and
+ * therefore permitted".
+ */
+describe("enableDagMode", () => {
+  it("defaults to false when unset", () => {
+    expect(configFromWireSettings({}).enableDagMode).toBe(false);
+  });
+
+  it('is true only for the exact string "true"', () => {
+    expect(
+      configFromWireSettings({ enableDagMode: "true" }).enableDagMode,
+    ).toBe(true);
+    for (const v of ["false", "1", "yes", "TRUE", ""]) {
+      expect(configFromWireSettings({ enableDagMode: v }).enableDagMode).toBe(
+        false,
+      );
+    }
+  });
+});

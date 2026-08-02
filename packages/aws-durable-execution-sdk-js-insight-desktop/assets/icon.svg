@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Workflow Insight app icon: solid red/blue/green nodes joined by white
+       elbow connectors and arrows, with a "+" in the last node. -->
+  <rect x="16" y="16" width="480" height="480" rx="104" fill="#ffffff"/>
+
+  <!-- Edges (white) -->
+  <g transform="translate(-40 20)" stroke="#1e3a8a" stroke-width="18" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M296 158 V186"/>
+    <path d="M250 248 H160 V296"/>
+    <path d="M206 360 H244"/>
+    <path d="M342 360 H380"/>
+  </g>
+
+  <!-- Arrowheads (white) -->
+  <g transform="translate(-40 20)" fill="#1e3a8a" stroke="none">
+    <path d="M296 208 L278 180 H314 Z"/>
+    <path d="M160 318 L142 290 H178 Z"/>
+    <path d="M256 360 L228 342 V378 Z"/>
+    <path d="M392 360 L364 342 V378 Z"/>
+  </g>
+
+  <!-- Nodes (solid, stroke matches fill) -->
+  <g transform="translate(-40 20)" stroke-width="18" stroke-linejoin="round">
+    <rect x="260" y="76" width="72" height="72" rx="14" fill="#3fb950" stroke="#3fb950"/>
+    <rect x="260" y="212" width="72" height="72" rx="14" fill="#60a5fa" stroke="#60a5fa"/>
+    <rect x="124" y="324" width="72" height="72" rx="14" fill="#f85149" stroke="#f85149"/>
+    <rect x="260" y="324" width="72" height="72" rx="14" fill="#60a5fa" stroke="#60a5fa"/>
+    <rect x="396" y="324" width="72" height="72" rx="14" fill="#3fb950" stroke="#3fb950"/>
+  </g>
+
+  <!-- Plus in the last node (white) -->
+  <path transform="translate(-40 20)" d="M432 340 V380 M412 360 H452" stroke="#1e3a8a" stroke-width="18" stroke-linecap="round" fill="none"/>
+</svg>

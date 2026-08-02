@@ -14,12 +14,40 @@ const options = {
   sourcemap: false,
   minify: !watch,
   logLevel: "info",
-  loader: { ".css": "css" },
+  // Monaco imports .css (collected into media/webview.css) and the codicon
+  // .ttf font (inlined as a data URL so it needs no extra webview resource).
+  loader: { ".css": "css", ".ttf": "dataurl" },
+};
+
+// Monaco's language services run in web workers. Bundle the two we need
+// (the generic editor worker + the TypeScript worker) as standalone classic
+// worker scripts under media/monaco/, loaded at runtime via importScripts.
+/** @type {import("esbuild").BuildOptions} */
+const workerOptions = {
+  entryPoints: {
+    "editor.worker":
+      "node_modules/monaco-editor/esm/vs/editor/editor.worker.js",
+    "ts.worker":
+      "node_modules/monaco-editor/esm/vs/language/typescript/ts.worker.js",
+  },
+  bundle: true,
+  outdir: "../media/monaco",
+  entryNames: "[name]",
+  platform: "browser",
+  format: "iife",
+  target: "es2020",
+  sourcemap: false,
+  minify: !watch,
+  logLevel: "info",
+  loader: { ".ttf": "dataurl" },
 };
 
 if (watch) {
-  const ctx = await esbuild.context(options);
-  await ctx.watch();
+  const [appCtx, workerCtx] = await Promise.all([
+    esbuild.context(options),
+    esbuild.context(workerOptions),
+  ]);
+  await Promise.all([appCtx.watch(), workerCtx.watch()]);
 } else {
-  await esbuild.build(options);
+  await Promise.all([esbuild.build(options), esbuild.build(workerOptions)]);
 }
