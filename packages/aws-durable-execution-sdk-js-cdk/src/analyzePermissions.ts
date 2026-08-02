@@ -196,6 +196,19 @@ export function analyzeWorkflowPermissions(
       warnings.add(
         `chainInvoke "${inv.name}" has no function ARN — granting lambda:InvokeFunction on "*".`,
       );
+    } else if (inv.arn.includes("*")) {
+      // A wildcard inside the ARN is still a wildcard grant. Reported so it is
+      // visible, and the caller's wildcard filter withholds it unless
+      // grantWildcardPermissions is set.
+      warnings.add(
+        `chainInvoke "${inv.name}" targets a wildcard ARN (${inv.arn}) — the ` +
+          `resulting lambda:InvokeFunction grant is not scoped to one function.`,
+      );
+    } else if (!/^arn:[a-z0-9-]+:lambda:/.test(inv.arn)) {
+      warnings.add(
+        `chainInvoke "${inv.name}" has a function ARN that is not a Lambda ARN ` +
+          `(${inv.arn}); no permission was inferred for it.`,
+      );
     }
   }
   for (const [arn, names] of invokeByArn) {

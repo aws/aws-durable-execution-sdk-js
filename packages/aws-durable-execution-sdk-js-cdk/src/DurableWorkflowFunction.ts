@@ -1,5 +1,5 @@
-import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join, relative, sep } from "node:path";
 import { Annotations, Duration, Tags } from "aws-cdk-lib";
 import { Alias, type IVersion, Runtime } from "aws-cdk-lib/aws-lambda";
 import { Effect, PolicyStatement } from "aws-cdk-lib/aws-iam";
@@ -148,13 +148,32 @@ export class DurableWorkflowFunction extends Construct {
       beforeInstall: (i, o) => userHooks?.beforeInstall(i, o) ?? [],
       afterBundling: (i, o) => {
         const dest = join(o, WORKFLOW_DAR_FILENAME);
-        // Copy the embedded `.dar` into the asset. Use a platform-appropriate
-        // command since local bundling runs in the host shell (Windows `cmd`
-        // has no `cp`).
+        // Resolve the source RELATIVE TO THE BUNDLER'S INPUT DIR, never from the
+        // host path.
+        //
+        // Command hooks run in the bundling environment. When esbuild is not
+        // available locally, NodejsFunction bundles in Docker, where the host's
+        // absolute `process.cwd()` path does not exist — so an absolute source made
+        // the copy fail there and silently cost the `.dar` embed and "Reopen in
+        // Studio". Local bundling worked, which is exactly why the tests were green.
+        // `i` is the project root in both environments, and the `.dar` sits under it
+        // beside the generated handler, so a relative path resolves in both.
+        // The base must be the directory CDK MOUNTS, which is the one holding the
+        // deps lockfile — not process.cwd(). Under jest those differ (cwd is the
+        // package, the lockfile is at the repo root), which is how the first version
+        // of this fix still failed locally.
+        const relFromRoot = relative(findLockDir(darPath), darPath)
+          .split(sep)
+          .join("/");
+        const src = `${i}/${relFromRoot}`;
+        // Fail loudly rather than leaving a function that looks deployed but cannot
+        // be reopened.
         const copy =
           process.platform === "win32"
-            ? `copy /Y "${darPath}" "${dest}"`
-            : `cp "${darPath}" "${dest}"`;
+            ? `copy /Y "${src.split("/").join(sep)}" "${dest}" || exit /b 1`
+            : `cp "${src}" "${dest}" || { echo "durable-execution: could not ` +
+              `embed ${WORKFLOW_DAR_FILENAME} (looked for ${relFromRoot} under the ` +
+              `bundling input dir)" >&2; exit 1; }`;
         return [...(userHooks?.afterBundling(i, o) ?? []), copy];
       },
     };
@@ -200,8 +219,13 @@ export class DurableWorkflowFunction extends Construct {
       for (const w of warnings) {
         Annotations.of(this).addWarning(`Permission inference: ${w}`);
       }
+      // ANY `*` in a resource makes the statement wildcard-scoped, not just a
+      // resource that is exactly "*". A chainInvoke's functionArn flows into
+      // `resources` and can itself contain wildcards, so
+      // `arn:aws:lambda:*:*:function:*` was classified as SCOPED and auto-granted —
+      // defeating the very control grantWildcardPermissions exists to provide.
       const isWildcard = (stmt: { resources: string[] }) =>
-        stmt.resources.includes("*");
+        stmt.resources.some((r) => r.includes("*"));
       const wildcard = statements.filter(isWildcard);
       const scoped = statements.filter((st) => !isWildcard(st));
 
@@ -251,6 +275,31 @@ export class DurableWorkflowFunction extends Construct {
       aliasName: props.aliasName ?? "live",
       version: this.version,
     });
+  }
+}
+
+/**
+ * The directory holding the deps lockfile, walking up from `from`.
+ *
+ * This mirrors how `NodejsFunction` picks `depsLockFilePath`, and it matters because
+ * that directory is what CDK mounts as the bundler's input: a file at
+ * `<lockDir>/x/y` appears at `<inputDir>/x/y` in BOTH local and Docker bundling.
+ * Deriving the base any other way (process.cwd(), for instance) breaks as soon as the
+ * two differ.
+ */
+function findLockDir(from: string): string {
+  const LOCKS = [
+    "package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    "bun.lockb",
+  ];
+  let dir = dirname(from);
+  for (;;) {
+    if (LOCKS.some((l) => existsSync(join(dir, l)))) return dir;
+    const up = dirname(dir);
+    if (up === dir) return process.cwd(); // no lockfile found; best effort
+    dir = up;
   }
 }
 

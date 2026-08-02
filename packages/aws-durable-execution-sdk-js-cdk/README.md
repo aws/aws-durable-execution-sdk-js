@@ -41,7 +41,12 @@ That single construct:
    `workflowStudioDar` tag, so the workflow can be reopened and edited in
    Workflow Studio ("Edit durable Function").
 
-`aws-cdk-lib` (^2.150) and `constructs` (^10) are peer dependencies.
+`aws-cdk-lib` (^2.235.0) and `constructs` (^10) are peer dependencies.
+
+`durableConfig` on `lambda.Function` first shipped in aws-cdk-lib **2.235.0**. On an
+earlier 2.x, CDK silently drops the unknown property: synth succeeds and a
+NON-DURABLE Lambda is deployed, with no error until it is invoked. That is why the
+floor is not `^2.0.0`.
 
 ## Props
 

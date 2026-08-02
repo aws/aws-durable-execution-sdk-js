@@ -27,7 +27,7 @@
   ],
   "peerDependencies": {
     "@aws/durable-execution-sdk-js": "^2.2.0",
-    "aws-cdk-lib": "^2.0.0",
+    "aws-cdk-lib": "^2.235.0",
     "constructs": "^10.0.0"
   },
   "dependencies": {
@@ -39,7 +39,7 @@
     "@aws/durable-execution-sdk-js": "^2.2.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^20.0.0",
-    "aws-cdk-lib": "^2.150.0",
+    "aws-cdk-lib": "^2.235.0",
     "constructs": "^10.0.0",
     "jest": "^30.0.3",
     "ts-jest": "^29.4.0"
