@@ -60,8 +60,8 @@ function selfWaitSeconds(node: DarNode): number {
       return spec.maxAttempts * spec.maxDelaySeconds;
     }
     // A durable invoke runs another workflow whose own timeout we cannot see from
-    // here, so its duration is unbounded as far as this analysis goes. Previously
-    // contributed 0, making a chain of long-running durable functions invisible.
+    // here, so its duration is unbounded as far as this analysis goes — treating it as
+    // zero would make a chain of long-running durable functions invisible.
     case "chainInvoke":
       return UNKNOWN_WAIT;
     case "awsJob": {

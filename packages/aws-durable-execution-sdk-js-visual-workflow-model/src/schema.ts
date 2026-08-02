@@ -9,6 +9,21 @@ import { TRIGGER_RULES } from "./dag";
  * tooling / editor validation; the packages' `parseWorkflow` remains the
  * authoritative loader.
  */
+/**
+ * ADVISORY, NOT ENFORCED AT RUNTIME.
+ *
+ * `parseWorkflow` deliberately checks only the coarse shape (that `nodes` and `edges`
+ * are arrays) and does not validate against this schema — no AJV, no validator of any
+ * kind runs it. So `additionalProperties: false`, the `required` lists and every `kind`
+ * / `triggerRule` enum below describe the intended format for editors, generators and
+ * humans; they do NOT reject a document. A node with an unknown `kind` reaches codegen,
+ * where the emitter's own `default:` arm is what refuses it.
+ *
+ * That is a deliberate trade for now — the reader is forgiving on purpose, because
+ * `.dar` files arrive hand-written and model-generated — but it means this schema must
+ * not be described as authoritative. Wiring validation into `parseWorkflow` is tracked
+ * as a follow-up.
+ */
 export const DAR_JSON_SCHEMA = {
   $schema: "http://json-schema.org/draft-07/schema#",
   $id: "https://github.com/aws/aws-durable-execution-sdk-js/dar.schema.json",

@@ -37,7 +37,6 @@ const ACTION_OVERRIDES: Record<string, string> = {
   "s3:DeleteObjects": "s3:DeleteObject",
   "s3:HeadObject": "s3:GetObject",
   "s3:HeadBucket": "s3:ListBucket",
-  "dynamodb:BatchWriteItem": "dynamodb:BatchWriteItem",
 };
 
 interface Collected {

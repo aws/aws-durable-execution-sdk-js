@@ -44,10 +44,9 @@ export const WORKFLOW_DAR_TAG_VALUE = "1";
  * statement granularity, and it ships no source map, since the construct also does
  * not call `generateHandlerWithMap`.
  *
- * This comment previously claimed JSON was "no longer written into new deployment
- * packages", which was false for every construct user. Moving the serializer into
- * `visual-workflow-model` and wiring the source map into the construct is tracked
- * as a follow-up; it is a refactor across packages, not a doc fix.
+ * Closing the gap means moving the `.dar.ts` serializer into `visual-workflow-model`
+ * and wiring the source map into the construct — a cross-package refactor, tracked
+ * as a follow-up.
  */
 export function serializeWorkflow(workflow: DarWorkflow): string {
   return JSON.stringify(workflow, null, 2);

@@ -7,8 +7,7 @@
  * deployed Lambda's bundled JS) can resolve a breakpoint set in the `.dar.ts`
  * file to the right position in the code that is ACTUALLY executing.
  *
- * WHY `.dar.ts`, NOT THE JSON `.dar` (history — this module previously
- * targeted the JSON format; superseded per an explicit product decision):
+ * WHY `.dar.ts`, NOT THE JSON `.dar`:
  * the JSON `.dar` stores every node's `code` as a single-line, `\n`-escaped
  * JSON string, so a node's entire multi-statement body physically occupies
  * ONE line in that file — real per-statement breakpoints were never possible

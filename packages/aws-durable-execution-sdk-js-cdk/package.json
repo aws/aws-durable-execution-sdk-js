@@ -2,6 +2,7 @@
   "name": "@aws/durable-execution-sdk-js-cdk",
   "version": "0.1.0",
   "description": "CDK construct that deploys a Workflow Studio .dar file as an AWS Lambda durable function (generates the handler at synth time).",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+ssh://git@github.com/aws/aws-durable-execution-sdk-js.git",

@@ -13,6 +13,7 @@ import { buildIdentifierMap } from "./identifiers";
 import {
   requireExpression,
   requireSdkClientPackage,
+  requireStatements,
   requireTemplateLiteral,
   requireIdentifier,
   requireTypeExpression,
@@ -451,19 +452,16 @@ function httpCallLines(node: DarNode, i: number): string[] {
  * position and are reported as "not an expression".
  */
 function isExpressionText(text: string): boolean {
-  const t = text.trim();
-  if (t === "") return false;
-  // Wrapped in parens so an object literal (`{ a: 1 }`) is read as a value
-  // rather than a block, matching how it will actually be emitted.
-  const probe = ts.createSourceFile(
-    "probe.ts",
-    `const __probe = (\n${t}\n);`,
-    ts.ScriptTarget.ES2022,
-    true,
-  );
-  const diagnostics = (probe as unknown as { parseDiagnostics: unknown[] })
-    .parseDiagnostics;
-  return diagnostics.length === 0;
+  // Delegates to the shared validator so there is exactly one definition of "is a
+  // single expression". The result gates RAW INLINING of a wait's durationCode, so a
+  // laxer check here emits code that does not parse — and esbuild reports that without
+  // naming the node.
+  try {
+    requireExpression(text, "expression", "codegen");
+    return text.trim() !== "";
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -495,11 +493,14 @@ function emitCompletionConfig(node: DarNode): string {
   const minSuccessful = node.minSuccessful;
   const tolCount = node.toleratedFailureCount;
   const tolPct = node.toleratedFailurePercentage;
-  if (typeof minSuccessful === "number")
+  // Number.isFinite, not typeof === "number": NaN and Infinity are both numbers and
+  // were interpolated verbatim, so a malformed `.dar` emitted
+  // `minSuccessful: NaN` — valid syntax that the SDK then has to cope with.
+  if (Number.isFinite(minSuccessful))
     fields.push(`minSuccessful: ${minSuccessful}`);
-  if (typeof tolCount === "number")
+  if (Number.isFinite(tolCount))
     fields.push(`toleratedFailureCount: ${tolCount}`);
-  if (typeof tolPct === "number")
+  if (Number.isFinite(tolPct))
     fields.push(`toleratedFailurePercentage: ${tolPct}`);
   return fields.length > 0 ? `completionConfig: { ${fields.join(", ")} }` : "";
 }
@@ -614,6 +615,30 @@ function emitNode(node: DarNode, scope: Scope): string {
         // with no error anywhere.
         //   - an EXPRESSION (`12`, `get_order.retryAfter`) is inlined directly;
         //   - a STATEMENT BLOCK (`const x = …; return x;`) keeps the IIFE.
+        // Per dar-specification.md, durationCode returns the wait in SECONDS. The
+        // emitter wraps it as `{ seconds: <code> }`, so returning a DURATION SPEC —
+        // the natural mistake, since the SDK's own wait() takes `{ seconds: 30 }` —
+        // silently produces `{ seconds: { seconds: 30 } }`. esbuild does not
+        // typecheck, so that ships and the wait misbehaves at runtime with nothing
+        // to point at. Caught here instead.
+        if (
+          /\breturn\s*\{\s*(seconds|minutes|hours|days)\s*:/.test(durationCode)
+        ) {
+          throw new Error(
+            `Node "${node.name}": duration code must return the wait in SECONDS ` +
+              `(for example "return 30;"), not a duration object — returning ` +
+              `{ seconds: ... } would emit { seconds: { seconds: ... } }.`,
+          );
+        }
+        // Both forms are interpolated verbatim, so both need checking: the expression
+        // form by isExpressionText above, the block form here.
+        if (!isExpressionText(durationCode)) {
+          requireStatements(
+            durationCode,
+            "duration code",
+            `node "${node.name}"`,
+          );
+        }
         if (isExpressionText(durationCode)) {
           return `await ${ctx}.wait(${name}, { seconds: (${durationCode.trim()}) })`;
         }
@@ -769,7 +794,7 @@ function emitNode(node: DarNode, scope: Scope): string {
         nesting = "nesting: NestingType.FLAT";
       }
       const config = configSuffix([
-        typeof node.maxConcurrency === "number"
+        Number.isFinite(node.maxConcurrency)
           ? `maxConcurrency: ${node.maxConcurrency}`
           : "",
         emitCompletionConfig(node),
@@ -897,7 +922,7 @@ function emitNode(node: DarNode, scope: Scope): string {
         ].join("\n");
       });
       const config = configSuffix([
-        typeof node.maxConcurrency === "number"
+        Number.isFinite(node.maxConcurrency)
           ? `maxConcurrency: ${node.maxConcurrency}`
           : "",
         emitCompletionConfig(node),
@@ -953,10 +978,22 @@ function emitChain(
   byId: Map<string, DarNode>,
   adj: Map<string, DarWorkflow["edges"]>,
   visited: Set<string>,
-): { lines: string[]; lastIdent?: string; terminated: boolean } {
+): {
+  lines: string[];
+  lastIdent?: string;
+  terminated: boolean;
+  /**
+   * True when the chain stopped because its last node was marked `terminal` (rather
+   * than by reaching an `end` node, which sets `terminated`). The distinction matters
+   * inside a condition branch: a terminal node's result IS the workflow's result, so
+   * the branch must return it rather than `break` out to the scope's trailing return.
+   */
+  endsAtTerminal: boolean;
+} {
   const lines: string[] = [];
   let lastIdent: string | undefined;
   let terminated = false;
+  let endsAtTerminal = false;
   let curId = startId;
   while (curId) {
     if (visited.has(curId)) {
@@ -964,11 +1001,10 @@ function emitChain(
       // Branches (conditions, error routes) each get a forked `visited`, so a
       // legitimate reconvergence never lands here; only a real cycle does.
       //
-      // This used to be the loop condition, so the chain just stopped and
-      // `emitLinearScope` appended a return: the loop silently vanished and the
-      // generated code ran the body exactly once. `topoSortTasks` throws for the
-      // same input in dag mode, so identical input was refused in one mode and
-      // quietly mis-compiled in the other. Refuse in both.
+      // Refused rather than tolerated: a durable workflow expresses repetition with a
+      // waitForCondition or a map, and treating a back-edge as "stop here" would emit
+      // the body once and drop the loop with no diagnostic. `topoSortTasks` refuses the
+      // same graph in dag mode, so both modes agree.
       const node = byId.get(curId);
       throw new Error(
         `Cannot generate "${wf.name}": the chain loops back to ` +
@@ -1004,9 +1040,10 @@ function emitChain(
     lastIdent = bindsResult(node.kind)
       ? (idents.get(curId) as string)
       : undefined;
+    endsAtTerminal = node.terminal === true;
     curId = firstFlowTarget(adj, curId);
   }
-  return { lines, lastIdent, terminated };
+  return { lines, lastIdent, terminated, endsAtTerminal };
 }
 
 /**
@@ -1285,7 +1322,19 @@ function emitCondition(
         ? `${pad}  case ${JSON.stringify(match)}: {`
         : `${pad}  default: {`;
     // A tail that already returns/throws (reached an end node) needs no break.
-    const tailEnd = tail.terminated ? [] : [`${pad}    break;`];
+    //
+    // Otherwise: if the branch ENDED because its last node was terminal, its result is
+    // the workflow's result, so return it. Emitting `break` there dropped the value —
+    // execution fell out of the switch to the scope's trailing `return undefined`, so
+    // a condition whose branches end in terminal steps computed both results and
+    // returned neither. Studio-saved workflows are unaffected because a terminal node
+    // owns an end node, which takes the branch above; hand-written, LLM-produced and
+    // ASL-imported files are not, and parseWorkflow is deliberately forgiving.
+    const tailEnd = tail.terminated
+      ? []
+      : tail.endsAtTerminal
+        ? [`${pad}    return ${tail.lastIdent ?? "undefined"};`]
+        : [`${pad}    break;`];
     lines.push(head, ...tail.lines, ...tailEnd, `${pad}  }`);
   }
   lines.push(`${pad}}`);
@@ -1869,10 +1918,9 @@ export class DagModeUnsupportedError extends Error {
 function emitDagScope(wf: DarWorkflow, scope: Scope): string {
   const idents = buildIdentifierMap(wf.nodes);
   const byId = new Map(wf.nodes.map((n) => [n.id, n]));
-  // A node sanitizing to `result` would shadow the DagResult const. That is now
-  // impossible: "result" is in RESERVED_IDENTIFIERS, so buildIdentifierMap above
-  // has already raised the clear rename error. The check that used to live here was
-  // unreachable, and unreachable guards read as protection that isn't there.
+  // No local check that a node sanitizes to `result` (which would shadow the DagResult
+  // const): "result" is in RESERVED_IDENTIFIERS, so buildIdentifierMap above has already
+  // raised the rename error.
   const pad = " ".repeat(scope.indent);
   const regs = emitDagRegistrations(
     wf,
@@ -2224,6 +2272,30 @@ function emitDagTask(
           "wait duration",
         );
         // Same two spellings as the linear path above.
+        // Per dar-specification.md, durationCode returns the wait in SECONDS. The
+        // emitter wraps it as `{ seconds: <code> }`, so returning a DURATION SPEC —
+        // the natural mistake, since the SDK's own wait() takes `{ seconds: 30 }` —
+        // silently produces `{ seconds: { seconds: 30 } }`. esbuild does not
+        // typecheck, so that ships and the wait misbehaves at runtime with nothing
+        // to point at. Caught here instead.
+        if (
+          /\breturn\s*\{\s*(seconds|minutes|hours|days)\s*:/.test(durationCode)
+        ) {
+          throw new Error(
+            `Node "${node.name}": duration code must return the wait in SECONDS ` +
+              `(for example "return 30;"), not a duration object — returning ` +
+              `{ seconds: ... } would emit { seconds: { seconds: ... } }.`,
+          );
+        }
+        // Both forms are interpolated verbatim, so both need checking: the expression
+        // form by isExpressionText above, the block form here.
+        if (!isExpressionText(durationCode)) {
+          requireStatements(
+            durationCode,
+            "duration code",
+            `node "${node.name}"`,
+          );
+        }
         if (isExpressionText(durationCode)) {
           return [
             ...commentLines,
@@ -2377,7 +2449,7 @@ function emitDagTask(
         nesting = "nesting: NestingType.FLAT";
       }
       const config = [
-        typeof node.maxConcurrency === "number"
+        Number.isFinite(node.maxConcurrency)
           ? `maxConcurrency: ${node.maxConcurrency}`
           : "",
         emitCompletionConfig(node),
@@ -2464,7 +2536,7 @@ function emitDagTask(
         ].join("\n");
       });
       const config = [
-        typeof node.maxConcurrency === "number"
+        Number.isFinite(node.maxConcurrency)
           ? `maxConcurrency: ${node.maxConcurrency}`
           : "",
         emitCompletionConfig(node),

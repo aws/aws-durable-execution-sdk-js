@@ -2,6 +2,7 @@
   "name": "@aws/durable-execution-sdk-js-visual-workflow-model",
   "version": "0.1.0",
   "description": "Shared model for the visual Workflow Studio `.dar` format: node kinds, identifiers, retry/wait strategy spec, version and schema — the single source of truth for the Studio authoring model and the CDK code generator.",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+ssh://git@github.com/aws/aws-durable-execution-sdk-js.git",
@@ -28,7 +29,8 @@
     "@types/node": "^20.0.0",
     "jest": "^30.0.3",
     "ts-jest": "^29.4.0",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "yaml": "^2.6.1"
   },
   "files": [
     "dist/**/*",

@@ -14,9 +14,18 @@ const MIGRATIONS: Record<string, DarMigration> = {};
 
 /**
  * Brings a raw parsed `.dar` object up to {@link DAR_VERSION} by applying the
- * registered migrations in sequence. A missing/blank `darVersion` is treated as
- * current (matching historical behavior); an unknown/newer version with no
- * migration path is returned untouched (the caller may still parse it).
+ * registered migrations in sequence.
+ *
+ * A missing or blank `darVersion` is treated as {@link OLDEST_DAR_VERSION}, since an
+ * unversioned file is a legacy file. A version with no path to the current one THROWS
+ * rather than being returned untouched — passing it through meant a file from a newer
+ * writer was silently read as current.
+ *
+ * Versions compare on MAJOR.MINOR, so "1", "1.0" and "1.0.0" are the same format. One
+ * consequence to be deliberate about: bumping DAR_VERSION to a new MINOR makes every
+ * existing file of the previous minor throw unless a migration is registered for it.
+ * For a purely additive change, register a no-op migration rather than relying on
+ * tolerance that does not exist here.
  *
  * Pure and side-effect free (operates on a shallow copy). `migrations` is
  * injectable for testing.
@@ -41,10 +50,8 @@ export function migrateDar(
    * silent pass-through it replaced.
    */
   const canon = (v: string): string => {
-    // Compared on MAJOR.MINOR only. Nothing writes a three-component version today,
-    // but "1.0.0" is unambiguously the same format as "1.0", and rejecting it would
-    // fail a file we can read perfectly well — the same over-strictness that made the
-    // first version of this check reject "1".
+    // Compared on MAJOR.MINOR only, so "1", "1.0" and "1.0.0" are one format. Being
+    // stricter would reject files this build reads perfectly well.
     const parts = v.trim().split(".");
     while (parts.length < 2) parts.push("0");
     return parts
@@ -66,9 +73,9 @@ export function migrateDar(
     obj = migrations[version](obj);
     version = typeof obj.darVersion === "string" ? obj.darVersion : DAR_VERSION;
   }
-  // A version we have no path from is either from a newer writer or corrupt. Both
-  // used to be returned untouched and silently treated as current, which turns a
-  // forward-compatibility problem into wrong behaviour with no signal.
+  // A version with no path to the current one is from a newer writer or corrupt.
+  // Returning it as-is would read it as current, turning a forward-compatibility
+  // problem into wrong behaviour with no signal.
   if (canon(version) !== canon(DAR_VERSION)) {
     throw new Error(
       `Cannot read this .dar workflow: it declares version "${version}" and this ` +

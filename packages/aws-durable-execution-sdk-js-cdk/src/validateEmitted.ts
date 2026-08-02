@@ -96,7 +96,12 @@ export function requireExpression(
 ): string {
   const v = value.trim();
   if (v === "") return v;
-  if (!parsesAsSingle(`const __probe = (\n${v}\n);`, ts.isVariableStatement)) {
+  // The closing delimiter must sit on the SAME LINE as the value, because that is
+  // where the emitters put it. With a newline before it, a trailing `//` survived the
+  // probe and then commented out the emitter's own `)` or `,` — so a value that
+  // validated cleanly produced a syntax error, surfaced as an opaque esbuild failure
+  // instead of a clear synth-time message.
+  if (!parsesAsSingle(`const __probe = (${v});`, ts.isVariableStatement)) {
     throw new Error(`${where}: ${what} is not a single JavaScript expression.`);
   }
   return v;
@@ -170,4 +175,41 @@ export function requireTemplateLiteral(
   for (const span of spans)
     requireExpression(span, `${what} interpolation`, where);
   return literalBody;
+}
+
+/**
+ * Validates code that is inlined as a STATEMENT BLOCK in generated output.
+ *
+ * A wait's `durationCode` may be either a single expression or a `return` block, and
+ * whichever it is gets interpolated verbatim into the emitted handler. The expression
+ * form is checked by {@link requireExpression}; the block form was checked by nothing,
+ * so `1); (2` was inlined into `(() => { 1); (2 })()` and produced a handler that did
+ * not parse — reaching the user as an esbuild failure with no mention of the node.
+ *
+ * Unlike a step's `code`, which is raw by design because the user is writing a whole
+ * function body, this text sits inside an expression the emitter builds, so it has to
+ * be a well-formed block.
+ */
+export function requireStatements(
+  value: string,
+  what: string,
+  where: string,
+): string {
+  const v = value.trim();
+  if (v === "") return v;
+  const probe = ts.createSourceFile(
+    "probe.ts",
+    `(() => {\n${v}\n})();`,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const diagnostics = (probe as unknown as { parseDiagnostics: unknown[] })
+    .parseDiagnostics;
+  if (diagnostics.length > 0) {
+    throw new Error(
+      `${where}: ${what} is neither a single expression nor a valid block of ` +
+        `statements, so the generated code would not parse.`,
+    );
+  }
+  return v;
 }
