@@ -177,6 +177,35 @@ export function requireTemplateLiteral(
   return literalBody;
 }
 
+/**
+ * Visits every `return` that belongs to THIS block, descending through control flow but
+ * stopping at function and class boundaries — a `return` inside a nested helper belongs
+ * to the helper, not to the block being validated.
+ *
+ * Checking only top-level statements was wrong in the common case: a conditional wait
+ * duration (`if (fast) { return 5; } else { return 60; }`) is the most natural reason to
+ * use the block form at all, and every such block was rejected as "never returns".
+ */
+function forEachOwnReturn(
+  nodes: readonly ts.Node[],
+  visit: (node: ts.ReturnStatement) => boolean,
+): boolean {
+  for (const n of nodes) {
+    if (ts.isReturnStatement(n)) {
+      if (visit(n)) return true;
+      continue;
+    }
+    // A nested function or class owns its own returns.
+    if (ts.isFunctionLike(n) || ts.isClassLike(n)) continue;
+    const children: ts.Node[] = [];
+    ts.forEachChild(n, (c) => {
+      children.push(c);
+    });
+    if (forEachOwnReturn(children, visit)) return true;
+  }
+  return false;
+}
+
 /** Parses `code` as the body of an IIFE and returns its top-level statements. */
 function blockStatements(code: string): ts.Statement[] | undefined {
   const sf = ts.createSourceFile(
@@ -231,8 +260,9 @@ export function requireStatements(
         `statements, so the generated code would not parse.`,
     );
   }
-  const returnsAValue = statements.some(
-    (st) => ts.isReturnStatement(st) && st.expression !== undefined,
+  const returnsAValue = forEachOwnReturn(
+    statements,
+    (r) => r.expression !== undefined,
   );
   if (!returnsAValue) {
     throw new Error(
@@ -274,11 +304,12 @@ export function returnsDurationObject(code: string): boolean {
 
   const statements = blockStatements(code);
   if (statements) {
-    return statements.some(
-      (st) =>
-        ts.isReturnStatement(st) &&
-        st.expression !== undefined &&
-        isDurationLiteral(st.expression),
+    // Same recursion as the return check: a conditional block that returns
+    // `{ seconds: 30 }` from one arm is the same mistake, so looking only at the top
+    // level would miss it.
+    return forEachOwnReturn(
+      statements,
+      (r) => r.expression !== undefined && isDurationLiteral(r.expression),
     );
   }
   // Not a block — try it as a bare expression (`{ seconds: 30 }` on its own).

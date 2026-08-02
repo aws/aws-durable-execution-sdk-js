@@ -180,6 +180,46 @@ describe("a duration block must actually return", () => {
     expect(() => generateHandler(durWf(code))).toThrow(/never returns a value/);
   });
 
+  /**
+   * A conditional duration is the most natural reason to use the block form at all, so
+   * checking only TOP-LEVEL statements for a return rejected the common case while
+   * catching the rare one. The search descends through control flow and stops at
+   * function and class boundaries, so a return belonging to a nested helper still does
+   * not count as the block's own.
+   */
+  it.each([
+    ["if/else", "if (input.fast) { return 5; } else { return 60; }"],
+    ["try/catch", "try { return 5; } catch { return 1; }"],
+    [
+      "switch",
+      "switch (input.tier) { case 'a': return 5; default: return 60; }",
+    ],
+    [
+      "deeply nested",
+      "if (a) { if (b) { while (c) { return 7; } } } return 1;",
+    ],
+    [
+      "a loop then a fallback",
+      "for (const x of input.xs) { return x; } return 1;",
+    ],
+  ])("accepts a block that returns from inside %s", (_label, code) => {
+    expect(() => generateHandler(durWf(code))).not.toThrow();
+  });
+
+  it("still rejects a block whose only return belongs to a nested helper", () => {
+    expect(() =>
+      generateHandler(durWf("const f = () => { return 5; };")),
+    ).toThrow(/never returns a value/);
+  });
+
+  it("catches a duration object returned from inside a branch", () => {
+    // Previously a false NEGATIVE: only top-level returns were shape-checked, so the
+    // `{ seconds: { seconds: 30 } }` trap slipped through a conditional.
+    expect(() =>
+      generateHandler(durWf("if (a) { return { seconds: 30 }; } return 1;")),
+    ).toThrow(/in SECONDS/);
+  });
+
   it("never emits a duration of undefined", () => {
     for (const code of ["12 //", "const x = 1;", "if (true) {}"]) {
       let emitted: string | undefined;
