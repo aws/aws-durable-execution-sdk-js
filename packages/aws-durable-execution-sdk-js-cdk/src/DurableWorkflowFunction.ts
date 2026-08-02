@@ -162,9 +162,16 @@ export class DurableWorkflowFunction extends Construct {
         // deps lockfile — not process.cwd(). Under jest those differ (cwd is the
         // package, the lockfile is at the repo root), which is how the first version
         // of this fix still failed locally.
-        const relFromRoot = relative(findLockDir(darPath), darPath)
-          .split(sep)
-          .join("/");
+        // A consumer may set projectRoot or depsLockFilePath through functionProps,
+        // and CDK mounts what THEY specified. Honour those first: otherwise the mount
+        // base and this base diverge and the copy fails (loudly, now, but still).
+        const explicitRoot = props.functionProps?.projectRoot;
+        const explicitLock = props.functionProps?.depsLockFilePath;
+        const mountBase =
+          explicitRoot ??
+          (explicitLock ? dirname(explicitLock) : undefined) ??
+          findLockDir(darPath);
+        const relFromRoot = relative(mountBase, darPath).split(sep).join("/");
         const src = `${i}/${relFromRoot}`;
         // Fail loudly rather than leaving a function that looks deployed but cannot
         // be reopened.
@@ -281,7 +288,10 @@ export class DurableWorkflowFunction extends Construct {
 /**
  * The directory holding the deps lockfile, walking up from `from`.
  *
- * This mirrors how `NodejsFunction` picks `depsLockFilePath`, and it matters because
+ * The FALLBACK for when a consumer sets neither `projectRoot` nor
+ * `depsLockFilePath` — those take precedence, since CDK mounts what they specify.
+ *
+ * This mirrors how `NodejsFunction` picks `depsLockFilePath` by default, and it matters because
  * that directory is what CDK mounts as the bundler's input: a file at
  * `<lockDir>/x/y` appears at `<inputDir>/x/y` in BOTH local and Docker bundling.
  * Deriving the base any other way (process.cwd(), for instance) breaks as soon as the

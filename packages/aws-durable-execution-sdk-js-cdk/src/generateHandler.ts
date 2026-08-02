@@ -14,6 +14,7 @@ import {
   requireExpression,
   requireSdkClientPackage,
   requireStatements,
+  returnsDurationObject,
   requireTemplateLiteral,
   requireIdentifier,
   requireTypeExpression,
@@ -616,14 +617,13 @@ function emitNode(node: DarNode, scope: Scope): string {
         //   - an EXPRESSION (`12`, `get_order.retryAfter`) is inlined directly;
         //   - a STATEMENT BLOCK (`const x = …; return x;`) keeps the IIFE.
         // Per dar-specification.md, durationCode returns the wait in SECONDS. The
-        // emitter wraps it as `{ seconds: <code> }`, so returning a DURATION SPEC —
+        // emitter wraps it as `{ seconds: <code> }`, so returning a DURATION OBJECT —
         // the natural mistake, since the SDK's own wait() takes `{ seconds: 30 }` —
-        // silently produces `{ seconds: { seconds: 30 } }`. esbuild does not
-        // typecheck, so that ships and the wait misbehaves at runtime with nothing
-        // to point at. Caught here instead.
-        if (
-          /\breturn\s*\{\s*(seconds|minutes|hours|days)\s*:/.test(durationCode)
-        ) {
+        // silently produces `{ seconds: { seconds: 30 } }`, and esbuild does not
+        // typecheck so it ships. Checked on the AST over top-level returns: text
+        // matching cannot distinguish this from valid code that gets a duration from
+        // a helper and reads a field off it.
+        if (returnsDurationObject(durationCode)) {
           throw new Error(
             `Node "${node.name}": duration code must return the wait in SECONDS ` +
               `(for example "return 30;"), not a duration object — returning ` +
@@ -2273,14 +2273,13 @@ function emitDagTask(
         );
         // Same two spellings as the linear path above.
         // Per dar-specification.md, durationCode returns the wait in SECONDS. The
-        // emitter wraps it as `{ seconds: <code> }`, so returning a DURATION SPEC —
+        // emitter wraps it as `{ seconds: <code> }`, so returning a DURATION OBJECT —
         // the natural mistake, since the SDK's own wait() takes `{ seconds: 30 }` —
-        // silently produces `{ seconds: { seconds: 30 } }`. esbuild does not
-        // typecheck, so that ships and the wait misbehaves at runtime with nothing
-        // to point at. Caught here instead.
-        if (
-          /\breturn\s*\{\s*(seconds|minutes|hours|days)\s*:/.test(durationCode)
-        ) {
+        // silently produces `{ seconds: { seconds: 30 } }`, and esbuild does not
+        // typecheck so it ships. Checked on the AST over top-level returns: text
+        // matching cannot distinguish this from valid code that gets a duration from
+        // a helper and reads a field off it.
+        if (returnsDurationObject(durationCode)) {
           throw new Error(
             `Node "${node.name}": duration code must return the wait in SECONDS ` +
               `(for example "return 30;"), not a duration object — returning ` +

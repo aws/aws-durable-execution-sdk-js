@@ -102,3 +102,29 @@ describe("wildcards inside an ARN are still wildcards", () => {
     expect(policyText(stack)).toContain("lambda:InvokeFunction");
   }, 180000);
 });
+
+/**
+ * CDK mounts whatever `projectRoot` / `depsLockFilePath` the consumer specifies, so the
+ * `.dar` copy's base must follow those rather than always walking up to the nearest
+ * lockfile. If the two disagree the copy resolves to a path that does not exist in the
+ * bundling environment.
+ */
+describe("the .dar copy honours a consumer-supplied project root", () => {
+  it("still embeds the workflow when projectRoot is set explicitly", () => {
+    const app = new App();
+    const stack = new Stack(app, "S");
+    new DurableWorkflowFunction(stack, "Wf", {
+      // The repo root: the same directory the default walk would find, passed
+      // explicitly so the explicit path is the one exercised.
+      functionProps: { projectRoot: join(__dirname, "..", "..", "..") },
+      workflow: wf([
+        { id: "a", kind: "step", name: "A", code: "return 1;", terminal: true },
+      ]),
+    });
+    const asm = app.synth();
+    const withDar = readdirSync(asm.directory)
+      .filter((d) => d.startsWith("asset."))
+      .filter((a) => existsSync(join(asm.directory, a, WORKFLOW_DAR_FILENAME)));
+    expect(withDar.length).toBeGreaterThan(0);
+  }, 180000);
+});

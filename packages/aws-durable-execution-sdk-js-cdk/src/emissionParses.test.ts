@@ -154,6 +154,79 @@ describe("values that would break emission are rejected", () => {
  * Found by the handler-execution suite, not by reading: the emitted string looked
  * plausible.
  */
+/**
+ * A block that parses but never returns is WORSE than one that does not parse: the IIFE
+ * evaluates to undefined, so the emitted duration is `{ seconds: undefined }` with no
+ * error at build or deploy. A syntax error at least stops the build.
+ *
+ * `12 //` is the case that matters. It is not a valid expression, so it takes the block
+ * path, where the comment eats nothing except a return that was never written.
+ */
+describe("a duration block must actually return", () => {
+  const durWf = (durationCode: string) =>
+    single({
+      id: "w",
+      kind: "wait",
+      name: "Pause",
+      durationCode,
+      terminal: true,
+    });
+
+  it.each([
+    ["a trailing comment leaves no return", "12 //"],
+    ["a bare statement", "const x = 1;"],
+    ["only a side effect", "console.log(1);"],
+  ])("rejects a block where %s", (_label, code) => {
+    expect(() => generateHandler(durWf(code))).toThrow(/never returns a value/);
+  });
+
+  it("never emits a duration of undefined", () => {
+    for (const code of ["12 //", "const x = 1;", "if (true) {}"]) {
+      let emitted: string | undefined;
+      try {
+        emitted = generateHandler(durWf(code));
+      } catch {
+        emitted = undefined;
+      }
+      expect(emitted ?? "").not.toContain("seconds: undefined");
+    }
+  });
+});
+
+/**
+ * The duration-object check runs on the AST over top-level returns. A regex over raw
+ * text rejected valid code that gets a duration from a helper and reads a field off it,
+ * and matched inside comments and string literals besides.
+ */
+describe("the duration-object check does not fire on valid code", () => {
+  const durWf = (durationCode: string) =>
+    single({
+      id: "w",
+      kind: "wait",
+      name: "Pause",
+      durationCode,
+      terminal: true,
+    });
+
+  it.each([
+    [
+      "reads seconds off a helper's duration",
+      "const f = () => { return { seconds: 1 }; }; return f().seconds;",
+    ],
+    ["mentions the shape in a comment", "// return { seconds: 5 }\nreturn 30;"],
+    [
+      "mentions the shape in a string",
+      'const s = "return { seconds: 5 }"; return s.length;',
+    ],
+    [
+      "returns a nested field",
+      "const cfg = { wait: { seconds: 9 } }; return cfg.wait.seconds;",
+    ],
+  ])("accepts code that %s", (_label, code) => {
+    expect(() => generateHandler(durWf(code))).not.toThrow();
+  });
+});
+
 describe("durationCode must return seconds, not a duration object", () => {
   const durationWf = (durationCode: string) =>
     single({
