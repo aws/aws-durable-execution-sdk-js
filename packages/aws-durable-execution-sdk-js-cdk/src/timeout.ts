@@ -79,8 +79,17 @@ function selfWaitSeconds(node: DarNode): number {
       return preset ? preset.maxWaitSeconds : 3600;
     }
     case "group":
-    case "map":
       return node.body ? scopeWaitSeconds(node.body as DarWorkflow) : 0;
+    case "map": {
+      // A map runs its body once PER ITEM and the item count is unknown at synth time,
+      // so costing a single iteration is a guess in the same way a dynamic wait was — and
+      // guessing short is what kills a live execution mid-flight. If the body contains any
+      // durable wait at all, the total is unbounded; if it contains none, one pass costs
+      // nothing either way and the bound stays exact.
+      if (!node.body) return 0;
+      const perItem = scopeWaitSeconds(node.body as DarWorkflow);
+      return perItem > 0 ? UNKNOWN_WAIT : 0;
+    }
     case "parallel":
       return Math.max(
         0,

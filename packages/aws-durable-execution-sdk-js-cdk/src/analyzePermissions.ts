@@ -26,6 +26,30 @@ const SERVICE_PREFIX: Record<string, string> = {
   sfn: "states",
   sesv2: "ses",
   "dynamodb-streams": "dynamodb",
+  // Packages whose name differs from the IAM prefix by more than punctuation. Without
+  // these the analyzer names actions that do not exist: harmless-looking under the
+  // default (the warning lists a fictional action) but rejected by CloudFormation when
+  // grantWildcardPermissions is set. `emr` mattered most because serviceIntegrations.ts
+  // already knew the right prefix, so the two disagreed inside one package.
+  emr: "elasticmapreduce",
+  "emr-containers": "emr-containers",
+  "route-53": "route53",
+  "route53-domains": "route53domains",
+  "waf-v2": "wafv2",
+  efs: "elasticfilesystem",
+  "cognito-identity-provider": "cognito-idp",
+  "cognito-identity": "cognito-identity",
+  "api-gateway": "apigateway",
+  apigatewayv2: "apigateway",
+  "auto-scaling": "autoscaling",
+  "application-auto-scaling": "application-autoscaling",
+  "elastic-load-balancing-v2": "elasticloadbalancing",
+  "elastic-load-balancing": "elasticloadbalancing",
+  "config-service": "config",
+  "service-catalog": "servicecatalog",
+  "step-functions": "states",
+  "resource-groups-tagging-api": "tag",
+  sts: "sts",
 };
 
 /** Fixes command->action names that don't follow the `Command`-stripping rule. */
@@ -37,6 +61,28 @@ const ACTION_OVERRIDES: Record<string, string> = {
   "s3:DeleteObjects": "s3:DeleteObject",
   "s3:HeadObject": "s3:GetObject",
   "s3:HeadBucket": "s3:ListBucket",
+  // CopyObject is not an IAM action; a copy needs read on the source and write on the
+  // destination. Mapped to PutObject here and GetObject is added alongside it below.
+  "s3:CopyObject": "s3:PutObject",
+  // @aws-sdk/lib-dynamodb's DocumentClient commands are named without the `Item`
+  // suffix, so the strip rule produced `dynamodb:Get` / `dynamodb:Put` — actions that
+  // do not exist. The client import that accompanies lib-dynamodb usage is
+  // `client-dynamodb`, which is how these reach the analyzer at all.
+  "dynamodb:Get": "dynamodb:GetItem",
+  "dynamodb:Put": "dynamodb:PutItem",
+  "dynamodb:Update": "dynamodb:UpdateItem",
+  "dynamodb:Delete": "dynamodb:DeleteItem",
+  "dynamodb:BatchGet": "dynamodb:BatchGetItem",
+  "dynamodb:BatchWrite": "dynamodb:BatchWriteItem",
+  "dynamodb:TransactGet": "dynamodb:TransactGetItems",
+  "dynamodb:TransactWrite": "dynamodb:TransactWriteItems",
+};
+
+/** Actions that imply a second action the command name does not mention. */
+const IMPLIED_ACTIONS: Record<string, string[]> = {
+  // A copy reads the source object as well as writing the destination.
+  "s3:PutObject": [],
+  "s3:CopyObject": ["s3:GetObject"],
 };
 
 interface Collected {
@@ -108,10 +154,24 @@ const IMPORT_RE =
 const CLIENT_RE = /@aws-sdk\/client-([\w-]+)/g;
 const COMMAND_RE = /\b([A-Z]\w*)Command\b/g;
 
-function actionFor(service: string, command: string): string {
-  const prefix = SERVICE_PREFIX[service] ?? service;
+/** Own-property lookup, so an inherited Object.prototype member can never match. */
+function own<T>(table: Record<string, T>, key: string): T | undefined {
+  return Object.prototype.hasOwnProperty.call(table, key)
+    ? table[key]
+    : undefined;
+}
+
+/**
+ * The IAM action(s) a command implies. Returns more than one where the command name
+ * understates what it does — an S3 copy reads the source as well as writing the
+ * destination, and `CopyObject` is not itself an IAM action.
+ */
+function actionsFor(service: string, command: string): string[] {
+  const prefix = own(SERVICE_PREFIX, service) ?? service;
   const raw = `${prefix}:${command}`;
-  return ACTION_OVERRIDES[raw] ?? raw;
+  const mapped = own(ACTION_OVERRIDES, raw) ?? raw;
+  const implied = own(IMPLIED_ACTIONS, raw) ?? [];
+  return [...new Set([mapped, ...implied])];
 }
 
 /**
@@ -168,11 +228,15 @@ export function analyzeWorkflowPermissions(
           continue;
         }
       }
-      const action = actionFor(service, command.replace(/Command$/, ""));
-      const prefix = action.split(":")[0];
-      if (!actionsByService.has(prefix))
-        actionsByService.set(prefix, new Set());
-      actionsByService.get(prefix)?.add(action);
+      for (const action of actionsFor(
+        service,
+        command.replace(/Command$/, ""),
+      )) {
+        const prefix = action.split(":")[0];
+        if (!actionsByService.has(prefix))
+          actionsByService.set(prefix, new Set());
+        actionsByService.get(prefix)?.add(action);
+      }
     }
   }
 

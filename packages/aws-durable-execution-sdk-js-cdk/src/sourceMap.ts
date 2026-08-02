@@ -476,11 +476,24 @@ export function buildHandlerSourceMap(
       pendingNodeId = undefined;
     }
     if (inBody && currentBodyLines && currentBodyLines.length > 0) {
-      // Clamp to the last body line in case a node's body (per
-      // generateHandler.ts's own fallback text, e.g. "return undefined;")
-      // is shorter than what locateDarTsFunctionBodyLines reports, or vice
-      // versa — keeps this robust rather than throwing on a mismatch.
-      const idx = Math.min(bodyLineIdx, currentBodyLines.length - 1);
+      // These are two INDEPENDENTLY produced line sequences: what generateHandler
+      // emitted from `node.code`, and what the external `.dar.ts` serializer wrote. They
+      // are only guaranteed to correspond while they stay the same length.
+      //
+      // Clamping an overflow to the last line silently collapsed every subsequent
+      // mapping onto one `.dar.ts` line, so a blank line, a reformat, or the
+      // `return undefined;` substitution for empty code shifted the whole map with no
+      // diagnostic — and a debugger stopping on the wrong line is worse than one that
+      // admits it has no map. Fail with the counts instead.
+      if (bodyLineIdx >= currentBodyLines.length) {
+        throw new Error(
+          `Source map mismatch for node "${pendingNodeId ?? "unknown"}": the ` +
+            `generated body has more lines than the ${currentBodyLines.length} found ` +
+            `in ${darSourceFileName}. The .dar.ts and the generated handler have ` +
+            `drifted, so breakpoints would map to the wrong lines.`,
+        );
+      }
+      const idx = bodyLineIdx;
       generator.addMapping({
         generated: { line: outLineNo, column: 0 },
         original: { line: currentBodyLines[idx], column: 0 },

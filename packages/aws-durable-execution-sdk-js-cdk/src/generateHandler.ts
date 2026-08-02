@@ -1052,6 +1052,11 @@ function emitChain(
       continue;
     }
     if (node.kind === "condition") {
+      // Conditions are dispatched here, BEFORE emitOperation, so they never reach the
+      // error wrapper — `emitCondition` also skips error-kind edges. Declared error
+      // handling on a condition was therefore discarded silently, and the recovery node
+      // disappeared from the output entirely. Refuse rather than drop it.
+      refuseConditionErrorHandling(node, adj);
       lines.push(
         nodeMarker(node),
         emitCondition(node, wf, scope, idents, byId, adj, visited),
@@ -1223,7 +1228,19 @@ function emitErrorCatch(
       ];
     }
     if (typeof h.fallbackCode === "string") {
-      if (!doesBind) return []; // nothing to assign a fallback to
+      if (!doesBind) {
+        // A fallback supplies a RESULT, and this node binds none (a wait, for
+        // instance), so there is nothing to assign. Returning [] emitted
+        // `catch (err) { }` — the error was swallowed and execution continued as
+        // though the operation had succeeded, which is strictly worse than not
+        // offering the feature. Refuse instead: the author asked for recovery that
+        // cannot be expressed here.
+        throw new Error(
+          `Node "${node.name}": a fallback cannot be used on a ${node.kind} node, ` +
+            `which produces no result to fall back to. Use an error route to another ` +
+            `node, or move the fallback to a node that returns a value.`,
+        );
+      }
       const code =
         h.fallbackCode.trim().length > 0 ? h.fallbackCode : "return undefined;";
       return [
@@ -1285,6 +1302,34 @@ function emitErrorCatch(
  * branch on its result. Each outgoing flow edge with a `match` becomes a `case`
  * (recursing into that branch's tail); a matchless edge is the `default`.
  */
+/**
+ * Refuses error handling declared on a `condition` node.
+ *
+ * A condition is control flow, not an operation: it is emitted as a `switch` and never
+ * passes through the try/catch wrapper, and `emitCondition` ignores error-kind edges. So
+ * an `onError` fallback or an error route on a condition produced no try, no catch, and
+ * no recovery node in the output at all — the author's declared route vanished.
+ *
+ * Recovering from a condition's own evaluation and then continuing is also ambiguous
+ * (there is no result to bind and no single successor), so this refuses rather than
+ * inventing a meaning. Wrap the expression in a step if it can fail.
+ */
+function refuseConditionErrorHandling(
+  node: DarNode,
+  adj: Map<string, { kind?: string }[]>,
+): void {
+  const hasFallback =
+    ((node.onError as ErrorBranch[] | undefined) ?? []).length > 0;
+  const hasErrorEdge = (adj.get(node.id) ?? []).some((e) => e.kind === "error");
+  if (!hasFallback && !hasErrorEdge) return;
+  throw new Error(
+    `Condition node "${node.name}" declares error handling, which cannot be applied: ` +
+      `a condition is emitted as control flow and never runs inside a try/catch, so the ` +
+      `route would be silently dropped. Move the failing expression into a step and put ` +
+      `the error handling there.`,
+  );
+}
+
 function emitCondition(
   node: DarNode,
   wf: DarWorkflow,
