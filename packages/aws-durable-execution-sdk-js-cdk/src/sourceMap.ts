@@ -440,6 +440,12 @@ export function buildHandlerSourceMap(
   // which resolve statement breakpoints inside the node's code. Additive: the
   // existing body-line mappings are untouched.
   let pendingNodeId: string | undefined;
+  /**
+   * The node whose body is being mapped. Separate from `pendingNodeId`, which is cleared
+   * as soon as the wrapper line is consumed — and a body line can only be reached AFTER
+   * that, so reading pendingNodeId in a body-line diagnostic always saw undefined.
+   */
+  let currentNodeId: string | undefined;
 
   for (const rawLine of inputLines) {
     const nm = nodeMarkerRe.exec(rawLine);
@@ -447,6 +453,7 @@ export function buildHandlerSourceMap(
       // A node marker is consumed (not emitted) — it selects which node's
       // .dar.ts function body the NEXT bodyStart/bodyEnd pair walks through.
       const fnName = idToFnName.get(nm[1]);
+      currentNodeId = nm[1];
       currentBodyLines = fnName ? functionLines.get(fnName) : undefined;
       inBody = false;
       pendingNodeId = nm[1];
@@ -487,7 +494,7 @@ export function buildHandlerSourceMap(
       // admits it has no map. Fail with the counts instead.
       if (bodyLineIdx >= currentBodyLines.length) {
         throw new Error(
-          `Source map mismatch for node "${pendingNodeId ?? "unknown"}": the ` +
+          `Source map mismatch for node "${currentNodeId ?? "unknown"}": the ` +
             `generated body has more lines than the ${currentBodyLines.length} found ` +
             `in ${darSourceFileName}. The .dar.ts and the generated handler have ` +
             `drifted, so breakpoints would map to the wrong lines.`,

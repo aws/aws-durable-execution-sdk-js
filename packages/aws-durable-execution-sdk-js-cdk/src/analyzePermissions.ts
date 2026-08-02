@@ -32,13 +32,10 @@ const SERVICE_PREFIX: Record<string, string> = {
   // grantWildcardPermissions is set. `emr` mattered most because serviceIntegrations.ts
   // already knew the right prefix, so the two disagreed inside one package.
   emr: "elasticmapreduce",
-  "emr-containers": "emr-containers",
   "route-53": "route53",
-  "route53-domains": "route53domains",
-  "waf-v2": "wafv2",
+  "route-53-domains": "route53domains",
   efs: "elasticfilesystem",
   "cognito-identity-provider": "cognito-idp",
-  "cognito-identity": "cognito-identity",
   "api-gateway": "apigateway",
   apigatewayv2: "apigateway",
   "auto-scaling": "autoscaling",
@@ -47,9 +44,7 @@ const SERVICE_PREFIX: Record<string, string> = {
   "elastic-load-balancing": "elasticloadbalancing",
   "config-service": "config",
   "service-catalog": "servicecatalog",
-  "step-functions": "states",
   "resource-groups-tagging-api": "tag",
-  sts: "sts",
 };
 
 /** Fixes command->action names that don't follow the `Command`-stripping rule. */
@@ -78,10 +73,14 @@ const ACTION_OVERRIDES: Record<string, string> = {
   "dynamodb:TransactWrite": "dynamodb:TransactWriteItems",
 };
 
-/** Actions that imply a second action the command name does not mention. */
+/**
+ * Extra actions a command needs beyond the one its name maps to. Keyed on the
+ * PRE-override action (what the strip rule produces), the same key ACTION_OVERRIDES uses,
+ * so an entry keyed on a mapped action would never fire.
+ */
 const IMPLIED_ACTIONS: Record<string, string[]> = {
-  // A copy reads the source object as well as writing the destination.
-  "s3:PutObject": [],
+  // A copy reads the source object as well as writing the destination, and CopyObject is
+  // not itself an IAM action.
   "s3:CopyObject": ["s3:GetObject"],
 };
 
