@@ -1,0 +1,93 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "5cc9ff63-c334-449a-983f-3bfe4b0bdc66",
+    "EventTimestamp": "2026-08-03T17:20:07.972Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "charge-payment",
+    "EventTimestamp": "2026-08-03T17:20:07.980Z",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6IjBiZTBkMjdkLTNmNTItNGJjNy1hZjIzLThmOGEzNjczYjhkNSIsIm9wZXJhdGlvbklkIjoiYzRjYTQyMzhhMGI5MjM4MiIsInRva2VuIjoiMWE5NDU0ZWEtYWYyYi00N2Q1LTlmNDEtNmVhMTYzZmRiNTQwIn0=",
+      "Timeout": 300,
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "CallbackFailed",
+    "SubType": "Callback",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "charge-payment",
+    "EventTimestamp": "2026-08-03T17:20:07.982Z",
+    "CallbackFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Card declined by issuer",
+          "ErrorType": "PaymentDeclinedException",
+          "ErrorData": "{\"code\":\"insufficient_funds\",\"retryable\":false}",
+          "StackTrace": [
+            "PaymentDeclinedException: Card declined by issuer",
+            "    at chargeCard (payments.js:42:11)",
+            "    at processPayment (payments.js:18:5)"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "dispatch-to-processor",
+    "EventTimestamp": "2026-08-03T17:20:07.983Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "dispatch-to-processor",
+    "EventTimestamp": "2026-08-03T17:20:07.983Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"dispatched\":true,\"callbackId\":\"eyJleGVjdXRpb25JZCI6IjBiZTBkMjdkLTNmNTItNGJjNy1hZjIzLThmOGEzNjczYjhkNSIsIm9wZXJhdGlvbklkIjoiYzRjYTQyMzhhMGI5MjM4MiIsInRva2VuIjoiMWE5NDU0ZWEtYWYyYi00N2Q1LTlmNDEtNmVhMTYzZmRiNTQwIn0=\"}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 6,
+    "EventTimestamp": "2026-08-03T17:20:07.984Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-03T17:20:07.972Z",
+      "EndTimestamp": "2026-08-03T17:20:07.984Z",
+      "Error": {},
+      "RequestId": "f0d02ba6-357d-424f-9669-a2cf7a259bef"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 7,
+    "Id": "5cc9ff63-c334-449a-983f-3bfe4b0bdc66",
+    "EventTimestamp": "2026-08-03T17:20:07.984Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"settled\":false,\"errorType\":\"CallbackExternalError\",\"message\":\"Card declined by issuer\",\"errorData\":\"{\\\"code\\\":\\\"insufficient_funds\\\",\\\"retryable\\\":false}\",\"isCallbackError\":true,\"isExternalError\":true,\"cause\":{\"name\":\"PaymentDeclinedException\",\"message\":\"Card declined by issuer\",\"stack\":\"PaymentDeclinedException: Card declined by issuer\\n    at chargeCard (payments.js:42:11)\\n    at processPayment (payments.js:18:5)\"}}"
+      }
+    }
+  }
+]

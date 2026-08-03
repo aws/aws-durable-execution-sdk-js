@@ -1,0 +1,71 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "1aae04ef-a4ef-4297-95d7-f93ec9e06ce3",
+    "EventTimestamp": "2026-08-03T17:12:42.384Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"mode\":\"non-retryable\"}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "call-flaky-api",
+    "EventTimestamp": "2026-08-03T17:12:42.387Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "call-flaky-api",
+    "EventTimestamp": "2026-08-03T17:12:42.387Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Field 'amount' must be a positive number",
+          "ErrorType": "ValidationError"
+        }
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2026-08-03T17:12:42.388Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-03T17:12:42.384Z",
+      "EndTimestamp": "2026-08-03T17:12:42.388Z",
+      "Error": {
+        "Payload": {
+          "ErrorType": "StepError",
+          "ErrorMessage": "Field 'amount' must be a positive number"
+        }
+      },
+      "RequestId": "cab32337-c328-472b-87db-d186e12c1b1a"
+    }
+  },
+  {
+    "EventType": "ExecutionFailed",
+    "EventId": 5,
+    "Id": "1aae04ef-a4ef-4297-95d7-f93ec9e06ce3",
+    "EventTimestamp": "2026-08-03T17:12:42.388Z",
+    "ExecutionFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "StepError",
+          "ErrorMessage": "Field 'amount' must be a positive number"
+        }
+      }
+    }
+  }
+]

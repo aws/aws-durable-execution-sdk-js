@@ -1,0 +1,86 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "834a33e0-5b36-49b9-9585-ae7e20ee0b3f",
+    "EventTimestamp": "2026-08-03T17:20:08.107Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "charge-payment",
+    "EventTimestamp": "2026-08-03T17:20:08.111Z",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6IjFjNTRhN2U2LTdiOWEtNDhlOS05YTZiLTg2NTY3NDVkYjdmMSIsIm9wZXJhdGlvbklkIjoiYzRjYTQyMzhhMGI5MjM4MiIsInRva2VuIjoiNTY1OTRmN2MtNjk1Ni00YzgwLThjMGUtMjljNjM1NDQ0MjUwIn0=",
+      "Timeout": 300,
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "CallbackFailed",
+    "SubType": "Callback",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "charge-payment",
+    "EventTimestamp": "2026-08-03T17:20:08.112Z",
+    "CallbackFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorData": "{\"code\":\"gateway_unavailable\"}"
+        }
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "dispatch-to-processor",
+    "EventTimestamp": "2026-08-03T17:20:08.114Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "dispatch-to-processor",
+    "EventTimestamp": "2026-08-03T17:20:08.114Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"dispatched\":true,\"callbackId\":\"eyJleGVjdXRpb25JZCI6IjFjNTRhN2U2LTdiOWEtNDhlOS05YTZiLTg2NTY3NDVkYjdmMSIsIm9wZXJhdGlvbklkIjoiYzRjYTQyMzhhMGI5MjM4MiIsInRva2VuIjoiNTY1OTRmN2MtNjk1Ni00YzgwLThjMGUtMjljNjM1NDQ0MjUwIn0=\"}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 6,
+    "EventTimestamp": "2026-08-03T17:20:08.114Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-03T17:20:08.107Z",
+      "EndTimestamp": "2026-08-03T17:20:08.114Z",
+      "Error": {},
+      "RequestId": "5ee23675-9bd7-4510-bc82-50407111d7c7"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 7,
+    "Id": "834a33e0-5b36-49b9-9585-ae7e20ee0b3f",
+    "EventTimestamp": "2026-08-03T17:20:08.115Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"settled\":false,\"errorType\":\"CallbackExternalError\",\"message\":\"Callback failed\",\"errorData\":\"{\\\"code\\\":\\\"gateway_unavailable\\\"}\",\"isCallbackError\":true,\"isExternalError\":true,\"cause\":{\"name\":\"Error\",\"message\":\"\"}}"
+      }
+    }
+  }
+]

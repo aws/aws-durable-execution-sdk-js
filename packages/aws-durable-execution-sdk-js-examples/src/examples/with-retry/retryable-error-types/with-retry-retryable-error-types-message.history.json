@@ -1,0 +1,140 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "a16b3361-f734-4f22-b8fe-ff14971d5418",
+    "EventTimestamp": "2026-08-03T17:12:39.266Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"mode\":\"message\"}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "call-flaky-api",
+    "EventTimestamp": "2026-08-03T17:12:39.271Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "call-flaky-api",
+    "EventTimestamp": "2026-08-03T17:12:39.272Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Request was throttled by the upstream API (attempt 1)",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2026-08-03T17:12:39.293Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-03T17:12:39.266Z",
+      "EndTimestamp": "2026-08-03T17:12:39.293Z",
+      "Error": {},
+      "RequestId": "099deb8e-8eff-4f20-a020-8fa3cee7d69b"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "c4ca4238a0b92382",
+    "Name": "call-flaky-api",
+    "EventTimestamp": "2026-08-03T17:12:40.276Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "c4ca4238a0b92382",
+    "Name": "call-flaky-api",
+    "EventTimestamp": "2026-08-03T17:12:40.276Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Request was throttled by the upstream API (attempt 2)",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 2,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 7,
+    "EventTimestamp": "2026-08-03T17:12:40.297Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-03T17:12:40.273Z",
+      "EndTimestamp": "2026-08-03T17:12:40.297Z",
+      "Error": {},
+      "RequestId": "db421046-0f8c-4452-b179-9c55f0639fa5"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "c4ca4238a0b92382",
+    "Name": "call-flaky-api",
+    "EventTimestamp": "2026-08-03T17:12:42.280Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 9,
+    "Id": "c4ca4238a0b92382",
+    "Name": "call-flaky-api",
+    "EventTimestamp": "2026-08-03T17:12:42.280Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"api call succeeded on attempt 3\""
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 2
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 10,
+    "EventTimestamp": "2026-08-03T17:12:42.280Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-03T17:12:42.277Z",
+      "EndTimestamp": "2026-08-03T17:12:42.280Z",
+      "Error": {},
+      "RequestId": "eecb29ef-2c43-4fd6-b1f9-5619218eb961"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 11,
+    "Id": "a16b3361-f734-4f22-b8fe-ff14971d5418",
+    "EventTimestamp": "2026-08-03T17:12:42.281Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "\"api call succeeded on attempt 3\""
+      }
+    }
+  }
+]

@@ -1,0 +1,171 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "0567b82a-d2ca-48ed-a2e5-b72a83cf4ad7",
+    "EventTimestamp": "2026-08-03T17:13:21.711Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"mode\":\"propagate\"}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "Parallel",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "failing-branches",
+    "EventTimestamp": "2026-08-03T17:13:21.720Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "ParallelBranch",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "parallel-branch-0",
+    "EventTimestamp": "2026-08-03T17:13:21.720Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "ParallelBranch",
+    "EventId": 4,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "parallel-branch-1",
+    "EventTimestamp": "2026-08-03T17:13:21.720Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "2f221a18eb863803",
+    "Name": "ok-branch",
+    "EventTimestamp": "2026-08-03T17:13:21.720Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "6151f5ab282d90e4",
+    "Name": "bad-branch",
+    "EventTimestamp": "2026-08-03T17:13:21.720Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "6151f5ab282d90e4",
+    "Name": "bad-branch",
+    "EventTimestamp": "2026-08-03T17:13:21.720Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "branch blew up",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "2f221a18eb863803",
+    "Name": "ok-branch",
+    "EventTimestamp": "2026-08-03T17:13:21.720Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"ok\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextFailed",
+    "SubType": "ParallelBranch",
+    "EventId": 9,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "parallel-branch-1",
+    "EventTimestamp": "2026-08-03T17:13:21.723Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "StepError",
+          "ErrorMessage": "branch blew up"
+        }
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "ParallelBranch",
+    "EventId": 10,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "parallel-branch-0",
+    "EventTimestamp": "2026-08-03T17:13:21.724Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"ok\""
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "Parallel",
+    "EventId": 11,
+    "Id": "c4ca4238a0b92382",
+    "Name": "failing-branches",
+    "EventTimestamp": "2026-08-03T17:13:21.724Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"all\":[{\"index\":0,\"status\":\"STARTED\"},{\"error\":{\"ErrorType\":\"ChildContextError\",\"ErrorMessage\":\"branch blew up\",\"Cause\":{\"ErrorType\":\"StepError\",\"ErrorMessage\":\"branch blew up\",\"Cause\":{\"ErrorType\":\"StepError\",\"ErrorMessage\":\"branch blew up\"}}},\"index\":1,\"status\":\"FAILED\"}],\"completionReason\":\"FAILURE_TOLERANCE_EXCEEDED\"}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 12,
+    "EventTimestamp": "2026-08-03T17:13:21.724Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-03T17:13:21.711Z",
+      "EndTimestamp": "2026-08-03T17:13:21.724Z",
+      "Error": {
+        "Payload": {
+          "ErrorType": "ChildContextError",
+          "ErrorMessage": "branch blew up"
+        }
+      },
+      "RequestId": "b952e91c-1fd0-498f-9dc5-bdd8ac96dc86"
+    }
+  },
+  {
+    "EventType": "ExecutionFailed",
+    "EventId": 13,
+    "Id": "0567b82a-d2ca-48ed-a2e5-b72a83cf4ad7",
+    "EventTimestamp": "2026-08-03T17:13:21.725Z",
+    "ExecutionFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "ChildContextError",
+          "ErrorMessage": "branch blew up"
+        }
+      }
+    }
+  }
+]

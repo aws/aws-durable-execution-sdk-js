@@ -1,0 +1,133 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "c9cc1434-58d1-495c-abf9-ad2e7f36c692",
+    "EventTimestamp": "2026-08-03T17:12:27.265Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "greet",
+    "EventTimestamp": "2026-08-03T17:12:27.275Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "greet",
+    "EventTimestamp": "2026-08-03T17:12:27.275Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"hello\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "RunInChildContext",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "child",
+    "EventTimestamp": "2026-08-03T17:12:27.278Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "8fbdbf5573b18fae",
+    "Name": "child-step",
+    "EventTimestamp": "2026-08-03T17:12:27.278Z",
+    "ParentId": "c81e728d9d4c2f63",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "8fbdbf5573b18fae",
+    "Name": "child-step",
+    "EventTimestamp": "2026-08-03T17:12:27.278Z",
+    "ParentId": "c81e728d9d4c2f63",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"child-done\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "RunInChildContext",
+    "EventId": 7,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "child",
+    "EventTimestamp": "2026-08-03T17:12:27.281Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"child-done\""
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "failing-step",
+    "EventTimestamp": "2026-08-03T17:12:27.281Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 9,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "failing-step",
+    "EventTimestamp": "2026-08-03T17:12:27.281Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "intentional step failure",
+          "ErrorType": "Error"
+        }
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 10,
+    "EventTimestamp": "2026-08-03T17:12:27.282Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-03T17:12:27.265Z",
+      "EndTimestamp": "2026-08-03T17:12:27.282Z",
+      "Error": {},
+      "RequestId": "54cd37ee-1bac-4935-ba64-e65303ab87fc"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 11,
+    "Id": "c9cc1434-58d1-495c-abf9-ad2e7f36c692",
+    "EventTimestamp": "2026-08-03T17:12:27.282Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"greeting\":\"hello\",\"childResult\":\"child-done\",\"recovered\":true}"
+      }
+    }
+  }
+]

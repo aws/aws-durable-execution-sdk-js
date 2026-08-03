@@ -1,0 +1,113 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "c121ee1a-dcef-4699-8094-9b05800243a6",
+    "EventTimestamp": "2026-08-03T17:11:05.272Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"reportId\":\"RPT-001\"}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "generate-report",
+    "EventTimestamp": "2026-08-03T17:11:05.280Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "generate-report",
+    "EventTimestamp": "2026-08-03T17:11:05.282Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"file\":\"/var/folders/d2/m1rtwf316ml11zx23psmwkz00000gr/T/dur-example-fs-serdes-always/f556f1d0531cbabb442762b08f13318d3840da8fc8c3118cbfc4bd45e908ee1b/6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b.json\",\"preview\":{\"id\":\"RPT-001\",\"status\":\"generated\",\"ownerEmail\":\"***\"}}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2026-08-03T17:11:05.288Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2026-08-03T17:11:06.288Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2026-08-03T17:11:05.309Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-03T17:11:05.272Z",
+      "EndTimestamp": "2026-08-03T17:11:05.309Z",
+      "Error": {},
+      "RequestId": "abce789f-3d75-4996-8a3d-fdec66715254"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 6,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2026-08-03T17:11:06.287Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "summarize-report",
+    "EventTimestamp": "2026-08-03T17:11:06.291Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "summarize-report",
+    "EventTimestamp": "2026-08-03T17:11:06.293Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"file\":\"/var/folders/d2/m1rtwf316ml11zx23psmwkz00000gr/T/dur-example-fs-serdes-always/f556f1d0531cbabb442762b08f13318d3840da8fc8c3118cbfc4bd45e908ee1b/4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce.json\",\"preview\":{\"id\":\"RPT-001\",\"status\":\"generated\"}}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 9,
+    "EventTimestamp": "2026-08-03T17:11:06.294Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-03T17:11:06.288Z",
+      "EndTimestamp": "2026-08-03T17:11:06.294Z",
+      "Error": {},
+      "RequestId": "8a0f8efe-c351-49ae-9375-4cb52aa8a747"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 10,
+    "Id": "c121ee1a-dcef-4699-8094-9b05800243a6",
+    "EventTimestamp": "2026-08-03T17:11:06.294Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"id\":\"RPT-001\",\"status\":\"generated\",\"bodyLength\":140000}"
+      }
+    }
+  }
+]

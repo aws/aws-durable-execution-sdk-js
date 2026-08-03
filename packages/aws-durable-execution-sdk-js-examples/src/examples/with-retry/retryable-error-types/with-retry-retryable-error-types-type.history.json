@@ -1,0 +1,140 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "ca46cd64-3c04-4ce9-80c5-69e311ec80c8",
+    "EventTimestamp": "2026-08-03T17:12:36.142Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"mode\":\"type\"}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "call-flaky-api",
+    "EventTimestamp": "2026-08-03T17:12:36.150Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "call-flaky-api",
+    "EventTimestamp": "2026-08-03T17:12:36.150Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Too many requests (attempt 1)",
+          "ErrorType": "RateLimitError"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 1,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2026-08-03T17:12:36.174Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-03T17:12:36.141Z",
+      "EndTimestamp": "2026-08-03T17:12:36.174Z",
+      "Error": {},
+      "RequestId": "c04b6d45-047d-4a00-b9b4-50223dd26963"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "c4ca4238a0b92382",
+    "Name": "call-flaky-api",
+    "EventTimestamp": "2026-08-03T17:12:37.156Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepFailed",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "c4ca4238a0b92382",
+    "Name": "call-flaky-api",
+    "EventTimestamp": "2026-08-03T17:12:37.156Z",
+    "StepFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Too many requests (attempt 2)",
+          "ErrorType": "RateLimitError"
+        }
+      },
+      "RetryDetails": {
+        "NextAttemptDelaySeconds": 2,
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 7,
+    "EventTimestamp": "2026-08-03T17:12:37.177Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-03T17:12:37.152Z",
+      "EndTimestamp": "2026-08-03T17:12:37.177Z",
+      "Error": {},
+      "RequestId": "09681c61-9fdf-445e-8d46-ddde28acc9ae"
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "c4ca4238a0b92382",
+    "Name": "call-flaky-api",
+    "EventTimestamp": "2026-08-03T17:12:39.161Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 9,
+    "Id": "c4ca4238a0b92382",
+    "Name": "call-flaky-api",
+    "EventTimestamp": "2026-08-03T17:12:39.161Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"api call succeeded on attempt 3\""
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 2
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 10,
+    "EventTimestamp": "2026-08-03T17:12:39.162Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-03T17:12:39.158Z",
+      "EndTimestamp": "2026-08-03T17:12:39.162Z",
+      "Error": {},
+      "RequestId": "fbdf368b-9ce5-4206-ad57-ef61c4cc1d72"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 11,
+    "Id": "ca46cd64-3c04-4ce9-80c5-69e311ec80c8",
+    "EventTimestamp": "2026-08-03T17:12:39.162Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "\"api call succeeded on attempt 3\""
+      }
+    }
+  }
+]

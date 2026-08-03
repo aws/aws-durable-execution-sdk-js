@@ -1,0 +1,86 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "8ff10b98-6c08-4d17-812f-7497414a13e1",
+    "EventTimestamp": "2026-08-03T17:21:36.888Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "await-external-approval",
+    "EventTimestamp": "2026-08-03T17:21:36.894Z",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6IjM1NTViNTczLTM1YjYtNDgwYS1iZWZlLTg3NmI2Zjc2YWI5YSIsIm9wZXJhdGlvbklkIjoiYzRjYTQyMzhhMGI5MjM4MiIsInRva2VuIjoiNmQ1ZDNmNjUtMjU1ZS00NjVlLTk3NzctMjkxODVhMTA1MTAyIn0=",
+      "Timeout": 1,
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "reconcile-local-state",
+    "EventTimestamp": "2026-08-03T17:21:36.897Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "CallbackTimedOut",
+    "SubType": "Callback",
+    "EventId": 4,
+    "Id": "c4ca4238a0b92382",
+    "Name": "await-external-approval",
+    "EventTimestamp": "2026-08-03T17:21:37.894Z",
+    "CallbackTimedOutDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Callback timed out"
+        }
+      }
+    }
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "reconcile-local-state",
+    "EventTimestamp": "2026-08-03T17:21:38.897Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"reconciled\":true}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 6,
+    "EventTimestamp": "2026-08-03T17:21:38.898Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-03T17:21:36.888Z",
+      "EndTimestamp": "2026-08-03T17:21:38.898Z",
+      "Error": {},
+      "RequestId": "35dc448d-0ef5-414e-ba1e-ad2000a60fb0"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 7,
+    "Id": "8ff10b98-6c08-4d17-812f-7497414a13e1",
+    "EventTimestamp": "2026-08-03T17:21:38.899Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"approved\":false,\"timedOut\":true,\"isCallbackError\":true,\"isTimeoutError\":true,\"errorType\":\"CallbackTimeoutError\",\"message\":\"Callback timed out\"}"
+      }
+    }
+  }
+]

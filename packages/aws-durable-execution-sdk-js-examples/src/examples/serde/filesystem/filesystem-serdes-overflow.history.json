@@ -1,0 +1,157 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "5420bf57-09af-4750-98ad-89d3417dd6e9",
+    "EventTimestamp": "2026-08-03T17:11:05.249Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "small-record",
+    "EventTimestamp": "2026-08-03T17:11:05.258Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "small-record",
+    "EventTimestamp": "2026-08-03T17:11:05.258Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"data\":\"{\\\"orderId\\\":\\\"ORD-42\\\",\\\"total\\\":19.99}\"}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "large-document",
+    "EventTimestamp": "2026-08-03T17:11:05.264Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "large-document",
+    "EventTimestamp": "2026-08-03T17:11:05.268Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"file\":\"/var/folders/d2/m1rtwf316ml11zx23psmwkz00000gr/T/dur-example-fs-serdes-overflow/06fb3fb5-f2d9-4d15-9028-da99486ffe44/2.json\"}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "empty-record",
+    "EventTimestamp": "2026-08-03T17:11:05.270Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "empty-record",
+    "EventTimestamp": "2026-08-03T17:11:05.270Z",
+    "StepSucceededDetails": {
+      "Result": {},
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 8,
+    "Id": "a87ff679a2f3e71d",
+    "EventTimestamp": "2026-08-03T17:11:05.274Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2026-08-03T17:11:06.274Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 9,
+    "EventTimestamp": "2026-08-03T17:11:05.297Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-03T17:11:05.249Z",
+      "EndTimestamp": "2026-08-03T17:11:05.297Z",
+      "Error": {},
+      "RequestId": "a7da26e3-f6fb-425c-9845-8f77522a52bb"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 10,
+    "Id": "a87ff679a2f3e71d",
+    "EventTimestamp": "2026-08-03T17:11:06.273Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 11,
+    "Id": "e4da3b7fbbce2345",
+    "Name": "combine",
+    "EventTimestamp": "2026-08-03T17:11:06.277Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 12,
+    "Id": "e4da3b7fbbce2345",
+    "Name": "combine",
+    "EventTimestamp": "2026-08-03T17:11:06.277Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"data\":\"{\\\"smallOrderId\\\":\\\"ORD-42\\\",\\\"largeLength\\\":307200,\\\"nothingIsUndefined\\\":true}\"}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 13,
+    "EventTimestamp": "2026-08-03T17:11:06.277Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-03T17:11:06.273Z",
+      "EndTimestamp": "2026-08-03T17:11:06.277Z",
+      "Error": {},
+      "RequestId": "ffb13009-4972-44aa-b226-cc53f2363650"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 14,
+    "Id": "5420bf57-09af-4750-98ad-89d3417dd6e9",
+    "EventTimestamp": "2026-08-03T17:11:06.277Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"smallOrderId\":\"ORD-42\",\"largeLength\":307200,\"nothingIsUndefined\":true}"
+      }
+    }
+  }
+]

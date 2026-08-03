@@ -1,0 +1,80 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "14557be1-7d75-41e5-8af8-9f5e36b3e4fe",
+    "EventTimestamp": "2026-08-03T17:09:32.159Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "14557be1-7d75-41e5-8af8-9f5e36b3e4fe",
+    "EventTimestamp": "2026-08-03T17:09:32.159Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "load-batch-metadata",
+    "EventTimestamp": "2026-08-03T17:09:32.167Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "load-batch-metadata",
+    "EventTimestamp": "2026-08-03T17:09:32.167Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"batches\":6,\"recordsPerBatch\":1000}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 4,
+    "Id": "35769d58719933cb",
+    "EventTimestamp": "2026-08-03T17:09:32.195Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"totalRecords\":6000,\"totalBatches\":6,\"records\":[{\"id\":\"rec-0-0\"...[trimmed 6377390 chars for repo size; not used by assertEventSignatures]"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2026-08-03T17:09:32.196Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-03T17:09:32.159Z",
+      "EndTimestamp": "2026-08-03T17:09:32.196Z",
+      "Error": {},
+      "RequestId": "3b8cced0-7273-49f8-b4f5-23c81bb54e84"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 6,
+    "Id": "14557be1-7d75-41e5-8af8-9f5e36b3e4fe",
+    "EventTimestamp": "2026-08-03T17:09:32.202Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"totalRecords\":6000,\"totalBatches\":6,\"records\":[{\"id\":\"rec-0-0\"...[trimmed 6377390 chars for repo size; not used by assertEventSignatures]"
+      }
+    }
+  }
+]

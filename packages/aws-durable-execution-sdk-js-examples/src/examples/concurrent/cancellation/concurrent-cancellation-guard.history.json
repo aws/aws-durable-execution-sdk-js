@@ -1,0 +1,57 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "27223c26-a2b3-4cb1-ac93-b7ac020864a5",
+    "EventTimestamp": "2026-08-03T17:13:23.065Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"mode\":\"guard\"}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "Parallel",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "guarded-batch",
+    "EventTimestamp": "2026-08-03T17:13:23.167Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "Parallel",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "guarded-batch",
+    "EventTimestamp": "2026-08-03T17:13:23.167Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"all\":[],\"completionReason\":\"CUSTOM_COMPLETION_FAILED\"}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2026-08-03T17:13:23.168Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-03T17:13:23.065Z",
+      "EndTimestamp": "2026-08-03T17:13:23.168Z",
+      "Error": {},
+      "RequestId": "a7f99c9c-6e90-4fc1-addb-11e7e1390606"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 5,
+    "Id": "27223c26-a2b3-4cb1-ac93-b7ac020864a5",
+    "EventTimestamp": "2026-08-03T17:13:23.168Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"thrownErrorType\":\"BatchCompletionError\",\"status\":\"FAILED\",\"completionReason\":\"CUSTOM_COMPLETION_FAILED\",\"totalCount\":0,\"startedCount\":0}"
+      }
+    }
+  }
+]

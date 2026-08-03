@@ -1,0 +1,113 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "408c3a06-dc75-4102-85bc-5944c2d3cd0d",
+    "EventTimestamp": "2026-08-03T17:11:05.247Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "build-profile",
+    "EventTimestamp": "2026-08-03T17:11:05.256Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "build-profile",
+    "EventTimestamp": "2026-08-03T17:11:05.259Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"file\":\"/var/folders/d2/m1rtwf316ml11zx23psmwkz00000gr/T/dur-example-preview-field-selection/f0f95f5f-4600-4e56-8a6c-afbdff14bb3b/1.json\",\"preview\":{\"id\":\"cust-9\",\"customer\":{\"id\":\"cust-9\",\"email\":\"person@example.com\",\"ssn\":\"***\"}}}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2026-08-03T17:11:05.265Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2026-08-03T17:11:06.266Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2026-08-03T17:11:05.287Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-03T17:11:05.247Z",
+      "EndTimestamp": "2026-08-03T17:11:05.287Z",
+      "Error": {},
+      "RequestId": "84dbe7ba-517a-4013-967a-4527ad035695"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 6,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2026-08-03T17:11:06.265Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "read-profile",
+    "EventTimestamp": "2026-08-03T17:11:06.267Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "read-profile",
+    "EventTimestamp": "2026-08-03T17:11:06.269Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"file\":\"/var/folders/d2/m1rtwf316ml11zx23psmwkz00000gr/T/dur-example-preview-field-selection/f0f95f5f-4600-4e56-8a6c-afbdff14bb3b/3.json\",\"preview\":{\"id\":\"cust-9\"}}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 9,
+    "EventTimestamp": "2026-08-03T17:11:06.270Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-03T17:11:06.265Z",
+      "EndTimestamp": "2026-08-03T17:11:06.270Z",
+      "Error": {},
+      "RequestId": "9e2872ce-c97d-4978-84e6-a5c2ab399c46"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 10,
+    "Id": "408c3a06-dc75-4102-85bc-5944c2d3cd0d",
+    "EventTimestamp": "2026-08-03T17:11:06.270Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"id\":\"cust-9\",\"email\":\"person@example.com\",\"auditLength\":2000}"
+      }
+    }
+  }
+]

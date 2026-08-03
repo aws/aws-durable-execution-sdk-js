@@ -1,0 +1,80 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "27926a36-dd7d-4b2e-922e-a9207c0fad7d",
+    "EventTimestamp": "2026-08-03T17:09:31.845Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "27926a36-dd7d-4b2e-922e-a9207c0fad7d",
+    "EventTimestamp": "2026-08-03T17:09:31.845Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "prepare-export",
+    "EventTimestamp": "2026-08-03T17:09:31.853Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "prepare-export",
+    "EventTimestamp": "2026-08-03T17:09:31.854Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"format\":\"csv\",\"rows\":60000}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 4,
+    "Id": "7b20970cd5f5d1db",
+    "EventTimestamp": "2026-08-03T17:09:31.912Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"format\":\"csv\",\"rowCount\":60000,\"byteLength\":7057779,\"document\"...[trimmed 7117846 chars for repo size; not used by assertEventSignatures]"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2026-08-03T17:09:31.913Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-03T17:09:31.845Z",
+      "EndTimestamp": "2026-08-03T17:09:31.913Z",
+      "Error": {},
+      "RequestId": "86db612a-8fd6-4900-a134-bb8eba5210d4"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 6,
+    "Id": "27926a36-dd7d-4b2e-922e-a9207c0fad7d",
+    "EventTimestamp": "2026-08-03T17:09:31.923Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"format\":\"csv\",\"rowCount\":60000,\"byteLength\":7057779,\"document\"...[trimmed 7117846 chars for repo size; not used by assertEventSignatures]"
+      }
+    }
+  }
+]
