@@ -45,6 +45,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   private readonly contextExtractor: ContextExtractor;
   private readonly useDefaultTracerProvider: boolean;
   private readonly workflowSpanName: string;
+  private readonly enrichLogger: boolean;
 
   // Per-invocation state
   private spanMap: Map<string, Span> = new Map();
@@ -61,6 +62,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     this.contextExtractor = config?.contextExtractor ?? xRayContextExtractor;
     this.useDefaultTracerProvider = config?.useDefaultTracerProvider ?? false;
     this.workflowSpanName = config?.workflowSpanName ?? "Workflow";
+    this.enrichLogger = config?.enrichLogger ?? true;
 
     // Pass config directly to createTracerProvider — when neither tracerProvider
     // nor useDefaultTracerProvider is set, option 3 creates an internal provider
@@ -569,6 +571,9 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   enrichLogContext(): Record<string, string | number | boolean> | undefined {
+    if (!this.enrichLogger) {
+      return undefined;
+    }
     const span = trace.getSpan(context.active());
     if (!span) {
       return undefined;

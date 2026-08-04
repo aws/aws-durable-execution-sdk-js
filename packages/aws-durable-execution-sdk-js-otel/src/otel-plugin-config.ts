@@ -82,6 +82,18 @@ export interface OtelPluginConfig {
    * Defaults to `"Workflow"`.
    */
   workflowSpanName?: string;
+
+  /**
+   * Whether `enrichLogContext()` contributes the active OTel trace context
+   * (`traceId`, `spanId`, `otelTraceSampled`) to each durable log record.
+   *
+   * When `true` (default), every log line emitted through the durable logger is
+   * stamped with the current span context for log/trace correlation. Set to
+   * `false` to disable the extra fields (e.g. to avoid duplicating context that
+   * a separate log-instrumentation layer already injects, or to keep log output
+   * minimal). Mirrors Python's `enrich_logger` and Java's `enableMdc`.
+   */
+  enrichLogger?: boolean;
 }
 
 /**

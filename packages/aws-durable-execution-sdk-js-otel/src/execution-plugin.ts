@@ -69,6 +69,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   // Workflow span name (configurable)
   private readonly workflowSpanName: string;
 
+  // Whether enrichLogContext() contributes trace context to log records
+  private readonly enrichLogger: boolean;
+
   constructor(config?: OtelPluginConfig) {
     const instrumentationName =
       config?.instrumentationName ?? DEFAULT_INSTRUMENTATION_NAME;
@@ -77,6 +80,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     this.contextExtractor = config?.contextExtractor ?? xRayContextExtractor;
     this.useDefaultTracerProvider = config?.useDefaultTracerProvider ?? false;
     this.workflowSpanName = config?.workflowSpanName ?? "Workflow";
+    this.enrichLogger = config?.enrichLogger ?? true;
 
     // Create or accept TracerProvider via the provider factory
     const { tracerProvider, ownsProvider } = createTracerProvider(config);
@@ -528,6 +532,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   enrichLogContext(): Record<string, string | number | boolean> | undefined {
+    if (!this.enrichLogger) {
+      return undefined;
+    }
     const span = trace.getSpan(context.active());
     if (!span) {
       return undefined;
