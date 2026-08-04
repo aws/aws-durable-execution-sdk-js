@@ -95,10 +95,15 @@ createTests({
         expect(workflowSpan).toBeDefined();
         expect(workflowSpan!.attributes["durable.execution.arn"]).toBeDefined();
 
-        // Verify Invocation span exists and is child of Workflow
-        const invocationSpan = spans.find((s) => s.name === "invocation");
+        // The Invocation span is invocation-rooted: it is NOT a child of the
+        // Workflow span. With no active parent span (community-collector local
+        // mode) it is a trace root. Execution correlation to the Workflow span
+        // is expressed via links on the operation/attempt spans instead.
+        const invocationSpan = spans.find((s) => s.name === "Invocation");
         expect(invocationSpan).toBeDefined();
-        expect(invocationSpan!.parentSpanId).toBe(workflowSpan!.spanId);
+        expect(invocationSpan!.parentSpanId).toBeUndefined();
+        // The Invocation span itself carries no links.
+        expect(invocationSpan!.links).toHaveLength(0);
 
         // Filter to operation spans: have durable.operation.type but NOT durable.attempt.outcome
         const operationSpans = spans.filter(
@@ -106,6 +111,14 @@ createTests({
             s.attributes["durable.operation.type"] !== undefined &&
             s.attributes["durable.attempt.outcome"] === undefined,
         );
+
+        // Every operation span links to the Workflow span for execution-scoped
+        // correlation (invocation-rooted plugin expresses the join via links).
+        for (const opSpan of operationSpans) {
+          expect(
+            opSpan.links.some((l) => l.spanId === workflowSpan!.spanId),
+          ).toBe(true);
+        }
 
         // Verify operation spans exist with correct attributes by durable.operation.name
         const fetchDataSpan = operationSpans.find(
@@ -127,10 +140,21 @@ createTests({
         const childOpsSpan = operationSpans.find(
           (s) => s.attributes["durable.operation.name"] === "child-operations",
         );
+        // A completed child context reports a synthesized terminal status.
         expect(childOpsSpan).toBeDefined();
         expect(childOpsSpan!.attributes["durable.operation.type"]).toBe(
           "CONTEXT",
         );
+        // The child context is replayed across the top-level wait's
+        // suspend/resume, so it has an in-flight STARTED span plus a terminal
+        // span; the terminal one reports the synthesized SUCCEEDED status.
+        expect(
+          operationSpans.some(
+            (s) =>
+              s.attributes["durable.operation.name"] === "child-operations" &&
+              s.attributes["durable.operation.status"] === "SUCCEEDED",
+          ),
+        ).toBe(true);
 
         const innerStepSpan = operationSpans.find(
           (s) => s.attributes["durable.operation.name"] === "inner-step",

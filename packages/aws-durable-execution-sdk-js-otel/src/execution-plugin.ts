@@ -69,9 +69,6 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   // Workflow span name (configurable)
   private readonly workflowSpanName: string;
 
-  // Cold start tracking
-  private isColdStart: boolean = true;
-
   constructor(config?: OtelPluginConfig) {
     const instrumentationName =
       config?.instrumentationName ?? DEFAULT_INSTRUMENTATION_NAME;
@@ -125,6 +122,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     this.workflowSpan = this.tracer.startSpan(
       this.workflowSpanName,
       {
+        kind: SpanKind.INTERNAL,
         attributes: {
           "durable.execution.arn": info.executionArn,
         },
@@ -139,10 +137,6 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       const parentContext = trace.setSpan(context.active(), this.workflowSpan);
 
       const invocationAttributes: Record<string, string | number | boolean> = {
-        "faas.invocation_id": info.requestId,
-        "faas.coldstart": this.isColdStart,
-        "cloud.provider": "aws",
-        "cloud.platform": "aws_lambda",
         "durable.execution.arn": info.executionArn,
         "durable.invocation.first": info.isFirstInvocation,
       };
@@ -198,9 +192,6 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         parentContext,
       );
     }
-
-    // Mark cold start as false after the first invocation
-    this.isColdStart = false;
   }
 
   wrapInvocation(
@@ -221,28 +212,47 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         info.status,
       );
 
-      // Set span status ERROR when execution has failed
+      // Map PluginInvocationStatus to span status:
+      //   FAILED -> ERROR
+      //   SUCCEEDED / PENDING -> OK (PENDING is a normal suspension, not an error)
+      //   RETRYING -> UNSET. The plugin interface cannot distinguish a STOPPED or
+      //   TIMED_OUT invocation from a RETRYING one at onInvocationEnd, so RETRYING
+      //   is intentionally left UNSET rather than reported as ERROR.
       if (info.status === "FAILED") {
         this.invocationSpan.setStatus({
           code: SpanStatusCode.ERROR,
           message: info.executionError?.message ?? "Execution failed",
         });
+      } else if (info.status === "SUCCEEDED" || info.status === "PENDING") {
+        this.invocationSpan.setStatus({ code: SpanStatusCode.OK });
       }
-      // Otherwise leave status as UNSET (default)
+      // RETRYING: leave status UNSET (default)
 
       this.invocationSpan.end();
     }
 
     // 2. Handle Workflow_Span based on terminal status
     if (info.status === "SUCCEEDED" || info.status === "FAILED") {
-      // Terminal: set status attribute, end (causes export)
+      // Terminal: set status attribute, map to span status, end (causes export).
+      // PluginInvocationStatus only distinguishes SUCCEEDED/FAILED/PENDING/RETRYING,
+      // so the plugin cannot tell whether a failed workflow was TIMED_OUT or STOPPED
+      // — those are collapsed into FAILED -> ERROR here.
       if (this.workflowSpan) {
         this.workflowSpan.setAttribute("durable.execution.status", info.status);
+        if (info.status === "FAILED") {
+          this.workflowSpan.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: info.executionError?.message ?? "Execution failed",
+          });
+        } else {
+          this.workflowSpan.setStatus({ code: SpanStatusCode.OK });
+        }
         this.workflowSpan.end();
       }
     }
     // Non-terminal (PENDING/RETRYING): do NOT end workflowSpan — just drop the reference.
-    // Spans that are never .end()'d are never exported by the OTel SDK.
+    // Its status stays UNSET and the span is never exported (spans that are never
+    // .end()'d are never exported by the OTel SDK).
 
     // 3. Discard open Operation_Spans without ending (they won't be exported)
 
@@ -364,6 +374,12 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
           message: info.error.message,
         });
         span.recordException(info.error);
+      } else if (info.status === "SUCCEEDED") {
+        // Stamp explicit OK ONLY on a SUCCEEDED terminal status. Terminal
+        // FAILURE statuses (TIMED_OUT/STOPPED/FAILED/CANCELLED) can arrive with
+        // NO error object (callback-timeout, chained-invoke fast paths); those
+        // must NOT be labelled OK, so they are left UNSET.
+        span.setStatus({ code: SpanStatusCode.OK });
       }
 
       span.end(info.endTimestamp);
@@ -421,6 +437,12 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
           message: info.error.message,
         });
         span.recordException(info.error);
+      } else if (info.status === "SUCCEEDED") {
+        // Stamp explicit OK ONLY on a SUCCEEDED terminal status. Terminal
+        // FAILURE statuses (TIMED_OUT/STOPPED/FAILED/CANCELLED) can arrive with
+        // NO error object on the cross-invocation fast paths; those must NOT be
+        // labelled OK, so they are left UNSET.
+        span.setStatus({ code: SpanStatusCode.OK });
       }
 
       span.end(info.endTimestamp);
@@ -492,6 +514,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         if (info.error) {
           attemptSpan.recordException(info.error);
         }
+      } else {
+        // Non-failed attempt: stamp explicit OK (matches Python OTel #604).
+        attemptSpan.setStatus({ code: SpanStatusCode.OK });
       }
       attemptSpan.end(info.endTimestamp);
       this.spanMap.delete(key);

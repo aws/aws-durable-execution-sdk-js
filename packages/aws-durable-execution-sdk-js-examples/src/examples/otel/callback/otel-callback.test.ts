@@ -126,7 +126,7 @@ createTests({
         expect(afterCallbackAttempt).toBeDefined();
 
         // --- Invocation span ---
-        const invocationSpan = spans.find((s) => s.name === "invocation");
+        const invocationSpan = spans.find((s) => s.name === "Invocation");
         expect(invocationSpan).toBeDefined();
 
         // --- Continuation spans with links ---

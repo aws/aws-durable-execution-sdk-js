@@ -13,7 +13,7 @@ jobs:
   npm-publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.release.tag_name }}
       - uses: actions/setup-node@v7
@@ -37,11 +37,3 @@ jobs:
           DIST_TAG_VERIFY_DELAY: "15"
         run: ./.github/workflows/iterate-publish-npm.sh
         shell: bash
-
-  notify-release:
-    needs: [npm-publish]
-    uses: ./.github/workflows/notify-release.yml
-    with:
-      tag_name: ${{ github.event.release.tag_name }}
-      release_url: ${{ github.event.release.html_url }}
-    secrets: inherit

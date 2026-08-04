@@ -2,9 +2,9 @@ name: Conformance Tests
 
 # Full-integration conformance run: builds the JS handlers, installs the pinned
 # language-agnostic runner from PyPI, then deploys + invokes + validates one SAM
-# stack per suite. Each suite runs as its own parallel matrix job. To add a suite
-# later, add its name to `strategy.matrix.suite` (and ship its template_<suite>.yaml
-# + handlers).
+# stack per suite. Suites are discovered from the package's template_<suite>.yaml
+# files (see scripts/discover_suites.py) and each runs as its own parallel matrix
+# job, so adding a suite only requires shipping its template + handlers.
 
 on:
   pull_request:
@@ -24,8 +24,22 @@ permissions:
   id-token: write # Required for AWS OIDC credentials
 
 jobs:
+  discover_suites:
+    name: discover conformance suites
+    runs-on: ubuntu-latest
+    outputs:
+      suites: ${{ steps.discover.outputs.suites }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Discover suites from templates
+        id: discover
+        working-directory: packages/aws-durable-execution-sdk-js-conformance-tests
+        run: echo "suites=$(python3 scripts/discover_suites.py)" >> "$GITHUB_OUTPUT"
+
   conformance:
     name: conformance (${{ matrix.suite }})
+    needs: discover_suites
     runs-on: ubuntu-latest
     # Global lock per suite stack: runs from different branches/PRs share the
     # persistent conformance-js-<suite> stacks, so deploys to the same stack
@@ -36,26 +50,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite:
-          [
-            step,
-            wait,
-            child,
-            callback,
-            invoke,
-            wait_for_condition,
-            wait_for_callback,
-            parallel,
-            map,
-          ]
+        suite: ${{ fromJSON(needs.discover_suites.outputs.suites) }}
     defaults:
       run:
         working-directory: packages/aws-durable-execution-sdk-js-conformance-tests
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: "22.x"
           cache: "npm"
@@ -72,7 +75,7 @@ jobs:
         run: npm run build # rollup -> dist/<handler>.js
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.14"
 
@@ -80,7 +83,7 @@ jobs:
         run: pip install "git+https://github.com/aws/aws-durable-execution-conformance-tests.git@main#subdirectory=packages/aws-durable-execution-conformance-tests"
 
       - name: Get AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           # SAM-capable deploy role (has CloudFormation/S3/IAM), same role the
           # SAM-based integration tests assume. NOT ACTIONS_INTEGRATION_ROLE_NAME
@@ -125,7 +128,7 @@ jobs:
 
       - name: Upload conformance report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: conformance-report-${{ matrix.suite }}
           path: |

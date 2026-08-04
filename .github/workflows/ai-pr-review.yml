@@ -1,0 +1,18 @@
+name: AI PR Review
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions: {}
+
+jobs:
+  ai-pr-review:
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    uses: aws/aws-durable-execution-ci/.github/workflows/ai-pr-review.yml@38ae538ba1950755b0fe77bc1ca24b1b4fbbb104
+    with:
+      prompt-path: .github/prompts/ai-pr-review.md
+    secrets: inherit

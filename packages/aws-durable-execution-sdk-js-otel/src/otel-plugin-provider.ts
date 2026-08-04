@@ -7,6 +7,7 @@ import {
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { AWSXRayPropagator } from "@opentelemetry/propagator-aws-xray";
 import { resourceFromAttributes } from "@opentelemetry/resources";
+import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
 import {
   AlwaysOnSampler,
   BatchSpanProcessor,
@@ -56,7 +57,7 @@ function buildLambdaResource() {
   }
 
   const attributes: Record<string, string> = {
-    "service.name": functionName,
+    [ATTR_SERVICE_NAME]: functionName,
     "faas.name": functionName,
     "cloud.provider": "aws",
     "cloud.platform": "aws_lambda",
