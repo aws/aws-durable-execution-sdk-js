@@ -1,10 +1,9 @@
+import { Event, EventType } from "@aws-sdk/client-lambda";
 import {
-  Event,
-  EventType,
   OperationType,
   OperationStatus,
   ErrorObject,
-} from "@aws-sdk/client-lambda";
+} from "@aws/durable-execution-sdk-js";
 import { historyEventsToOperationEvents } from "../process-history-events";
 
 describe("historyEventsToOperationEvents", () => {

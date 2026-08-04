@@ -1,4 +1,4 @@
-import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
+import { OperationStatus, OperationType } from "@aws/durable-execution-sdk-js";
 import { OperationStorage, TrackedOperation } from "../operation-storage";
 import { OperationWaitManager } from "../../local/operations/operation-wait-manager";
 import { IndexedOperations } from "../indexed-operations";

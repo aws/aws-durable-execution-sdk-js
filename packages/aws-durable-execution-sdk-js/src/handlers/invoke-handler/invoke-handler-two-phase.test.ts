@@ -1,7 +1,7 @@
 import { createInvokeHandler } from "./invoke-handler";
 import { ExecutionContext, OperationLifecycleState } from "../../types";
 import { DurablePromise } from "../../types/durable-promise";
-import { OperationStatus } from "@aws-sdk/client-lambda";
+import { OperationStatus } from "../../types/wire";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 
 jest.mock("../../utils/logger/logger");

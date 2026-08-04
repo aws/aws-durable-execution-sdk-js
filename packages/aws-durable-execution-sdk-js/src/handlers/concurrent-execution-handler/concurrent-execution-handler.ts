@@ -17,7 +17,7 @@ import {
   DurableLogger,
   NestingType,
 } from "../../types";
-import { OperationStatus } from "@aws-sdk/client-lambda";
+import { OperationStatus } from "../../types/wire";
 import { log } from "../../utils/logger/logger";
 import {
   BatchResultImpl,

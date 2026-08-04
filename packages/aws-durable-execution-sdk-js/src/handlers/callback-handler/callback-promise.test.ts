@@ -1,6 +1,6 @@
 import { createCallbackPromise } from "./callback-promise";
 import { ExecutionContext, OperationLifecycleState } from "../../types";
-import { OperationStatus } from "@aws-sdk/client-lambda";
+import { OperationStatus } from "../../types/wire";
 import {
   CallbackError,
   CallbackExternalError,

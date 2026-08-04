@@ -1,5 +1,5 @@
 import { CheckpointManager } from "../utils/checkpoint/checkpoint-manager";
-import { OperationUpdate } from "@aws-sdk/client-lambda";
+import { OperationUpdate } from "../types/wire";
 import { DurableExecutionClient } from "../types/durable-execution";
 import { TerminationManager } from "../termination-manager/termination-manager";
 import { DurableLogger } from "../types/durable-logger";

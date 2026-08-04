@@ -1,4 +1,4 @@
-import { ErrorObject } from "@aws-sdk/client-lambda";
+import { ErrorObject } from "../../types/wire";
 import { DurableOperationError } from "../../errors/durable-error/durable-error";
 import { STORE_STACK_TRACES } from "../constants/constants";
 

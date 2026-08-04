@@ -1,9 +1,9 @@
+import { InvalidParameterValueException } from "@aws-sdk/client-lambda";
 import {
   CallbackDetails,
-  InvalidParameterValueException,
   OperationAction,
   OperationType,
-} from "@aws-sdk/client-lambda";
+} from "@aws/durable-execution-sdk-js";
 import { CallbackManager, CompleteCallbackStatus } from "../callback-manager";
 import { CheckpointManager } from "../checkpoint-manager";
 import {

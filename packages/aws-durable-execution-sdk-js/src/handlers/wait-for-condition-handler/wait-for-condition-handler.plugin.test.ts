@@ -11,7 +11,7 @@ import {
   DurableInstrumentationPlugin,
   AttemptEndInfoOutcome,
 } from "../../types/plugin";
-import { OperationStatus } from "@aws-sdk/client-lambda";
+import { OperationStatus } from "../../types/wire";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
 jest.mock("../../utils/logger/logger");

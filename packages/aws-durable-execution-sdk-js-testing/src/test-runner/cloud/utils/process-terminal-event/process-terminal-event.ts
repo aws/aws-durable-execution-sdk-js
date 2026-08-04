@@ -1,4 +1,5 @@
-import { Event, EventType, OperationType } from "@aws-sdk/client-lambda";
+import { Event, EventType } from "@aws-sdk/client-lambda";
+import { OperationType } from "@aws/durable-execution-sdk-js";
 import { historyEventTypes } from "../process-history-events/history-event-types";
 
 type EventWithType = Event & {

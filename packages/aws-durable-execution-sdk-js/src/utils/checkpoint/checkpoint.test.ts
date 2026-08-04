@@ -4,7 +4,7 @@ import {
   OperationStatus,
   OperationType,
   OperationUpdate,
-} from "@aws-sdk/client-lambda";
+} from "../../types/wire";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
 import { OperationSubType, ExecutionContext, DurableLogger } from "../../types";

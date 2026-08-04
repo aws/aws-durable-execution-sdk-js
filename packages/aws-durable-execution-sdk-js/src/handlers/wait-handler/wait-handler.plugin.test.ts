@@ -1,5 +1,5 @@
 import { createWaitHandler } from "./wait-handler";
-import { OperationStatus } from "@aws-sdk/client-lambda";
+import { OperationStatus } from "../../types/wire";
 import { ExecutionContext } from "../../types";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";

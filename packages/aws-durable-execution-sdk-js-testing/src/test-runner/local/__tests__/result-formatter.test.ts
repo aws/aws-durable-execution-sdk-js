@@ -1,12 +1,8 @@
 import { ResultFormatter } from "../result-formatter";
 import { LocalOperationStorage } from "../operations/local-operation-storage";
 import { OperationWaitManager } from "../operations/operation-wait-manager";
-import {
-  OperationType,
-  Event,
-  EventType,
-  ExecutionStatus,
-} from "@aws-sdk/client-lambda";
+import { Event, EventType, ExecutionStatus } from "@aws-sdk/client-lambda";
+import { OperationType } from "@aws/durable-execution-sdk-js";
 import { OperationWithData } from "../../common/operations/operation-with-data";
 import { IndexedOperations } from "../../common/indexed-operations";
 import { TestExecutionResult } from "../../common/test-execution-state";

@@ -3,7 +3,7 @@ import {
   OperationUpdate,
   Operation,
   OperationStatus,
-} from "@aws-sdk/client-lambda";
+} from "../../types/wire";
 import { DurableExecutionClient } from "../../types/durable-execution";
 import { log } from "../logger/logger";
 import { TerminationManager } from "../../termination-manager/termination-manager";
@@ -28,6 +28,7 @@ import {
 } from "../../types/operation-lifecycle";
 import { OperationLifecycleState } from "../../types/operation-lifecycle-state";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
+import { normalizeOperations } from "../operation/normalize-operation";
 
 export const STEP_DATA_UPDATED_EVENT = "stepDataUpdated";
 
@@ -430,7 +431,7 @@ export class CheckpointManager implements Checkpoint {
 
     if (response.NewExecutionState?.Operations) {
       await this.updateStepDataFromCheckpointResponse(
-        response.NewExecutionState.Operations,
+        normalizeOperations(response.NewExecutionState.Operations),
       );
     }
   }

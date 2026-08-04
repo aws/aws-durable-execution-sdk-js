@@ -2,7 +2,7 @@ import { CheckpointManager } from "./checkpoint-manager";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
 import { OperationLifecycleState, OperationSubType } from "../../types";
-import { OperationType } from "@aws-sdk/client-lambda";
+import { OperationType } from "../../types/wire";
 import { EventEmitter } from "events";
 import { hashId } from "../step-id-utils/step-id-utils";
 import { CHECKPOINT_TERMINATION_COOLDOWN_MS } from "../constants/constants";

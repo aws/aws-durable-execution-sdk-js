@@ -1,4 +1,4 @@
-import { Operation } from "@aws-sdk/client-lambda";
+import { WireOperation } from "../../types/wire";
 import { DurableExecutionClient } from "../../types/durable-execution";
 import { DurableExecutionInvocationInput } from "../../types";
 
@@ -8,11 +8,9 @@ import { DurableExecutionInvocationInput } from "../../types";
  *
  * @internal
  */
-export class DurableExecutionInvocationInputWithClient
-  implements DurableExecutionInvocationInput
-{
+export class DurableExecutionInvocationInputWithClient implements DurableExecutionInvocationInput {
   public readonly InitialExecutionState: {
-    Operations: Operation[];
+    Operations: WireOperation[];
     NextMarker?: string | undefined;
   };
   public readonly DurableExecutionArn: string;

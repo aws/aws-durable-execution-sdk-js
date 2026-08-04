@@ -1,10 +1,10 @@
+import { InvalidParameterValueException } from "@aws-sdk/client-lambda";
 import {
   CheckpointDurableExecutionRequest,
   CheckpointDurableExecutionResponse,
-  InvalidParameterValueException,
   Operation,
   ErrorObject,
-} from "@aws-sdk/client-lambda";
+} from "@aws/durable-execution-sdk-js";
 import {
   createExecutionId,
   createCheckpointToken,

@@ -1,6 +1,6 @@
 import { hashId, getStepData } from "./step-id-utils";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
-import { Operation, OperationType } from "@aws-sdk/client-lambda";
+import { Operation, OperationType } from "../../types/wire";
 
 describe("Hash Utility", () => {
   describe("hashId", () => {

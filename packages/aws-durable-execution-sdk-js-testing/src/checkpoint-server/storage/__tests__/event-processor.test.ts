@@ -1,10 +1,10 @@
+import { EventType } from "@aws-sdk/client-lambda";
 import {
   OperationUpdate,
   OperationAction,
   OperationType,
   Operation,
-  EventType,
-} from "@aws-sdk/client-lambda";
+} from "@aws/durable-execution-sdk-js";
 import { EventProcessor } from "../event-processor";
 import * as historyEventDetails from "../../utils/history-event-details";
 

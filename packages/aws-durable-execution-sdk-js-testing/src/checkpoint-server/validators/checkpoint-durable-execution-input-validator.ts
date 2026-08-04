@@ -1,10 +1,10 @@
+import { InvalidParameterValueException } from "@aws-sdk/client-lambda";
 import {
-  InvalidParameterValueException,
   Operation,
   OperationAction,
   OperationType,
   OperationUpdate,
-} from "@aws-sdk/client-lambda";
+} from "@aws/durable-execution-sdk-js";
 import { validateCallbackOperation } from "./operation-type/validate-callback-operation";
 import { validateContextOperation } from "./operation-type/validate-context-operation";
 import { validateExecutionOperation } from "./operation-type/validate-execution-operation";

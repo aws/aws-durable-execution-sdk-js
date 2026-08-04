@@ -14,7 +14,7 @@ import {
   OperationAction,
   OperationStatus,
   OperationType,
-} from "@aws-sdk/client-lambda";
+} from "../../types/wire";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { defaultSerdes, AnySerdes } from "../../utils/serdes/serdes";

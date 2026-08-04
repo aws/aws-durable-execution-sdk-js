@@ -1,4 +1,5 @@
-import { ErrorObject, EventType } from "@aws-sdk/client-lambda";
+import { EventType } from "@aws-sdk/client-lambda";
+import { ErrorObject } from "@aws/durable-execution-sdk-js";
 import {
   processStartDurableExecution,
   processStartInvocation,

@@ -1,12 +1,12 @@
+import { InvalidParameterValueException } from "@aws-sdk/client-lambda";
 import {
-  InvalidParameterValueException,
   Operation,
   OperationAction,
   OperationStatus,
   OperationType,
   OperationUpdate,
   ErrorObject,
-} from "@aws-sdk/client-lambda";
+} from "@aws/durable-execution-sdk-js";
 import { validateContextOperation } from "../validate-context-operation";
 
 describe("validateContextOperation", () => {

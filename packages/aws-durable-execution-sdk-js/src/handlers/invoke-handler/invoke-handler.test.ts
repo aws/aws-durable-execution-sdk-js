@@ -4,7 +4,7 @@ import {
   OperationStatus,
   OperationType,
   OperationAction,
-} from "@aws-sdk/client-lambda";
+} from "../../types/wire";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 
 jest.mock("../../utils/logger/logger");

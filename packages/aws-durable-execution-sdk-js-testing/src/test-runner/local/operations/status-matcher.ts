@@ -1,4 +1,4 @@
-import { OperationStatus } from "@aws-sdk/client-lambda";
+import { OperationStatus } from "@aws/durable-execution-sdk-js";
 import { WaitingOperationStatus } from "../../types/durable-operation";
 
 const STARTED_STATUSES: OperationStatus[] = Object.values(OperationStatus);

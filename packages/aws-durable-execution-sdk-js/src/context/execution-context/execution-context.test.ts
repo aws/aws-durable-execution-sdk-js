@@ -1,8 +1,4 @@
-import {
-  Operation,
-  OperationStatus,
-  OperationType,
-} from "@aws-sdk/client-lambda";
+import { Operation, OperationStatus, OperationType } from "../../types/wire";
 import { DurableExecutionInvocationInput, OperationSubType } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { initializeExecutionContext } from "./execution-context";

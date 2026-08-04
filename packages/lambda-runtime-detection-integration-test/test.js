@@ -3,8 +3,9 @@
 // and ESM module contexts. The function is invoked at module-load
 // time and the result is baked into the SDK_VERSION exposed via the
 // LambdaClient's customUserAgent — so we spawn a child Node process
-// for each scenario, instantiate DurableExecutionApiClient, and
-// inspect the resulting UserAgent for the `-bundled` suffix.
+// for each scenario, instantiate DurableExecutionApiClient, resolve
+// its lazily-created Lambda client, and inspect the resulting
+// UserAgent for the `-bundled` suffix.
 //
 // We can't unit-test this in Jest: the real version module reads
 // `import.meta.url` at top level, which ts-jest cannot compile
@@ -21,19 +22,23 @@ const sdkRoot = dirname(
   sdkRequire.resolve("@aws/durable-execution-sdk-js"),
 ).replace(/\/dist-cjs$/, "");
 
-// Probe script: instantiates DurableExecutionApiClient (which builds
-// a LambdaClient with the SDK's name + version baked into
-// customUserAgent) and prints the customUserAgent as JSON.
+// Probe script: instantiates DurableExecutionApiClient and resolves its
+// Lambda client (which is created on first use, with the SDK's name +
+// version baked into customUserAgent), then prints the customUserAgent
+// as JSON.
 const cjsProbe = `
 const sdk = require("@aws/durable-execution-sdk-js");
 const c = new sdk.DurableExecutionApiClient();
-process.stdout.write(JSON.stringify(c.client.config.customUserAgent));
+c.resolveClient().then(({ client }) =>
+  process.stdout.write(JSON.stringify(client.config.customUserAgent)),
+);
 `;
 
 const esmProbe = `
 import * as sdk from "@aws/durable-execution-sdk-js";
 const c = new sdk.DurableExecutionApiClient();
-process.stdout.write(JSON.stringify(c.client.config.customUserAgent));
+const { client } = await c.resolveClient();
+process.stdout.write(JSON.stringify(client.config.customUserAgent));
 `;
 
 function probe({ moduleSystem, env }) {

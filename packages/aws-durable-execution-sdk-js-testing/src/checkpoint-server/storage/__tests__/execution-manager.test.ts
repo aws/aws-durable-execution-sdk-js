@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
+import { EventType } from "@aws-sdk/client-lambda";
 import {
   OperationStatus,
   OperationType,
-  EventType,
   ErrorObject,
   OperationAction,
-} from "@aws-sdk/client-lambda";
+} from "@aws/durable-execution-sdk-js";
 import { ExecutionManager, StartExecutionParams } from "../execution-manager";
 import { CheckpointManager } from "../checkpoint-manager";
 import {

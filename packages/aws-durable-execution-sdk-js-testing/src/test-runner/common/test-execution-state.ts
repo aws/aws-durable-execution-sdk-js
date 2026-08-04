@@ -1,4 +1,5 @@
-import { ErrorObject, ExecutionStatus } from "@aws-sdk/client-lambda";
+import { ExecutionStatus } from "@aws-sdk/client-lambda";
+import { ErrorObject } from "@aws/durable-execution-sdk-js";
 import { defaultLogger } from "../../logger";
 
 export interface TestExecutionResult {

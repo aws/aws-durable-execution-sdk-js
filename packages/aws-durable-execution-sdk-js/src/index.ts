@@ -46,6 +46,38 @@ export {
   NestingType,
 } from "./types";
 export { DurablePromise } from "./types/durable-promise";
+// Wire protocol shapes. These are referenced by the public handler, client and error
+// signatures above, and were previously re-exported from `@aws-sdk/client-lambda`.
+// The SDK now declares them itself so its type surface does not depend on the AWS SDK;
+// see `src/types/wire/wire-model.aws-sdk-parity.test.ts`.
+export {
+  OperationType,
+  OperationStatus,
+  OperationAction,
+  WireTimestamp,
+  Operation,
+  WireOperation,
+  OperationUpdate,
+  ErrorObject,
+  ExecutionDetails,
+  ContextDetails,
+  StepDetails,
+  WireStepDetails,
+  WaitDetails,
+  WireWaitDetails,
+  CallbackDetails,
+  ChainedInvokeDetails,
+  ContextOptions,
+  StepOptions,
+  WaitOptions,
+  CallbackOptions,
+  ChainedInvokeOptions,
+  CheckpointUpdatedExecutionState,
+  CheckpointDurableExecutionRequest,
+  CheckpointDurableExecutionResponse,
+  GetDurableExecutionStateRequest,
+  GetDurableExecutionStateResponse,
+} from "./types/wire";
 export { StepInterruptedError } from "./errors/step-errors/step-errors";
 export {
   DurableOperationError,

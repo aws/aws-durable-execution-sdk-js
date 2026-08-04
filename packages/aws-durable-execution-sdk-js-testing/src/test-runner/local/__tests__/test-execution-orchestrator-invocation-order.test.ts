@@ -8,15 +8,12 @@ import {
 import {
   DurableExecutionInvocationOutput,
   InvocationStatus,
-} from "@aws/durable-execution-sdk-js";
-import {
   ErrorObject,
-  Event,
-  EventType,
   OperationAction,
   OperationStatus,
   OperationType,
-} from "@aws-sdk/client-lambda";
+} from "@aws/durable-execution-sdk-js";
+import { Event, EventType } from "@aws-sdk/client-lambda";
 import { OperationWaitManager } from "../operations/operation-wait-manager";
 import { IndexedOperations } from "../../common/indexed-operations";
 import { OperationEvents } from "../../common/operations/operation-with-data";

@@ -45,7 +45,7 @@ import { createMapHandler } from "../../handlers/map-handler/map-handler";
 import { createParallelHandler } from "../../handlers/parallel-handler/parallel-handler";
 import { createPromiseHandler } from "../../handlers/promise-handler/promise-handler";
 import { createConcurrentExecutionHandler } from "../../handlers/concurrent-execution-handler/concurrent-execution-handler";
-import { OperationStatus } from "@aws-sdk/client-lambda";
+import { OperationStatus } from "../../types/wire";
 import { ModeManagement } from "./mode-management/mode-management";
 import {
   getActiveContext,

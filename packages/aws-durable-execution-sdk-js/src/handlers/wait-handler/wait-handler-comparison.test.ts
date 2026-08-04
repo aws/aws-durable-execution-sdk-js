@@ -1,6 +1,6 @@
 import { createWaitHandler } from "./wait-handler";
 import { ExecutionContext, OperationSubType } from "../../types";
-import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
+import { OperationStatus, OperationType } from "../../types/wire";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 
 describe("Wait Handler Tests", () => {

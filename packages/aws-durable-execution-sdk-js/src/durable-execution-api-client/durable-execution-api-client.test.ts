@@ -41,9 +41,20 @@ describe("ApiStorage", () => {
     logSpy = log as jest.MockedFunction<typeof log>;
   });
 
-  test("should create default LambdaClient with correct configuration when no client is passed", () => {
-    // Create ApiStorage without passing a client (should use default)
-    new DurableExecutionApiClient();
+  test("should not create the default LambdaClient until the first request", async () => {
+    const mockSend = jest.fn().mockResolvedValue({});
+    (LambdaClient as jest.Mock).mockImplementation(() => ({ send: mockSend }));
+
+    const apiStorage = new DurableExecutionApiClient();
+
+    // The Lambda client is loaded and constructed lazily, so simply constructing
+    // the API client must not pull it in.
+    expect(LambdaClient).not.toHaveBeenCalled();
+
+    await apiStorage.getExecutionState({
+      CheckpointToken: "checkpoint-token",
+      DurableExecutionArn: "durable-execution-arn",
+    });
 
     // Verify that LambdaClient was constructed with the correct default configuration
     expect(LambdaClient).toHaveBeenCalledWith({
@@ -57,16 +68,22 @@ describe("ApiStorage", () => {
     });
   });
 
-  test("should not create LambdaClient when custom client is passed", () => {
+  test("should not create LambdaClient when custom client is passed", async () => {
     // Clear mocks to reset call counts
     jest.clearAllMocks();
 
-    const customClient = { send: jest.fn() };
+    const customClient = { send: jest.fn().mockResolvedValue({}) };
 
     // Create ApiStorage with custom client (should not call LambdaClient constructor)
-    new DurableExecutionApiClient(customClient as any);
+    const apiStorage = new DurableExecutionApiClient(customClient as any);
 
-    // Verify that LambdaClient constructor was not called
+    await apiStorage.getExecutionState({
+      CheckpointToken: "checkpoint-token",
+      DurableExecutionArn: "durable-execution-arn",
+    });
+
+    // Verify the injected client was used, and no default client was constructed
+    expect(customClient.send).toHaveBeenCalledTimes(1);
     expect(LambdaClient).not.toHaveBeenCalled();
   });
 
@@ -75,7 +92,7 @@ describe("ApiStorage", () => {
     {
       name: "default LambdaClient",
       // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-      setup: () => {
+      setup: async () => {
         // Create a fresh mock client for this test
         const mockLambdaClient = { send: jest.fn() };
 
@@ -85,9 +102,10 @@ describe("ApiStorage", () => {
         // Create the API client - it will use either the cached client or create a new one
         const apiStorage = new DurableExecutionApiClient();
 
-        // We need to access the actual client being used by the apiStorage instance
-        // Since the client might be cached, we need to replace the send method on the actual client
-        const actualClient = (apiStorage as any).client;
+        // The default client is created on first use and cached at module scope, so
+        // resolve it here and redirect its send method at this test's mock. Awaiting
+        // the private accessor avoids issuing a request that the assertions would see.
+        const { client: actualClient } = await apiStorage.resolveClient();
         if (actualClient && actualClient.send) {
           actualClient.send = mockLambdaClient.send;
         }
@@ -102,7 +120,7 @@ describe("ApiStorage", () => {
     {
       name: "custom LambdaClient",
       // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-      setup: () => {
+      setup: async () => {
         const customMockClient = { send: jest.fn() };
         return {
           apiStorage: new DurableExecutionApiClient(customMockClient as any),
@@ -118,8 +136,8 @@ describe("ApiStorage", () => {
     let apiStorage: DurableExecutionClient;
     let mockClient: { send: jest.Mock };
 
-    beforeEach(() => {
-      const clientSetup = setup();
+    beforeEach(async () => {
+      const clientSetup = await setup();
       apiStorage = clientSetup.apiStorage;
       mockClient = clientSetup.mockClient;
     });

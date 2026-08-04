@@ -1,4 +1,4 @@
-import { Operation } from "@aws-sdk/client-lambda";
+import { Operation } from "../../types/wire";
 import {
   OperationInfo,
   PluginOperationStatus,

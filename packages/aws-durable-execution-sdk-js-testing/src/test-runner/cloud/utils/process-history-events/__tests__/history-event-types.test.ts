@@ -1,4 +1,4 @@
-import { OperationType, OperationStatus } from "@aws-sdk/client-lambda";
+import { OperationType, OperationStatus } from "@aws/durable-execution-sdk-js";
 import { historyEventTypes } from "../history-event-types";
 
 describe("historyEventTypes", () => {

@@ -1,6 +1,6 @@
 import { TerminationManager } from "../termination-manager/termination-manager";
 import { DurableExecutionClient } from "./durable-execution";
-import { ErrorObject, Operation } from "@aws-sdk/client-lambda";
+import { ErrorObject, Operation, WireOperation } from "./wire";
 
 /**
  * @internal
@@ -73,7 +73,7 @@ export interface DurableExecutionInvocationInput {
      * - Output results
      * - Execution timestamps and status
      */
-    Operations: Operation[];
+    Operations: WireOperation[];
 
     /**
      * Pagination marker for retrieving additional operation history if needed.

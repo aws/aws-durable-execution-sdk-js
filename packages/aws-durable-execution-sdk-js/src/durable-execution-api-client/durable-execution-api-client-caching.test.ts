@@ -19,29 +19,41 @@ describe("DurableExecutionApiClient Caching", () => {
     jest.clearAllMocks();
   });
 
-  test("should cache and reuse default LambdaClient across multiple instances", () => {
+  test("should cache and reuse default LambdaClient across multiple instances", async () => {
     // Track call count for this test
     let callCount = 0;
+    const send = jest.fn().mockResolvedValue({});
 
     // Replace the mock implementation to track calls
     (LambdaClient as jest.Mock).mockImplementation(function () {
       callCount++;
-      return { send: jest.fn() };
+      return { send };
     });
 
-    // Create the first instance (should create a new LambdaClient)
+    // Create the first instance. The client is created on first use, not on
+    // construction, so nothing should have been constructed yet.
     const firstInstance = new DurableExecutionApiClient();
+    expect(callCount).toBe(0);
+
+    await firstInstance.getExecutionState({
+      CheckpointToken: "test-token",
+      DurableExecutionArn: "test-arn",
+    });
     const callCountAfterFirst = callCount;
 
-    // Create the second instance (should reuse the cached LambdaClient)
+    // Create and use the second instance (should reuse the cached LambdaClient)
     const secondInstance = new DurableExecutionApiClient();
+    await secondInstance.getExecutionState({
+      CheckpointToken: "test-token",
+      DurableExecutionArn: "test-arn",
+    });
     const callCountAfterSecond = callCount;
 
     // Verify both instances exist
     expect(firstInstance).toBeInstanceOf(DurableExecutionApiClient);
     expect(secondInstance).toBeInstanceOf(DurableExecutionApiClient);
 
-    // First instance should have triggered LambdaClient creation
+    // First instance's request should have triggered LambdaClient creation
     expect(callCountAfterFirst).toBe(1);
 
     // Second instance should NOT have triggered another LambdaClient creation (cached)
