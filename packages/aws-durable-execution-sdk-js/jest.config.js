@@ -15,9 +15,17 @@ module.exports = {
   // it would reject with TS1343 because Jest forces module: commonjs).
   // The stub provides the same exports — SDK_NAME and SDK_VERSION —
   // suitable for tests that only need to read them.
+  //
+  // The second pattern is deliberately not anchored, so it matches the
+  // module at any relative depth: "./utils/constants/version" from the
+  // barrel, "../utils/constants/version" from src/utils/*, and so on.
+  // Anchoring it to one depth means each new importer has to remember to
+  // add another entry here, and the failure only shows up once something
+  // imports that importer under ts-jest. `src/index.test.ts` covers the
+  // barrel so this stays honest.
   moduleNameMapper: {
     "^./version$": "<rootDir>/src/utils/constants/__mocks__/version.ts",
-    "^../utils/constants/version$":
+    "utils/constants/version$":
       "<rootDir>/src/utils/constants/__mocks__/version.ts",
   },
   moduleFileExtensions: ["ts", "js", "json", "node"],
