@@ -1,15 +1,6 @@
-// This module is the SDK's only runtime dependency on `@aws-sdk/client-lambda`.
-//
-// The client and command classes are loaded with a dynamic import the first time a
-// request is actually made, rather than at module scope. Loading the Lambda client is
-// the single largest contributor to this package's import cost, and executions that
-// inject their own client — or that never reach a checkpoint — should not pay it. The
-// type-only import below is erased at compile time and adds nothing to the bundle.
-import type {
-  CheckpointDurableExecutionCommand as CheckpointDurableExecutionCommandType,
-  GetDurableExecutionStateCommand as GetDurableExecutionStateCommandType,
-  LambdaClient,
-} from "@aws-sdk/client-lambda";
+// The runtime dependency on `@aws-sdk/client-lambda` lives in `./lambda-module`. The
+// type-only import below is erased at compile time.
+import type { LambdaClient } from "@aws-sdk/client-lambda";
 import {
   CheckpointDurableExecutionRequest,
   CheckpointDurableExecutionResponse,
@@ -19,41 +10,11 @@ import {
 import { DurableExecutionClient } from "../types/durable-execution";
 import { log } from "../utils/logger/logger";
 import { DurableLogger } from "../types/durable-logger";
-import { SDK_NAME, SDK_VERSION } from "../utils/constants/version";
-
-/**
- * The subset of `@aws-sdk/client-lambda` this module needs at runtime.
- */
-interface LambdaModule {
-  LambdaClient: new (config: Record<string, unknown>) => LambdaClient;
-  CheckpointDurableExecutionCommand: new (
-    input: CheckpointDurableExecutionRequest,
-  ) => CheckpointDurableExecutionCommandType;
-  GetDurableExecutionStateCommand: new (
-    input: GetDurableExecutionStateRequest,
-  ) => GetDurableExecutionStateCommandType;
-}
-
-let lambdaModulePromise: Promise<LambdaModule> | undefined;
-let defaultLambdaClient: LambdaClient | undefined;
-
-/**
- * Loads `@aws-sdk/client-lambda` on first use and memoizes the result, so concurrent
- * callers share a single import.
- *
- * The namespace shape depends on how the bundle consuming this module resolves the
- * dependency: a dynamic import from CommonJS may yield the module's exports under
- * `default` rather than as named exports, so both layouts are accepted.
- */
-const loadLambdaModule = (): Promise<LambdaModule> => {
-  lambdaModulePromise ??= import("@aws-sdk/client-lambda").then((module) => {
-    const namespace = module as unknown as
-      | LambdaModule
-      | { default: LambdaModule };
-    return "LambdaClient" in namespace ? namespace : namespace.default;
-  });
-  return lambdaModulePromise;
-};
+import {
+  LambdaModule,
+  loadLambdaModule,
+  resolveDefaultLambdaClient,
+} from "./lambda-module";
 
 /**
  * Durable execution client which uses an API-based LambdaClient
@@ -71,14 +32,13 @@ export class DurableExecutionApiClient implements DurableExecutionClient {
     // Start loading the AWS SDK now, without blocking construction. This class is
     // instantiated while the execution context is being initialized, so the load overlaps
     // with reading execution state and running the handler up to its first durable
-    // operation, rather than delaying that operation. Loading it here rather than at module
-    // scope also means a compute that supplies its own DurableExecutionClient — and
+    // operation, rather than delaying that operation. Loading it from here rather than at
+    // module scope also means a compute that supplies its own DurableExecutionClient — and
     // therefore never constructs this class — does not load the AWS SDK at all.
     //
-    // Rejections are deliberately ignored here: attaching handlers marks the memoized
-    // promise as handled so a failure is not reported as an unhandled rejection, and the
-    // real error is surfaced to the caller by `resolveClient`, which awaits the same
-    // promise.
+    // Rejections are deliberately ignored here: attaching handlers marks the promise as
+    // handled so a failure is not reported as an unhandled rejection, and the real error is
+    // surfaced to the caller by the request methods, which await the same load.
     void loadLambdaModule().then(
       () => undefined,
       () => undefined,
@@ -86,35 +46,16 @@ export class DurableExecutionApiClient implements DurableExecutionClient {
   }
 
   /**
-   * Resolves the client to use, creating and caching the default one on first use when no
-   * client was injected.
-   *
-   * @internal This is not part of the supported API surface. It is exposed rather than
-   * private because the SDK's own tests and the `lambda-runtime-detection-integration-test`
-   * package need to force the lazy load and inspect the resulting client without issuing a
-   * request.
+   * Resolves the client and command constructors to use, creating and caching the default
+   * client on first use when none was injected.
    */
-  async resolveClient(): Promise<{
+  private async resolveClient(): Promise<{
     client: LambdaClient;
     module: LambdaModule;
   }> {
     const module = await loadLambdaModule();
-
-    if (this.injectedClient) {
-      return { client: this.injectedClient, module };
-    }
-
-    defaultLambdaClient ??= new module.LambdaClient({
-      customUserAgent: [[SDK_NAME, SDK_VERSION]],
-      requestHandler: {
-        connectionTimeout: 5000,
-        socketTimeout: 50000,
-        requestTimeout: 55000,
-        throwOnRequestTimeout: true,
-      },
-    });
-
-    return { client: defaultLambdaClient, module };
+    const client = this.injectedClient ?? (await resolveDefaultLambdaClient());
+    return { client, module };
   }
 
   /**
@@ -127,8 +68,11 @@ export class DurableExecutionApiClient implements DurableExecutionClient {
     params: GetDurableExecutionStateRequest,
     logger?: DurableLogger,
   ): Promise<GetDurableExecutionStateResponse> {
+    // Resolved outside the try so that a failure to load or construct the client is not
+    // reported as the request itself having failed.
+    const { client, module } = await this.resolveClient();
+
     try {
-      const { client, module } = await this.resolveClient();
       const response = await client.send(
         new module.GetDurableExecutionStateCommand({
           DurableExecutionArn: params.DurableExecutionArn,
@@ -172,8 +116,11 @@ export class DurableExecutionApiClient implements DurableExecutionClient {
     params: CheckpointDurableExecutionRequest,
     logger?: DurableLogger,
   ): Promise<CheckpointDurableExecutionResponse> {
+    // Resolved outside the try so that a failure to load or construct the client is not
+    // reported as the checkpoint itself having failed.
+    const { client, module } = await this.resolveClient();
+
     try {
-      const { client, module } = await this.resolveClient();
       const response = await client.send(
         new module.CheckpointDurableExecutionCommand({
           DurableExecutionArn: params.DurableExecutionArn,

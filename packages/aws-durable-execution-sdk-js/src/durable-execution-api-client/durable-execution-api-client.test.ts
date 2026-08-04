@@ -9,6 +9,7 @@ import {
 import { OperationSubType } from "../types";
 import { log } from "../utils/logger/logger";
 import { DurableExecutionApiClient } from "./durable-execution-api-client";
+import { resolveDefaultLambdaClient } from "./lambda-module";
 import { DurableExecutionClient } from "../types/durable-execution";
 import { SDK_NAME, SDK_VERSION } from "../utils/constants/version";
 
@@ -103,9 +104,10 @@ describe("ApiStorage", () => {
         const apiStorage = new DurableExecutionApiClient();
 
         // The default client is created on first use and cached at module scope, so
-        // resolve it here and redirect its send method at this test's mock. Awaiting
-        // the private accessor avoids issuing a request that the assertions would see.
-        const { client: actualClient } = await apiStorage.resolveClient();
+        // resolve it through the loader and redirect its send method at this test's
+        // mock. Going through the loader rather than issuing a request keeps the
+        // assertions below from seeing an extra call.
+        const actualClient = await resolveDefaultLambdaClient();
         if (actualClient && actualClient.send) {
           actualClient.send = mockLambdaClient.send;
         }

@@ -103,6 +103,21 @@ describe("normalizeOperation", () => {
     );
   });
 
+  it("preserves an explicitly undefined WaitDetails key", () => {
+    // The WAIT twin of the case above: a present-but-undefined member must survive
+    // normalization as a present-but-undefined member, not be dropped.
+    const operation = wireOperation({
+      Type: OperationType.WAIT,
+      WaitDetails: undefined,
+    });
+
+    const result = normalizeOperation(operation);
+
+    expect("WaitDetails" in result).toBe(true);
+    expect(result.WaitDetails).toBeUndefined();
+    expect(Object.keys(result).sort()).toEqual(Object.keys(operation).sort());
+  });
+
   it("does not invent optional members that were absent", () => {
     const result = normalizeOperation(wireOperation());
 

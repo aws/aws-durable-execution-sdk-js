@@ -78,6 +78,15 @@ export {
   GetDurableExecutionStateRequest,
   GetDurableExecutionStateResponse,
 } from "./types/wire";
+/**
+ * The package version, suffixed with `-bundled` when the SDK is running from inside the
+ * Lambda runtime directory.
+ *
+ * @internal Exposed for `lambda-runtime-detection-integration-test`, which has to observe
+ * the value from a real CommonJS and a real ES module process — the detection relies on
+ * `__filename` / `import.meta.url`, which Jest cannot exercise.
+ */
+export { SDK_VERSION } from "./utils/constants/version";
 export { StepInterruptedError } from "./errors/step-errors/step-errors";
 export {
   DurableOperationError,
