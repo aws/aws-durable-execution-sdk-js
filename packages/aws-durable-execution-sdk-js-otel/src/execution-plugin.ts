@@ -374,6 +374,12 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
           message: info.error.message,
         });
         span.recordException(info.error);
+      } else if (info.status === "SUCCEEDED") {
+        // Stamp explicit OK ONLY on a SUCCEEDED terminal status. Terminal
+        // FAILURE statuses (TIMED_OUT/STOPPED/FAILED/CANCELLED) can arrive with
+        // NO error object (callback-timeout, chained-invoke fast paths); those
+        // must NOT be labelled OK, so they are left UNSET.
+        span.setStatus({ code: SpanStatusCode.OK });
       }
 
       span.end(info.endTimestamp);
@@ -431,6 +437,12 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
           message: info.error.message,
         });
         span.recordException(info.error);
+      } else if (info.status === "SUCCEEDED") {
+        // Stamp explicit OK ONLY on a SUCCEEDED terminal status. Terminal
+        // FAILURE statuses (TIMED_OUT/STOPPED/FAILED/CANCELLED) can arrive with
+        // NO error object on the cross-invocation fast paths; those must NOT be
+        // labelled OK, so they are left UNSET.
+        span.setStatus({ code: SpanStatusCode.OK });
       }
 
       span.end(info.endTimestamp);
@@ -502,6 +514,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         if (info.error) {
           attemptSpan.recordException(info.error);
         }
+      } else {
+        // Non-failed attempt: stamp explicit OK (matches Python OTel #604).
+        attemptSpan.setStatus({ code: SpanStatusCode.OK });
       }
       attemptSpan.end(info.endTimestamp);
       this.spanMap.delete(key);
