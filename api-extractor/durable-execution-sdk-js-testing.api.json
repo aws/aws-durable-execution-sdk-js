@@ -1,7 +1,7 @@
 {
   "metadata": {
     "toolPackage": "@microsoft/api-extractor",
-    "toolVersion": "7.55.1",
+    "toolVersion": "7.58.2",
     "schemaVersion": 1011,
     "oldestForwardsCompatibleVersion": 1001,
     "tsdocConfig": {
@@ -469,7 +469,7 @@
               "excerptTokens": [
                 {
                   "kind": "Content",
-                  "text": "constructor({ functionName, client, config, }: "
+                  "text": "constructor(input: "
                 },
                 {
                   "kind": "Reference",
@@ -487,6 +487,14 @@
               "parameters": [
                 {
                   "parameterName": "{ functionName, client, config, }",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 0,
+                    "endIndex": 0
+                  },
+                  "isOptional": false
+                },
+                {
+                  "parameterName": "input",
                   "parameterTypeTokenRange": {
                     "startIndex": 1,
                     "endIndex": 2
@@ -936,7 +944,7 @@
                 {
                   "kind": "Reference",
                   "text": "InvocationType",
-                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!InvocationType:type"
+                  "canonicalReference": "@aws-sdk/client-lambda!InvocationType:type"
                 },
                 {
                   "kind": "Content",
@@ -1009,7 +1017,7 @@
                 {
                   "kind": "Reference",
                   "text": "LambdaClient",
-                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~LambdaClient:class"
+                  "canonicalReference": "@aws-sdk/client-lambda!LambdaClient:class"
                 },
                 {
                   "kind": "Content",
@@ -1394,7 +1402,7 @@
                 {
                   "kind": "Reference",
                   "text": "Event",
-                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~Event_2:interface"
+                  "canonicalReference": "@aws-sdk/client-lambda!Event:interface"
                 },
                 {
                   "kind": "Content",
@@ -1577,7 +1585,7 @@
                 {
                   "kind": "Reference",
                   "text": "OperationStatus",
-                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationStatus:type"
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~OperationStatus_2:type"
                 },
                 {
                   "kind": "Content",
@@ -1676,7 +1684,7 @@
                 {
                   "kind": "Reference",
                   "text": "OperationType",
-                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationType:type"
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~OperationType_2:type"
                 },
                 {
                   "kind": "Content",
@@ -1816,7 +1824,7 @@
                 {
                   "kind": "Reference",
                   "text": "SendDurableExecutionCallbackFailureResponse",
-                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~SendDurableExecutionCallbackFailureResponse:interface"
+                  "canonicalReference": "@aws-sdk/client-lambda!SendDurableExecutionCallbackFailureResponse:interface"
                 },
                 {
                   "kind": "Content",
@@ -1867,7 +1875,7 @@
                 {
                   "kind": "Reference",
                   "text": "SendDurableExecutionCallbackHeartbeatResponse",
-                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~SendDurableExecutionCallbackHeartbeatResponse:interface"
+                  "canonicalReference": "@aws-sdk/client-lambda!SendDurableExecutionCallbackHeartbeatResponse:interface"
                 },
                 {
                   "kind": "Content",
@@ -1917,7 +1925,7 @@
                 {
                   "kind": "Reference",
                   "text": "SendDurableExecutionCallbackSuccessResponse",
-                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~SendDurableExecutionCallbackSuccessResponse:interface"
+                  "canonicalReference": "@aws-sdk/client-lambda!SendDurableExecutionCallbackSuccessResponse:interface"
                 },
                 {
                   "kind": "Content",
@@ -2318,73 +2326,6 @@
           "extendsTokenRanges": []
         },
         {
-          "kind": "TypeAlias",
-          "canonicalReference": "@aws/durable-execution-sdk-js-testing!ExecutionStatus:type",
-          "docComment": "/**\n * @public\n */\n",
-          "excerptTokens": [
-            {
-              "kind": "Content",
-              "text": "export type ExecutionStatus =\n  "
-            },
-            {
-              "kind": "Content",
-              "text": "(typeof "
-            },
-            {
-              "kind": "Reference",
-              "text": "ExecutionStatus",
-              "canonicalReference": "@aws/durable-execution-sdk-js-testing!ExecutionStatus:var"
-            },
-            {
-              "kind": "Content",
-              "text": ")[keyof typeof "
-            },
-            {
-              "kind": "Reference",
-              "text": "ExecutionStatus",
-              "canonicalReference": "@aws/durable-execution-sdk-js-testing!ExecutionStatus:var"
-            },
-            {
-              "kind": "Content",
-              "text": "]"
-            },
-            {
-              "kind": "Content",
-              "text": ";"
-            }
-          ],
-          "fileUrlPath": "../client-lambda/dist-types/models/models_0.d.ts",
-          "releaseTag": "Public",
-          "name": "ExecutionStatus",
-          "typeTokenRange": {
-            "startIndex": 1,
-            "endIndex": 6
-          }
-        },
-        {
-          "kind": "Variable",
-          "canonicalReference": "@aws/durable-execution-sdk-js-testing!ExecutionStatus:var",
-          "docComment": "/**\n * @enum\n *\n * @public\n */\n",
-          "excerptTokens": [
-            {
-              "kind": "Content",
-              "text": "ExecutionStatus: "
-            },
-            {
-              "kind": "Content",
-              "text": "{\n  readonly FAILED: \"FAILED\";\n  readonly RUNNING: \"RUNNING\";\n  readonly STOPPED: \"STOPPED\";\n  readonly SUCCEEDED: \"SUCCEEDED\";\n  readonly TIMED_OUT: \"TIMED_OUT\";\n}"
-            }
-          ],
-          "fileUrlPath": "../client-lambda/dist-types/models/models_0.d.ts",
-          "isReadonly": true,
-          "releaseTag": "Public",
-          "name": "ExecutionStatus",
-          "variableTypeTokenRange": {
-            "startIndex": 1,
-            "endIndex": 2
-          }
-        },
-        {
           "kind": "Interface",
           "canonicalReference": "@aws/durable-execution-sdk-js-testing!Invocation:interface",
           "docComment": "/**\n * Tracks a single invocation of the durable function handler. Contains timing information, request ID, and any errors that occurred.\n *\n * @public\n */\n",
@@ -2526,73 +2467,6 @@
           "extendsTokenRanges": []
         },
         {
-          "kind": "TypeAlias",
-          "canonicalReference": "@aws/durable-execution-sdk-js-testing!InvocationType:type",
-          "docComment": "/**\n * @public\n */\n",
-          "excerptTokens": [
-            {
-              "kind": "Content",
-              "text": "export type InvocationType =\n  "
-            },
-            {
-              "kind": "Content",
-              "text": "(typeof "
-            },
-            {
-              "kind": "Reference",
-              "text": "InvocationType",
-              "canonicalReference": "@aws/durable-execution-sdk-js-testing!InvocationType:var"
-            },
-            {
-              "kind": "Content",
-              "text": ")[keyof typeof "
-            },
-            {
-              "kind": "Reference",
-              "text": "InvocationType",
-              "canonicalReference": "@aws/durable-execution-sdk-js-testing!InvocationType:var"
-            },
-            {
-              "kind": "Content",
-              "text": "]"
-            },
-            {
-              "kind": "Content",
-              "text": ";"
-            }
-          ],
-          "fileUrlPath": "../client-lambda/dist-types/models/models_0.d.ts",
-          "releaseTag": "Public",
-          "name": "InvocationType",
-          "typeTokenRange": {
-            "startIndex": 1,
-            "endIndex": 6
-          }
-        },
-        {
-          "kind": "Variable",
-          "canonicalReference": "@aws/durable-execution-sdk-js-testing!InvocationType:var",
-          "docComment": "/**\n * @enum\n *\n * @public\n */\n",
-          "excerptTokens": [
-            {
-              "kind": "Content",
-              "text": "InvocationType: "
-            },
-            {
-              "kind": "Content",
-              "text": "{\n  readonly DryRun: \"DryRun\";\n  readonly Event: \"Event\";\n  readonly RequestResponse: \"RequestResponse\";\n}"
-            }
-          ],
-          "fileUrlPath": "../client-lambda/dist-types/models/models_0.d.ts",
-          "isReadonly": true,
-          "releaseTag": "Public",
-          "name": "InvocationType",
-          "variableTypeTokenRange": {
-            "startIndex": 1,
-            "endIndex": 2
-          }
-        },
-        {
           "kind": "Interface",
           "canonicalReference": "@aws/durable-execution-sdk-js-testing!InvokeRequest:interface",
           "docComment": "/**\n * Request parameters for invoking a durable function.\n *\n * @public\n */\n",
@@ -2703,7 +2577,7 @@
               "excerptTokens": [
                 {
                   "kind": "Content",
-                  "text": "constructor({ handlerFunction }: "
+                  "text": "constructor(input: "
                 },
                 {
                   "kind": "Reference",
@@ -2722,47 +2596,20 @@
                 {
                   "parameterName": "{ handlerFunction }",
                   "parameterTypeTokenRange": {
+                    "startIndex": 0,
+                    "endIndex": 0
+                  },
+                  "isOptional": false
+                },
+                {
+                  "parameterName": "input",
+                  "parameterTypeTokenRange": {
                     "startIndex": 1,
                     "endIndex": 2
                   },
                   "isOptional": false
                 }
               ]
-            },
-            {
-              "kind": "Property",
-              "canonicalReference": "@aws/durable-execution-sdk-js-testing!LocalDurableTestRunner.fakeClock:member",
-              "docComment": "",
-              "excerptTokens": [
-                {
-                  "kind": "Content",
-                  "text": "static fakeClock: "
-                },
-                {
-                  "kind": "Reference",
-                  "text": "InstalledClock",
-                  "canonicalReference": "@types/sinonjs__fake-timers!InstalledClock:type"
-                },
-                {
-                  "kind": "Content",
-                  "text": " | undefined"
-                },
-                {
-                  "kind": "Content",
-                  "text": ";"
-                }
-              ],
-              "isReadonly": false,
-              "isOptional": false,
-              "releaseTag": "Public",
-              "name": "fakeClock",
-              "propertyTypeTokenRange": {
-                "startIndex": 1,
-                "endIndex": 3
-              },
-              "isStatic": true,
-              "isProtected": false,
-              "isAbstract": false
             },
             {
               "kind": "Method",
@@ -3371,36 +3218,6 @@
               "name": "setupTestEnvironment"
             },
             {
-              "kind": "Property",
-              "canonicalReference": "@aws/durable-execution-sdk-js-testing!LocalDurableTestRunner.skipTime:member",
-              "docComment": "",
-              "excerptTokens": [
-                {
-                  "kind": "Content",
-                  "text": "static skipTime: "
-                },
-                {
-                  "kind": "Content",
-                  "text": "boolean"
-                },
-                {
-                  "kind": "Content",
-                  "text": ";"
-                }
-              ],
-              "isReadonly": false,
-              "isOptional": false,
-              "releaseTag": "Public",
-              "name": "skipTime",
-              "propertyTypeTokenRange": {
-                "startIndex": 1,
-                "endIndex": 2
-              },
-              "isStatic": true,
-              "isProtected": false,
-              "isAbstract": false
-            },
-            {
               "kind": "Method",
               "canonicalReference": "@aws/durable-execution-sdk-js-testing!LocalDurableTestRunner.teardownTestEnvironment:member(1)",
               "docComment": "/**\n * Cleans up and tears down the test environment after durable execution testing.\n *\n * This method stops the checkpoint server, uninstalls fake timers, and performs cleanup of resources that were initialized during test environment setup. This should be called once after all tests have completed, typically in a test cleanup hook like `afterAll`.\n *\n * @remarks\n *\n * - This method safely uninstalls fake timers that were installed during setup if skipTime was enabled. - Must be called after {@link LocalDurableTestRunner.setupTestEnvironment} to prevent resource leaks - Failure to call this method may leave the checkpoint server running and consume system resources\n *\n * @returns Promise that resolves when the test environment teardown is complete\n *\n * @throws\n *\n * Will throw an error if the checkpoint server fails to stop gracefully\n *\n * @example\n * ```typescript\n * import { LocalDurableTestRunner } from '@aws/durable-execution-sdk-js-testing';\n *\n * // Basic teardown\n * afterAll(async () => {\n *   await LocalDurableTestRunner.teardownTestEnvironment();\n * });\n *\n * // Complete test lifecycle\n * describe('Durable Function Tests', () => {\n *   beforeAll(async () => {\n *     await LocalDurableTestRunner.setupTestEnvironment();\n *   });\n *\n *   afterAll(async () => {\n *     await LocalDurableTestRunner.teardownTestEnvironment();\n *   });\n *\n *   it('should execute durable function', async () => {\n *     // test implementation\n *   });\n * });\n * ```\n *\n * @see\n *\n * {@link LocalDurableTestRunner.setupTestEnvironment} for initializing the test environment\n */\n",
@@ -3507,6 +3324,33 @@
           "members": [
             {
               "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!LocalDurableTestRunnerSetupParameters#checkpointDelay:member",
+              "docComment": "/**\n * Option to simulate checkpoint API delay. Adding delay can make tests behave more similarily to the real world, where checkpoint API calls take longer. This can help with finding concurrency bugs, race conditions, or other issues.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "checkpointDelay?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "checkpointDelay",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
               "canonicalReference": "@aws/durable-execution-sdk-js-testing!LocalDurableTestRunnerSetupParameters#skipTime:member",
               "docComment": "/**\n * Whether to enable time skipping using fake timers during test execution.\n *\n * When set to `true`, the test runner will install fake timers that allow tests to skip over time-based operations like `setTimeout`, `setInterval`, `context.wait`, and `context.step` retries without actually waiting for the specified duration. This significantly speeds up test execution for workflows that involve delays or timeouts.\n *\n * When set to `false` or undefined, real timers will be used and any time-based operations will execute with their actual delays.\n *\n * @remarks\n *\n * - The fake timers installation may fail in some environments, but this won't prevent the test setup from completing successfully - All test runners created after setup will inherit this time skipping behavior\n *\n * @defaultValue false\n *\n * @example\n * ```typescript\n * // Enable time skipping for faster test execution\n * await LocalDurableTestRunner.setupTestEnvironment({ skipTime: true });\n *\n * // Use real timers (default behavior)\n * await LocalDurableTestRunner.setupTestEnvironment({ skipTime: false });\n * // or simply:\n * await LocalDurableTestRunner.setupTestEnvironment();\n * ```\n *\n */\n",
               "excerptTokens": [
@@ -3534,140 +3378,6 @@
             }
           ],
           "extendsTokenRanges": []
-        },
-        {
-          "kind": "TypeAlias",
-          "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationStatus:type",
-          "docComment": "/**\n * @public\n */\n",
-          "excerptTokens": [
-            {
-              "kind": "Content",
-              "text": "export type OperationStatus =\n  "
-            },
-            {
-              "kind": "Content",
-              "text": "(typeof "
-            },
-            {
-              "kind": "Reference",
-              "text": "OperationStatus",
-              "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationStatus:var"
-            },
-            {
-              "kind": "Content",
-              "text": ")[keyof typeof "
-            },
-            {
-              "kind": "Reference",
-              "text": "OperationStatus",
-              "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationStatus:var"
-            },
-            {
-              "kind": "Content",
-              "text": "]"
-            },
-            {
-              "kind": "Content",
-              "text": ";"
-            }
-          ],
-          "fileUrlPath": "../client-lambda/dist-types/models/models_0.d.ts",
-          "releaseTag": "Public",
-          "name": "OperationStatus",
-          "typeTokenRange": {
-            "startIndex": 1,
-            "endIndex": 6
-          }
-        },
-        {
-          "kind": "Variable",
-          "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationStatus:var",
-          "docComment": "/**\n * @enum\n *\n * @public\n */\n",
-          "excerptTokens": [
-            {
-              "kind": "Content",
-              "text": "OperationStatus: "
-            },
-            {
-              "kind": "Content",
-              "text": "{\n  readonly CANCELLED: \"CANCELLED\";\n  readonly FAILED: \"FAILED\";\n  readonly PENDING: \"PENDING\";\n  readonly READY: \"READY\";\n  readonly STARTED: \"STARTED\";\n  readonly STOPPED: \"STOPPED\";\n  readonly SUCCEEDED: \"SUCCEEDED\";\n  readonly TIMED_OUT: \"TIMED_OUT\";\n}"
-            }
-          ],
-          "fileUrlPath": "../client-lambda/dist-types/models/models_0.d.ts",
-          "isReadonly": true,
-          "releaseTag": "Public",
-          "name": "OperationStatus",
-          "variableTypeTokenRange": {
-            "startIndex": 1,
-            "endIndex": 2
-          }
-        },
-        {
-          "kind": "TypeAlias",
-          "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationType:type",
-          "docComment": "/**\n * @public\n */\n",
-          "excerptTokens": [
-            {
-              "kind": "Content",
-              "text": "export type OperationType = "
-            },
-            {
-              "kind": "Content",
-              "text": "(typeof "
-            },
-            {
-              "kind": "Reference",
-              "text": "OperationType",
-              "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationType:var"
-            },
-            {
-              "kind": "Content",
-              "text": ")[keyof typeof "
-            },
-            {
-              "kind": "Reference",
-              "text": "OperationType",
-              "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationType:var"
-            },
-            {
-              "kind": "Content",
-              "text": "]"
-            },
-            {
-              "kind": "Content",
-              "text": ";"
-            }
-          ],
-          "fileUrlPath": "../client-lambda/dist-types/models/models_0.d.ts",
-          "releaseTag": "Public",
-          "name": "OperationType",
-          "typeTokenRange": {
-            "startIndex": 1,
-            "endIndex": 6
-          }
-        },
-        {
-          "kind": "Variable",
-          "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationType:var",
-          "docComment": "/**\n * @enum\n *\n * @public\n */\n",
-          "excerptTokens": [
-            {
-              "kind": "Content",
-              "text": "OperationType: "
-            },
-            {
-              "kind": "Content",
-              "text": "{\n  readonly CALLBACK: \"CALLBACK\";\n  readonly CHAINED_INVOKE: \"CHAINED_INVOKE\";\n  readonly CONTEXT: \"CONTEXT\";\n  readonly EXECUTION: \"EXECUTION\";\n  readonly STEP: \"STEP\";\n  readonly WAIT: \"WAIT\";\n}"
-            }
-          ],
-          "fileUrlPath": "../client-lambda/dist-types/models/models_0.d.ts",
-          "isReadonly": true,
-          "releaseTag": "Public",
-          "name": "OperationType",
-          "variableTypeTokenRange": {
-            "startIndex": 1,
-            "endIndex": 2
-          }
         },
         {
           "kind": "Interface",
@@ -3903,7 +3613,7 @@
                 {
                   "kind": "Reference",
                   "text": "Event",
-                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~Event_2:interface"
+                  "canonicalReference": "@aws-sdk/client-lambda!Event:interface"
                 },
                 {
                   "kind": "Content",
@@ -3973,7 +3683,7 @@
                 {
                   "kind": "Reference",
                   "text": "OperationStatus",
-                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationStatus:type"
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~OperationStatus_2:type"
                 },
                 {
                   "kind": "Content",
@@ -4056,7 +3766,7 @@
                 {
                   "kind": "Reference",
                   "text": "ExecutionStatus",
-                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!ExecutionStatus:type"
+                  "canonicalReference": "@aws-sdk/client-lambda!ExecutionStatus:type"
                 },
                 {
                   "kind": "Content",
