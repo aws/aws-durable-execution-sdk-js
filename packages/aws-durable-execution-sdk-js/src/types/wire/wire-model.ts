@@ -6,7 +6,7 @@ import { OperationAction, OperationStatus, OperationType } from "./wire-enums";
  * Timestamps reach the SDK by more than one transport, and those transports do not agree on
  * a single runtime representation of the same logical field:
  *
- * - The Lambda invocation event ({@link DurableExecutionInvocationInput}) is plain JSON
+ * - The Lambda invocation event (`DurableExecutionInvocationInput`) is plain JSON
  *   parsed by the runtime, so timestamps arrive as ISO-8601 **strings**
  *   (for example `"2026-07-13T22:11:27.127Z"`).
  * - Responses fetched through the Lambda API are deserialized by the AWS SDK, which
@@ -82,7 +82,7 @@ export interface StepDetails {
 }
 
 /**
- * {@link StepDetails} as it appears on the wire, before timestamp normalization.
+ * `StepDetails` as it appears on the wire, before timestamp normalization.
  *
  * @public
  */
@@ -105,7 +105,7 @@ export interface WaitDetails {
 }
 
 /**
- * {@link WaitDetails} as it appears on the wire, before timestamp normalization.
+ * `WaitDetails` as it appears on the wire, before timestamp normalization.
  *
  * @public
  */
@@ -145,7 +145,7 @@ export interface ChainedInvokeDetails {
  * to `Date`.
  *
  * This is the form the SDK works with internally and exposes through
- * {@link DurableContext} and the instrumentation plugin surface. Operations are
+ * `DurableContext` and the instrumentation plugin surface. Operations are
  * normalized from {@link WireOperation} as they enter the SDK, so consumers never have to
  * deal with the wire's dual timestamp representation.
  *

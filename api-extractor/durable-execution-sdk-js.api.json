@@ -11914,7 +11914,7 @@
         {
           "kind": "Interface",
           "canonicalReference": "@aws/durable-execution-sdk-js!Operation:interface",
-          "docComment": "/**\n * A single entry in a durable execution's operation history, with timestamps normalized to `Date`.\n *\n * This is the form the SDK works with internally and exposes through {@link DurableContext} and the instrumentation plugin surface. Operations are normalized from {@link WireOperation} as they enter the SDK, so consumers never have to deal with the wire's dual timestamp representation.\n *\n * Exactly one of the `*Details` members is populated, selected by {@link Operation.Type}.\n *\n * @public\n */\n",
+          "docComment": "/**\n * A single entry in a durable execution's operation history, with timestamps normalized to `Date`.\n *\n * This is the form the SDK works with internally and exposes through `DurableContext` and the instrumentation plugin surface. Operations are normalized from {@link WireOperation} as they enter the SDK, so consumers never have to deal with the wire's dual timestamp representation.\n *\n * Exactly one of the `*Details` members is populated, selected by {@link Operation.Type}.\n *\n * @public\n */\n",
           "excerptTokens": [
             {
               "kind": "Content",
@@ -16774,7 +16774,7 @@
         {
           "kind": "Interface",
           "canonicalReference": "@aws/durable-execution-sdk-js!WireStepDetails:interface",
-          "docComment": "/**\n * {@link StepDetails} as it appears on the wire, before timestamp normalization.\n *\n * @public\n */\n",
+          "docComment": "/**\n * `StepDetails` as it appears on the wire, before timestamp normalization.\n *\n * @public\n */\n",
           "excerptTokens": [
             {
               "kind": "Content",
@@ -16851,7 +16851,7 @@
         {
           "kind": "TypeAlias",
           "canonicalReference": "@aws/durable-execution-sdk-js!WireTimestamp:type",
-          "docComment": "/**\n * A timestamp as it appears on the durable execution wire protocol, before normalization.\n *\n * Timestamps reach the SDK by more than one transport, and those transports do not agree on a single runtime representation of the same logical field:\n *\n * - The Lambda invocation event ({@link DurableExecutionInvocationInput}) is plain JSON parsed by the runtime, so timestamps arrive as ISO-8601 **strings** (for example `\"2026-07-13T22:11:27.127Z\"`). - Responses fetched through the Lambda API are deserialized by the AWS SDK, which converts timestamps into **`Date`** instances.\n *\n * This union, together with `normalizeOperation`, is the designated absorption point for that kind of per-transport difference: a transport that represents timestamps some other way is accommodated by widening this union and teaching `toDate` to parse it, without touching {@link Operation} or anything downstream of it.\n *\n * The union therefore appears only on the raw shapes — {@link WireOperation} and the API response types. The SDK normalizes every operation as it enters, so {@link Operation} and everything downstream carry real `Date`s.\n *\n * @public\n */\n",
+          "docComment": "/**\n * A timestamp as it appears on the durable execution wire protocol, before normalization.\n *\n * Timestamps reach the SDK by more than one transport, and those transports do not agree on a single runtime representation of the same logical field:\n *\n * - The Lambda invocation event (`DurableExecutionInvocationInput`) is plain JSON parsed by the runtime, so timestamps arrive as ISO-8601 **strings** (for example `\"2026-07-13T22:11:27.127Z\"`). - Responses fetched through the Lambda API are deserialized by the AWS SDK, which converts timestamps into **`Date`** instances.\n *\n * This union, together with `normalizeOperation`, is the designated absorption point for that kind of per-transport difference: a transport that represents timestamps some other way is accommodated by widening this union and teaching `toDate` to parse it, without touching {@link Operation} or anything downstream of it.\n *\n * The union therefore appears only on the raw shapes — {@link WireOperation} and the API response types. The SDK normalizes every operation as it enters, so {@link Operation} and everything downstream carry real `Date`s.\n *\n * @public\n */\n",
           "excerptTokens": [
             {
               "kind": "Content",
@@ -16882,7 +16882,7 @@
         {
           "kind": "Interface",
           "canonicalReference": "@aws/durable-execution-sdk-js!WireWaitDetails:interface",
-          "docComment": "/**\n * {@link WaitDetails} as it appears on the wire, before timestamp normalization.\n *\n * @public\n */\n",
+          "docComment": "/**\n * `WaitDetails` as it appears on the wire, before timestamp normalization.\n *\n * @public\n */\n",
           "excerptTokens": [
             {
               "kind": "Content",

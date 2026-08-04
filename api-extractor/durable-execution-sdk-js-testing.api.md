@@ -10,8 +10,6 @@ import { ExecutionStatus } from '@aws-sdk/client-lambda';
 import { Handler } from 'aws-lambda';
 import { InvocationType } from '@aws-sdk/client-lambda';
 import { LambdaClient } from '@aws-sdk/client-lambda';
-import { OperationStatus } from '@aws-sdk/client-lambda';
-import { OperationType } from '@aws-sdk/client-lambda';
 import { SendDurableExecutionCallbackFailureResponse } from '@aws-sdk/client-lambda';
 import { SendDurableExecutionCallbackHeartbeatResponse } from '@aws-sdk/client-lambda';
 import { SendDurableExecutionCallbackSuccessResponse } from '@aws-sdk/client-lambda';
@@ -133,17 +131,14 @@ export interface DurableOperation<TResult = any> {
     getEvents(): Event_2[] | undefined;
     getId(): string | undefined;
     getName(): string | undefined;
-    // Warning: (ae-forgotten-export) The symbol "Operation" needs to be exported by the entry point index.d.ts
     getOperationData(): Operation | undefined;
     getParentId(): string | undefined;
     getStartTimestamp(): Date | undefined;
-    // Warning: (ae-forgotten-export) The symbol "OperationStatus_2" needs to be exported by the entry point index.d.ts
-    getStatus(): OperationStatus_2 | undefined;
+    getStatus(): OperationStatus | undefined;
     getStepDetails(): StepDetails<TResult> | undefined;
     // Warning: (ae-forgotten-export) The symbol "OperationSubType" needs to be exported by the entry point index.d.ts
     getSubType(): OperationSubType | undefined;
-    // Warning: (ae-forgotten-export) The symbol "OperationType_2" needs to be exported by the entry point index.d.ts
-    getType(): OperationType_2 | undefined;
+    getType(): OperationType | undefined;
     getWaitDetails(): WaitResultDetails | undefined;
     isCallback(): boolean;
     isWaitForCallback(): boolean;
@@ -227,7 +222,7 @@ export interface LocalDurableTestRunnerSetupParameters {
 }
 
 // @public
-interface Operation {
+export interface Operation {
     // Warning: (ae-forgotten-export) The symbol "CallbackDetails_2" needs to be exported by the entry point index.d.ts
     CallbackDetails?: CallbackDetails_2 | undefined;
     // Warning: (ae-forgotten-export) The symbol "ChainedInvokeDetails_2" needs to be exported by the entry point index.d.ts
@@ -241,19 +236,17 @@ interface Operation {
     Name?: string | undefined;
     ParentId?: string | undefined;
     StartTimestamp: Date | undefined;
-    Status: OperationStatus_2 | undefined;
+    Status: OperationStatus | undefined;
     // Warning: (ae-forgotten-export) The symbol "StepDetails_2" needs to be exported by the entry point index.d.ts
     StepDetails?: StepDetails_2 | undefined;
     SubType?: string | undefined;
-    Type: OperationType_2 | undefined;
+    Type: OperationType | undefined;
     // Warning: (ae-forgotten-export) The symbol "WaitDetails" needs to be exported by the entry point index.d.ts
     WaitDetails?: WaitDetails | undefined;
 }
 
-export { OperationStatus }
-
 // @public
-const OperationStatus_2: {
+export const OperationStatus: {
     readonly CANCELLED: "CANCELLED";
     readonly FAILED: "FAILED";
     readonly PENDING: "PENDING";
@@ -265,7 +258,7 @@ const OperationStatus_2: {
 };
 
 // @public
-type OperationStatus_2 = (typeof OperationStatus_2)[keyof typeof OperationStatus_2];
+export type OperationStatus = (typeof OperationStatus)[keyof typeof OperationStatus];
 
 // @public
 enum OperationSubType {
@@ -282,10 +275,8 @@ enum OperationSubType {
     WAIT_FOR_CONDITION = "WaitForCondition"
 }
 
-export { OperationType }
-
 // @public
-const OperationType_2: {
+export const OperationType: {
     readonly CALLBACK: "CALLBACK";
     readonly CHAINED_INVOKE: "CHAINED_INVOKE";
     readonly CONTEXT: "CONTEXT";
@@ -295,7 +286,7 @@ const OperationType_2: {
 };
 
 // @public
-type OperationType_2 = (typeof OperationType_2)[keyof typeof OperationType_2];
+export type OperationType = (typeof OperationType)[keyof typeof OperationType];
 
 // @public
 export interface StepDetails<TResult = unknown> {
@@ -319,7 +310,7 @@ export interface TestResult<TResult = any> {
     getHistoryEvents(): Event_2[];
     getInvocations(): Invocation[];
     getOperations(params?: {
-        status: OperationStatus_2;
+        status: OperationStatus;
     }): DurableOperation[];
     getResult(): TResult | undefined;
     getStatus(): ExecutionStatus | undefined;
@@ -362,7 +353,7 @@ export interface WaitResultDetails {
 }
 
 // @public
-interface WireOperation extends Omit<Operation, "StartTimestamp" | "EndTimestamp" | "StepDetails" | "WaitDetails"> {
+export interface WireOperation extends Omit<Operation, "StartTimestamp" | "EndTimestamp" | "StepDetails" | "WaitDetails"> {
     EndTimestamp?: WireTimestamp | undefined;
     // Warning: (ae-forgotten-export) The symbol "WireTimestamp" needs to be exported by the entry point index.d.ts
     StartTimestamp: WireTimestamp | undefined;
@@ -384,10 +375,6 @@ type WireTimestamp = Date | string;
 interface WireWaitDetails {
     ScheduledEndTimestamp?: WireTimestamp | undefined;
 }
-
-// Warnings were encountered during analysis:
-//
-// /Users/parpooya/workplace/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/types/core.ts:76:5 - (ae-forgotten-export) The symbol "WireOperation" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 

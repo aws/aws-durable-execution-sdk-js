@@ -1491,7 +1491,7 @@
                 {
                   "kind": "Reference",
                   "text": "Operation",
-                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~Operation:interface"
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!Operation:interface"
                 },
                 {
                   "kind": "Content",
@@ -1585,7 +1585,7 @@
                 {
                   "kind": "Reference",
                   "text": "OperationStatus",
-                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~OperationStatus_2:type"
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationStatus:type"
                 },
                 {
                   "kind": "Content",
@@ -1684,7 +1684,7 @@
                 {
                   "kind": "Reference",
                   "text": "OperationType",
-                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~OperationType_2:type"
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationType:type"
                 },
                 {
                   "kind": "Content",
@@ -3381,6 +3381,586 @@
         },
         {
           "kind": "Interface",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!Operation:interface",
+          "docComment": "/**\n * A single entry in a durable execution's operation history, with timestamps normalized to `Date`.\n *\n * This is the form the SDK works with internally and exposes through `DurableContext` and the instrumentation plugin surface. Operations are normalized from {@link WireOperation} as they enter the SDK, so consumers never have to deal with the wire's dual timestamp representation.\n *\n * Exactly one of the `*Details` members is populated, selected by {@link Operation.Type}.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface Operation "
+            }
+          ],
+          "fileUrlPath": "../aws-durable-execution-sdk-js/src/types/wire/wire-model.ts",
+          "releaseTag": "Public",
+          "name": "Operation",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!Operation#CallbackDetails:member",
+              "docComment": "/**\n * Populated when `Type` is `CALLBACK`.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "CallbackDetails?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "CallbackDetails",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~CallbackDetails_2:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "CallbackDetails",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!Operation#ChainedInvokeDetails:member",
+              "docComment": "/**\n * Populated when `Type` is `CHAINED_INVOKE`.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "ChainedInvokeDetails?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "ChainedInvokeDetails",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~ChainedInvokeDetails_2:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "ChainedInvokeDetails",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!Operation#ContextDetails:member",
+              "docComment": "/**\n * Populated when `Type` is `CONTEXT`.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "ContextDetails?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "ContextDetails",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~ContextDetails_2:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "ContextDetails",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!Operation#EndTimestamp:member",
+              "docComment": "/**\n * When the operation reached a terminal status, if it has.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "EndTimestamp?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Date",
+                  "canonicalReference": "!Date:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "EndTimestamp",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!Operation#ExecutionDetails:member",
+              "docComment": "/**\n * Populated when `Type` is `EXECUTION`.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "ExecutionDetails?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "ExecutionDetails",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~ExecutionDetails:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "ExecutionDetails",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!Operation#Id:member",
+              "docComment": "/**\n * Hashed operation identifier, unique within the execution.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "Id: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "Id",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!Operation#Name:member",
+              "docComment": "/**\n * Caller-supplied operation name.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "Name?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "Name",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!Operation#ParentId:member",
+              "docComment": "/**\n * Hashed identifier of the enclosing operation, if any.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "ParentId?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "ParentId",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!Operation#StartTimestamp:member",
+              "docComment": "/**\n * When the operation started.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "StartTimestamp: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Date",
+                  "canonicalReference": "!Date:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "StartTimestamp",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!Operation#Status:member",
+              "docComment": "/**\n * Current lifecycle status of the operation.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "Status: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "OperationStatus",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationStatus:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "Status",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!Operation#StepDetails:member",
+              "docComment": "/**\n * Populated when `Type` is `STEP`.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "StepDetails?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "StepDetails",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~StepDetails_2:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "StepDetails",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!Operation#SubType:member",
+              "docComment": "/**\n * SDK-level refinement of {@link Operation.Type}, such as a map or parallel context.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "SubType?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "SubType",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!Operation#Type:member",
+              "docComment": "/**\n * Which kind of operation this entry represents.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "Type: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "OperationType",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationType:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "Type",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!Operation#WaitDetails:member",
+              "docComment": "/**\n * Populated when `Type` is `WAIT`.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "WaitDetails?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "WaitDetails",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~WaitDetails:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "WaitDetails",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationStatus:type",
+          "docComment": "/**\n * The lifecycle status of a durable operation as recorded by the service.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type OperationStatus = "
+            },
+            {
+              "kind": "Content",
+              "text": "(typeof "
+            },
+            {
+              "kind": "Reference",
+              "text": "OperationStatus",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationStatus:var"
+            },
+            {
+              "kind": "Content",
+              "text": ")[keyof typeof "
+            },
+            {
+              "kind": "Reference",
+              "text": "OperationStatus",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationStatus:var"
+            },
+            {
+              "kind": "Content",
+              "text": "]"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "../aws-durable-execution-sdk-js/src/types/wire/wire-enums.ts",
+          "releaseTag": "Public",
+          "name": "OperationStatus",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 6
+          }
+        },
+        {
+          "kind": "Variable",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationStatus:var",
+          "docComment": "/**\n * The lifecycle status of a durable operation as recorded by the service.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "OperationStatus: "
+            },
+            {
+              "kind": "Content",
+              "text": "{\n    readonly CANCELLED: \"CANCELLED\";\n    readonly FAILED: \"FAILED\";\n    readonly PENDING: \"PENDING\";\n    readonly READY: \"READY\";\n    readonly STARTED: \"STARTED\";\n    readonly STOPPED: \"STOPPED\";\n    readonly SUCCEEDED: \"SUCCEEDED\";\n    readonly TIMED_OUT: \"TIMED_OUT\";\n}"
+            }
+          ],
+          "fileUrlPath": "../aws-durable-execution-sdk-js/src/types/wire/wire-enums.ts",
+          "isReadonly": true,
+          "releaseTag": "Public",
+          "name": "OperationStatus",
+          "variableTypeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 2
+          }
+        },
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationType:type",
+          "docComment": "/**\n * The kind of durable operation an entry in the execution history represents.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type OperationType = "
+            },
+            {
+              "kind": "Content",
+              "text": "(typeof "
+            },
+            {
+              "kind": "Reference",
+              "text": "OperationType",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationType:var"
+            },
+            {
+              "kind": "Content",
+              "text": ")[keyof typeof "
+            },
+            {
+              "kind": "Reference",
+              "text": "OperationType",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationType:var"
+            },
+            {
+              "kind": "Content",
+              "text": "]"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "../aws-durable-execution-sdk-js/src/types/wire/wire-enums.ts",
+          "releaseTag": "Public",
+          "name": "OperationType",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 6
+          }
+        },
+        {
+          "kind": "Variable",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationType:var",
+          "docComment": "/**\n * The kind of durable operation an entry in the execution history represents.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "OperationType: "
+            },
+            {
+              "kind": "Content",
+              "text": "{\n    readonly CALLBACK: \"CALLBACK\";\n    readonly CHAINED_INVOKE: \"CHAINED_INVOKE\";\n    readonly CONTEXT: \"CONTEXT\";\n    readonly EXECUTION: \"EXECUTION\";\n    readonly STEP: \"STEP\";\n    readonly WAIT: \"WAIT\";\n}"
+            }
+          ],
+          "fileUrlPath": "../aws-durable-execution-sdk-js/src/types/wire/wire-enums.ts",
+          "isReadonly": true,
+          "releaseTag": "Public",
+          "name": "OperationType",
+          "variableTypeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 2
+          }
+        },
+        {
+          "kind": "Interface",
           "canonicalReference": "@aws/durable-execution-sdk-js-testing!StepDetails:interface",
           "docComment": "/**\n * Details for a step operation result, including retry information and outcome.\n *\n * @public\n */\n",
           "excerptTokens": [
@@ -3683,7 +4263,7 @@
                 {
                   "kind": "Reference",
                   "text": "OperationStatus",
-                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~OperationStatus_2:type"
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!OperationStatus:type"
                 },
                 {
                   "kind": "Content",
@@ -4113,6 +4693,179 @@
             }
           ],
           "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@aws/durable-execution-sdk-js-testing!WireOperation:interface",
+          "docComment": "/**\n * {@link Operation} as it appears on the wire, before timestamp normalization.\n *\n * This is the shape carried by the Lambda invocation event and by API responses. Prefer {@link Operation} everywhere else.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface WireOperation extends "
+            },
+            {
+              "kind": "Reference",
+              "text": "Omit",
+              "canonicalReference": "!Omit:type"
+            },
+            {
+              "kind": "Content",
+              "text": "<"
+            },
+            {
+              "kind": "Reference",
+              "text": "Operation",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!Operation:interface"
+            },
+            {
+              "kind": "Content",
+              "text": ", \"StartTimestamp\" | \"EndTimestamp\" | \"StepDetails\" | \"WaitDetails\">"
+            },
+            {
+              "kind": "Content",
+              "text": " "
+            }
+          ],
+          "fileUrlPath": "../aws-durable-execution-sdk-js/src/types/wire/wire-model.ts",
+          "releaseTag": "Public",
+          "name": "WireOperation",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!WireOperation#EndTimestamp:member",
+              "docComment": "/**\n * When the operation reached a terminal status, if it has.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "EndTimestamp?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "WireTimestamp",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~WireTimestamp:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "EndTimestamp",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!WireOperation#StartTimestamp:member",
+              "docComment": "/**\n * When the operation started.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "StartTimestamp: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "WireTimestamp",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~WireTimestamp:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "StartTimestamp",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!WireOperation#StepDetails:member",
+              "docComment": "/**\n * Populated when `Type` is `STEP`.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "StepDetails?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "WireStepDetails",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~WireStepDetails:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "StepDetails",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js-testing!WireOperation#WaitDetails:member",
+              "docComment": "/**\n * Populated when `Type` is `WAIT`.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "WaitDetails?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "WireWaitDetails",
+                  "canonicalReference": "@aws/durable-execution-sdk-js-testing!~WireWaitDetails:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "WaitDetails",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            }
+          ],
+          "extendsTokenRanges": [
+            {
+              "startIndex": 1,
+              "endIndex": 5
+            }
+          ]
         }
       ]
     }
