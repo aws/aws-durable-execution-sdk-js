@@ -1551,6 +1551,25 @@ describe("InvocationOtelPlugin", () => {
       const result = plugin.enrichLogContext();
       expect(result).toBeUndefined();
     });
+
+    it("returns undefined when enrichLogger is disabled, even with an active span", async () => {
+      const noEnrichPlugin = new InvocationOtelPlugin({
+        tracerProvider: provider,
+        enrichLogger: false,
+      });
+      await noEnrichPlugin.onInvocationStart(makeInvocationInfo());
+
+      let logContext: Record<string, string | number | boolean> | undefined;
+      const fn = async () => {
+        logContext = noEnrichPlugin.enrichLogContext();
+        return { output: "test" } as any;
+      };
+
+      await noEnrichPlugin.wrapInvocation(makeInvocationInfo(), fn);
+      await noEnrichPlugin.onInvocationEnd(makeInvocationEndInfo());
+
+      expect(logContext).toBeUndefined();
+    });
   });
 
   describe("Span attributes", () => {
