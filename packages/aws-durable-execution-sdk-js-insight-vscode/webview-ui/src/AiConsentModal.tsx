@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { HostCapabilities } from "./types";
 import Modal from "@cloudscape-design/components/modal";
 import Box from "@cloudscape-design/components/box";
 import Button from "@cloudscape-design/components/button";
@@ -7,6 +8,12 @@ import SpaceBetween from "@cloudscape-design/components/space-between";
 import TextContent from "@cloudscape-design/components/text-content";
 
 interface Props {
+  /**
+   * What the current host supports. The disclosure enumerates where data can
+   * go, so it must not name a provider this host cannot use — the desktop app
+   * has no Copilot.
+   */
+  capabilities: HostCapabilities;
   visible: boolean;
   onAccept: () => void;
   onDecline: () => void;
@@ -22,7 +29,7 @@ interface Props {
  * below AND bump AI_DISCLOSURE_VERSION in types.ts so already-consented users
  * are re-prompted.
  */
-export function AiConsentModal({ visible, onAccept, onDecline }: Props) {
+export function AiConsentModal({ visible, capabilities, onAccept, onDecline }: Props) {
   const [agreed, setAgreed] = useState(false);
 
   return (
@@ -53,7 +60,8 @@ export function AiConsentModal({ visible, onAccept, onDecline }: Props) {
             limited portions of your data — such as result <b>column names</b>{" "}
             and a <b>small sample of result rows</b> used for summaries or chart
             building — to the AI model provider you have configured (Amazon
-            Bedrock, GitHub Copilot, or a local model server you run).
+            Bedrock,{capabilities.copilot ? " GitHub Copilot," : ""} or a local
+            model server you run).
           </p>
           <p>
             The <b>Query</b> mode does <b>not</b> use AI: it runs the query you
@@ -71,12 +79,14 @@ export function AiConsentModal({ visible, onAccept, onDecline }: Props) {
               configure, and processed under your AWS agreement and Bedrock&rsquo;s
               service terms. It leaves your machine and goes to AWS.
             </li>
-            <li>
-              <b>GitHub Copilot</b> — sent to GitHub Copilot through VS
-              Code&rsquo;s Language Model API, under your GitHub Copilot
-              subscription terms and privacy policy. It leaves your machine and
-              goes to GitHub/Microsoft.
-            </li>
+            {capabilities.copilot && (
+              <li>
+                <b>GitHub Copilot</b> — sent to GitHub Copilot through VS
+                Code&rsquo;s Language Model API, under your GitHub Copilot
+                subscription terms and privacy policy. It leaves your machine
+                and goes to GitHub/Microsoft.
+              </li>
+            )}
             <li>
               <b>Local server (Ollama / OpenAI-compatible)</b> — sent to the
               endpoint you run and control (for example, on your own machine or

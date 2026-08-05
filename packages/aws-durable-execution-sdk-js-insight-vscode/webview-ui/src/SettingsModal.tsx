@@ -11,13 +11,19 @@ import Select, { type SelectProps } from "@cloudscape-design/components/select";
 import Autosuggest from "@cloudscape-design/components/autosuggest";
 import ProgressBar from "@cloudscape-design/components/progress-bar";
 import Tabs from "@cloudscape-design/components/tabs";
-import type { Settings, DestinationTestReport } from "./types";
+import type {
+  HostCapabilities,
+  Settings,
+  DestinationTestReport,
+} from "./types";
 import { RECOMMENDED_BEDROCK_MODELS } from "./types";
-import { postMessage } from "./vscode";
+import { postMessage } from "./hostBridge";
 
 interface Props {
   visible: boolean;
   settings: Settings;
+  /** What the current host supports; gates host-dependent options. */
+  capabilities: HostCapabilities;
   modelDownloaded: boolean;
   downloadPercent: number;
   onDismiss: () => void;
@@ -71,13 +77,21 @@ const LOCAL_MODEL_OPTIONS: SelectProps.Option[] = [
   },
 ];
 
-export function SettingsModal({ visible, settings, modelDownloaded, downloadPercent, onDismiss, onSave, testing, testResult, onTest, onClearTest, bedrockModels, bedrockModelsLoading, bedrockModelsError, onListModels }: Props) {
+export function SettingsModal({ visible, settings, capabilities, modelDownloaded, downloadPercent, onDismiss, onSave, testing, testResult, onTest, onClearTest, bedrockModels, bedrockModelsLoading, bedrockModelsError, onListModels }: Props) {
   const [form, setForm] = useState<Settings>(settings);
   const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
-    setForm(settings);
-  }, [settings, visible]);
+    // A provider this host cannot reach must not load into the form: the
+    // settings file is shared in spirit between hosts (and can be carried
+    // between them), so "copilot" can arrive in the desktop app where it is
+    // unusable. Present the default instead of an option that isn't offered.
+    setForm(
+      !capabilities.copilot && settings.llmProvider === "copilot"
+        ? { ...settings, llmProvider: "bedrock" }
+        : settings,
+    );
+  }, [settings, visible, capabilities.copilot]);
 
   // Drop any prior test result when the modal (re)opens so a stale pass/fail
   // from a previous session isn't shown against freshly-loaded settings.
@@ -90,6 +104,27 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
     if (field === "destinationType") onClearTest();
     setForm((f) => ({ ...f, [field]: value }));
   };
+
+  // One source for both the option list and the selected-option lookup, so the
+  // dropdown cannot show a label for a choice it doesn't offer. Copilot is
+  // omitted entirely where the host can't reach it rather than shown disabled:
+  // there is no action the user could take to enable it.
+  const llmProviderOptions = [
+    { value: "bedrock", label: "Amazon Bedrock" },
+    ...(capabilities.copilot
+      ? [
+          {
+            value: "copilot",
+            label: "GitHub Copilot (VS Code built-in)",
+          },
+        ]
+      : []),
+    {
+      value: "local-server",
+      label: "Local server (Ollama / OpenAI-compatible)",
+    },
+    { value: "local", label: "Local LLM (offline, on-device)" },
+  ];
 
   const canSave = form.llmProvider !== "local" || modelDownloaded;
 
@@ -340,20 +375,11 @@ export function SettingsModal({ visible, settings, modelDownloaded, downloadPerc
                 >
                   <Select
                     selectedOption={
-                      form.llmProvider === "copilot"
-                        ? { value: "copilot", label: "GitHub Copilot (VS Code built-in)" }
-                        : form.llmProvider === "local"
-                          ? { value: "local", label: "Local LLM (offline, ~2.2 GB download)" }
-                          : form.llmProvider === "local-server"
-                            ? { value: "local-server", label: "Local server (Ollama / OpenAI-compatible)" }
-                            : { value: "bedrock", label: "Amazon Bedrock" }
+                      llmProviderOptions.find(
+                        (o) => o.value === form.llmProvider,
+                      ) ?? llmProviderOptions[0]
                     }
-                    options={[
-                      { value: "bedrock", label: "Amazon Bedrock" },
-                      { value: "copilot", label: "GitHub Copilot (VS Code built-in)" },
-                      { value: "local-server", label: "Local server (Ollama / OpenAI-compatible)" },
-                      { value: "local", label: "Local LLM (offline, on-device)" },
-                    ]}
+                    options={llmProviderOptions}
                     onChange={({ detail }) => update("llmProvider", detail.selectedOption.value ?? "bedrock")}
                   />
                 </FormField>

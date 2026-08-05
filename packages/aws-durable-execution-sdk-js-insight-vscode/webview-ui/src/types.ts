@@ -76,9 +76,30 @@ export interface SqsMessageRow {
   attributes: Record<string, string>;
 }
 
+/**
+ * What the current host can do, sent with every `config` message.
+ *
+ * The same bundle runs in VS Code and in the desktop app, so it cannot assume a
+ * capability is present. Anything host-dependent goes here rather than being
+ * inferred in the UI.
+ */
+export interface HostCapabilities {
+  /**
+   * Whether the "copilot" LLM provider is usable. False outside VS Code — the
+   * Language Model API only exists in the extension host — in which case the UI
+   * must not offer it.
+   */
+  copilot: boolean;
+}
+
 /** Messages from extension host → webview */
 export type InboundMessage =
-  | { type: "config"; settings: Settings; modelDownloaded?: boolean }
+  | {
+      type: "config";
+      settings: Settings;
+      modelDownloaded?: boolean;
+      capabilities: HostCapabilities;
+    }
   | { type: "status"; text: string }
   | {
       type: "results";

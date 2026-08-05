@@ -10,7 +10,7 @@ import Spinner from "@cloudscape-design/components/spinner";
 import Modal from "@cloudscape-design/components/modal";
 import { useState } from "react";
 import { RecordDetail } from "./RecordDetail";
-import { postMessage } from "./vscode";
+import { postMessage } from "./hostBridge";
 
 interface Props {
   columns: string[];

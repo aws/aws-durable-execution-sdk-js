@@ -31,7 +31,7 @@ jest.mock("./config", () => ({
   resolveCredentials: jest.fn(() => ({})),
 }));
 
-import type { InsightConfig } from "./config";
+import type { InsightConfig } from "./configCore";
 import { testDestination } from "./destinationTest";
 import { tableExists, runAthenaQuery } from "./athena";
 import { runAuroraQuery } from "./aurora";

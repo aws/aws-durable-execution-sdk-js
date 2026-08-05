@@ -4,8 +4,8 @@ import {
   DescribeLogGroupsCommand,
 } from "@aws-sdk/client-cloudwatch-logs";
 import { SQSClient, GetQueueAttributesCommand } from "@aws-sdk/client-sqs";
-import type { InsightConfig } from "./config";
-import { resolveCredentials } from "./config";
+import type { InsightConfig } from "./configCore";
+import { resolveCredentials } from "./configCore";
 import { tableExists, runAthenaQuery } from "./athena";
 import { runAuroraQuery } from "./aurora";
 import { runRedshiftQuery } from "./redshift";
