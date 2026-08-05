@@ -150,6 +150,14 @@ export interface DurableExecutionConfig {
    * that, every failure is treated as transient and a permanent one is retried until the
    * execution times out.
    *
+   * A stated scope is believed, and is checked before the SDK inspects the error's shape.
+   * A transport that wraps another one therefore takes over responsibility for classifying
+   * the errors it wraps: wrapping an AWS error as INVOCATION scope suppresses the
+   * heuristics that would otherwise recognize it — for example a KMS misconfiguration,
+   * which arrives as a 502 but can never succeed on retry — and it will be retried until
+   * the execution times out. Either classify wrapped errors deliberately, or let them
+   * through unwrapped so the existing heuristics still apply.
+   *
    * Supplying both this and {@link DurableExecutionConfig.client} is a configuration error
    * and fails the execution before the handler runs, because the two contradict each other.
    */

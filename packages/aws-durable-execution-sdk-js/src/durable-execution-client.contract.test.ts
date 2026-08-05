@@ -13,19 +13,24 @@ import {
 } from "./index";
 
 /**
- * Guards the promise that a transport can be written without depending on AWS.
+ * Exercises the transport contract using no AWS types.
  *
- * This file imports nothing from `@aws-sdk/*` or `aws-lambda`, so it fails to compile if an
- * AWS type ever reappears in the transitive closure of {@link DurableExecutionClient}, its
- * request and response shapes, or {@link DurableExecutionConfig.durableExecutionClient}.
- * That property is what makes durable functions portable to compute types other than
- * Lambda, and it is easy to lose by accident: adding one AWS-typed field to any of the wire
- * shapes would do it, and nothing else in the suite would notice.
+ * This is a readable demonstration that a transport can be written against
+ * {@link DurableExecutionClient} without reaching for `@aws-sdk/*` or `aws-lambda`, and that
+ * such an implementation satisfies {@link DurableExecutionConfig.durableExecutionClient} and
+ * can classify its own failures.
  *
- * What this does not cover: it exercises the contract's types and the error classification
- * in isolation, not a full execution. End-to-end behaviour of an injected transport is
- * covered by the execution-context transport-selection tests and the checkpoint error
- * classification tests.
+ * It is deliberately not claimed as a gate on AWS-freedom, because it is a weak one: this
+ * file imports {@link DurableExecutionConfig}, which already names `LambdaClient` through
+ * its deprecated `client` property and compiles regardless; an AWS-typed field added to a
+ * request shape would go unnoticed, since only `params.Marker` is read; and an *optional*
+ * AWS-typed field added to a response shape would also compile, because an object literal
+ * need not supply it. Only a newly *required* AWS-typed response field would break it.
+ *
+ * The actual gates are elsewhere: the `no-restricted-imports` rule on `src/types/wire/**`
+ * (see `eslint.config.js`), which fails the build if an AWS import appears in the wire
+ * model at all, and `wire-model.aws-sdk-parity.test.ts`, which pins those shapes to the
+ * service model in both directions.
  */
 
 /** A transport with no AWS dependency of any kind. */

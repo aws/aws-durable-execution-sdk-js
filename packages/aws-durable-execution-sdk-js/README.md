@@ -335,6 +335,65 @@ const retryStrategy = createRetryStrategy({
 });
 ```
 
+### Custom Transport
+
+By default the SDK talks to the Lambda durable execution APIs. You can replace that
+transport with your own by implementing `DurableExecutionClient`, which has two operations
+and names no AWS types:
+
+```typescript
+import {
+  DurableExecutionClient,
+  DurableExecutionClientError,
+  DurableExecutionClientErrorScope,
+  withDurableExecution,
+} from "@aws/durable-execution-sdk-js";
+
+class HttpDurableExecutionClient implements DurableExecutionClient {
+  async getExecutionState(params) {
+    const response = await fetch(`${this.endpoint}/state`, { ... });
+    return response.json();
+  }
+
+  async checkpoint(params) {
+    const response = await fetch(`${this.endpoint}/checkpoint`, { ... });
+
+    if (!response.ok) {
+      // Tell the SDK whether to end just this invocation or the whole execution.
+      throw new DurableExecutionClientError(`Checkpoint failed: ${response.status}`, {
+        scope:
+          response.status < 500
+            ? DurableExecutionClientErrorScope.EXECUTION // won't succeed on retry
+            : DurableExecutionClientErrorScope.INVOCATION, // may succeed later
+      });
+    }
+
+    return response.json();
+  }
+}
+
+export const handler = withDurableExecution(myHandler, {
+  durableExecutionClient: new HttpDurableExecutionClient(),
+});
+```
+
+Without a stated scope, every failure is treated as transient, so a permanent one is retried
+until the execution times out.
+
+To keep the Lambda transport but configure the underlying client yourself, pass it to
+`DurableExecutionApiClient` rather than using the deprecated `client` option:
+
+```typescript
+import { DurableExecutionApiClient } from "@aws/durable-execution-sdk-js";
+import { LambdaClient } from "@aws-sdk/client-lambda";
+
+export const handler = withDurableExecution(myHandler, {
+  durableExecutionClient: new DurableExecutionApiClient(
+    new LambdaClient({ region: "us-west-2", maxAttempts: 5 }),
+  ),
+});
+```
+
 ## Logging
 
 Access enriched logger:

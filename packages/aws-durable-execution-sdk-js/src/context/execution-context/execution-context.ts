@@ -29,6 +29,15 @@ const resolveDurableExecutionClient = (
   config?: DurableExecutionConfig,
 ): DurableExecutionClient => {
   if (DurableExecutionInvocationInputWithClient.isInstance(event)) {
+    if (config?.durableExecutionClient) {
+      // Worth a line: a harness supplying its own transport silently shadows the one the
+      // handler under test was configured with, which is confusing to debug from the
+      // outside.
+      log(
+        "🔀",
+        "Event-injected durable execution client overrides config.durableExecutionClient",
+      );
+    }
     return event.durableExecutionClient;
   }
 

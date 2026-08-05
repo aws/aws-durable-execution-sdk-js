@@ -665,4 +665,39 @@ describe("withDurableExecution", () => {
       "transient failure",
     );
   });
+
+  it("rejects conflicting transport config before the transport is used", async () => {
+    // The point of checking this early: with both provided, the SDK would otherwise pick
+    // one, read execution state through it, and only then report the misconfiguration.
+    const mockHandler = jest.fn();
+    const wrappedHandler = withDurableExecution(mockHandler, {
+      client: {} as never,
+      durableExecutionClient: {
+        getExecutionState: jest.fn(),
+        checkpoint: jest.fn(),
+      } as never,
+    });
+
+    const result = await wrappedHandler(mockEvent, mockContext);
+
+    expect(result.Status).toBe(InvocationStatus.FAILED);
+    expect(initializeExecutionContext).not.toHaveBeenCalled();
+    expect(mockHandler).not.toHaveBeenCalled();
+  });
+
+  it("does not reject either transport option on its own", async () => {
+    const mockHandler = jest.fn().mockResolvedValue("ok");
+    mockTerminationManager.getTerminationPromise.mockReturnValue(
+      new Promise(() => {}),
+    );
+
+    await withDurableExecution(mockHandler, {
+      durableExecutionClient: {
+        getExecutionState: jest.fn(),
+        checkpoint: jest.fn(),
+      } as never,
+    })(mockEvent, mockContext);
+
+    expect(initializeExecutionContext).toHaveBeenCalled();
+  });
 });

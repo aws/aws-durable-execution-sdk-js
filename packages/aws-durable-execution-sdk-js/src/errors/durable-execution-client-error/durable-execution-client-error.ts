@@ -22,6 +22,13 @@ export const DurableExecutionClientErrorScope = {
   EXECUTION: "EXECUTION",
 } as const;
 
+// Adding a scope here is NOT a backward-compatible change. An SDK older than the addition
+// does not recognize the new value, so `isDurableExecutionClientError` rejects the marker
+// outright and the error falls back to transport-shape inspection -- which for a non-Lambda
+// transport means every failure is treated as transient. The direction of that failure is
+// safe, but the classification is lost, so a new scope needs a deliberate rollout rather
+// than being treated as additive.
+
 /**
  * How far a {@link DurableExecutionClient} failure reaches.
  *
@@ -38,7 +45,7 @@ export type DurableExecutionClientErrorScope =
 export interface DurableExecutionClientErrorOptions {
   /**
    * How far the failure reaches. Defaults to
-   * {@link DurableExecutionClientErrorScope.INVOCATION}, because assuming a failure is
+   * {@link (DurableExecutionClientErrorScope:variable).INVOCATION}, because assuming a failure is
    * transient is the safe default: the execution gets another attempt rather than being
    * failed on the strength of an error the SDK does not understand.
    */
@@ -60,6 +67,11 @@ export interface DurableExecutionClientErrorOptions {
  *
  * Throwing this error states the classification directly, so any transport can express it
  * without imitating another one's error shape.
+ *
+ * The scope is honoured wherever the error surfaces, not only on transport calls. In
+ * practice it is thrown by a {@link DurableExecutionClient}, but an EXECUTION-scoped error
+ * that escapes handler code fails the execution just the same. Handler code that wants an
+ * ordinary retryable failure should throw an ordinary error rather than this one.
  *
  * @example
  * ```typescript
