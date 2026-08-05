@@ -24,5 +24,4 @@ export interface OperationInfo {
   timer?: NodeJS.Timeout;
   resolver?: () => void;
   pollCount?: number;
-  pollStartTime?: number;
 }

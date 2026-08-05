@@ -79,6 +79,7 @@ async function runHandler<
     new Set<string>(),
     plugin,
     executionContext.requestId,
+    executionContext.getRemainingTimeMs,
   );
 
   // Extract customerHandlerEvent early so it's available for plugins in onInvocationStart
@@ -447,10 +448,15 @@ async function runHandler<
       }
     };
 
-  return (
-    plugin.wrapInvocation?.(invocationInfo, executeInvocation) ??
-    executeInvocation()
-  );
+  try {
+    return await (plugin.wrapInvocation?.(invocationInfo, executeInvocation) ??
+      executeInvocation());
+  } finally {
+    // Every exit from the invocation funnels through here, including the normal-completion
+    // path that never terminates. Without this, poll timers stay armed after the handler
+    // returns and can fire during a later invocation in a reused execution environment.
+    checkpointManager.dispose();
+  }
 }
 
 /**

@@ -7,6 +7,7 @@ export const createTestCheckpointManager = (
   checkpointToken: string,
   emitter: EventEmitter,
   logger: DurableLogger,
+  getRemainingTimeMs: () => number = (): number => Infinity,
 ): CheckpointManager => {
   return new CheckpointManager(
     context.durableExecutionArn,
@@ -19,5 +20,6 @@ export const createTestCheckpointManager = (
     new Set<string>(),
     {},
     "",
+    getRemainingTimeMs,
   );
 };
