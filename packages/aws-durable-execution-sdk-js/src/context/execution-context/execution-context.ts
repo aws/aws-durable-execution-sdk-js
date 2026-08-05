@@ -130,6 +130,10 @@ export const initializeExecutionContext = async (
       },
       tenantId: context.tenantId,
       requestId: context.awsRequestId,
+      // The one reduction here that is a function rather than a value, because the answer
+      // changes over the life of the invocation. Where no deadline is known, a caller
+      // supplies `() => Infinity`.
+      getRemainingTimeMs: () => context.getRemainingTimeInMillis(),
     },
     durableExecutionMode,
     checkpointToken,

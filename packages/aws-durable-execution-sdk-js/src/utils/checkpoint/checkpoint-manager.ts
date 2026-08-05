@@ -24,7 +24,12 @@ import { DurableLogger } from "../../types/durable-logger";
 import { Checkpoint } from "./checkpoint-helper";
 import {
   CHECKPOINT_TERMINATION_COOLDOWN_MS,
-  MAX_POLL_DURATION_MS,
+  MAX_TIMER_DELAY_MS,
+  MIN_REMAINING_TIME_TO_POLL_MS,
+  INITIAL_POLL_DELAY_MS,
+  POLL_INTERVAL_CEILING_MS,
+  EXTENDED_POLL_INTERVAL_CEILING_MS,
+  POLLS_BEFORE_EXTENDED_INTERVAL,
 } from "../constants/constants";
 import {
   OperationInfo,
@@ -70,6 +75,7 @@ export class CheckpointManager implements Checkpoint {
   private readonly MAX_PAYLOAD_SIZE = 750 * 1024; // 750KB in bytes
   private readonly MAX_ITEMS_IN_BATCH = 250;
   private isTerminating = false;
+  private disposed = false;
 
   // Operation lifecycle tracking
   private operations = new Map<string, OperationInfo>();
@@ -92,6 +98,14 @@ export class CheckpointManager implements Checkpoint {
     private finishedAncestors: Set<string>,
     private plugin: DurableInstrumentationPlugin,
     private requestId: string,
+    /**
+     * How much longer the current invocation may run, in milliseconds.
+     *
+     * Deliberately a plain function rather than an invocation context: the caller supplies
+     * `() => context.getRemainingTimeInMillis()`, and where no deadline is known,
+     * `() => Infinity`. Nothing below this constructor needs the platform type to answer it.
+     */
+    private getRemainingTimeMs: () => number,
   ) {
     this.currentTaskToken = initialTaskToken;
   }
@@ -99,6 +113,43 @@ export class CheckpointManager implements Checkpoint {
   setTerminating(): void {
     this.isTerminating = true;
     log("🛑", "Checkpoint manager marked as terminating");
+  }
+
+  /**
+   * Releases everything this manager armed, and refuses to arm anything further.
+   *
+   * Timers outlive the invocation that armed them. Nothing else clears them on the normal
+   * path: cleanupAllOperations is only reached through executeTermination, and
+   * setTerminating merely sets a flag, so a handler that completes without suspending
+   * returns with its poll timers still pending. In a reused execution environment those
+   * fire during a later invocation and checkpoint against a task token that has since been
+   * replaced. Bounding timers by the reported deadline narrows this but cannot close it: a
+   * timer armed for five minutes is legitimate right up until the handler returns after ten
+   * seconds, and where no deadline is reported a timer can be armed for as long as
+   * MAX_TIMER_DELAY_MS allows.
+   *
+   * Deliberately per-manager rather than a module-level "current invocation" marker. A
+   * process-wide marker identifies the newest invocation rather than a particular execution,
+   * and executions already run concurrently in one process -- the local test runner's factory
+   * creates nested runners for exactly that. Such a marker would make an earlier execution's
+   * manager stale, silently stopping its polling while leaving its operations awaited and
+   * unresolved. State on the manager cannot conflate two executions, because each invocation
+   * has its own.
+   *
+   * Idempotent.
+   */
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+
+    if (this.terminationTimer) {
+      clearTimeout(this.terminationTimer);
+      this.terminationTimer = null;
+      this.terminationReason = null;
+    }
+
+    this.cleanupAllOperations();
+    log("🧹", "Checkpoint manager disposed");
   }
 
   /**
@@ -852,6 +903,9 @@ export class CheckpointManager implements Checkpoint {
   }
 
   private startTimerWithPolling(stepId: string, endTimestamp?: Date): void {
+    // This manager's invocation is over; a timer armed now could only fire into a later one.
+    if (this.disposed) return;
+
     const op = this.operations.get(stepId);
     if (!op) return;
 
@@ -863,21 +917,33 @@ export class CheckpointManager implements Checkpoint {
         endTimestamp instanceof Date ? endTimestamp : new Date(endTimestamp);
       // Wait until endTimestamp
       delay = Math.max(0, timestamp.getTime() - Date.now());
-
-      // Skip setTimeout if delay exceeds MAX_POLL_DURATION_MS (Lambda will timeout before it fires)
-      if (delay > MAX_POLL_DURATION_MS) {
-        return;
-      }
     } else {
-      // No timestamp, start polling immediately (1 second delay)
-      delay = 1000;
+      // No known end time, so poll promptly instead of waiting for one.
+      delay = INITIAL_POLL_DELAY_MS;
     }
 
-    // Initialize poll count and start time for this operation
-    if (!op.pollCount) {
-      op.pollCount = 0;
-      op.pollStartTime = Date.now();
+    // Don't schedule a timer that cannot usefully fire, for either of two reasons: the
+    // invocation ends before the wait does, in which case the execution should suspend and
+    // resume later instead of holding this timer; or the delay is larger than setTimeout can
+    // represent, in which case Node would fire it almost immediately. Leaving the timer
+    // unscheduled leaves the operation's promise unresolved, which is what lets central
+    // termination suspend the execution.
+    //
+    // MIN_REMAINING_TIME_TO_POLL_MS is subtracted so this agrees with what the poll loop
+    // will accept: without it, a wait ending in the final moments of the invocation would
+    // get a timer that forceRefreshAndCheckStatus is guaranteed to refuse the instant it
+    // fires. The guard covers both branches above -- an operation with no end time used to
+    // be the one path that ignored the deadline entirely.
+    const schedulableDelayMs = Math.min(
+      this.getRemainingTimeMs() - MIN_REMAINING_TIME_TO_POLL_MS,
+      MAX_TIMER_DELAY_MS,
+    );
+    if (delay > schedulableDelayMs) {
+      return;
     }
+
+    // Initialize poll count for this operation (drives the backoff below)
+    op.pollCount ??= 0;
 
     op.timer = setTimeout(() => {
       this.forceRefreshAndCheckStatus(stepId);
@@ -885,21 +951,23 @@ export class CheckpointManager implements Checkpoint {
   }
 
   private async forceRefreshAndCheckStatus(stepId: string): Promise<void> {
+    // Belt and braces: dispose clears armed timers, so reaching here after disposal means a
+    // callback was already queued. Checkpointing now would use a replaced task token.
+    if (this.disposed) return;
+
     const op = this.operations.get(stepId);
     if (!op) return;
 
-    // Check if we've exceeded max polling duration (15 minutes)
-    if (
-      op.pollStartTime &&
-      Date.now() - op.pollStartTime > MAX_POLL_DURATION_MS
-    ) {
-      // Stop polling after 15 minutes to prevent indefinite resource consumption.
-      // We don't resolve or reject the promise because the handler cannot continue
-      // without a status change. The execution will remain suspended until the
-      // operation completes or the Lambda times out.
+    // Stop polling once the invocation has too little time left to act on a result. We
+    // don't resolve or reject the promise because the handler cannot continue without a
+    // status change; the execution stays suspended until the operation completes or the
+    // invocation ends. A compute with no deadline reports Infinity and so keeps polling at
+    // the backoff interval below, which is the only way it can observe completion.
+    const remainingTimeMs = this.getRemainingTimeMs();
+    if (remainingTimeMs < MIN_REMAINING_TIME_TO_POLL_MS) {
       log(
         "⏱️",
-        `Max polling duration (15 min) exceeded for ${stepId}, stopping poll`,
+        `Only ${remainingTimeMs}ms left in this invocation, stopping poll for ${stepId}`,
       );
       if (op.timer) {
         clearTimeout(op.timer);
@@ -933,7 +1001,15 @@ export class CheckpointManager implements Checkpoint {
       // Status not changed yet, poll again with incremental backoff
       // Start at 1s, increase by 1s each poll, max 10s
       op.pollCount = (op.pollCount || 0) + 1;
-      const nextDelay = Math.min(op.pollCount * 1000, 10000);
+      // Widen the interval once this loop has run long enough that the operation is
+      // evidently not about to complete. The removed budget doubled as a cap on checkpoint
+      // calls; bounding by the reported deadline removes it, and where no deadline is
+      // reported there is nothing to bound it at all.
+      const intervalCeilingMs =
+        op.pollCount > POLLS_BEFORE_EXTENDED_INTERVAL
+          ? EXTENDED_POLL_INTERVAL_CEILING_MS
+          : POLL_INTERVAL_CEILING_MS;
+      const nextDelay = Math.min(op.pollCount * 1000, intervalCeilingMs);
 
       op.timer = setTimeout(() => {
         this.forceRefreshAndCheckStatus(stepId);

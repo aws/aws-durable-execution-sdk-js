@@ -48,6 +48,7 @@ describe("CheckpointManager - StepData Update", () => {
       isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
       requestId: "mock-request-id",
       tenantId: undefined,
+      getRemainingTimeMs: (): number => Infinity,
     };
 
     mockLogger = createDefaultLogger(mockContext);

@@ -58,6 +58,7 @@ describe("Checkpoint Integration Tests", () => {
       new Set<string>(),
       {},
       "",
+      () => Infinity,
     );
     const checkpoint = (stepId: string, data: any): Promise<any> =>
       checkpointManager.checkpoint(stepId, data);
@@ -97,6 +98,7 @@ describe("Checkpoint Integration Tests", () => {
       new Set<string>(),
       {},
       "",
+      () => Infinity,
     );
     const checkpoint = (stepId: string, data: any): Promise<any> =>
       checkpointManager.checkpoint(stepId, data);
@@ -185,6 +187,7 @@ describe("Checkpoint Integration Tests", () => {
       new Set<string>(),
       {},
       "",
+      () => Infinity,
     );
     const checkpoint = (stepId: string, data: any): Promise<any> =>
       checkpointManager.checkpoint(stepId, data);
@@ -226,6 +229,7 @@ describe("Checkpoint Integration Tests", () => {
       new Set<string>(),
       {},
       "",
+      () => Infinity,
     );
     const checkpoint = (stepId: string, data: any): Promise<any> =>
       checkpointManager.checkpoint(stepId, data);
@@ -280,6 +284,7 @@ describe("Checkpoint Integration Tests", () => {
       new Set<string>(),
       {},
       "",
+      () => Infinity,
     );
     const checkpoint1 = (stepId: string, data: any): Promise<any> =>
       checkpointManager1.checkpoint(stepId, data);
@@ -295,6 +300,7 @@ describe("Checkpoint Integration Tests", () => {
       new Set<string>(),
       {},
       "",
+      () => Infinity,
     );
     const checkpoint2 = (stepId: string, data: any): Promise<any> =>
       checkpointManager2.checkpoint(stepId, data);

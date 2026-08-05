@@ -114,6 +114,7 @@ describe("runInChildContext serdes round-trip", () => {
       isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
       requestId: "mock-request-id",
       tenantId: undefined,
+      getRemainingTimeMs: (): number => Infinity,
     } satisfies ExecutionContext;
 
     mockParentContext = { awsRequestId: "mock-request-id" };

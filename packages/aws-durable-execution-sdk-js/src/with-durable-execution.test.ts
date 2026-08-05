@@ -80,6 +80,7 @@ describe("withDurableExecution", () => {
     (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
       checkpoint: jest.fn().mockResolvedValue(undefined),
       setTerminating: jest.fn(),
+      dispose: jest.fn(),
       waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
     }));
 
@@ -89,6 +90,47 @@ describe("withDurableExecution", () => {
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  it("disposes the checkpoint manager on the normal-completion path", async () => {
+    // The path that never terminates, and therefore never reached any cleanup before:
+    // without disposal the invocation returns with its poll timers still armed.
+    const dispose = jest.fn();
+    (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
+      checkpoint: jest.fn().mockResolvedValue(undefined),
+      setTerminating: jest.fn(),
+      dispose,
+      waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
+    }));
+    mockTerminationManager.getTerminationPromise.mockReturnValue(
+      new Promise(() => {}),
+    );
+
+    await withDurableExecution(jest.fn().mockResolvedValue({ ok: true }))(
+      mockEvent,
+      mockContext,
+    );
+
+    expect(dispose).toHaveBeenCalled();
+  });
+
+  it("disposes the checkpoint manager when the handler throws", async () => {
+    const dispose = jest.fn();
+    (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
+      checkpoint: jest.fn().mockResolvedValue(undefined),
+      setTerminating: jest.fn(),
+      dispose,
+      waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
+    }));
+    mockTerminationManager.getTerminationPromise.mockReturnValue(
+      new Promise(() => {}),
+    );
+
+    await withDurableExecution(
+      jest.fn().mockRejectedValue(new Error("handler blew up")),
+    )(mockEvent, mockContext);
+
+    expect(dispose).toHaveBeenCalled();
   });
 
   it("should return successful response when handler completes normally", async () => {
@@ -408,6 +450,7 @@ describe("withDurableExecution", () => {
     (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
       checkpoint: jest.fn().mockRejectedValue(checkpointError),
       setTerminating: jest.fn(),
+      dispose: jest.fn(),
     }));
 
     mockTerminationManager.getTerminationPromise.mockReturnValue(

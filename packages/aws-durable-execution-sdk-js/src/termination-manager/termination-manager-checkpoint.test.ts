@@ -24,6 +24,7 @@ const createCheckpoint = (
     new Set<string>(),
     {},
     "",
+    () => Infinity,
   );
   const checkpoint = (stepId: string, data: any): Promise<any> =>
     manager.checkpoint(stepId, data);
@@ -54,6 +55,7 @@ describe("TerminationManager Checkpoint Integration", () => {
       _stepData: {},
       terminationManager,
       requestId: "",
+      getRemainingTimeMs: (): number => Infinity,
       tenantId: "",
       pendingCompletions: new Set(),
       getStepData: jest.fn(),

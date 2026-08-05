@@ -35,6 +35,17 @@ export class InvokeHandler {
       awsRequestId: randomUUID(),
       logGroupName: "MyLogGroupName",
       logStreamName: "MyLogStreamName",
+      // Constant rather than a countdown, and overridable through the constructor. The SDK
+      // now uses this to decide whether to schedule a wait timer and whether to keep
+      // polling, so the value has two consequences locally: scheduling behaves as it always
+      // did (900_000 is what the SDK's old fixed cap was), but because the deadline never
+      // elapses, the stop-polling condition cannot trigger and a poll loop is bounded only
+      // by the backoff ceiling for as long as an operation stays EXECUTING.
+      //
+      // Making it count down would model a real invocation more closely -- note that
+      // skipTime does not manipulate the clock, so elapsed time here is real -- but it would
+      // also let operations stall locally in runs that advance fake timers themselves,
+      // which is a deliberate behaviour change rather than a fix. Left as is for now.
       getRemainingTimeInMillis: function (): number {
         return 900_000;
       },

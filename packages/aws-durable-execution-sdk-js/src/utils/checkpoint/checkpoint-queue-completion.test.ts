@@ -32,6 +32,7 @@ describe("CheckpointManager Queue Completion", () => {
       new Set<string>(),
       {},
       "",
+      () => Infinity,
     );
   });
 
