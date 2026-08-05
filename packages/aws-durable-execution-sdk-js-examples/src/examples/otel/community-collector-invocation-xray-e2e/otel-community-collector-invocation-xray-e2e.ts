@@ -33,8 +33,10 @@ let exporter: InMemorySpanExporter | undefined;
 let plugin: InvocationOtelPlugin;
 
 if (isCloudEnvironment()) {
-  // Cloud mode: default AutoOtlp source — plugin builds its own OTLP exporter
-  plugin = new InvocationOtelPlugin();
+  // Cloud mode: build our own OTLP exporter to the community collector sidecar
+  plugin = new InvocationOtelPlugin({
+    providerSource: ProviderSource.AutoOtlp,
+  });
 } else {
   // Local mode: custom TracerProvider with InMemorySpanExporter
   exporter = new InMemorySpanExporter();

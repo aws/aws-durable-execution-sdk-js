@@ -84,8 +84,8 @@ describe("createTracerProvider", () => {
     });
   });
 
-  describe("default (AutoOtlp) behaves same as absent", () => {
-    it("creates an internal provider with source=AutoOtlp when providerSource=AutoOtlp", () => {
+  describe("providerSource=AutoOtlp", () => {
+    it("creates an internal provider with source=AutoOtlp", () => {
       const result = createTracerProvider({
         providerSource: ProviderSource.AutoOtlp,
       });
@@ -97,53 +97,39 @@ describe("createTracerProvider", () => {
         (result.tracerProvider as NodeTracerProvider).shutdown();
       }
     });
+  });
 
-    it("creates an internal provider with source=AutoOtlp when providerSource is absent", () => {
+  describe("default source is Global when providerSource is absent", () => {
+    it("returns the global provider with source=Global for an empty config", () => {
+      const globalProvider = new NodeTracerProvider();
+      globalProvider.register();
+
       const result = createTracerProvider({});
 
-      expect(result.source).toBe(ProviderSource.AutoOtlp);
+      expect(result.tracerProvider).toBe(trace.getTracerProvider());
+      expect(result.source).toBe(ProviderSource.Global);
 
-      // Clean up
-      if ("shutdown" in result.tracerProvider) {
-        (result.tracerProvider as NodeTracerProvider).shutdown();
-      }
+      globalProvider.shutdown();
     });
 
-    it("creates an internal provider with source=AutoOtlp when config is undefined", () => {
+    it("returns the global provider with source=Global for undefined config", () => {
+      const globalProvider = new NodeTracerProvider();
+      globalProvider.register();
+
       const result = createTracerProvider(undefined);
 
-      expect(result.source).toBe(ProviderSource.AutoOtlp);
+      expect(result.tracerProvider).toBe(trace.getTracerProvider());
+      expect(result.source).toBe(ProviderSource.Global);
 
-      // Clean up
-      if ("shutdown" in result.tracerProvider) {
-        (result.tracerProvider as NodeTracerProvider).shutdown();
-      }
-    });
-
-    it("explicit AutoOtlp produces same source as absent", () => {
-      const resultExplicit = createTracerProvider({
-        providerSource: ProviderSource.AutoOtlp,
-      });
-      const resultAbsent = createTracerProvider({});
-
-      expect(resultExplicit.source).toBe(resultAbsent.source);
-      expect(resultExplicit.source).toBe(ProviderSource.AutoOtlp);
-
-      // Clean up
-      if ("shutdown" in resultExplicit.tracerProvider) {
-        (resultExplicit.tracerProvider as NodeTracerProvider).shutdown();
-      }
-      if ("shutdown" in resultAbsent.tracerProvider) {
-        (resultAbsent.tracerProvider as NodeTracerProvider).shutdown();
-      }
+      globalProvider.shutdown();
     });
   });
 });
 
 describe("resolveProviderSource validation", () => {
-  it("defaults to AutoOtlp when providerSource is absent", () => {
-    expect(resolveProviderSource(undefined)).toBe(ProviderSource.AutoOtlp);
-    expect(resolveProviderSource({})).toBe(ProviderSource.AutoOtlp);
+  it("defaults to Global when providerSource is absent", () => {
+    expect(resolveProviderSource(undefined)).toBe(ProviderSource.Global);
+    expect(resolveProviderSource({})).toBe(ProviderSource.Global);
   });
 
   it("returns the configured source verbatim for Global", () => {

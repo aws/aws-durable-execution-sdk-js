@@ -33,8 +33,10 @@ let exporter: InMemorySpanExporter | undefined;
 let plugin: ExecutionOtelPlugin;
 
 if (isCloudEnvironment()) {
-  // Cloud mode: ExecutionOtelPlugin with default OTLP export to ADOT collector
-  plugin = new ExecutionOtelPlugin();
+  // Cloud mode: build our own OTLP exporter to the ADOT collector
+  plugin = new ExecutionOtelPlugin({
+    providerSource: ProviderSource.AutoOtlp,
+  });
 } else {
   // Local mode: custom TracerProvider with InMemorySpanExporter
   exporter = new InMemorySpanExporter();

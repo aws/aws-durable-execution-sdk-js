@@ -147,10 +147,12 @@ describe("InvocationOtelPlugin - Global provider mode", () => {
     ).toBe(true);
   });
 
-  it("creates its own internal provider when no config is provided", async () => {
-    // When no config is provided, InvocationOtelPlugin creates its own provider (option 3)
-    // Spans will NOT appear in the globally registered exporter
-    const plugin = new InvocationOtelPlugin();
+  it("creates its own internal provider with providerSource AutoOtlp", async () => {
+    // With AutoOtlp the InvocationOtelPlugin creates its own provider (option 3).
+    // Spans will NOT appear in the globally registered exporter.
+    const plugin = new InvocationOtelPlugin({
+      providerSource: ProviderSource.AutoOtlp,
+    });
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onInvocationEnd(makeInvocationEndInfo());

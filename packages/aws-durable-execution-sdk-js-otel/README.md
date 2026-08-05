@@ -13,9 +13,9 @@ This package provides two plugin implementations:
 
 Both plugins share the same configuration interface (`OtelPluginConfig`) and support three TracerProvider modes, selected via `providerSource`:
 
-1. **Auto-created** (`ProviderSource.AutoOtlp`, default) — the plugin creates its own TracerProvider with OTLP export to `localhost:4318`
-2. **Explicit** (`ProviderSource.Explicit`) — you pass your own `tracerProvider` instance
-3. **Global** (`ProviderSource.Global`) — use the globally registered provider (e.g., from the ADOT layer)
+1. **Global** (`ProviderSource.Global`, default) — use the globally registered provider (e.g., from the ADOT layer)
+2. **Auto-created** (`ProviderSource.AutoOtlp`) — the plugin creates its own TracerProvider with OTLP export to `localhost:4318`
+3. **Explicit** (`ProviderSource.Explicit`) — you pass your own `tracerProvider` instance
 
 Both plugins can be deployed with either the **ADOT Lambda layer** or the **OpenTelemetry community collector-only layer**.
 
@@ -113,7 +113,7 @@ Both plugins can use either Lambda layer. The layer provides span transport (a c
 
 **ADOT Layer:** Registers a global TracerProvider with auto-instrumentation. Use `providerSource: ProviderSource.Global` so the plugin delegates to that provider. Set `AWS_LAMBDA_EXEC_WRAPPER=/opt/otel-instrument` to activate it.
 
-**Community Collector Layer:** Only runs a collector process at `localhost:4318`. The plugin creates its own TracerProvider (default mode) and exports spans to the collector. Requires a `collector.yaml` in your function bundle and `OPENTELEMETRY_COLLECTOR_CONFIG_URI=/var/task/collector.yaml`.
+**Community Collector Layer:** Only runs a collector process at `localhost:4318`. The plugin creates its own TracerProvider (AutoOtlp mode) and exports spans to the collector. Requires a `collector.yaml` in your function bundle and `OPENTELEMETRY_COLLECTOR_CONFIG_URI=/var/task/collector.yaml`.
 
 > **Tip:** The community collector layer is smaller and purpose-built for span transport. The ADOT layer is convenient if you want zero-config auto-instrumentation from the layer itself.
 
@@ -124,9 +124,9 @@ Both plugins can use either Lambda layer. The layer provides span transport (a c
 | #   | Plugin                 | Layer                     | `providerSource`     | `AWS_LAMBDA_EXEC_WRAPPER` | `collector.yaml` needed? |
 | --- | ---------------------- | ------------------------- | -------------------- | ------------------------- | ------------------------ |
 | 1   | `ExecutionOtelPlugin`  | ADOT Layer                | `Global`             | `/opt/otel-instrument`    | No                       |
-| 2   | `ExecutionOtelPlugin`  | Community Collector Layer | `AutoOtlp` (default) | Do NOT set                | Yes                      |
+| 2   | `ExecutionOtelPlugin`  | Community Collector Layer | `AutoOtlp`            | Do NOT set                | Yes                      |
 | 3   | `InvocationOtelPlugin` | ADOT Layer                | `Global`             | `/opt/otel-instrument`    | No                       |
-| 4   | `InvocationOtelPlugin` | Community Collector Layer | `AutoOtlp` (default) | Do NOT set                | Yes                      |
+| 4   | `InvocationOtelPlugin` | Community Collector Layer | `AutoOtlp`            | Do NOT set                | Yes                      |
 
 ### 1. ExecutionOtelPlugin + ADOT Layer
 
@@ -290,7 +290,7 @@ interface OtelPluginConfig {
   /** Custom TracerProvider, used only with providerSource: ProviderSource.Explicit. */
   tracerProvider?: TracerProvider;
 
-  /** Selects the provider mode. Defaults to ProviderSource.AutoOtlp. */
+  /** Selects the provider mode. Defaults to ProviderSource.Global. */
   providerSource?: ProviderSource;
 
   /** Context extractor for upstream trace context. Defaults to xRayContextExtractor. */
@@ -316,7 +316,7 @@ interface OtelPluginConfig {
 }
 ```
 
-**Provider selection:** `providerSource` selects the mode (defaulting to `ProviderSource.AutoOtlp`). `tracerProvider` is required with — and only valid with — `ProviderSource.Explicit`; supplying it with any other source throws.
+**Provider selection:** `providerSource` selects the mode (defaulting to `ProviderSource.Global`). `tracerProvider` is required with — and only valid with — `ProviderSource.Explicit`; supplying it with any other source throws.
 
 **Usage examples:**
 
@@ -350,7 +350,7 @@ const plugin = new InvocationOtelPlugin({
 
 ## Export Strategies
 
-When the plugin auto-creates its TracerProvider (default mode), you can configure where spans go:
+When the plugin auto-creates its TracerProvider (AutoOtlp mode), you can configure where spans go:
 
 ### Via a Collector Layer (Recommended)
 
@@ -599,7 +599,7 @@ Unlike the Workflow_Span, the Invocation_Span is **always** ended and exported (
 
 ## Additional npm Dependencies
 
-When the plugin auto-creates its TracerProvider (default mode), these peer dependencies are required:
+When the plugin auto-creates its TracerProvider (AutoOtlp mode), these peer dependencies are required:
 
 ```bash
 npm install @opentelemetry/exporter-trace-otlp-http \
