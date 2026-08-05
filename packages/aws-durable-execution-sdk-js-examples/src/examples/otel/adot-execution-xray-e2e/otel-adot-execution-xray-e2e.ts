@@ -2,7 +2,10 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
-import { ExecutionOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+import {
+  ExecutionOtelPlugin,
+  ProviderSource,
+} from "@aws/durable-execution-sdk-js-otel";
 import { ExampleConfig } from "../../../types";
 import { xrayE2eWorkflow } from "../shared/xray-e2e-workflow";
 
@@ -11,11 +14,13 @@ import { xrayE2eWorkflow } from "../shared/xray-e2e-workflow";
  *
  * Exercises the exact same workflow (steps, wait, child context) as
  * otel-community-collector-execution-xray-e2e but uses the ExecutionOtelPlugin with
- * useDefaultTracerProvider: true, backed by the ADOT Lambda layer's
+ * providerSource: ProviderSource.Global, backed by the ADOT Lambda layer's
  * globally registered TracerProvider. This allows direct trace comparison
  * between the two plugin implementations in X-Ray.
  */
-const plugin = new ExecutionOtelPlugin({ useDefaultTracerProvider: true });
+const plugin = new ExecutionOtelPlugin({
+  providerSource: ProviderSource.Global,
+});
 
 export const config: ExampleConfig = {
   name: "OTel ADOT Execution XRay E2E",

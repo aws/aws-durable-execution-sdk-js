@@ -2,7 +2,10 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
-import { ExecutionOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+import {
+  ExecutionOtelPlugin,
+  ProviderSource,
+} from "@aws/durable-execution-sdk-js-otel";
 import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
@@ -39,7 +42,10 @@ if (isCloudEnvironment()) {
     spanProcessors: [new SimpleSpanProcessor(exporter)],
   });
 
-  plugin = new ExecutionOtelPlugin({ tracerProvider: provider });
+  plugin = new ExecutionOtelPlugin({
+    providerSource: ProviderSource.Explicit,
+    tracerProvider: provider,
+  });
 }
 
 export function getSerializedSpans(): SerializedSpan[] {

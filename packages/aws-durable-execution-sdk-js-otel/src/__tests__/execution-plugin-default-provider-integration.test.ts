@@ -14,6 +14,7 @@ import type {
   AttemptEndInfo,
 } from "@aws/durable-execution-sdk-js";
 import { ExecutionOtelPlugin } from "../execution-plugin";
+import { ProviderSource } from "../otel-plugin-config";
 
 const TEST_ARN =
   "arn:aws:states:us-east-1:123456789012:execution:my-sm:exec-integration-1";
@@ -113,7 +114,7 @@ function findSpans(
  * Integration test: End-to-end span export with default provider.
  *
  * This test registers a real NodeTracerProvider with InMemorySpanExporter globally,
- * creates a ExecutionOtelPlugin with useDefaultTracerProvider: true, and simulates
+ * creates a ExecutionOtelPlugin with providerSource: ProviderSource.Global, and simulates
  * a full invocation lifecycle verifying the complete span hierarchy is exported.
  *
  * Since this test runs locally (no Lambda environment), there is no ambient invocation
@@ -142,7 +143,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
 
   it("exports spans through the globally registered provider pipeline", async () => {
     const plugin = new ExecutionOtelPlugin({
-      useDefaultTracerProvider: true,
+      providerSource: ProviderSource.Global,
     });
 
     // Simulate full invocation lifecycle:
@@ -191,7 +192,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
 
   it("Workflow_Span is a root span with no parent", async () => {
     const plugin = new ExecutionOtelPlugin({
-      useDefaultTracerProvider: true,
+      providerSource: ProviderSource.Global,
     });
 
     await plugin.onInvocationStart(makeInvocationInfo());
@@ -214,7 +215,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
 
   it("Invocation_Span is created as child of ambient context", async () => {
     const plugin = new ExecutionOtelPlugin({
-      useDefaultTracerProvider: true,
+      providerSource: ProviderSource.Global,
     });
 
     await plugin.onInvocationStart(makeInvocationInfo());
@@ -246,7 +247,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
 
   it("operation and attempt spans have correct parent-child hierarchy under Workflow_Span", async () => {
     const plugin = new ExecutionOtelPlugin({
-      useDefaultTracerProvider: true,
+      providerSource: ProviderSource.Global,
     });
 
     await plugin.onInvocationStart(makeInvocationInfo());
@@ -292,7 +293,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
 
   it("span links point to the Invocation span when there is no ambient invocation span", async () => {
     const plugin = new ExecutionOtelPlugin({
-      useDefaultTracerProvider: true,
+      providerSource: ProviderSource.Global,
     });
 
     // No ambient invocation span in local test environment
@@ -338,7 +339,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     const shutdownSpy = jest.spyOn(provider, "shutdown");
 
     const plugin = new ExecutionOtelPlugin({
-      useDefaultTracerProvider: true,
+      providerSource: ProviderSource.Global,
     });
 
     await plugin.onInvocationStart(makeInvocationInfo());
@@ -360,7 +361,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
 
   it("full lifecycle with multiple operations produces correct span hierarchy", async () => {
     const plugin = new ExecutionOtelPlugin({
-      useDefaultTracerProvider: true,
+      providerSource: ProviderSource.Global,
     });
 
     // Simulate: start → op1 (with attempt) → op2 (with attempt) → end

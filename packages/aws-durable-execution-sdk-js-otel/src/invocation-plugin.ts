@@ -62,9 +62,9 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     this.workflowSpanName = config?.workflowSpanName ?? "Workflow";
     this.enrichLogger = config?.enrichLogger ?? true;
 
-    // Pass config directly to createTracerProvider — when neither tracerProvider
-    // nor useDefaultTracerProvider is set, option 3 creates an internal provider
-    // with OTLP export (same behavior as ExecutionOtelPlugin).
+    // Pass config directly to createTracerProvider — with the default
+    // providerSource (AutoOtlp) it creates an internal provider with OTLP
+    // export (same behavior as ExecutionOtelPlugin).
     const { tracerProvider, source } = createTracerProvider(config);
     this.tracerProvider = tracerProvider;
 

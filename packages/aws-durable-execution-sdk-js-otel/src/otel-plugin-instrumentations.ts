@@ -9,19 +9,16 @@ import { ProviderSource } from "./otel-plugin-provider";
  * Registers HTTP and AWS SDK instrumentations for the ExecutionOtelPlugin
  * and InvocationOtelPlugin.
  *
- * Skips ALL instrumentation registration when a custom `tracerProvider` is
- * provided in the config (the caller owns instrumentation in that case).
+ * Behavior is driven by the resolved {@link ProviderSource}:
  *
- * When `useDefaultTracerProvider` is true (and no explicit `tracerProvider`):
- * - Registers `@opentelemetry/instrumentation-aws-sdk` on the provided
- *   tracerProvider (preserving InvocationOtelPlugin's existing behavior)
- * - Skips HTTP instrumentation (the external auto-instrumentation layer
- *   is expected to handle HTTP spans)
- *
- * When neither `tracerProvider` nor `useDefaultTracerProvider` is set:
- * - Always registers `@opentelemetry/instrumentation-aws-sdk`
- * - Registers `@opentelemetry/instrumentation-http` unless
- *   `enableHttpInstrumentation` is explicitly `false`
+ * - `Explicit` — skips ALL instrumentation registration (the caller owns the
+ *   provider and its instrumentation).
+ * - `Global` — registers `@opentelemetry/instrumentation-aws-sdk` on the
+ *   provided tracerProvider, but skips HTTP instrumentation (the external
+ *   auto-instrumentation layer is expected to handle HTTP spans).
+ * - `AutoOtlp` — registers `@opentelemetry/instrumentation-aws-sdk` and
+ *   `@opentelemetry/instrumentation-http` (unless `enableHttpInstrumentation`
+ *   is explicitly `false`).
  *
  * The HTTP instrumentation is configured to suppress spans for requests
  * whose hostname matches `127.0.0.1` or the value of the

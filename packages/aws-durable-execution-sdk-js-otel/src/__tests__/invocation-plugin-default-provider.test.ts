@@ -1,5 +1,5 @@
 /**
- * Unit tests for InvocationOtelPlugin with useDefaultTracerProvider mode.
+ * Unit tests for InvocationOtelPlugin with Global provider mode.
  *
  * These tests mirror the execution-plugin-default-provider-integration tests
  * but verify InvocationOtelPlugin-specific behavior:
@@ -22,6 +22,7 @@ import {
 } from "@opentelemetry/api";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
 import { InvocationOtelPlugin } from "../invocation-plugin";
+import { ProviderSource } from "../otel-plugin-config";
 import type {
   InvocationInfo,
   InvocationEndInfo,
@@ -82,7 +83,7 @@ function makeOperationEndInfo(
   };
 }
 
-describe("InvocationOtelPlugin - useDefaultTracerProvider mode", () => {
+describe("InvocationOtelPlugin - Global provider mode", () => {
   let exporter: InMemorySpanExporter;
   let provider: NodeTracerProvider;
 
@@ -102,8 +103,8 @@ describe("InvocationOtelPlugin - useDefaultTracerProvider mode", () => {
     propagation.disable();
   });
 
-  it("uses the global provider when useDefaultTracerProvider is explicitly true", async () => {
-    const plugin = new InvocationOtelPlugin({ useDefaultTracerProvider: true });
+  it("uses the global provider when providerSource is Global", async () => {
+    const plugin = new InvocationOtelPlugin({ providerSource: ProviderSource.Global });
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onOperationStart(
@@ -160,8 +161,8 @@ describe("InvocationOtelPlugin - useDefaultTracerProvider mode", () => {
     expect(invocationSpan).toBeUndefined();
   });
 
-  it("exports operation spans via the global provider when useDefaultTracerProvider=true", async () => {
-    const plugin = new InvocationOtelPlugin({ useDefaultTracerProvider: true });
+  it("exports operation spans via the global provider when providerSource is Global", async () => {
+    const plugin = new InvocationOtelPlugin({ providerSource: ProviderSource.Global });
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onOperationStart(
@@ -179,7 +180,7 @@ describe("InvocationOtelPlugin - useDefaultTracerProvider mode", () => {
   });
 
   it("supports multiple invocation lifecycles without leaking state", async () => {
-    const plugin = new InvocationOtelPlugin({ useDefaultTracerProvider: true });
+    const plugin = new InvocationOtelPlugin({ providerSource: ProviderSource.Global });
 
     // First invocation
     await plugin.onInvocationStart(makeInvocationInfo());
@@ -220,7 +221,7 @@ describe("InvocationOtelPlugin - useDefaultTracerProvider mode", () => {
   });
 
   it("does not shutdown the global provider on invocation end", async () => {
-    const plugin = new InvocationOtelPlugin({ useDefaultTracerProvider: true });
+    const plugin = new InvocationOtelPlugin({ providerSource: ProviderSource.Global });
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onOperationStart(
@@ -273,7 +274,7 @@ describe("InvocationOtelPlugin - custom instrumentationName", () => {
   });
 
   it("uses default instrumentationName when not specified", async () => {
-    const plugin = new InvocationOtelPlugin({ tracerProvider: provider });
+    const plugin = new InvocationOtelPlugin({ providerSource: ProviderSource.Explicit, tracerProvider: provider });
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onInvocationEnd(makeInvocationEndInfo());
@@ -288,6 +289,7 @@ describe("InvocationOtelPlugin - custom instrumentationName", () => {
 
   it("uses custom instrumentationName when specified", async () => {
     const plugin = new InvocationOtelPlugin({
+      providerSource: ProviderSource.Explicit,
       tracerProvider: provider,
       instrumentationName: "my-custom-tracer",
     });
@@ -330,6 +332,7 @@ describe("InvocationOtelPlugin - forceFlush error handling", () => {
     };
 
     const plugin = new InvocationOtelPlugin({
+      providerSource: ProviderSource.Explicit,
       tracerProvider: failingProvider as any,
     });
 

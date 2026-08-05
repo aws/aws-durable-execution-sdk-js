@@ -4,7 +4,10 @@ import {
   NodeTracerProvider,
 } from "@opentelemetry/sdk-trace-node";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
-import { InvocationOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+import {
+  InvocationOtelPlugin,
+  ProviderSource,
+} from "@aws/durable-execution-sdk-js-otel";
 
 /**
  * Serialized representation of an OpenTelemetry span for test assertions.
@@ -47,6 +50,7 @@ export function createOtelTestSetup(): OtelTestSetup {
   });
 
   const plugin = new InvocationOtelPlugin({
+    providerSource: ProviderSource.Explicit,
     tracerProvider: provider,
   });
 
@@ -120,7 +124,9 @@ export interface DualModeOtelSetup {
 export function createDualModeOtelSetup(): DualModeOtelSetup {
   if (isAdotEnvironment()) {
     // Cloud mode: use ADOT's globally registered TracerProvider for trace export to X-Ray
-    const plugin = new InvocationOtelPlugin({ useDefaultTracerProvider: true });
+    const plugin = new InvocationOtelPlugin({
+      providerSource: ProviderSource.Global,
+    });
     return {
       plugin,
       getSerializedSpans: () => [],
