@@ -67,6 +67,29 @@ module.exports = [
     },
   },
   {
+    // The wire model is the SDK's own declaration of the durable execution protocol, and
+    // nothing portable can depend on the AWS SDK. Keeping it AWS-free is what lets a
+    // transport for another compute type be written against these types, so it is enforced
+    // rather than left to review. The parity test is exempt: comparing our declarations to
+    // the service model is precisely its job, and it imports the AWS types for that.
+    files: ["src/types/wire/**/*.ts"],
+    ignores: ["src/types/wire/**/*.aws-sdk-parity.test.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@aws-sdk/*", "aws-lambda"],
+              message:
+                "The wire model must stay free of AWS types so it can describe the protocol for any compute type. If the service model changed, update the declarations here and let wire-model.aws-sdk-parity.test.ts verify them.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     ignores: ["dist/**/*", "node_modules/**/*"],
   },
 ];

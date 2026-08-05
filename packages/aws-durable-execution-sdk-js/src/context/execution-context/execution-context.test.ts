@@ -853,4 +853,59 @@ describe("initializeExecutionContext", () => {
       expect(step.StepDetails?.Result).toBe('"done"');
     });
   });
+
+  describe("transport selection", () => {
+    const stubClient = (): DurableExecutionClient => ({
+      getExecutionState: jest.fn().mockResolvedValue({ Operations: [] }),
+      checkpoint: jest.fn().mockResolvedValue({ NewExecutionState: undefined }),
+    });
+
+    it("uses a caller-supplied durableExecutionClient instead of the Lambda transport", async () => {
+      const injected = stubClient();
+
+      const { executionContext } = await initializeExecutionContext(
+        mockEvent,
+        mockLambdaContext,
+        { durableExecutionClient: injected },
+      );
+
+      expect(executionContext.durableExecutionClient).toBe(injected);
+      expect(DurableExecutionApiClient).not.toHaveBeenCalled();
+    });
+
+    it("falls back to the Lambda transport when no transport is supplied", async () => {
+      await initializeExecutionContext(mockEvent, mockLambdaContext);
+
+      expect(DurableExecutionApiClient).toHaveBeenCalled();
+    });
+
+    it("passes the deprecated client through to the Lambda transport", async () => {
+      const lambdaClient = {} as never;
+
+      await initializeExecutionContext(mockEvent, mockLambdaContext, {
+        client: lambdaClient,
+      });
+
+      expect(DurableExecutionApiClient).toHaveBeenCalledWith(lambdaClient);
+    });
+
+    it("lets an event-injected transport win over configuration", async () => {
+      // A harness wrapping an already-configured handler can only inject through the
+      // event, so that channel has to take precedence over the handler's own config.
+      const fromEvent = stubClient();
+      const fromConfig = stubClient();
+      const wrapped = new DurableExecutionInvocationInputWithClient(
+        mockEvent,
+        fromEvent,
+      );
+
+      const { executionContext } = await initializeExecutionContext(
+        wrapped,
+        mockLambdaContext,
+        { durableExecutionClient: fromConfig },
+      );
+
+      expect(executionContext.durableExecutionClient).toBe(fromEvent);
+    });
+  });
 });
