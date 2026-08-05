@@ -55,7 +55,6 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   // TracerProvider (internally managed or user-provided)
   private readonly tracerProvider: TracerProvider;
   private readonly tracer: Tracer;
-  private readonly ownsProvider: boolean;
 
   // Per-invocation state
   private workflowSpan: Span | undefined;
@@ -83,10 +82,8 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     this.enrichLogger = config?.enrichLogger ?? true;
 
     // Create or accept TracerProvider via the provider factory
-    const { tracerProvider, ownsProvider, source } =
-      createTracerProvider(config);
+    const { tracerProvider, source } = createTracerProvider(config);
     this.tracerProvider = tracerProvider;
-    this.ownsProvider = ownsProvider;
 
     // Register HTTP and AWS SDK instrumentations (skipped when custom provider is supplied)
     registerStandaloneInstrumentations(this.tracerProvider, source, config);

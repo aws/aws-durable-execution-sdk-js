@@ -43,18 +43,18 @@ describe("createTracerProvider", () => {
       const result = createTracerProvider({ useDefaultTracerProvider: true });
 
       expect(result.tracerProvider).toBe(trace.getTracerProvider());
-      expect(result.ownsProvider).toBe(false);
+      expect(result.source).toBe(ProviderSource.Global);
 
       globalProvider.shutdown();
     });
 
-    it("sets ownsProvider=false", () => {
+    it("sets source=Global", () => {
       const globalProvider = new NodeTracerProvider();
       globalProvider.register();
 
       const result = createTracerProvider({ useDefaultTracerProvider: true });
 
-      expect(result.ownsProvider).toBe(false);
+      expect(result.source).toBe(ProviderSource.Global);
 
       globalProvider.shutdown();
     });
@@ -74,7 +74,7 @@ describe("createTracerProvider", () => {
 
       expect(result.tracerProvider).toBe(explicitProvider);
       expect(result.tracerProvider).not.toBe(trace.getTracerProvider());
-      expect(result.ownsProvider).toBe(false);
+      expect(result.source).toBe(ProviderSource.Explicit);
 
       globalProvider.shutdown();
       explicitProvider.shutdown();
@@ -95,12 +95,12 @@ describe("createTracerProvider", () => {
   });
 
   describe("useDefaultTracerProvider=false behaves same as absent", () => {
-    it("creates an internal provider with ownsProvider=true when useDefaultTracerProvider=false", () => {
+    it("creates an internal provider with source=AutoOtlp when useDefaultTracerProvider=false", () => {
       const result = createTracerProvider({
         useDefaultTracerProvider: false,
       });
 
-      expect(result.ownsProvider).toBe(true);
+      expect(result.source).toBe(ProviderSource.AutoOtlp);
 
       // Clean up
       if ("shutdown" in result.tracerProvider) {
@@ -108,10 +108,10 @@ describe("createTracerProvider", () => {
       }
     });
 
-    it("creates an internal provider with ownsProvider=true when useDefaultTracerProvider is absent", () => {
+    it("creates an internal provider with source=AutoOtlp when useDefaultTracerProvider is absent", () => {
       const result = createTracerProvider({});
 
-      expect(result.ownsProvider).toBe(true);
+      expect(result.source).toBe(ProviderSource.AutoOtlp);
 
       // Clean up
       if ("shutdown" in result.tracerProvider) {
@@ -119,10 +119,10 @@ describe("createTracerProvider", () => {
       }
     });
 
-    it("creates an internal provider with ownsProvider=true when config is undefined", () => {
+    it("creates an internal provider with source=AutoOtlp when config is undefined", () => {
       const result = createTracerProvider(undefined);
 
-      expect(result.ownsProvider).toBe(true);
+      expect(result.source).toBe(ProviderSource.AutoOtlp);
 
       // Clean up
       if ("shutdown" in result.tracerProvider) {
@@ -130,14 +130,14 @@ describe("createTracerProvider", () => {
       }
     });
 
-    it("useDefaultTracerProvider=false produces same ownsProvider as absent", () => {
+    it("useDefaultTracerProvider=false produces same source as absent", () => {
       const resultFalse = createTracerProvider({
         useDefaultTracerProvider: false,
       });
       const resultAbsent = createTracerProvider({});
 
-      expect(resultFalse.ownsProvider).toBe(resultAbsent.ownsProvider);
-      expect(resultFalse.ownsProvider).toBe(true);
+      expect(resultFalse.source).toBe(resultAbsent.source);
+      expect(resultFalse.source).toBe(ProviderSource.AutoOtlp);
 
       // Clean up
       if ("shutdown" in resultFalse.tracerProvider) {

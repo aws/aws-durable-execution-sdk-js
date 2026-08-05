@@ -36,13 +36,12 @@ export enum ProviderSource {
 export interface ProviderResult {
   /** The configured TracerProvider. */
   tracerProvider: TracerProvider;
-  /** Which tier produced the provider. */
-  source: ProviderSource;
   /**
-   * Whether the factory created (and therefore owns) this provider.
-   * Derived: true only for `ProviderSource.AutoOtlp`.
+   * Which tier produced the provider. This is the single source of truth for
+   * provider ownership: the factory created (and therefore owns) the provider
+   * only when `source === ProviderSource.AutoOtlp`.
    */
-  ownsProvider: boolean;
+  source: ProviderSource;
 }
 
 /**
@@ -98,8 +97,8 @@ function buildLambdaResource() {
  * ExecutionOtelPlugin.
  *
  * When a custom `tracerProvider` is supplied in the config, it is returned
- * as-is with `ownsProvider: false` — no exporter, propagator, or sampler
- * registration is performed.
+ * as-is with `source: ProviderSource.Explicit` — no exporter, propagator, or
+ * sampler registration is performed.
  *
  * Otherwise, the factory creates a `NodeTracerProvider` with:
  * - `OTLPTraceExporter` targeting the configured endpoint
@@ -116,7 +115,6 @@ export function createTracerProvider(
     return {
       tracerProvider: config.tracerProvider,
       source: ProviderSource.Explicit,
-      ownsProvider: false,
     };
   }
 
@@ -125,7 +123,6 @@ export function createTracerProvider(
     return {
       tracerProvider: trace.getTracerProvider(),
       source: ProviderSource.Global,
-      ownsProvider: false,
     };
   }
 
@@ -174,6 +171,5 @@ export function createTracerProvider(
   return {
     tracerProvider,
     source: ProviderSource.AutoOtlp,
-    ownsProvider: true,
   };
 }
