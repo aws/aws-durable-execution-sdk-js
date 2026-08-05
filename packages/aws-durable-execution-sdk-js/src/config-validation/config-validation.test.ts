@@ -1,4 +1,7 @@
-import { validateDurableExecutionConfig } from "./config-validation";
+import {
+  validateDurableExecutionConfig,
+  validateTransportConfig,
+} from "./config-validation";
 
 describe("validateDurableExecutionConfig", () => {
   it("returns undefined for undefined config", () => {
@@ -35,33 +38,45 @@ describe("validateDurableExecutionConfig", () => {
     ).toMatch(/childOperationsDepth/);
   });
 
-  describe("client and durableExecutionClient", () => {
-    const stubClient = () =>
-      ({ getExecutionState: jest.fn(), checkpoint: jest.fn() }) as never;
-
-    it("rejects supplying both, since they configure the transport incompatibly", () => {
-      const error = validateDurableExecutionConfig({
+  // The transport rule lives in validateTransportConfig, which runs earlier -- see
+  // the tests below. This function must not also enforce it, or one of the two calls
+  // would be unreachable.
+  it("leaves the transport rule to the earlier phase", () => {
+    expect(
+      validateDurableExecutionConfig({
         client: {} as never,
-        durableExecutionClient: stubClient(),
-      });
+        durableExecutionClient: {
+          getExecutionState: jest.fn(),
+          checkpoint: jest.fn(),
+        } as never,
+      }),
+    ).toBeUndefined();
+  });
+});
 
-      expect(error).toContain("Both `client` and `durableExecutionClient`");
-      expect(error).toContain("DurableExecutionApiClient");
+describe("validateTransportConfig", () => {
+  const stubClient = () =>
+    ({ getExecutionState: jest.fn(), checkpoint: jest.fn() }) as never;
+
+  it("rejects supplying both, since they configure the transport incompatibly", () => {
+    const error = validateTransportConfig({
+      client: {} as never,
+      durableExecutionClient: stubClient(),
     });
 
-    it("accepts either one alone", () => {
-      expect(
-        validateDurableExecutionConfig({ client: {} as never }),
-      ).toBeUndefined();
-      expect(
-        validateDurableExecutionConfig({
-          durableExecutionClient: stubClient(),
-        }),
-      ).toBeUndefined();
-    });
+    expect(error).toContain("Both `client` and `durableExecutionClient`");
+    expect(error).toContain("DurableExecutionApiClient");
+  });
 
-    it("accepts neither", () => {
-      expect(validateDurableExecutionConfig({})).toBeUndefined();
-    });
+  it("accepts either one alone", () => {
+    expect(validateTransportConfig({ client: {} as never })).toBeUndefined();
+    expect(
+      validateTransportConfig({ durableExecutionClient: stubClient() }),
+    ).toBeUndefined();
+  });
+
+  it("accepts neither", () => {
+    expect(validateTransportConfig({})).toBeUndefined();
+    expect(validateTransportConfig(undefined)).toBeUndefined();
   });
 });
