@@ -30,11 +30,12 @@ To send us a pull request, please:
 
 1. Fork the repository.
 2. Modify the source; please focus on the specific change you are contributing. If you also reformat all the code, it will be hard for us to focus on your change.
-3. Write tests for your changes and ensure all tests pass. See [TESTING.md](TESTING.md) for details on running tests, understanding the testing architecture, and the naming conventions (unit, composed, integration).
-4. If your contribution includes new SDK features, API changes, or testing library enhancements, please also add or update examples in the [examples package](./packages/aws-durable-execution-sdk-js-examples) to demonstrate and validate these changes. Examples serve as both documentation and integration tests. See [ADDING_EXAMPLES.md](./packages/aws-durable-execution-sdk-js-examples/ADDING_EXAMPLES.md) for implementation details.
-5. Commit to your fork using clear conventional commit messages.
-6. Send us a pull request with the title matching conventional commits, answering any default questions in the pull request interface. If the PR type has a scope, it must match `sdk`, `sdk-testing`, `examples`, `eslint-plugin`, or `ci`. For example: `feat(sdk): add map handler functionality` or `fix(sdk-testing): fix race condition in checkpoint server`.
-7. Pay attention to any automated CI failures reported in the pull request, and stay involved in the conversation.
+3. Write tests for your changes and ensure all tests pass. At minimum, include related **unit tests**. Add **composed tests** when the change spans multiple internal components, and **integration tests** when it affects public API surfaces or end-to-end workflows. For isolated bug fixes where a unit test alone sufficiently covers the fix, composed or integration tests are not required. See [TESTING.md](TESTING.md) for details on running tests, understanding the testing architecture, and the naming conventions (unit, composed, integration).
+4. Do **not** add conformance tests. If you believe your change warrants a conformance test, please mention it in your PR description or open an issue in the [Conformance Tests repository](https://github.com/aws/aws-durable-execution-conformance-tests/issues/new?template=new_requirement.yml).
+5. If your contribution includes new SDK features, API changes, or testing library enhancements, please also add or update examples in the [examples package](./packages/aws-durable-execution-sdk-js-examples) to demonstrate and validate these changes. Examples serve as both documentation and integration tests. See [ADDING_EXAMPLES.md](./packages/aws-durable-execution-sdk-js-examples/ADDING_EXAMPLES.md) for implementation details.
+6. Commit to your fork using clear conventional commit messages.
+7. Send us a pull request with the title matching conventional commits, answering any default questions in the pull request interface. If the PR type has a scope, it must match `sdk`, `sdk-testing`, `examples`, `eslint-plugin`, or `ci`. For example: `feat(sdk): add map handler functionality` or `fix(sdk-testing): fix race condition in checkpoint server`.
+8. Pay attention to any automated CI failures reported in the pull request, and stay involved in the conversation.
 
 GitHub provides additional document on [forking a repository](https://help.github.com/articles/fork-a-repo/) and
 [creating a pull request](https://help.github.com/articles/creating-a-pull-request/).

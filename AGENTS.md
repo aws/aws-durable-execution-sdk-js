@@ -153,6 +153,12 @@ context.logger.info("Starting")  # Deduplicated automatically
 context.step(lambda _: send_email(...), name="email")
 ```
 
+## Testing Requirements
+
+All changes MUST include related tests. At minimum, include **unit tests**. Add **composed tests** when the change spans multiple internal components, and **integration tests** when it affects public API surfaces or end-to-end workflows. For isolated bug fixes where a unit test alone sufficiently covers the fix, composed or integration tests are not required.
+
+Do NOT add conformance tests — conformance tests live in a separate repository ([aws-durable-execution-conformance-tests](https://github.com/aws/aws-durable-execution-conformance-tests)) and are managed by the team. If a change warrants a new conformance test, note it in the PR description or [open an issue](https://github.com/aws/aws-durable-execution-conformance-tests/issues/new?template=new_requirement.yml) in that repository.
+
 ## IAM Permissions
 
 Durable functions require the [`AWSLambdaBasicDurableExecutionRolePolicy`](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/AWSLambdaBasicDurableExecutionRolePolicy.html) managed policy, which includes:
