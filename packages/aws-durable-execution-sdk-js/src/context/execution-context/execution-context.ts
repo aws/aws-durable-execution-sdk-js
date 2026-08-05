@@ -1,12 +1,10 @@
-// Type-only: the client is only forwarded to `DurableExecutionApiClient`, which owns
-// the sole runtime dependency on `@aws-sdk/client-lambda`.
-import type { LambdaClient } from "@aws-sdk/client-lambda";
 import { Operation } from "../../types/wire";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import {
   DurableExecutionInvocationInput,
   ExecutionContext,
   DurableExecutionMode,
+  DurableExecutionConfig,
 } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { getStepData as getStepDataUtil } from "../../utils/step-id-utils/step-id-utils";
@@ -14,13 +12,36 @@ import { createDefaultLogger } from "../../utils/logger/default-logger";
 
 import { Context } from "aws-lambda";
 import { DurableExecutionApiClient } from "../../durable-execution-api-client/durable-execution-api-client";
+import { DurableExecutionClient } from "../../types/durable-execution";
 import { DurableExecutionInvocationInputWithClient } from "../../utils/durable-execution-invocation-input/durable-execution-invocation-input";
 import { normalizeOperations } from "../../utils/operation/normalize-operation";
+
+/**
+ * Chooses the transport for this invocation.
+ *
+ * A harness that wraps an already-configured handler cannot supply configuration, so it
+ * injects through the event instead; that channel wins, since the handler's own config is
+ * whatever the code under test declared. Otherwise a caller-supplied transport is used,
+ * and failing that the SDK's Lambda transport.
+ */
+const resolveDurableExecutionClient = (
+  event: DurableExecutionInvocationInput,
+  config?: DurableExecutionConfig,
+): DurableExecutionClient => {
+  if (DurableExecutionInvocationInputWithClient.isInstance(event)) {
+    return event.durableExecutionClient;
+  }
+
+  return (
+    config?.durableExecutionClient ??
+    new DurableExecutionApiClient(config?.client)
+  );
+};
 
 export const initializeExecutionContext = async (
   event: DurableExecutionInvocationInput,
   context: Context,
-  lambdaClient?: LambdaClient,
+  config?: DurableExecutionConfig,
 ): Promise<{
   executionContext: ExecutionContext;
   durableExecutionMode: DurableExecutionMode;
@@ -32,11 +53,7 @@ export const initializeExecutionContext = async (
   const checkpointToken = event.CheckpointToken;
   const durableExecutionArn = event.DurableExecutionArn;
 
-  const durableExecutionClient =
-    // Allow passing arbitrary durable clients if the input is a custom class
-    DurableExecutionInvocationInputWithClient.isInstance(event)
-      ? event.durableExecutionClient
-      : new DurableExecutionApiClient(lambdaClient);
+  const durableExecutionClient = resolveDurableExecutionClient(event, config);
 
   // Create logger for initialization errors using existing logger factory
   const initLogger = createDefaultLogger({

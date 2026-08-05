@@ -381,8 +381,32 @@ export interface DurableExecutionClient {
 }
 
 // @public
+export class DurableExecutionClientError extends Error {
+    constructor(message: string, options?: DurableExecutionClientErrorOptions);
+    readonly isDurableExecutionClientError = true;
+    readonly scope: DurableExecutionClientErrorScope;
+}
+
+// @public
+export interface DurableExecutionClientErrorOptions {
+    cause?: unknown;
+    scope?: DurableExecutionClientErrorScope;
+}
+
+// @public
+export const DurableExecutionClientErrorScope: {
+    readonly INVOCATION: "INVOCATION";
+    readonly EXECUTION: "EXECUTION";
+};
+
+// @public
+export type DurableExecutionClientErrorScope = (typeof DurableExecutionClientErrorScope)[keyof typeof DurableExecutionClientErrorScope];
+
+// @public
 export interface DurableExecutionConfig {
+    // @deprecated
     client?: LambdaClient;
+    durableExecutionClient?: DurableExecutionClient;
     plugins?: DurableInstrumentationPlugin[];
     pluginsConfig?: {
         childOperationsDepth?: number;
@@ -676,6 +700,9 @@ export class InvokeError extends DurableOperationError {
     // (undocumented)
     readonly errorType = "InvokeError";
 }
+
+// @public
+export function isDurableExecutionClientError(error: unknown): error is DurableExecutionClientError;
 
 // @public
 export enum JitterStrategy {

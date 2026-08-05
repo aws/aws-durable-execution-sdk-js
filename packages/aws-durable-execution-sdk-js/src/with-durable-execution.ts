@@ -11,6 +11,10 @@ import { isNonRetryableCustomerError } from "./errors/non-retryable-errors";
 import { TerminationReason } from "./termination-manager/types";
 import { resolveRootPreserveChildDepth } from "./utils/child-operations-depth/child-operations-depth";
 import { validateDurableExecutionConfig } from "./config-validation/config-validation";
+import {
+  DurableExecutionClientErrorScope,
+  isDurableExecutionClientError,
+} from "./errors/durable-execution-client-error/durable-execution-client-error";
 
 import {
   DurableLogger,
@@ -544,7 +548,7 @@ export const withDurableExecution = <
     validateDurableExecutionEvent(event);
     try {
       const { executionContext, durableExecutionMode, checkpointToken } =
-        await initializeExecutionContext(event, context, config?.client);
+        await initializeExecutionContext(event, context, config);
       const plugin = createPluginRunner(config?.plugins ?? []);
       return await runHandler(
         event,
@@ -557,6 +561,20 @@ export const withDurableExecution = <
         config,
       );
     } catch (error) {
+      // A transport that states the failure is fatal for the execution is believed. This
+      // path covers client calls made before the durable machinery is running -- reading
+      // execution state during initialization -- where there is no checkpoint classifier
+      // to consult.
+      if (
+        isDurableExecutionClientError(error) &&
+        error.scope === DurableExecutionClientErrorScope.EXECUTION
+      ) {
+        return {
+          Status: InvocationStatus.FAILED,
+          Error: createErrorObjectFromError(error),
+        };
+      }
+
       // Non-retryable customer errors (e.g., KMS key misconfiguration) should
       // fail the execution immediately rather than retrying the invocation.
       if (isNonRetryableCustomerError(error)) {

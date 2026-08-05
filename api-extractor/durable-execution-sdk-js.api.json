@@ -7548,6 +7548,292 @@
           "extendsTokenRanges": []
         },
         {
+          "kind": "Class",
+          "canonicalReference": "@aws/durable-execution-sdk-js!DurableExecutionClientError:class",
+          "docComment": "/**\n * Error a {@link DurableExecutionClient} throws to tell the SDK how to treat a failure.\n *\n * The SDK has to decide, for every failed client call, whether to end the invocation and let the execution resume later or to fail the execution outright. For the Lambda transport it infers this from the AWS SDK's error shape — HTTP status codes and exception names. A transport that does not produce AWS-shaped errors has no way to express the distinction, and would be treated as transient in every case, so a permanent failure would be retried until the execution timed out.\n *\n * Throwing this error states the classification directly, so any transport can express it without imitating another one's error shape.\n *\n * @example\n * ```typescript\n * class HttpDurableExecutionClient implements DurableExecutionClient {\n *   async checkpoint(params: CheckpointDurableExecutionRequest) {\n *     const response = await fetch(this.endpoint, { ... });\n *\n *     if (!response.ok) {\n *       throw new DurableExecutionClientError(\n *         `Checkpoint rejected: ${response.status}`,\n *         {\n *           // 4xx will not succeed on retry; 5xx might.\n *           scope:\n *             response.status < 500\n *               ? DurableExecutionClientErrorScope.EXECUTION\n *               : DurableExecutionClientErrorScope.INVOCATION,\n *         },\n *       );\n *     }\n *\n *     return response.json();\n *   }\n * }\n * ```\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export declare class DurableExecutionClientError extends "
+            },
+            {
+              "kind": "Reference",
+              "text": "Error",
+              "canonicalReference": "!Error:interface"
+            },
+            {
+              "kind": "Content",
+              "text": " "
+            }
+          ],
+          "fileUrlPath": "src/errors/durable-execution-client-error/durable-execution-client-error.ts",
+          "releaseTag": "Public",
+          "isAbstract": false,
+          "name": "DurableExecutionClientError",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "Constructor",
+              "canonicalReference": "@aws/durable-execution-sdk-js!DurableExecutionClientError:constructor(1)",
+              "docComment": "/**\n * Constructs a new instance of the `DurableExecutionClientError` class\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "constructor(message: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ", options?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "DurableExecutionClientErrorOptions",
+                  "canonicalReference": "@aws/durable-execution-sdk-js!DurableExecutionClientErrorOptions:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ");"
+                }
+              ],
+              "releaseTag": "Public",
+              "isProtected": false,
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "message",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": false
+                },
+                {
+                  "parameterName": "options",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 4
+                  },
+                  "isOptional": true
+                }
+              ]
+            },
+            {
+              "kind": "Property",
+              "canonicalReference": "@aws/durable-execution-sdk-js!DurableExecutionClientError#isDurableExecutionClientError:member",
+              "docComment": "/**\n * Structural marker used by {@link isDurableExecutionClientError}.\n *\n * The SDK identifies this error by property rather than by `instanceof`, so that it is still recognized when the transport and the SDK are bundled separately and therefore hold different copies of this class.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly isDurableExecutionClientError = "
+                },
+                {
+                  "kind": "Content",
+                  "text": "true"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "isDurableExecutionClientError",
+              "propertyTypeTokenRange": {
+                "startIndex": 0,
+                "endIndex": 0
+              },
+              "initializerTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "isStatic": false,
+              "isProtected": false,
+              "isAbstract": false
+            },
+            {
+              "kind": "Property",
+              "canonicalReference": "@aws/durable-execution-sdk-js!DurableExecutionClientError#scope:member",
+              "docComment": "/**\n * How far the failure reaches.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly scope: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "DurableExecutionClientErrorScope",
+                  "canonicalReference": "@aws/durable-execution-sdk-js!DurableExecutionClientErrorScope:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "scope",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "isStatic": false,
+              "isProtected": false,
+              "isAbstract": false
+            }
+          ],
+          "extendsTokenRange": {
+            "startIndex": 1,
+            "endIndex": 2
+          },
+          "implementsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@aws/durable-execution-sdk-js!DurableExecutionClientErrorOptions:interface",
+          "docComment": "/**\n * Options for {@link DurableExecutionClientError}.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface DurableExecutionClientErrorOptions "
+            }
+          ],
+          "fileUrlPath": "src/errors/durable-execution-client-error/durable-execution-client-error.ts",
+          "releaseTag": "Public",
+          "name": "DurableExecutionClientErrorOptions",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!DurableExecutionClientErrorOptions#cause:member",
+              "docComment": "/**\n * The underlying error, preserved for diagnostics.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "cause?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "unknown"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "cause",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!DurableExecutionClientErrorOptions#scope:member",
+              "docComment": "/**\n * How far the failure reaches. Defaults to {@link DurableExecutionClientErrorScope.INVOCATION}, because assuming a failure is transient is the safe default: the execution gets another attempt rather than being failed on the strength of an error the SDK does not understand.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "scope?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "DurableExecutionClientErrorScope",
+                  "canonicalReference": "@aws/durable-execution-sdk-js!DurableExecutionClientErrorScope:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "scope",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "@aws/durable-execution-sdk-js!DurableExecutionClientErrorScope:type",
+          "docComment": "/**\n * How far a {@link DurableExecutionClient} failure reaches.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type DurableExecutionClientErrorScope = "
+            },
+            {
+              "kind": "Content",
+              "text": "(typeof "
+            },
+            {
+              "kind": "Reference",
+              "text": "DurableExecutionClientErrorScope",
+              "canonicalReference": "@aws/durable-execution-sdk-js!DurableExecutionClientErrorScope:var"
+            },
+            {
+              "kind": "Content",
+              "text": ")[keyof typeof "
+            },
+            {
+              "kind": "Reference",
+              "text": "DurableExecutionClientErrorScope",
+              "canonicalReference": "@aws/durable-execution-sdk-js!DurableExecutionClientErrorScope:var"
+            },
+            {
+              "kind": "Content",
+              "text": "]"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/errors/durable-execution-client-error/durable-execution-client-error.ts",
+          "releaseTag": "Public",
+          "name": "DurableExecutionClientErrorScope",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 6
+          }
+        },
+        {
+          "kind": "Variable",
+          "canonicalReference": "@aws/durable-execution-sdk-js!DurableExecutionClientErrorScope:var",
+          "docComment": "/**\n * How far a {@link DurableExecutionClient} failure reaches.\n *\n * The SDK already distinguishes these two outcomes internally; this is the vocabulary a transport uses to select between them.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "DurableExecutionClientErrorScope: "
+            },
+            {
+              "kind": "Content",
+              "text": "{\n    readonly INVOCATION: \"INVOCATION\";\n    readonly EXECUTION: \"EXECUTION\";\n}"
+            }
+          ],
+          "fileUrlPath": "src/errors/durable-execution-client-error/durable-execution-client-error.ts",
+          "isReadonly": true,
+          "releaseTag": "Public",
+          "name": "DurableExecutionClientErrorScope",
+          "variableTypeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 2
+          }
+        },
+        {
           "kind": "Interface",
           "canonicalReference": "@aws/durable-execution-sdk-js!DurableExecutionConfig:interface",
           "docComment": "/**\n * Configuration options for durable execution setup.\n *\n * This interface allows customization of the durable execution runtime behavior, primarily for dependency injection and testing scenarios. In most production use cases, the default configuration is sufficient.\n *\n * @public\n */\n",
@@ -7565,7 +7851,7 @@
             {
               "kind": "PropertySignature",
               "canonicalReference": "@aws/durable-execution-sdk-js!DurableExecutionConfig#client:member",
-              "docComment": "/**\n * Optional custom AWS Lambda client instance for durable execution operations.\n *\n * When provided, this client will be used for all AWS Lambda service calls including checkpoint operations and execution state management. This is useful for: - Custom AWS configurations (regions, credentials, endpoints) - Testing with mocked Lambda clients - Advanced networking configurations (VPC endpoints, proxies) - Custom retry and timeout configurations\n *\n * If not provided, a default Lambda client will be created automatically using the standard AWS SDK configuration chain (environment variables, IAM roles, etc.).\n *\n * @example\n * ```typescript\n * import { LambdaClient } from '@aws-sdk/client-lambda';\n *\n * const customClient = new LambdaClient({\n *   region: 'us-west-2',\n *   maxAttempts: 5,\n *   retryMode: 'adaptive'\n * });\n *\n * export const handler = withDurableExecution(myHandler, {\n *   client: customClient\n * });\n * ```\n *\n */\n",
+              "docComment": "/**\n * Optional custom AWS Lambda client instance for durable execution operations.\n *\n * @deprecated\n *\n * Use {@link DurableExecutionConfig.durableExecutionClient} instead, which accepts any transport rather than only a Lambda client. To keep the Lambda transport with your own client, hand it to {@link DurableExecutionApiClient}:\n * ```typescript\n * // Before\n * withDurableExecution(handler, { client: myLambdaClient });\n *\n * // After\n * withDurableExecution(handler, {\n *   durableExecutionClient: new DurableExecutionApiClient(myLambdaClient),\n * });\n * ```\n *\n * This property will be removed in the next major version. It is the last place the AWS SDK appears in the SDK's public type surface, and durable functions are being extended to compute types other than Lambda, where a `LambdaClient` has no meaning.\n *\n * When provided, this client will be used for all AWS Lambda service calls including checkpoint operations and execution state management. This is useful for: - Custom AWS configurations (regions, credentials, endpoints) - Testing with mocked Lambda clients - Advanced networking configurations (VPC endpoints, proxies) - Custom retry and timeout configurations\n *\n * If not provided, a default Lambda client will be created automatically using the standard AWS SDK configuration chain (environment variables, IAM roles, etc.).\n */\n",
               "excerptTokens": [
                 {
                   "kind": "Content",
@@ -7585,6 +7871,34 @@
               "isOptional": true,
               "releaseTag": "Public",
               "name": "client",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!DurableExecutionConfig#durableExecutionClient:member",
+              "docComment": "/**\n * Optional transport used to read execution state and write checkpoints.\n *\n * Supplying one replaces the SDK's own transport entirely. {@link DurableExecutionClient} is compute-neutral — it names no AWS types in its parameters or results — so an implementation can talk to any backend that provides the same two operations.\n *\n * Leave it unset for the default behaviour: the SDK uses {@link DurableExecutionApiClient}, which calls the Lambda durable execution APIs and creates its own client. To keep that transport but configure the underlying client yourself, construct it explicitly rather than using the deprecated {@link DurableExecutionConfig.client}:\n * ```typescript\n * withDurableExecution(handler, {\n *   durableExecutionClient: new DurableExecutionApiClient(\n *     new LambdaClient({ region: \"us-west-2\", maxAttempts: 5 }),\n *   ),\n * });\n * ```\n *\n * An implementation should throw {@link DurableExecutionClientError} to tell the SDK whether a failure ends only the current invocation or the whole execution. Without that, every failure is treated as transient and a permanent one is retried until the execution times out.\n *\n * Supplying both this and {@link DurableExecutionConfig.client} is a configuration error and fails the execution before the handler runs, because the two contradict each other.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "durableExecutionClient?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "DurableExecutionClient",
+                  "canonicalReference": "@aws/durable-execution-sdk-js!DurableExecutionClient:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "durableExecutionClient",
               "propertyTypeTokenRange": {
                 "startIndex": 1,
                 "endIndex": 2
@@ -11193,6 +11507,61 @@
             "endIndex": 2
           },
           "implementsTokenRanges": []
+        },
+        {
+          "kind": "Function",
+          "canonicalReference": "@aws/durable-execution-sdk-js!isDurableExecutionClientError:function(1)",
+          "docComment": "/**\n * Returns true when an error carries a {@link DurableExecutionClientError} classification.\n *\n * Matches structurally rather than by `instanceof`, so a transport bundled separately from the SDK is still recognized. An error claiming the marker but carrying an unrecognized scope is not matched, so a malformed value falls through to the SDK's normal handling rather than being acted on.\n *\n * @param error - The thrown value to inspect.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export declare function isDurableExecutionClientError(error: "
+            },
+            {
+              "kind": "Content",
+              "text": "unknown"
+            },
+            {
+              "kind": "Content",
+              "text": "): "
+            },
+            {
+              "kind": "Reference",
+              "text": "error",
+              "canonicalReference": "@aws/durable-execution-sdk-js!~error"
+            },
+            {
+              "kind": "Content",
+              "text": " is "
+            },
+            {
+              "kind": "Reference",
+              "text": "DurableExecutionClientError",
+              "canonicalReference": "@aws/durable-execution-sdk-js!DurableExecutionClientError:class"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/errors/durable-execution-client-error/durable-execution-client-error.ts",
+          "returnTypeTokenRange": {
+            "startIndex": 3,
+            "endIndex": 6
+          },
+          "releaseTag": "Public",
+          "overloadIndex": 1,
+          "parameters": [
+            {
+              "parameterName": "error",
+              "parameterTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "isOptional": false
+            }
+          ],
+          "name": "isDurableExecutionClientError"
         },
         {
           "kind": "Enum",

@@ -16,6 +16,10 @@ import {
   CheckpointUnrecoverableExecutionError,
 } from "../../errors/checkpoint-errors/checkpoint-errors";
 import { isNonRetryableCustomerError } from "../../errors/non-retryable-errors";
+import {
+  DurableExecutionClientErrorScope,
+  isDurableExecutionClientError,
+} from "../../errors/durable-execution-client-error/durable-execution-client-error";
 import { DurableLogger } from "../../types/durable-logger";
 import { Checkpoint } from "./checkpoint-helper";
 import {
@@ -228,6 +232,35 @@ export class CheckpointManager implements Checkpoint {
     const originalError =
       error instanceof Error ? error : new Error(String(error));
 
+    // A transport that states its own classification is believed, so it does not have to
+    // imitate the AWS SDK's error shape to be understood. Checked before the shape
+    // inspection below, which only applies to transports that produce AWS-shaped errors.
+    if (isDurableExecutionClientError(error)) {
+      log("🔍", "Classifying checkpoint error from client-stated scope:", {
+        scope: error.scope,
+        errorName: error.name,
+        errorMessage: error.message,
+      });
+
+      return error.scope === DurableExecutionClientErrorScope.EXECUTION
+        ? new CheckpointUnrecoverableExecutionError(
+            `Checkpoint failed: ${error.message}`,
+            originalError,
+          )
+        : new CheckpointUnrecoverableInvocationError(
+            `Checkpoint failed: ${error.message}`,
+            originalError,
+          );
+    }
+
+    // Everything below reads the AWS SDK's error shape -- HTTP status codes and Lambda
+    // exception names -- and so only classifies failures from the Lambda transport. It
+    // belongs in DurableExecutionApiClient, which would translate its own errors into
+    // DurableExecutionClientError and leave this method with a single, neutral rule.
+    // Moving it is deferred because it changes what propagates out of the Lambda client
+    // (today the original AWS error is rethrown unchanged and preserved as
+    // `originalError`), and misclassifying a checkpoint failure either fails an execution
+    // that could have resumed or retries one that never will.
     const awsError = error as {
       name?: string;
       $metadata?: { httpStatusCode?: number };
