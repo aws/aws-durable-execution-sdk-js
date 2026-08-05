@@ -1,13 +1,16 @@
 import {
-  OperationType,
-  Operation,
-  OperationStatus,
-  ErrorObject,
   Event,
   SendDurableExecutionCallbackFailureResponse,
   SendDurableExecutionCallbackHeartbeatResponse,
   SendDurableExecutionCallbackSuccessResponse,
 } from "@aws-sdk/client-lambda";
+import {
+  OperationType,
+  Operation,
+  OperationStatus,
+  ErrorObject,
+  OperationSubType,
+} from "@aws/durable-execution-sdk-js";
 import { WaitingOperationStatus } from "../../types/durable-operation";
 import {
   DurableOperation,
@@ -22,7 +25,6 @@ import { doesStatusMatch } from "../../local/operations/status-matcher";
 import { tryJsonParse } from "../utils";
 import { IndexedOperations } from "../indexed-operations";
 import { transformErrorObjectToErrorResult } from "../../../utils";
-import { OperationSubType } from "@aws/durable-execution-sdk-js";
 import { DurableApiClient } from "../create-durable-api-client";
 
 /**
@@ -41,9 +43,9 @@ export interface OperationEvents {
  * the current state of the execution.
  * @internal
  */
-export class OperationWithData<OperationResultValue = unknown>
-  implements DurableOperation<OperationResultValue>
-{
+export class OperationWithData<
+  OperationResultValue = unknown,
+> implements DurableOperation<OperationResultValue> {
   /**
    * Creates a new OperationWithData instance.
    * @param waitManager - Manager for waiting on operation status changes

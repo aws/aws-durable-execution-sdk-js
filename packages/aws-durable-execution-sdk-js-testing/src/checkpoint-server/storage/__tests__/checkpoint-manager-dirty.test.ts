@@ -8,7 +8,7 @@ import {
   OperationType,
   OperationAction,
   OperationStatus,
-} from "@aws-sdk/client-lambda";
+} from "@aws/durable-execution-sdk-js";
 import { CompleteCallbackStatus } from "../callback-manager";
 
 // Mock crypto's randomUUID function

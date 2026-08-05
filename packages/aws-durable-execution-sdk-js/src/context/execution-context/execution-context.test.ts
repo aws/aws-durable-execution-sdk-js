@@ -1,8 +1,4 @@
-import {
-  Operation,
-  OperationStatus,
-  OperationType,
-} from "@aws-sdk/client-lambda";
+import { Operation, OperationStatus, OperationType } from "../../types/wire";
 import { DurableExecutionInvocationInput, OperationSubType } from "../../types";
 import { log } from "../../utils/logger/logger";
 import { initializeExecutionContext } from "./execution-context";
@@ -748,5 +744,113 @@ describe("initializeExecutionContext", () => {
     expect(result.executionContext.durableExecutionClient).toBe(
       mockCustomDurableClient,
     );
+  });
+
+  describe("timestamp normalization", () => {
+    // The invocation event is plain JSON parsed by the runtime, so its timestamps are
+    // ISO-8601 strings, whereas GetDurableExecutionState responses are deserialized by the
+    // AWS SDK into Dates. Both feed the same operation history, and everything downstream
+    // -- notably the instrumentation plugin surface, whose OperationInfo declares Date --
+    // relies on them being normalized here. Regression guard: the otel plugin passes these
+    // straight into OpenTelemetry's startTime, which rejects strings.
+    const stringTimestampEvent: DurableExecutionInvocationInput = {
+      CheckpointToken: mockCheckpointToken,
+      DurableExecutionArn: mockDurableExecutionArn,
+      InitialExecutionState: {
+        Operations: [
+          {
+            Id: "execution-op",
+            Type: OperationType.EXECUTION,
+            Status: OperationStatus.STARTED,
+            StartTimestamp: "2026-07-13T22:11:27.127Z",
+            ExecutionDetails: { InputPayload: mockCustomerHandlerEvent },
+          },
+          {
+            Id: "step1",
+            ParentId: "execution-op",
+            Name: "my-step",
+            Type: OperationType.STEP,
+            SubType: OperationSubType.STEP,
+            Status: OperationStatus.SUCCEEDED,
+            StartTimestamp: "2026-07-13T22:11:28.000Z",
+            EndTimestamp: "2026-07-13T22:11:29.500Z",
+            StepDetails: {
+              Attempt: 1,
+              NextAttemptTimestamp: "2026-07-13T22:11:35.000Z",
+              Result: '"done"',
+            },
+          },
+          {
+            Id: "wait1",
+            ParentId: "execution-op",
+            Type: OperationType.WAIT,
+            SubType: OperationSubType.WAIT,
+            Status: OperationStatus.STARTED,
+            StartTimestamp: "2026-07-13T22:11:30.000Z",
+            WaitDetails: {
+              ScheduledEndTimestamp: "2026-07-13T23:00:00.000Z",
+            },
+          },
+        ],
+        NextMarker: "",
+      },
+    };
+
+    it("converts ISO-8601 event timestamps into Dates", async () => {
+      const { executionContext } = await initializeExecutionContext(
+        stringTimestampEvent,
+        mockLambdaContext,
+      );
+
+      const step = executionContext._stepData["step1"];
+      expect(step.StartTimestamp).toEqual(new Date("2026-07-13T22:11:28.000Z"));
+      expect(step.EndTimestamp).toEqual(new Date("2026-07-13T22:11:29.500Z"));
+      expect(step.StepDetails?.NextAttemptTimestamp).toEqual(
+        new Date("2026-07-13T22:11:35.000Z"),
+      );
+
+      const wait = executionContext._stepData["wait1"];
+      expect(wait.WaitDetails?.ScheduledEndTimestamp).toEqual(
+        new Date("2026-07-13T23:00:00.000Z"),
+      );
+    });
+
+    it("leaves every timestamp downstream as a real Date instance", async () => {
+      const { executionContext } = await initializeExecutionContext(
+        stringTimestampEvent,
+        mockLambdaContext,
+      );
+
+      for (const operation of Object.values(executionContext._stepData)) {
+        expect(operation.StartTimestamp).toBeInstanceOf(Date);
+        if (operation.EndTimestamp !== undefined) {
+          expect(operation.EndTimestamp).toBeInstanceOf(Date);
+        }
+        if (operation.StepDetails?.NextAttemptTimestamp !== undefined) {
+          expect(operation.StepDetails.NextAttemptTimestamp).toBeInstanceOf(
+            Date,
+          );
+        }
+        if (operation.WaitDetails?.ScheduledEndTimestamp !== undefined) {
+          expect(operation.WaitDetails.ScheduledEndTimestamp).toBeInstanceOf(
+            Date,
+          );
+        }
+      }
+    });
+
+    it("preserves the non-timestamp members of each operation", async () => {
+      const { executionContext } = await initializeExecutionContext(
+        stringTimestampEvent,
+        mockLambdaContext,
+      );
+
+      const step = executionContext._stepData["step1"];
+      expect(step.Name).toBe("my-step");
+      expect(step.ParentId).toBe("execution-op");
+      expect(step.Status).toBe(OperationStatus.SUCCEEDED);
+      expect(step.StepDetails?.Attempt).toBe(1);
+      expect(step.StepDetails?.Result).toBe('"done"');
+    });
   });
 });

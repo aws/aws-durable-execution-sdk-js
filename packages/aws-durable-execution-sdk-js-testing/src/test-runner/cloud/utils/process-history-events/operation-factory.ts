@@ -1,4 +1,5 @@
-import { Operation, Event } from "@aws-sdk/client-lambda";
+import { Event } from "@aws-sdk/client-lambda";
+import { Operation } from "@aws/durable-execution-sdk-js";
 import { OperationEvents } from "../../../common/operations/operation-with-data";
 import { HistoryEventType } from "./history-event-types";
 import { HistoryEventTypes } from "./operation-types";

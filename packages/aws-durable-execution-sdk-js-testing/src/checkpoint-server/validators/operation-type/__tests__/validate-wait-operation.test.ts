@@ -1,11 +1,11 @@
+import { InvalidParameterValueException } from "@aws-sdk/client-lambda";
 import {
-  InvalidParameterValueException,
   Operation,
   OperationAction,
   OperationStatus,
   OperationType,
   OperationUpdate,
-} from "@aws-sdk/client-lambda";
+} from "@aws/durable-execution-sdk-js";
 import { validateWaitOperation } from "../validate-wait-operation";
 
 describe("validateWaitOperation", () => {

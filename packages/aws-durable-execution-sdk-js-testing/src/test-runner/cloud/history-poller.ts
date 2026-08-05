@@ -2,8 +2,8 @@ import {
   Event,
   GetDurableExecutionHistoryCommandOutput,
   GetDurableExecutionHistoryRequest,
-  OperationStatus,
 } from "@aws-sdk/client-lambda";
+import { OperationStatus } from "@aws/durable-execution-sdk-js";
 import { OperationEvents } from "../common/operations/operation-with-data";
 import { historyEventsToOperationEvents } from "./utils/process-history-events/process-history-events";
 import { TestExecutionState } from "../common/test-execution-state";

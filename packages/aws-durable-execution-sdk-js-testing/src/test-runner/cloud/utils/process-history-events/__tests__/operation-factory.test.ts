@@ -1,9 +1,9 @@
+import { Event } from "@aws-sdk/client-lambda";
 import {
-  Event,
   OperationType,
   OperationStatus,
   Operation,
-} from "@aws-sdk/client-lambda";
+} from "@aws/durable-execution-sdk-js";
 import { OperationEvents } from "../../../../common/operations/operation-with-data";
 import {
   createOperation,

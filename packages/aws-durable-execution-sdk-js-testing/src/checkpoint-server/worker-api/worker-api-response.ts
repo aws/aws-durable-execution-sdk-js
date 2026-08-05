@@ -1,11 +1,13 @@
 import {
-  CheckpointDurableExecutionResponse,
-  GetDurableExecutionStateResponse,
   SendDurableExecutionCallbackFailureResponse,
   SendDurableExecutionCallbackHeartbeatResponse,
   SendDurableExecutionCallbackSuccessResponse,
   Event,
 } from "@aws-sdk/client-lambda";
+import {
+  CheckpointDurableExecutionResponse,
+  GetDurableExecutionStateResponse,
+} from "@aws/durable-execution-sdk-js";
 import { InvocationResult } from "../storage/execution-manager";
 import { ApiType } from "./worker-api-types";
 import { CheckpointOperation } from "../storage/checkpoint-manager";

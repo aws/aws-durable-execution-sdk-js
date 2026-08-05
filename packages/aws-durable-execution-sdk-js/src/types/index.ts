@@ -1,4 +1,5 @@
 export * from "./core";
+export * from "./wire";
 export * from "./logger";
 export * from "./durable-logger";
 export * from "./step";

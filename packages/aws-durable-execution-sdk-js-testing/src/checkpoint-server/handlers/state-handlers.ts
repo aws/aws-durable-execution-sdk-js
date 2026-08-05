@@ -1,4 +1,4 @@
-import { GetDurableExecutionStateResponse } from "@aws-sdk/client-lambda";
+import { GetDurableExecutionStateResponse } from "@aws/durable-execution-sdk-js";
 import { createExecutionId } from "../utils/tagged-strings";
 import { ExecutionManager } from "../storage/execution-manager";
 

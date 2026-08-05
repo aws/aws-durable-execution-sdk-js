@@ -1,11 +1,11 @@
-import { Operation } from "@aws-sdk/client-lambda";
-import { Context } from "aws-lambda";
 import {
+  Operation,
   withDurableExecution,
   DurableExecutionInvocationOutput,
   DurableExecutionInvocationInputWithClient,
   DurableExecutionInvocationInput,
 } from "@aws/durable-execution-sdk-js";
+import { Context } from "aws-lambda";
 import { randomUUID } from "node:crypto";
 import { LocalRunnerClient } from "./local-runner-storage";
 

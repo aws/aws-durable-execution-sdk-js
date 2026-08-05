@@ -1,8 +1,8 @@
+import { InvalidParameterValueException } from "@aws-sdk/client-lambda";
 import {
-  InvalidParameterValueException,
   OperationAction,
   OperationUpdate,
-} from "@aws-sdk/client-lambda";
+} from "@aws/durable-execution-sdk-js";
 
 /**
  * Validates an EXECUTION operation update. Only allows SUCCEED and FAIL actions.

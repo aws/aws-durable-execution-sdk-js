@@ -1,6 +1,6 @@
 import { createStepHandler } from "./step-handler";
 import { ExecutionContext, OperationLifecycleState } from "../../types";
-import { OperationStatus } from "@aws-sdk/client-lambda";
+import { OperationStatus } from "../../types/wire";
 import { Context } from "aws-lambda";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";

@@ -43,7 +43,8 @@
     "prepublishOnly": "npm test && npm run lint && npm run build",
     "run-locally": "tsx ./src/run-durable.ts",
     "clean": "rm -rf node_modules dist dist-cjs dist-types coverage .tsbuildinfo .rollup.cache",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "api:extract": "npm run build:types && api-extractor run --local"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",

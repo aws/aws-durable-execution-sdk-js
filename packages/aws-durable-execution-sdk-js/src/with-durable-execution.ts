@@ -1,4 +1,4 @@
-import { OperationType } from "@aws-sdk/client-lambda";
+import { OperationType } from "./types/wire";
 import { Context } from "aws-lambda";
 import { EventEmitter } from "events";
 import { createDurableContext } from "./context/durable-context/durable-context";

@@ -7,7 +7,7 @@ import {
   DurableLogger,
   OperationLifecycleState,
 } from "../../types";
-import { OperationType, OperationStatus } from "@aws-sdk/client-lambda";
+import { OperationType, OperationStatus } from "../../types/wire";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";

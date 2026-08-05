@@ -1,4 +1,4 @@
-import { OperationType } from "@aws-sdk/client-lambda";
+import { OperationType } from "@aws/durable-execution-sdk-js";
 import { IndexedOperations } from "./indexed-operations";
 import {
   OperationEvents,

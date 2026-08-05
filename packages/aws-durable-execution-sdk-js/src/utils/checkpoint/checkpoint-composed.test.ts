@@ -1,7 +1,7 @@
 import { CheckpointManager } from "./checkpoint-manager";
 import { CheckpointFunction } from "../../testing/mock-checkpoint";
 import { DurableLogger, ExecutionContext, OperationSubType } from "../../types";
-import { OperationAction, OperationType } from "@aws-sdk/client-lambda";
+import { OperationAction, OperationType } from "../../types/wire";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { hashId } from "../step-id-utils/step-id-utils";
 import { createMockExecutionContext } from "../../testing/mock-context";

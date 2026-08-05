@@ -2,13 +2,13 @@ import {
   Operation,
   OperationStatus,
   OperationType,
-} from "@aws-sdk/client-lambda";
+  OperationSubType,
+} from "@aws/durable-execution-sdk-js";
 import { WaitingOperationStatus } from "../../types/durable-operation";
 import { DurableOperation } from "../../types/durable-operation";
 import { doesStatusMatch } from "./status-matcher";
 import { OperationEvents } from "../../common/operations/operation-with-data";
 import { IndexedOperations } from "../../common/indexed-operations";
-import { OperationSubType } from "@aws/durable-execution-sdk-js";
 
 interface WaitingOperation {
   operation: DurableOperation<unknown>;

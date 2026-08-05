@@ -5,10 +5,9 @@ import {
   InvokeCommand,
   GetDurableExecutionHistoryCommand,
   GetDurableExecutionHistoryCommandOutput,
-  OperationStatus,
-  OperationType,
   InvocationType,
 } from "@aws-sdk/client-lambda";
+import { OperationStatus, OperationType } from "@aws/durable-execution-sdk-js";
 import { CloudDurableTestRunner } from "../cloud-durable-test-runner";
 import { TestResult } from "../../types/durable-test-runner";
 import { WaitingOperationStatus } from "../../types/durable-operation";

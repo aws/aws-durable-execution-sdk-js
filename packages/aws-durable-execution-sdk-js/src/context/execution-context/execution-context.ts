@@ -1,4 +1,7 @@
-import { LambdaClient, Operation } from "@aws-sdk/client-lambda";
+// Type-only: the client is only forwarded to `DurableExecutionApiClient`, which owns
+// the sole runtime dependency on `@aws-sdk/client-lambda`.
+import type { LambdaClient } from "@aws-sdk/client-lambda";
+import { Operation } from "../../types/wire";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import {
   DurableExecutionInvocationInput,
@@ -12,6 +15,7 @@ import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { Context } from "aws-lambda";
 import { DurableExecutionApiClient } from "../../durable-execution-api-client/durable-execution-api-client";
 import { DurableExecutionInvocationInputWithClient } from "../../utils/durable-execution-invocation-input/durable-execution-invocation-input";
+import { normalizeOperations } from "../../utils/operation/normalize-operation";
 
 export const initializeExecutionContext = async (
   event: DurableExecutionInvocationInput,
@@ -41,7 +45,9 @@ export const initializeExecutionContext = async (
     tenantId: context.tenantId,
   });
 
-  const operationsArray = [...(event.InitialExecutionState.Operations || [])];
+  const operationsArray: Operation[] = normalizeOperations(
+    event.InitialExecutionState.Operations || [],
+  );
   let nextMarker = event.InitialExecutionState.NextMarker;
 
   while (nextMarker) {
@@ -54,7 +60,7 @@ export const initializeExecutionContext = async (
       },
       initLogger,
     );
-    operationsArray.push(...(response.Operations || []));
+    operationsArray.push(...normalizeOperations(response.Operations || []));
     nextMarker = response.NextMarker || "";
   }
 

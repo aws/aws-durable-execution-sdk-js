@@ -8,7 +8,7 @@ import {
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { EventEmitter } from "events";
 import { createDefaultLogger } from "../logger/default-logger";
-import { OperationType } from "@aws-sdk/client-lambda";
+import { OperationType } from "../../types/wire";
 import { log } from "../logger/logger";
 import { CHECKPOINT_TERMINATION_COOLDOWN_MS } from "../constants/constants";
 

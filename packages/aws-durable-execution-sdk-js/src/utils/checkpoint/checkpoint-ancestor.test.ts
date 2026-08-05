@@ -1,4 +1,4 @@
-import { OperationAction } from "@aws-sdk/client-lambda";
+import { OperationAction } from "../../types/wire";
 import { CheckpointManager } from "./checkpoint-manager";
 import { createTestCheckpointManager } from "../../testing/create-test-checkpoint-manager";
 import { createMockExecutionContext } from "../../testing/mock-context";

@@ -1,4 +1,4 @@
-import { OperationUpdate } from "@aws-sdk/client-lambda";
+import { OperationUpdate } from "../types/wire";
 import { Checkpoint } from "../utils/checkpoint/checkpoint-helper";
 
 export interface CheckpointFunction extends Checkpoint {

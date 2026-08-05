@@ -1,10 +1,13 @@
+// Type-only: `LambdaClient` appears in the public `DurableExecutionConfig.client`
+// signature so callers can inject a configured client. Importing it as a type keeps
+// `@aws-sdk/client-lambda` out of the runtime graph for this module.
+import type { LambdaClient } from "@aws-sdk/client-lambda";
 import {
   CheckpointDurableExecutionRequest,
   CheckpointDurableExecutionResponse,
   GetDurableExecutionStateRequest,
   GetDurableExecutionStateResponse,
-  LambdaClient,
-} from "@aws-sdk/client-lambda";
+} from "./wire";
 import { DurableContext } from "./durable-context";
 import { DurableLogger } from "./durable-logger";
 import { Context } from "aws-lambda";

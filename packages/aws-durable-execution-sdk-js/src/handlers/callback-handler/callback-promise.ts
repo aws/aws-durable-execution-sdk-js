@@ -3,7 +3,7 @@ import {
   DurablePromise,
   OperationLifecycleState,
 } from "../../types";
-import { OperationStatus } from "@aws-sdk/client-lambda";
+import { OperationStatus } from "../../types/wire";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 import {
   CallbackError,

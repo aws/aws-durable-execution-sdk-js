@@ -17,7 +17,7 @@ import {
   processCallbackHeartbeat,
   processCallbackSuccess,
 } from "../handlers/callbacks";
-import { CheckpointDurableExecutionResponse } from "@aws-sdk/client-lambda";
+import { CheckpointDurableExecutionResponse } from "@aws/durable-execution-sdk-js";
 
 export interface WorkerServerApiHandlerParams {
   checkpointDelaySettings?: number;

@@ -3,7 +3,7 @@ import {
   OperationStatus,
   OperationUpdate,
   OperationAction,
-} from "@aws-sdk/client-lambda";
+} from "@aws/durable-execution-sdk-js";
 import { createExecutionId } from "../../utils/tagged-strings";
 import { CheckpointManager } from "../checkpoint-manager";
 

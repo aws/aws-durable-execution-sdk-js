@@ -3,8 +3,8 @@ import {
   OperationType,
   ErrorObject,
   Operation,
-} from "@aws-sdk/client-lambda";
-import { OperationSubType } from "@aws/durable-execution-sdk-js";
+  OperationSubType,
+} from "@aws/durable-execution-sdk-js";
 
 import { WaitingOperationStatus } from "../../../types/durable-operation";
 import { OperationWaitManager } from "../../../local/operations/operation-wait-manager";

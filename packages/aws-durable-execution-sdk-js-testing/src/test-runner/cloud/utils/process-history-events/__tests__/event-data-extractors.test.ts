@@ -1,4 +1,5 @@
-import { Event, ErrorObject } from "@aws-sdk/client-lambda";
+import { Event } from "@aws-sdk/client-lambda";
+import { ErrorObject } from "@aws/durable-execution-sdk-js";
 import {
   getErrorFromEvent,
   getPayloadFromEvent,

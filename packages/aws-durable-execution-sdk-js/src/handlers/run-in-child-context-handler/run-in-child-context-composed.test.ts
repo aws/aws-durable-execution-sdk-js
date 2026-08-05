@@ -14,7 +14,7 @@ import {
   OperationStatus,
   OperationAction,
   CheckpointDurableExecutionRequest,
-} from "@aws-sdk/client-lambda";
+} from "../../types/wire";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 

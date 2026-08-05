@@ -9,7 +9,8 @@ import { CallbackId, CheckpointToken } from "../utils/tagged-strings";
 import { ExecutionId, InvocationId } from "../utils/tagged-strings";
 import { decodeCallbackId } from "../utils/callback-id";
 import { OperationEvents } from "../../test-runner/common/operations/operation-with-data";
-import { ErrorObject, EventType } from "@aws-sdk/client-lambda";
+import { EventType } from "@aws-sdk/client-lambda";
+import { ErrorObject } from "@aws/durable-execution-sdk-js";
 import {
   StartDurableExecutionRequest,
   StartInvocationRequest,

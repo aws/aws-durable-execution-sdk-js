@@ -6,7 +6,7 @@ import {
   DurablePromise,
   OperationLifecycleState,
 } from "../../types";
-import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
+import { OperationStatus, OperationType } from "../../types/wire";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { Serdes, AnySerdesDeserializer } from "../../utils/serdes/serdes";

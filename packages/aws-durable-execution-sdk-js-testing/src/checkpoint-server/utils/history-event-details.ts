@@ -1,11 +1,10 @@
+import { Event, EventType } from "@aws-sdk/client-lambda";
 import {
   OperationAction,
   OperationUpdate,
-  Event,
   OperationType,
-  EventType,
   Operation,
-} from "@aws-sdk/client-lambda";
+} from "@aws/durable-execution-sdk-js";
 
 export type OperationActionWithoutRetry = Exclude<
   OperationAction,

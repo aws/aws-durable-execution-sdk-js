@@ -2,7 +2,7 @@ import { createDurableContext } from "./durable-context";
 import { DurableExecutionMode, Duration } from "../../types";
 import { DurablePromise } from "../../types/durable-promise";
 import { Context } from "aws-lambda";
-import { OperationStatus } from "@aws-sdk/client-lambda";
+import { OperationStatus } from "../../types/wire";
 import { createMockExecutionContext } from "../../testing/mock-context";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { DurableLogger } from "../../types/durable-logger";

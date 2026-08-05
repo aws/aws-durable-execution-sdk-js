@@ -1,8 +1,5 @@
-import {
-  InvalidParameterValueException,
-  OperationAction,
-  OperationType,
-} from "@aws-sdk/client-lambda";
+import { InvalidParameterValueException } from "@aws-sdk/client-lambda";
+import { OperationAction, OperationType } from "@aws/durable-execution-sdk-js";
 import { validateValidActionsByOperationType } from "../valid-actions-by-operation-type-validator";
 
 describe("validateValidActionsByOperationType", () => {
