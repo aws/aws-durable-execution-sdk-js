@@ -24,7 +24,7 @@ import { DurableLogger } from "../../types/durable-logger";
 import { Checkpoint } from "./checkpoint-helper";
 import {
   CHECKPOINT_TERMINATION_COOLDOWN_MS,
-  MAX_POLL_DURATION_MS,
+  MAX_SET_TIMEOUT_DELAY_MS,
 } from "../constants/constants";
 import {
   OperationInfo,
@@ -35,6 +35,23 @@ import { DurableInstrumentationPlugin } from "../../types/plugin";
 import { normalizeOperations } from "../operation/normalize-operation";
 
 export const STEP_DATA_UPDATED_EVENT = "stepDataUpdated";
+
+/**
+ * Invocation epoch, shared across the module (i.e. the execution environment).
+ *
+ * Lambda reuses (freezes/thaws) execution environments. If an invocation ends
+ * without cleanup — e.g. a hard function timeout — its pending poll timers can
+ * survive the freeze and fire during a later invocation, issuing checkpoint
+ * calls with a stale task token. Each CheckpointManager captures the epoch
+ * current at construction time; {@link advanceInvocationEpoch} is called once
+ * per invocation (before the invocation's manager is constructed), so timer
+ * callbacks belonging to a previous invocation's manager become no-ops.
+ */
+let currentInvocationEpoch = 0;
+
+export function advanceInvocationEpoch(): number {
+  return ++currentInvocationEpoch;
+}
 
 const TERMINAL_STATUSES: OperationStatus[] = [
   OperationStatus.SUCCEEDED,
@@ -70,6 +87,13 @@ export class CheckpointManager implements Checkpoint {
   private readonly MAX_PAYLOAD_SIZE = 750 * 1024; // 750KB in bytes
   private readonly MAX_ITEMS_IN_BATCH = 250;
   private isTerminating = false;
+
+  /**
+   * The invocation epoch this manager belongs to. When a newer invocation
+   * advances the module epoch, timer callbacks on this (stale) manager no-op
+   * instead of issuing checkpoint calls with an outdated task token.
+   */
+  private readonly invocationEpoch = currentInvocationEpoch;
 
   // Operation lifecycle tracking
   private operations = new Map<string, OperationInfo>();
@@ -855,6 +879,10 @@ export class CheckpointManager implements Checkpoint {
     const op = this.operations.get(stepId);
     if (!op) return;
 
+    // Stale manager from a previous invocation (reused environment) - do not
+    // arm new timers.
+    if (this.invocationEpoch !== currentInvocationEpoch) return;
+
     let delay: number;
 
     if (endTimestamp) {
@@ -864,8 +892,11 @@ export class CheckpointManager implements Checkpoint {
       // Wait until endTimestamp
       delay = Math.max(0, timestamp.getTime() - Date.now());
 
-      // Skip setTimeout if delay exceeds MAX_POLL_DURATION_MS (Lambda will timeout before it fires)
-      if (delay > MAX_POLL_DURATION_MS) {
+      // Skip setTimeout if delay exceeds the 32-bit setTimeout bound: Node
+      // would clamp it to 1ms and fire immediately, turning a far-future wait
+      // into a hot poll loop. Operations due that far out resume via
+      // suspension and re-invocation instead.
+      if (delay > MAX_SET_TIMEOUT_DELAY_MS) {
         return;
       }
     } else {
@@ -888,19 +919,11 @@ export class CheckpointManager implements Checkpoint {
     const op = this.operations.get(stepId);
     if (!op) return;
 
-    // Check if we've exceeded max polling duration (15 minutes)
-    if (
-      op.pollStartTime &&
-      Date.now() - op.pollStartTime > MAX_POLL_DURATION_MS
-    ) {
-      // Stop polling after 15 minutes to prevent indefinite resource consumption.
-      // We don't resolve or reject the promise because the handler cannot continue
-      // without a status change. The execution will remain suspended until the
-      // operation completes or the Lambda times out.
-      log(
-        "⏱️",
-        `Max polling duration (15 min) exceeded for ${stepId}, stopping poll`,
-      );
+    // Stale manager from a previous invocation (reused environment): stop
+    // silently rather than issuing a checkpoint call with an outdated task
+    // token. Live polling is bounded by the invocation lifetime - timers are
+    // cleared on termination - so no wall-clock cap is needed here.
+    if (this.invocationEpoch !== currentInvocationEpoch) {
       if (op.timer) {
         clearTimeout(op.timer);
         op.timer = undefined;

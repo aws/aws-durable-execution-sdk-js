@@ -16,11 +16,12 @@ export const STORE_STACK_TRACES = false;
 export const CHECKPOINT_TERMINATION_COOLDOWN_MS = 20;
 
 /**
- * Maximum polling duration in milliseconds (15 minutes)
- * Used to cap setTimeout delays to prevent 32-bit signed integer overflow
- * and limit polling duration for long-running operations
+ * Maximum delay accepted by setTimeout (2^31 - 1 milliseconds, ~24.8 days).
+ * Node.js clamps larger delays to 1ms, which would make a far-future timer
+ * fire immediately. Timers for operations due beyond this bound are not
+ * scheduled; those operations resume via suspension and re-invocation instead.
  */
-export const MAX_POLL_DURATION_MS = 15 * 60 * 1000;
+export const MAX_SET_TIMEOUT_DELAY_MS = 2 ** 31 - 1;
 
 /**
  * Maximum checkpoint payload size in bytes (256KB).

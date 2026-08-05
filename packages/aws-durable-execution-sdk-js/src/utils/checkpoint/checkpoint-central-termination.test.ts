@@ -1,4 +1,7 @@
-import { CheckpointManager } from "./checkpoint-manager";
+import {
+  CheckpointManager,
+  advanceInvocationEpoch,
+} from "./checkpoint-manager";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
 import { OperationLifecycleState, OperationSubType } from "../../types";
@@ -1437,7 +1440,7 @@ describe("CheckpointManager - Centralized Termination", () => {
   });
 
   describe("startTimerWithPolling - setTimeout overflow protection", () => {
-    it("should skip setTimeout when delay exceeds MAX_POLL_DURATION_MS", () => {
+    it("should skip setTimeout when delay exceeds MAX_SET_TIMEOUT_DELAY_MS", () => {
       const stepId = "long-wait-step";
 
       // Create operation in IDLE_AWAITED state
@@ -1450,7 +1453,8 @@ describe("CheckpointManager - Centralized Termination", () => {
             type: OperationType.WAIT,
             subType: OperationSubType.WAIT,
           },
-          // Set endTimestamp to 364 days in the future (exceeds MAX_POLL_DURATION_MS)
+          // Set endTimestamp to 364 days in the future (exceeds the 32-bit
+          // setTimeout bound of ~24.8 days)
           endTimestamp: new Date(Date.now() + 364 * 24 * 60 * 60 * 1000),
         },
       );
@@ -1467,7 +1471,40 @@ describe("CheckpointManager - Centralized Termination", () => {
       setTimeoutSpy.mockRestore();
     });
 
-    it("should use setTimeout when delay is within MAX_POLL_DURATION_MS", () => {
+    it("should use setTimeout for delays beyond 15 minutes (no wall-clock cap)", () => {
+      const stepId = "hour-scale-wait-step";
+      const longDelay = 60 * 60 * 1000; // 1 hour - formerly skipped by the 15-min cap
+
+      checkpointManager.markOperationState(
+        stepId,
+        OperationLifecycleState.IDLE_AWAITED,
+        {
+          metadata: {
+            stepId,
+            type: OperationType.WAIT,
+            subType: OperationSubType.WAIT,
+          },
+          endTimestamp: new Date(Date.now() + longDelay),
+        },
+      );
+
+      const setTimeoutSpy = jest.spyOn(global, "setTimeout");
+
+      checkpointManager.waitForStatusChange(stepId);
+
+      expect(setTimeoutSpy).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Number),
+      );
+
+      const actualDelay = setTimeoutSpy.mock.calls[0][1] as number;
+      expect(actualDelay).toBeLessThanOrEqual(longDelay);
+      expect(actualDelay).toBeGreaterThan(longDelay - 1000); // Allow 1s tolerance
+
+      setTimeoutSpy.mockRestore();
+    });
+
+    it("should use setTimeout when delay is within MAX_SET_TIMEOUT_DELAY_MS", () => {
       const stepId = "short-wait-step";
       const shortDelay = 5 * 60 * 1000; // 5 minutes
 
@@ -1503,6 +1540,90 @@ describe("CheckpointManager - Centralized Termination", () => {
       expect(actualDelay).toBeGreaterThan(shortDelay - 1000); // Allow 1s tolerance
 
       setTimeoutSpy.mockRestore();
+    });
+  });
+
+  describe("invocation epoch guard", () => {
+    // A concurrently-executing step keeps the invocation alive (prevents
+    // graceful termination from clearing poll timers) - this mirrors the real
+    // scenario where polling matters: Promise.all([longStep, callback]).
+    const keepInvocationAlive = (): void => {
+      checkpointManager.markOperationState(
+        "executing-step",
+        OperationLifecycleState.EXECUTING,
+        {
+          metadata: {
+            stepId: "executing-step",
+            type: OperationType.STEP,
+            subType: OperationSubType.STEP,
+          },
+        },
+      );
+    };
+
+    it("should not issue checkpoint calls from timers of a stale-epoch manager", async () => {
+      const stepId = "stale-epoch-step";
+      keepInvocationAlive();
+
+      // Arm polling on the current manager (no endTimestamp → 1s first poll)
+      checkpointManager.markOperationState(
+        stepId,
+        OperationLifecycleState.IDLE_AWAITED,
+        {
+          metadata: {
+            stepId,
+            type: OperationType.CALLBACK,
+            subType: OperationSubType.WAIT_FOR_CALLBACK,
+          },
+        },
+      );
+      checkpointManager.waitForStatusChange(stepId);
+
+      const forceCheckpointSpy = jest.spyOn(
+        checkpointManager as any,
+        "forceCheckpoint",
+      );
+
+      // A new invocation begins in the same (reused) environment, making this
+      // manager's epoch stale.
+      advanceInvocationEpoch();
+
+      // Fire the pending poll timer
+      await jest.advanceTimersByTimeAsync(1100);
+
+      // The stale manager must not attempt any checkpoint refresh
+      expect(forceCheckpointSpy).not.toHaveBeenCalled();
+
+      forceCheckpointSpy.mockRestore();
+    });
+
+    it("should keep polling with a current-epoch manager (baseline)", async () => {
+      const stepId = "live-epoch-step";
+      keepInvocationAlive();
+
+      checkpointManager.markOperationState(
+        stepId,
+        OperationLifecycleState.IDLE_AWAITED,
+        {
+          metadata: {
+            stepId,
+            type: OperationType.CALLBACK,
+            subType: OperationSubType.WAIT_FOR_CALLBACK,
+          },
+        },
+      );
+      checkpointManager.waitForStatusChange(stepId);
+
+      const forceCheckpointSpy = jest
+        .spyOn(checkpointManager as any, "forceCheckpoint")
+        .mockResolvedValue(undefined);
+
+      // Fire the pending poll timer without advancing the epoch
+      await jest.advanceTimersByTimeAsync(1100);
+
+      expect(forceCheckpointSpy).toHaveBeenCalled();
+
+      forceCheckpointSpy.mockRestore();
     });
   });
 });
