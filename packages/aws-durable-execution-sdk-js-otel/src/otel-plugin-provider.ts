@@ -82,19 +82,21 @@ function buildLambdaResource() {
 }
 
 /**
- * Factory function that creates and configures a `TracerProvider` for the
- * ExecutionOtelPlugin.
+ * Factory function that resolves and configures a `TracerProvider` for the
+ * ExecutionOtelPlugin and InvocationOtelPlugin, based on the config's
+ * {@link ProviderSource} (see {@link resolveProviderSource}):
  *
- * When a custom `tracerProvider` is supplied in the config, it is returned
- * as-is with `source: ProviderSource.Explicit` — no exporter, propagator, or
- * sampler registration is performed.
- *
- * Otherwise, the factory creates a `NodeTracerProvider` with:
- * - `OTLPTraceExporter` targeting the configured endpoint
- * - `BatchSpanProcessor` wrapping the exporter
- * - `AWSXRayPropagator` + `W3CTraceContextPropagator` composite propagator
- * - `TraceIdRatioBasedSampler` (or `AlwaysOnSampler`) based on env var
- * - Lambda resource attributes when `AWS_LAMBDA_FUNCTION_NAME` is set
+ * - `Global` (the default when `providerSource` is unset) — returns the
+ *   globally registered provider via `trace.getTracerProvider()` as-is; no
+ *   exporter, propagator, or sampler registration is performed.
+ * - `Explicit` — returns the supplied `config.tracerProvider` as-is, with no
+ *   auto-setup.
+ * - `AutoOtlp` — creates a `NodeTracerProvider` with:
+ *   - `OTLPTraceExporter` targeting the configured endpoint
+ *   - `BatchSpanProcessor` wrapping the exporter
+ *   - `AWSXRayPropagator` + `W3CTraceContextPropagator` composite propagator
+ *   - `TraceIdRatioBasedSampler` (or `AlwaysOnSampler`) based on env var
+ *   - Lambda resource attributes when `AWS_LAMBDA_FUNCTION_NAME` is set
  */
 export function createTracerProvider(
   config?: OtelPluginConfig,
