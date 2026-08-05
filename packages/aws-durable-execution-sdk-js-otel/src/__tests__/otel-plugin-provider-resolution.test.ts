@@ -10,7 +10,7 @@ import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
-import { createTracerProvider } from "../otel-plugin-provider";
+import { createTracerProvider, ProviderSource } from "../otel-plugin-provider";
 import { registerStandaloneInstrumentations } from "../otel-plugin-instrumentations";
 
 // Save original env
@@ -162,7 +162,7 @@ describe("registerStandaloneInstrumentations", () => {
 
       // Should not throw and should return early
       expect(() => {
-        registerStandaloneInstrumentations(mockProvider, {
+        registerStandaloneInstrumentations(mockProvider, ProviderSource.Global, {
           useDefaultTracerProvider: true,
         });
       }).not.toThrow();
@@ -184,9 +184,13 @@ describe("registerStandaloneInstrumentations", () => {
 
       // Should not throw - returns early due to config.tracerProvider being set
       expect(() => {
-        registerStandaloneInstrumentations(mockProvider, {
-          tracerProvider: explicitProvider,
-        });
+        registerStandaloneInstrumentations(
+          mockProvider,
+          ProviderSource.Explicit,
+          {
+            tracerProvider: explicitProvider,
+          },
+        );
       }).not.toThrow();
 
       explicitProvider.shutdown();
@@ -203,10 +207,14 @@ describe("registerStandaloneInstrumentations", () => {
       const explicitProvider = new NodeTracerProvider();
 
       expect(() => {
-        registerStandaloneInstrumentations(mockProvider, {
-          tracerProvider: explicitProvider,
-          useDefaultTracerProvider: true,
-        });
+        registerStandaloneInstrumentations(
+          mockProvider,
+          ProviderSource.Explicit,
+          {
+            tracerProvider: explicitProvider,
+            useDefaultTracerProvider: true,
+          },
+        );
       }).not.toThrow();
 
       explicitProvider.shutdown();
@@ -222,7 +230,7 @@ describe("registerStandaloneInstrumentations", () => {
 
       // This should not throw and should proceed through the full registration path
       expect(() => {
-        registerStandaloneInstrumentations(provider, {
+        registerStandaloneInstrumentations(provider, ProviderSource.AutoOtlp, {
           useDefaultTracerProvider: false,
         });
       }).not.toThrow();
@@ -234,7 +242,7 @@ describe("registerStandaloneInstrumentations", () => {
       const provider = new NodeTracerProvider();
 
       expect(() => {
-        registerStandaloneInstrumentations(provider, {});
+        registerStandaloneInstrumentations(provider, ProviderSource.AutoOtlp, {});
       }).not.toThrow();
 
       provider.shutdown();

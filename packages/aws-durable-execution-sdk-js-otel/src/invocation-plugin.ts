@@ -67,11 +67,11 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     // Pass config directly to createTracerProvider — when neither tracerProvider
     // nor useDefaultTracerProvider is set, option 3 creates an internal provider
     // with OTLP export (same behavior as ExecutionOtelPlugin).
-    const { tracerProvider } = createTracerProvider(config);
+    const { tracerProvider, source } = createTracerProvider(config);
     this.tracerProvider = tracerProvider;
 
     // Register instrumentations using the shared module
-    registerStandaloneInstrumentations(this.tracerProvider, config);
+    registerStandaloneInstrumentations(this.tracerProvider, source, config);
 
     this.tracer = this.tracerProvider.getTracer(instrumentationName);
 

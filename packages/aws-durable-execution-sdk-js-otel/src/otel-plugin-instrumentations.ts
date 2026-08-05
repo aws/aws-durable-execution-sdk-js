@@ -3,6 +3,7 @@ import { AwsInstrumentation } from "@opentelemetry/instrumentation-aws-sdk";
 import { HttpInstrumentation } from "@opentelemetry/instrumentation-http";
 import { registerInstrumentations } from "@opentelemetry/instrumentation";
 import type { OtelPluginConfig } from "./otel-plugin-config";
+import { ProviderSource } from "./otel-plugin-provider";
 
 /**
  * Registers HTTP and AWS SDK instrumentations for the ExecutionOtelPlugin
@@ -29,19 +30,20 @@ import type { OtelPluginConfig } from "./otel-plugin-config";
  */
 export function registerStandaloneInstrumentations(
   tracerProvider: TracerProvider,
+  source: ProviderSource,
   config?: OtelPluginConfig,
 ): void {
-  // Skip all instrumentation when an explicit custom provider is given (caller owns instrumentation)
-  if (config?.tracerProvider) {
+  // Skip all instrumentation for an explicit custom provider (caller owns it)
+  if (source === ProviderSource.Explicit) {
     return;
   }
 
   const instrumentations = [];
 
-  // Register HTTP instrumentation only when NOT using the default provider
+  // Register HTTP instrumentation only for the auto-configured (owned) provider
   // and not explicitly disabled
   if (
-    !config?.useDefaultTracerProvider &&
+    source === ProviderSource.AutoOtlp &&
     config?.enableHttpInstrumentation !== false
   ) {
     instrumentations.push(

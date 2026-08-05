@@ -21,10 +21,27 @@ const DEFAULT_OTLP_ENDPOINT = "http://localhost:4318/v1/traces";
 /**
  * Result of the TracerProvider factory function.
  */
+/**
+ * Which of the three resolution tiers produced the tracer provider.
+ */
+export enum ProviderSource {
+  /** Caller supplied `config.tracerProvider`. */
+  Explicit = "explicit",
+  /** `useDefaultTracerProvider` -> `trace.getTracerProvider()`. */
+  Global = "global",
+  /** Default: the plugin builds and owns an OTLP provider. */
+  AutoOtlp = "auto_otlp",
+}
+
 export interface ProviderResult {
   /** The configured TracerProvider. */
   tracerProvider: TracerProvider;
-  /** Whether the factory created (and therefore owns) this provider. */
+  /** Which tier produced the provider. */
+  source: ProviderSource;
+  /**
+   * Whether the factory created (and therefore owns) this provider.
+   * Derived: true only for `ProviderSource.AutoOtlp`.
+   */
   ownsProvider: boolean;
 }
 
@@ -96,12 +113,20 @@ export function createTracerProvider(
 ): ProviderResult {
   // Priority 1: If a custom provider is supplied, skip all auto-setup.
   if (config?.tracerProvider) {
-    return { tracerProvider: config.tracerProvider, ownsProvider: false };
+    return {
+      tracerProvider: config.tracerProvider,
+      source: ProviderSource.Explicit,
+      ownsProvider: false,
+    };
   }
 
   // Priority 2: Use globally registered default provider
   if (config?.useDefaultTracerProvider) {
-    return { tracerProvider: trace.getTracerProvider(), ownsProvider: false };
+    return {
+      tracerProvider: trace.getTracerProvider(),
+      source: ProviderSource.Global,
+      ownsProvider: false,
+    };
   }
 
   // Priority 3: Create internal provider with full auto-setup
@@ -146,5 +171,9 @@ export function createTracerProvider(
   // Also register at the global level so HTTP instrumentation picks it up
   propagation.setGlobalPropagator(new CompositePropagator({ propagators }));
 
-  return { tracerProvider, ownsProvider: true };
+  return {
+    tracerProvider,
+    source: ProviderSource.AutoOtlp,
+    ownsProvider: true,
+  };
 }
