@@ -11,6 +11,7 @@ import { OperationType, OperationStatus } from "../../types/wire";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import { TerminationReason } from "../../termination-manager/types";
 
 jest.mock("../../utils/logger/logger");
 jest.mock("../../errors/serdes-errors/serdes-errors");
@@ -567,7 +568,7 @@ describe("WaitForCondition Handler", () => {
   });
 
   describe("Serdes error handling", () => {
-    it("should bubble up Serdes errors during state deserialization", async () => {
+    it("should terminate execution on Serdes error during STARTED state deserialization", async () => {
       const stepId = "step-1";
       const hashedStepId = hashId(stepId);
 
@@ -585,7 +586,12 @@ describe("WaitForCondition Handler", () => {
 
       // Force safeDeserialize to fail for state deserialization
       mockSafeDeserialize.mockImplementationOnce(async () => {
-        throw new Error("Deserialization failed");
+        mockContext.terminationManager.terminate({
+          reason: TerminationReason.SERDES_FAILED,
+          message: "Failed to deserialize operation payload",
+          error: expect.any(Error),
+        });
+        return new Promise(() => {}); // Never resolves, simulating termination
       });
 
       const handler = createWaitForConditionHandler(
@@ -604,9 +610,72 @@ describe("WaitForCondition Handler", () => {
         initialState: "initial",
       };
 
-      await expect(handler(checkFunc, config)).rejects.toThrow(
-        "Deserialization failed",
+      const handlerPromise = handler(checkFunc, config);
+
+      // We need to yield to the event loop so the handler can execute up to the termination point
+      await Promise.resolve();
+
+      expect(mockContext.terminationManager.terminate).toHaveBeenCalledWith({
+        reason: TerminationReason.SERDES_FAILED,
+        message: "Failed to deserialize operation payload",
+        error: expect.any(Error),
+      });
+      expect(checkFunc).not.toHaveBeenCalled();
+    });
+
+    it("should terminate execution on Serdes error during READY state deserialization", async () => {
+      const stepId = "step-1";
+      const hashedStepId = hashId(stepId);
+
+      (mockContext as any)._stepData[hashedStepId] = {
+        Id: hashedStepId,
+        Status: OperationStatus.READY,
+        StepDetails: {
+          Attempt: 1,
+          Result: JSON.stringify("checkpointed-state"),
+        },
+      };
+
+      (mockContext.getStepData as jest.Mock).mockReturnValue(
+        (mockContext as any)._stepData[hashedStepId],
       );
+
+      // Force safeDeserialize to fail for state deserialization
+      mockSafeDeserialize.mockImplementationOnce(async () => {
+        mockContext.terminationManager.terminate({
+          reason: TerminationReason.SERDES_FAILED,
+          message: "Failed to deserialize operation payload",
+          error: expect.any(Error),
+        });
+        return new Promise(() => {}); // Never resolves, simulating termination
+      });
+
+      const handler = createWaitForConditionHandler(
+        mockContext,
+        mockCheckpoint,
+        createStepId,
+        createDefaultLogger(),
+        undefined,
+      );
+
+      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = jest
+        .fn()
+        .mockResolvedValue("new-result");
+      const config: WaitForConditionConfig<string> = {
+        waitStrategy: () => ({ shouldContinue: false }),
+        initialState: "initial",
+      };
+
+      const handlerPromise = handler(checkFunc, config);
+
+      // We need to yield to the event loop so the handler can execute up to the termination point
+      await Promise.resolve();
+
+      expect(mockContext.terminationManager.terminate).toHaveBeenCalledWith({
+        reason: TerminationReason.SERDES_FAILED,
+        message: "Failed to deserialize operation payload",
+        error: expect.any(Error),
+      });
       expect(checkFunc).not.toHaveBeenCalled();
     });
   });

@@ -2,7 +2,7 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
-import { AnySerdes, SerDesException } from "@aws/durable-execution-sdk-js";
+import { AnySerdes } from "@aws/durable-execution-sdk-js";
 
 // A custom serdes that fails on deserialize
 const failingSerdes: AnySerdes = {
@@ -10,7 +10,7 @@ const failingSerdes: AnySerdes = {
     return JSON.stringify(value);
   },
   deserialize: async (_payload: string | undefined) => {
-    throw new SerDesException("simulated deserialization failure");
+    throw new Error("simulated deserialization failure");
   },
 };
 
