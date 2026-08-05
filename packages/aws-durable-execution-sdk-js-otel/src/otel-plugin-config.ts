@@ -3,6 +3,22 @@ import type { TextMapPropagator } from "@opentelemetry/api";
 import type { ContextExtractor } from "./context-extractors";
 
 /**
+ * The three tracer-provider resolution tiers a config can select.
+ *
+ * This is the single vocabulary for "which provider mode are we in", consumed
+ * by the provider factory (to build/accept the provider) and by the plugins
+ * (to shape spans). Derive it from a config with {@link resolveProviderSource}.
+ */
+export enum ProviderSource {
+  /** Caller supplied `config.tracerProvider`. */
+  Explicit = "explicit",
+  /** `useDefaultTracerProvider` -> `trace.getTracerProvider()`. */
+  Global = "global",
+  /** Default: the plugin builds and owns an OTLP provider. */
+  AutoOtlp = "auto_otlp",
+}
+
+/**
  * Shared configuration options for both ExecutionOtelPlugin and InvocationOtelPlugin.
  *
  * All fields are optional. When no configuration is provided, the plugin
@@ -70,8 +86,10 @@ export interface OtelPluginConfig {
    * This skips all auto-setup (exporter, propagators, instrumentations).
    * The caller is responsible for configuring the global provider.
    *
-   * Precedence: explicit tracerProvider > useDefaultTracerProvider > auto-created.
-   * If both tracerProvider and useDefaultTracerProvider are set, tracerProvider wins.
+   * Precedence is resolved centrally by {@link resolveProviderSource}:
+   * explicit `tracerProvider` > `useDefaultTracerProvider` > auto-created.
+   * If both `tracerProvider` and `useDefaultTracerProvider` are set,
+   * `tracerProvider` wins.
    *
    * Defaults to false.
    */
@@ -100,3 +118,25 @@ export interface OtelPluginConfig {
  * @deprecated Use `OtelPluginConfig` instead.
  */
 export type ExecutionOtelPluginConfig = OtelPluginConfig;
+
+/**
+ * Resolves the {@link ProviderSource} for a config, applying the documented
+ * precedence in one place:
+ *
+ *   explicit `tracerProvider` > `useDefaultTracerProvider` > auto-created OTLP.
+ *
+ * This is the single source of truth for provider-mode selection. Both the
+ * provider factory and the plugins derive their behavior from the returned
+ * `ProviderSource` rather than re-interpreting the raw config booleans.
+ */
+export function resolveProviderSource(
+  config?: OtelPluginConfig,
+): ProviderSource {
+  if (config?.tracerProvider) {
+    return ProviderSource.Explicit;
+  }
+  if (config?.useDefaultTracerProvider) {
+    return ProviderSource.Global;
+  }
+  return ProviderSource.AutoOtlp;
+}

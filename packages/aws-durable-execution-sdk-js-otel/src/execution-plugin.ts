@@ -31,7 +31,7 @@ import {
 import { xRayContextExtractor } from "./context-extractors";
 import type { ContextExtractor } from "./context-extractors";
 import type { OtelPluginConfig } from "./otel-plugin-config";
-import { createTracerProvider } from "./otel-plugin-provider";
+import { createTracerProvider, ProviderSource } from "./otel-plugin-provider";
 import { registerStandaloneInstrumentations } from "./otel-plugin-instrumentations";
 
 const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
@@ -63,7 +63,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   private executionArn: string;
 
   // Default provider mode
-  private readonly useDefaultTracerProvider: boolean;
+  private readonly providerSource: ProviderSource;
 
   // Workflow span name (configurable)
   private readonly workflowSpanName: string;
@@ -77,13 +77,13 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
     this.idGenerator = new DeterministicIdGenerator();
     this.contextExtractor = config?.contextExtractor ?? xRayContextExtractor;
-    this.useDefaultTracerProvider = config?.useDefaultTracerProvider ?? false;
     this.workflowSpanName = config?.workflowSpanName ?? "Workflow";
     this.enrichLogger = config?.enrichLogger ?? true;
 
     // Create or accept TracerProvider via the provider factory
     const { tracerProvider, source } = createTracerProvider(config);
     this.tracerProvider = tracerProvider;
+    this.providerSource = source;
 
     // Register HTTP and AWS SDK instrumentations (skipped when custom provider is supplied)
     registerStandaloneInstrumentations(this.tracerProvider, source, config);
@@ -134,7 +134,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     );
 
     // 7. Create Invocation_Span
-    if (!this.useDefaultTracerProvider) {
+    if (this.providerSource !== ProviderSource.Global) {
       // Non-default mode: child of Workflow_Span with Lambda semantic attributes
       const parentContext = trace.setSpan(context.active(), this.workflowSpan);
 

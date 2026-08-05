@@ -43,7 +43,6 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   private readonly tracer: Tracer;
   private readonly idGenerator: DeterministicIdGenerator;
   private readonly contextExtractor: ContextExtractor;
-  private readonly useDefaultTracerProvider: boolean;
   private readonly workflowSpanName: string;
   private readonly enrichLogger: boolean;
 
@@ -60,7 +59,6 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
 
     this.idGenerator = new DeterministicIdGenerator();
     this.contextExtractor = config?.contextExtractor ?? xRayContextExtractor;
-    this.useDefaultTracerProvider = config?.useDefaultTracerProvider ?? false;
     this.workflowSpanName = config?.workflowSpanName ?? "Workflow";
     this.enrichLogger = config?.enrichLogger ?? true;
 

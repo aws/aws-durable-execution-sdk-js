@@ -15,23 +15,12 @@ import {
   TraceIdRatioBasedSampler,
 } from "@opentelemetry/sdk-trace-node";
 import type { OtelPluginConfig } from "./otel-plugin-config";
+import { ProviderSource, resolveProviderSource } from "./otel-plugin-config";
+
+// Re-export so existing consumers can keep importing ProviderSource from here.
+export { ProviderSource } from "./otel-plugin-config";
 
 const DEFAULT_OTLP_ENDPOINT = "http://localhost:4318/v1/traces";
-
-/**
- * Result of the TracerProvider factory function.
- */
-/**
- * Which of the three resolution tiers produced the tracer provider.
- */
-export enum ProviderSource {
-  /** Caller supplied `config.tracerProvider`. */
-  Explicit = "explicit",
-  /** `useDefaultTracerProvider` -> `trace.getTracerProvider()`. */
-  Global = "global",
-  /** Default: the plugin builds and owns an OTLP provider. */
-  AutoOtlp = "auto_otlp",
-}
 
 export interface ProviderResult {
   /** The configured TracerProvider. */
@@ -110,23 +99,19 @@ function buildLambdaResource() {
 export function createTracerProvider(
   config?: OtelPluginConfig,
 ): ProviderResult {
-  // Priority 1: If a custom provider is supplied, skip all auto-setup.
-  if (config?.tracerProvider) {
-    return {
-      tracerProvider: config.tracerProvider,
-      source: ProviderSource.Explicit,
-    };
+  const source = resolveProviderSource(config);
+
+  // Explicit: caller supplied a provider — return it as-is, no auto-setup.
+  if (source === ProviderSource.Explicit) {
+    return { tracerProvider: config!.tracerProvider!, source };
   }
 
-  // Priority 2: Use globally registered default provider
-  if (config?.useDefaultTracerProvider) {
-    return {
-      tracerProvider: trace.getTracerProvider(),
-      source: ProviderSource.Global,
-    };
+  // Global: use the globally registered default provider, no auto-setup.
+  if (source === ProviderSource.Global) {
+    return { tracerProvider: trace.getTracerProvider(), source };
   }
 
-  // Priority 3: Create internal provider with full auto-setup
+  // AutoOtlp: create an internal provider with full auto-setup.
   // Resolve the OTLP endpoint
   const endpoint =
     config?.exporterConfig?.endpoint ||
@@ -168,8 +153,5 @@ export function createTracerProvider(
   // Also register at the global level so HTTP instrumentation picks it up
   propagation.setGlobalPropagator(new CompositePropagator({ propagators }));
 
-  return {
-    tracerProvider,
-    source: ProviderSource.AutoOtlp,
-  };
+  return { tracerProvider, source };
 }
