@@ -156,3 +156,7 @@ The functions used in the integration tests are kept alive for reuse. This makes
 ## Creating tests
 
 For implementation details on creating new tests and their corresponding history files, see [ADDING_EXAMPLES.md](./packages/aws-durable-execution-sdk-js-examples/ADDING_EXAMPLES.md).
+
+## Conformance Tests
+
+Conformance tests verify cross-SDK behavioral parity and live in a separate repository: [aws-durable-execution-conformance-tests](https://github.com/aws/aws-durable-execution-conformance-tests). Contributors do not need to add conformance tests. If you believe a change warrants one, mention it in your PR description or [open an issue](https://github.com/aws/aws-durable-execution-conformance-tests/issues/new?template=new_requirement.yml) in that repository.
