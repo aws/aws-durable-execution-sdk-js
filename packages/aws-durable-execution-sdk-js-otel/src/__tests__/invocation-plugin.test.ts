@@ -557,10 +557,22 @@ describe("InvocationOtelPlugin", () => {
       const inv = findSpan("Invocation")!;
       const op = findSpan("timed-step")!;
       const toMs = (t: [number, number]): number => t[0] * 1000 + t[1] / 1e6;
+      // The Invocation and operation spans are each anchored to an independent
+      // hrTime() reading taken when they were created, and this test does no
+      // work between their end() calls. Sub-millisecond disagreement between
+      // those anchors is enough to invert the comparison, so allow a small
+      // tolerance. The invariant worth protecting is that the op span is NOT
+      // backdated to the durable timestamp (which would put it ~60s outside the
+      // Invocation window) — a few ms of clock noise does not threaten that.
+      const CLOCK_TOLERANCE_MS = 5;
       // The op span is NOT backdated to the durable timestamp; it nests inside
       // the Invocation span's wall-clock [start, end] window.
-      expect(toMs(op.startTime)).toBeGreaterThanOrEqual(toMs(inv.startTime));
-      expect(toMs(op.endTime)).toBeLessThanOrEqual(toMs(inv.endTime));
+      expect(toMs(op.startTime)).toBeGreaterThanOrEqual(
+        toMs(inv.startTime) - CLOCK_TOLERANCE_MS,
+      );
+      expect(toMs(op.endTime)).toBeLessThanOrEqual(
+        toMs(inv.endTime) + CLOCK_TOLERANCE_MS,
+      );
     });
   });
 
