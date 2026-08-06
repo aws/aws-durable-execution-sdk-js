@@ -29,13 +29,18 @@ createTests({
       // One branch was still in flight (STARTED) when the batch completed...
       expect(result.startedCount).toBe(1);
       // ...and the two never-launched branches are absent entirely, so the
-      // total is only the two that were started (not all four).
+      // total is only the two that were started (not all four). These exact
+      // counts hold because of the 20x gap between the fast (100ms) and slow
+      // (2000ms) branches: branch 0 trips minSuccessful long before branch 1
+      // could finish, even under a loaded scheduler (see the handler comment).
       expect(result.totalCount).toBe(2);
       expect(result.results).toEqual(["branch 0 (fast)"]);
 
-      assertEventSignatures(execution, "min-successful", {
-        invocationCompletedDifference: 1,
-      });
+      // No invocationCompletedDifference tolerance: with no post-batch wait the
+      // whole example runs in a single invocation (the handler returns as soon
+      // as the batch completes early), so the InvocationCompleted count is
+      // deterministic and asserted exactly.
+      assertEventSignatures(execution, "min-successful");
     }, 15000);
 
     it("declines the batch up front via a guard predicate", async () => {

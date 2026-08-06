@@ -19,9 +19,15 @@ export const config: ExampleConfig = {
     "is FAILED and reports CUSTOM_COMPLETION_FAILED.",
 };
 
+type ErrorPropagationMode = "propagate" | "custom-failed";
+
+interface ErrorPropagationEvent {
+  mode?: ErrorPropagationMode;
+}
+
 export const handler = withDurableExecution(
-  async (event: any, context: DurableContext) => {
-    const mode: string = event?.mode ?? "propagate";
+  async (event: ErrorPropagationEvent, context: DurableContext) => {
+    const mode: ErrorPropagationMode = event?.mode ?? "propagate";
 
     if (mode === "custom-failed") {
       // Quorum: all three items must succeed. Uses the unnamed
@@ -51,8 +57,11 @@ export const handler = withDurableExecution(
         },
       );
 
-      await context.wait({ seconds: 1 });
-
+      // No post-batch `context.wait` here: the batch status and counts below
+      // are fixed the moment the shouldComplete predicate fails the batch, so a
+      // trailing wait would only add a durable suspension (an extra invocation)
+      // without demonstrating anything about error propagation.
+      //
       // A custom FAILED decision is authoritative for the batch status even
       // though it is surfaced alongside the individual item error.
       return {

@@ -36,9 +36,10 @@ createTests({
       expect(result.hasFailure).toBe(true);
       expect(result.failureCount).toBe(1);
 
-      assertEventSignatures(execution, "custom-failed", {
-        invocationCompletedDifference: 1,
-      });
+      // No invocationCompletedDifference tolerance: with the post-batch wait
+      // removed the example completes in a single invocation, so the recorded
+      // InvocationCompleted count is deterministic.
+      assertEventSignatures(execution, "custom-failed");
     });
   },
 });

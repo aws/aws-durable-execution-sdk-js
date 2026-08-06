@@ -1,21 +1,23 @@
 import {
   DurableContext,
   withDurableExecution,
-  refreshLogConfig,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
-  name: "Circular-safe error logging",
+  name: "Circular-Safe Error Logging",
   description:
     "When verbose logging is enabled, the SDK stringifies logged values with a " +
-    "circular-reference-safe serializer. This example enables verbose mode and " +
-    "throws errors whose object graphs are hostile to plain JSON.stringify — a " +
-    "self-referential/shared-reference graph and a BigInt-carrying error — to " +
-    "show that logging degrades gracefully ('[Circular]', '[Unable to " +
-    "stringify]') instead of crashing the invocation.",
-  // Verbose logging is very chatty and this handler intentionally fails; keep it
-  // out of the capacity-provider matrix — the single local/cloud run is enough.
+    "circular-reference-safe serializer. This example throws errors whose object " +
+    "graphs are hostile to plain JSON.stringify — a self-referential/shared-reference " +
+    "graph and a BigInt-carrying error — to show that logging degrades gracefully " +
+    "('[Circular]', '[Unable to stringify]') instead of crashing the invocation.",
+  // localOnly: the safe stringifier only runs in verbose mode, but the generated
+  // SAM template hardcodes DURABLE_VERBOSE_MODE:"false" for every function and
+  // ExampleConfig has no per-example env override, so a cloud deployment could
+  // not exercise this path. The test enables verbose mode in-process (see the
+  // test file) and asserts the behavior locally instead.
+  localOnly: true,
 };
 
 interface OrderNode {
@@ -25,21 +27,8 @@ interface OrderNode {
   items: OrderNode[];
 }
 
-/**
- * Enables SDK verbose logging at runtime. In production you would set the
- * `DURABLE_VERBOSE_MODE=true` environment variable on the function and call
- * `refreshLogConfig()` once (the flag is cached at module load). We do both here
- * so the example is self-contained and deterministic in tests.
- */
-function enableVerboseLogging(): void {
-  process.env.DURABLE_VERBOSE_MODE = "true";
-  refreshLogConfig();
-}
-
 export const handler = withDurableExecution(
   async (event: { mode?: "circular" | "bigint" }, context: DurableContext) => {
-    enableVerboseLogging();
-
     await context.step("prepare-order", async () => "ready");
 
     if (event.mode === "bigint") {

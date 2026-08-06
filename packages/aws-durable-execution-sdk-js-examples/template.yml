@@ -1768,31 +1768,6 @@ Resources:
         - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
     Metadata:
       SkipBuild: "True"
-  OversizedExecutionResult:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: OversizedExecutionResult-22x-NodeJS-Local
-      CodeUri: ./dist
-      Handler: oversized-execution-result.handler
-      Runtime: nodejs22.x
-      Architectures:
-        - x86_64
-      MemorySize: 128
-      Timeout: 60
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
-      Role:
-        Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
-      Environment:
-        Variables:
-          DURABLE_VERBOSE_MODE: "false"
-          DURABLE_EXAMPLES_VERBOSE: "true"
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-    Metadata:
-      SkipBuild: "True"
   ParallelBasic:
     Type: AWS::Serverless::Function
     Properties:
@@ -2743,31 +2718,6 @@ Resources:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
-  CircularReferences:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: Circular-safeerrorlogging-22x-NodeJS-Local
-      CodeUri: ./dist
-      Handler: circular-references.handler
-      Runtime: nodejs22.x
-      Architectures:
-        - x86_64
-      MemorySize: 128
-      Timeout: 60
-      DurableConfig:
-        ExecutionTimeout: 60
-        RetentionPeriodInDays: 7
-      Role:
-        Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
-      Environment:
-        Variables:
-          DURABLE_VERBOSE_MODE: "false"
-          DURABLE_EXAMPLES_VERBOSE: "true"
-          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
-    Metadata:
-      SkipBuild: "True"
   ClassWithDates:
     Type: AWS::Serverless::Function
     Properties:
@@ -2846,7 +2796,7 @@ Resources:
   FilesystemSerdesOverflow:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: FilesystemSerdes(OVERFLOWmode)-22x-NodeJS-Local
+      FunctionName: FilesystemSerdesOverflowMode-22x-NodeJS-Local
       CodeUri: ./dist
       Handler: filesystem-serdes-overflow.handler
       Runtime: nodejs22.x
@@ -2871,7 +2821,7 @@ Resources:
   FilesystemSerdes:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: FilesystemSerdes(ALWAYSmode)-22x-NodeJS-Local
+      FunctionName: FilesystemSerdesAlwaysMode-22x-NodeJS-Local
       CodeUri: ./dist
       Handler: filesystem-serdes.handler
       Runtime: nodejs22.x
@@ -2896,7 +2846,7 @@ Resources:
   PreviewFieldSelection:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: Previewfieldselection(include/mask/path)-22x-NodeJS-Local
+      FunctionName: PreviewFieldSelection-22x-NodeJS-Local
       CodeUri: ./dist
       Handler: preview-field-selection.handler
       Runtime: nodejs22.x
@@ -2921,7 +2871,7 @@ Resources:
   PreviewTruncation:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: Previewgenerationwithtruncation-22x-NodeJS-Local
+      FunctionName: PreviewTruncation-22x-NodeJS-Local
       CodeUri: ./dist
       Handler: preview-truncation.handler
       Runtime: nodejs22.x
