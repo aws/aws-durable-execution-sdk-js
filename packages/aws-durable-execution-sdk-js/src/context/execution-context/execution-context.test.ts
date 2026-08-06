@@ -141,8 +141,26 @@ describe("initializeExecutionContext", () => {
         isOperationUpdatedBetweenInvocation: expect.any(Function),
         tenantId: mockLambdaContext.tenantId,
         requestId: mockLambdaContext.awsRequestId,
+        getRemainingTimeMs: expect.any(Function),
       },
     });
+  });
+
+  it("reports remaining time from the platform context on each call", async () => {
+    // This is the single point where the compute's deadline enters the SDK, so it has to
+    // delegate rather than capture: the value changes over the life of the invocation.
+    const remaining = jest
+      .fn()
+      .mockReturnValueOnce(120_000)
+      .mockReturnValueOnce(90_000);
+    const { executionContext } = await initializeExecutionContext(
+      mockEvent,
+      { ...mockLambdaContext, getRemainingTimeInMillis: remaining },
+      undefined,
+    );
+
+    expect(executionContext.getRemainingTimeMs()).toBe(120_000);
+    expect(executionContext.getRemainingTimeMs()).toBe(90_000);
   });
 
   it("should initialize execution context in verbose mode", async () => {

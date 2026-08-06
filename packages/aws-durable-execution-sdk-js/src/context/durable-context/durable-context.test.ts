@@ -13,6 +13,7 @@ describe("DurableContext executionContext property", () => {
       _stepData: {},
       terminationManager: {} as any,
       requestId: "test-request-id",
+      getRemainingTimeMs: (): number => Infinity,
       tenantId: undefined,
       pendingCompletions: new Set(),
       getStepData: jest.fn(),

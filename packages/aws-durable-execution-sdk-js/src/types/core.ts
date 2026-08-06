@@ -339,6 +339,15 @@ export interface ExecutionContext {
 
   requestId: string;
   tenantId: string | undefined;
+
+  /**
+   * How much longer the current invocation may run, in milliseconds.
+   *
+   * Reduced from the invocation context alongside `requestId` and `tenantId`, so that nothing
+   * downstream needs that context to answer it. Where no deadline is known, `Infinity`.
+   */
+  getRemainingTimeMs: () => number;
+
   pendingCompletions: Set<string>; // Track stepIds with pending SUCCEED/FAIL
   getStepData(stepId: string): Operation | undefined;
 

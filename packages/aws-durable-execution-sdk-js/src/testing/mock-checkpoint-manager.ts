@@ -14,7 +14,7 @@ export class MockCheckpointManager extends CheckpointManager {
   public forceCheckpointCalls: number = 0;
   public setTerminatingCalls: number = 0;
 
-  constructor() {
+  constructor(getRemainingTimeMs: () => number = (): number => Infinity) {
     // Create a minimal mock - pass empty/mock values for required constructor params
     super(
       "mock-arn",
@@ -27,6 +27,7 @@ export class MockCheckpointManager extends CheckpointManager {
       new Set<string>(),
       {} as DurableInstrumentationPlugin,
       "mock-request-id",
+      getRemainingTimeMs,
     );
   }
 

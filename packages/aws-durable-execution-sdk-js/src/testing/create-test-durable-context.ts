@@ -81,6 +81,7 @@ export function createTestDurableContext(options?: {
       return false;
     },
     requestId: "mock-request-id",
+    getRemainingTimeMs: (): number => Infinity,
     tenantId: undefined,
   };
 
