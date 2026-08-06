@@ -9,7 +9,10 @@ createTests({
       const execution = await runner.run({ payload: { mode: "propagate" } });
 
       // throwIfError re-raised the branch error, failing the whole execution.
+      // The TYPE is the point of this example: the branch's own error surfaces
+      // wrapped as a ChildContextError, not as a generic batch failure.
       expect(execution.getStatus()).toBe(ExecutionStatus.FAILED);
+      expect(execution.getError()?.errorType).toBe("ChildContextError");
       expect(execution.getError()?.errorMessage).toContain("branch blew up");
 
       assertEventSignatures(execution, "propagate");

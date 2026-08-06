@@ -36,6 +36,9 @@ createTests({
       assertEventSignatures(execution, undefined, {
         invocationCompletedDifference: 1,
       });
-    });
+      // Explicit timeout: this test runs real timers (skipTime:false) with a 2s
+      // in-step sleep, so jest's 5s default leaves little headroom on a loaded
+      // runner.
+    }, 15000);
   },
 });

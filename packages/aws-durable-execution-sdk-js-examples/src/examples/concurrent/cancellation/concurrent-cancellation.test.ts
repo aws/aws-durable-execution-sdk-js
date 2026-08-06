@@ -36,11 +36,16 @@ createTests({
       expect(result.totalCount).toBe(2);
       expect(result.results).toEqual(["branch 0 (fast)"]);
 
-      // No invocationCompletedDifference tolerance: with no post-batch wait the
-      // whole example runs in a single invocation (the handler returns as soon
-      // as the batch completes early), so the InvocationCompleted count is
-      // deterministic and asserted exactly.
-      assertEventSignatures(execution, "min-successful");
+      // The batch counts above are asserted exactly — they are the substance of
+      // this example. The InvocationCompleted count is not: locally the whole
+      // example runs in a single invocation (the handler returns as soon as the
+      // batch completes early), but this snapshot is recorded locally and also
+      // asserted against real Lambda, where an early-completing, concurrency-
+      // capped batch can take an extra checkpoint round-trip. Allow one, as the
+      // sibling concurrent examples do.
+      assertEventSignatures(execution, "min-successful", {
+        invocationCompletedDifference: 1,
+      });
     }, 15000);
 
     it("declines the batch up front via a guard predicate", async () => {

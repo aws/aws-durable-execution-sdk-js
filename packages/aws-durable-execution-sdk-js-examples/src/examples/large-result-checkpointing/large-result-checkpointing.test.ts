@@ -1,9 +1,46 @@
+import type { Event } from "@aws-sdk/client-lambda";
 import { handler } from "./large-result-checkpointing";
 import { createTests } from "../../utils/test-helper";
 import { ExecutionStatus } from "@aws/durable-execution-sdk-js-testing";
 
 // 6MB Lambda response limit (minus a small envelope) enforced by the SDK.
 const LAMBDA_RESPONSE_SIZE_LIMIT = 6 * 1024 * 1024 - 50;
+
+/**
+ * Asserts the SDK actually took the oversized-result path: rather than
+ * returning the value inline, it wrote a separate EXECUTION-scoped SUCCEED
+ * checkpoint (`execution-result-*`) carrying the full serialized result.
+ *
+ * That checkpoint surfaces as a second `ExecutionSucceeded` event whose `Id` is
+ * the checkpoint's own id rather than the execution's, so the two are easy to
+ * tell apart. On the ordinary inline path only the execution's own
+ * `ExecutionSucceeded` exists.
+ *
+ * This is the authoritative signal. Measuring `execution.getResult()` is NOT:
+ * the local runner hands back the full result either way, so a size assertion
+ * on the returned value passes even when the oversize branch never runs.
+ */
+function expectOversizedResultCheckpoint(events: Event[]) {
+  const executionId = events.find(
+    (event) => event.EventType === "ExecutionStarted",
+  )?.Id;
+  expect(typeof executionId).toBe("string");
+
+  const checkpointEvents = events.filter(
+    (event) =>
+      event.EventType === "ExecutionSucceeded" && event.Id !== executionId,
+  );
+  expect(checkpointEvents).toHaveLength(1);
+
+  // The checkpoint carries the whole oversized payload, which is what made it
+  // impossible to return inline in the first place.
+  const payload =
+    checkpointEvents[0].ExecutionSucceededDetails?.Result?.Payload;
+  expect(typeof payload).toBe("string");
+  expect(Buffer.byteLength(payload as string, "utf8")).toBeGreaterThan(
+    LAMBDA_RESPONSE_SIZE_LIMIT,
+  );
+}
 
 // NOTE ON THE HISTORY SNAPSHOTS (both modes):
 // The `.history.json` files for this example contain `ExecutionStarted` TWICE
@@ -50,11 +87,9 @@ createTests({
       expect(result.records[0].id).toBe("rec-0-0");
       expect(result.records[result.records.length - 1].id).toBe("rec-5-999");
 
-      // Confirm the serialized result is genuinely over the Lambda response
-      // limit, i.e. this really exercised the oversized-result path and not the
-      // ordinary inline return.
-      const serializedSize = Buffer.byteLength(JSON.stringify(result), "utf8");
-      expect(serializedSize).toBeGreaterThan(LAMBDA_RESPONSE_SIZE_LIMIT);
+      // Prove the oversize path ran, rather than inferring it from the size of
+      // the returned value.
+      expectOversizedResultCheckpoint(execution.getHistoryEvents());
 
       // The single durable step still completed successfully.
       const step = runner.getOperation("load-batch-metadata");
@@ -90,11 +125,9 @@ createTests({
         Buffer.byteLength(result.document, "utf8"),
       );
 
-      // Confirm the serialized result really is over the Lambda response limit,
-      // i.e. this exercised the oversized-result path rather than an inline
-      // return.
-      const serializedSize = Buffer.byteLength(JSON.stringify(result), "utf8");
-      expect(serializedSize).toBeGreaterThan(LAMBDA_RESPONSE_SIZE_LIMIT);
+      // Prove the oversize path ran, rather than inferring it from the size of
+      // the returned value.
+      expectOversizedResultCheckpoint(execution.getHistoryEvents());
 
       // The durable step that produced the export spec completed successfully.
       const step = runner.getOperation("prepare-export");

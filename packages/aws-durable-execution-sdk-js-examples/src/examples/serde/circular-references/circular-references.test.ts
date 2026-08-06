@@ -24,8 +24,25 @@ function disableVerboseLogging(): void {
 createTests({
   handler,
   tests: (runner, { assertEventSignatures }) => {
+    let debugSpy: jest.SpyInstance;
+
     beforeAll(enableVerboseLogging);
     afterAll(disableVerboseLogging);
+
+    // The SDK's verbose logger writes through console.debug and passes logged
+    // values through safeStringify. Capturing that output is the only way to
+    // assert the stringifier's behaviour: the thrown error's `message` comes
+    // from the Error itself, so asserting on it alone would still pass if the
+    // stringifier silently stopped substituting its markers.
+    beforeEach(() => {
+      debugSpy = jest.spyOn(console, "debug").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      debugSpy.mockRestore();
+    });
+
+    const loggedOutput = () => debugSpy.mock.calls.flat().join("\n");
 
     it("should fail gracefully when the thrown error graph contains circular/shared references", async () => {
       const execution = await runner.run({ payload: { mode: "circular" } });
@@ -42,6 +59,13 @@ createTests({
         "Failed to reconcile order graph",
       );
 
+      // The cycle was replaced with the "[Circular]" marker rather than throwing
+      // "Converting circular structure to JSON", and the graph really was logged
+      // (the non-circular part of it still appears).
+      const output = loggedOutput();
+      expect(output).toContain("[Circular]");
+      expect(output).toContain("order-1");
+
       assertEventSignatures(execution, "circular");
     });
 
@@ -56,6 +80,11 @@ createTests({
       expect(execution.getError()?.errorMessage).toBe(
         "Order total overflowed a safe integer",
       );
+
+      // A BigInt cannot be serialized at all, so the stringifier falls back to
+      // its "[Unable to stringify]" marker instead of letting the TypeError
+      // escape and take down the invocation.
+      expect(loggedOutput()).toContain("[Unable to stringify]");
 
       assertEventSignatures(execution, "bigint");
     });
