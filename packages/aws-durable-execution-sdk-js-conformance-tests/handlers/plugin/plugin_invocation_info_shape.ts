@@ -51,6 +51,11 @@ function makePlugin(): DurableInstrumentationPlugin {
         has_result: info.executionResult !== undefined,
         has_error: info.executionError != null,
       };
+      // The execution result value exactly as exposed on the end info
+      // (omitted when the API does not populate it).
+      if (info.executionResult !== undefined) {
+        rec.result = info.executionResult;
+      }
       // `first` MUST come from the END info itself — capturing it at
       // invocation-start is forbidden here because the field's presence on the
       // end info is exactly what is under test. The JS InvocationEndInfo does
