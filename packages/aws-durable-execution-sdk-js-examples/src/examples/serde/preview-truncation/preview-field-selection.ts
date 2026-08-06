@@ -11,7 +11,7 @@ import {
 import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
-  name: "Preview field selection (include / mask / path)",
+  name: "Preview Field Selection",
   description:
     "buildPreview with EXCLUDE_ALL mode: nothing is shown unless explicitly " +
     "included. Demonstrates name matching at any depth (ANYWHERE, the default), " +
@@ -19,7 +19,7 @@ export const config: ExampleConfig = {
     "is replaced with a mask string in the preview.",
 };
 
-const basePath = join(tmpdir(), "dur-example-preview-field-selection");
+export const basePath = join(tmpdir(), "dur-example-preview-field-selection");
 
 export const handler = withDurableExecution(
   async (_event: unknown, context: DurableContext) => {

@@ -10,7 +10,7 @@ import {
 import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
-  name: "Preview generation with truncation",
+  name: "Preview Truncation",
   description:
     "buildPreview produces a compact, inline summary of a large offloaded value " +
     "for the console/API and telemetry. This example uses INCLUDE_ALL mode with " +
@@ -18,7 +18,7 @@ export const config: ExampleConfig = {
     "once the byte budget is reached (later fields are dropped).",
 };
 
-const basePath = join(tmpdir(), "dur-example-preview-truncation");
+export const basePath = join(tmpdir(), "dur-example-preview-truncation");
 
 export const handler = withDurableExecution(
   async (_event: unknown, context: DurableContext) => {

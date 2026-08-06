@@ -1,14 +1,24 @@
-import { OperationStatus } from "@aws/durable-execution-sdk-js-testing";
+import { rm } from "node:fs/promises";
+import {
+  ExecutionStatus,
+  OperationStatus,
+} from "@aws/durable-execution-sdk-js-testing";
 import { createTests } from "../../../utils/test-helper";
-import { handler } from "./filesystem-serdes-overflow";
+import { basePath, handler } from "./filesystem-serdes-overflow";
 
 createTests({
   handler,
   tests: (runner, { assertEventSignatures }) => {
+    // The large-document step overflows ~300KB to a temp file each run; remove
+    // the base directory afterwards so runs do not accumulate on disk.
+    afterAll(async () => {
+      await rm(basePath, { recursive: true, force: true });
+    });
+
     it("should keep small values inline, overflow large values to a file, and pass through undefined", async () => {
       const execution = await runner.run({ payload: {} });
 
-      expect(execution.getStatus()).toBe("SUCCEEDED");
+      expect(execution.getStatus()).toBe(ExecutionStatus.SUCCEEDED);
       // A single invocation: the serdes round trip does not need a replay.
       expect(execution.getInvocations().length).toBe(1);
       // small + large + empty + combine

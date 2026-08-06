@@ -12,7 +12,7 @@ import {
 import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
-  name: "Filesystem Serdes (ALWAYS mode)",
+  name: "Filesystem Serdes Always Mode",
   description:
     "Stores step results on a durable, shared filesystem (e.g. an S3 Files or " +
     "EFS mount) instead of inline in the checkpoint. The checkpoint keeps only " +
@@ -30,7 +30,7 @@ export const config: ExampleConfig = {
  * that wrote it: the point is that the serdes round-trips correctly, not that
  * the underlying mount is durable.
  */
-const basePath = join(tmpdir(), "dur-example-fs-serdes-always");
+export const basePath = join(tmpdir(), "dur-example-fs-serdes-always");
 
 interface GeneratedReport {
   id: string;

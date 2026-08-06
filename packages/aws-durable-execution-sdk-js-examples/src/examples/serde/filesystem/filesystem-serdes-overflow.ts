@@ -9,7 +9,7 @@ import {
 import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
-  name: "Filesystem Serdes (OVERFLOW mode)",
+  name: "Filesystem Serdes Overflow Mode",
   description:
     "OVERFLOW storage mode keeps small values inline in the checkpoint (as JSON) " +
     "and only spills to a file when a value would exceed the ~256KB checkpoint " +
@@ -22,7 +22,7 @@ export const config: ExampleConfig = {
  * temp dir is fine here because this example reads every value back within the
  * invocation that wrote it — it demonstrates the serdes, not mount durability.
  */
-const basePath = join(tmpdir(), "dur-example-fs-serdes-overflow");
+export const basePath = join(tmpdir(), "dur-example-fs-serdes-overflow");
 
 export const handler = withDurableExecution(
   async (_event: unknown, context: DurableContext) => {
