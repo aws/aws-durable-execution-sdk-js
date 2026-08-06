@@ -93,11 +93,12 @@ export function AiConsentModal({ visible, capabilities, onAccept, onDecline }: P
               private network). Nothing is sent to a third-party cloud, provided
               that endpoint is itself local/self-hosted.
             </li>
-            <li>
-              <b>On-device model</b> — runs entirely on your computer; your
-              request and data do not leave your machine. (Available only when
-              running the extension from source, not in the packaged build.)
-            </li>
+            {capabilities.localLlm && (
+              <li>
+                <b>On-device model</b> — runs entirely on your computer; your
+                request and data do not leave your machine.
+              </li>
+            )}
           </ul>
           <p>
             Your requests and data are processed by, and subject to the terms

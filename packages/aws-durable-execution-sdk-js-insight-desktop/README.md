@@ -73,15 +73,37 @@ setting, same as the extension.
 
 ## Differences from the VS Code extension
 
-Two, both a consequence of what the host can offer:
+All of these are consequences of what the host can offer, and each is reported to
+the UI as a capability so it never presents an option that cannot work — see
+`hostCapabilities.ts`.
 
-|                          | VS Code                     | Desktop                                                                                                                                                                                                         |
-| ------------------------ | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Copilot LLM provider** | Available (`vscode.lm`)     | Not available — the API only exists in the extension host. Selecting it reports that; use Bedrock, a local model, or a local server.                                                                            |
-| **Naming a saved query** | Prompts with `showInputBox` | Saved automatically under the truncated query text. Electron has no native single-line input dialog, and `HostPort.promptForText` is optional, so the session falls back to the label it would have pre-filled. |
+|                            | VS Code                                                                                  | Desktop                                                                                                                                                                                                         |
+| -------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Copilot LLM provider**   | Available (`vscode.lm`)                                                                  | Not available — the API only exists in the extension host. The option is hidden, and a stored `llmProvider: "copilot"` is narrowed to Bedrock when config is read, so Settings and query behavior always agree. |
+| **On-device LLM provider** | Available — the VSIX ships `node-llama-cpp` (`.vscodeignore` deliberately un-ignores it) | Available in a dev checkout, absent from a packaged app. See below.                                                                                                                                             |
+| **Naming a saved query**   | Prompts with `showInputBox`                                                              | Saved automatically under the truncated query text. Electron has no native single-line input dialog, and `HostPort.promptForText` is optional, so the session falls back to the label it would have pre-filled. |
 
 Everything else — every destination, every query mode, charts, export,
 drill-down, the SQS live view — is the same code.
+
+### Why the on-device provider is dev-only here
+
+`node-llama-cpp` is a native module loaded by dynamic import. It stays external in
+`esbuild.mjs` (a native addon cannot be bundled), and `electron-builder`'s `files`
+list is `dist/**/*` plus `package.json` — no `node_modules`. A packaged app
+therefore has nothing to resolve it from.
+
+Rather than hardcode the capability off for this host, `isLocalLlmAvailable()`
+checks whether the module actually resolves. That answer is truthful in all three
+builds: the VSIX ships it, a dev checkout finds it hoisted in the workspace root,
+and a packaged app does not — so the option simply is not offered there. The
+alternative failure mode, where it works under `npm start` and silently breaks
+after packaging, cannot produce a broken affordance.
+
+Making it work when packaged means declaring `node-llama-cpp` as a real dependency
+of this package, adding it to `files`, and rebuilding the native addon against
+Electron's ABI (`electron-rebuild`) per target arch. That is a deliberate
+follow-up, not an oversight.
 
 ## Security posture
 

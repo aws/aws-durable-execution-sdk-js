@@ -17,6 +17,15 @@ concurrency:
   group: ${{ github.event_name }}-${{ github.head_ref || github.ref_name || github.run_id }}
   cancel-in-progress: true
 
+env:
+  # The desktop app's `electron` devDependency has an install script that
+  # downloads a ~100 MB platform binary. Root `npm ci` runs it, and CI runs root
+  # `npm ci` across roughly eight jobs per PR — none of which launch Electron
+  # (the desktop tests are pure: assetPath.test.ts imports only node:path, and
+  # the bundle step needs no runtime). Skip the download; anyone who needs the
+  # binary locally gets it from a normal `npm install`, or `npm rebuild electron`.
+  ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+
 jobs:
   lint-commits:
     # Note: To re-run `lint-commits` after fixing the PR title, close-and-reopen the PR.
@@ -54,6 +63,42 @@ jobs:
             packages/**/dist*/*
             package.json
             package-lock.json
+
+  # Typecheck and actually *bundle* both Workflow Insight hosts.
+  #
+  # Neither host package is in the root `build` script, so without this job
+  # main.ts, preload.ts and the two esbuild configs are only ever typechecked —
+  # an unresolvable external or a renamed entry point would ship unnoticed. The
+  # hostAgnostic guard catches `vscode` leaking into the shared modules, but that
+  # is a source-level check and cannot see a bundler failure.
+  #
+  # webview-ui gets its own `npm ci`: it is a nested package outside the root
+  # workspaces glob, so the root install never covers it, and it is the one place
+  # the renderer is typechecked at all.
+  insight-hosts:
+    needs: lint-commits
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci
+      - name: Install webview-ui dependencies
+        working-directory: packages/aws-durable-execution-sdk-js-insight-vscode/webview-ui
+        run: npm ci
+      - name: Typecheck both hosts
+        run: npm run typecheck:hosts
+      - name: Typecheck the renderer
+        working-directory: packages/aws-durable-execution-sdk-js-insight-vscode/webview-ui
+        run: npx tsc --noEmit
+      - name: Bundle the VS Code extension (renderer + extension host)
+        run: npm run build -w packages/aws-durable-execution-sdk-js-insight-vscode
+      - name: Bundle the desktop app
+        run: npm run build -w packages/aws-durable-execution-sdk-js-insight-desktop
 
   unit-tests:
     needs: build

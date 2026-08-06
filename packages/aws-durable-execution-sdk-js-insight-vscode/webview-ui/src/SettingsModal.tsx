@@ -81,30 +81,6 @@ export function SettingsModal({ visible, settings, capabilities, modelDownloaded
   const [form, setForm] = useState<Settings>(settings);
   const [downloading, setDownloading] = useState(false);
 
-  useEffect(() => {
-    // A provider this host cannot reach must not load into the form: the
-    // settings file is shared in spirit between hosts (and can be carried
-    // between them), so "copilot" can arrive in the desktop app where it is
-    // unusable. Present the default instead of an option that isn't offered.
-    setForm(
-      !capabilities.copilot && settings.llmProvider === "copilot"
-        ? { ...settings, llmProvider: "bedrock" }
-        : settings,
-    );
-  }, [settings, visible, capabilities.copilot]);
-
-  // Drop any prior test result when the modal (re)opens so a stale pass/fail
-  // from a previous session isn't shown against freshly-loaded settings.
-  useEffect(() => {
-    onClearTest();
-  }, [visible, onClearTest]);
-
-  const update = (field: keyof Settings, value: string | boolean) => {
-    // Changing the destination invalidates any existing test result.
-    if (field === "destinationType") onClearTest();
-    setForm((f) => ({ ...f, [field]: value }));
-  };
-
   // One source for both the option list and the selected-option lookup, so the
   // dropdown cannot show a label for a choice it doesn't offer. Copilot is
   // omitted entirely where the host can't reach it rather than shown disabled:
@@ -123,8 +99,38 @@ export function SettingsModal({ visible, settings, capabilities, modelDownloaded
       value: "local-server",
       label: "Local server (Ollama / OpenAI-compatible)",
     },
-    { value: "local", label: "Local LLM (offline, on-device)" },
+    ...(capabilities.localLlm
+      ? [{ value: "local", label: "Local LLM (offline, on-device)" }]
+      : []),
   ];
+
+  useEffect(() => {
+    // Defence in depth, and generic rather than per-provider: the host already
+    // narrows llmProvider to something it can honor before sending config (see
+    // hostCapabilities.ts), so this only matters if a value ever arrives that
+    // isn't on offer. Loading one would let Save persist a provider the host
+    // cannot use.
+    const offered = llmProviderOptions.some(
+      (o) => o.value === settings.llmProvider,
+    );
+    setForm(
+      offered
+        ? settings
+        : { ...settings, llmProvider: llmProviderOptions[0].value },
+    );
+  }, [settings, visible, capabilities.copilot, capabilities.localLlm]);
+
+  // Drop any prior test result when the modal (re)opens so a stale pass/fail
+  // from a previous session isn't shown against freshly-loaded settings.
+  useEffect(() => {
+    onClearTest();
+  }, [visible, onClearTest]);
+
+  const update = (field: keyof Settings, value: string | boolean) => {
+    // Changing the destination invalidates any existing test result.
+    if (field === "destinationType") onClearTest();
+    setForm((f) => ({ ...f, [field]: value }));
+  };
 
   const canSave = form.llmProvider !== "local" || modelDownloaded;
 

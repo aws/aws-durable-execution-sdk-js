@@ -86,10 +86,15 @@ export interface SqsMessageRow {
 export interface HostCapabilities {
   /**
    * Whether the "copilot" LLM provider is usable. False outside VS Code — the
-   * Language Model API only exists in the extension host — in which case the UI
-   * must not offer it.
+   * Language Model API only exists in the extension host.
    */
   copilot: boolean;
+  /**
+   * Whether the "local" on-device provider is usable. Needs the native
+   * node-llama-cpp module, which the extension ships but a packaged desktop app
+   * does not.
+   */
+  localLlm: boolean;
 }
 
 /** Messages from extension host → webview */

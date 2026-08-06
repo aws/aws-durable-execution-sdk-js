@@ -125,9 +125,11 @@ export function App() {
   const [loading, setLoading] = useState(false);
   const [modelDownloaded, setModelDownloaded] = useState(false);
   // Defaults to no capabilities: the UI should hide a host-dependent feature
-  // until the host has positively reported that it has it.
+  // until the host has positively reported that it has it, so a host that fails
+  // to report can only ever hide an option, never offer a broken one.
   const [capabilities, setCapabilities] = useState<HostCapabilities>({
     copilot: false,
+    localLlm: false,
   });
   const [downloadPercent, setDownloadPercent] = useState(0);
   // Result of a "Test connection" run in the Settings modal (null = not run

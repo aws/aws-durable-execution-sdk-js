@@ -19,7 +19,7 @@ import {
   type InsightConfig,
 } from "./configCore";
 import type { Favorite, HostPort, SettingValue } from "./hostPort";
-import { getCopilotBridge } from "./copilotBridge";
+import { detectCapabilities, withEffectiveProvider } from "./hostCapabilities";
 import {
   BOOLEAN_SETTING_KEYS,
   NUMBER_SETTING_KEYS,
@@ -244,6 +244,20 @@ export class ExplorerSession {
     this.listenController = undefined;
   }
 
+  /**
+   * The host's config, with the LLM provider narrowed to what this host can
+   * actually honor.
+   *
+   * Every read in this class goes through here rather than calling the port
+   * directly, so the provider the session *uses* is the same one sendConfig
+   * *reports*. Reading the port directly is how a desktop app with a
+   * carried-over `llmProvider: "copilot"` came to show "Amazon Bedrock" in
+   * Settings while the next query threw about Copilot.
+   */
+  private readConfig(): InsightConfig {
+    return withEffectiveProvider(this.host.readConfig(), detectCapabilities());
+  }
+
   private async handleMessage(msg: InboundMessage): Promise<void> {
     try {
       switch (msg.type) {
@@ -301,7 +315,7 @@ export class ExplorerSession {
   }
 
   private sendConfig(): void {
-    const cfg = this.host.readConfig();
+    const cfg = this.readConfig();
     // Reflect the selected local model so isModelDownloaded() below (and any
     // local generation) targets the right file.
     setLocalModel(cfg.localModel);
@@ -345,12 +359,8 @@ export class ExplorerSession {
       },
       modelDownloaded: isModelDownloaded(),
       // What this host can actually do, so the UI never offers a provider it
-      // cannot reach. Derived rather than declared: Copilot works exactly when
-      // a bridge has been installed, so there is no second place to keep in
-      // sync (see copilotBridge.ts).
-      capabilities: {
-        copilot: getCopilotBridge() !== undefined,
-      },
+      // cannot reach. Detected, not declared — see hostCapabilities.ts.
+      capabilities: detectCapabilities(),
     });
   }
 
@@ -430,7 +440,7 @@ export class ExplorerSession {
     await this.host.writeSettings(coercedEntries);
     this.sendConfig();
 
-    const cfg = this.host.readConfig();
+    const cfg = this.readConfig();
     if (
       cfg.destinationType === "s3" &&
       cfg.athenaDatabase &&
@@ -486,7 +496,7 @@ export class ExplorerSession {
   private async onDownloadModel(localModel?: string): Promise<void> {
     // Download the model the user picked in settings (may not be saved yet),
     // falling back to the saved selection.
-    setLocalModel(localModel ?? this.host.readConfig().localModel);
+    setLocalModel(localModel ?? this.readConfig().localModel);
     if (isModelDownloaded()) {
       this.host.post({ type: "downloadProgress", percent: 100, done: true });
       return;
@@ -587,7 +597,7 @@ export class ExplorerSession {
     description: string;
     requestId: number;
   }): Promise<void> {
-    const cfg = this.host.readConfig();
+    const cfg = this.readConfig();
     // Visualize builds the chart spec with the LLM — enforce consent host-side
     // too (defense in depth); reply as a chartSpecError so the webview clears
     // its loading state.
@@ -626,7 +636,7 @@ export class ExplorerSession {
 
   private onStartListening(): void {
     if (this.listenController) return; // already listening
-    const cfg = this.host.readConfig();
+    const cfg = this.readConfig();
     if (!cfg.sqsQueueUrl) {
       this.host.post({
         type: "error",
@@ -671,7 +681,7 @@ export class ExplorerSession {
       this.host.post({ type: "error", message: "Enter a question first." });
       return;
     }
-    const cfg = this.host.readConfig();
+    const cfg = this.readConfig();
     setLocalModel(cfg.localModel);
     setLocalServer(cfg.localServerUrl, cfg.localServerModel);
     const credentials = resolveCredentials(cfg.awsProfile);
@@ -1547,7 +1557,7 @@ export class ExplorerSession {
     month?: string,
     day?: string,
   ): Promise<void> {
-    const cfg = this.host.readConfig();
+    const cfg = this.readConfig();
     const credentials = resolveCredentials(cfg.awsProfile);
     try {
       let record: Record<string, string> | undefined;
