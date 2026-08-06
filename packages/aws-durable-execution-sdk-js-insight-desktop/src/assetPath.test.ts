@@ -1,4 +1,13 @@
-import { resolve, sep } from "node:path";
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve, sep } from "node:path";
 import { contentTypeFor, resolveAssetPath } from "./assetPath";
 
 const ROOT = resolve("/tmp/insight-media");
@@ -52,6 +61,60 @@ describe("resolveAssetPath", () => {
     expect(resolveAssetPath(ROOT, "/./webview.js")).toBe(
       `${ROOT}${sep}webview.js`,
     );
+  });
+
+  describe("with real directories on disk", () => {
+    let root: string;
+    let outside: string;
+
+    beforeEach(() => {
+      const base = realpathSync(mkdtempSync(join(tmpdir(), "insight-assets-")));
+      root = join(base, "media");
+      outside = join(base, "secrets");
+      mkdirSync(root);
+      mkdirSync(outside);
+      writeFileSync(join(root, "webview.js"), "// asset");
+      writeFileSync(join(outside, "creds"), "sensitive");
+    });
+
+    afterEach(() => {
+      rmSync(dirname(root), { recursive: true, force: true });
+    });
+
+    it("serves a real file inside the root", () => {
+      expect(resolveAssetPath(root, "/webview.js")).toBe(
+        join(root, "webview.js"),
+      );
+    });
+
+    it("rejects a symlink pointing outside the root", () => {
+      // The lexical check passes here — "escape/creds" contains no ".." — so
+      // only the realpath comparison can catch this.
+      symlinkSync(outside, join(root, "escape"));
+      expect(resolveAssetPath(root, "/escape/creds")).toBeNull();
+    });
+
+    it("rejects a symlinked file pointing outside the root", () => {
+      symlinkSync(join(outside, "creds"), join(root, "innocent.js"));
+      expect(resolveAssetPath(root, "/innocent.js")).toBeNull();
+    });
+
+    it("allows a symlink that stays inside the root", () => {
+      mkdirSync(join(root, "sub"));
+      writeFileSync(join(root, "sub", "real.js"), "// ok");
+      symlinkSync(join(root, "sub"), join(root, "linked"));
+      expect(resolveAssetPath(root, "/linked/real.js")).toBe(
+        join(root, "linked", "real.js"),
+      );
+    });
+
+    it("still resolves a path that does not exist yet", () => {
+      // realpathSync throws for a missing path; the lexical result must stand so
+      // the caller's own existence check produces the 404.
+      expect(resolveAssetPath(root, "/missing.js")).toBe(
+        join(root, "missing.js"),
+      );
+    });
   });
 });
 

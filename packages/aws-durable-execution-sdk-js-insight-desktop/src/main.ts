@@ -111,6 +111,12 @@ function indexHtml(nonce: string): string {
  */
 async function serveAsset(request: Request): Promise<Response> {
   const url = new URL(request.url);
+  // Only our single authority is served. `insight://evil/webview.js` is a
+  // distinct origin that the CSP and the preload's targeted postMessage do not
+  // account for, so refuse it rather than serving the app under a second origin.
+  if (url.host !== HOST) {
+    return new Response("Not found", { status: 404 });
+  }
   const pathname = decodeURIComponent(url.pathname);
 
   if (pathname === "/" || pathname === "/index.html") {
@@ -200,10 +206,19 @@ function launch(): void {
   });
 }
 
-app.whenReady().then(() => {
-  protocol.handle(SCHEME, serveAsset);
-  launch();
-});
+app
+  .whenReady()
+  .then(() => {
+    protocol.handle(SCHEME, serveAsset);
+    launch();
+  })
+  .catch((err: unknown) => {
+    // Nothing has a window yet, so there is no UI to report into: fail loudly
+    // and exit rather than leaving a running process with no way in. Without the
+    // catch this would surface only as an unhandled rejection warning.
+    console.error("[workflow-insight] failed to start:", err);
+    app.exit(1);
+  });
 
 // Standard single-window desktop behavior: quit with the last window, except on
 // macOS where the app is expected to stay resident in the dock.

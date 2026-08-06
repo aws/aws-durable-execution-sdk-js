@@ -17,21 +17,49 @@ import {
   existsSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 
-/** The modules the desktop package imports directly (see its src/). */
-const DESKTOP_ENTRY_POINTS = [
-  "explorerSession.ts",
-  "configCore.ts",
-  "hostPort.ts",
-  "settingsKeys.ts",
-];
-
 const SRC = __dirname;
+
+/** The desktop package's own sources, which are what pull these modules in. */
+const DESKTOP_SRC = resolve(
+  SRC,
+  "..",
+  "..",
+  "aws-durable-execution-sdk-js-insight-desktop",
+  "src",
+);
+
+/**
+ * The modules the desktop package actually imports from this one.
+ *
+ * Derived from the desktop sources rather than listed by hand. A hardcoded list
+ * is the same kind of second source of truth this change argues against, and it
+ * fails in the direction that hides problems: import a new module from the
+ * desktop host, forget to add it here, and the guard silently stops covering the
+ * thing you just added.
+ */
+function desktopEntryPoints(): string[] {
+  const entries = new Set<string>();
+  const files = readdirSync(DESKTOP_SRC).filter(
+    (f) => f.endsWith(".ts") && !f.endsWith(".test.ts"),
+  );
+  for (const file of files) {
+    const src = readFileSync(join(DESKTOP_SRC, file), "utf-8");
+    // Relative specifiers that climb out of the desktop package into this
+    // package's src, e.g. "../../aws-durable-execution-sdk-js-insight-vscode/src/x".
+    const re =
+      /["'](?:\.\.\/)+aws-durable-execution-sdk-js-insight-vscode\/src\/([^"']+)["']/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(src))) entries.add(`${m[1]}.ts`);
+  }
+  return [...entries].sort();
+}
 
 function resolveImport(fromFile: string, spec: string): string | undefined {
   const base = resolve(dirname(fromFile), spec);
@@ -101,7 +129,19 @@ function findVsCodePath(entry: string, root = SRC): string[] | undefined {
 }
 
 describe("host-agnostic module graph", () => {
-  it.each(DESKTOP_ENTRY_POINTS)(
+  it("derives the desktop's entry points from its actual imports", () => {
+    // A derivation that silently found nothing would make every assertion below
+    // vacuous, so pin that it sees the real ones.
+    const derived = desktopEntryPoints();
+    expect(derived.length).toBeGreaterThan(0);
+    expect(derived).toContain("explorerSession.ts");
+    expect(derived).toContain("hostPort.ts");
+    for (const entry of derived) {
+      expect(existsSync(join(SRC, entry))).toBe(true);
+    }
+  });
+
+  it.each(desktopEntryPoints())(
     "%s does not reach the vscode API",
     (entryName) => {
       const entry = join(SRC, entryName);

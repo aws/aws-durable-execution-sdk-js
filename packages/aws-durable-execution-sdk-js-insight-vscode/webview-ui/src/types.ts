@@ -246,13 +246,29 @@ export interface Settings {
 }
 
 /**
- * Version of the AI-usage disclosure. Bump this whenever the notice wording
- * changes so previously-consented users are re-prompted.
+ * Version of the AI-usage disclosure. Bump this whenever the *substance* of the
+ * notice changes — the providers named, or where data can go — so
+ * previously-consented users are re-prompted.
  * LEGAL: wording is pending review by the Legal team (see tracked ticket).
  *
  * Currently "2": "1" was the initial gate (features + generic data notice);
  * "2" added the per-provider data-flow breakdown, so early adopters on "1"
  * re-accept the fuller disclosure.
+ *
+ * Deliberately NOT bumped when the desktop host was added, even though the text
+ * a VS Code user sees did change: the on-device bullet lost the parenthetical
+ * "(Available only when running the extension from source, not in the packaged
+ * build.)". That caveat was simply wrong — .vscodeignore explicitly un-ignores
+ * node_modules/node-llama-cpp, so the packaged VSIX does support the on-device
+ * provider. Removing an inaccurate limitation does not change which providers
+ * exist or where data travels (on-device sends nothing anywhere), so
+ * re-prompting every consented user would be disproportionate. The other
+ * host-dependent edits only *remove* bullets, and only on a host where that
+ * provider is unreachable, which likewise cannot widen the disclosure.
+ *
+ * The test to apply when editing this text: could a user who already consented
+ * be surprised about where their data goes? If yes, bump. If the change only
+ * narrows or corrects, don't — but say so here.
  */
 export const AI_DISCLOSURE_VERSION = "2";
 

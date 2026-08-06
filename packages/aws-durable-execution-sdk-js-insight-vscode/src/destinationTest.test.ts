@@ -27,7 +27,10 @@ jest.mock("./opensearch", () => ({
   pingOpenSearch: jest.fn(),
   countOpenSearchDocs: jest.fn(),
 }));
-jest.mock("./config", () => ({
+// Must target ./configCore, which is where destinationTest.ts imports
+// resolveCredentials from. Pointing this at ./config made it a no-op and let the
+// real provider chain run in tests.
+jest.mock("./configCore", () => ({
   resolveCredentials: jest.fn(() => ({})),
 }));
 

@@ -39,17 +39,33 @@ export interface HostCapabilities {
  * three builds — the VSIX (ships it), a desktop dev checkout (finds it hoisted
  * in the workspace root), and a packaged desktop app (does not, so this reports
  * false and the UI stops offering it).
+ *
+ * Memoized because Node caches *successful* resolutions but not failures: in a
+ * packaged app, where the answer is always no, every uncached call would walk the
+ * directory chain and throw. Config reads are per-query rather than
+ * per-keystroke, so that was never material — but the answer also cannot change
+ * within a process, so there is no reason to pay for it twice.
  */
+let localLlmAvailable: boolean | undefined;
+
 export function isLocalLlmAvailable(): boolean {
-  try {
-    require.resolve("node-llama-cpp");
-    return true;
-  } catch {
-    return false;
+  if (localLlmAvailable === undefined) {
+    try {
+      require.resolve("node-llama-cpp");
+      localLlmAvailable = true;
+    } catch {
+      localLlmAvailable = false;
+    }
   }
+  return localLlmAvailable;
 }
 
-/** Detect this host's capabilities. Cheap; call it per config read. */
+/**
+ * Detect this host's capabilities.
+ *
+ * Cheap enough to call on every config read: the Copilot check is a variable
+ * read, and the on-device check is memoized above.
+ */
 export function detectCapabilities(): HostCapabilities {
   return {
     copilot: getCopilotBridge() !== undefined,

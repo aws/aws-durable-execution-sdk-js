@@ -5,6 +5,7 @@
  * is the app's only filesystem-facing boundary reachable from renderer-supplied
  * input, so it is the part most worth having tests for.
  */
+import { realpathSync } from "node:fs";
 import { resolve, sep } from "node:path";
 
 /** Content types for the assets the webview bundle actually requests. */
@@ -45,6 +46,11 @@ export function contentTypeFor(path: string): string {
  * `root + sep` boundary is what stops a sibling directory whose name merely
  * starts with the root's from being accepted (`/media` must not admit
  * `/media-evil`).
+ *
+ * The lexical check alone cannot see a symlink pointing outside the root, so the
+ * resolved path is also compared after `realpathSync`. Both checks are kept: the
+ * lexical one rejects traversal before touching the filesystem, and it is the
+ * only one that can act on a path that does not exist yet.
  */
 export function resolveAssetPath(
   root: string,
@@ -56,8 +62,22 @@ export function resolveAssetPath(
   // Strip leading separators BEFORE any normalization (see above).
   const relativePart = pathname.replace(/^[/\\]+/, "");
   const candidate = resolve(absoluteRoot, relativePart);
-  if (candidate !== absoluteRoot && !candidate.startsWith(absoluteRoot + sep)) {
-    return null;
+  if (!isInside(absoluteRoot, candidate)) return null;
+
+  // Re-check through symlinks. realpathSync throws for a nonexistent path, in
+  // which case the lexical result stands and the caller's existence check will
+  // reject it anyway.
+  try {
+    const realRoot = realpathSync(absoluteRoot);
+    const realCandidate = realpathSync(candidate);
+    if (!isInside(realRoot, realCandidate)) return null;
+  } catch {
+    // Nonexistent (or unreadable) path: nothing more to verify here.
   }
   return candidate;
+}
+
+/** Whether `candidate` is `root` itself or sits beneath it. */
+function isInside(root: string, candidate: string): boolean {
+  return candidate === root || candidate.startsWith(root + sep);
 }
