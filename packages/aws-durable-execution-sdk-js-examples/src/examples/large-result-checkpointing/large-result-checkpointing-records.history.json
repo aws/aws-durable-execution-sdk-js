@@ -2,22 +2,22 @@
   {
     "EventType": "ExecutionStarted",
     "EventId": 1,
-    "Id": "14557be1-7d75-41e5-8af8-9f5e36b3e4fe",
-    "EventTimestamp": "2026-08-03T17:09:32.159Z",
+    "Id": "bde06805-8fc6-40a0-98db-4328293e5bbe",
+    "EventTimestamp": "2026-08-06T18:18:53.156Z",
     "ExecutionStartedDetails": {
       "Input": {
-        "Payload": "{}"
+        "Payload": "{\"mode\":\"records\"}"
       }
     }
   },
   {
     "EventType": "ExecutionStarted",
     "EventId": 1,
-    "Id": "14557be1-7d75-41e5-8af8-9f5e36b3e4fe",
-    "EventTimestamp": "2026-08-03T17:09:32.159Z",
+    "Id": "bde06805-8fc6-40a0-98db-4328293e5bbe",
+    "EventTimestamp": "2026-08-06T18:18:53.156Z",
     "ExecutionStartedDetails": {
       "Input": {
-        "Payload": "{}"
+        "Payload": "{\"mode\":\"records\"}"
       }
     }
   },
@@ -27,7 +27,7 @@
     "EventId": 2,
     "Id": "c4ca4238a0b92382",
     "Name": "load-batch-metadata",
-    "EventTimestamp": "2026-08-03T17:09:32.167Z",
+    "EventTimestamp": "2026-08-06T18:18:53.164Z",
     "StepStartedDetails": {}
   },
   {
@@ -36,7 +36,7 @@
     "EventId": 3,
     "Id": "c4ca4238a0b92382",
     "Name": "load-batch-metadata",
-    "EventTimestamp": "2026-08-03T17:09:32.167Z",
+    "EventTimestamp": "2026-08-06T18:18:53.164Z",
     "StepSucceededDetails": {
       "Result": {
         "Payload": "{\"batches\":6,\"recordsPerBatch\":1000}"
@@ -47,33 +47,33 @@
   {
     "EventType": "ExecutionSucceeded",
     "EventId": 4,
-    "Id": "35769d58719933cb",
-    "EventTimestamp": "2026-08-03T17:09:32.195Z",
+    "Id": "ac4838c68f006430",
+    "EventTimestamp": "2026-08-06T18:18:53.190Z",
     "ExecutionSucceededDetails": {
       "Result": {
-        "Payload": "{\"totalRecords\":6000,\"totalBatches\":6,\"records\":[{\"id\":\"rec-0-0\"...[trimmed 6377390 chars for repo size; not used by assertEventSignatures]"
+        "Payload": "{\"mode\":\"records\",\"totalRecords\":6000,\"totalBatches\":6,\"reco...[trimmed 6377347 chars for repo size; not used by assertEventSignatures]"
       }
     }
   },
   {
     "EventType": "InvocationCompleted",
     "EventId": 5,
-    "EventTimestamp": "2026-08-03T17:09:32.196Z",
+    "EventTimestamp": "2026-08-06T18:18:53.191Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-08-03T17:09:32.159Z",
-      "EndTimestamp": "2026-08-03T17:09:32.196Z",
+      "StartTimestamp": "2026-08-06T18:18:53.155Z",
+      "EndTimestamp": "2026-08-06T18:18:53.191Z",
       "Error": {},
-      "RequestId": "3b8cced0-7273-49f8-b4f5-23c81bb54e84"
+      "RequestId": "bd35620b-346e-460f-bc7e-d5aefe119e4c"
     }
   },
   {
     "EventType": "ExecutionSucceeded",
     "EventId": 6,
-    "Id": "14557be1-7d75-41e5-8af8-9f5e36b3e4fe",
-    "EventTimestamp": "2026-08-03T17:09:32.202Z",
+    "Id": "bde06805-8fc6-40a0-98db-4328293e5bbe",
+    "EventTimestamp": "2026-08-06T18:18:53.199Z",
     "ExecutionSucceededDetails": {
       "Result": {
-        "Payload": "{\"totalRecords\":6000,\"totalBatches\":6,\"records\":[{\"id\":\"rec-0-0\"...[trimmed 6377390 chars for repo size; not used by assertEventSignatures]"
+        "Payload": "{\"mode\":\"records\",\"totalRecords\":6000,\"totalBatches\":6,\"reco...[trimmed 6377347 chars for repo size; not used by assertEventSignatures]"
       }
     }
   }
