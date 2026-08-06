@@ -1,4 +1,4 @@
-// 10-21: Attempt hook info field shape (interface-shape probe)
+// 10-21: Attempt hook info field shape (canonical dump)
 import {
   DurableContext,
   withDurableExecution,
@@ -16,14 +16,45 @@ function isStep(type?: string): boolean {
   return (type || "").toUpperCase() === "STEP";
 }
 
-// INTERFACE-SHAPE probe: every logged field is read from the CURRENT hook's own
-// info parameter. When the SDK's info type does not expose a field, the
-// corresponding has_* flag is emitted false; that omission is the honest signal
-// of a missing API surface.
+function iso(d?: Date): string | undefined {
+  return d != null ? new Date(d).toISOString() : undefined;
+}
+
+function compact(rec: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(rec)) {
+    if (v !== undefined && v !== null) out[k] = v;
+  }
+  return out;
+}
+
+// CANONICAL DUMP of the CURRENT hook's own attempt info. Replay indicators
+// (isReplay / isReplayingChildren) are dumped when the info exposes them but
+// are not asserted here; attempt-end additionally carries outcome and error.
+function dumpAttempt(hook: string, info: AttemptInfo): Record<string, unknown> {
+  return {
+    plugin: PLUGIN,
+    hook,
+    id: info.id,
+    name: info.name,
+    type: info.type != null ? info.type.toUpperCase() : undefined,
+    subType: info.subType,
+    parentId: info.parentId,
+    attempt: info.attempt,
+    startTimestamp: iso(info.startTimestamp),
+    endTimestamp: iso(info.endTimestamp),
+    isReplay: info.isReplay,
+    isReplayingChildren: (info as AttemptInfo & { isReplayingChildren?: boolean })
+      .isReplayingChildren,
+  };
+}
+
 function makePlugin(): DurableInstrumentationPlugin {
   let executionArn = "";
   const emit = (rec: Record<string, unknown>): void =>
-    process.stdout.write(JSON.stringify({ ...rec, durableExecutionArn: executionArn }) + "\n");
+    process.stdout.write(
+      JSON.stringify({ ...compact(rec), durableExecutionArn: executionArn }) + "\n",
+    );
 
   return {
     async onInvocationStart(info: InvocationInfo): Promise<void> {
@@ -32,28 +63,15 @@ function makePlugin(): DurableInstrumentationPlugin {
     },
     async onOperationAttemptStart(info: AttemptInfo): Promise<void> {
       if (!isStep(info.type)) return;
-      emit({
-        plugin: PLUGIN,
-        hook: "attempt-start",
-        op: info.id,
-        name: info.name,
-        type: (info.type || "").toUpperCase(),
-        attempt: info.attempt,
-        has_start_time: info.startTimestamp != null,
-      });
+      emit(dumpAttempt("attempt-start", info));
     },
     async onOperationAttemptEnd(info: AttemptEndInfo): Promise<void> {
       if (!isStep(info.type)) return;
       emit({
-        plugin: PLUGIN,
-        hook: "attempt-end",
-        op: info.id,
-        name: info.name,
-        type: (info.type || "").toUpperCase(),
-        attempt: info.attempt,
-        // The attempt outcome as reported by the info parameter (SUCCEEDED / FAILED).
+        ...dumpAttempt("attempt-end", info),
+        // The attempt outcome as reported by the info (SUCCEEDED / FAILED).
         outcome: info.outcome,
-        has_error: info.error != null,
+        error: info.error != null ? info.error.message : undefined,
       });
     },
   };

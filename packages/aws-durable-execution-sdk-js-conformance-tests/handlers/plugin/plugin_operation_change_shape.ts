@@ -1,10 +1,11 @@
-// 10-22: Operation-change hook info field shape (interface-shape probe)
+// 10-22: Operation-change hook info field shape (canonical dump)
 import {
   DurableContext,
   withDurableExecution,
   DurableInstrumentationPlugin,
   InvocationInfo,
   OperationChangeInfo,
+  OperationInfo,
 } from "@aws/durable-execution-sdk-js";
 
 const PLUGIN = "CONFPLUGIN";
@@ -13,17 +14,29 @@ function isStep(type?: string): boolean {
   return (type || "").toUpperCase() === "STEP";
 }
 
-// INTERFACE-SHAPE probe: every logged field is read from the CURRENT hook's own
-// info parameter (the change info and the DELTA ITEM's own OperationInfo) —
-// never reconstructed from another hook or from plugin state. When the SDK's
-// info type does not expose a field, the corresponding has_* flag is emitted
-// false; that omission is the honest signal of a missing API surface. The
-// reference item shape is the full operation info (identity + status +
-// payloads), not a reduced change-item record.
+function iso(d?: Date): string | undefined {
+  return d != null ? new Date(d).toISOString() : undefined;
+}
+
+function compact(rec: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(rec)) {
+    if (v !== undefined && v !== null) out[k] = v;
+  }
+  return out;
+}
+
+// CANONICAL DUMP: one record per step-type DELTA ITEM. Each record dumps the
+// item's own full operation field surface at top level (canonical camelCase;
+// type upper-cased; timestamps ISO-8601; result raw serialized string; error
+// message), plus the hook-level fields (executionArn, map-size counts) and the
+// derived scalar inFullMap := the id also appears in the info's full map.
 function makePlugin(): DurableInstrumentationPlugin {
   let executionArn = "";
   const emit = (rec: Record<string, unknown>): void =>
-    process.stdout.write(JSON.stringify({ ...rec, durableExecutionArn: executionArn }) + "\n");
+    process.stdout.write(
+      JSON.stringify({ ...compact(rec), durableExecutionArn: executionArn }) + "\n",
+    );
 
   return {
     async onInvocationStart(info: InvocationInfo): Promise<void> {
@@ -31,27 +44,33 @@ function makePlugin(): DurableInstrumentationPlugin {
       executionArn = info.executionArn;
     },
     async onOperationChange(info: OperationChangeInfo): Promise<void> {
-      const fullMap = info.operations;
-      // `has_arn` probes whether the change info itself carries the ARN.
-      const hasArn = info.executionArn != null && info.executionArn !== "";
+      const updatedOperationsCount = Object.keys(info.updatedOperations).length;
+      const operationsCount = Object.keys(info.operations).length;
       for (const [id, op] of Object.entries(info.updatedOperations)) {
         if (!isStep(op.type)) continue;
+        const item = op as OperationInfo;
         emit({
           plugin: PLUGIN,
           hook: "operation-change",
-          op: id,
-          status: op.status,
-          // Whether the same op id also appears in the info's full operations map.
-          in_full_map: id in fullMap,
-          has_arn: hasArn,
-          // The DELTA ITEM's own field surface.
-          item_name: op.name,
-          item_type: (op.type || "").toUpperCase(),
-          item_has_result: op.result != null,
-          item_has_end_time: op.endTimestamp != null,
-          item_has_attempt: op.attempt != null,
-          // The item exposes a replay indicator (isReplay field is present).
-          item_has_replay: "isReplay" in op,
+          // Hook-level fields from the change info itself.
+          executionArn: info.executionArn,
+          updatedOperationsCount,
+          operationsCount,
+          // Derived: the same id also appears in the info's full operations map.
+          inFullMap: id in info.operations,
+          // The delta item's own operation field surface, dumped at top level.
+          id: item.id,
+          name: item.name,
+          type: item.type != null ? item.type.toUpperCase() : undefined,
+          subType: item.subType,
+          parentId: item.parentId,
+          status: item.status,
+          startTimestamp: iso(item.startTimestamp),
+          endTimestamp: iso(item.endTimestamp),
+          result: item.result,
+          error: item.error != null ? item.error.message : undefined,
+          attempt: item.attempt,
+          isReplay: item.isReplay,
         });
       }
     },

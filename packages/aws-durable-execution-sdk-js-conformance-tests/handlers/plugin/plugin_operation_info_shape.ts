@@ -1,4 +1,4 @@
-// 10-20: Operation hook info field shape (interface-shape probe)
+// 10-20: Operation hook info field shape (canonical dump)
 import {
   DurableContext,
   withDurableExecution,
@@ -14,14 +14,48 @@ function isStep(type?: string): boolean {
   return (type || "").toUpperCase() === "STEP";
 }
 
-// INTERFACE-SHAPE probe: every logged field is read from the CURRENT hook's own
-// info parameter. When the SDK's info type does not expose a field, the
-// corresponding has_* flag is emitted false (or the value field omitted); that
-// omission is the honest signal of a missing API surface.
+function iso(d?: Date): string | undefined {
+  return d != null ? new Date(d).toISOString() : undefined;
+}
+
+// Drops undefined/null so an unexposed field is OMITTED (missing key -> failed
+// assertion -> parity signal).
+function compact(rec: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(rec)) {
+    if (v !== undefined && v !== null) out[k] = v;
+  }
+  return out;
+}
+
+// CANONICAL DUMP of the CURRENT hook's own operation info: every field mapped
+// one-to-one to its canonical camelCase name; type upper-cased; timestamps as
+// ISO-8601 strings; result as the raw serialized string; error as its message.
+function dumpOperation(hook: string, info: OperationInfo): Record<string, unknown> {
+  return {
+    plugin: PLUGIN,
+    hook,
+    id: info.id,
+    name: info.name,
+    type: info.type != null ? info.type.toUpperCase() : undefined,
+    subType: info.subType,
+    parentId: info.parentId,
+    status: info.status,
+    startTimestamp: iso(info.startTimestamp),
+    endTimestamp: iso(info.endTimestamp),
+    result: info.result,
+    error: info.error != null ? info.error.message : undefined,
+    attempt: info.attempt,
+    isReplay: info.isReplay,
+  };
+}
+
 function makePlugin(): DurableInstrumentationPlugin {
   let executionArn = "";
   const emit = (rec: Record<string, unknown>): void =>
-    process.stdout.write(JSON.stringify({ ...rec, durableExecutionArn: executionArn }) + "\n");
+    process.stdout.write(
+      JSON.stringify({ ...compact(rec), durableExecutionArn: executionArn }) + "\n",
+    );
 
   return {
     async onInvocationStart(info: InvocationInfo): Promise<void> {
@@ -30,41 +64,11 @@ function makePlugin(): DurableInstrumentationPlugin {
     },
     async onOperationStart(info: OperationInfo): Promise<void> {
       if (!isStep(info.type)) return;
-      emit({
-        plugin: PLUGIN,
-        hook: "operation-start",
-        op: info.id,
-        name: info.name,
-        type: (info.type || "").toUpperCase(),
-        replay: info.isReplay,
-        has_start_time: info.startTimestamp != null,
-        // Emitted for observability; not asserted at start (status may not be
-        // checkpointed yet when the live first-start hook fires).
-        has_status: info.status != null,
-      });
+      emit(dumpOperation("operation-start", info));
     },
     async onOperationEnd(info: OperationEndInfo): Promise<void> {
       if (!isStep(info.type)) return;
-      const rec: Record<string, unknown> = {
-        plugin: PLUGIN,
-        hook: "operation-end",
-        op: info.id,
-        name: info.name,
-        type: (info.type || "").toUpperCase(),
-        replay: info.isReplay,
-        status: info.status,
-        has_result: info.result != null,
-        has_error: info.error != null,
-        // The 1-based attempt number exactly as exposed on the end info.
-        attempt: info.attempt,
-        has_end_time: info.endTimestamp != null,
-      };
-      // The operation's checkpointed serialized result exactly as exposed on the
-      // info parameter (e.g. '"task-a"'); omitted when unavailable.
-      if (info.result != null) {
-        rec.result = info.result;
-      }
-      emit(rec);
+      emit(dumpOperation("operation-end", info));
     },
   };
 }
