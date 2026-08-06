@@ -80,21 +80,23 @@ describe("writeDesktopSettings", () => {
     expect(storedSettings()).toEqual({ region: "us-east-1" });
   });
 
-  it("refuses inherited property names", () => {
-    // A plain-object merge would treat these as assignments to the prototype
-    // chain rather than as settings. The allowlist is what makes them inert.
+  it("refuses inherited property names reaching the allowlist", () => {
+    // `constructor` and `toString` are what actually exercise the loop: in an
+    // object literal they are ordinary own properties, so the allowlist is the
+    // only thing stopping them from being persisted as settings.
+    //
+    // `__proto__` is deliberately NOT tested here. In a literal with a string
+    // value it is neither a prototype assignment nor an own property —
+    // Object.keys({ __proto__: "x" }) is [] — so it never reaches the loop and
+    // an assertion about it could not fail. Its realistic shape is a parsed
+    // settings file, covered in the readDesktopConfig suite below.
     writeDesktopSettings({
-      __proto__: "polluted",
       constructor: "polluted",
       toString: "polluted",
       region: "us-east-1",
     } as unknown as Record<string, string>);
-    const stored = storedSettings();
-    expect(stored).toEqual({ region: "us-east-1" });
+    expect(storedSettings()).toEqual({ region: "us-east-1" });
     expect({}.toString).toBeInstanceOf(Function);
-    expect(
-      (Object.prototype as unknown as Record<string, unknown>).polluted,
-    ).toBeUndefined();
   });
 
   it("removes a key when the value is undefined, restoring the default", () => {
@@ -141,6 +143,54 @@ describe("readDesktopConfig", () => {
     const cfg = readDesktopConfig();
     expect(cfg.sqsDeleteAfterRead).toBe(true);
     expect(cfg.agenticMaxIterations).toBe(3);
+  });
+
+  it("ignores a __proto__ key in the settings file", () => {
+    // The path that actually produces __proto__ as an own property: JSON.parse
+    // does create it (Object.keys(JSON.parse('{"__proto__":{}}')) is
+    // ["__proto__"]), unlike an object literal, so this is the shape that
+    // reaches loadSettings' allowlist.
+    //
+    // The value is a *string* on purpose. With an object value the scalar type
+    // check in loadSettings rejects it first, so the allowlist is never
+    // exercised and this test passes even with the allowlist deleted (verified).
+    // A string makes the allowlist the only thing standing in the way.
+    //
+    // For the record this is defence in depth, not a live vulnerability:
+    // loadSettings accumulates into Object.create(null) and the later merge
+    // spreads (which *defines* rather than *sets*), so the key is inert either
+    // way — it would just be persisted back as a meaningless entry.
+    writeRaw(SETTINGS_FILE, '{"__proto__":"polluted","region":"us-east-1"}');
+
+    expect(() => readDesktopConfig()).not.toThrow();
+    expect(readDesktopConfig().region).toBe("us-east-1");
+
+    // Nothing was grafted onto the prototype chain.
+    expect(
+      (Object.prototype as unknown as Record<string, unknown>).polluted,
+    ).toBeUndefined();
+    expect(Object.getPrototypeOf({})).toBe(Object.prototype);
+
+    // And the key is dropped rather than carried forward on the next write.
+    writeDesktopSettings({ athenaTable: "t" });
+    const stored = storedSettings();
+    expect(Object.keys(stored).sort()).toEqual(["athenaTable", "region"]);
+    expect(Object.prototype.hasOwnProperty.call(stored, "__proto__")).toBe(
+      false,
+    );
+  });
+
+  it("ignores a non-scalar value in the settings file", () => {
+    // The other half of loadSettings' filter: an object or array value is not a
+    // setting, whatever its key.
+    writeRaw(
+      SETTINGS_FILE,
+      '{"region":{"nested":true},"athenaTable":["a"],"athenaDatabase":"db"}',
+    );
+    expect(readDesktopConfig().athenaDatabase).toBe("db");
+    // Both malformed entries fall back to their defaults.
+    expect(readDesktopConfig().region).toBe("us-east-1");
+    expect(readDesktopConfig().athenaTable).toBe("workflow_insight");
   });
 
   it("falls back to defaults for a corrupt file rather than throwing", () => {

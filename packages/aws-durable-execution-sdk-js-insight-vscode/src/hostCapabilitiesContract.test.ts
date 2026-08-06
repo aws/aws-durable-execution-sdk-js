@@ -82,9 +82,15 @@ describe("HostCapabilities stays consistent across both projects", () => {
   });
 
   it("App.tsx's default covers exactly the host's fields", () => {
-    // A field missing here is the silent "permanently false" case: the host
-    // reports it, but the initial state has no entry and nothing in the type
-    // system objects, because the object literal would be incomplete.
+    // Belt-and-braces, not the primary guard: tsc already rejects an incomplete
+    // default, since useState<HostCapabilities>({ copilot: false }) fails with
+    // TS2345 "Property 'localLlm' is missing". (The renderer typecheck added to
+    // CI in this change caught exactly that error once.)
+    //
+    // What this still covers is someone silencing that error rather than fixing
+    // it — an `as HostCapabilities` cast, a non-null assertion, or widening the
+    // useState type argument — which would restore the silent
+    // "permanently false" case. Cheap enough to keep for that.
     expect(rendererDefaultKeys()).toEqual(hostFields);
   });
 
