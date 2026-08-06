@@ -89,6 +89,12 @@ export {
 export { SDK_VERSION } from "./utils/constants/version";
 export { StepInterruptedError } from "./errors/step-errors/step-errors";
 export {
+  DurableExecutionClientError,
+  DurableExecutionClientErrorScope,
+  DurableExecutionClientErrorOptions,
+  isDurableExecutionClientError,
+} from "./errors/durable-execution-client-error/durable-execution-client-error";
+export {
   DurableOperationError,
   StepError,
   CallbackError,

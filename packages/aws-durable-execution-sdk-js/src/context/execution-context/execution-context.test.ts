@@ -141,8 +141,26 @@ describe("initializeExecutionContext", () => {
         isOperationUpdatedBetweenInvocation: expect.any(Function),
         tenantId: mockLambdaContext.tenantId,
         requestId: mockLambdaContext.awsRequestId,
+        getRemainingTimeMs: expect.any(Function),
       },
     });
+  });
+
+  it("reports remaining time from the platform context on each call", async () => {
+    // This is the single point where the compute's deadline enters the SDK, so it has to
+    // delegate rather than capture: the value changes over the life of the invocation.
+    const remaining = jest
+      .fn()
+      .mockReturnValueOnce(120_000)
+      .mockReturnValueOnce(90_000);
+    const { executionContext } = await initializeExecutionContext(
+      mockEvent,
+      { ...mockLambdaContext, getRemainingTimeInMillis: remaining },
+      undefined,
+    );
+
+    expect(executionContext.getRemainingTimeMs()).toBe(120_000);
+    expect(executionContext.getRemainingTimeMs()).toBe(90_000);
   });
 
   it("should initialize execution context in verbose mode", async () => {
@@ -851,6 +869,61 @@ describe("initializeExecutionContext", () => {
       expect(step.Status).toBe(OperationStatus.SUCCEEDED);
       expect(step.StepDetails?.Attempt).toBe(1);
       expect(step.StepDetails?.Result).toBe('"done"');
+    });
+  });
+
+  describe("transport selection", () => {
+    const stubClient = (): DurableExecutionClient => ({
+      getExecutionState: jest.fn().mockResolvedValue({ Operations: [] }),
+      checkpoint: jest.fn().mockResolvedValue({ NewExecutionState: undefined }),
+    });
+
+    it("uses a caller-supplied durableExecutionClient instead of the Lambda transport", async () => {
+      const injected = stubClient();
+
+      const { executionContext } = await initializeExecutionContext(
+        mockEvent,
+        mockLambdaContext,
+        { durableExecutionClient: injected },
+      );
+
+      expect(executionContext.durableExecutionClient).toBe(injected);
+      expect(DurableExecutionApiClient).not.toHaveBeenCalled();
+    });
+
+    it("falls back to the Lambda transport when no transport is supplied", async () => {
+      await initializeExecutionContext(mockEvent, mockLambdaContext);
+
+      expect(DurableExecutionApiClient).toHaveBeenCalled();
+    });
+
+    it("passes the deprecated client through to the Lambda transport", async () => {
+      const lambdaClient = {} as never;
+
+      await initializeExecutionContext(mockEvent, mockLambdaContext, {
+        client: lambdaClient,
+      });
+
+      expect(DurableExecutionApiClient).toHaveBeenCalledWith(lambdaClient);
+    });
+
+    it("lets an event-injected transport win over configuration", async () => {
+      // A harness wrapping an already-configured handler can only inject through the
+      // event, so that channel has to take precedence over the handler's own config.
+      const fromEvent = stubClient();
+      const fromConfig = stubClient();
+      const wrapped = new DurableExecutionInvocationInputWithClient(
+        mockEvent,
+        fromEvent,
+      );
+
+      const { executionContext } = await initializeExecutionContext(
+        wrapped,
+        mockLambdaContext,
+        { durableExecutionClient: fromConfig },
+      );
+
+      expect(executionContext.durableExecutionClient).toBe(fromEvent);
     });
   });
 });
