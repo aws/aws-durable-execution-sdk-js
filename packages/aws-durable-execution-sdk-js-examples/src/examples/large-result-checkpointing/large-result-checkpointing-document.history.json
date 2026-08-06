@@ -2,19 +2,8 @@
   {
     "EventType": "ExecutionStarted",
     "EventId": 1,
-    "Id": "0efe5d98-e810-4339-bd3f-2bb552f0d6ff",
-    "EventTimestamp": "2026-08-06T18:18:53.365Z",
-    "ExecutionStartedDetails": {
-      "Input": {
-        "Payload": "{\"mode\":\"document\"}"
-      }
-    }
-  },
-  {
-    "EventType": "ExecutionStarted",
-    "EventId": 1,
-    "Id": "0efe5d98-e810-4339-bd3f-2bb552f0d6ff",
-    "EventTimestamp": "2026-08-06T18:18:53.365Z",
+    "Id": "6918cca6-2322-4cdb-8b88-b54f67b401f9",
+    "EventTimestamp": "2026-08-06T21:55:50.426Z",
     "ExecutionStartedDetails": {
       "Input": {
         "Payload": "{\"mode\":\"document\"}"
@@ -27,7 +16,7 @@
     "EventId": 2,
     "Id": "c4ca4238a0b92382",
     "Name": "prepare-export",
-    "EventTimestamp": "2026-08-06T18:18:53.369Z",
+    "EventTimestamp": "2026-08-06T21:55:50.429Z",
     "StepStartedDetails": {}
   },
   {
@@ -36,7 +25,7 @@
     "EventId": 3,
     "Id": "c4ca4238a0b92382",
     "Name": "prepare-export",
-    "EventTimestamp": "2026-08-06T18:18:53.369Z",
+    "EventTimestamp": "2026-08-06T21:55:50.429Z",
     "StepSucceededDetails": {
       "Result": {
         "Payload": "{\"format\":\"csv\",\"rows\":60000}"
@@ -47,8 +36,8 @@
   {
     "EventType": "ExecutionSucceeded",
     "EventId": 4,
-    "Id": "f0cc8f59e5a40479",
-    "EventTimestamp": "2026-08-06T18:18:53.429Z",
+    "Id": "743f84794951fad3",
+    "EventTimestamp": "2026-08-06T21:55:50.480Z",
     "ExecutionSucceededDetails": {
       "Result": {
         "Payload": "{\"mode\":\"document\",\"format\":\"csv\",\"rowCount\":60000,\"byteLeng...[trimmed 7117804 chars for repo size; not used by assertEventSignatures]"
@@ -58,19 +47,19 @@
   {
     "EventType": "InvocationCompleted",
     "EventId": 5,
-    "EventTimestamp": "2026-08-06T18:18:53.430Z",
+    "EventTimestamp": "2026-08-06T21:55:50.481Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-08-06T18:18:53.365Z",
-      "EndTimestamp": "2026-08-06T18:18:53.430Z",
+      "StartTimestamp": "2026-08-06T21:55:50.426Z",
+      "EndTimestamp": "2026-08-06T21:55:50.481Z",
       "Error": {},
-      "RequestId": "a782bef5-555a-40a7-9e65-8dda8b48d802"
+      "RequestId": "06a8a150-b056-4658-80f4-3a1191df2a86"
     }
   },
   {
     "EventType": "ExecutionSucceeded",
     "EventId": 6,
-    "Id": "0efe5d98-e810-4339-bd3f-2bb552f0d6ff",
-    "EventTimestamp": "2026-08-06T18:18:53.439Z",
+    "Id": "6918cca6-2322-4cdb-8b88-b54f67b401f9",
+    "EventTimestamp": "2026-08-06T21:55:50.488Z",
     "ExecutionSucceededDetails": {
       "Result": {
         "Payload": "{\"mode\":\"document\",\"format\":\"csv\",\"rowCount\":60000,\"byteLeng...[trimmed 7117804 chars for repo size; not used by assertEventSignatures]"

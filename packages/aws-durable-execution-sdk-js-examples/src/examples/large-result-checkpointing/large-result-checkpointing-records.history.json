@@ -2,19 +2,8 @@
   {
     "EventType": "ExecutionStarted",
     "EventId": 1,
-    "Id": "bde06805-8fc6-40a0-98db-4328293e5bbe",
-    "EventTimestamp": "2026-08-06T18:18:53.156Z",
-    "ExecutionStartedDetails": {
-      "Input": {
-        "Payload": "{\"mode\":\"records\"}"
-      }
-    }
-  },
-  {
-    "EventType": "ExecutionStarted",
-    "EventId": 1,
-    "Id": "bde06805-8fc6-40a0-98db-4328293e5bbe",
-    "EventTimestamp": "2026-08-06T18:18:53.156Z",
+    "Id": "bed6323f-0a87-4461-8e46-16b2c9c45df8",
+    "EventTimestamp": "2026-08-06T21:55:50.234Z",
     "ExecutionStartedDetails": {
       "Input": {
         "Payload": "{\"mode\":\"records\"}"
@@ -27,7 +16,7 @@
     "EventId": 2,
     "Id": "c4ca4238a0b92382",
     "Name": "load-batch-metadata",
-    "EventTimestamp": "2026-08-06T18:18:53.164Z",
+    "EventTimestamp": "2026-08-06T21:55:50.240Z",
     "StepStartedDetails": {}
   },
   {
@@ -36,7 +25,7 @@
     "EventId": 3,
     "Id": "c4ca4238a0b92382",
     "Name": "load-batch-metadata",
-    "EventTimestamp": "2026-08-06T18:18:53.164Z",
+    "EventTimestamp": "2026-08-06T21:55:50.241Z",
     "StepSucceededDetails": {
       "Result": {
         "Payload": "{\"batches\":6,\"recordsPerBatch\":1000}"
@@ -47,8 +36,8 @@
   {
     "EventType": "ExecutionSucceeded",
     "EventId": 4,
-    "Id": "ac4838c68f006430",
-    "EventTimestamp": "2026-08-06T18:18:53.190Z",
+    "Id": "42639750c31d2ea2",
+    "EventTimestamp": "2026-08-06T21:55:50.265Z",
     "ExecutionSucceededDetails": {
       "Result": {
         "Payload": "{\"mode\":\"records\",\"totalRecords\":6000,\"totalBatches\":6,\"reco...[trimmed 6377347 chars for repo size; not used by assertEventSignatures]"
@@ -58,19 +47,19 @@
   {
     "EventType": "InvocationCompleted",
     "EventId": 5,
-    "EventTimestamp": "2026-08-06T18:18:53.191Z",
+    "EventTimestamp": "2026-08-06T21:55:50.266Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-08-06T18:18:53.155Z",
-      "EndTimestamp": "2026-08-06T18:18:53.191Z",
+      "StartTimestamp": "2026-08-06T21:55:50.234Z",
+      "EndTimestamp": "2026-08-06T21:55:50.266Z",
       "Error": {},
-      "RequestId": "bd35620b-346e-460f-bc7e-d5aefe119e4c"
+      "RequestId": "c6f39f69-5c9d-4976-a53a-05147b978073"
     }
   },
   {
     "EventType": "ExecutionSucceeded",
     "EventId": 6,
-    "Id": "bde06805-8fc6-40a0-98db-4328293e5bbe",
-    "EventTimestamp": "2026-08-06T18:18:53.199Z",
+    "Id": "bed6323f-0a87-4461-8e46-16b2c9c45df8",
+    "EventTimestamp": "2026-08-06T21:55:50.272Z",
     "ExecutionSucceededDetails": {
       "Result": {
         "Payload": "{\"mode\":\"records\",\"totalRecords\":6000,\"totalBatches\":6,\"reco...[trimmed 6377347 chars for repo size; not used by assertEventSignatures]"

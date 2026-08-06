@@ -1160,6 +1160,61 @@ describe("IndexedOperations", () => {
         expect(historyEvents.map((e) => e.EventId)).toContain(200);
       });
 
+      it("should not re-append events when a second execution operation is interleaved with an update to the first", () => {
+        // This is the shape produced by the SDK's oversized-result path: the
+        // handler's return value exceeds Lambda's response size limit, so the
+        // result is written as a separate `execution-result-*` checkpoint
+        // (Action SUCCEED, Type EXECUTION) with its own id, and the execution's
+        // own operation is then re-emitted with its completion event appended.
+        const executionStarted: OperationEvents = {
+          operation: {
+            Id: "execution-1",
+            Name: "my-execution",
+            Type: OperationType.EXECUTION,
+            Status: OperationStatus.STARTED,
+            StartTimestamp: undefined,
+          },
+          events: [{ EventId: 1 }],
+        };
+
+        const oversizedResultCheckpoint: OperationEvents = {
+          operation: {
+            Id: "execution-result-1700000000000",
+            Name: "execution-result",
+            Type: OperationType.EXECUTION,
+            Status: OperationStatus.SUCCEEDED,
+            StartTimestamp: undefined,
+          },
+          events: [{ EventId: 2 }],
+        };
+
+        // The execution's own operation, re-emitted with its completion event.
+        const executionSucceeded: OperationEvents = {
+          operation: {
+            Id: "execution-1",
+            Name: "my-execution",
+            Type: OperationType.EXECUTION,
+            Status: OperationStatus.SUCCEEDED,
+            StartTimestamp: undefined,
+          },
+          events: [{ EventId: 1 }, { EventId: 3 }],
+        };
+
+        const indexed = new IndexedOperations([executionStarted]);
+        indexed.addOperations([oversizedResultCheckpoint]);
+        indexed.addOperations([executionSucceeded]);
+
+        // Each event must appear exactly once. Previously the second execution
+        // operation clobbered the single-slot tracker, so EventId 1 was
+        // appended twice.
+        const eventIds = indexed.getHistoryEvents().map((e) => e.EventId);
+        expect(eventIds).toEqual([1, 2, 3]);
+
+        // Execution operations still stay out of the operation index.
+        expect(indexed.getOperations()).toHaveLength(0);
+        expect(indexed.getById("execution-1")).toBeUndefined();
+      });
+
       it("should handle updating execution operation with same ID", () => {
         const indexed = new IndexedOperations([
           executionOperation,

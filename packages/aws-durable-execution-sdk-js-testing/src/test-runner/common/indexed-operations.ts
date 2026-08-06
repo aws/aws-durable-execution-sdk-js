@@ -10,7 +10,18 @@ import { OperationType } from "@aws/durable-execution-sdk-js";
  * @internal
  */
 export class IndexedOperations {
-  private executionOperation: OperationEvents | undefined = undefined;
+  /**
+   * Execution-typed operations, keyed by id, so they are excluded from
+   * {@link getOperations} while still being deduplicated individually.
+   *
+   * An execution can produce more than one EXECUTION-typed operation: when a
+   * handler's return value exceeds Lambda's response size limit, the SDK writes
+   * the result as a separate `execution-result-*` checkpoint (Action SUCCEED,
+   * Type EXECUTION) with its own id. A single-slot tracker was clobbered by that
+   * second operation, so the original execution operation's history offset was
+   * lost and its already-recorded events were appended a second time.
+   */
+  private readonly executionOperationsById = new Map<string, OperationEvents>();
   private readonly operationsById = new Map<string, OperationEvents>();
   private readonly operationsByName = new Map<
     string,
@@ -45,15 +56,12 @@ export class IndexedOperations {
         throw new Error("Cannot add operation without an ID");
       }
 
-      // Execution operation is tracked separately so that it isn't added to the operation index
-      const executionOperation =
-        this.executionOperation?.operation.Id === operation.Id
-          ? this.executionOperation
-          : undefined;
-
-      // Check if operation already exists and validate parent doesn't change
+      // Execution operations are tracked in their own index so that they are
+      // not added to the operation index, while still being deduplicated per id
+      // (an execution can have more than one EXECUTION-typed operation).
       const existingOperation =
-        this.operationsById.get(operation.Id) ?? executionOperation;
+        this.operationsById.get(operation.Id) ??
+        this.executionOperationsById.get(operation.Id);
 
       const previousHistoryIndex = existingOperation?.events.length ?? 0;
       this.historyEvents.push(
@@ -61,7 +69,7 @@ export class IndexedOperations {
       );
 
       if (operation.Type === OperationType.EXECUTION) {
-        this.executionOperation = checkpointOperation;
+        this.executionOperationsById.set(operation.Id, checkpointOperation);
         continue;
       }
 

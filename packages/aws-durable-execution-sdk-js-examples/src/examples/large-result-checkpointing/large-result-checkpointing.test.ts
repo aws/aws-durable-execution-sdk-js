@@ -43,25 +43,19 @@ function expectOversizedResultCheckpoint(events: Event[]) {
 }
 
 // NOTE ON THE HISTORY SNAPSHOTS (both modes):
-// The `.history.json` files for this example contain `ExecutionStarted` TWICE
-// (byte-identical: same EventId, Id, and timestamp) and `ExecutionSucceeded`
-// twice. This is specific to the oversized-result path and is expected here —
-// do not "fix" the snapshots.
-//   * The duplicate `ExecutionStarted` is a known artifact of the LOCAL test
-//     runner's history assembly, NOT a real SDK/production event. The SDK's
-//     oversize branch writes a second EXECUTION-typed checkpoint
-//     (`execution-result-*`, Action SUCCEED) with a different Id; that clobbers
-//     the single-slot execution-operation tracker in the testing package's
-//     IndexedOperations, so when the real execution operation is finally
-//     re-emitted its already-recorded `ExecutionStarted` is appended a second
-//     time. It would NOT appear against real Lambda (CloudDurableTestRunner
-//     reads the service's authoritative event log). See the stage report.
-//   * The EXTRA `ExecutionSucceeded` IS legitimate: one is the
-//     `execution-result-*` result checkpoint the SDK writes, the other is the
-//     execution's own completion. This second SUCCEED is exactly what makes the
-//     oversize path assertable via signature counts, so it must be kept.
-// `assertEventSignatures` only compares {EventType, SubType, Name} counts, so
-// regenerating the snapshot reproduces these counts deterministically.
+// The `.history.json` files for this example contain `ExecutionSucceeded`
+// TWICE, which is expected here and specific to the oversized-result path — do
+// not "fix" the snapshots. One is the `execution-result-*` result checkpoint
+// the SDK writes because the value was too large to return inline; the other is
+// the execution's own completion. They are distinguishable by `Id`, and this
+// second SUCCEED is exactly what makes the oversize path assertable via
+// signature counts, so it must be kept.
+//
+// The oversized payloads themselves are trimmed out of the committed snapshots
+// (`...[trimmed N chars for repo size]`) because `assertEventSignatures`
+// compares only {EventType, SubType, Name} counts and ignores payloads.
+// Regenerating a snapshot writes the full ~6-7MB payload back, so re-apply the
+// same trimming before committing.
 
 createTests({
   handler,
