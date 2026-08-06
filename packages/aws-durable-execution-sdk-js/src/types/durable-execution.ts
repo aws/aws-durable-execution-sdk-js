@@ -1,10 +1,13 @@
+// Type-only: `LambdaClient` appears in the public `DurableExecutionConfig.client`
+// signature so callers can inject a configured client. Importing it as a type keeps
+// `@aws-sdk/client-lambda` out of the runtime graph for this module.
+import type { LambdaClient } from "@aws-sdk/client-lambda";
 import {
   CheckpointDurableExecutionRequest,
   CheckpointDurableExecutionResponse,
   GetDurableExecutionStateRequest,
   GetDurableExecutionStateResponse,
-  LambdaClient,
-} from "@aws-sdk/client-lambda";
+} from "./wire";
 import { DurableContext } from "./durable-context";
 import { DurableLogger } from "./durable-logger";
 import { Context } from "aws-lambda";
@@ -91,6 +94,24 @@ export interface DurableExecutionConfig {
   /**
    * Optional custom AWS Lambda client instance for durable execution operations.
    *
+   * @deprecated Use {@link DurableExecutionConfig.durableExecutionClient} instead, which
+   * accepts any transport rather than only a Lambda client. To keep the Lambda transport
+   * with your own client, hand it to {@link DurableExecutionApiClient}:
+   *
+   * ```typescript
+   * // Before
+   * withDurableExecution(handler, { client: myLambdaClient });
+   *
+   * // After
+   * withDurableExecution(handler, {
+   *   durableExecutionClient: new DurableExecutionApiClient(myLambdaClient),
+   * });
+   * ```
+   *
+   * This property will be removed in the next major version. It is the last place the AWS
+   * SDK appears in the SDK's public type surface, and durable functions are being extended
+   * to compute types other than Lambda, where a `LambdaClient` has no meaning.
+   *
    * When provided, this client will be used for all AWS Lambda service calls including
    * checkpoint operations and execution state management. This is useful for:
    * - Custom AWS configurations (regions, credentials, endpoints)
@@ -100,23 +121,47 @@ export interface DurableExecutionConfig {
    *
    * If not provided, a default Lambda client will be created automatically using
    * the standard AWS SDK configuration chain (environment variables, IAM roles, etc.).
-   *
-   * @example
-   * ```typescript
-   * import { LambdaClient } from '@aws-sdk/client-lambda';
-   *
-   * const customClient = new LambdaClient({
-   *   region: 'us-west-2',
-   *   maxAttempts: 5,
-   *   retryMode: 'adaptive'
-   * });
-   *
-   * export const handler = withDurableExecution(myHandler, {
-   *   client: customClient
-   * });
-   * ```
    */
   client?: LambdaClient;
+
+  /**
+   * Optional transport used to read execution state and write checkpoints.
+   *
+   * Supplying one replaces the SDK's own transport entirely. {@link DurableExecutionClient}
+   * is compute-neutral — it names no AWS types in its parameters or results — so an
+   * implementation can talk to any backend that provides the same two operations.
+   *
+   * Leave it unset for the default behaviour: the SDK uses
+   * {@link DurableExecutionApiClient}, which calls the Lambda durable execution APIs and
+   * creates its own client. To keep that transport but configure the underlying client
+   * yourself, construct it explicitly rather than using the deprecated
+   * {@link DurableExecutionConfig.client}:
+   *
+   * ```typescript
+   * withDurableExecution(handler, {
+   *   durableExecutionClient: new DurableExecutionApiClient(
+   *     new LambdaClient({ region: "us-west-2", maxAttempts: 5 }),
+   *   ),
+   * });
+   * ```
+   *
+   * An implementation should throw {@link DurableExecutionClientError} to tell the SDK
+   * whether a failure ends only the current invocation or the whole execution. Without
+   * that, every failure is treated as transient and a permanent one is retried until the
+   * execution times out.
+   *
+   * A stated scope is believed, and is checked before the SDK inspects the error's shape.
+   * A transport that wraps another one therefore takes over responsibility for classifying
+   * the errors it wraps: wrapping an AWS error as INVOCATION scope suppresses the
+   * heuristics that would otherwise recognize it — for example a KMS misconfiguration,
+   * which arrives as a 502 but can never succeed on retry — and it will be retried until
+   * the execution times out. Either classify wrapped errors deliberately, or let them
+   * through unwrapped so the existing heuristics still apply.
+   *
+   * Supplying both this and {@link DurableExecutionConfig.client} is a configuration error
+   * and fails the execution before the handler runs, because the two contradict each other.
+   */
+  durableExecutionClient?: DurableExecutionClient;
 
   /**
    * Optional array of instrumentation plugins for observability and tracing.

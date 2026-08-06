@@ -1,13 +1,13 @@
+import { InvalidParameterValueException } from "@aws-sdk/client-lambda";
 import {
   CallbackDetails,
   ErrorObject,
-  InvalidParameterValueException,
   Operation,
   OperationAction,
   OperationStatus,
   OperationType,
   OperationUpdate,
-} from "@aws-sdk/client-lambda";
+} from "@aws/durable-execution-sdk-js";
 import { randomUUID } from "node:crypto";
 import { CallbackId, ExecutionId, InvocationId } from "../utils/tagged-strings";
 import { CallbackManager, CompleteCallbackStatus } from "./callback-manager";

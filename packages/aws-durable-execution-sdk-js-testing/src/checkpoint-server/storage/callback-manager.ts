@@ -1,10 +1,9 @@
 import {
-  CallbackDetails,
   InvalidParameterValueException,
   Event,
   EventType,
-  Operation,
 } from "@aws-sdk/client-lambda";
+import { CallbackDetails, Operation } from "@aws/durable-execution-sdk-js";
 import {
   CallbackId,
   createCallbackId,

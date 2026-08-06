@@ -45,6 +45,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   private readonly contextExtractor: ContextExtractor;
   private readonly useDefaultTracerProvider: boolean;
   private readonly workflowSpanName: string;
+  private readonly enrichLogger: boolean;
 
   // Per-invocation state
   private spanMap: Map<string, Span> = new Map();
@@ -61,6 +62,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     this.contextExtractor = config?.contextExtractor ?? xRayContextExtractor;
     this.useDefaultTracerProvider = config?.useDefaultTracerProvider ?? false;
     this.workflowSpanName = config?.workflowSpanName ?? "Workflow";
+    this.enrichLogger = config?.enrichLogger ?? true;
 
     // Pass config directly to createTracerProvider — when neither tracerProvider
     // nor useDefaultTracerProvider is set, option 3 creates an internal provider
@@ -375,13 +377,21 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         span.setAttribute("durable.attempt.number", info.attempt);
       }
 
-      // Record error if present
+      // Record error if present; otherwise stamp explicit OK ONLY on a
+      // SUCCEEDED terminal status (matches Python OTel plugin #604). Only
+      // reached for operations that terminate this invocation — suspended ops
+      // early-return above and keep their STARTED status UNSET. Terminal
+      // FAILURE statuses (TIMED_OUT/STOPPED/FAILED/CANCELLED) can arrive with
+      // NO error object (callback-timeout, chained-invoke fast paths); those
+      // must NOT be labelled OK, so they are left UNSET.
       if (info.error) {
         span.setStatus({
           code: SpanStatusCode.ERROR,
           message: info.error.message,
         });
         span.recordException(info.error);
+      } else if (info.status === "SUCCEEDED") {
+        span.setStatus({ code: SpanStatusCode.OK });
       }
 
       // End the span
@@ -444,13 +454,20 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         parentContext,
       );
 
-      // Record error if present
+      // Record error if present; otherwise stamp explicit OK ONLY on a
+      // SUCCEEDED terminal status (matches Python OTel plugin #604). This is
+      // the terminal completion path for an operation started in a prior
+      // invocation. Terminal FAILURE statuses can arrive with NO error object
+      // (callback-timeout, chained-invoke 'already failed' cross-invocation
+      // fast paths); those must NOT be labelled OK, so they are left UNSET.
       if (info.error) {
         continuationSpan.setStatus({
           code: SpanStatusCode.ERROR,
           message: info.error.message,
         });
         continuationSpan.recordException(info.error);
+      } else if (info.status === "SUCCEEDED") {
+        continuationSpan.setStatus({ code: SpanStatusCode.OK });
       }
 
       // Immediately end
@@ -540,6 +557,9 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         if (info.error) {
           attemptSpan.recordException(info.error);
         }
+      } else {
+        // Non-failed attempt: stamp explicit OK (matches Python OTel #604).
+        attemptSpan.setStatus({ code: SpanStatusCode.OK });
       }
       attemptSpan.end();
       this.spanMap.delete(key);
@@ -551,6 +571,9 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   enrichLogContext(): Record<string, string | number | boolean> | undefined {
+    if (!this.enrichLogger) {
+      return undefined;
+    }
     const span = trace.getSpan(context.active());
     if (!span) {
       return undefined;

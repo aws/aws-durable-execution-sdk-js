@@ -1,11 +1,8 @@
 // Main interface for customers to interface with for both the local
 // and cloud-based test runners.
 
-import {
-  OperationStatus,
-  Event,
-  ExecutionStatus,
-} from "@aws-sdk/client-lambda";
+import { Event, ExecutionStatus } from "@aws-sdk/client-lambda";
+import { OperationStatus } from "@aws/durable-execution-sdk-js";
 import { DurableOperation } from "./durable-operation";
 
 /**

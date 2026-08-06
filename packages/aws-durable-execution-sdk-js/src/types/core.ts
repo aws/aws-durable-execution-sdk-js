@@ -1,6 +1,6 @@
 import { TerminationManager } from "../termination-manager/termination-manager";
 import { DurableExecutionClient } from "./durable-execution";
-import { ErrorObject, Operation } from "@aws-sdk/client-lambda";
+import { ErrorObject, Operation, WireOperation } from "./wire";
 
 /**
  * @internal
@@ -73,7 +73,7 @@ export interface DurableExecutionInvocationInput {
      * - Output results
      * - Execution timestamps and status
      */
-    Operations: Operation[];
+    Operations: WireOperation[];
 
     /**
      * Pagination marker for retrieving additional operation history if needed.
@@ -339,6 +339,15 @@ export interface ExecutionContext {
 
   requestId: string;
   tenantId: string | undefined;
+
+  /**
+   * How much longer the current invocation may run, in milliseconds.
+   *
+   * Reduced from the invocation context alongside `requestId` and `tenantId`, so that nothing
+   * downstream needs that context to answer it. Where no deadline is known, `Infinity`.
+   */
+  getRemainingTimeMs: () => number;
+
   pendingCompletions: Set<string>; // Track stepIds with pending SUCCEED/FAIL
   getStepData(stepId: string): Operation | undefined;
 

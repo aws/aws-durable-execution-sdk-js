@@ -1,14 +1,16 @@
 import {
-  Operation,
   Event,
-  OperationType,
-  OperationStatus,
   SendDurableExecutionCallbackSuccessResponse,
-  ErrorObject,
   SendDurableExecutionCallbackFailureResponse,
   SendDurableExecutionCallbackHeartbeatResponse,
 } from "@aws-sdk/client-lambda";
-import { OperationSubType } from "@aws/durable-execution-sdk-js";
+import {
+  Operation,
+  OperationType,
+  OperationStatus,
+  ErrorObject,
+  OperationSubType,
+} from "@aws/durable-execution-sdk-js";
 import { TestResultError } from "./durable-test-runner";
 
 /**

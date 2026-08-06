@@ -1,8 +1,5 @@
-import {
-  InvalidParameterValueException,
-  OperationAction,
-  OperationType,
-} from "@aws-sdk/client-lambda";
+import { InvalidParameterValueException } from "@aws-sdk/client-lambda";
+import { OperationAction, OperationType } from "@aws/durable-execution-sdk-js";
 
 const VALID_ACTIONS_FOR_STEP = new Set([
   OperationAction.START,

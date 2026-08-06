@@ -8,7 +8,7 @@ import {
   OperationStatus,
   OperationType,
   OperationAction,
-} from "@aws-sdk/client-lambda";
+} from "../../types/wire";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";

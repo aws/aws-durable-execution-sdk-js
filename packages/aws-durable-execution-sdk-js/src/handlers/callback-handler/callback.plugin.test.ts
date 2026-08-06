@@ -1,6 +1,6 @@
 import { createCallback } from "./callback";
 import { ExecutionContext } from "../../types";
-import { OperationStatus, Operation } from "@aws-sdk/client-lambda";
+import { OperationStatus, Operation } from "../../types/wire";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { DurableInstrumentationPlugin } from "../../types/plugin";

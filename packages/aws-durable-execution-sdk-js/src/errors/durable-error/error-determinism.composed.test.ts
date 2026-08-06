@@ -5,7 +5,7 @@ import {
   PromiseCombinatorError,
   DurableOperationError,
 } from "./durable-error";
-import { ErrorObject } from "@aws-sdk/client-lambda";
+import { ErrorObject } from "../../types/wire";
 
 describe("Error Determinism Composed Tests", () => {
   describe("Step Error Determinism", () => {

@@ -14,6 +14,10 @@ import { TEST_CONSTANTS } from "./testing/test-constants";
 import { createErrorObjectFromError } from "./utils/error-object/error-object";
 import { CheckpointManager } from "./utils/checkpoint/checkpoint-manager";
 import { LambdaClient } from "@aws-sdk/client-lambda";
+import {
+  DurableExecutionClientError,
+  DurableExecutionClientErrorScope,
+} from "./errors/durable-execution-client-error/durable-execution-client-error";
 
 // Mock dependencies
 jest.mock("./context/execution-context/execution-context");
@@ -76,6 +80,7 @@ describe("withDurableExecution", () => {
     (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
       checkpoint: jest.fn().mockResolvedValue(undefined),
       setTerminating: jest.fn(),
+      dispose: jest.fn(),
       waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
     }));
 
@@ -85,6 +90,47 @@ describe("withDurableExecution", () => {
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  it("disposes the checkpoint manager on the normal-completion path", async () => {
+    // The path that never terminates, and therefore never reached any cleanup before:
+    // without disposal the invocation returns with its poll timers still armed.
+    const dispose = jest.fn();
+    (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
+      checkpoint: jest.fn().mockResolvedValue(undefined),
+      setTerminating: jest.fn(),
+      dispose,
+      waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
+    }));
+    mockTerminationManager.getTerminationPromise.mockReturnValue(
+      new Promise(() => {}),
+    );
+
+    await withDurableExecution(jest.fn().mockResolvedValue({ ok: true }))(
+      mockEvent,
+      mockContext,
+    );
+
+    expect(dispose).toHaveBeenCalled();
+  });
+
+  it("disposes the checkpoint manager when the handler throws", async () => {
+    const dispose = jest.fn();
+    (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
+      checkpoint: jest.fn().mockResolvedValue(undefined),
+      setTerminating: jest.fn(),
+      dispose,
+      waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
+    }));
+    mockTerminationManager.getTerminationPromise.mockReturnValue(
+      new Promise(() => {}),
+    );
+
+    await withDurableExecution(
+      jest.fn().mockRejectedValue(new Error("handler blew up")),
+    )(mockEvent, mockContext);
+
+    expect(dispose).toHaveBeenCalled();
   });
 
   it("should return successful response when handler completes normally", async () => {
@@ -404,6 +450,7 @@ describe("withDurableExecution", () => {
     (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
       checkpoint: jest.fn().mockRejectedValue(checkpointError),
       setTerminating: jest.fn(),
+      dispose: jest.fn(),
     }));
 
     mockTerminationManager.getTerminationPromise.mockReturnValue(
@@ -570,11 +617,11 @@ describe("withDurableExecution", () => {
     const wrappedHandler = withDurableExecution(mockHandler, config);
     await wrappedHandler(mockEvent, mockContext);
 
-    // Verify that initializeExecutionContext was called with the client parameter
+    // Verify that the config, carrying the client, reaches initializeExecutionContext
     expect(initializeExecutionContext).toHaveBeenCalledWith(
       mockEvent,
       mockContext,
-      mockClient,
+      config,
     );
     expect(mockHandler).toHaveBeenCalledWith(
       mockCustomerHandlerEvent,
@@ -612,5 +659,88 @@ describe("withDurableExecution", () => {
       "Service unavailable",
     );
     expect(mockHandler).not.toHaveBeenCalled();
+  });
+
+  // Reading execution state happens before the durable machinery is running, so there
+  // is no checkpoint classifier to consult. A transport's stated scope has to be
+  // honoured here instead.
+  it("should return FAILED status when a client states the failure is fatal for the execution", async () => {
+    (initializeExecutionContext as jest.Mock).mockRejectedValue(
+      new DurableExecutionClientError("execution not found", {
+        scope: DurableExecutionClientErrorScope.EXECUTION,
+      }),
+    );
+
+    const mockHandler = jest.fn();
+    const wrappedHandler = withDurableExecution(mockHandler);
+    const result = await wrappedHandler(mockEvent, mockContext);
+
+    expect(result.Status).toBe(InvocationStatus.FAILED);
+    expect(result).toHaveProperty("Error");
+    expect(mockHandler).not.toHaveBeenCalled();
+  });
+
+  it("should re-throw when a client states the failure only ends the invocation", async () => {
+    (initializeExecutionContext as jest.Mock).mockRejectedValue(
+      new DurableExecutionClientError("backend unavailable", {
+        scope: DurableExecutionClientErrorScope.INVOCATION,
+      }),
+    );
+
+    const mockHandler = jest.fn();
+    const wrappedHandler = withDurableExecution(mockHandler);
+
+    await expect(wrappedHandler(mockEvent, mockContext)).rejects.toThrow(
+      "backend unavailable",
+    );
+    expect(mockHandler).not.toHaveBeenCalled();
+  });
+
+  it("should re-throw an unscoped client error so the execution can resume", async () => {
+    (initializeExecutionContext as jest.Mock).mockRejectedValue(
+      new DurableExecutionClientError("transient failure"),
+    );
+
+    const mockHandler = jest.fn();
+    const wrappedHandler = withDurableExecution(mockHandler);
+
+    await expect(wrappedHandler(mockEvent, mockContext)).rejects.toThrow(
+      "transient failure",
+    );
+  });
+
+  it("rejects conflicting transport config before the transport is used", async () => {
+    // The point of checking this early: with both provided, the SDK would otherwise pick
+    // one, read execution state through it, and only then report the misconfiguration.
+    const mockHandler = jest.fn();
+    const wrappedHandler = withDurableExecution(mockHandler, {
+      client: {} as never,
+      durableExecutionClient: {
+        getExecutionState: jest.fn(),
+        checkpoint: jest.fn(),
+      } as never,
+    });
+
+    const result = await wrappedHandler(mockEvent, mockContext);
+
+    expect(result.Status).toBe(InvocationStatus.FAILED);
+    expect(initializeExecutionContext).not.toHaveBeenCalled();
+    expect(mockHandler).not.toHaveBeenCalled();
+  });
+
+  it("does not reject either transport option on its own", async () => {
+    const mockHandler = jest.fn().mockResolvedValue("ok");
+    mockTerminationManager.getTerminationPromise.mockReturnValue(
+      new Promise(() => {}),
+    );
+
+    await withDurableExecution(mockHandler, {
+      durableExecutionClient: {
+        getExecutionState: jest.fn(),
+        checkpoint: jest.fn(),
+      } as never,
+    })(mockEvent, mockContext);
+
+    expect(initializeExecutionContext).toHaveBeenCalled();
   });
 });

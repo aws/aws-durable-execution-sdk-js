@@ -1,4 +1,4 @@
-import { OperationType } from "@aws-sdk/client-lambda";
+import { OperationType } from "./wire";
 import { OperationSubType } from "./core";
 import { OperationLifecycleState } from "./operation-lifecycle-state";
 
@@ -24,5 +24,4 @@ export interface OperationInfo {
   timer?: NodeJS.Timeout;
   resolver?: () => void;
   pollCount?: number;
-  pollStartTime?: number;
 }

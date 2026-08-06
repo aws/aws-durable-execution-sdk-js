@@ -5,7 +5,7 @@ import {
   OperationLifecycleState,
   OperationSubType,
 } from "../../types";
-import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
+import { OperationStatus, OperationType } from "../../types/wire";
 import { Context } from "aws-lambda";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";

@@ -1,6 +1,6 @@
 import { createInvokeHandler } from "./invoke-handler";
 import { ExecutionContext } from "../../types";
-import { OperationStatus } from "@aws-sdk/client-lambda";
+import { OperationStatus } from "../../types/wire";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
 

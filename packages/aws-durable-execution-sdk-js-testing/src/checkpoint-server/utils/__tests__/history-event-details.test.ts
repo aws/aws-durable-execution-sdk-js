@@ -1,11 +1,11 @@
+import { EventType } from "@aws-sdk/client-lambda";
 import {
   OperationAction,
   OperationUpdate,
-  EventType,
   OperationType,
   Operation,
   ErrorObject,
-} from "@aws-sdk/client-lambda";
+} from "@aws/durable-execution-sdk-js";
 import {
   getHistoryEventDetail,
   getRetryHistoryEventDetail,

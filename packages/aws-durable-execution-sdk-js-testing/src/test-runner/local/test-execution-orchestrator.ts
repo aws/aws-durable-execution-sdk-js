@@ -1,11 +1,12 @@
+import { ExecutionStatus } from "@aws-sdk/client-lambda";
 import {
-  ExecutionStatus,
   Operation,
   OperationStatus,
-} from "@aws-sdk/client-lambda";
-import {
   InvocationStatus,
   DurableLambdaHandler,
+  OperationAction,
+  OperationType,
+  OperationUpdate,
 } from "@aws/durable-execution-sdk-js";
 import { InvocationResult } from "../../checkpoint-server/storage/execution-manager";
 import { ExecutionId } from "../../checkpoint-server/utils/tagged-strings";
@@ -17,11 +18,6 @@ import {
   TestExecutionState,
 } from "../common/test-execution-state";
 import { InvokeRequest } from "../types/durable-test-runner";
-import {
-  OperationAction,
-  OperationType,
-  OperationUpdate,
-} from "@aws-sdk/client-lambda";
 import { CheckpointOperation } from "../../checkpoint-server/storage/checkpoint-manager";
 import { Scheduler } from "./orchestration/scheduler";
 import { FunctionStorage } from "./operations/function-storage";

@@ -1,10 +1,10 @@
+import { InvalidParameterValueException } from "@aws-sdk/client-lambda";
 import {
-  InvalidParameterValueException,
   Operation,
   OperationAction,
   OperationStatus,
   OperationUpdate,
-} from "@aws-sdk/client-lambda";
+} from "@aws/durable-execution-sdk-js";
 
 const allowedStatusToClose: (OperationStatus | undefined)[] = [
   OperationStatus.STARTED, // Closing an at-most-once step

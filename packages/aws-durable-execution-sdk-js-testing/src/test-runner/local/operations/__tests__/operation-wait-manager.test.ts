@@ -1,12 +1,15 @@
 import { OperationWaitManager } from "../operation-wait-manager";
-import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
+import {
+  OperationStatus,
+  OperationType,
+  OperationSubType,
+} from "@aws/durable-execution-sdk-js";
 import { WaitingOperationStatus } from "../../../types/durable-operation";
 import { IndexedOperations } from "../../../common/indexed-operations";
 import {
   OperationEvents,
   OperationWithData,
 } from "../../../common/operations/operation-with-data";
-import { OperationSubType } from "@aws/durable-execution-sdk-js";
 import { DurableApiClient } from "../../../common/create-durable-api-client";
 
 describe("OperationWaitManager", () => {

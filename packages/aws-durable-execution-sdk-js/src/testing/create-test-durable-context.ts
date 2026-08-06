@@ -1,9 +1,6 @@
 import { Context } from "aws-lambda";
 import { EventEmitter } from "events";
-import {
-  Operation,
-  CheckpointDurableExecutionResponse,
-} from "@aws-sdk/client-lambda";
+import { Operation, CheckpointDurableExecutionResponse } from "../types/wire";
 import {
   createDurableContext,
   DurableContextImpl,
@@ -84,6 +81,7 @@ export function createTestDurableContext(options?: {
       return false;
     },
     requestId: "mock-request-id",
+    getRemainingTimeMs: (): number => Infinity,
     tenantId: undefined,
   };
 

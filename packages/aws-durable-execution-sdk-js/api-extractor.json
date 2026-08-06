@@ -184,7 +184,7 @@
      * SUPPORTED TOKENS: <projectFolder>, <packageName>, <unscopedPackageName>
      * DEFAULT VALUE: "<projectFolder>/etc/"
      */
-    "reportFolder": "<projectFolder>/api-extractor/",
+    "reportFolder": "<projectFolder>/../../api-extractor/",
 
     /**
      * Specifies the folder where the temporary report file is written.  The file name portion is determined by
@@ -229,7 +229,7 @@
      * SUPPORTED TOKENS: <projectFolder>, <packageName>, <unscopedPackageName>
      * DEFAULT VALUE: "<projectFolder>/temp/<unscopedPackageName>.api.json"
      */
-    "apiJsonFilePath": "<projectFolder>/api-extractor/<unscopedPackageName>.api.json"
+    "apiJsonFilePath": "<projectFolder>/../../api-extractor/<unscopedPackageName>.api.json"
 
     /**
      * Whether "forgotten exports" should be included in the doc model file. Forgotten exports are declarations

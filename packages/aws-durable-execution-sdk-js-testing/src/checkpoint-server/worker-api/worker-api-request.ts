@@ -1,12 +1,11 @@
 import {
   CheckpointDurableExecutionCommandInput,
-  ErrorObject,
   GetDurableExecutionCommandInput,
-  Operation,
   SendDurableExecutionCallbackFailureRequest,
   SendDurableExecutionCallbackHeartbeatRequest,
   SendDurableExecutionCallbackSuccessRequest,
 } from "@aws-sdk/client-lambda";
+import { ErrorObject, Operation } from "@aws/durable-execution-sdk-js";
 import { ExecutionId, InvocationId } from "../utils/tagged-strings";
 import { ApiType } from "./worker-api-types";
 

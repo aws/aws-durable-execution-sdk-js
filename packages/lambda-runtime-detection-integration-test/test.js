@@ -1,10 +1,9 @@
 // Verifies that isInLambdaRuntime() correctly detects whether the SDK
 // is running from inside the Lambda runtime directory, in BOTH CJS
 // and ESM module contexts. The function is invoked at module-load
-// time and the result is baked into the SDK_VERSION exposed via the
-// LambdaClient's customUserAgent — so we spawn a child Node process
-// for each scenario, instantiate DurableExecutionApiClient, and
-// inspect the resulting UserAgent for the `-bundled` suffix.
+// time and the result is baked into the SDK_VERSION the package
+// exports — so we spawn a child Node process for each scenario and
+// read SDK_VERSION, checking it for the `-bundled` suffix.
 //
 // We can't unit-test this in Jest: the real version module reads
 // `import.meta.url` at top level, which ts-jest cannot compile
@@ -21,19 +20,16 @@ const sdkRoot = dirname(
   sdkRequire.resolve("@aws/durable-execution-sdk-js"),
 ).replace(/\/dist-cjs$/, "");
 
-// Probe script: instantiates DurableExecutionApiClient (which builds
-// a LambdaClient with the SDK's name + version baked into
-// customUserAgent) and prints the customUserAgent as JSON.
+// Probe script: prints the SDK_VERSION the package resolved at module
+// load, which encodes the result of the runtime-directory detection.
 const cjsProbe = `
 const sdk = require("@aws/durable-execution-sdk-js");
-const c = new sdk.DurableExecutionApiClient();
-process.stdout.write(JSON.stringify(c.client.config.customUserAgent));
+process.stdout.write(JSON.stringify(sdk.SDK_VERSION));
 `;
 
 const esmProbe = `
 import * as sdk from "@aws/durable-execution-sdk-js";
-const c = new sdk.DurableExecutionApiClient();
-process.stdout.write(JSON.stringify(c.client.config.customUserAgent));
+process.stdout.write(JSON.stringify(sdk.SDK_VERSION));
 `;
 
 function probe({ moduleSystem, env }) {
@@ -58,16 +54,13 @@ function probe({ moduleSystem, env }) {
   return JSON.parse(result.stdout);
 }
 
-function getSdkVersionEntry(customUserAgent) {
-  const entry = customUserAgent.find(
-    ([name]) => name === "aws-durable-execution-sdk-js",
-  );
-  if (!entry) {
+function getSdkVersion(probeOutput) {
+  if (typeof probeOutput !== "string" || probeOutput.length === 0) {
     throw new Error(
-      `customUserAgent missing SDK entry: ${JSON.stringify(customUserAgent)}`,
+      `probe did not return an SDK_VERSION: ${JSON.stringify(probeOutput)}`,
     );
   }
-  return entry[1];
+  return probeOutput;
 }
 
 const scenarios = [
@@ -100,8 +93,7 @@ const scenarios = [
 let failed = 0;
 for (const scenario of scenarios) {
   try {
-    const ua = probe(scenario);
-    const version = getSdkVersionEntry(ua);
+    const version = getSdkVersion(probe(scenario));
     const isBundled = version.endsWith("-bundled");
     if (isBundled !== scenario.expectBundled) {
       throw new Error(

@@ -69,6 +69,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   // Workflow span name (configurable)
   private readonly workflowSpanName: string;
 
+  // Whether enrichLogContext() contributes trace context to log records
+  private readonly enrichLogger: boolean;
+
   constructor(config?: OtelPluginConfig) {
     const instrumentationName =
       config?.instrumentationName ?? DEFAULT_INSTRUMENTATION_NAME;
@@ -77,6 +80,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     this.contextExtractor = config?.contextExtractor ?? xRayContextExtractor;
     this.useDefaultTracerProvider = config?.useDefaultTracerProvider ?? false;
     this.workflowSpanName = config?.workflowSpanName ?? "Workflow";
+    this.enrichLogger = config?.enrichLogger ?? true;
 
     // Create or accept TracerProvider via the provider factory
     const { tracerProvider, ownsProvider } = createTracerProvider(config);
@@ -374,6 +378,12 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
           message: info.error.message,
         });
         span.recordException(info.error);
+      } else if (info.status === "SUCCEEDED") {
+        // Stamp explicit OK ONLY on a SUCCEEDED terminal status. Terminal
+        // FAILURE statuses (TIMED_OUT/STOPPED/FAILED/CANCELLED) can arrive with
+        // NO error object (callback-timeout, chained-invoke fast paths); those
+        // must NOT be labelled OK, so they are left UNSET.
+        span.setStatus({ code: SpanStatusCode.OK });
       }
 
       span.end(info.endTimestamp);
@@ -431,6 +441,12 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
           message: info.error.message,
         });
         span.recordException(info.error);
+      } else if (info.status === "SUCCEEDED") {
+        // Stamp explicit OK ONLY on a SUCCEEDED terminal status. Terminal
+        // FAILURE statuses (TIMED_OUT/STOPPED/FAILED/CANCELLED) can arrive with
+        // NO error object on the cross-invocation fast paths; those must NOT be
+        // labelled OK, so they are left UNSET.
+        span.setStatus({ code: SpanStatusCode.OK });
       }
 
       span.end(info.endTimestamp);
@@ -502,6 +518,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         if (info.error) {
           attemptSpan.recordException(info.error);
         }
+      } else {
+        // Non-failed attempt: stamp explicit OK (matches Python OTel #604).
+        attemptSpan.setStatus({ code: SpanStatusCode.OK });
       }
       attemptSpan.end(info.endTimestamp);
       this.spanMap.delete(key);
@@ -513,6 +532,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   enrichLogContext(): Record<string, string | number | boolean> | undefined {
+    if (!this.enrichLogger) {
+      return undefined;
+    }
     const span = trace.getSpan(context.active());
     if (!span) {
       return undefined;

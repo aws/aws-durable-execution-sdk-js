@@ -10,7 +10,7 @@ import {
   OperationType,
   OperationStatus,
   OperationAction,
-} from "@aws-sdk/client-lambda";
+} from "../../types/wire";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { runWithContext } from "../../utils/context-tracker/context-tracker";

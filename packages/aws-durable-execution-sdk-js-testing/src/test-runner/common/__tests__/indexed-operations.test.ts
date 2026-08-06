@@ -2,7 +2,7 @@ import {
   Operation,
   OperationStatus,
   OperationType,
-} from "@aws-sdk/client-lambda";
+} from "@aws/durable-execution-sdk-js";
 import { IndexedOperations } from "../indexed-operations";
 import { OperationEvents } from "../operations/operation-with-data";
 

@@ -1,8 +1,5 @@
-import {
-  EventType,
-  OperationStatus,
-  OperationType,
-} from "@aws-sdk/client-lambda";
+import { EventType } from "@aws-sdk/client-lambda";
+import { OperationStatus, OperationType } from "@aws/durable-execution-sdk-js";
 import { LocalOperationStorage } from "../local-operation-storage";
 import { OperationWaitManager } from "../operation-wait-manager";
 import { IndexedOperations } from "../../../common/indexed-operations";

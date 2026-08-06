@@ -1,4 +1,4 @@
-import { ErrorObject, Operation } from "@aws-sdk/client-lambda";
+import { ErrorObject, Operation } from "@aws/durable-execution-sdk-js";
 import { CheckpointOperation } from "../../../checkpoint-server/storage/checkpoint-manager";
 import { InvocationResult } from "../../../checkpoint-server/storage/execution-manager";
 import {

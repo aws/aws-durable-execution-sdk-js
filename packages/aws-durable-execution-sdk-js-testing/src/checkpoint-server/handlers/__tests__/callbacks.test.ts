@@ -2,7 +2,7 @@ import {
   ErrorObject,
   OperationType,
   OperationAction,
-} from "@aws-sdk/client-lambda";
+} from "@aws/durable-execution-sdk-js";
 import {
   processCallbackFailure,
   processCallbackSuccess,

@@ -4,7 +4,7 @@ import {
   OperationStatus,
   OperationType,
   OperationUpdate,
-} from "@aws-sdk/client-lambda";
+} from "../../types/wire";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
 import { OperationSubType, ExecutionContext, DurableLogger } from "../../types";
@@ -36,6 +36,7 @@ const createCheckpoint = (
     new Set<string>(),
     {},
     "",
+    () => Infinity,
   );
   const checkpoint = (stepId: string, data: any): Promise<any> =>
     manager.checkpoint(stepId, data);
@@ -86,6 +87,7 @@ describe("CheckpointManager", () => {
       isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
       requestId: "",
       tenantId: undefined,
+      getRemainingTimeMs: (): number => Infinity,
     } satisfies ExecutionContext;
     mockLogger = createDefaultLogger(mockContext);
 
@@ -757,6 +759,7 @@ describe("deleteCheckpointHandler", () => {
       isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
       requestId: "",
       tenantId: undefined,
+      getRemainingTimeMs: (): number => Infinity,
     } satisfies ExecutionContext;
 
     const stepData2 = {};
@@ -772,6 +775,7 @@ describe("deleteCheckpointHandler", () => {
       isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
       requestId: "",
       tenantId: undefined,
+      getRemainingTimeMs: (): number => Infinity,
     } satisfies ExecutionContext;
 
     mockLogger1 = createDefaultLogger(mockContext1);
@@ -1039,6 +1043,7 @@ describe("createCheckpointHandler", () => {
       isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
       requestId: "mock-request-id",
       tenantId: undefined,
+      getRemainingTimeMs: (): number => Infinity,
     } satisfies ExecutionContext;
     mockLogger = createDefaultLogger(mockContext);
   });

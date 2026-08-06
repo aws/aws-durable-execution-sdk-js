@@ -8,7 +8,7 @@ import {
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { EventEmitter } from "events";
 import { createDefaultLogger } from "../logger/default-logger";
-import { OperationType } from "@aws-sdk/client-lambda";
+import { OperationType } from "../../types/wire";
 import { log } from "../logger/logger";
 import { CHECKPOINT_TERMINATION_COOLDOWN_MS } from "../constants/constants";
 
@@ -38,6 +38,7 @@ describe("CheckpointManager Termination Behavior", () => {
       getStepData: jest.fn(),
       isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
       requestId: "",
+      getRemainingTimeMs: (): number => Infinity,
       tenantId: "",
       pendingCompletions: new Set(),
     } satisfies ExecutionContext;

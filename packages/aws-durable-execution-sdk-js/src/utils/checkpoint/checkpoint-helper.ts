@@ -1,4 +1,4 @@
-import { OperationUpdate } from "@aws-sdk/client-lambda";
+import { OperationUpdate } from "../../types/wire";
 import { OperationLifecycleState } from "../../types/operation-lifecycle-state";
 import {
   OperationMetadata,

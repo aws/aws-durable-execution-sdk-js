@@ -1,4 +1,4 @@
-import { ErrorObject } from "@aws-sdk/client-lambda";
+import { ErrorObject } from "@aws/durable-execution-sdk-js";
 import { createCallbackId } from "../utils/tagged-strings";
 import { CompleteCallbackStatus } from "../storage/callback-manager";
 import { ExecutionManager } from "../storage/execution-manager";

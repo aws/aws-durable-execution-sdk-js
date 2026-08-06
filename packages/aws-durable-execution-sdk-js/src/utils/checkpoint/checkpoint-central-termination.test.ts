@@ -2,7 +2,7 @@ import { CheckpointManager } from "./checkpoint-manager";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
 import { OperationLifecycleState, OperationSubType } from "../../types";
-import { OperationType } from "@aws-sdk/client-lambda";
+import { OperationType } from "../../types/wire";
 import { EventEmitter } from "events";
 import { hashId } from "../step-id-utils/step-id-utils";
 import { CHECKPOINT_TERMINATION_COOLDOWN_MS } from "../constants/constants";
@@ -14,6 +14,8 @@ describe("CheckpointManager - Centralized Termination", () => {
   let mockTerminationManager: jest.Mocked<TerminationManager>;
   let mockClient: any;
   let mockStepDataEmitter: EventEmitter;
+  // Default: no deadline reported. Individual tests narrow this.
+  let mockRemainingTimeMs: number;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -28,6 +30,7 @@ describe("CheckpointManager - Centralized Termination", () => {
     };
 
     mockStepDataEmitter = new EventEmitter();
+    mockRemainingTimeMs = Infinity;
 
     checkpointManager = new CheckpointManager(
       "test-arn",
@@ -40,6 +43,7 @@ describe("CheckpointManager - Centralized Termination", () => {
       new Set<string>(),
       {},
       "",
+      () => mockRemainingTimeMs,
     );
   });
 
@@ -250,7 +254,6 @@ describe("CheckpointManager - Centralized Termination", () => {
           expect(op?.timer).toBeUndefined();
           expect(op?.resolver).toBeUndefined();
           expect(op?.pollCount).toBeUndefined();
-          expect(op?.pollStartTime).toBeUndefined();
 
           // Verify no timers were scheduled
           expect(jest.getTimerCount()).toBe(0);
@@ -294,7 +297,6 @@ describe("CheckpointManager - Centralized Termination", () => {
         expect(op?.timer).toBeUndefined();
         expect(op?.resolver).toBeUndefined();
         expect(op?.pollCount).toBeUndefined();
-        expect(op?.pollStartTime).toBeUndefined();
 
         // Verify no timers were scheduled
         expect(jest.getTimerCount()).toBe(0);
@@ -335,7 +337,6 @@ describe("CheckpointManager - Centralized Termination", () => {
         expect(op?.timer).toBeDefined();
         expect(op?.resolver).toBeDefined();
         expect(op?.pollCount).toBe(0);
-        expect(op?.pollStartTime).toBeDefined();
 
         // Verify timer was scheduled
         expect(jest.getTimerCount()).toBeGreaterThan(0);
@@ -375,7 +376,6 @@ describe("CheckpointManager - Centralized Termination", () => {
         expect(op?.timer).toBeDefined();
         expect(op?.resolver).toBeDefined();
         expect(op?.pollCount).toBe(0);
-        expect(op?.pollStartTime).toBeDefined();
 
         // Verify timer was scheduled
         expect(jest.getTimerCount()).toBeGreaterThan(0);
@@ -420,7 +420,6 @@ describe("CheckpointManager - Centralized Termination", () => {
         expect(op?.timer).toBeDefined();
         expect(op?.resolver).toBeDefined();
         expect(op?.pollCount).toBe(0);
-        expect(op?.pollStartTime).toBeDefined();
 
         // Verify timer was scheduled
         expect(jest.getTimerCount()).toBeGreaterThan(0);
@@ -529,7 +528,6 @@ describe("CheckpointManager - Centralized Termination", () => {
           expect(op?.timer).toBeUndefined();
           expect(op?.resolver).toBeUndefined();
           expect(op?.pollCount).toBeUndefined();
-          expect(op?.pollStartTime).toBeUndefined();
 
           // Verify no timers were scheduled
           expect(jest.getTimerCount()).toBe(0);
@@ -573,7 +571,6 @@ describe("CheckpointManager - Centralized Termination", () => {
         expect(op?.timer).toBeUndefined();
         expect(op?.resolver).toBeUndefined();
         expect(op?.pollCount).toBeUndefined();
-        expect(op?.pollStartTime).toBeUndefined();
 
         // Verify no timers were scheduled
         expect(jest.getTimerCount()).toBe(0);
@@ -613,7 +610,6 @@ describe("CheckpointManager - Centralized Termination", () => {
         expect(op?.timer).toBeDefined();
         expect(op?.resolver).toBeDefined();
         expect(op?.pollCount).toBe(0);
-        expect(op?.pollStartTime).toBeDefined();
 
         // Verify timer was scheduled
         expect(jest.getTimerCount()).toBeGreaterThan(0);
@@ -652,7 +648,6 @@ describe("CheckpointManager - Centralized Termination", () => {
         expect(op?.timer).toBeDefined();
         expect(op?.resolver).toBeDefined();
         expect(op?.pollCount).toBe(0);
-        expect(op?.pollStartTime).toBeDefined();
 
         // Verify timer was scheduled
         expect(jest.getTimerCount()).toBeGreaterThan(0);
@@ -696,7 +691,6 @@ describe("CheckpointManager - Centralized Termination", () => {
         expect(op?.timer).toBeDefined();
         expect(op?.resolver).toBeDefined();
         expect(op?.pollCount).toBe(0);
-        expect(op?.pollStartTime).toBeDefined();
 
         // Verify timer was scheduled
         expect(jest.getTimerCount()).toBeGreaterThan(0);
@@ -940,7 +934,6 @@ describe("CheckpointManager - Centralized Termination", () => {
       const ops = checkpointManager.getAllOperations();
       const op = ops.get("step-1");
       expect(op?.pollCount).toBe(0);
-      expect(op?.pollStartTime).toBeDefined();
     });
 
     it("should use endTimestamp for initial delay calculation", () => {
@@ -1436,11 +1429,18 @@ describe("CheckpointManager - Centralized Termination", () => {
     });
   });
 
-  describe("startTimerWithPolling - setTimeout overflow protection", () => {
-    it("should skip setTimeout when delay exceeds MAX_POLL_DURATION_MS", () => {
-      const stepId = "long-wait-step";
-
-      // Create operation in IDLE_AWAITED state
+  describe("startTimerWithPolling - invocation deadline and timer limits", () => {
+    /**
+     * Registers an awaited wait and returns a spy scoped to the poll timer.
+     *
+     * The spy has to be installed after markOperationState: that call schedules the
+     * termination cooldown (CHECKPOINT_TERMINATION_COOLDOWN_MS), which would otherwise be
+     * indistinguishable from the poll timer these tests are about.
+     */
+    const spyOnPollTimerFor = (
+      stepId: string,
+      waitEndsInMs: number,
+    ): jest.SpyInstance => {
       checkpointManager.markOperationState(
         stepId,
         OperationLifecycleState.IDLE_AWAITED,
@@ -1450,28 +1450,90 @@ describe("CheckpointManager - Centralized Termination", () => {
             type: OperationType.WAIT,
             subType: OperationSubType.WAIT,
           },
-          // Set endTimestamp to 364 days in the future (exceeds MAX_POLL_DURATION_MS)
-          endTimestamp: new Date(Date.now() + 364 * 24 * 60 * 60 * 1000),
+          endTimestamp: new Date(Date.now() + waitEndsInMs),
         },
       );
 
-      // Spy on setTimeout to verify it's not called
-      const setTimeoutSpy = jest.spyOn(global, "setTimeout");
-
-      // Call waitForStatusChange which internally calls startTimerWithPolling
+      const spy = jest.spyOn(global, "setTimeout");
       checkpointManager.waitForStatusChange(stepId);
+      return spy;
+    };
 
-      // Verify setTimeout was NOT called
+    it("skips the timer when the wait outlasts the invocation", () => {
+      // The timer could not fire, so the execution should suspend and resume later
+      // instead. This is the case the removed hard-coded cap approximated.
+      mockRemainingTimeMs = 60_000;
+
+      const setTimeoutSpy = spyOnPollTimerFor(
+        "outlasts-invocation",
+        5 * 60 * 1000,
+      );
+
       expect(setTimeoutSpy).not.toHaveBeenCalled();
-
       setTimeoutSpy.mockRestore();
     });
 
-    it("should use setTimeout when delay is within MAX_POLL_DURATION_MS", () => {
-      const stepId = "short-wait-step";
-      const shortDelay = 5 * 60 * 1000; // 5 minutes
+    it("schedules a timer beyond the removed bound when the invocation allows it", () => {
+      // The point of the change: the ceiling is now the deadline the invocation reports, so
+      // this wait is awaited in-invocation when the reported time allows it. Under the
+      // removed hard-coded cap it was skipped regardless.
+      mockRemainingTimeMs = 60 * 60 * 1000;
+      const thirtyMinutes = 30 * 60 * 1000;
 
-      // Create operation in IDLE_AWAITED state
+      const setTimeoutSpy = spyOnPollTimerFor(
+        "within-long-invocation",
+        thirtyMinutes,
+      );
+
+      expect(setTimeoutSpy).toHaveBeenCalled();
+      const scheduledDelay = setTimeoutSpy.mock.calls[0][1] as number;
+      expect(scheduledDelay).toBeGreaterThan(15 * 60 * 1000);
+      expect(scheduledDelay).toBeLessThanOrEqual(thirtyMinutes);
+      setTimeoutSpy.mockRestore();
+    });
+
+    it("skips the timer when the delay exceeds what setTimeout can represent", () => {
+      // A compute with no deadline reports Infinity, so the invocation is no longer what
+      // bounds this -- without the explicit clamp Node would set the duration to 1 and fire
+      // almost immediately, turning a 60-day wait into a poll loop.
+      mockRemainingTimeMs = Infinity;
+
+      const setTimeoutSpy = spyOnPollTimerFor(
+        "beyond-timer-range",
+        60 * 24 * 60 * 60 * 1000,
+      );
+
+      expect(setTimeoutSpy).not.toHaveBeenCalled();
+      setTimeoutSpy.mockRestore();
+    });
+
+    // The poll loop itself: when a timer fires, whether another poll is worth starting is
+    // decided by the invocation's remaining time rather than a fixed budget measured from
+    // the first poll. The timer is scheduled with the default (no deadline) and the
+    // remaining time is set just before it fires, which models an invocation running down
+    // and keeps this independent of the scheduling guard above. forceCheckpoint is stubbed
+    // because a real one would bring in the checkpoint queue and the termination cooldown,
+    // neither of which these tests are about.
+    const runPollWithRemaining = async (
+      stepId: string,
+      remainingTimeMs: number,
+    ): Promise<jest.SpyInstance> => {
+      // Polling only matters while the invocation is alive for some other reason: a lone
+      // awaited wait makes shouldTerminate suspend after the cooldown, which clears the poll
+      // timer before it can fire. A concurrently EXECUTING operation blocks termination
+      // (Rule 4), which is the situation in which polling does the work.
+      checkpointManager.markOperationState(
+        `${stepId}-concurrent`,
+        OperationLifecycleState.EXECUTING,
+        {
+          metadata: {
+            stepId: `${stepId}-concurrent`,
+            type: OperationType.STEP,
+            subType: OperationSubType.STEP,
+          },
+        },
+      );
+
       checkpointManager.markOperationState(
         stepId,
         OperationLifecycleState.IDLE_AWAITED,
@@ -1481,28 +1543,290 @@ describe("CheckpointManager - Centralized Termination", () => {
             type: OperationType.WAIT,
             subType: OperationSubType.WAIT,
           },
-          // Set endTimestamp to 5 minutes in the future
-          endTimestamp: new Date(Date.now() + shortDelay),
+          endTimestamp: new Date(Date.now() + 1000),
         },
       );
 
-      // Spy on setTimeout to capture the delay value
-      const setTimeoutSpy = jest.spyOn(global, "setTimeout");
+      const forceCheckpointSpy = jest
+        .spyOn(checkpointManager, "forceCheckpoint")
+        .mockResolvedValue();
 
-      // Call waitForStatusChange which internally calls startTimerWithPolling
       checkpointManager.waitForStatusChange(stepId);
 
-      // Verify setTimeout was called with original delay (within tolerance)
-      expect(setTimeoutSpy).toHaveBeenCalledWith(
-        expect.any(Function),
-        expect.any(Number),
+      mockRemainingTimeMs = remainingTimeMs;
+      await jest.advanceTimersByTimeAsync(1000);
+
+      return forceCheckpointSpy;
+    };
+
+    it("polls while the invocation still has time left", async () => {
+      const forceCheckpointSpy = await runPollWithRemaining(
+        "time-remaining",
+        60_000,
       );
 
-      const actualDelay = setTimeoutSpy.mock.calls[0][1] as number;
-      expect(actualDelay).toBeLessThanOrEqual(shortDelay);
-      expect(actualDelay).toBeGreaterThan(shortDelay - 1000); // Allow 1s tolerance
+      expect(forceCheckpointSpy).toHaveBeenCalled();
+    });
 
+    it("keeps polling long after the removed bound would have stopped", async () => {
+      // The headline behaviour change, and the reason elapsed polling time is no longer
+      // tracked: the removed budget stopped a loop after a fixed elapsed duration regardless
+      // of how much invocation was left. Polling long enough to cross that duration is what
+      // distinguishes this from the test above.
+      mockRemainingTimeMs = 60 * 60 * 1000;
+      const stepId = "past-old-budget";
+
+      checkpointManager.markOperationState(
+        `${stepId}-concurrent`,
+        OperationLifecycleState.EXECUTING,
+        {
+          metadata: {
+            stepId: `${stepId}-concurrent`,
+            type: OperationType.STEP,
+            subType: OperationSubType.STEP,
+          },
+        },
+      );
+      checkpointManager.markOperationState(
+        stepId,
+        OperationLifecycleState.IDLE_AWAITED,
+        {
+          metadata: {
+            stepId,
+            type: OperationType.WAIT,
+            subType: OperationSubType.WAIT,
+          },
+          endTimestamp: new Date(Date.now() + 1000),
+        },
+      );
+
+      const forceCheckpointSpy = jest
+        .spyOn(checkpointManager, "forceCheckpoint")
+        .mockResolvedValue();
+
+      checkpointManager.waitForStatusChange(stepId);
+
+      await jest.advanceTimersByTimeAsync(16 * 60 * 1000);
+      const pollsInFirst16Minutes = forceCheckpointSpy.mock.calls.length;
+
+      forceCheckpointSpy.mockClear();
+      await jest.advanceTimersByTimeAsync(60 * 1000);
+
+      expect(pollsInFirst16Minutes).toBeGreaterThan(0);
+      expect(forceCheckpointSpy).toHaveBeenCalled();
+    });
+
+    it("resolves the waiting promise once the status changes", async () => {
+      // The success path polling exists for: a status change observed by a poll releases the
+      // handler. Previously uncovered.
+      mockRemainingTimeMs = 60_000;
+      const stepId = "status-changes";
+
+      checkpointManager.markOperationState(
+        `${stepId}-concurrent`,
+        OperationLifecycleState.EXECUTING,
+        {
+          metadata: {
+            stepId: `${stepId}-concurrent`,
+            type: OperationType.STEP,
+            subType: OperationSubType.STEP,
+          },
+        },
+      );
+      checkpointManager.markOperationState(
+        stepId,
+        OperationLifecycleState.IDLE_AWAITED,
+        {
+          metadata: {
+            stepId,
+            type: OperationType.WAIT,
+            subType: OperationSubType.WAIT,
+          },
+          endTimestamp: new Date(Date.now() + 1000),
+        },
+      );
+
+      // Stand in for the backend reporting completion on the next refresh.
+      jest
+        .spyOn(checkpointManager, "forceCheckpoint")
+        .mockImplementation(async () => {
+          (checkpointManager as any).stepData[hashId(stepId)] = {
+            Status: "SUCCEEDED",
+          };
+        });
+
+      let resolved = false;
+      void checkpointManager.waitForStatusChange(stepId).then(() => {
+        resolved = true;
+      });
+
+      await jest.advanceTimersByTimeAsync(1000);
+
+      expect(resolved).toBe(true);
+      const op = checkpointManager.getAllOperations().get(stepId);
+      expect(op?.timer).toBeUndefined();
+    });
+
+    it("stops polling once too little invocation time remains", async () => {
+      // Below MIN_REMAINING_TIME_TO_POLL_MS: not enough left to receive a result and act on
+      // it, so the timer is cleared and the promise is left unresolved for suspension.
+      const forceCheckpointSpy = await runPollWithRemaining(
+        "deadline-imminent",
+        500,
+      );
+
+      expect(forceCheckpointSpy).not.toHaveBeenCalled();
+      const op = checkpointManager.getAllOperations().get("deadline-imminent");
+      expect(op?.timer).toBeUndefined();
+    });
+
+    it("schedules a timer with no deadline when the delay is representable", () => {
+      mockRemainingTimeMs = Infinity;
+      const fiveMinutes = 5 * 60 * 1000;
+
+      const setTimeoutSpy = spyOnPollTimerFor(
+        "no-deadline-short-wait",
+        fiveMinutes,
+      );
+
+      expect(setTimeoutSpy).toHaveBeenCalled();
+      expect(setTimeoutSpy.mock.calls[0][1]).toBeLessThanOrEqual(fiveMinutes);
       setTimeoutSpy.mockRestore();
+    });
+  });
+
+  describe("dispose", () => {
+    const armPollTimerFor = (
+      stepId: string,
+      manager = checkpointManager,
+    ): void => {
+      manager.markOperationState(
+        `${stepId}-concurrent`,
+        OperationLifecycleState.EXECUTING,
+        {
+          metadata: {
+            stepId: `${stepId}-concurrent`,
+            type: OperationType.STEP,
+            subType: OperationSubType.STEP,
+          },
+        },
+      );
+      manager.markOperationState(stepId, OperationLifecycleState.IDLE_AWAITED, {
+        metadata: {
+          stepId,
+          type: OperationType.WAIT,
+          subType: OperationSubType.WAIT,
+        },
+        endTimestamp: new Date(Date.now() + 1000),
+      });
+      manager.waitForStatusChange(stepId);
+    };
+
+    it("clears armed timers so they cannot fire into a later invocation", async () => {
+      // The gap this closes: a handler completing normally never terminates, so nothing
+      // else clears its timers.
+      const forceCheckpointSpy = jest
+        .spyOn(checkpointManager, "forceCheckpoint")
+        .mockResolvedValue();
+      armPollTimerFor("armed-then-disposed");
+
+      expect(
+        checkpointManager.getAllOperations().get("armed-then-disposed")?.timer,
+      ).toBeDefined();
+
+      checkpointManager.dispose();
+
+      expect(
+        checkpointManager.getAllOperations().get("armed-then-disposed")?.timer,
+      ).toBeUndefined();
+      await jest.advanceTimersByTimeAsync(60_000);
+      expect(forceCheckpointSpy).not.toHaveBeenCalled();
+    });
+
+    it("refuses to arm new timers once disposed", async () => {
+      const forceCheckpointSpy = jest
+        .spyOn(checkpointManager, "forceCheckpoint")
+        .mockResolvedValue();
+
+      checkpointManager.dispose();
+      armPollTimerFor("armed-after-disposal");
+
+      expect(
+        checkpointManager.getAllOperations().get("armed-after-disposal")?.timer,
+      ).toBeUndefined();
+      await jest.advanceTimersByTimeAsync(60_000);
+      expect(forceCheckpointSpy).not.toHaveBeenCalled();
+    });
+
+    it("cancels a scheduled termination", async () => {
+      // A lone awaited wait schedules termination after the cooldown. If the invocation ends
+      // first, that timer would otherwise fire and terminate an invocation that is already
+      // over.
+      checkpointManager.markOperationState(
+        "lone-wait",
+        OperationLifecycleState.IDLE_AWAITED,
+        {
+          metadata: {
+            stepId: "lone-wait",
+            type: OperationType.WAIT,
+            subType: OperationSubType.WAIT,
+          },
+        },
+      );
+
+      checkpointManager.dispose();
+      await jest.advanceTimersByTimeAsync(
+        CHECKPOINT_TERMINATION_COOLDOWN_MS * 5,
+      );
+
+      expect(mockTerminationManager.terminate).not.toHaveBeenCalled();
+    });
+
+    it("is idempotent", () => {
+      checkpointManager.dispose();
+      expect(() => checkpointManager.dispose()).not.toThrow();
+    });
+
+    it("keeps polling when a second execution starts in the same process", async () => {
+      // The reason this is per-manager state rather than a module-level "current
+      // invocation" marker. A process-wide marker identifies the newest invocation, so a
+      // second execution starting would make the first one's manager stale: it would stop
+      // polling and stop arming timers while its operation stayed awaited with an
+      // unresolved resolver -- a hang. Executions already run concurrently in one process:
+      // the local test runner's factory creates nested runners for exactly that. This is not
+      // reachable through a single deployed invocation, which is why it needs a test rather
+      // than review vigilance.
+      const firstForceCheckpoint = jest
+        .spyOn(checkpointManager, "forceCheckpoint")
+        .mockResolvedValue();
+      armPollTimerFor("first-execution");
+
+      // A second execution begins while the first is still live.
+      const secondManager = new CheckpointManager(
+        "second-arn",
+        {},
+        mockClient,
+        mockTerminationManager,
+        "second-token",
+        new EventEmitter(),
+        {} as never,
+        new Set<string>(),
+        {},
+        "",
+        () => mockRemainingTimeMs,
+      );
+      armPollTimerFor("second-execution", secondManager);
+
+      // The first execution must be unaffected, both by the second starting...
+      await jest.advanceTimersByTimeAsync(1000);
+      expect(firstForceCheckpoint).toHaveBeenCalled();
+
+      // ...and by it finishing.
+      firstForceCheckpoint.mockClear();
+      secondManager.dispose();
+      armPollTimerFor("first-execution-again");
+      await jest.advanceTimersByTimeAsync(1000);
+      expect(firstForceCheckpoint).toHaveBeenCalled();
     });
   });
 });

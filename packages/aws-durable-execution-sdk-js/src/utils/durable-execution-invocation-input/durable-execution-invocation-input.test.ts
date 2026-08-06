@@ -1,4 +1,4 @@
-import { Operation } from "@aws-sdk/client-lambda";
+import { Operation } from "../../types/wire";
 import { DurableExecutionInvocationInput } from "../../types";
 import { DurableExecutionClient } from "../../types/durable-execution";
 import { DurableExecutionInvocationInputWithClient } from "./durable-execution-invocation-input";

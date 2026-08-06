@@ -14,7 +14,7 @@ import {
   OperationStatus,
   OperationAction,
   CheckpointDurableExecutionRequest,
-} from "@aws-sdk/client-lambda";
+} from "../../types/wire";
 import { hashId, getStepData } from "../../utils/step-id-utils/step-id-utils";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 
@@ -95,6 +95,7 @@ describe("Run In Child Context Integration Tests", () => {
       isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
       requestId: "mock-request-id",
       tenantId: undefined,
+      getRemainingTimeMs: (): number => Infinity,
     } satisfies ExecutionContext;
 
     mockParentContext = { awsRequestId: "mock-request-id" };

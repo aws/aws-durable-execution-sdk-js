@@ -1,0 +1,13 @@
+name: Issue Triage
+
+on:
+  issues:
+    types: [opened]
+
+permissions: {}
+
+jobs:
+  triage:
+    permissions:
+      issues: write
+    uses: aws/aws-durable-execution-ci/.github/workflows/issue-triage.yml@043a1a0ac3e0a7f51f92826431aea93c234ad7cd

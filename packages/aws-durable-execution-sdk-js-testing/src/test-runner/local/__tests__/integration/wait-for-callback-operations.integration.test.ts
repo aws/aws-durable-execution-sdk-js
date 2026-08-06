@@ -3,8 +3,8 @@ import { WaitingOperationStatus } from "../../../types/durable-operation";
 import {
   DurableContext,
   withDurableExecution,
+  OperationStatus,
 } from "@aws/durable-execution-sdk-js";
-import { OperationStatus } from "@aws-sdk/client-lambda";
 
 beforeAll(() =>
   LocalDurableTestRunner.setupTestEnvironment({

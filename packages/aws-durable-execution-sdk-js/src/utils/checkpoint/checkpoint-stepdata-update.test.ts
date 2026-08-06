@@ -7,7 +7,7 @@ import {
   Operation,
   OperationStatus,
   OperationType,
-} from "@aws-sdk/client-lambda";
+} from "../../types/wire";
 import { TEST_CONSTANTS } from "../../testing/test-constants";
 import { getStepData } from "../step-id-utils/step-id-utils";
 import { EventEmitter } from "events";
@@ -48,6 +48,7 @@ describe("CheckpointManager - StepData Update", () => {
       isOperationUpdatedBetweenInvocation: jest.fn().mockReturnValue(false),
       requestId: "mock-request-id",
       tenantId: undefined,
+      getRemainingTimeMs: (): number => Infinity,
     };
 
     mockLogger = createDefaultLogger(mockContext);

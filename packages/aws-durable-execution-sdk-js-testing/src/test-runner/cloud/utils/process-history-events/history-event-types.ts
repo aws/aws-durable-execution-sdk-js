@@ -1,10 +1,9 @@
+import { EventType, Event } from "@aws-sdk/client-lambda";
 import {
   OperationType,
   OperationStatus,
-  EventType,
-  Event,
   Operation,
-} from "@aws-sdk/client-lambda";
+} from "@aws/durable-execution-sdk-js";
 
 export const executionHistoryEventTypes = {
   ExecutionStarted: {

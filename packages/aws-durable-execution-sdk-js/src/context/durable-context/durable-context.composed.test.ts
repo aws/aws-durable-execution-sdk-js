@@ -1,6 +1,6 @@
 import { createTestDurableContext } from "../../testing/create-test-durable-context";
 import { DurableExecutionMode } from "../../types";
-import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
+import { OperationStatus, OperationType } from "../../types/wire";
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 

@@ -5,7 +5,7 @@ import {
   CallbackSubmitterError,
   DurableOperationError,
 } from "../../errors/durable-error/durable-error";
-import { ErrorObject } from "@aws-sdk/client-lambda";
+import { ErrorObject } from "../../types/wire";
 
 describe("CallbackError", () => {
   describe("Constructor", () => {

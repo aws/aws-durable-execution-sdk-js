@@ -1,4 +1,4 @@
-import { OperationType, OperationAction } from "@aws-sdk/client-lambda";
+import { OperationType, OperationAction } from "@aws/durable-execution-sdk-js";
 import { processGetDurableExecutionState } from "../state-handlers";
 import { ExecutionManager } from "../../storage/execution-manager";
 import {

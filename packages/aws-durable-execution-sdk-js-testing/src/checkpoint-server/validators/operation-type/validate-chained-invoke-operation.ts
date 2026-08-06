@@ -1,10 +1,10 @@
+import { InvalidParameterValueException } from "@aws-sdk/client-lambda";
 import {
-  InvalidParameterValueException,
   Operation,
   OperationAction,
   OperationStatus,
   OperationUpdate,
-} from "@aws-sdk/client-lambda";
+} from "@aws/durable-execution-sdk-js";
 
 const allowedStatusToCancel: (OperationStatus | undefined)[] = [
   OperationStatus.STARTED,

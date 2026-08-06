@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { Operation } from "@aws-sdk/client-lambda";
+import { Operation } from "../../types/wire";
 
 const HASH_LENGTH = 16;
 

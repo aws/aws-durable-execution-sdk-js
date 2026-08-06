@@ -6,7 +6,7 @@ import {
   ExecutionContext,
   DurablePromise,
 } from "../../types";
-import { OperationStatus, OperationType } from "@aws-sdk/client-lambda";
+import { OperationStatus, OperationType } from "../../types/wire";
 
 describe("ConcurrencyController - Replay Mode", () => {
   let controller: ConcurrencyController<DurableLogger>;

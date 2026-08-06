@@ -7,6 +7,10 @@ import {
 import { DurableLogger, ExecutionContext } from "../../types";
 import { EventEmitter } from "events";
 import { createDefaultLogger } from "../logger/default-logger";
+import {
+  DurableExecutionClientError,
+  DurableExecutionClientErrorScope,
+} from "../../errors/durable-execution-client-error/durable-execution-client-error";
 
 describe("Checkpoint Error Classification", () => {
   let handler: CheckpointManager;
@@ -180,5 +184,68 @@ describe("Checkpoint Error Classification", () => {
     const result = (handler as any).classifyCheckpointError(originalError);
 
     expect(result.originalError).toBe(originalError);
+  });
+
+  describe("client-stated scope", () => {
+    // A transport that does not produce AWS-shaped errors states its own
+    // classification; the shape inspection below it never sees these.
+    it("classifies EXECUTION scope as an execution error", () => {
+      const error = new DurableExecutionClientError("checkpoint rejected", {
+        scope: DurableExecutionClientErrorScope.EXECUTION,
+      });
+
+      const result = (handler as any).classifyCheckpointError(error);
+
+      expect(result).toBeInstanceOf(CheckpointUnrecoverableExecutionError);
+      expect(result.message).toContain("checkpoint rejected");
+      expect(result.originalError).toBe(error);
+    });
+
+    it("classifies INVOCATION scope as an invocation error", () => {
+      const error = new DurableExecutionClientError("backend unavailable", {
+        scope: DurableExecutionClientErrorScope.INVOCATION,
+      });
+
+      const result = (handler as any).classifyCheckpointError(error);
+
+      expect(result).toBeInstanceOf(CheckpointUnrecoverableInvocationError);
+      expect(result.message).toContain("backend unavailable");
+    });
+
+    it("treats an unscoped client error as an invocation error", () => {
+      const result = (handler as any).classifyCheckpointError(
+        new DurableExecutionClientError("something went wrong"),
+      );
+
+      expect(result).toBeInstanceOf(CheckpointUnrecoverableInvocationError);
+    });
+
+    it("honours the scope even when the error also carries an AWS shape", () => {
+      // The stated scope wins over shape inspection, which would otherwise read
+      // this 400 as an execution error.
+      const error = Object.assign(
+        new DurableExecutionClientError("throttled by proxy", {
+          scope: DurableExecutionClientErrorScope.INVOCATION,
+        }),
+        { $metadata: { httpStatusCode: 400 } },
+      );
+
+      const result = (handler as any).classifyCheckpointError(error);
+
+      expect(result).toBeInstanceOf(CheckpointUnrecoverableInvocationError);
+    });
+
+    it("ignores a marker with an unrecognized scope and falls back to shape inspection", () => {
+      const malformed = Object.assign(new Error("Invalid parameter value"), {
+        name: "ValidationException",
+        isDurableExecutionClientError: true,
+        scope: "NOT_A_SCOPE",
+        $metadata: { httpStatusCode: 400 },
+      });
+
+      const result = (handler as any).classifyCheckpointError(malformed);
+
+      expect(result).toBeInstanceOf(CheckpointUnrecoverableExecutionError);
+    });
   });
 });

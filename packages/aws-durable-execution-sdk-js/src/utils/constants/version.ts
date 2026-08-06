@@ -56,6 +56,12 @@ const isRuntimeBundled = isInLambdaRuntime();
 
 export const SDK_NAME = "aws-durable-execution-sdk-js";
 const baseVersion = process.env.NPM_PACKAGE_VERSION || "0.0.0";
+/**
+ * The package version, suffixed with `-bundled` when the SDK is running from inside the
+ * Lambda runtime directory.
+ *
+ * @internal
+ */
 export const SDK_VERSION = isRuntimeBundled
   ? `${baseVersion}-bundled`
   : baseVersion;

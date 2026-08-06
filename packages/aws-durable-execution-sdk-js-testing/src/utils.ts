@@ -1,4 +1,4 @@
-import { ErrorObject } from "@aws-sdk/client-lambda";
+import { ErrorObject } from "@aws/durable-execution-sdk-js";
 import type { ConvertDatesToNumbers } from "./types";
 import { TestResultError } from "./test-runner";
 

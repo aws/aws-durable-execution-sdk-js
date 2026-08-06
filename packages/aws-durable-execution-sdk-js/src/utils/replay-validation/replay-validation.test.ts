@@ -1,5 +1,5 @@
 import { validateReplayConsistency } from "./replay-validation";
-import { Operation, OperationType } from "@aws-sdk/client-lambda";
+import { Operation, OperationType } from "../../types/wire";
 import { OperationSubType, ExecutionContext } from "../../types";
 import { terminateForUnrecoverableError } from "../termination-helper/termination-helper";
 

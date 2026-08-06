@@ -1,5 +1,5 @@
+import { InvalidParameterValueException } from "@aws-sdk/client-lambda";
 import {
-  InvalidParameterValueException,
   Operation,
   OperationAction,
   OperationStatus,
@@ -7,7 +7,7 @@ import {
   OperationUpdate,
   ErrorObject,
   StepOptions,
-} from "@aws-sdk/client-lambda";
+} from "@aws/durable-execution-sdk-js";
 import { validateStepOperation } from "../validate-step-operation";
 
 describe("validateStepOperation", () => {

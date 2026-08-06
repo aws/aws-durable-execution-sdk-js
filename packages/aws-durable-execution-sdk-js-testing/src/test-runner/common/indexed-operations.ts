@@ -1,5 +1,6 @@
 import { OperationEvents } from "./operations/operation-with-data";
-import { Event, OperationType } from "@aws-sdk/client-lambda";
+import { Event } from "@aws-sdk/client-lambda";
+import { OperationType } from "@aws/durable-execution-sdk-js";
 
 /**
  * Optimized way of retrieving operations by id and name/index.

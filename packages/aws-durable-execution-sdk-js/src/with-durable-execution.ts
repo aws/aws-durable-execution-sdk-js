@@ -1,4 +1,4 @@
-import { OperationType } from "@aws-sdk/client-lambda";
+import { OperationType } from "./types/wire";
 import { Context } from "aws-lambda";
 import { EventEmitter } from "events";
 import { createDurableContext } from "./context/durable-context/durable-context";
@@ -10,7 +10,14 @@ import { isUnrecoverableInvocationError } from "./errors/unrecoverable-error/unr
 import { isNonRetryableCustomerError } from "./errors/non-retryable-errors";
 import { TerminationReason } from "./termination-manager/types";
 import { resolveRootPreserveChildDepth } from "./utils/child-operations-depth/child-operations-depth";
-import { validateDurableExecutionConfig } from "./config-validation/config-validation";
+import {
+  validateDurableExecutionConfig,
+  validateTransportConfig,
+} from "./config-validation/config-validation";
+import {
+  DurableExecutionClientErrorScope,
+  isDurableExecutionClientError,
+} from "./errors/durable-execution-client-error/durable-execution-client-error";
 
 import {
   DurableLogger,
@@ -72,6 +79,7 @@ async function runHandler<
     new Set<string>(),
     plugin,
     executionContext.requestId,
+    executionContext.getRemainingTimeMs,
   );
 
   // Extract customerHandlerEvent early so it's available for plugins in onInvocationStart
@@ -106,11 +114,14 @@ async function runHandler<
   };
   await plugin.onInvocationStart?.(invocationInfo);
 
-  // Reject invalid configuration before anything else. It's a non-retryable
-  // error and no durable operations have started yet, so fail fast: return
-  // FAILED without creating the context or invoking the user handler. We return
-  // FAILED (rather than throw) so Lambda does not retry a permanently-broken
-  // configuration.
+  // Reject invalid configuration before running the handler. It's a non-retryable
+  // error and no durable operations have started yet, so fail fast: return FAILED
+  // without invoking the user handler. We return FAILED (rather than throw) so
+  // Lambda does not retry a permanently-broken configuration.
+  //
+  // The execution context already exists by this point, so a check that must precede
+  // transport construction cannot live here -- see validateTransportConfig, which runs
+  // earlier for that reason.
   const configError = validateDurableExecutionConfig(config);
   if (configError) {
     const error = new Error(configError);
@@ -437,10 +448,15 @@ async function runHandler<
       }
     };
 
-  return (
-    plugin.wrapInvocation?.(invocationInfo, executeInvocation) ??
-    executeInvocation()
-  );
+  try {
+    return await (plugin.wrapInvocation?.(invocationInfo, executeInvocation) ??
+      executeInvocation());
+  } finally {
+    // Every exit from the invocation funnels through here, including the normal-completion
+    // path that never terminates. Without this, poll timers stay armed after the handler
+    // returns and can fire during a later invocation in a reused execution environment.
+    checkpointManager.dispose();
+  }
 }
 
 /**
@@ -542,9 +558,24 @@ export const withDurableExecution = <
     context: Context,
   ): Promise<DurableExecutionInvocationOutput> => {
     validateDurableExecutionEvent(event);
+
+    // Checked before the transport is constructed, because from here on a transport is
+    // chosen and used: initializeExecutionContext reads execution state through it. The
+    // remaining config checks stay where they are, after the plugin lifecycle has started,
+    // since none of them affect which transport is built. No plugin hooks fire for this
+    // error: nothing was transported and no operation exists to report on. FAILED rather
+    // than a throw, so the platform does not retry a permanently-broken configuration.
+    const transportConfigError = validateTransportConfig(config);
+    if (transportConfigError) {
+      return {
+        Status: InvocationStatus.FAILED,
+        Error: createErrorObjectFromError(new Error(transportConfigError)),
+      };
+    }
+
     try {
       const { executionContext, durableExecutionMode, checkpointToken } =
-        await initializeExecutionContext(event, context, config?.client);
+        await initializeExecutionContext(event, context, config);
       const plugin = createPluginRunner(config?.plugins ?? []);
       return await runHandler(
         event,
@@ -557,6 +588,23 @@ export const withDurableExecution = <
         config,
       );
     } catch (error) {
+      // A transport that states the failure is fatal for the execution is believed,
+      // wherever that error surfaces. In practice it comes from reading execution state
+      // during initialization, which is the one client call with no checkpoint classifier
+      // to consult; checkpoint failures are classified in CheckpointManager and reach this
+      // point already wrapped. The try also covers the handler, so an EXECUTION-scoped
+      // error thrown by handler code is honoured too -- see DurableExecutionClientError,
+      // which documents that.
+      if (
+        isDurableExecutionClientError(error) &&
+        error.scope === DurableExecutionClientErrorScope.EXECUTION
+      ) {
+        return {
+          Status: InvocationStatus.FAILED,
+          Error: createErrorObjectFromError(error),
+        };
+      }
+
       // Non-retryable customer errors (e.g., KMS key misconfiguration) should
       // fail the execution immediately rather than retrying the invocation.
       if (isNonRetryableCustomerError(error)) {
