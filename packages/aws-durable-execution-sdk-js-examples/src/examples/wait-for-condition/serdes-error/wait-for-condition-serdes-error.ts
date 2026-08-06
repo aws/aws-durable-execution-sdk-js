@@ -3,6 +3,7 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import { AnySerdes } from "@aws/durable-execution-sdk-js";
+import { ExampleConfig } from "../../../types";
 
 // A custom serdes that fails on deserialize
 const failingSerdes: AnySerdes = {
@@ -31,3 +32,9 @@ export const handler = withDurableExecution(
     return result;
   },
 );
+
+export const config: ExampleConfig = {
+  name: "Wait For Condition Serdes Error",
+  description:
+    "Wait-for-condition custom serdes that throws error on deserialize",
+};

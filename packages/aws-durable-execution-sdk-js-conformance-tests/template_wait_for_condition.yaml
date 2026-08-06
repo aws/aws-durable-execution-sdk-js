@@ -248,21 +248,4 @@ Resources:
         - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
-        ExecutionTimeout: 300
-  WaitForConditionSerdesError:
-    Type: AWS::Serverless::Function
-    Metadata:
-      SkipBuild: "True"
-    TestingMetadata:
-      TestDescription: ["6-14"]
-    Properties:
-      CodeUri: ./dist
-      Handler: wait_for_condition_serdes_error.handler
-      Description: Wait-for-condition serdes error
-      Role:
-        Fn::GetAtt:
-        - DurableFunctionRole
-        - Arn
-      DurableConfig:
-        RetentionPeriodInDays: 7
-        ExecutionTimeout: 300
+        ExecutionTimeout: 300
