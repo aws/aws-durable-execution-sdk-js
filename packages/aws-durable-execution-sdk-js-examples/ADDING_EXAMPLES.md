@@ -195,6 +195,8 @@ Inside `tests`, you have access to:
 
 **IMPORTANT**: Every test **MUST** call `assertEventSignatures(execution)` at the end. This validates that the execution produces the expected sequence of durable execution events.
 
+> **Note:** `assertEventSignatures` compares only the counts of `{EventType, SubType, Name}` for each event and ignores all payloads (there is a `TODO` in `src/utils/test-helper.ts` about adding `result`/`error` to the signature). This means a history snapshot does **not** protect result values, errors, or previews. Any assertion about a result, error, or preview must be written explicitly in the test (e.g. `expect(execution.getResult()).toEqual(...)`).
+
 ### How it Works
 
 1. **First Run**: When you first create a test, run it with `GENERATE_HISTORY=true` to create the history file:
@@ -206,6 +208,8 @@ Inside `tests`, you have access to:
 2. **History File Creation**: This generates a `.history.json` file next to your test containing the expected event signatures.
 
 3. **Subsequent Runs**: Normal test runs compare the actual events against the stored history file.
+
+> **`GENERATE_HISTORY=true` only creates history files that do not already exist.** For an existing `.history.json` the flag is a no-op — it will **not** overwrite the file, and the test still asserts against the current (stale) snapshot. This is deliberate protection against accidentally rewriting committed snapshots. To intentionally regenerate an existing snapshot, delete the file first (see the "Event signature mismatch" troubleshooting entry).
 
 ### Example Usage
 
@@ -356,13 +360,25 @@ sam local execution history $DURABLE_EXECUTION_ARN
 **Error: "History file [...].history.json does not exist"**
 
 - Run the test with `GENERATE_HISTORY=true npm test` to create the history file
+- `GENERATE_HISTORY=true` only creates a file when none exists yet, so this works for a brand-new snapshot; to regenerate an existing one, see "Event signature mismatch" below
 - Make sure the file is committed to your repository
 
 **Error: Event signature mismatch**
 
 - The execution produced different events than expected
-- If this is intentional (you changed the function), regenerate the history with `GENERATE_HISTORY=true npm test`
-- If not intentional, check your function logic for unintended changes
+- If this is **not** intentional, check your function logic for unintended changes
+- If it **is** intentional (you changed the function), you must regenerate the snapshot. `GENERATE_HISTORY=true` will **not** overwrite an existing `.history.json` — it only creates missing files (deliberate protection against accidentally rewriting snapshots). Delete the stale file first, then regenerate and verify:
+
+  ```bash
+  # From the examples package directory. Adjust the path/suffix to your test.
+  rm src/examples/{path-to-example}/{example-name}.history.json
+
+  # Recreate the snapshot from the current execution
+  GENERATE_HISTORY=true npm test
+
+  # Re-run without the flag to confirm the new snapshot verifies
+  npm test
+  ```
 
 **TypeError: testResult.getHistoryEvents is not a function**
 
