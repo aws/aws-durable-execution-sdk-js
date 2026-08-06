@@ -48,8 +48,9 @@ export const handler = withDurableExecution(
       history: Array.from({ length: 50 }, (_, i) => ({ event: `evt-${i}` })),
     }));
 
-    await context.wait({ seconds: 1 });
-
+    // `record` has already round-tripped through the serdes: a step returns
+    // `deserialize(serialize(result))`, so the value below was read back out of
+    // the file the serdes wrote. No replay (and so no durable mount) is needed.
     return await context.step("read-record", async () => ({
       id: record.id,
       tier: record.tier,

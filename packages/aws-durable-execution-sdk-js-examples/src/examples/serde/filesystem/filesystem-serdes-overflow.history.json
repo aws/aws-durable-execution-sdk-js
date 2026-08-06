@@ -2,8 +2,8 @@
   {
     "EventType": "ExecutionStarted",
     "EventId": 1,
-    "Id": "5420bf57-09af-4750-98ad-89d3417dd6e9",
-    "EventTimestamp": "2026-08-03T17:11:05.249Z",
+    "Id": "5adb2642-1377-40ea-98e3-94bd7500aaef",
+    "EventTimestamp": "2026-08-06T18:03:08.910Z",
     "ExecutionStartedDetails": {
       "Input": {
         "Payload": "{}"
@@ -16,7 +16,7 @@
     "EventId": 2,
     "Id": "c4ca4238a0b92382",
     "Name": "small-record",
-    "EventTimestamp": "2026-08-03T17:11:05.258Z",
+    "EventTimestamp": "2026-08-06T18:03:08.917Z",
     "StepStartedDetails": {}
   },
   {
@@ -25,7 +25,7 @@
     "EventId": 3,
     "Id": "c4ca4238a0b92382",
     "Name": "small-record",
-    "EventTimestamp": "2026-08-03T17:11:05.258Z",
+    "EventTimestamp": "2026-08-06T18:03:08.917Z",
     "StepSucceededDetails": {
       "Result": {
         "Payload": "{\"data\":\"{\\\"orderId\\\":\\\"ORD-42\\\",\\\"total\\\":19.99}\"}"
@@ -39,7 +39,7 @@
     "EventId": 4,
     "Id": "c81e728d9d4c2f63",
     "Name": "large-document",
-    "EventTimestamp": "2026-08-03T17:11:05.264Z",
+    "EventTimestamp": "2026-08-06T18:03:08.921Z",
     "StepStartedDetails": {}
   },
   {
@@ -48,10 +48,10 @@
     "EventId": 5,
     "Id": "c81e728d9d4c2f63",
     "Name": "large-document",
-    "EventTimestamp": "2026-08-03T17:11:05.268Z",
+    "EventTimestamp": "2026-08-06T18:03:08.922Z",
     "StepSucceededDetails": {
       "Result": {
-        "Payload": "{\"file\":\"/var/folders/d2/m1rtwf316ml11zx23psmwkz00000gr/T/dur-example-fs-serdes-overflow/06fb3fb5-f2d9-4d15-9028-da99486ffe44/2.json\"}"
+        "Payload": "{\"file\":\"/var/folders/d2/m1rtwf316ml11zx23psmwkz00000gr/T/dur-example-fs-serdes-overflow/6aff0885-c6d4-49f6-9b41-2d693778a7cb/2.json\"}"
       },
       "RetryDetails": {}
     }
@@ -62,7 +62,7 @@
     "EventId": 6,
     "Id": "eccbc87e4b5ce2fe",
     "Name": "empty-record",
-    "EventTimestamp": "2026-08-03T17:11:05.270Z",
+    "EventTimestamp": "2026-08-06T18:03:08.925Z",
     "StepStartedDetails": {}
   },
   {
@@ -71,60 +71,28 @@
     "EventId": 7,
     "Id": "eccbc87e4b5ce2fe",
     "Name": "empty-record",
-    "EventTimestamp": "2026-08-03T17:11:05.270Z",
+    "EventTimestamp": "2026-08-06T18:03:08.925Z",
     "StepSucceededDetails": {
       "Result": {},
       "RetryDetails": {}
     }
   },
   {
-    "EventType": "WaitStarted",
-    "SubType": "Wait",
-    "EventId": 8,
-    "Id": "a87ff679a2f3e71d",
-    "EventTimestamp": "2026-08-03T17:11:05.274Z",
-    "WaitStartedDetails": {
-      "Duration": 1,
-      "ScheduledEndTimestamp": "2026-08-03T17:11:06.274Z"
-    }
-  },
-  {
-    "EventType": "InvocationCompleted",
-    "EventId": 9,
-    "EventTimestamp": "2026-08-03T17:11:05.297Z",
-    "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-08-03T17:11:05.249Z",
-      "EndTimestamp": "2026-08-03T17:11:05.297Z",
-      "Error": {},
-      "RequestId": "a7da26e3-f6fb-425c-9845-8f77522a52bb"
-    }
-  },
-  {
-    "EventType": "WaitSucceeded",
-    "SubType": "Wait",
-    "EventId": 10,
-    "Id": "a87ff679a2f3e71d",
-    "EventTimestamp": "2026-08-03T17:11:06.273Z",
-    "WaitSucceededDetails": {
-      "Duration": 1
-    }
-  },
-  {
     "EventType": "StepStarted",
     "SubType": "Step",
-    "EventId": 11,
-    "Id": "e4da3b7fbbce2345",
+    "EventId": 8,
+    "Id": "a87ff679a2f3e71d",
     "Name": "combine",
-    "EventTimestamp": "2026-08-03T17:11:06.277Z",
+    "EventTimestamp": "2026-08-06T18:03:08.927Z",
     "StepStartedDetails": {}
   },
   {
     "EventType": "StepSucceeded",
     "SubType": "Step",
-    "EventId": 12,
-    "Id": "e4da3b7fbbce2345",
+    "EventId": 9,
+    "Id": "a87ff679a2f3e71d",
     "Name": "combine",
-    "EventTimestamp": "2026-08-03T17:11:06.277Z",
+    "EventTimestamp": "2026-08-06T18:03:08.927Z",
     "StepSucceededDetails": {
       "Result": {
         "Payload": "{\"data\":\"{\\\"smallOrderId\\\":\\\"ORD-42\\\",\\\"largeLength\\\":307200,\\\"nothingIsUndefined\\\":true}\"}"
@@ -134,20 +102,20 @@
   },
   {
     "EventType": "InvocationCompleted",
-    "EventId": 13,
-    "EventTimestamp": "2026-08-03T17:11:06.277Z",
+    "EventId": 10,
+    "EventTimestamp": "2026-08-06T18:03:08.927Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-08-03T17:11:06.273Z",
-      "EndTimestamp": "2026-08-03T17:11:06.277Z",
+      "StartTimestamp": "2026-08-06T18:03:08.910Z",
+      "EndTimestamp": "2026-08-06T18:03:08.927Z",
       "Error": {},
-      "RequestId": "ffb13009-4972-44aa-b226-cc53f2363650"
+      "RequestId": "e40d905d-708b-4b93-9577-73a5d4554377"
     }
   },
   {
     "EventType": "ExecutionSucceeded",
-    "EventId": 14,
-    "Id": "5420bf57-09af-4750-98ad-89d3417dd6e9",
-    "EventTimestamp": "2026-08-03T17:11:06.277Z",
+    "EventId": 11,
+    "Id": "5adb2642-1377-40ea-98e3-94bd7500aaef",
+    "EventTimestamp": "2026-08-06T18:03:08.928Z",
     "ExecutionSucceededDetails": {
       "Result": {
         "Payload": "{\"smallOrderId\":\"ORD-42\",\"largeLength\":307200,\"nothingIsUndefined\":true}"

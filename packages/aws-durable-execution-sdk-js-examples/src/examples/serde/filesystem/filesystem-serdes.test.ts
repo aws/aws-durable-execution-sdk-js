@@ -8,16 +8,16 @@ import { handler } from "./filesystem-serdes";
 createTests({
   handler,
   tests: (runner, { assertEventSignatures }) => {
-    it("should write the result to a file and read it back on replay", async () => {
+    it("should write the result to a file and read it back through the serdes", async () => {
       const execution = await runner.run({
         payload: { reportId: "RPT-001" },
       });
 
       expect(execution.getStatus()).toBe("SUCCEEDED");
-      // initial invocation + replay after wait
-      expect(execution.getInvocations().length).toBe(2);
-      // generate-report step + wait + summarize-report step
-      expect(execution.getOperations().length).toBe(3);
+      // A single invocation: the serdes round trip does not need a replay.
+      expect(execution.getInvocations().length).toBe(1);
+      // generate-report step + summarize-report step
+      expect(execution.getOperations().length).toBe(2);
 
       const generateStep = runner.getOperation("generate-report");
       expect(generateStep.getType()).toBe(OperationType.STEP);

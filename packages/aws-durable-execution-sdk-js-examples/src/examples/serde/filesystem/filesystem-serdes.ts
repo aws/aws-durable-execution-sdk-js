@@ -25,8 +25,10 @@ export const config: ExampleConfig = {
  * A generated document large enough that you would not want it stored inline in
  * every checkpoint. In production `basePath` points at a durable, shared mount
  * such as `/mnt/s3` (S3 Files) or `/mnt/efs` (EFS) — NOT Lambda's ephemeral
- * `/tmp`, which is not shared across replays. Here we use the OS temp dir purely
- * so the example is runnable locally and in integration tests.
+ * `/tmp`, which is not shared across invocations. The OS temp dir is fine here
+ * because this example deliberately reads the value back within the invocation
+ * that wrote it: the point is that the serdes round-trips correctly, not that
+ * the underlying mount is durable.
  */
 const basePath = join(tmpdir(), "dur-example-fs-serdes-always");
 
@@ -72,11 +74,11 @@ export const handler = withDurableExecution(
       }),
     );
 
-    // Wait forces a replay. On resume the report is deserialized by reading it
-    // back from the file the serdes wrote.
-    await context.wait({ seconds: 1 });
-
-    // Step 2: use the rehydrated value, proving the file round-tripped.
+    // Step 2: use the rehydrated value, proving the file round-tripped. No
+    // replay is needed to exercise deserialize: a step always returns
+    // `deserialize(serialize(result))` so that its first-run value is identical
+    // to the one a later replay would reconstruct. `report` here has therefore
+    // already been read back out of the file the serdes wrote.
     const summary = await context.step("summarize-report", async () => ({
       id: report.id,
       status: report.status,

@@ -9,10 +9,10 @@ createTests({
       const execution = await runner.run({ payload: {} });
 
       expect(execution.getStatus()).toBe("SUCCEEDED");
-      // initial invocation + replay after wait
-      expect(execution.getInvocations().length).toBe(2);
-      // small + large + empty + wait + combine
-      expect(execution.getOperations().length).toBe(5);
+      // A single invocation: the serdes round trip does not need a replay.
+      expect(execution.getInvocations().length).toBe(1);
+      // small + large + empty + combine
+      expect(execution.getOperations().length).toBe(4);
 
       expect(runner.getOperation("small-record").getStatus()).toBe(
         OperationStatus.SUCCEEDED,

@@ -52,8 +52,9 @@ export const handler = withDurableExecution(
       auditLog: "A".repeat(2000),
     }));
 
-    await context.wait({ seconds: 1 });
-
+    // `profile` has already round-tripped through the serdes: a step returns
+    // `deserialize(serialize(result))`, so the value below was read back out of
+    // the file the serdes wrote. No replay (and so no durable mount) is needed.
     return await context.step("read-profile", async () => ({
       id: profile.id,
       email: profile.customer.email,

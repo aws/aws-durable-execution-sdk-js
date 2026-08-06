@@ -19,7 +19,8 @@ export const config: ExampleConfig = {
 
 /**
  * In production `basePath` is a durable, shared mount (S3 Files / EFS). The OS
- * temp dir is used here only so the example runs locally and in integration.
+ * temp dir is fine here because this example reads every value back within the
+ * invocation that wrote it — it demonstrates the serdes, not mount durability.
  */
 const basePath = join(tmpdir(), "dur-example-fs-serdes-overflow");
 
@@ -52,10 +53,10 @@ export const handler = withDurableExecution(
       async () => undefined,
     );
 
-    // Wait forces a replay so both the inline value and the file-backed value
-    // are deserialized (one from the envelope's data, one by reading the file).
-    await context.wait({ seconds: 1 });
-
+    // No replay is needed to exercise deserialize: a step always returns
+    // `deserialize(serialize(result))`, so each value above has already made the
+    // round trip — the small one out of the inline envelope, the large one by
+    // reading back the overflow file, and the undefined one straight through.
     return await context.step("combine", async () => ({
       smallOrderId: small.orderId,
       largeLength: large.length,
