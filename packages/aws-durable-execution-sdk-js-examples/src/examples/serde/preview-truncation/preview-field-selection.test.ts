@@ -53,9 +53,15 @@ createTests({
 
       // `customer.email` uses PATH matching: the exact nested path is included,
       // and ONLY that path. The value carries a decoy `email` at the top level
-      // with the same field name; it must not appear. This is what separates
-      // PATH from ANYWHERE (which matched `id` in two places) and from a suffix
-      // match, either of which would pull the decoy in.
+      // with the same field name; it must not appear.
+      //
+      // The decoy guards against a PATH implementation loosened to compare only
+      // the last segment, or to `endsWith` — either would pull it in. It does
+      // NOT distinguish PATH from ANYWHERE: under ANYWHERE the selector is
+      // tested against individual path segments (`path.split(".")`), so a dotted
+      // name matches nothing at all. Dropping `match: PATH` therefore makes
+      // `customer.email` disappear from the preview rather than making the decoy
+      // appear -- which is what the assertion below catches.
       expect(preview.customer?.email).toBe("person@example.com");
       expect(preview.email).toBeUndefined();
       expect(JSON.stringify(preview)).not.toContain("decoy@example.com");

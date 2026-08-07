@@ -2,8 +2,8 @@
   {
     "EventType": "ExecutionStarted",
     "EventId": 1,
-    "Id": "d2e6b1d1-ad69-42f8-aae3-baa8226482ce",
-    "EventTimestamp": "2026-08-06T18:03:08.880Z",
+    "Id": "0249894f-ab79-4f58-be1c-9dcaf4339e6d",
+    "EventTimestamp": "2026-08-07T18:44:29.252Z",
     "ExecutionStartedDetails": {
       "Input": {
         "Payload": "{}"
@@ -16,7 +16,7 @@
     "EventId": 2,
     "Id": "c4ca4238a0b92382",
     "Name": "build-profile",
-    "EventTimestamp": "2026-08-06T18:03:08.892Z",
+    "EventTimestamp": "2026-08-07T18:44:29.261Z",
     "StepStartedDetails": {}
   },
   {
@@ -25,10 +25,10 @@
     "EventId": 3,
     "Id": "c4ca4238a0b92382",
     "Name": "build-profile",
-    "EventTimestamp": "2026-08-06T18:03:08.893Z",
+    "EventTimestamp": "2026-08-07T18:44:29.262Z",
     "StepSucceededDetails": {
       "Result": {
-        "Payload": "{\"file\":\"/var/folders/d2/m1rtwf316ml11zx23psmwkz00000gr/T/dur-example-preview-field-selection/e193e444-3017-47a5-b705-4a8454ed75d3/1.json\",\"preview\":{\"id\":\"cust-9\",\"customer\":{\"id\":\"cust-9\",\"email\":\"person@example.com\",\"ssn\":\"***\"}}}"
+        "Payload": "{\"file\":\"/var/folders/d2/m1rtwf316ml11zx23psmwkz00000gr/T/dur-example-preview-field-selection/3f369870-9340-470f-b1f7-3e4210975994/1.json\",\"preview\":{\"id\":\"cust-9\",\"customer\":{\"id\":\"cust-9\",\"email\":\"person@example.com\",\"ssn\":\"***\"}}}"
       },
       "RetryDetails": {}
     }
@@ -39,7 +39,7 @@
     "EventId": 4,
     "Id": "c81e728d9d4c2f63",
     "Name": "read-profile",
-    "EventTimestamp": "2026-08-06T18:03:08.896Z",
+    "EventTimestamp": "2026-08-07T18:44:29.265Z",
     "StepStartedDetails": {}
   },
   {
@@ -48,10 +48,10 @@
     "EventId": 5,
     "Id": "c81e728d9d4c2f63",
     "Name": "read-profile",
-    "EventTimestamp": "2026-08-06T18:03:08.898Z",
+    "EventTimestamp": "2026-08-07T18:44:29.267Z",
     "StepSucceededDetails": {
       "Result": {
-        "Payload": "{\"file\":\"/var/folders/d2/m1rtwf316ml11zx23psmwkz00000gr/T/dur-example-preview-field-selection/e193e444-3017-47a5-b705-4a8454ed75d3/2.json\",\"preview\":{\"id\":\"cust-9\"}}"
+        "Payload": "{\"file\":\"/var/folders/d2/m1rtwf316ml11zx23psmwkz00000gr/T/dur-example-preview-field-selection/3f369870-9340-470f-b1f7-3e4210975994/2.json\",\"preview\":{\"id\":\"cust-9\"}}"
       },
       "RetryDetails": {}
     }
@@ -59,22 +59,22 @@
   {
     "EventType": "InvocationCompleted",
     "EventId": 6,
-    "EventTimestamp": "2026-08-06T18:03:08.899Z",
+    "EventTimestamp": "2026-08-07T18:44:29.269Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-08-06T18:03:08.880Z",
-      "EndTimestamp": "2026-08-06T18:03:08.899Z",
+      "StartTimestamp": "2026-08-07T18:44:29.252Z",
+      "EndTimestamp": "2026-08-07T18:44:29.269Z",
       "Error": {},
-      "RequestId": "4af09885-53dd-48ea-8b5d-ef0b6cce92eb"
+      "RequestId": "6d5756e7-025a-40de-a5f2-88c50336d051"
     }
   },
   {
     "EventType": "ExecutionSucceeded",
     "EventId": 7,
-    "Id": "d2e6b1d1-ad69-42f8-aae3-baa8226482ce",
-    "EventTimestamp": "2026-08-06T18:03:08.900Z",
+    "Id": "0249894f-ab79-4f58-be1c-9dcaf4339e6d",
+    "EventTimestamp": "2026-08-07T18:44:29.269Z",
     "ExecutionSucceededDetails": {
       "Result": {
-        "Payload": "{\"id\":\"cust-9\",\"email\":\"person@example.com\",\"auditLength\":2000}"
+        "Payload": "{\"id\":\"cust-9\",\"email\":\"decoy@example.com\",\"customerEmail\":\"person@example.com\",\"auditLength\":2000}"
       }
     }
   }
