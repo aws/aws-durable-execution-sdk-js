@@ -1,0 +1,81 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "7b140c23-0167-4db4-9831-28f1d25e29de",
+    "EventTimestamp": "2026-08-06T18:03:08.925Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "build-record",
+    "EventTimestamp": "2026-08-06T18:03:08.932Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "build-record",
+    "EventTimestamp": "2026-08-06T18:03:08.934Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"file\":\"/var/folders/d2/m1rtwf316ml11zx23psmwkz00000gr/T/dur-example-preview-truncation/2bdc5545-cc82-491d-a8e4-4f497d9ea29d/1.json\",\"preview\":{\"id\":\"acct-123\",\"region\":\"us-west-2\",\"tier\":\"gold\"}}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "read-record",
+    "EventTimestamp": "2026-08-06T18:03:08.936Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "read-record",
+    "EventTimestamp": "2026-08-06T18:03:08.938Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"file\":\"/var/folders/d2/m1rtwf316ml11zx23psmwkz00000gr/T/dur-example-preview-truncation/2bdc5545-cc82-491d-a8e4-4f497d9ea29d/2.json\",\"preview\":{\"id\":\"acct-123\",\"tier\":\"gold\",\"notesLength\":500}}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 6,
+    "EventTimestamp": "2026-08-06T18:03:08.939Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-06T18:03:08.925Z",
+      "EndTimestamp": "2026-08-06T18:03:08.939Z",
+      "Error": {},
+      "RequestId": "cd462602-3af4-449b-97f0-1bb2ad2fd652"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 7,
+    "Id": "7b140c23-0167-4db4-9831-28f1d25e29de",
+    "EventTimestamp": "2026-08-06T18:03:08.940Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"id\":\"acct-123\",\"tier\":\"gold\",\"notesLength\":500}"
+      }
+    }
+  }
+]

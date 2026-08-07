@@ -2568,6 +2568,31 @@ Resources:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
+  ClassWithDates:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ClassSerdeswithDaterehydration-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: class-with-dates.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      Environment:
+        Variables:
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+    Metadata:
+      SkipBuild: "True"
   ConfigureCallbackDeserializer:
     Type: AWS::Serverless::Function
     Properties:
@@ -2599,6 +2624,106 @@ Resources:
       FunctionName: ConfigureDefaultSerdesviaconfigureSerdes-22x-NodeJS-Local
       CodeUri: ./dist
       Handler: configure-serdes.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      Environment:
+        Variables:
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+    Metadata:
+      SkipBuild: "True"
+  FilesystemSerdesOverflow:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: FilesystemSerdesOverflowMode-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: filesystem-serdes-overflow.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      Environment:
+        Variables:
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+    Metadata:
+      SkipBuild: "True"
+  FilesystemSerdes:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: FilesystemSerdesAlwaysMode-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: filesystem-serdes.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      Environment:
+        Variables:
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+    Metadata:
+      SkipBuild: "True"
+  PreviewFieldSelection:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: PreviewFieldSelection-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: preview-field-selection.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      Environment:
+        Variables:
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+    Metadata:
+      SkipBuild: "True"
+  PreviewTruncation:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: PreviewTruncation-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: preview-truncation.handler
       Runtime: nodejs22.x
       Architectures:
         - x86_64

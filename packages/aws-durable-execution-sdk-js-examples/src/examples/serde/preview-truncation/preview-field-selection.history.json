@@ -1,0 +1,81 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "d2e6b1d1-ad69-42f8-aae3-baa8226482ce",
+    "EventTimestamp": "2026-08-06T18:03:08.880Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "build-profile",
+    "EventTimestamp": "2026-08-06T18:03:08.892Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "build-profile",
+    "EventTimestamp": "2026-08-06T18:03:08.893Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"file\":\"/var/folders/d2/m1rtwf316ml11zx23psmwkz00000gr/T/dur-example-preview-field-selection/e193e444-3017-47a5-b705-4a8454ed75d3/1.json\",\"preview\":{\"id\":\"cust-9\",\"customer\":{\"id\":\"cust-9\",\"email\":\"person@example.com\",\"ssn\":\"***\"}}}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "read-profile",
+    "EventTimestamp": "2026-08-06T18:03:08.896Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "read-profile",
+    "EventTimestamp": "2026-08-06T18:03:08.898Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"file\":\"/var/folders/d2/m1rtwf316ml11zx23psmwkz00000gr/T/dur-example-preview-field-selection/e193e444-3017-47a5-b705-4a8454ed75d3/2.json\",\"preview\":{\"id\":\"cust-9\"}}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 6,
+    "EventTimestamp": "2026-08-06T18:03:08.899Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-06T18:03:08.880Z",
+      "EndTimestamp": "2026-08-06T18:03:08.899Z",
+      "Error": {},
+      "RequestId": "4af09885-53dd-48ea-8b5d-ef0b6cce92eb"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 7,
+    "Id": "d2e6b1d1-ad69-42f8-aae3-baa8226482ce",
+    "EventTimestamp": "2026-08-06T18:03:08.900Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"id\":\"cust-9\",\"email\":\"person@example.com\",\"auditLength\":2000}"
+      }
+    }
+  }
+]
