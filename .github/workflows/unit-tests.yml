@@ -15,6 +15,15 @@ concurrency:
   group: ${{ github.head_ref }}-${{ github.run_id}}-${{ inputs.node-version }}-unit
   cancel-in-progress: true
 
+env:
+  # The desktop app's `electron` devDependency has an install script that
+  # downloads a ~100 MB platform binary. Root `npm ci` runs it, and CI runs root
+  # `npm ci` across roughly eight jobs per PR — none of which launch Electron
+  # (the desktop tests are pure: assetPath.test.ts imports only node:path, and
+  # the bundle step needs no runtime). Skip the download; anyone who needs the
+  # binary locally gets it from a normal `npm install`, or `npm rebuild electron`.
+  ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+
 jobs:
   test:
     runs-on: ubuntu-latest

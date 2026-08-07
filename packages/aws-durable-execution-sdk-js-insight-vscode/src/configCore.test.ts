@@ -1,12 +1,14 @@
-jest.mock("vscode", () => ({ workspace: { getConfiguration: jest.fn() } }), {
-  virtual: true,
-});
+/**
+ * Note the absence of a `vscode` mock: configCore is host-free by design, so
+ * this suite importing it without one is itself the assertion that the module
+ * stays importable from the desktop host.
+ */
 jest.mock("@aws-sdk/credential-providers", () => ({
   fromIni: jest.fn(),
   fromNodeProviderChain: jest.fn(),
 }));
 
-import { configFromWireSettings } from "./config";
+import { configFromWireSettings } from "./configCore";
 
 describe("configFromWireSettings", () => {
   it("applies defaults for an empty payload", () => {
