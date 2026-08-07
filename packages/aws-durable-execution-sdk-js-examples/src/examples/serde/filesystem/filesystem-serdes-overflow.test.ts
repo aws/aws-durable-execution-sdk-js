@@ -5,7 +5,31 @@ import {
 } from "@aws/durable-execution-sdk-js-testing";
 import { createTests } from "../../../utils/test-helper";
 import { basePath, handler } from "./filesystem-serdes-overflow";
-import { FileSystemEnvelope } from "../../shared/filesystem-envelope";
+
+/**
+ * The checkpoint envelope written by the filesystem serdes, as this test needs to
+ * observe it.
+ *
+ * The SDK's own shape is a discriminated union, `@internal` and not exported:
+ *
+ * ```ts
+ * { data: string } | { file: string; preview?: Record<string, unknown> }
+ * ```
+ *
+ * Exactly one of `data` (inline, under the OVERFLOW threshold) or `file` (spilled
+ * to disk) is present, and `preview` only ever accompanies `file` --
+ * `generatePreview` runs solely on the write-to-file branches.
+ *
+ * Mirrored here with optional fields rather than as a union because this test
+ * asserts each field's ABSENCE, which a union would require narrowing before the
+ * access. The other filesystem examples only read a `file` that is always
+ * present, so they declare it required.
+ */
+interface FileSystemEnvelope {
+  data?: string;
+  file?: string;
+  preview?: Record<string, unknown>;
+}
 
 createTests({
   handler,

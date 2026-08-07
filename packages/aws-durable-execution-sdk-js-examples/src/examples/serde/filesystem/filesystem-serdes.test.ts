@@ -7,7 +7,16 @@ import {
 } from "@aws/durable-execution-sdk-js-testing";
 import { createTests } from "../../../utils/test-helper";
 import { basePath, handler } from "./filesystem-serdes";
-import { FileSystemEnvelope } from "../../shared/filesystem-envelope";
+
+/**
+ * The checkpoint envelope written by the filesystem serdes when the value is
+ * offloaded to a file: the checkpoint keeps only the pointer, plus an inline
+ * preview when `generatePreview` is configured.
+ */
+interface FileSystemEnvelope {
+  file: string;
+  preview?: Record<string, unknown>;
+}
 
 createTests({
   handler,
@@ -61,8 +70,8 @@ createTests({
       // Asserting the shape is what distinguishes HASH from the URI default,
       // where the directory is the invocation UUID and the file name is the
       // URI-encoded entity id — neither of which is 64 hex characters.
-      expect(basename(envelope.file!)).toMatch(/^[0-9a-f]{64}\.json$/);
-      expect(basename(dirname(envelope.file!))).toMatch(/^[0-9a-f]{64}$/);
+      expect(basename(envelope.file)).toMatch(/^[0-9a-f]{64}\.json$/);
+      expect(basename(dirname(envelope.file))).toMatch(/^[0-9a-f]{64}$/);
 
       const preview = envelope.preview as Record<string, unknown>;
       // EXCLUDE_ALL + include id/status: both included fields are present.

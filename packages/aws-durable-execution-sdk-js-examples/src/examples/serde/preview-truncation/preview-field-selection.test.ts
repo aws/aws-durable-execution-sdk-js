@@ -5,7 +5,16 @@ import {
 } from "@aws/durable-execution-sdk-js-testing";
 import { createTests } from "../../../utils/test-helper";
 import { basePath, handler } from "./preview-field-selection";
-import { FileSystemEnvelope } from "../../shared/filesystem-envelope";
+
+/**
+ * The checkpoint envelope written by the filesystem serdes when the value is
+ * offloaded to a file: the checkpoint keeps only the pointer, plus an inline
+ * preview when `generatePreview` is configured.
+ */
+interface FileSystemEnvelope {
+  file: string;
+  preview?: Record<string, unknown>;
+}
 
 createTests({
   handler,
@@ -35,7 +44,7 @@ createTests({
       // Inspect the inline preview stored in the checkpoint envelope.
       const envelope = buildStep.getStepDetails()?.result as FileSystemEnvelope;
       expect(typeof envelope.file).toBe("string");
-      expect(envelope.file!.length).toBeGreaterThan(0);
+      expect(envelope.file.length).toBeGreaterThan(0);
 
       const preview = envelope.preview as {
         id?: unknown;
