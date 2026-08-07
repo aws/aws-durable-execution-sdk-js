@@ -249,7 +249,8 @@ export interface Settings {
  * Version of the AI-usage disclosure. Bump this whenever the *substance* of the
  * notice changes — the providers named, or where data can go — so
  * previously-consented users are re-prompted.
- * LEGAL: wording is pending review by the Legal team (see tracked ticket).
+ * LEGAL: the disclosure copy in AiConsentModal.tsx is reviewed and approved. A
+ * substantive edit needs Legal review again as well as a bump here.
  *
  * Currently "2": "1" was the initial gate (features + generic data notice);
  * "2" added the per-provider data-flow breakdown, so early adopters on "1"
@@ -265,6 +266,13 @@ export interface Settings {
  * re-prompting every consented user would be disproportionate. The other
  * host-dependent edits only *remove* bullets, and only on a host where that
  * provider is unreachable, which likewise cannot widen the disclosure.
+ *
+ * Also deliberately NOT bumped when the wording moved from "pending Legal
+ * review" to approved. Legal approved the text as it already stood, so not one
+ * character a user reads changed — only a code comment describing its status.
+ * There is nothing for a consented user to re-accept. (An earlier note here said
+ * to bump when the approved text landed; that anticipated Legal returning
+ * *different* copy, which is not what happened.)
  *
  * The test to apply when editing this text: could a user who already consented
  * be surprised about where their data goes? If yes, bump. If the change only
