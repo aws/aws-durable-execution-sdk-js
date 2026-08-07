@@ -872,6 +872,10 @@ describe("CheckpointManager", () => {
         ...mockOperation,
         operation: {
           ...mockOperation.operation,
+          // StartTimestamp is a Date stamped by storage while the test runs; it
+          // agrees with the setup-captured value only within the same
+          // millisecond. Assert its type, not the exact instant.
+          StartTimestamp: expect.any(Date),
           CallbackDetails: {
             CallbackId: expect.any(String),
           },
