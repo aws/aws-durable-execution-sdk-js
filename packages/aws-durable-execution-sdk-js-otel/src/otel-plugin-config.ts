@@ -11,14 +11,14 @@ import type { ContextExtractor } from "./context-extractors";
  */
 export enum ProviderSource {
   /** Caller supplied `config.tracerProvider`; the plugin uses it as-is. */
-  Explicit = "explicit",
+  EXPLICIT = "explicit",
   /**
    * Default: use the globally registered provider via
    * `trace.getTracerProvider()`.
    */
-  Global = "global",
+  GLOBAL = "global",
   /** The plugin builds and owns an OTLP provider. */
-  AutoOtlp = "auto_otlp",
+  AUTO_OTLP = "auto_otlp",
 }
 
 /**
@@ -32,11 +32,11 @@ export enum ProviderSource {
 export interface OtelPluginConfig {
   /**
    * Custom TracerProvider, used only when `providerSource` is
-   * `ProviderSource.Explicit`. When selected, the plugin uses this provider
+   * `ProviderSource.EXPLICIT`. When selected, the plugin uses this provider
    * as-is and skips all auto-setup (no exporter, no propagators, no
    * instrumentations are registered). The caller owns the provider.
    *
-   * Required when `providerSource === ProviderSource.Explicit`, and ignored
+   * Required when `providerSource === ProviderSource.EXPLICIT`, and ignored
    * (rejected) for any other source — see {@link resolveProviderSource}.
    */
   tracerProvider?: TracerProvider;
@@ -89,18 +89,18 @@ export interface OtelPluginConfig {
   /**
    * Selects how the plugin obtains its `TracerProvider`:
    *
-   * - `ProviderSource.Global` (default) — the plugin uses the globally
+   * - `ProviderSource.GLOBAL` (default) — the plugin uses the globally
    *   registered provider via `trace.getTracerProvider()` and skips all
    *   auto-setup. The caller owns the global provider (e.g. the ADOT Lambda
    *   layer). If no global provider is registered, OTel returns a no-op
    *   provider and no spans are exported.
-   * - `ProviderSource.AutoOtlp` — the plugin builds and owns an internal
+   * - `ProviderSource.AUTO_OTLP` — the plugin builds and owns an internal
    *   `NodeTracerProvider` with OTLP export, propagators, sampler, and
    *   HTTP + AWS SDK instrumentation.
-   * - `ProviderSource.Explicit` — the plugin uses `tracerProvider` as-is and
+   * - `ProviderSource.EXPLICIT` — the plugin uses `tracerProvider` as-is and
    *   skips all auto-setup. `tracerProvider` is then required.
    *
-   * Defaults to `ProviderSource.Global`.
+   * Defaults to `ProviderSource.GLOBAL`.
    */
   providerSource?: ProviderSource;
 
@@ -132,11 +132,11 @@ export type ExecutionOtelPluginConfig = OtelPluginConfig;
  * Resolves and validates the {@link ProviderSource} for a config.
  *
  * `providerSource` is the sole selector (defaulting to
- * `ProviderSource.Global`). `tracerProvider` is a companion input consumed
- * only by the `Explicit` source. This function enforces that coupling:
+ * `ProviderSource.GLOBAL`). `tracerProvider` is a companion input consumed
+ * only by the `EXPLICIT` source. This function enforces that coupling:
  *
- * - `Explicit` requires `tracerProvider` — throws if it is missing.
- * - `tracerProvider` may only be supplied with `Explicit` — throws otherwise,
+ * - `EXPLICIT` requires `tracerProvider` — throws if it is missing.
+ * - `tracerProvider` may only be supplied with `EXPLICIT` — throws otherwise,
  *   rather than silently ignoring a provider the caller expected to be used.
  *
  * It is the single source of truth for provider-mode selection: both the
@@ -146,18 +146,18 @@ export type ExecutionOtelPluginConfig = OtelPluginConfig;
 export function resolveProviderSource(
   config?: OtelPluginConfig,
 ): ProviderSource {
-  const source = config?.providerSource ?? ProviderSource.Global;
+  const source = config?.providerSource ?? ProviderSource.GLOBAL;
 
-  if (source === ProviderSource.Explicit && !config?.tracerProvider) {
+  if (source === ProviderSource.EXPLICIT && !config?.tracerProvider) {
     throw new Error(
       "OtelPluginConfig: providerSource 'explicit' requires a `tracerProvider` to be set.",
     );
   }
 
-  if (config?.tracerProvider && source !== ProviderSource.Explicit) {
+  if (config?.tracerProvider && source !== ProviderSource.EXPLICIT) {
     throw new Error(
       "OtelPluginConfig: `tracerProvider` is only used with providerSource 'explicit'. " +
-        "Set providerSource: ProviderSource.Explicit, or remove tracerProvider.",
+        "Set providerSource: ProviderSource.EXPLICIT, or remove tracerProvider.",
     );
   }
 

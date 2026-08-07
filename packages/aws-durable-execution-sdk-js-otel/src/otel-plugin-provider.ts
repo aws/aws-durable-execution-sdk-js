@@ -28,7 +28,7 @@ export interface ProviderResult {
   /**
    * Which tier produced the provider. This is the single source of truth for
    * provider ownership: the factory created (and therefore owns) the provider
-   * only when `source === ProviderSource.AutoOtlp`.
+   * only when `source === ProviderSource.AUTO_OTLP`.
    */
   source: ProviderSource;
 }
@@ -86,12 +86,12 @@ function buildLambdaResource() {
  * ExecutionOtelPlugin and InvocationOtelPlugin, based on the config's
  * {@link ProviderSource} (see {@link resolveProviderSource}):
  *
- * - `Global` (the default when `providerSource` is unset) — returns the
+ * - `GLOBAL` (the default when `providerSource` is unset) — returns the
  *   globally registered provider via `trace.getTracerProvider()` as-is; no
  *   exporter, propagator, or sampler registration is performed.
- * - `Explicit` — returns the supplied `config.tracerProvider` as-is, with no
+ * - `EXPLICIT` — returns the supplied `config.tracerProvider` as-is, with no
  *   auto-setup.
- * - `AutoOtlp` — creates a `NodeTracerProvider` with:
+ * - `AUTO_OTLP` — creates a `NodeTracerProvider` with:
  *   - `OTLPTraceExporter` targeting the configured endpoint
  *   - `BatchSpanProcessor` wrapping the exporter
  *   - `AWSXRayPropagator` + `W3CTraceContextPropagator` composite propagator
@@ -104,16 +104,16 @@ export function createTracerProvider(
   const source = resolveProviderSource(config);
 
   // Explicit: caller supplied a provider — return it as-is, no auto-setup.
-  if (source === ProviderSource.Explicit) {
+  if (source === ProviderSource.EXPLICIT) {
     return { tracerProvider: config!.tracerProvider!, source };
   }
 
   // Global: use the globally registered default provider, no auto-setup.
-  if (source === ProviderSource.Global) {
+  if (source === ProviderSource.GLOBAL) {
     return { tracerProvider: trace.getTracerProvider(), source };
   }
 
-  // AutoOtlp: create an internal provider with full auto-setup.
+  // AUTO_OTLP: create an internal provider with full auto-setup.
   // Resolve the OTLP endpoint
   const endpoint =
     config?.exporterConfig?.endpoint ||

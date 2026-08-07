@@ -13,9 +13,9 @@ This package provides two plugin implementations:
 
 Both plugins share the same configuration interface (`OtelPluginConfig`) and support three TracerProvider modes, selected via `providerSource`:
 
-1. **Global** (`ProviderSource.Global`, default) — use the globally registered provider (e.g., from the ADOT layer)
-2. **Auto-created** (`ProviderSource.AutoOtlp`) — the plugin creates its own TracerProvider with OTLP export to `localhost:4318`
-3. **Explicit** (`ProviderSource.Explicit`) — you pass your own `tracerProvider` instance
+1. **Global** (`ProviderSource.GLOBAL`, default) — use the globally registered provider (e.g., from the ADOT layer)
+2. **Auto-created** (`ProviderSource.AUTO_OTLP`) — the plugin creates its own TracerProvider with OTLP export to `localhost:4318`
+3. **Explicit** (`ProviderSource.EXPLICIT`) — you pass your own `tracerProvider` instance
 
 Both plugins can be deployed with either the **ADOT Lambda layer** or the **OpenTelemetry community collector-only layer**.
 
@@ -98,7 +98,7 @@ With no configuration, both plugins auto-create a TracerProvider with:
 
 **Use `ExecutionOtelPlugin` when** you want a single unified trace view across all invocations of a durable execution, with the workflow as the logical root.
 
-**Use `InvocationOtelPlugin` when** you want a lighter-weight plugin that still produces a unified Workflow trace with the community collector, or delegates entirely to the ADOT layer's auto-instrumentation when `providerSource: ProviderSource.Global`.
+**Use `InvocationOtelPlugin` when** you want a lighter-weight plugin that still produces a unified Workflow trace with the community collector, or delegates entirely to the ADOT layer's auto-instrumentation when `providerSource: ProviderSource.GLOBAL`.
 
 ---
 
@@ -111,9 +111,9 @@ Both plugins can use either Lambda layer. The layer provides span transport (a c
 | **ADOT Lambda Layer**              | OTel SDK auto-instrumentation + collector extension    | `arn:aws:lambda:{region}:615299751070:layer:AWSOpenTelemetryDistroJs:{version}`             |
 | **Community Collector-Only Layer** | Collector extension only (no SDK auto-instrumentation) | `arn:aws:lambda:{region}:184161586896:layer:opentelemetry-nodejs-{version}:{layer-version}` |
 
-**ADOT Layer:** Registers a global TracerProvider with auto-instrumentation. Use `providerSource: ProviderSource.Global` so the plugin delegates to that provider. Set `AWS_LAMBDA_EXEC_WRAPPER=/opt/otel-instrument` to activate it.
+**ADOT Layer:** Registers a global TracerProvider with auto-instrumentation. Use `providerSource: ProviderSource.GLOBAL` so the plugin delegates to that provider. Set `AWS_LAMBDA_EXEC_WRAPPER=/opt/otel-instrument` to activate it.
 
-**Community Collector Layer:** Only runs a collector process at `localhost:4318`. The plugin creates its own TracerProvider (AutoOtlp mode) and exports spans to the collector. Requires a `collector.yaml` in your function bundle and `OPENTELEMETRY_COLLECTOR_CONFIG_URI=/var/task/collector.yaml`.
+**Community Collector Layer:** Only runs a collector process at `localhost:4318`. The plugin creates its own TracerProvider (AUTO_OTLP mode) and exports spans to the collector. Requires a `collector.yaml` in your function bundle and `OPENTELEMETRY_COLLECTOR_CONFIG_URI=/var/task/collector.yaml`.
 
 > **Tip:** The community collector layer is smaller and purpose-built for span transport. The ADOT layer is convenient if you want zero-config auto-instrumentation from the layer itself.
 
@@ -123,10 +123,10 @@ Both plugins can use either Lambda layer. The layer provides span transport (a c
 
 | #   | Plugin                 | Layer                     | `providerSource`     | `AWS_LAMBDA_EXEC_WRAPPER` | `collector.yaml` needed? |
 | --- | ---------------------- | ------------------------- | -------------------- | ------------------------- | ------------------------ |
-| 1   | `ExecutionOtelPlugin`  | ADOT Layer                | `Global`             | `/opt/otel-instrument`    | No                       |
-| 2   | `ExecutionOtelPlugin`  | Community Collector Layer | `AutoOtlp`            | Do NOT set                | Yes                      |
-| 3   | `InvocationOtelPlugin` | ADOT Layer                | `Global`             | `/opt/otel-instrument`    | No                       |
-| 4   | `InvocationOtelPlugin` | Community Collector Layer | `AutoOtlp`            | Do NOT set                | Yes                      |
+| 1   | `ExecutionOtelPlugin`  | ADOT Layer                | `GLOBAL`             | `/opt/otel-instrument`    | No                       |
+| 2   | `ExecutionOtelPlugin`  | Community Collector Layer | `AUTO_OTLP`            | Do NOT set                | Yes                      |
+| 3   | `InvocationOtelPlugin` | ADOT Layer                | `GLOBAL`             | `/opt/otel-instrument`    | No                       |
+| 4   | `InvocationOtelPlugin` | Community Collector Layer | `AUTO_OTLP`            | Do NOT set                | Yes                      |
 
 ### 1. ExecutionOtelPlugin + ADOT Layer
 
@@ -136,7 +136,7 @@ The ADOT layer provides both the collector and a global TracerProvider. The plug
 
 ```typescript
 import { ExecutionOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
-const plugin = new ExecutionOtelPlugin({ providerSource: ProviderSource.Global });
+const plugin = new ExecutionOtelPlugin({ providerSource: ProviderSource.GLOBAL });
 ```
 
 **SAM template:**
@@ -206,7 +206,7 @@ The ADOT layer provides both the collector and a global TracerProvider. The plug
 
 ```typescript
 import { InvocationOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
-const plugin = new InvocationOtelPlugin({ providerSource: ProviderSource.Global });
+const plugin = new InvocationOtelPlugin({ providerSource: ProviderSource.GLOBAL });
 ```
 
 **SAM template:**
@@ -277,7 +277,7 @@ MyFunction:
 | Already have ADOT layer, want unified execution traces | ExecutionOtelPlugin + ADOT Layer (option 1)           |
 | Already have ADOT layer, want per-invocation traces    | InvocationOtelPlugin + ADOT Layer (option 3)          |
 | Want smallest layer size                               | Community Collector (collector-only, no bundled SDK)  |
-| Want zero-config auto-instrumentation from ADOT        | ADOT Layer with `providerSource: ProviderSource.Global`      |
+| Want zero-config auto-instrumentation from ADOT        | ADOT Layer with `providerSource: ProviderSource.GLOBAL`      |
 
 ---
 
@@ -287,10 +287,10 @@ Both plugins accept the same `OtelPluginConfig` interface:
 
 ```typescript
 interface OtelPluginConfig {
-  /** Custom TracerProvider, used only with providerSource: ProviderSource.Explicit. */
+  /** Custom TracerProvider, used only with providerSource: ProviderSource.EXPLICIT. */
   tracerProvider?: TracerProvider;
 
-  /** Selects the provider mode. Defaults to ProviderSource.Global. */
+  /** Selects the provider mode. Defaults to ProviderSource.GLOBAL. */
   providerSource?: ProviderSource;
 
   /** Context extractor for upstream trace context. Defaults to xRayContextExtractor. */
@@ -316,7 +316,7 @@ interface OtelPluginConfig {
 }
 ```
 
-**Provider selection:** `providerSource` selects the mode (defaulting to `ProviderSource.Global`). `tracerProvider` is required with — and only valid with — `ProviderSource.Explicit`; supplying it with any other source throws.
+**Provider selection:** `providerSource` selects the mode (defaulting to `ProviderSource.GLOBAL`). `tracerProvider` is required with — and only valid with — `ProviderSource.EXPLICIT`; supplying it with any other source throws.
 
 **Usage examples:**
 
@@ -325,7 +325,7 @@ interface OtelPluginConfig {
 const plugin = new ExecutionOtelPlugin();
 
 // Use the ADOT layer's globally registered TracerProvider
-const plugin = new InvocationOtelPlugin({ providerSource: ProviderSource.Global });
+const plugin = new InvocationOtelPlugin({ providerSource: ProviderSource.GLOBAL });
 
 // Custom endpoint and headers (third-party vendor)
 const plugin = new ExecutionOtelPlugin({
@@ -341,7 +341,7 @@ const provider = new NodeTracerProvider({
   /* your config */
 });
 const plugin = new InvocationOtelPlugin({
-  providerSource: ProviderSource.Explicit,
+  providerSource: ProviderSource.EXPLICIT,
   tracerProvider: provider,
 });
 ```
@@ -350,7 +350,7 @@ const plugin = new InvocationOtelPlugin({
 
 ## Export Strategies
 
-When the plugin auto-creates its TracerProvider (AutoOtlp mode), you can configure where spans go:
+When the plugin auto-creates its TracerProvider (AUTO_OTLP mode), you can configure where spans go:
 
 ### Via a Collector Layer (Recommended)
 
@@ -536,7 +536,7 @@ Workflow_Span (deterministic ID from execution ARN, exported on terminal status 
     └── [link → Invocation_Span]
 ```
 
-> When `providerSource: ProviderSource.Global`, the plugin does not create its own Invocation_Span. Instead, it links to the ambient invocation span from the ADOT layer's context.
+> When `providerSource: ProviderSource.GLOBAL`, the plugin does not create its own Invocation_Span. Instead, it links to the ambient invocation span from the ADOT layer's context.
 
 ### InvocationOtelPlugin
 
@@ -556,7 +556,7 @@ Workflow_Span (deterministic ID from execution ARN, exported on terminal status 
 └── [attributes: durable.execution.arn, durable.execution.status]
 ```
 
-> When `providerSource: ProviderSource.Global` (ADOT mode), neither the Workflow_Span nor the Invocation_Span is created by the plugin. Operations are attached to the ADOT layer's ambient invocation span instead.
+> When `providerSource: ProviderSource.GLOBAL` (ADOT mode), neither the Workflow_Span nor the Invocation_Span is created by the plugin. Operations are attached to the ADOT layer's ambient invocation span instead.
 
 Cross-invocation operations are correlated via span links to deterministic span IDs.
 
@@ -599,7 +599,7 @@ Unlike the Workflow_Span, the Invocation_Span is **always** ended and exported (
 
 ## Additional npm Dependencies
 
-When the plugin auto-creates its TracerProvider (AutoOtlp mode), these peer dependencies are required:
+When the plugin auto-creates its TracerProvider (AUTO_OTLP mode), these peer dependencies are required:
 
 ```bash
 npm install @opentelemetry/exporter-trace-otlp-http \
@@ -620,7 +620,7 @@ npm install @opentelemetry/exporter-trace-otlp-http \
 | `@opentelemetry/core`                     | Propagators, samplers                          | Required (already a peer dep)                        |
 | `@opentelemetry/instrumentation-aws-sdk`  | Auto-instrument AWS SDK calls                  | Required (already a peer dep)                        |
 
-When using `providerSource: ProviderSource.Global` (ADOT layer mode), the ADOT layer provides all OTel dependencies — you only need `@opentelemetry/api` in your package.
+When using `providerSource: ProviderSource.GLOBAL` (ADOT layer mode), the ADOT layer provides all OTel dependencies — you only need `@opentelemetry/api` in your package.
 
 ---
 
@@ -686,11 +686,11 @@ After deploying with either plugin and either layer:
 | Symptom                         | Likely Cause                                                                                                                                 |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | No traces appear                | Collector layer not attached, or config env var not set                                                                                      |
-| No traces with ADOT layer       | `AWS_LAMBDA_EXEC_WRAPPER` not set (when using `providerSource: ProviderSource.Global`)                                                              |
+| No traces with ADOT layer       | `AWS_LAMBDA_EXEC_WRAPPER` not set (when using `providerSource: ProviderSource.GLOBAL`)                                                              |
 | Traces fragmented across IDs    | X-Ray active tracing not enabled on the function                                                                                             |
 | Missing operation spans         | Sampling ratio set below 1.0                                                                                                                 |
 | Collector layer errors          | Check `collector.yaml` is in the function bundle at the path specified                                                                       |
-| Duplicate spans with ADOT layer | `AWS_LAMBDA_EXEC_WRAPPER` is set but `providerSource` is not `Global` — either remove the env var or set `providerSource: ProviderSource.Global` |
+| Duplicate spans with ADOT layer | `AWS_LAMBDA_EXEC_WRAPPER` is set but `providerSource` is not `GLOBAL` — either remove the env var or set `providerSource: ProviderSource.GLOBAL` |
 
 ## License
 

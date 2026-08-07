@@ -118,7 +118,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     provider = new NodeTracerProvider({
       spanProcessors: [new SimpleSpanProcessor(exporter)],
     });
-    // Register the provider globally — this is what providerSource: Global picks up
+    // Register the provider globally — this is what providerSource: GLOBAL picks up
     provider.register();
   });
 
@@ -132,14 +132,14 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
 
   it("exports spans via InMemorySpanExporter through a full invocation lifecycle", async () => {
     /**
-     * Integration test: Full lifecycle with providerSource: Global.
+     * Integration test: Full lifecycle with providerSource: GLOBAL.
      *
      * Exercises: onInvocationStart (with ambient invocation span) →
      * onOperationStart → onOperationAttemptStart → onOperationAttemptEnd →
      * onOperationEnd → wrapChildContextFn (CONTEXT type) → onInvocationEnd
      */
     const plugin = new ExecutionOtelPlugin({
-      providerSource: ProviderSource.Global,
+      providerSource: ProviderSource.GLOBAL,
     });
 
     // Create an ambient invocation span (simulating the one from the Lambda layer/environment)
@@ -271,7 +271,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
   it("does not shutdown the provider (only forceFlush is called)", async () => {
     /**
      * Verifies that the plugin never calls shutdown on the globally registered
-     * provider it does not own. When using providerSource: Global, the provider
+     * provider it does not own. When using providerSource: GLOBAL, the provider
      * stored internally is the ProxyTracerProvider from trace.getTracerProvider(),
      * which may not expose forceFlush directly. The plugin checks for forceFlush
      * presence and calls it if available.
@@ -279,7 +279,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     const shutdownSpy = jest.spyOn(provider, "shutdown");
 
     const plugin = new ExecutionOtelPlugin({
-      providerSource: ProviderSource.Global,
+      providerSource: ProviderSource.GLOBAL,
     });
 
     // Run a minimal lifecycle
@@ -305,7 +305,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
      * and the global provider remains functional across multiple lifecycles.
      */
     const plugin = new ExecutionOtelPlugin({
-      providerSource: ProviderSource.Global,
+      providerSource: ProviderSource.GLOBAL,
     });
 
     const ambientTracer = provider.getTracer("test-ambient-layer");
@@ -404,10 +404,10 @@ describe("ExecutionOtelPlugin - Parent-child workflow span ID collision preventi
       "arn:aws:lambda:us-east-1:123456789012:function:durable-enrich:$LATEST:child-exec-1";
 
     const parentPlugin = new ExecutionOtelPlugin({
-      providerSource: ProviderSource.Global,
+      providerSource: ProviderSource.GLOBAL,
     });
     const childPlugin = new ExecutionOtelPlugin({
-      providerSource: ProviderSource.Global,
+      providerSource: ProviderSource.GLOBAL,
     });
 
     // --- Parent workflow execution ---
@@ -477,7 +477,7 @@ describe("ExecutionOtelPlugin - Parent-child workflow span ID collision preventi
   // the span status at the default UNSET (code 0).
   it("onOperationEnd terminal path: TIMED_OUT status with NO error leaves the operation span NOT OK (UNSET)", async () => {
     const plugin = new ExecutionOtelPlugin({
-      providerSource: ProviderSource.Global,
+      providerSource: ProviderSource.GLOBAL,
     });
 
     await plugin.onInvocationStart(makeInvocationInfo());
@@ -502,7 +502,7 @@ describe("ExecutionOtelPlugin - Parent-child workflow span ID collision preventi
 
   it("onOperationEnd cross-invocation path: STOPPED status with NO error leaves the span NOT OK (UNSET)", async () => {
     const plugin = new ExecutionOtelPlugin({
-      providerSource: ProviderSource.Global,
+      providerSource: ProviderSource.GLOBAL,
     });
 
     await plugin.onInvocationStart(makeInvocationInfo());
@@ -525,7 +525,7 @@ describe("ExecutionOtelPlugin - Parent-child workflow span ID collision preventi
 
   it("onOperationEnd terminal path: SUCCEEDED status with NO error stamps OK", async () => {
     const plugin = new ExecutionOtelPlugin({
-      providerSource: ProviderSource.Global,
+      providerSource: ProviderSource.GLOBAL,
     });
 
     await plugin.onInvocationStart(makeInvocationInfo());

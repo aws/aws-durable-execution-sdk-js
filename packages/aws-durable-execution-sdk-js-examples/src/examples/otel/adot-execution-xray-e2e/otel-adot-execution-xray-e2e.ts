@@ -14,12 +14,12 @@ import { xrayE2eWorkflow } from "../shared/xray-e2e-workflow";
  *
  * Exercises the exact same workflow (steps, wait, child context) as
  * otel-community-collector-execution-xray-e2e but uses the ExecutionOtelPlugin with
- * providerSource: ProviderSource.Global, backed by the ADOT Lambda layer's
+ * providerSource: ProviderSource.GLOBAL, backed by the ADOT Lambda layer's
  * globally registered TracerProvider. This allows direct trace comparison
  * between the two plugin implementations in X-Ray.
  */
 const plugin = new ExecutionOtelPlugin({
-  providerSource: ProviderSource.Global,
+  providerSource: ProviderSource.GLOBAL,
 });
 
 export const config: ExampleConfig = {

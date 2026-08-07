@@ -63,7 +63,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     this.enrichLogger = config?.enrichLogger ?? true;
 
     // Pass config directly to createTracerProvider — with the default
-    // providerSource (AutoOtlp) it creates an internal provider with OTLP
+    // providerSource (AUTO_OTLP) it creates an internal provider with OTLP
     // export (same behavior as ExecutionOtelPlugin).
     const { tracerProvider, source } = createTracerProvider(config);
     this.tracerProvider = tracerProvider;

@@ -35,7 +35,7 @@ let plugin: ExecutionOtelPlugin;
 if (isCloudEnvironment()) {
   // Cloud mode: build our own OTLP exporter to the ADOT collector
   plugin = new ExecutionOtelPlugin({
-    providerSource: ProviderSource.AutoOtlp,
+    providerSource: ProviderSource.AUTO_OTLP,
   });
 } else {
   // Local mode: custom TracerProvider with InMemorySpanExporter
@@ -45,7 +45,7 @@ if (isCloudEnvironment()) {
   });
 
   plugin = new ExecutionOtelPlugin({
-    providerSource: ProviderSource.Explicit,
+    providerSource: ProviderSource.EXPLICIT,
     tracerProvider: provider,
   });
 }

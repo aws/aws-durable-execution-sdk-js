@@ -50,7 +50,7 @@ export function createOtelTestSetup(): OtelTestSetup {
   });
 
   const plugin = new InvocationOtelPlugin({
-    providerSource: ProviderSource.Explicit,
+    providerSource: ProviderSource.EXPLICIT,
     tracerProvider: provider,
   });
 
@@ -125,7 +125,7 @@ export function createDualModeOtelSetup(): DualModeOtelSetup {
   if (isAdotEnvironment()) {
     // Cloud mode: use ADOT's globally registered TracerProvider for trace export to X-Ray
     const plugin = new InvocationOtelPlugin({
-      providerSource: ProviderSource.Global,
+      providerSource: ProviderSource.GLOBAL,
     });
     return {
       plugin,

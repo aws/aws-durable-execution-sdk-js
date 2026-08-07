@@ -134,7 +134,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     );
 
     // 7. Create Invocation_Span
-    if (this.providerSource !== ProviderSource.Global) {
+    if (this.providerSource !== ProviderSource.GLOBAL) {
       // Non-default mode: child of Workflow_Span with Lambda semantic attributes
       const parentContext = trace.setSpan(context.active(), this.workflowSpan);
 

@@ -9,9 +9,9 @@ import {
 import { ExampleConfig } from "../../../types";
 import { xrayE2eWorkflow } from "../shared/xray-e2e-workflow";
 
-// ADOT layer registers a global TracerProvider — use it via ProviderSource.Global
+// ADOT layer registers a global TracerProvider — use it via ProviderSource.GLOBAL
 const plugin = new InvocationOtelPlugin({
-  providerSource: ProviderSource.Global,
+  providerSource: ProviderSource.GLOBAL,
 });
 
 export const config: ExampleConfig = {
