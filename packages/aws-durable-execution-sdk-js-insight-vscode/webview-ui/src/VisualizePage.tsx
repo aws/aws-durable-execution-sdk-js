@@ -12,7 +12,7 @@ import StatusIndicator from "@cloudscape-design/components/status-indicator";
 import Modal from "@cloudscape-design/components/modal";
 import Table from "@cloudscape-design/components/table";
 import { VegaChart } from "./VegaChart";
-import { postMessage } from "./vscode";
+import { postMessage } from "./hostBridge";
 
 interface Props {
   columns: string[];

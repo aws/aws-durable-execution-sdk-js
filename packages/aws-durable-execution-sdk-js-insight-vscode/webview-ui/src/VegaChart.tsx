@@ -6,7 +6,7 @@ import Header from "@cloudscape-design/components/header";
 import SpaceBetween from "@cloudscape-design/components/space-between";
 import Button from "@cloudscape-design/components/button";
 import Box from "@cloudscape-design/components/box";
-import { postMessage } from "./vscode";
+import { postMessage } from "./hostBridge";
 
 interface Props {
   spec: Record<string, unknown>;

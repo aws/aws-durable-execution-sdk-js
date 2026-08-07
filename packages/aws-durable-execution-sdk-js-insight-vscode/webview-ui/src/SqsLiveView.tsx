@@ -5,7 +5,7 @@ import Button from "@cloudscape-design/components/button";
 import StatusIndicator from "@cloudscape-design/components/status-indicator";
 import Alert from "@cloudscape-design/components/alert";
 import { ResultsTable } from "./ResultsTable";
-import { postMessage } from "./vscode";
+import { postMessage } from "./hostBridge";
 import type { SqsMessageRow } from "./types";
 
 interface Props {

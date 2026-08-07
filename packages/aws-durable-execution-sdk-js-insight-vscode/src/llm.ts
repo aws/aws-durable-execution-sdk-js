@@ -1,4 +1,4 @@
-import * as vscode from "vscode";
+import { getCopilotBridge, requireCopilotBridge } from "./copilotBridge";
 import {
   BedrockRuntimeClient,
   type ContentBlock,
@@ -251,27 +251,14 @@ export async function verifyResult(
     }
 
     if (opts.provider === "copilot") {
-      const models = await vscode.lm.selectChatModels({ vendor: "copilot" });
-      if (models.length === 0) {
+      const model = await getCopilotBridge()?.selectModel();
+      if (!model) {
         return { satisfied: true, reason: "No judge model available." };
       }
-      const cts = new vscode.CancellationTokenSource();
-      try {
-        const response = await models[0].sendRequest(
-          [
-            vscode.LanguageModelChatMessage.User(
-              `${instruction}\n\nRespond with ONLY JSON: {"satisfied": true|false, "reason": "...", "suggestion": "..."}`,
-            ),
-          ],
-          {},
-          cts.token,
-        );
-        let text = "";
-        for await (const chunk of response.text) text += chunk;
-        return parseVerdict(text);
-      } finally {
-        cts.dispose();
-      }
+      const text = await model.send([
+        `${instruction}\n\nRespond with ONLY JSON: {"satisfied": true|false, "reason": "...", "suggestion": "..."}`,
+      ]);
+      return parseVerdict(text);
     }
 
     if (opts.provider === "local-server") {
@@ -445,23 +432,11 @@ async function completeText(
       .trim();
   }
   if (opts.provider === "copilot") {
-    const models = await vscode.lm.selectChatModels({ vendor: "copilot" });
-    if (models.length === 0) {
+    const model = await requireCopilotBridge().selectModel();
+    if (!model) {
       throw new Error("No Copilot chat model is available.");
     }
-    const cts = new vscode.CancellationTokenSource();
-    try {
-      const response = await models[0].sendRequest(
-        [vscode.LanguageModelChatMessage.User(prompt)],
-        {},
-        cts.token,
-      );
-      let text = "";
-      for await (const chunk of response.text) text += chunk;
-      return text.trim();
-    } finally {
-      cts.dispose();
-    }
+    return (await model.send([prompt])).trim();
   }
   // local
   const { model } = await getLocalModel();
@@ -595,49 +570,30 @@ async function generateViaBedrock(
   };
 }
 
-// ─── VS Code Copilot (Language Model API) ────────────────────────────────────
+// ─── Copilot (VS Code Language Model API, via copilotBridge) ─────────────────
 
 async function generateViaCopilot(
   opts: GenerateOptions,
 ): Promise<GeneratedQuery> {
-  const models = await vscode.lm.selectChatModels({
-    vendor: "copilot",
-  });
-  if (models.length === 0) {
-    // Try without any filter to see what's available
-    const allModels = await vscode.lm.selectChatModels();
-    const available = allModels
-      .map((m) => `${m.vendor}/${m.family}/${m.id}`)
-      .join(", ");
+  const bridge = requireCopilotBridge();
+  const model = await bridge.selectModel();
+  if (!model) {
+    // List everything the host can see, so the error says why nothing matched.
+    const available = (await bridge.listAllModelIds()).join(", ");
     throw new Error(
       `No Copilot model found. Available models: [${available || "none"}]. Make sure GitHub Copilot is installed and you've signed in.`,
     );
   }
 
-  const model = models[0];
   const systemPrompt = buildSystemPrompt(opts.destinationType, {
     tableName: opts.tableName,
     agentic: opts.agentic,
   });
 
-  const messages = [
-    vscode.LanguageModelChatMessage.User(
-      `${systemPrompt}\n\nIMPORTANT: Respond with ONLY a JSON object in this exact format (no markdown, no code fences):\n{"query": "...", "explanation": "...", "timeRangeMs": ..., "suggestedCharts": ["...", "..."]}\n\nFor suggestedCharts, pick 2-4 from: bar, stacked-bar, line, area, scatter, heatmap, histogram, pie, boxplot.\nIf timeRangeMs is not relevant, omit it.`,
-    ),
-    vscode.LanguageModelChatMessage.User(opts.question),
-  ];
-
-  const cts = new vscode.CancellationTokenSource();
-  // Collect the streamed response
-  let text = "";
-  try {
-    const response = await model.sendRequest(messages, {}, cts.token);
-    for await (const chunk of response.text) {
-      text += chunk;
-    }
-  } finally {
-    cts.dispose();
-  }
+  const text = await model.send([
+    `${systemPrompt}\n\nIMPORTANT: Respond with ONLY a JSON object in this exact format (no markdown, no code fences):\n{"query": "...", "explanation": "...", "timeRangeMs": ..., "suggestedCharts": ["...", "..."]}\n\nFor suggestedCharts, pick 2-4 from: bar, stacked-bar, line, area, scatter, heatmap, histogram, pie, boxplot.\nIf timeRangeMs is not relevant, omit it.`,
+    opts.question,
+  ]);
 
   // Parse JSON from the response (handle potential markdown wrapping)
   const jsonMatch = text.match(/\{[\s\S]*"query"[\s\S]*\}/);
