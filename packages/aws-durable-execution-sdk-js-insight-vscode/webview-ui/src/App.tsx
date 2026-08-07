@@ -6,7 +6,7 @@ import Button from "@cloudscape-design/components/button";
 import Box from "@cloudscape-design/components/box";
 import Container from "@cloudscape-design/components/container";
 import ExpandableSection from "@cloudscape-design/components/expandable-section";
-import { postMessage } from "./vscode";
+import { postMessage } from "./hostBridge";
 import { QueryPanel } from "./QueryPanel";
 import { ResultsTable } from "./ResultsTable";
 import { VisualizePage } from "./VisualizePage";
@@ -19,6 +19,7 @@ import {
   MAX_DISPLAYED_MESSAGES,
 } from "./SqsLiveView";
 import type {
+  HostCapabilities,
   InboundMessage,
   Settings,
   SqsMessageRow,
@@ -123,6 +124,13 @@ export function App() {
     settings.aiDisclosureAcceptedVersion === AI_DISCLOSURE_VERSION;
   const [loading, setLoading] = useState(false);
   const [modelDownloaded, setModelDownloaded] = useState(false);
+  // Defaults to no capabilities: the UI should hide a host-dependent feature
+  // until the host has positively reported that it has it, so a host that fails
+  // to report can only ever hide an option, never offer a broken one.
+  const [capabilities, setCapabilities] = useState<HostCapabilities>({
+    copilot: false,
+    localLlm: false,
+  });
   const [downloadPercent, setDownloadPercent] = useState(0);
   // Result of a "Test connection" run in the Settings modal (null = not run
   // yet this session); `destTesting` shows the in-flight spinner.
@@ -165,6 +173,7 @@ export function App() {
           setMode(msg.settings.queryMode);
         if (msg.modelDownloaded !== undefined)
           setModelDownloaded(msg.modelDownloaded);
+        setCapabilities(msg.capabilities);
         break;
       case "status":
         setStatus(msg.text);
@@ -619,6 +628,7 @@ export function App() {
         <SettingsModal
           visible={settingsOpen}
           settings={settings}
+          capabilities={capabilities}
           modelDownloaded={modelDownloaded}
           downloadPercent={downloadPercent}
           onDismiss={() => setSettingsOpen(false)}
@@ -635,6 +645,7 @@ export function App() {
 
         <AiConsentModal
           visible={consentOpen}
+          capabilities={capabilities}
           onAccept={acceptConsent}
           onDecline={declineConsent}
         />

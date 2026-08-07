@@ -38,6 +38,19 @@ export class CheckpointManager {
 
   private _isExecutionCompleted = false;
 
+  /**
+   * Id of the execution's own EXECUTION-typed operation, assigned in
+   * {@link initialize}.
+   *
+   * The service keys the execution's terminal event by this id. When the SDK
+   * checkpoints an oversized result it invents its own id
+   * (`execution-result-<timestamp>`), but the service treats any EXECUTION-typed
+   * update as an update to the execution itself and ignores that id — a real
+   * execution history contains exactly one ExecutionSucceeded, carrying this id.
+   * {@link registerUpdate} redirects such updates here to match.
+   */
+  private executionOperationId: string | undefined = undefined;
+
   constructor(executionId: ExecutionId) {
     this.callbackManager = new CallbackManager(executionId, this);
   }
@@ -171,6 +184,7 @@ export class CheckpointManager {
     } satisfies OperationEvents;
 
     this.operationDataMap.set(initialId, initialOperationEvents);
+    this.executionOperationId = initialId;
 
     return initialOperationEvents;
   }
@@ -344,6 +358,12 @@ export class CheckpointManager {
             copied.operation.ContextDetails?.ReplayChildren,
         };
         break;
+      case OperationType.EXECUTION:
+        // The execution reached a terminal state through a checkpoint (the
+        // oversized-result path). Further checkpoints must be rejected, and the
+        // invocation response must not add a second terminal event.
+        this._isExecutionCompleted = true;
+        break;
     }
 
     return copied;
@@ -400,6 +420,26 @@ export class CheckpointManager {
 
     if (!newOperation.Status) {
       throw new Error("Missing Status in operation");
+    }
+
+    // The execution may already have been completed by an EXECUTION-typed
+    // checkpoint (the oversized-result path). The service ignores the invocation
+    // response in that case — the execution is terminal and its result is
+    // already stored — so return before the response is merged.
+    //
+    // Ignore the response's *contents*, not its arrival. Merging would let a
+    // contradictory status overwrite the terminal state, leaving a stored FAILED
+    // against a recorded ExecutionSucceeded. But the update must still be
+    // published: the invocation only runs to completion once an update is
+    // published, and without it no InvocationCompleted event is recorded and
+    // `getInvocations()` comes back empty. Publishing the original operation is
+    // a no-op for history, since it carries no new events.
+    if (
+      operationData.operation.Type === OperationType.EXECUTION &&
+      this._isExecutionCompleted
+    ) {
+      this.addOperationUpdate({ ...operationData, update: undefined });
+      return operationData;
     }
 
     const newOperationData: OperationEvents = {
@@ -520,6 +560,20 @@ export class CheckpointManager {
    * @returns the operation update along with the operation itself
    */
   registerUpdate(update: OperationUpdate): OperationEvents {
+    // An EXECUTION-typed update always refers to the execution itself, whatever
+    // id the caller used. The SDK's oversized-result path checkpoints with a
+    // synthetic `execution-result-<timestamp>` id; the service applies it to the
+    // execution's own operation and records a single terminal event keyed by the
+    // execution id, so redirect it here rather than creating a second
+    // EXECUTION-typed operation.
+    if (
+      update.Type === OperationType.EXECUTION &&
+      this.executionOperationId !== undefined &&
+      update.Id !== this.executionOperationId
+    ) {
+      update = { ...update, Id: this.executionOperationId };
+    }
+
     if (!update.Id) {
       throw new Error("Missing Id in update");
     }
@@ -619,7 +673,6 @@ export class CheckpointManager {
 
     return updatedResult;
   }
-
   /**
    * Clears all callback timers and all operation data.
    */
