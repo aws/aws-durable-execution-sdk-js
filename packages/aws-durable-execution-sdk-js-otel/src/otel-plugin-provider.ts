@@ -15,17 +15,22 @@ import {
   TraceIdRatioBasedSampler,
 } from "@opentelemetry/sdk-trace-node";
 import type { OtelPluginConfig } from "./otel-plugin-config";
+import { ProviderSource, resolveProviderSource } from "./otel-plugin-config";
+
+// Re-export so existing consumers can keep importing ProviderSource from here.
+export { ProviderSource } from "./otel-plugin-config";
 
 const DEFAULT_OTLP_ENDPOINT = "http://localhost:4318/v1/traces";
 
-/**
- * Result of the TracerProvider factory function.
- */
 export interface ProviderResult {
   /** The configured TracerProvider. */
   tracerProvider: TracerProvider;
-  /** Whether the factory created (and therefore owns) this provider. */
-  ownsProvider: boolean;
+  /**
+   * Which tier produced the provider. This is the single source of truth for
+   * provider ownership: the factory created (and therefore owns) the provider
+   * only when `source === ProviderSource.AUTO_OTLP`.
+   */
+  source: ProviderSource;
 }
 
 /**
@@ -77,34 +82,38 @@ function buildLambdaResource() {
 }
 
 /**
- * Factory function that creates and configures a `TracerProvider` for the
- * ExecutionOtelPlugin.
+ * Factory function that resolves and configures a `TracerProvider` for the
+ * ExecutionOtelPlugin and InvocationOtelPlugin, based on the config's
+ * {@link ProviderSource} (see {@link resolveProviderSource}):
  *
- * When a custom `tracerProvider` is supplied in the config, it is returned
- * as-is with `ownsProvider: false` — no exporter, propagator, or sampler
- * registration is performed.
- *
- * Otherwise, the factory creates a `NodeTracerProvider` with:
- * - `OTLPTraceExporter` targeting the configured endpoint
- * - `BatchSpanProcessor` wrapping the exporter
- * - `AWSXRayPropagator` + `W3CTraceContextPropagator` composite propagator
- * - `TraceIdRatioBasedSampler` (or `AlwaysOnSampler`) based on env var
- * - Lambda resource attributes when `AWS_LAMBDA_FUNCTION_NAME` is set
+ * - `GLOBAL` (the default when `providerSource` is unset) — returns the
+ *   globally registered provider via `trace.getTracerProvider()` as-is; no
+ *   exporter, propagator, or sampler registration is performed.
+ * - `EXPLICIT` — returns the supplied `config.tracerProvider` as-is, with no
+ *   auto-setup.
+ * - `AUTO_OTLP` — creates a `NodeTracerProvider` with:
+ *   - `OTLPTraceExporter` targeting the configured endpoint
+ *   - `BatchSpanProcessor` wrapping the exporter
+ *   - `AWSXRayPropagator` + `W3CTraceContextPropagator` composite propagator
+ *   - `TraceIdRatioBasedSampler` (or `AlwaysOnSampler`) based on env var
+ *   - Lambda resource attributes when `AWS_LAMBDA_FUNCTION_NAME` is set
  */
 export function createTracerProvider(
   config?: OtelPluginConfig,
 ): ProviderResult {
-  // Priority 1: If a custom provider is supplied, skip all auto-setup.
-  if (config?.tracerProvider) {
-    return { tracerProvider: config.tracerProvider, ownsProvider: false };
+  const source = resolveProviderSource(config);
+
+  // Explicit: caller supplied a provider — return it as-is, no auto-setup.
+  if (source === ProviderSource.EXPLICIT) {
+    return { tracerProvider: config!.tracerProvider!, source };
   }
 
-  // Priority 2: Use globally registered default provider
-  if (config?.useDefaultTracerProvider) {
-    return { tracerProvider: trace.getTracerProvider(), ownsProvider: false };
+  // Global: use the globally registered default provider, no auto-setup.
+  if (source === ProviderSource.GLOBAL) {
+    return { tracerProvider: trace.getTracerProvider(), source };
   }
 
-  // Priority 3: Create internal provider with full auto-setup
+  // AUTO_OTLP: create an internal provider with full auto-setup.
   // Resolve the OTLP endpoint
   const endpoint =
     config?.exporterConfig?.endpoint ||
@@ -146,5 +155,5 @@ export function createTracerProvider(
   // Also register at the global level so HTTP instrumentation picks it up
   propagation.setGlobalPropagator(new CompositePropagator({ propagators }));
 
-  return { tracerProvider, ownsProvider: true };
+  return { tracerProvider, source };
 }

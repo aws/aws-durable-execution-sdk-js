@@ -12,6 +12,7 @@ import {
 } from "@opentelemetry/api";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
 import { InvocationOtelPlugin } from "../invocation-plugin";
+import { ProviderSource } from "../otel-plugin-config";
 import {
   DeterministicIdGenerator,
   deriveSpanIdFromOperationId,
@@ -125,7 +126,7 @@ beforeEach(() => {
     idGenerator,
   });
   provider.register();
-  plugin = new InvocationOtelPlugin({ tracerProvider: provider });
+  plugin = new InvocationOtelPlugin({ providerSource: ProviderSource.EXPLICIT, tracerProvider: provider });
 });
 
 afterEach(async () => {
@@ -163,6 +164,7 @@ describe("InvocationOtelPlugin", () => {
 
     it("honors custom workflowSpanName from config; invocation span name is fixed", async () => {
       const customPlugin = new InvocationOtelPlugin({
+        providerSource: ProviderSource.EXPLICIT,
         tracerProvider: provider,
         workflowSpanName: "my-workflow",
       });
@@ -1566,6 +1568,7 @@ describe("InvocationOtelPlugin", () => {
 
     it("returns undefined when enrichLogger is disabled, even with an active span", async () => {
       const noEnrichPlugin = new InvocationOtelPlugin({
+        providerSource: ProviderSource.EXPLICIT,
         tracerProvider: provider,
         enrichLogger: false,
       });
@@ -1909,11 +1912,13 @@ describe("InvocationOtelPlugin", () => {
 
       // Create parent plugin with shared provider
       const parentPlugin = new InvocationOtelPlugin({
+        providerSource: ProviderSource.EXPLICIT,
         tracerProvider: provider,
       });
 
       // Create child plugin with shared provider
       const childPlugin = new InvocationOtelPlugin({
+        providerSource: ProviderSource.EXPLICIT,
         tracerProvider: provider,
       });
 
