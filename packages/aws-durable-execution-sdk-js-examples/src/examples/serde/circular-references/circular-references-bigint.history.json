@@ -1,0 +1,66 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "777e9b72-d299-4434-b1ab-6cbd60ffb810",
+    "EventTimestamp": "2026-08-03T17:15:03.613Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"mode\":\"bigint\"}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "prepare-order",
+    "EventTimestamp": "2026-08-03T17:15:03.618Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "prepare-order",
+    "EventTimestamp": "2026-08-03T17:15:03.618Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"ready\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2026-08-03T17:15:03.620Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-03T17:15:03.613Z",
+      "EndTimestamp": "2026-08-03T17:15:03.620Z",
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Order total overflowed a safe integer",
+          "ErrorType": "Error"
+        }
+      },
+      "RequestId": "ed8ca023-a653-4d61-affe-a6fe0e98542a"
+    }
+  },
+  {
+    "EventType": "ExecutionFailed",
+    "EventId": 5,
+    "Id": "777e9b72-d299-4434-b1ab-6cbd60ffb810",
+    "EventTimestamp": "2026-08-03T17:15:03.620Z",
+    "ExecutionFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Order total overflowed a safe integer",
+          "ErrorType": "Error"
+        }
+      }
+    }
+  }
+]

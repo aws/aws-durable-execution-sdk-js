@@ -1,0 +1,66 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "744ea5fb-064e-4368-a20f-d9fa1ef960a7",
+    "EventTimestamp": "2026-08-03T17:15:03.399Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"mode\":\"circular\"}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "prepare-order",
+    "EventTimestamp": "2026-08-03T17:15:03.443Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "prepare-order",
+    "EventTimestamp": "2026-08-03T17:15:03.443Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"ready\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2026-08-03T17:15:03.504Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-03T17:15:03.399Z",
+      "EndTimestamp": "2026-08-03T17:15:03.504Z",
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Failed to reconcile order graph",
+          "ErrorType": "Error"
+        }
+      },
+      "RequestId": "a359b3a1-d7f8-4af9-8b95-5af713c5b07d"
+    }
+  },
+  {
+    "EventType": "ExecutionFailed",
+    "EventId": 5,
+    "Id": "744ea5fb-064e-4368-a20f-d9fa1ef960a7",
+    "EventTimestamp": "2026-08-03T17:15:03.508Z",
+    "ExecutionFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Failed to reconcile order graph",
+          "ErrorType": "Error"
+        }
+      }
+    }
+  }
+]
