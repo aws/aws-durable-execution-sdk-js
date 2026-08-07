@@ -402,3 +402,20 @@ Resources:
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
+  PluginContextInfoShape:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-23"]
+    Properties:
+      CodeUri: ./dist
+      Handler: plugin_context_info_shape.handler
+      Description: Context operations expose subType tokens and user-function hooks expose the children-replay indicator
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
