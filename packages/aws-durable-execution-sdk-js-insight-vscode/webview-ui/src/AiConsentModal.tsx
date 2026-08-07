@@ -24,10 +24,12 @@ interface Props {
  * or the Visualize page). Consent is persisted (workflowInsight.aiDisclosureAcceptedVersion)
  * so it's asked once per disclosure version.
  *
- * LEGAL: This wording is a placeholder pending review/approval by the Legal
- * team (tracked separately). When the approved text lands, update the copy
- * below AND bump AI_DISCLOSURE_VERSION in types.ts so already-consented users
- * are re-prompted.
+ * LEGAL: the copy below is reviewed and approved. Treat it as approved text
+ * rather than ordinary prose to tidy up in passing — it is what users are
+ * consenting to. Changing which providers are named, or what is said about where
+ * data goes, needs Legal review again *and* a bump of AI_DISCLOSURE_VERSION in
+ * types.ts so already-consented users re-accept. That constant documents the test
+ * to apply to a given edit.
  */
 export function AiConsentModal({ visible, capabilities, onAccept, onDecline }: Props) {
   const [agreed, setAgreed] = useState(false);

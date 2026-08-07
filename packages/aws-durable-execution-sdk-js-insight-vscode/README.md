@@ -358,7 +358,7 @@ consent; you can review or withdraw it at any time (see below).
 | **Amazon Bedrock** | Amazon Bedrock in your configured AWS account/region; under your AWS agreement + Bedrock terms                           |
 | **GitHub Copilot** | GitHub Copilot via the VS Code Language Model API; under your Copilot subscription terms                                 |
 | **Local server**   | Only the OpenAI-compatible endpoint you run and control (e.g. Ollama on localhost) — no third-party cloud if self-hosted |
-| **On-device**      | Stays entirely on your machine; nothing leaves your computer (source builds only)                                        |
+| **On-device**      | Stays entirely on your machine; nothing leaves your computer                                                             |
 
 Data you send is subject to the terms and privacy policy of the provider you
 select — review them before sending sensitive data. AI-generated queries and
