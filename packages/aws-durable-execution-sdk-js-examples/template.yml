@@ -3596,3 +3596,28 @@ Resources:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
+  WithRetryLinearStrategy:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: WithRetry-LinearStrategy-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: with-retry-linear-strategy.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      Environment:
+        Variables:
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+    Metadata:
+      SkipBuild: "True"
