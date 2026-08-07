@@ -92,6 +92,41 @@ function toLambdaRuntime(runtime = "22.x") {
   return `nodejs${runtime}`;
 }
 
+// Lambda's FunctionName constraints: [a-zA-Z0-9-_] only, 64 characters max.
+// See https://docs.aws.amazon.com/lambda/latest/api/API_CreateFunction.html
+const LAMBDA_FUNCTION_NAME_PATTERN = /^[a-zA-Z0-9\-_]+$/;
+const LAMBDA_FUNCTION_NAME_MAX_LENGTH = 64;
+
+/**
+ * Fail fast on a function name Lambda would reject.
+ *
+ * `getDefaultFunctionName` only strips whitespace from `config.name`, so any
+ * other punctuation (parentheses, slashes, dots) survives into `FunctionName`
+ * and makes `sam deploy` reject the *whole* template — taking the shared
+ * integration-test stack down with it, far from the example that caused it.
+ * Catching it at generation time points straight at the offending example.
+ */
+function assertValidFunctionName(functionName: string, exampleName: string) {
+  if (!LAMBDA_FUNCTION_NAME_PATTERN.test(functionName)) {
+    throw new Error(
+      `Example "${exampleName}" produces the invalid Lambda function name ` +
+        `"${functionName}". Lambda allows only letters, numbers, hyphens and ` +
+        `underscores. The name is derived from the example's \`config.name\` ` +
+        `with whitespace removed, so remove any punctuation from it (move the ` +
+        `detail into \`config.description\` instead).`,
+    );
+  }
+
+  if (functionName.length > LAMBDA_FUNCTION_NAME_MAX_LENGTH) {
+    throw new Error(
+      `Example "${exampleName}" produces the Lambda function name ` +
+        `"${functionName}" (${functionName.length} characters), which exceeds ` +
+        `Lambda's ${LAMBDA_FUNCTION_NAME_MAX_LENGTH}-character limit. Shorten ` +
+        `the example's \`config.name\`.`,
+    );
+  }
+}
+
 function getDefaultFunctionName(catalog: any, runtime = "22.x") {
   const lambdaRuntime = runtime.replace(".", "");
   return `${catalog.name.replace(/\s/g, "")}-${lambdaRuntime}-NodeJS-Local`;
@@ -286,6 +321,7 @@ function generateTemplate(options: TemplateOptions | boolean = {}) {
       const functionName =
         normalizedOptions.functionNameMap?.[handlerFile]?.functionName ??
         getDefaultFunctionName(catalog, normalizedOptions.runtime);
+      assertValidFunctionName(functionName, catalog.name);
       const functionResourceName = toPascalCase(handlerFile);
       const logGroupResourceName = `${functionResourceName}LogGroup`;
       const functionResource = createFunctionResource(
