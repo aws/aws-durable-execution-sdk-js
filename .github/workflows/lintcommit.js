@@ -33,6 +33,9 @@ const scopes = new Set([
   "deps",
   "deps-dev",
   "otel",
+  // Workflow Insight: the VS Code extension, the desktop app, and the host-free
+  // modules they share.
+  "insight",
 ]);
 
 /**
@@ -156,8 +159,11 @@ function _test() {
     "chore(deps): bump the aws-sdk group across 1 directory with 5 updates":
       undefined,
     "chore(deps-dev): bump flatted from 3.4.1 to 3.4.2": undefined,
-    "feat(foo): fix the types":
-      'invalid scope "foo" (valid scopes are testing-sdk, sdk, examples, eslint-plugin, deps, deps-dev)',
+    // Derived from `scopes` rather than hardcoded: the literal this replaced had
+    // already gone stale (it predated "ci" and "otel"), failing the self-test on
+    // main. The assertion that matters here is that an unknown scope is
+    // rejected, not the exact wording of the list.
+    "feat(foo): fix the types": `invalid scope "foo" (valid scopes are ${Array.from(scopes).join(", ")})`,
   };
 
   let passed = 0;

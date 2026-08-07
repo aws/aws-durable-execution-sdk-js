@@ -76,9 +76,35 @@ export interface SqsMessageRow {
   attributes: Record<string, string>;
 }
 
+/**
+ * What the current host can do, sent with every `config` message.
+ *
+ * The same bundle runs in VS Code and in the desktop app, so it cannot assume a
+ * capability is present. Anything host-dependent goes here rather than being
+ * inferred in the UI.
+ */
+export interface HostCapabilities {
+  /**
+   * Whether the "copilot" LLM provider is usable. False outside VS Code — the
+   * Language Model API only exists in the extension host.
+   */
+  copilot: boolean;
+  /**
+   * Whether the "local" on-device provider is usable. Needs the native
+   * node-llama-cpp module, which the extension ships but a packaged desktop app
+   * does not.
+   */
+  localLlm: boolean;
+}
+
 /** Messages from extension host → webview */
 export type InboundMessage =
-  | { type: "config"; settings: Settings; modelDownloaded?: boolean }
+  | {
+      type: "config";
+      settings: Settings;
+      modelDownloaded?: boolean;
+      capabilities: HostCapabilities;
+    }
   | { type: "status"; text: string }
   | {
       type: "results";
@@ -220,13 +246,29 @@ export interface Settings {
 }
 
 /**
- * Version of the AI-usage disclosure. Bump this whenever the notice wording
- * changes so previously-consented users are re-prompted.
+ * Version of the AI-usage disclosure. Bump this whenever the *substance* of the
+ * notice changes — the providers named, or where data can go — so
+ * previously-consented users are re-prompted.
  * LEGAL: wording is pending review by the Legal team (see tracked ticket).
  *
  * Currently "2": "1" was the initial gate (features + generic data notice);
  * "2" added the per-provider data-flow breakdown, so early adopters on "1"
  * re-accept the fuller disclosure.
+ *
+ * Deliberately NOT bumped when the desktop host was added, even though the text
+ * a VS Code user sees did change: the on-device bullet lost the parenthetical
+ * "(Available only when running the extension from source, not in the packaged
+ * build.)". That caveat was simply wrong — .vscodeignore explicitly un-ignores
+ * node_modules/node-llama-cpp, so the packaged VSIX does support the on-device
+ * provider. Removing an inaccurate limitation does not change which providers
+ * exist or where data travels (on-device sends nothing anywhere), so
+ * re-prompting every consented user would be disproportionate. The other
+ * host-dependent edits only *remove* bullets, and only on a host where that
+ * provider is unreachable, which likewise cannot widen the disclosure.
+ *
+ * The test to apply when editing this text: could a user who already consented
+ * be surprised about where their data goes? If yes, bump. If the change only
+ * narrows or corrects, don't — but say so here.
  */
 export const AI_DISCLOSURE_VERSION = "2";
 

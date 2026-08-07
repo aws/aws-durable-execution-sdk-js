@@ -1,0 +1,1639 @@
+/**
+ * The Explorer's behavior, with no host in it.
+ *
+ * This is every message the renderer can send and everything that happens in
+ * response: query generation (raw / single-shot / agentic), the Bedrock tool
+ * loop, read-only enforcement, drill-down column injection, row-detail
+ * lookups, SQS live tailing, chart specs, and settings round-trips.
+ *
+ * It reaches the outside world only through {@link HostPort}, so the VS Code
+ * extension and the Electron desktop app share this logic rather than each
+ * carrying a copy. Anything that needs a dialog, a settings store, or a way to
+ * reach the renderer belongs on the port, not here.
+ */
+import { randomUUID } from "crypto";
+import type { AwsCredentialIdentityProvider } from "@aws-sdk/types";
+import {
+  resolveCredentials,
+  configFromWireSettings,
+  type InsightConfig,
+} from "./configCore";
+import type { Favorite, HostPort, SettingValue } from "./hostPort";
+import { detectCapabilities, withEffectiveProvider } from "./hostCapabilities";
+import {
+  BOOLEAN_SETTING_KEYS,
+  NUMBER_SETTING_KEYS,
+  isSettingKey,
+} from "./settingsKeys";
+import { testDestination } from "./destinationTest";
+import { listBedrockModels } from "./bedrockModels";
+import {
+  generateQuery,
+  verifyResult,
+  analyzeResults,
+  generateChartSpec,
+  isModelDownloaded,
+  ensureModel,
+  setLocalModel,
+  setLocalServer,
+  type GeneratedQuery,
+} from "./llm";
+import {
+  runAgentLoop,
+  type AgentQueryResult,
+  type ConversationTurn,
+} from "./agentLoop";
+import { runLogsInsightsQuery, fetchLogsInsightsRecord } from "./logsInsights";
+import { runDynamoDBQuery, fetchDynamoDBRecord } from "./dynamodb";
+import { runAuroraQuery, fetchAuroraRecord } from "./aurora";
+import { runRedshiftQuery, fetchRedshiftRecord } from "./redshift";
+import { runOpenSearchQuery, fetchOpenSearchRecord } from "./opensearch";
+import {
+  runAthenaQuery,
+  ensureAthenaTable,
+  tableExists,
+  fetchAthenaRecord,
+} from "./athena";
+import { listenToQueue, type SqsMessageRow } from "./sqs";
+import { ensureLimit } from "./schema";
+import { assertReadOnly } from "./queryValidator";
+import {
+  ensureIdentifierColumn,
+  isAggregateQuery,
+  resolveActualColumnCasing,
+  resolveActualColumns,
+} from "./queryShape";
+
+export type InboundMessage =
+  | { type: "ready" }
+  | { type: "generate"; question: string; mode?: QueryMode }
+  | { type: "setMode"; mode: QueryMode }
+  | { type: "setConsent"; version: string }
+  | { type: "newSession" }
+  | { type: "saveSettings"; settings: Record<string, string> }
+  | { type: "testDestination"; settings: Record<string, string> }
+  | { type: "listModels"; settings: Record<string, string> }
+  | { type: "downloadModel"; localModel?: string }
+  | { type: "exportChart"; format: "svg" | "png"; content: string }
+  | {
+      type: "exportData";
+      format: "csv" | "json";
+      content: string;
+      filename: string;
+    }
+  | { type: "saveFavorite"; query: string; destinationType: string }
+  | { type: "deleteFavorite"; id: string }
+  // NOTE: keep this `visualize` shape in sync with OutboundMessage in
+  // webview-ui/src/types.ts (host and webview message types are declared
+  // separately in each project's own `src`).
+  | {
+      type: "visualize";
+      columns: string[];
+      numericColumns: string[];
+      chartType?: string;
+      description: string;
+      requestId: number;
+    }
+  | { type: "startListening" }
+  | { type: "stopListening" }
+  | {
+      type: "fetchDetail";
+      idColumn: string;
+      idValue: string;
+      year?: string;
+      month?: string;
+      day?: string;
+    };
+
+/**
+ * Query execution mode chosen in the composer (kept in sync with QueryMode in
+ * webview-ui/src/types.ts):
+ * - "query": run the user's text verbatim as a read-only query (no LLM).
+ * - "ask":   one LLM NL→query translation, run once, present (no agent loop).
+ * - "agent": the full agentic explore→answer loop.
+ */
+export type QueryMode = "query" | "ask" | "agent";
+
+/**
+ * Current AI-usage disclosure version the user must have accepted before any
+ * LLM-backed action runs. Kept in sync with AI_DISCLOSURE_VERSION in
+ * webview-ui/src/types.ts — bump both together when the disclosure wording
+ * changes so consented users are re-prompted. The webview gates the UI; the
+ * host re-checks (defense in depth) so a replayed/malformed message can't
+ * bypass the disclosure.
+ */
+const REQUIRED_AI_DISCLOSURE_VERSION = "2";
+
+/**
+ * Normalized results payload: the body of a "results" message minus its
+ * `type`. Produced by ExplorerPanel.executeQuery and shared by both basic and
+ * advanced (agentic) generation paths.
+ */
+interface QueryExecution {
+  columns: string[];
+  rows: string[][];
+  count?: number;
+  /** True if the result was capped at MAX_SQL_ROWS (more rows exist than returned). */
+  truncated?: boolean;
+  /** Per-column numeric-type flag (aligned with `columns`), for typed run_javascript input. */
+  numericColumns?: boolean[];
+  explanation?: string;
+  suggestedCharts?: string[];
+  finalQuery: string;
+  idColumn?: string;
+  partitionColumns?: { year?: string; month?: string; day?: string };
+  hiddenColumns?: string[];
+}
+
+/**
+ * The query dialect for a destination, for shape checks like isAggregateQuery.
+ * The two log-exporter destinations use CloudWatch Logs Insights; everything
+ * else (DynamoDB PartiQL, Aurora PostgreSQL, S3/Athena Trino) is SQL-shaped.
+ */
+function queryDialect(destinationType: string): "sql" | "logs-insights" {
+  return destinationType === "cloudwatch-logs-exporter" ||
+    destinationType === "lambda-log-exporter"
+    ? "logs-insights"
+    : "sql";
+}
+
+/**
+ * Max rows handed to run_javascript. The model sees only a small sample, but
+ * JS computes over this fuller set so aggregations aren't silently limited.
+ * Bounded so a huge result can't overwhelm the sandbox/host; when the true
+ * result exceeds it, the JS result reports the truncation so the model can
+ * fall back to a SQL aggregate.
+ */
+const JS_ROW_CAP = 5000;
+
+/**
+ * Hard ceiling on rows loaded from a SQL destination (Athena/Aurora/DynamoDB)
+ * for one query, independent of the model-supplied LIMIT. The model is told to
+ * add LIMIT 100, but nothing forces it to, and Athena's result pagination
+ * otherwise pulls EVERY matching row into the extension-host process and then
+ * serializes it to the webview — a large table with a LIMIT-less query would
+ * blow up host memory. This is the SQL analogue of ensureLimit on the logs
+ * path: a safety net well above normal result sizes (and above JS_ROW_CAP, so
+ * run_javascript's fuller set isn't further clipped by it). When hit, the
+ * result is marked truncated so the model/UI don't treat it as complete. It
+ * bounds host memory only; per-query scan cost is a separate concern (see the
+ * Athena bytes_scanned_cutoff_per_query guidance).
+ */
+const MAX_SQL_ROWS = 10000;
+
+/**
+ * Default CloudWatch Logs Insights time window (24h) used for "query" mode,
+ * where the user supplies the raw query but no time range (mirrors the
+ * generator's own default).
+ */
+const DEFAULT_TIME_RANGE_MS = 86_400_000;
+
+/**
+ * Whether a query-execution error is worth asking the model to fix (a
+ * malformed/invalid query) versus a hard failure (missing config, no
+ * permissions) that a retry can't help. Destination-agnostic, so every
+ * provider path retries on exactly the same class of errors.
+ */
+function isRetryableQueryError(msg: string): boolean {
+  return (
+    msg.includes("MalformedQueryException") ||
+    msg.includes("ValidationException") ||
+    msg.includes("Athena query failed") ||
+    msg.includes("INVALID_") ||
+    msg.includes("SYNTAX_ERROR")
+  );
+}
+
+/**
+ * Extra guidance appended to a fix-it prompt when the failure is a
+ * COLUMN_NOT_FOUND (the classic "referenced an input/output JSON field as a
+ * bare column" mistake). Empty for any other error.
+ */
+function columnNotFoundHint(msg: string): string {
+  return msg.includes("COLUMN_NOT_FOUND")
+    ? "\n\nThis is likely because a field that lives inside input/output was referenced as a bare column instead of via json_extract_scalar(input, '$.path') / json_extract_scalar(output, '$.path') — check every column reference (including in GROUP BY/ORDER BY) against the schema's actual top-level columns."
+    : "";
+}
+
+/**
+ * Normalize a query for the agentic loop's "already tried this" check: trim,
+ * collapse runs of whitespace, and lowercase, so trivially-different but
+ * effectively-identical regenerations (reindented, recased) are recognized as
+ * repeats and stop the loop instead of wasting an iteration.
+ */
+function normalizeQuery(query: string): string {
+  return query.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+export class ExplorerSession {
+  private listenController: AbortController | undefined;
+  // Summarized advanced-mode conversation (user questions + assistant answers),
+  // so follow-up questions continue the session. Cleared on "newSession".
+  private conversation: ConversationTurn[] = [];
+
+  constructor(private readonly host: HostPort) {}
+
+  /** Entry point: handle one message from the renderer. */
+  async dispatch(msg: InboundMessage): Promise<void> {
+    return await this.handleMessage(msg);
+  }
+
+  /** Stop any in-flight SQS tail. Call when the host window goes away. */
+  disposeSession(): void {
+    this.listenController?.abort();
+    this.listenController = undefined;
+  }
+
+  /**
+   * The host's config, with the LLM provider narrowed to what this host can
+   * actually honor.
+   *
+   * Every read in this class goes through here rather than calling the port
+   * directly, so the provider the session *uses* is the same one sendConfig
+   * *reports*. Reading the port directly is how a desktop app with a
+   * carried-over `llmProvider: "copilot"` came to show "Amazon Bedrock" in
+   * Settings while the next query threw about Copilot.
+   */
+  private readConfig(): InsightConfig {
+    return withEffectiveProvider(this.host.readConfig(), detectCapabilities());
+  }
+
+  private async handleMessage(msg: InboundMessage): Promise<void> {
+    try {
+      switch (msg.type) {
+        case "ready":
+          this.sendConfig();
+          this.host.post({ type: "favorites", favorites: this.getFavorites() });
+          return;
+        case "generate":
+          return await this.onGenerate(msg.question, msg.mode ?? "agent");
+        case "setMode":
+          return await this.onSetMode(msg.mode);
+        case "setConsent":
+          return await this.onSetConsent(msg.version);
+        case "newSession":
+          this.conversation = [];
+          this.host.post({ type: "sessionCleared" });
+          return;
+        case "saveSettings":
+          return await this.onSaveSettings(msg.settings);
+        case "testDestination":
+          return await this.onTestDestination(msg.settings);
+        case "listModels":
+          return await this.onListModels(msg.settings);
+        case "downloadModel":
+          return await this.onDownloadModel(msg.localModel);
+        case "exportChart":
+          return await this.onExportChart(msg.format, msg.content);
+        case "exportData":
+          return await this.onExportData(msg.format, msg.content, msg.filename);
+        case "saveFavorite":
+          return await this.onSaveFavorite(msg.query, msg.destinationType);
+        case "deleteFavorite":
+          return await this.onDeleteFavorite(msg.id);
+        case "visualize":
+          return await this.onVisualize(msg);
+        case "startListening":
+          return this.onStartListening();
+        case "stopListening":
+          return this.onStopListening();
+        case "fetchDetail":
+          return await this.onFetchDetail(
+            msg.idColumn,
+            msg.idValue,
+            msg.year,
+            msg.month,
+            msg.day,
+          );
+      }
+    } catch (err) {
+      this.host.post({
+        type: "error",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  private sendConfig(): void {
+    const cfg = this.readConfig();
+    // Reflect the selected local model so isModelDownloaded() below (and any
+    // local generation) targets the right file.
+    setLocalModel(cfg.localModel);
+    setLocalServer(cfg.localServerUrl, cfg.localServerModel);
+    this.host.post({
+      type: "config",
+      settings: {
+        region: cfg.region,
+        destinationType: cfg.destinationType,
+        logGroupName: cfg.logGroupNames.join(", "),
+        dynamodbTableName: cfg.dynamodbTableName,
+        auroraResourceArn: cfg.auroraResourceArn,
+        auroraSecretArn: cfg.auroraSecretArn,
+        auroraDatabase: cfg.auroraDatabase,
+        auroraTable: cfg.auroraTable,
+        redshiftWorkgroupName: cfg.redshiftWorkgroupName,
+        redshiftClusterIdentifier: cfg.redshiftClusterIdentifier,
+        redshiftDbUser: cfg.redshiftDbUser,
+        redshiftSecretArn: cfg.redshiftSecretArn,
+        redshiftDatabase: cfg.redshiftDatabase,
+        redshiftTable: cfg.redshiftTable,
+        redshiftSchema: cfg.redshiftSchema,
+        opensearchEndpoint: cfg.opensearchEndpoint,
+        opensearchIndex: cfg.opensearchIndex,
+        sqsQueueUrl: cfg.sqsQueueUrl,
+        sqsDeleteAfterRead: cfg.sqsDeleteAfterRead,
+        athenaDatabase: cfg.athenaDatabase,
+        athenaTable: cfg.athenaTable,
+        athenaWorkgroup: cfg.athenaWorkgroup,
+        athenaOutputLocation: cfg.athenaOutputLocation,
+        athenaS3Location: cfg.athenaS3Location,
+        llmProvider: cfg.llmProvider,
+        awsProfile: cfg.awsProfile ?? "",
+        bedrockModelId: cfg.bedrockModelId,
+        localModel: cfg.localModel,
+        localServerUrl: cfg.localServerUrl,
+        localServerModel: cfg.localServerModel,
+        agenticMaxIterations: String(cfg.agenticMaxIterations),
+        queryMode: cfg.queryMode,
+        aiDisclosureAcceptedVersion: cfg.aiDisclosureAcceptedVersion,
+      },
+      modelDownloaded: isModelDownloaded(),
+      // What this host can actually do, so the UI never offers a provider it
+      // cannot reach. Detected, not declared — see hostCapabilities.ts.
+      capabilities: detectCapabilities(),
+    });
+  }
+
+  private async onTestDestination(
+    settings: Record<string, string>,
+  ): Promise<void> {
+    // Test exactly what the user has typed in the modal (not the saved config),
+    // so they can validate before committing. Failures are reported as a normal
+    // result payload — not the global `error` toast — so they render inline in
+    // the modal next to the Test button.
+    const cfg = configFromWireSettings(settings);
+    try {
+      const result = await testDestination(cfg);
+      this.host.post({ type: "destinationTestResult", result });
+    } catch (err) {
+      this.host.post({
+        type: "destinationTestResult",
+        result: {
+          ok: false,
+          summary: err instanceof Error ? err.message : String(err),
+          checks: [],
+        },
+      });
+    }
+  }
+
+  private async onListModels(settings: Record<string, string>): Promise<void> {
+    // Use the region/profile currently in the modal (may be unsaved) so the
+    // list matches what the user is about to save. Errors are reported inline
+    // via the same payload rather than the global error toast.
+    const cfg = configFromWireSettings(settings);
+    try {
+      const models = await listBedrockModels({
+        region: cfg.region,
+        credentials: resolveCredentials(cfg.awsProfile),
+      });
+      this.host.post({ type: "bedrockModels", models });
+    } catch (err) {
+      // Omit `models` on failure so the webview keeps any previously-fetched
+      // suggestions (e.g. after a retry with a typo'd profile) rather than
+      // clearing the list.
+      this.host.post({
+        type: "bedrockModels",
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  private async onSaveSettings(
+    settings: Record<string, string>,
+  ): Promise<void> {
+    const coercedEntries: Record<string, SettingValue> = {};
+    for (const [key, value] of Object.entries(settings)) {
+      // Allowlist rather than trust: the renderer's payload decides which keys
+      // get persisted, so an unrecognized one is dropped here instead of
+      // reaching a host's settings store. Also keeps `__proto__` and friends
+      // out of the desktop host's plain-object merge.
+      if (!isSettingKey(key)) continue;
+      // The webview sends every value as a string, so non-string keys are
+      // coerced to their schema type before writing. Which keys those are
+      // comes from settingsKeys.ts (asserted against the extension manifest)
+      // rather than being spelled out here, so a newly-added boolean/number
+      // setting is coerced correctly without touching this loop.
+      let coerced: SettingValue;
+      if (BOOLEAN_SETTING_KEYS.includes(key)) {
+        // `false` is meaningful here, so it must not collapse to "unset".
+        coerced = value === "true";
+      } else if (NUMBER_SETTING_KEYS.includes(key)) {
+        // Invalid/empty becomes undefined so the schema default applies.
+        const n = Number(value);
+        coerced = Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
+      } else {
+        coerced = value || undefined;
+      }
+      coercedEntries[key] = coerced;
+    }
+    await this.host.writeSettings(coercedEntries);
+    this.sendConfig();
+
+    const cfg = this.readConfig();
+    if (
+      cfg.destinationType === "s3" &&
+      cfg.athenaDatabase &&
+      cfg.athenaS3Location
+    ) {
+      await this.onEnsureAthenaTable(cfg);
+    }
+
+    this.host.post({ type: "settingsSaved" });
+  }
+
+  /**
+   * Auto-create (or verify) the Glue table backing Athena queries, and
+   * discover any Hive partitions S3Exporter has already written. Idempotent —
+   * safe to run every time settings are saved. Best-effort: surfaces failures
+   * as a non-fatal warning rather than blocking settings from saving, since
+   * the user may not have Glue/Athena permissions yet (or the bucket/table
+   * exist already via other tooling).
+   */
+  private async onEnsureAthenaTable(cfg: InsightConfig): Promise<void> {
+    const credentials = resolveCredentials(cfg.awsProfile);
+    try {
+      const exists = await tableExists({
+        region: cfg.region,
+        credentials,
+        database: cfg.athenaDatabase,
+        table: cfg.athenaTable,
+      });
+      if (exists) return;
+
+      this.host.post({
+        type: "status",
+        text: `Creating Glue table ${cfg.athenaDatabase}.${cfg.athenaTable}...`,
+      });
+      await ensureAthenaTable({
+        region: cfg.region,
+        credentials,
+        database: cfg.athenaDatabase,
+        table: cfg.athenaTable,
+        workgroup: cfg.athenaWorkgroup || undefined,
+        outputLocation: cfg.athenaOutputLocation || undefined,
+        s3Location: cfg.athenaS3Location,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.host.post({
+        type: "error",
+        message: `Saved settings, but couldn't auto-create the Athena table: ${msg}`,
+      });
+    }
+  }
+
+  private async onDownloadModel(localModel?: string): Promise<void> {
+    // Download the model the user picked in settings (may not be saved yet),
+    // falling back to the saved selection.
+    setLocalModel(localModel ?? this.readConfig().localModel);
+    if (isModelDownloaded()) {
+      this.host.post({ type: "downloadProgress", percent: 100, done: true });
+      return;
+    }
+    await ensureModel((text) => {
+      const match = text.match(/(\d+)%/);
+      const percent = match ? Number(match[1]) : 0;
+      this.host.post({ type: "downloadProgress", percent, done: false });
+    });
+    this.host.post({ type: "downloadProgress", percent: 100, done: true });
+  }
+
+  private async onExportChart(
+    format: "svg" | "png",
+    content: string,
+  ): Promise<void> {
+    const ext = format === "svg" ? "svg" : "png";
+    // An SVG arrives as text; a PNG arrives as a data URL (data:image/png;base64,...).
+    const data =
+      format === "svg"
+        ? Buffer.from(content, "utf-8")
+        : Buffer.from(content.split(",")[1], "base64");
+    const path = await this.host.saveFile({
+      suggestedName: `chart.${ext}`,
+      extension: ext,
+      filterLabel: format.toUpperCase(),
+      data,
+    });
+    if (!path) return;
+    this.host.showInfo(`Chart saved to ${path}`);
+  }
+
+  /** Save a result table (CSV/JSON text built by the webview) to a file. */
+  private async onExportData(
+    format: "csv" | "json",
+    content: string,
+    filename: string,
+  ): Promise<void> {
+    const ext = format === "csv" ? "csv" : "json";
+    const path = await this.host.saveFile({
+      suggestedName: filename || `results.${ext}`,
+      extension: ext,
+      filterLabel: format.toUpperCase(),
+      data: Buffer.from(content, "utf-8"),
+    });
+    if (!path) return;
+    this.host.showInfo(`Results saved to ${path}`);
+  }
+
+  private getFavorites(): Favorite[] {
+    return this.host.readFavorites();
+  }
+
+  private async setFavorites(list: Favorite[]): Promise<void> {
+    await this.host.writeFavorites(list);
+    this.host.post({ type: "favorites", favorites: list });
+  }
+
+  /** Prompt for a name, then persist the query to favorites (globalState). */
+  private async onSaveFavorite(
+    query: string,
+    destinationType: string,
+  ): Promise<void> {
+    const suggested = query.length > 60 ? `${query.slice(0, 57)}...` : query;
+    // Hosts without a native text prompt (the desktop app) skip straight to the
+    // suggested label rather than losing the ability to save queries at all.
+    const label = this.host.promptForText
+      ? await this.host.promptForText({
+          message: "Name this saved query",
+          defaultValue: suggested,
+        })
+      : suggested;
+    if (label === undefined) return; // cancelled
+    if (!label.trim()) return; // empty name
+    const fav: Favorite = {
+      id: randomUUID(),
+      label: label.trim(),
+      query,
+      destinationType,
+    };
+    await this.setFavorites([...this.getFavorites(), fav]);
+    this.host.showInfo(`Saved query "${fav.label}".`);
+  }
+
+  private async onDeleteFavorite(id: string): Promise<void> {
+    await this.setFavorites(this.getFavorites().filter((f) => f.id !== id));
+  }
+
+  /**
+   * Free-text "describe how to visualize" on the Visualize page: ask the model
+   * to map the request onto the fetched columns and return a Vega-Lite spec.
+   * Only column names/types + the description are sent, never the row data.
+   */
+  private async onVisualize(msg: {
+    columns: string[];
+    numericColumns: string[];
+    chartType?: string;
+    description: string;
+    requestId: number;
+  }): Promise<void> {
+    const cfg = this.readConfig();
+    // Visualize builds the chart spec with the LLM — enforce consent host-side
+    // too (defense in depth); reply as a chartSpecError so the webview clears
+    // its loading state.
+    if (!this.hasAiConsent(cfg)) {
+      this.host.post({
+        type: "chartSpecError",
+        message:
+          "AI features require accepting the AI-usage disclosure first. Please try again and accept the notice.",
+        requestId: msg.requestId,
+      });
+      return;
+    }
+    setLocalModel(cfg.localModel);
+    setLocalServer(cfg.localServerUrl, cfg.localServerModel);
+    const credentials = resolveCredentials(cfg.awsProfile);
+    try {
+      const spec = await generateChartSpec({
+        provider: cfg.llmProvider,
+        region: cfg.region,
+        credentials,
+        modelId: cfg.bedrockModelId,
+        columns: msg.columns,
+        numericColumns: msg.numericColumns,
+        chartType: msg.chartType,
+        description: msg.description,
+      });
+      this.host.post({ type: "chartSpec", spec, requestId: msg.requestId });
+    } catch (err) {
+      this.host.post({
+        type: "chartSpecError",
+        message: err instanceof Error ? err.message : String(err),
+        requestId: msg.requestId,
+      });
+    }
+  }
+
+  private onStartListening(): void {
+    if (this.listenController) return; // already listening
+    const cfg = this.readConfig();
+    if (!cfg.sqsQueueUrl) {
+      this.host.post({
+        type: "error",
+        message: "No SQS queue configured. Set workflowInsight.sqsQueueUrl.",
+      });
+      return;
+    }
+
+    const controller = new AbortController();
+    this.listenController = controller;
+    this.host.post({ type: "sqsStatus", listening: true });
+
+    void listenToQueue({
+      region: cfg.region,
+      credentials: resolveCredentials(cfg.awsProfile),
+      queueUrl: cfg.sqsQueueUrl,
+      deleteAfterRead: cfg.sqsDeleteAfterRead,
+      signal: controller.signal,
+      onMessages: (messages: SqsMessageRow[]) =>
+        this.host.post({ type: "sqsMessages", messages }),
+      onError: (error) =>
+        this.host.post({ type: "error", message: error.message }),
+    }).finally(() => {
+      // Only clear/notify if this call owns the current controller — a newer
+      // start/stop may have already replaced it.
+      if (this.listenController === controller) {
+        this.listenController = undefined;
+        this.host.post({ type: "sqsStatus", listening: false });
+      }
+    });
+  }
+
+  private onStopListening(): void {
+    this.listenController?.abort();
+    this.listenController = undefined;
+    this.host.post({ type: "sqsStatus", listening: false });
+  }
+
+  private async onGenerate(question: string, mode: QueryMode): Promise<void> {
+    const q = question.trim();
+    if (!q) {
+      this.host.post({ type: "error", message: "Enter a question first." });
+      return;
+    }
+    const cfg = this.readConfig();
+    setLocalModel(cfg.localModel);
+    setLocalServer(cfg.localServerUrl, cfg.localServerModel);
+    const credentials = resolveCredentials(cfg.awsProfile);
+    const tableName =
+      cfg.destinationType === "dynamodb"
+        ? cfg.dynamodbTableName
+        : cfg.destinationType === "aurora"
+          ? cfg.auroraTable
+          : cfg.destinationType === "redshift"
+            ? `${cfg.redshiftSchema}.${cfg.redshiftTable}`
+            : cfg.destinationType === "opensearch"
+              ? cfg.opensearchIndex
+              : cfg.destinationType === "s3"
+                ? cfg.athenaTable
+                : undefined;
+
+    // Dispatch by the selected mode:
+    //  - query: run the text verbatim (no LLM)
+    //  - ask:   one NL→query translation, run once (no agent loop)
+    //  - agent: the full agentic explore→answer loop
+    if (mode === "query") {
+      return await this.onRunRawQuery(q, cfg, credentials);
+    }
+    // ask/agent use the LLM — enforce the AI-usage consent host-side too, so a
+    // replayed or malformed "generate" message can't bypass the disclosure the
+    // webview shows. query mode above is intentionally exempt (no LLM).
+    if (!this.hasAiConsent(cfg)) {
+      this.host.post({
+        type: "error",
+        message:
+          "AI features require accepting the AI-usage disclosure first. Please try again and accept the notice.",
+      });
+      return;
+    }
+    if (mode === "ask") {
+      return await this.onGenerateSingleShot(q, cfg, credentials, tableName);
+    }
+    return await this.onGenerateAgentic(q, cfg, credentials, tableName);
+  }
+
+  /**
+   * "query" mode: run the user's text verbatim as a read-only query. No LLM is
+   * involved — executeQuery still enforces read-only and caps rows, but the
+   * query is otherwise sent to the destination exactly as typed (no drill-down
+   * injection, no explanation, no verify/refine).
+   */
+  private async onRunRawQuery(
+    q: string,
+    cfg: InsightConfig,
+    credentials: AwsCredentialIdentityProvider,
+  ): Promise<void> {
+    this.host.post({ type: "status", text: "Running query..." });
+    const exec = await this.executeQuery(
+      cfg,
+      credentials,
+      { query: q, explanation: "", timeRangeMs: DEFAULT_TIME_RANGE_MS },
+      { injectDrillDown: false },
+    );
+    // Query mode has no LLM prose, so post an explicit summary — otherwise a
+    // 0-row result (e.g. a query whose language doesn't match the configured
+    // destination) looks like nothing happened.
+    const n = exec.count ?? exec.rows.length;
+    this.host.post({
+      type: "agentAnswer",
+      text:
+        n > 0
+          ? `Ran your query — returned ${n} row${n === 1 ? "" : "s"}${exec.truncated ? " (capped)" : ""}.`
+          : `Ran your query — 0 rows returned. If you expected data, check that your query matches the configured destination's query language (${cfg.destinationType}).`,
+    });
+    this.host.post({ type: "results", ...exec });
+  }
+
+  /**
+   * "ask" mode: one LLM NL→query translation, run once, present. No agent
+   * loop, no verify/refine — a single query the model writes for the question.
+   */
+  private async onGenerateSingleShot(
+    q: string,
+    cfg: InsightConfig,
+    credentials: AwsCredentialIdentityProvider,
+    tableName: string | undefined,
+  ): Promise<void> {
+    this.host.post({ type: "status", text: "Generating query..." });
+    const generated = await generateQuery({
+      provider: cfg.llmProvider,
+      region: cfg.region,
+      credentials,
+      modelId: cfg.bedrockModelId,
+      question: this.withConversationContext(q),
+      destinationType: cfg.destinationType,
+      tableName,
+    });
+    this.host.post({ type: "status", text: "Running query..." });
+    const exec = await this.executeQuery(cfg, credentials, generated);
+    this.host.post({ type: "results", ...exec });
+    this.recordTurn(
+      q,
+      generated.explanation ||
+        `Returned ${exec.count ?? exec.rows.length} row(s).`,
+    );
+  }
+
+  /** Persist the composer's query mode as the default for next time. */
+  private async onSetMode(mode: QueryMode): Promise<void> {
+    await this.host.writeSettings({ queryMode: mode });
+  }
+
+  /**
+   * Record the user's acceptance of the AI-usage disclosure (the version of the
+   * notice they agreed to). Stored in settings so it persists and is auditable;
+   * a version bump re-prompts. Gating happens in the webview before any LLM
+   * call, but persisting here keeps the decision durable.
+   */
+  private async onSetConsent(version: string): Promise<void> {
+    await this.host.writeSettings({ aiDisclosureAcceptedVersion: version });
+  }
+
+  /**
+   * Host-side AI-usage consent check (defense in depth). The webview gates AI
+   * actions behind the disclosure modal, but we re-verify here so a replayed or
+   * malformed message can't reach the LLM without accepted consent. Returns
+   * true when the stored acceptance matches the current disclosure version.
+   */
+  private hasAiConsent(cfg: { aiDisclosureAcceptedVersion: string }): boolean {
+    return cfg.aiDisclosureAcceptedVersion === REQUIRED_AI_DISCLOSURE_VERSION;
+  }
+
+  /**
+   * Agentic generation: run the query, then ask the model whether the results
+   * actually answer the question; if not, refine the query and try again, up
+   * to a small cap. Emits "agentStep" transcript messages so the webview can
+   * show the loop's progress. Read-only enforcement, identifier injection, and
+   * partition pruning all go through executeQuery. Dispatches to the Bedrock
+   * multi-step tool loop when available.
+   */
+  private async onGenerateAgentic(
+    q: string,
+    cfg: InsightConfig,
+    credentials: AwsCredentialIdentityProvider,
+    tableName: string | undefined,
+  ): Promise<void> {
+    // The full multi-turn "explore then answer" agent loop (run_query/finish)
+    // needs Bedrock's Converse tool use. Use it for every queryable
+    // destination under Bedrock (SQS isn't queryable and never reaches here).
+    // Copilot/local keep the generate→verify→refine loop below.
+    if (cfg.llmProvider === "bedrock" && cfg.destinationType !== "sqs") {
+      return await this.onGenerateAgenticToolLoop(q, cfg, credentials);
+    }
+
+    const MAX_ITERATIONS = cfg.agenticMaxIterations;
+
+    this.host.post({ type: "status", text: "Generating query..." });
+    let generated = await generateQuery({
+      provider: cfg.llmProvider,
+      region: cfg.region,
+      credentials,
+      modelId: cfg.bedrockModelId,
+      question: this.withConversationContext(q),
+      destinationType: cfg.destinationType,
+      tableName,
+      agentic: true,
+    });
+
+    let lastExec: QueryExecution | undefined;
+    // Queries already attempted (normalized), so a loop that starts repeating
+    // itself stops early instead of burning the whole iteration budget on the
+    // same failing/unhelpful query — the higher the cap, the more this matters.
+    const tried = new Set<string>();
+
+    for (let iter = 1; iter <= MAX_ITERATIONS; iter++) {
+      const norm = normalizeQuery(generated.query);
+      if (tried.has(norm)) {
+        // Oscillation guard. This single-shot verify/refine loop BREAKS on a
+        // repeat: the model regenerated the same query, so further refine
+        // rounds would just repeat it. (The Bedrock tool loop instead feeds an
+        // error back and lets the model pick a different query or finish — see
+        // agentLoop.ts — because there the model has tool-driven agency to
+        // change course rather than re-emitting one query.)
+        this.host.post({
+          type: "agentStep",
+          iteration: iter,
+          query: generated.query,
+          outcome: "error",
+          detail:
+            "Stopped: the model repeated a query it had already tried, so more attempts won't help.",
+        });
+        break;
+      }
+      tried.add(norm);
+
+      this.host.post({
+        type: "status",
+        text: `Agentic step ${iter}/${MAX_ITERATIONS}: running query...`,
+      });
+
+      let exec: QueryExecution;
+      try {
+        // Inject drill-down/partition columns for row-level result sets so
+        // each row can be clicked for its full record. Skip it for aggregate
+        // queries (and post-process raw fetches); ensureIdentifierColumn also
+        // safely bails on DISTINCT/set-operator/derived shapes it can't
+        // rewrite without corrupting. Decided by query shape, not a model
+        // flag, so drill-down is consistent across providers.
+        exec = await this.executeQuery(cfg, credentials, generated, {
+          injectDrillDown:
+            !isAggregateQuery(
+              generated.query,
+              queryDialect(cfg.destinationType),
+            ) && !generated.postProcess,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.host.post({
+          type: "agentStep",
+          iteration: iter,
+          query: generated.query,
+          outcome: "error",
+          detail: msg,
+        });
+        if (isRetryableQueryError(msg) && iter < MAX_ITERATIONS) {
+          this.host.post({
+            type: "status",
+            text: "Query failed, asking the model to fix it...",
+          });
+          generated = await generateQuery({
+            provider: cfg.llmProvider,
+            region: cfg.region,
+            credentials,
+            modelId: cfg.bedrockModelId,
+            question: this.withConversationContext(
+              `${q}\n\nThe previous query failed with this error: ${msg}${columnNotFoundHint(msg)}\nPlease fix the query.`,
+            ),
+            destinationType: cfg.destinationType,
+            tableName,
+            agentic: true,
+          });
+          continue;
+        }
+        throw err;
+      }
+
+      lastExec = exec;
+
+      // If the model chose to fetch raw data for a post-processing step (it
+      // set postProcess=true because the answer was awkward to express in the
+      // query language), answer the question from those rows via an LLM
+      // analysis step instead of the verify/refine loop.
+      if (generated.postProcess) {
+        this.host.post({
+          type: "status",
+          text: `Agentic step ${iter}/${MAX_ITERATIONS}: analyzing results...`,
+        });
+        const answer = await analyzeResults({
+          provider: cfg.llmProvider,
+          region: cfg.region,
+          credentials,
+          modelId: cfg.bedrockModelId,
+          question: q,
+          goal: generated.postProcessGoal,
+          columns: exec.columns,
+          rows: exec.rows,
+        });
+        this.host.post({
+          type: "agentStep",
+          iteration: iter,
+          query: exec.finalQuery,
+          rowCount: exec.count ?? exec.rows.length,
+          outcome: "analyzed",
+          detail:
+            generated.postProcessGoal ??
+            "Post-processed the returned rows to answer the question.",
+        });
+        if (answer) this.host.post({ type: "agentAnswer", text: answer });
+        this.host.post({ type: "results", ...exec });
+        this.recordTurn(q, answer || "Post-processed the results to answer.");
+        return;
+      }
+
+      // Judge whether the results answer the question.
+      this.host.post({
+        type: "status",
+        text: `Agentic step ${iter}/${MAX_ITERATIONS}: checking results...`,
+      });
+      const rowCount = exec.count ?? exec.rows.length;
+      const verdict = await verifyResult({
+        provider: cfg.llmProvider,
+        region: cfg.region,
+        credentials,
+        modelId: cfg.bedrockModelId,
+        question: q,
+        query: exec.finalQuery,
+        columns: exec.columns,
+        rowCount,
+        sampleRows: exec.rows.slice(0, 5),
+      });
+
+      this.host.post({
+        type: "agentStep",
+        iteration: iter,
+        query: exec.finalQuery,
+        rowCount,
+        outcome: verdict.satisfied ? "satisfied" : "unsatisfied",
+        detail: verdict.reason,
+      });
+
+      if (verdict.satisfied || iter === MAX_ITERATIONS) {
+        // Produce a conversational prose answer (works on every provider) so
+        // the reply isn't just a table — parity with the Bedrock tool loop.
+        // analyzeResults is a second model call, so skip it for empty results:
+        // the verdict reason already explains an empty set well (e.g. "no
+        // failed executions") and it isn't worth the extra round-trip.
+        let answer = "";
+        if (rowCount > 0) {
+          this.host.post({ type: "status", text: "Writing the answer..." });
+          answer = await analyzeResults({
+            provider: cfg.llmProvider,
+            region: cfg.region,
+            credentials,
+            modelId: cfg.bedrockModelId,
+            question: q,
+            columns: exec.columns,
+            rows: exec.rows,
+          });
+        }
+        const prose = answer || verdict.reason;
+        if (prose) this.host.post({ type: "agentAnswer", text: prose });
+        this.host.post({ type: "results", ...exec });
+        // Record the turn so follow-ups have conversation context (threaded
+        // back in via withConversationContext on the next question).
+        this.recordTurn(q, prose || `Returned ${rowCount} row(s).`);
+        return;
+      }
+
+      // Refine and try again.
+      this.host.post({
+        type: "status",
+        text: `Refining query (step ${iter + 1}/${MAX_ITERATIONS})...`,
+      });
+      const suggestion = verdict.suggestion
+        ? `\nSuggested fix: ${verdict.suggestion}`
+        : "";
+      generated = await generateQuery({
+        provider: cfg.llmProvider,
+        region: cfg.region,
+        credentials,
+        modelId: cfg.bedrockModelId,
+        question: this.withConversationContext(
+          `${q}\n\nA previous attempt ran this query:\n${exec.finalQuery}\n\nIt returned ${rowCount} row(s), but that did not adequately answer the question because: ${verdict.reason}${suggestion}\nPlease produce an improved query.`,
+        ),
+        destinationType: cfg.destinationType,
+        tableName,
+        agentic: true,
+      });
+    }
+
+    // The loop returns as soon as it has an answer; reaching here means it
+    // stopped early (repeated query) or exhausted its iterations. Show the
+    // best result we got, or surface a clear error if we never got one.
+    if (lastExec) {
+      this.host.post({ type: "results", ...lastExec });
+    } else {
+      this.host.post({
+        type: "error",
+        message:
+          "The assistant couldn't produce a working query for this question within its iteration budget. Try rephrasing, or raise workflowInsight.agenticMaxIterations.",
+      });
+    }
+  }
+
+  /**
+   * Advanced mode, Bedrock + SQL destinations: the full "explore then answer"
+   * agent loop. The model uses run_query to discover the data's shape (e.g.
+   * which keys exist in input/output) and compute candidates — seeing real
+   * columns/rows each time — then calls finish with the query that answers the
+   * question. Exploration and the final presentation run use the SAME
+   * query-shape drill-down injection, so when the model finishes with a query
+   * it already explored, the executed SQL is identical and the result is
+   * reused from queryCache instead of being scanned (billed) a second time.
+   * The number of queries is bounded by agenticMaxIterations.
+   */
+  private async onGenerateAgenticToolLoop(
+    q: string,
+    cfg: InsightConfig,
+    credentials: AwsCredentialIdentityProvider,
+  ): Promise<void> {
+    const tableName =
+      cfg.destinationType === "dynamodb"
+        ? cfg.dynamodbTableName
+        : cfg.destinationType === "aurora"
+          ? cfg.auroraTable
+          : cfg.destinationType === "redshift"
+            ? `${cfg.redshiftSchema}.${cfg.redshiftTable}`
+            : cfg.destinationType === "opensearch"
+              ? cfg.opensearchIndex
+              : cfg.destinationType === "s3"
+                ? cfg.athenaTable
+                : undefined;
+
+    let iteration = 0;
+    // The most recent successful query execution, so a turn that ends with a
+    // prose-only answer (the model explored with run_query, then answered
+    // without a distinct "final" query) still shows the data it fetched —
+    // matching the "every data question shows its table" expectation.
+    let lastExec: QueryExecution | undefined;
+    // Per-question cache of raw query results (keyed by executed query text),
+    // shared by the exploration run_query calls and the final presentation
+    // run — so the finish query, already scanned during exploration, isn't
+    // scanned again for presentation when the SQL is identical.
+    const queryCache = new Map<
+      string,
+      { columns: string[]; rows: string[][] }
+    >();
+
+    // Each run_query the model issues: run it read-only and return a bounded
+    // sample. Injection uses the SAME query-shape decision as the final
+    // presentation run, so when the model finishes with a query it already
+    // explored, the executed SQL is identical and the queryCache hits — no
+    // second Athena scan (see the final executeQuery call below). lookbackHours
+    // (log-based sources only) sets the search window. The number of queries
+    // is bounded by agenticMaxIterations.
+    const runQuery = async (
+      query: string,
+      lookbackHours?: number,
+    ): Promise<AgentQueryResult> => {
+      try {
+        const exec = await this.executeQuery(
+          cfg,
+          credentials,
+          {
+            query,
+            explanation: "",
+            timeRangeMs: (lookbackHours ?? 24) * 60 * 60 * 1000,
+          },
+          {
+            injectDrillDown: !isAggregateQuery(
+              query,
+              queryDialect(cfg.destinationType),
+            ),
+            queryCache,
+          },
+        );
+        // Remember the latest successful, row-bearing execution so a
+        // prose-only finish can still present it (see the answer-only branch).
+        if (exec.rows.length > 0) lastExec = exec;
+        return {
+          columns: exec.columns,
+          // Small sample for the model's context; run_javascript gets the
+          // fuller set (capped) so its aggregations aren't limited to 20 rows.
+          rows: exec.rows.slice(0, 20),
+          allRows: exec.rows.slice(0, JS_ROW_CAP),
+          rowCount: exec.count ?? exec.rows.length,
+          truncated: exec.truncated,
+          numericColumns: exec.numericColumns,
+        };
+      } catch (err) {
+        return {
+          columns: [],
+          rows: [],
+          rowCount: 0,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    };
+
+    this.host.post({ type: "status", text: "Working on your question..." });
+
+    const final = await runAgentLoop({
+      region: cfg.region,
+      credentials,
+      modelId: cfg.bedrockModelId,
+      question: q,
+      destinationType: cfg.destinationType,
+      tableName,
+      maxIterations: cfg.agenticMaxIterations,
+      priorTurns: this.conversation,
+      runQuery,
+      onStep: (e) => {
+        iteration += 1;
+        this.host.post({
+          type: "agentStep",
+          iteration,
+          query: e.query ?? "",
+          rowCount: e.rowCount,
+          outcome:
+            e.kind === "error"
+              ? "error"
+              : e.kind === "finish"
+                ? "satisfied"
+                : e.kind === "note"
+                  ? "unsatisfied"
+                  : e.kind === "script"
+                    ? "script"
+                    : "ran",
+          detail: e.detail,
+        });
+        this.host.post({
+          type: "status",
+          text:
+            e.kind === "finish"
+              ? "Preparing the answer..."
+              : `Agent step ${iteration}: ${e.purpose ?? "running a query"}...`,
+        });
+      },
+    });
+
+    if (!final || !final.query) {
+      // No usable query. If the model produced any prose, still show it and
+      // record the turn so the conversation continues. If it explored real
+      // rows on the way to that answer, present the latest of those too so the
+      // turn still shows its data table.
+      const proseOnly = final?.answer || final?.explanation;
+      if (proseOnly) {
+        this.host.post({ type: "agentAnswer", text: proseOnly });
+        if (lastExec) this.host.post({ type: "results", ...lastExec });
+        this.recordTurn(q, proseOnly);
+        return;
+      }
+      this.host.post({
+        type: "error",
+        message:
+          "The assistant couldn't arrive at a query that answers this question. Try rephrasing, or raise workflowInsight.agenticMaxIterations.",
+      });
+      return;
+    }
+
+    // Run the final query for presentation, with the normal drill-down
+    // decision (row-level results get the identifier/partition columns).
+    this.host.post({ type: "status", text: "Running the final query..." });
+    const exec = await this.executeQuery(
+      cfg,
+      credentials,
+      {
+        query: final.query,
+        explanation: final.explanation,
+        timeRangeMs: (final.lookbackHours ?? 24) * 60 * 60 * 1000,
+        suggestedCharts: final.suggestedCharts,
+      },
+      {
+        injectDrillDown: !isAggregateQuery(
+          final.query,
+          queryDialect(cfg.destinationType),
+        ),
+        queryCache,
+      },
+    );
+    // The prose reply is the answer; fall back to the explanation so the
+    // conversation never shows a bare "here are the results" placeholder.
+    const prose = final.answer || final.explanation;
+    if (prose) this.host.post({ type: "agentAnswer", text: prose });
+    this.host.post({ type: "results", ...exec });
+    // Record the turn so follow-up questions have this exchange as context.
+    this.recordTurn(
+      q,
+      prose ||
+        `Returned ${exec.count ?? exec.rows.length} row(s) for: ${final.query}`,
+    );
+  }
+
+  /**
+   * Prefix a question with a compact transcript of the current conversation,
+   * so the single-shot verify/refine path (Copilot/local) gets the same
+   * follow-up context the Bedrock tool loop gets via priorTurns. Without it, a
+   * follow-up like "now only the failed ones" would generate cold, with no
+   * idea what "those" referred to. Returns the question unchanged when there's
+   * no history yet.
+   */
+  private withConversationContext(question: string): string {
+    if (this.conversation.length === 0) return question;
+    const history = this.conversation
+      .map((t) => `${t.role === "user" ? "User" : "Assistant"}: ${t.text}`)
+      .join("\n");
+    return `Earlier in this conversation:\n${history}\n\nCurrent question: ${question}`;
+  }
+
+  /**
+   * Append a completed exchange to the advanced-mode conversation history, so
+   * the next question continues the session. Trims the history to a bounded
+   * number of recent turns to keep prompt size (and cost) in check.
+   */
+  private recordTurn(question: string, answer: string): void {
+    this.conversation.push({ role: "user", text: question });
+    this.conversation.push({ role: "assistant", text: answer });
+    const MAX_TURNS = 12; // 6 user+assistant pairs
+    if (this.conversation.length > MAX_TURNS) {
+      this.conversation = this.conversation.slice(-MAX_TURNS);
+    }
+  }
+
+  /**
+   * Run a single generated query against the configured destination and return
+   * the normalized results payload (the body of a "results" message, minus the
+   * type). Shared by both provider paths (the Bedrock tool loop and the
+   * verify/refine loop) so there is exactly one place that enforces read-only
+   * access, injects the identifier/partition columns, and runs the
+   * per-destination query engine. Throws on execution errors
+   * (the caller decides whether to retry).
+   */
+  private async executeQuery(
+    cfg: InsightConfig,
+    credentials: AwsCredentialIdentityProvider,
+    generated: GeneratedQuery,
+    opts?: {
+      injectDrillDown?: boolean;
+      /**
+       * Per-question cache of raw query results keyed by the exact executed
+       * query string. Lets the tool loop reuse a result it already scanned
+       * during exploration instead of re-running the same SQL for
+       * presentation — avoids double-billing the scan (esp. Athena). A cache
+       * hit only happens when the executed query text is identical, i.e. when
+       * drill-down injection added nothing; otherwise the SQL differs and we
+       * (correctly) run it. Not used for the time-windowed CloudWatch path,
+       * whose result depends on the wall-clock window, not just the query.
+       */
+      queryCache?: Map<string, { columns: string[]; rows: string[][] }>;
+    },
+  ): Promise<QueryExecution> {
+    // Whether to inject the drill-down identifier (and Athena partition)
+    // columns into the query. Callers pass false for exploration/analytical
+    // queries; the agentic paths decide by query shape (isAggregateQuery), so
+    // an analytical query (DISTINCT/UNNEST/aggregate/derived) runs exactly as
+    // written instead of being corrupted by columns that aren't in its scope.
+    // ensureIdentifierColumn is itself conservative and bails on shapes it
+    // can't rewrite safely, so injection is a no-op there even if requested.
+    const inject = opts?.injectDrillDown ?? true;
+    const queryCache = opts?.queryCache;
+    // Run a query unless its exact text was already run this question, in
+    // which case reuse the cached result (no second scan).
+    const runOnce = async <T extends { columns: string[]; rows: string[][] }>(
+      key: string,
+      run: () => Promise<T>,
+    ): Promise<T> => {
+      const hit = queryCache?.get(key);
+      if (hit) return hit as T;
+      const res = await run();
+      queryCache?.set(key, res);
+      return res;
+    };
+    // Enforce the host row ceiling uniformly. Athena's runner already stops
+    // paging at MAX_SQL_ROWS (and sets truncated); Aurora/DynamoDB return a
+    // single API response (bounded by the service's ~1 MB reply), but slice
+    // them too so the guarantee holds for every SQL destination.
+    const capRows = <
+      T extends { columns: string[]; rows: string[][]; truncated?: boolean },
+    >(
+      table: T,
+    ): { rows: string[][]; count: number; truncated: boolean } => {
+      const overCap = table.rows.length > MAX_SQL_ROWS;
+      const rows = overCap ? table.rows.slice(0, MAX_SQL_ROWS) : table.rows;
+      return {
+        rows,
+        count: rows.length,
+        truncated: !!table.truncated || overCap,
+      };
+    };
+    if (cfg.destinationType === "dynamodb") {
+      if (!cfg.dynamodbTableName)
+        throw new Error("No DynamoDB table configured.");
+      assertReadOnly(generated.query, "PartiQL");
+      const { query, idColumn, injectedColumns } = inject
+        ? ensureIdentifierColumn(generated.query, "pk", "sql")
+        : {
+            query: generated.query,
+            idColumn: undefined,
+            injectedColumns: [] as string[],
+          };
+      const table = await runOnce(query, () =>
+        runDynamoDBQuery({
+          region: cfg.region,
+          credentials,
+          tableName: cfg.dynamodbTableName,
+          statement: query,
+        }),
+      );
+      const capped = capRows(table);
+      return {
+        ...table,
+        ...capped,
+        explanation: generated.explanation,
+        suggestedCharts: generated.suggestedCharts,
+        finalQuery: query,
+        idColumn: resolveActualColumnCasing(idColumn, table.columns),
+        hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
+      };
+    }
+    if (cfg.destinationType === "aurora") {
+      if (!cfg.auroraResourceArn || !cfg.auroraSecretArn)
+        throw new Error("Aurora not configured.");
+      assertReadOnly(generated.query, "PostgreSQL");
+      const { query, idColumn, injectedColumns } = inject
+        ? ensureIdentifierColumn(generated.query, "execution_arn", "sql")
+        : {
+            query: generated.query,
+            idColumn: undefined,
+            injectedColumns: [] as string[],
+          };
+      const table = await runOnce(query, () =>
+        runAuroraQuery({
+          region: cfg.region,
+          credentials,
+          resourceArn: cfg.auroraResourceArn,
+          secretArn: cfg.auroraSecretArn,
+          database: cfg.auroraDatabase,
+          sql: query,
+        }),
+      );
+      const capped = capRows(table);
+      return {
+        ...table,
+        ...capped,
+        explanation: generated.explanation,
+        suggestedCharts: generated.suggestedCharts,
+        finalQuery: query,
+        idColumn: resolveActualColumnCasing(idColumn, table.columns),
+        hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
+      };
+    }
+    if (cfg.destinationType === "redshift") {
+      if (!cfg.redshiftWorkgroupName && !cfg.redshiftClusterIdentifier)
+        throw new Error("Redshift not configured.");
+      assertReadOnly(generated.query, "Redshift SQL");
+      const { query, idColumn, injectedColumns } = inject
+        ? ensureIdentifierColumn(generated.query, "execution_arn", "sql")
+        : {
+            query: generated.query,
+            idColumn: undefined,
+            injectedColumns: [] as string[],
+          };
+      const table = await runOnce(query, () =>
+        runRedshiftQuery({
+          region: cfg.region,
+          credentials,
+          database: cfg.redshiftDatabase,
+          workgroupName: cfg.redshiftWorkgroupName || undefined,
+          clusterIdentifier: cfg.redshiftClusterIdentifier || undefined,
+          dbUser: cfg.redshiftDbUser || undefined,
+          secretArn: cfg.redshiftSecretArn || undefined,
+          sql: query,
+        }),
+      );
+      const capped = capRows(table);
+      return {
+        ...table,
+        ...capped,
+        explanation: generated.explanation,
+        suggestedCharts: generated.suggestedCharts,
+        finalQuery: query,
+        idColumn: resolveActualColumnCasing(idColumn, table.columns),
+        hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
+      };
+    }
+    if (cfg.destinationType === "opensearch") {
+      if (!cfg.opensearchEndpoint)
+        throw new Error("OpenSearch not configured.");
+      assertReadOnly(generated.query, "OpenSearch SQL");
+      const { query, idColumn, injectedColumns } = inject
+        ? ensureIdentifierColumn(generated.query, "executionArn", "sql")
+        : {
+            query: generated.query,
+            idColumn: undefined,
+            injectedColumns: [] as string[],
+          };
+      const table = await runOnce(query, () =>
+        runOpenSearchQuery({
+          region: cfg.region,
+          credentials,
+          endpoint: cfg.opensearchEndpoint,
+          sql: query,
+        }),
+      );
+      const capped = capRows(table);
+      return {
+        ...table,
+        ...capped,
+        explanation: generated.explanation,
+        suggestedCharts: generated.suggestedCharts,
+        finalQuery: query,
+        idColumn: resolveActualColumnCasing(idColumn, table.columns),
+        hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
+      };
+    }
+    if (cfg.destinationType === "s3") {
+      if (!cfg.athenaDatabase) throw new Error("Athena not configured.");
+      assertReadOnly(generated.query, "Trino/Presto SQL");
+      // The openx JSON SerDe lowercases all keys, so the identifier column
+      // the LLM's SQL would reference is "executionarn", not "executionArn" —
+      // match that here too (see schema.ts's Athena dialect notes on key
+      // casing). Also carry the year/month/day partition columns through so
+      // the row-detail fetch can prune to one partition instead of scanning
+      // the whole table (see fetchAthenaRecord's doc comment).
+      const { query, idColumn, injectedColumns } = inject
+        ? ensureIdentifierColumn(generated.query, "executionarn", "sql", [
+            "year",
+            "month",
+            "day",
+          ])
+        : {
+            query: generated.query,
+            idColumn: undefined,
+            injectedColumns: [] as string[],
+          };
+      const table = await runOnce(query, () =>
+        runAthenaQuery({
+          region: cfg.region,
+          credentials,
+          database: cfg.athenaDatabase,
+          workgroup: cfg.athenaWorkgroup || undefined,
+          outputLocation: cfg.athenaOutputLocation || undefined,
+          query,
+          maxRows: MAX_SQL_ROWS,
+        }),
+      );
+      const capped = capRows(table);
+      return {
+        ...table,
+        ...capped,
+        explanation: generated.explanation,
+        suggestedCharts: generated.suggestedCharts,
+        finalQuery: query,
+        idColumn: resolveActualColumnCasing(idColumn, table.columns),
+        partitionColumns: {
+          year: resolveActualColumnCasing("year", table.columns),
+          month: resolveActualColumnCasing("month", table.columns),
+          day: resolveActualColumnCasing("day", table.columns),
+        },
+        hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
+      };
+    }
+    // CloudWatch Logs path
+    const limited = ensureLimit(generated.query);
+    const {
+      query: finalQuery,
+      idColumn,
+      injectedColumns,
+    } = inject
+      ? ensureIdentifierColumn(limited, "executionArn", "logs-insights")
+      : {
+          query: limited,
+          idColumn: undefined,
+          injectedColumns: [] as string[],
+        };
+    const endTimeMs = Date.now();
+    const startTimeMs = endTimeMs - generated.timeRangeMs;
+    const table = await runLogsInsightsQuery({
+      region: cfg.region,
+      credentials,
+      logGroupNames: cfg.logGroupNames,
+      queryString: finalQuery,
+      startTimeMs,
+      endTimeMs,
+    });
+    return {
+      ...table,
+      explanation: generated.explanation,
+      suggestedCharts: generated.suggestedCharts,
+      finalQuery,
+      idColumn: resolveActualColumnCasing(idColumn, table.columns),
+      hiddenColumns: resolveActualColumns(injectedColumns, table.columns),
+    };
+  }
+
+  /**
+   * Fetch the full record for a single row, keyed by the identifier column
+   * ensureIdentifierColumn added to the query (idColumn/idValue from the
+   * webview's row-click). Dispatches to the destination-appropriate
+   * point-lookup. Aggregate query results never carry an idColumn (see
+   * queryShape.ts), so the webview never sends this message for those —
+   * this handler doesn't need to re-check that.
+   */
+  private async onFetchDetail(
+    idColumn: string,
+    idValue: string,
+    year?: string,
+    month?: string,
+    day?: string,
+  ): Promise<void> {
+    const cfg = this.readConfig();
+    const credentials = resolveCredentials(cfg.awsProfile);
+    try {
+      let record: Record<string, string> | undefined;
+      if (cfg.destinationType === "dynamodb") {
+        record = await fetchDynamoDBRecord({
+          region: cfg.region,
+          credentials,
+          tableName: cfg.dynamodbTableName,
+          pk: idValue,
+        });
+      } else if (cfg.destinationType === "aurora") {
+        record = await fetchAuroraRecord({
+          region: cfg.region,
+          credentials,
+          resourceArn: cfg.auroraResourceArn,
+          secretArn: cfg.auroraSecretArn,
+          database: cfg.auroraDatabase,
+          table: cfg.auroraTable,
+          executionArn: idValue,
+        });
+      } else if (cfg.destinationType === "redshift") {
+        record = await fetchRedshiftRecord({
+          region: cfg.region,
+          credentials,
+          database: cfg.redshiftDatabase,
+          workgroupName: cfg.redshiftWorkgroupName || undefined,
+          clusterIdentifier: cfg.redshiftClusterIdentifier || undefined,
+          dbUser: cfg.redshiftDbUser || undefined,
+          secretArn: cfg.redshiftSecretArn || undefined,
+          table: `${cfg.redshiftSchema}.${cfg.redshiftTable}`,
+          executionArn: idValue,
+        });
+      } else if (cfg.destinationType === "opensearch") {
+        record = await fetchOpenSearchRecord({
+          region: cfg.region,
+          credentials,
+          endpoint: cfg.opensearchEndpoint,
+          index: cfg.opensearchIndex,
+          executionArn: idValue,
+        });
+      } else if (cfg.destinationType === "s3") {
+        record = await fetchAthenaRecord({
+          region: cfg.region,
+          credentials,
+          database: cfg.athenaDatabase,
+          table: cfg.athenaTable,
+          workgroup: cfg.athenaWorkgroup || undefined,
+          outputLocation: cfg.athenaOutputLocation || undefined,
+          executionArn: idValue,
+          year,
+          month,
+          day,
+        });
+      } else {
+        record = await fetchLogsInsightsRecord({
+          region: cfg.region,
+          credentials,
+          logGroupNames: cfg.logGroupNames,
+          executionArn: idValue,
+        });
+      }
+
+      if (!record) {
+        this.host.post({
+          type: "error",
+          message: `Couldn't find a record for ${idColumn} = ${idValue}.`,
+        });
+        return;
+      }
+      this.host.post({ type: "detailResult", fields: record });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.host.post({
+        type: "error",
+        message: `Failed to fetch record detail: ${msg}`,
+      });
+    }
+  }
+}
