@@ -37,6 +37,15 @@ export interface SkipTimeProps {
  * Orchestrates test execution lifecycle, polling, and handler invocation for LocalDurableTestRunner.
  * Manages the coordination between checkpoint polling, operation processing, and handler execution.
  */
+// Statuses from which an execution cannot move on. Used to tell an expected
+// update-less notification for a finished execution apart from a real gap.
+const TERMINAL_EXECUTION_STATUSES: ReadonlySet<OperationStatus> = new Set([
+  OperationStatus.SUCCEEDED,
+  OperationStatus.FAILED,
+  OperationStatus.STOPPED,
+  OperationStatus.TIMED_OUT,
+]);
+
 export class TestExecutionOrchestrator {
   private executionState: TestExecutionState;
   private invokeHandlerInstance: InvokeHandler;
@@ -478,6 +487,23 @@ export class TestExecutionOrchestrator {
     operation: Operation,
   ): void {
     if (!update) {
+      // An already-terminal execution is re-published without an update when the
+      // checkpoint server ignores the invocation response. That happens on the
+      // oversized-result path, where a checkpoint completes the execution before
+      // the handler returns, so this notification carries nothing to resolve.
+      // Keep the error for the genuinely unexpected case: a missing update on an
+      // execution that has not reached a terminal state.
+      if (
+        operation.Status &&
+        TERMINAL_EXECUTION_STATUSES.has(operation.Status)
+      ) {
+        defaultLogger.debug(
+          "Ignoring update-less notification for a terminal execution",
+          { status: operation.Status },
+        );
+        return;
+      }
+
       throw new Error("Operation update is missing for execution update");
     }
 
