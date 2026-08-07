@@ -22,13 +22,18 @@ export const config: ExampleConfig = {
 };
 
 /**
- * A generated document large enough that you would not want it stored inline in
- * every checkpoint. In production `basePath` points at a durable, shared mount
- * such as `/mnt/s3` (S3 Files) or `/mnt/efs` (EFS) — NOT Lambda's ephemeral
- * `/tmp`, which is not shared across invocations. The OS temp dir is fine here
- * because this example deliberately reads the value back within the invocation
- * that wrote it: the point is that the serdes round-trips correctly, not that
- * the underlying mount is durable.
+ * Where the serdes writes its files.
+ *
+ * The SDK's own guidance for `createFileSystemSerdes` is explicit: do NOT use
+ * Lambda's ephemeral `/tmp`. It is local to one execution environment, so a
+ * replay landing on a different one cannot read the file back. Production points
+ * this at a durable, shared mount — `/mnt/s3` (S3 Files) or `/mnt/efs` (EFS).
+ *
+ * An OS temp dir is nonetheless correct for THIS example, because it never reads
+ * across invocations: a step returns `deserialize(serialize(result))`, so the
+ * value is written and read back inside the one invocation that produced it. The
+ * test pins that with a single-invocation assertion. Copying this snippet into a
+ * handler that resumes after a wait or a callback would need a real mount.
  */
 export const basePath = join(tmpdir(), "dur-example-fs-serdes-always");
 

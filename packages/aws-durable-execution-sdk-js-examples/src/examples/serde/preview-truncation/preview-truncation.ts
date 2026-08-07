@@ -18,6 +18,20 @@ export const config: ExampleConfig = {
     "once the byte budget is reached (later fields are dropped).",
 };
 
+/**
+ * Where the serdes writes its files.
+ *
+ * The SDK's own guidance for `createFileSystemSerdes` is explicit: do NOT use
+ * Lambda's ephemeral `/tmp`. It is local to one execution environment, so a
+ * replay landing on a different one cannot read the file back. Production points
+ * this at a durable, shared mount — `/mnt/s3` (S3 Files) or `/mnt/efs` (EFS).
+ *
+ * An OS temp dir is nonetheless correct for THIS example, because it never reads
+ * across invocations: a step returns `deserialize(serialize(result))`, so the
+ * value is written and read back inside the one invocation that produced it. The
+ * test pins that with a single-invocation assertion. Copying this snippet into a
+ * handler that resumes after a wait or a callback would need a real mount.
+ */
 export const basePath = join(tmpdir(), "dur-example-preview-truncation");
 
 export const handler = withDurableExecution(

@@ -5,17 +5,7 @@ import {
 } from "@aws/durable-execution-sdk-js-testing";
 import { createTests } from "../../../utils/test-helper";
 import { basePath, handler } from "./filesystem-serdes-overflow";
-
-/**
- * The checkpoint envelope written by the filesystem serdes. In OVERFLOW mode the
- * two fields are mutually exclusive: a value small enough to checkpoint inline is
- * stored as JSON in `data`, and only an oversized value is spilled to a file and
- * stored as a `file` pointer.
- */
-interface FileSystemEnvelope {
-  data?: string;
-  file?: string;
-}
+import { FileSystemEnvelope } from "../../shared/filesystem-envelope";
 
 createTests({
   handler,
@@ -67,7 +57,12 @@ createTests({
       const largeEnvelope = envelopeFor("large-document");
       expect(largeEnvelope?.data).toBeUndefined();
       expect(typeof largeEnvelope?.file).toBe("string");
-      expect(largeEnvelope!.file!.startsWith(basePath)).toBe(true);
+      // Assert the directory name, not the absolute path. `basePath` here is
+      // computed in the test process; in cloud mode the handler runs on Lambda,
+      // where `tmpdir()` is /tmp while a macOS test runner would produce
+      // /var/folders/..., so comparing the two would couple the assertion to the
+      // host.
+      expect(largeEnvelope!.file).toContain("dur-example-fs-serdes-overflow");
 
       // Undefined result: passed straight through, so there is no envelope at
       // all and nothing was written to the filesystem.

@@ -8,16 +8,28 @@ import { handler } from "./circular-references";
 
 // This example exercises the SDK's circular-safe stringifier, which only runs
 // when verbose logging is on. Verbose mode is a process-global flag, so the
-// TEST owns enabling it (in beforeAll) and — critically — turning it back off
-// (in afterAll) so it does not leak into other example suites that share this
-// Jest worker. The handler itself stays pure and never mutates process state.
+// TEST owns enabling it (in beforeAll) and — critically — putting it back as it
+// was (in afterAll) so it does not leak into other example suites that share
+// this Jest worker. The handler itself stays pure and never mutates process
+// state.
+//
+// Restore rather than delete: if the flag was already set in the environment,
+// unsetting it would turn verbose logging off for every later suite in this
+// worker, which is the leak this is meant to prevent.
+let previousVerboseMode: string | undefined;
+
 function enableVerboseLogging(): void {
+  previousVerboseMode = process.env.DURABLE_VERBOSE_MODE;
   process.env.DURABLE_VERBOSE_MODE = "true";
   refreshLogConfig();
 }
 
-function disableVerboseLogging(): void {
-  delete process.env.DURABLE_VERBOSE_MODE;
+function restoreVerboseLogging(): void {
+  if (previousVerboseMode === undefined) {
+    delete process.env.DURABLE_VERBOSE_MODE;
+  } else {
+    process.env.DURABLE_VERBOSE_MODE = previousVerboseMode;
+  }
   refreshLogConfig();
 }
 
@@ -27,7 +39,7 @@ createTests({
     let debugSpy: jest.SpyInstance;
 
     beforeAll(enableVerboseLogging);
-    afterAll(disableVerboseLogging);
+    afterAll(restoreVerboseLogging);
 
     // The SDK's verbose logger writes through console.debug and passes logged
     // values through safeStringify. Capturing that output is the only way to

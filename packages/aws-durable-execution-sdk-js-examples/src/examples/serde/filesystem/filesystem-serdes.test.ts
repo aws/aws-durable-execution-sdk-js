@@ -1,4 +1,5 @@
 import { rm } from "node:fs/promises";
+import { basename, dirname } from "node:path";
 import {
   ExecutionStatus,
   OperationStatus,
@@ -6,23 +7,18 @@ import {
 } from "@aws/durable-execution-sdk-js-testing";
 import { createTests } from "../../../utils/test-helper";
 import { basePath, handler } from "./filesystem-serdes";
-
-/**
- * The checkpoint envelope written by the filesystem serdes. In ALWAYS mode the
- * value is offloaded to a file and the checkpoint keeps only the file pointer
- * plus an inline preview.
- */
-interface FileSystemEnvelope {
-  file: string;
-  preview?: Record<string, unknown>;
-}
+import { FileSystemEnvelope } from "../../shared/filesystem-envelope";
 
 createTests({
   handler,
   tests: (runner, { assertEventSignatures }) => {
     // The example writes ~140KB into a temp directory on every run. Remove it
-    // so runs do not accumulate on disk. Cleanup lives in the test, not the
-    // handler, so the example stays a realistic production snippet.
+    // so local runs do not accumulate on disk. Cleanup lives in the test, not
+    // the handler, so the example stays a realistic production snippet.
+    //
+    // Local only: in cloud mode this runs on the test runner, not on Lambda, so
+    // files written into a deployed function's /tmp are left behind until that
+    // execution environment is recycled.
     afterAll(async () => {
       await rm(basePath, { recursive: true, force: true });
     });
@@ -58,7 +54,15 @@ createTests({
       const envelope = generateStep.getStepDetails()
         ?.result as FileSystemEnvelope;
       expect(typeof envelope.file).toBe("string");
-      expect(envelope.file.length).toBeGreaterThan(0);
+
+      // HASH path encoding, which this example advertises. Under HASH the whole
+      // ARN becomes one SHA-256 segment and the entity id becomes the file name:
+      //   <basePath>/<sha256(arn)>/<sha256(entityId)>.json
+      // Asserting the shape is what distinguishes HASH from the URI default,
+      // where the directory is the invocation UUID and the file name is the
+      // URI-encoded entity id — neither of which is 64 hex characters.
+      expect(basename(envelope.file!)).toMatch(/^[0-9a-f]{64}\.json$/);
+      expect(basename(dirname(envelope.file!))).toMatch(/^[0-9a-f]{64}$/);
 
       const preview = envelope.preview as Record<string, unknown>;
       // EXCLUDE_ALL + include id/status: both included fields are present.

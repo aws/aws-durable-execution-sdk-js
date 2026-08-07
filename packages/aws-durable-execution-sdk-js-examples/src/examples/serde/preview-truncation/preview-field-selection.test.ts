@@ -5,11 +5,7 @@ import {
 } from "@aws/durable-execution-sdk-js-testing";
 import { createTests } from "../../../utils/test-helper";
 import { basePath, handler } from "./preview-field-selection";
-
-interface FileSystemEnvelope {
-  file: string;
-  preview?: Record<string, unknown>;
-}
+import { FileSystemEnvelope } from "../../shared/filesystem-envelope";
 
 createTests({
   handler,
@@ -32,16 +28,18 @@ createTests({
 
       const result = execution.getResult() as any;
       expect(result.id).toBe("cust-9");
-      expect(result.email).toBe("person@example.com");
+      expect(result.email).toBe("decoy@example.com");
+      expect(result.customerEmail).toBe("person@example.com");
       expect(result.auditLength).toBe(2000);
 
       // Inspect the inline preview stored in the checkpoint envelope.
       const envelope = buildStep.getStepDetails()?.result as FileSystemEnvelope;
       expect(typeof envelope.file).toBe("string");
-      expect(envelope.file.length).toBeGreaterThan(0);
+      expect(envelope.file!.length).toBeGreaterThan(0);
 
       const preview = envelope.preview as {
         id?: unknown;
+        email?: unknown;
         customer?: { id?: unknown; email?: unknown; ssn?: unknown };
         status?: unknown;
         auditLog?: unknown;
@@ -53,11 +51,14 @@ createTests({
       expect(preview.id).toBe("cust-9");
       expect(preview.customer?.id).toBe("cust-9");
 
-      // `customer.email` uses PATH matching: the exact nested path is included.
-      // This is distinct from ANYWHERE — a PATH selector matches only that one
-      // location, whereas `id` (ANYWHERE) matched two. The top level has no
-      // `email` field, so nothing else could leak in under this selector.
+      // `customer.email` uses PATH matching: the exact nested path is included,
+      // and ONLY that path. The value carries a decoy `email` at the top level
+      // with the same field name; it must not appear. This is what separates
+      // PATH from ANYWHERE (which matched `id` in two places) and from a suffix
+      // match, either of which would pull the decoy in.
       expect(preview.customer?.email).toBe("person@example.com");
+      expect(preview.email).toBeUndefined();
+      expect(JSON.stringify(preview)).not.toContain("decoy@example.com");
 
       // `ssn` is masked: shown but redacted, never leaking the real value.
       expect(preview.customer?.ssn).toBe("***");

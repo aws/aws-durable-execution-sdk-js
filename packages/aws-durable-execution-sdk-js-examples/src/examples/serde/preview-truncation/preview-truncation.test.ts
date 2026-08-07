@@ -5,11 +5,7 @@ import {
 } from "@aws/durable-execution-sdk-js-testing";
 import { createTests } from "../../../utils/test-helper";
 import { basePath, handler } from "./preview-truncation";
-
-interface FileSystemEnvelope {
-  file: string;
-  preview?: Record<string, unknown>;
-}
+import { FileSystemEnvelope } from "../../shared/filesystem-envelope";
 
 createTests({
   handler,
@@ -38,7 +34,7 @@ createTests({
       // Inspect the inline preview stored in the checkpoint envelope.
       const envelope = buildStep.getStepDetails()?.result as FileSystemEnvelope;
       expect(typeof envelope.file).toBe("string");
-      expect(envelope.file.length).toBeGreaterThan(0);
+      expect(envelope.file!.length).toBeGreaterThan(0);
 
       const preview = envelope.preview as Record<string, unknown>;
       // The excluded secret is never present, even under INCLUDE_ALL.
