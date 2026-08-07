@@ -1,0 +1,113 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "1a287789-c060-49fe-bb73-b1a9ab1ccf24",
+    "EventTimestamp": "2026-08-03T17:11:04.971Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"title\":\"Durable Functions 101\"}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "create-article",
+    "EventTimestamp": "2026-08-03T17:11:04.983Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "create-article",
+    "EventTimestamp": "2026-08-03T17:11:04.983Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"title\":\"Durable Functions 101\",\"createdAt\":\"2020-01-01T00:00:00.000Z\",\"metadata\":{\"publishedAt\":\"2020-01-02T00:00:00.000Z\"}}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2026-08-03T17:11:04.987Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2026-08-03T17:11:05.987Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 5,
+    "EventTimestamp": "2026-08-03T17:11:05.010Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-03T17:11:04.971Z",
+      "EndTimestamp": "2026-08-03T17:11:05.009Z",
+      "Error": {},
+      "RequestId": "0d40a4e9-521d-4a58-9bff-58ebcdc1725c"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 6,
+    "Id": "c81e728d9d4c2f63",
+    "EventTimestamp": "2026-08-03T17:11:05.988Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "inspect-article",
+    "EventTimestamp": "2026-08-03T17:11:05.991Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "inspect-article",
+    "EventTimestamp": "2026-08-03T17:11:05.991Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"title\":\"Durable Functions 101\",\"createdAtIsDate\":true,\"publishedAtIsDate\":true,\"isPublished\":true,\"ageIsPositive\":true,\"archivedAtIsUndefined\":true}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 9,
+    "EventTimestamp": "2026-08-03T17:11:05.991Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-03T17:11:05.988Z",
+      "EndTimestamp": "2026-08-03T17:11:05.991Z",
+      "Error": {},
+      "RequestId": "667518e9-1069-4994-baf0-154f0b7165d3"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 10,
+    "Id": "1a287789-c060-49fe-bb73-b1a9ab1ccf24",
+    "EventTimestamp": "2026-08-03T17:11:05.991Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"title\":\"Durable Functions 101\",\"createdAtIsDate\":true,\"publishedAtIsDate\":true,\"isPublished\":true,\"ageIsPositive\":true,\"archivedAtIsUndefined\":true}"
+      }
+    }
+  }
+]

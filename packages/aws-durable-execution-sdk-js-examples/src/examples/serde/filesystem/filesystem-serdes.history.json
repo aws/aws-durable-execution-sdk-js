@@ -1,0 +1,81 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "54b13fd5-13f5-4a87-91ae-fb67d23e0f79",
+    "EventTimestamp": "2026-08-06T18:03:08.878Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"reportId\":\"RPT-001\"}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "generate-report",
+    "EventTimestamp": "2026-08-06T18:03:08.890Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "generate-report",
+    "EventTimestamp": "2026-08-06T18:03:08.893Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"file\":\"/var/folders/d2/m1rtwf316ml11zx23psmwkz00000gr/T/dur-example-fs-serdes-always/169ea30019608a1740c22162f57c96fa6a201d51205b3ef59ce660ab9b3dab5d/6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b.json\",\"preview\":{\"id\":\"RPT-001\",\"status\":\"generated\",\"ownerEmail\":\"***\"}}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "summarize-report",
+    "EventTimestamp": "2026-08-06T18:03:08.896Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 5,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "summarize-report",
+    "EventTimestamp": "2026-08-06T18:03:08.898Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"file\":\"/var/folders/d2/m1rtwf316ml11zx23psmwkz00000gr/T/dur-example-fs-serdes-always/169ea30019608a1740c22162f57c96fa6a201d51205b3ef59ce660ab9b3dab5d/d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35.json\",\"preview\":{\"id\":\"RPT-001\",\"status\":\"generated\"}}"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 6,
+    "EventTimestamp": "2026-08-06T18:03:08.899Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-06T18:03:08.878Z",
+      "EndTimestamp": "2026-08-06T18:03:08.899Z",
+      "Error": {},
+      "RequestId": "6efe6533-7cd9-4b84-84ba-79020be1706a"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 7,
+    "Id": "54b13fd5-13f5-4a87-91ae-fb67d23e0f79",
+    "EventTimestamp": "2026-08-06T18:03:08.900Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"id\":\"RPT-001\",\"status\":\"generated\",\"bodyLength\":140000}"
+      }
+    }
+  }
+]
