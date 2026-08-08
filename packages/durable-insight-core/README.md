@@ -22,24 +22,44 @@ It exists so the hosts can share one implementation instead of copying it.
 
 ## The one rule
 
-**Nothing in this package may import `vscode`.**
+**Nothing in this package may import a host-specific module.**
 
-That is what makes it reusable: the Electron app has no VS Code API, so a single
-`import * as vscode from "vscode"` anywhere in here would break it — at runtime,
-not at compile time, and possibly only on a code path nobody exercises during
-review.
+There are three, one per host, and each exists in only one process:
 
-So the rule is enforced mechanically rather than by convention.
-`src/hostAgnostic.test.ts` enumerates every non-test file in `src/` and asserts
-none of them imports `vscode`, in either the namespace/named form or a bare
-side-effect `import "vscode"`. It also asserts the enumeration is non-empty and
-contains known members, so it cannot pass by finding nothing, and it includes
-"guards the guard" cases that write a temporary offending fixture and confirm the
-detector catches it.
+| Module                      | Only available in          |
+| --------------------------- | -------------------------- |
+| `vscode`                    | the VS Code extension host |
+| `electron`                  | the desktop app            |
+| `@modelcontextprotocol/sdk` | the MCP server             |
 
-If you need the VS Code API, your code belongs in
-`aws-durable-execution-sdk-js-insight-vscode`, not here. `HostPort` is the seam:
-define what you need in terms of that interface and let each host implement it.
+That is what makes this package reusable. Shared code reaching for any one of them
+breaks the other hosts **at runtime, not at compile time** -- and possibly only on a
+path nobody exercises during review.
+
+The rule was originally written as "nothing may import `vscode`", which was too
+narrow and had a real hole: an Electron import in a module that no test happened to
+cover passed every check -- eslint, `typecheck:hosts`, both host bundles, and the
+entire test suite. It was found by injecting the fault, not by reading the code.
+
+So the rule is enforced mechanically, and against all three:
+
+- `src/hostAgnostic.test.ts` enumerates every non-test file in `src/` and asserts
+  none imports any host module. It also asserts the enumeration is non-empty and
+  contains known members, so it cannot pass by finding nothing.
+- `src/hostModuleScan.ts` holds the detector -- one copy, shared with every host's
+  guard, because it was previously duplicated with no self-tests on one side.
+  `hostModuleScan.test.ts` covers every module in every import form: static, bare
+  side-effect, `require`, dynamic `import`, and **subpaths**. Subpaths are not
+  defensive: the MCP SDK is only ever imported that way, so an exact-specifier match
+  would have missed every real usage while looking correct.
+- A test asserts the module list still has all three, so a fourth host cannot be
+  added without noticing.
+
+Each host runs the mirror image of this guard -- "my own host API and no other" --
+so the extension host is stopped from importing `electron`, and so on.
+
+If you need a host API, your code belongs in that host's package. `HostPort` is the
+seam: define what you need in terms of that interface and let each host implement it.
 
 ## What lives here
 
