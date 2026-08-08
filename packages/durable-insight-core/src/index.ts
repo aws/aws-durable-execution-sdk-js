@@ -23,4 +23,4 @@ export * from "./schema";
 export * from "./settingsKeys";
 export * from "./sqs";
 export * from "./verdict";
-export * from "./vscodeImportScan";
+export * from "./hostModuleScan";
