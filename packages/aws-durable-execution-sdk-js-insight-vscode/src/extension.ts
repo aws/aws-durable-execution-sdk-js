@@ -24,7 +24,7 @@ import {
   type PromptRequest,
   type SaveFileRequest,
   type SettingValue,
-} from "durable-insight-core";
+} from "@aws/durable-insight-core";
 
 export function activate(context: vscode.ExtensionContext): void {
   // Copilot-backed generation lives behind a port so llm.ts stays host-free;

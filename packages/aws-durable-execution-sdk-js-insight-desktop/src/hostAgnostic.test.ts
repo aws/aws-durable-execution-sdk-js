@@ -1,13 +1,20 @@
 /**
- * Guards that nothing in the desktop (Electron) package's own sources imports
- * the `vscode` API — this host has no VS Code extension API, so a stray
- * `import ... "vscode"` would break the build. Host-free shared code lives in
- * `durable-insight-core`, which enforces the same invariant package-wide in its
- * own hostAgnostic.test.ts; this small guard covers the desktop package's own
- * src, so the two together cover the whole desktop graph.
+ * Guards that nothing in the desktop (Electron) package's own sources imports the
+ * `vscode` API. This host has no VS Code extension API, so a stray
+ * `import ... "vscode"` would break it at runtime.
+ *
+ * The detector is imported from `@aws/durable-insight-core`, not re-implemented.
+ * It used to be a verbatim copy of core's regex with no self-tests of its own,
+ * which meant a regression in this copy would have passed silently forever while
+ * still reporting green. Core's `vscodeImportScan.test.ts` covers all four import
+ * forms in one place; this file supplies only the enumeration.
+ *
+ * Together with core's package-wide guard, the two cover the whole desktop graph:
+ * core proves the shared code is clean, this proves the host's own code is.
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
+import { importsVsCode } from "@aws/durable-insight-core";
 
 const SRC = __dirname;
 
@@ -24,26 +31,20 @@ function collectSourceFiles(dir: string): string[] {
   return out;
 }
 
-function importsVsCode(src: string): boolean {
-  return (
-    /\bfrom\s*["']vscode["']/.test(src) ||
-    /(^|;)\s*import\s*["']vscode["']/m.test(src) ||
-    /\brequire\s*\(\s*["']vscode["']\s*\)/.test(src) ||
-    /\bimport\s*\(\s*["']vscode["']\s*\)/.test(src)
-  );
-}
-
-const sourceFiles = collectSourceFiles(SRC).sort();
+const names = collectSourceFiles(SRC)
+  .map((f) => relative(SRC, f))
+  .sort();
 
 describe("desktop package is host-free", () => {
-  it("enumerates its own sources", () => {
-    expect(sourceFiles.length).toBeGreaterThan(0);
+  // Guards against the guard passing by finding nothing.
+  it("finds its own sources, including known members", () => {
+    expect(names.length).toBeGreaterThan(3);
+    for (const expected of ["main.ts", "host.ts", "settings.ts"]) {
+      expect(names).toContain(expected);
+    }
   });
 
-  it.each(sourceFiles.map((f) => [relative(SRC, f), f] as const))(
-    "%s does not import the vscode API",
-    (_name, file) => {
-      expect(importsVsCode(readFileSync(file, "utf-8"))).toBe(false);
-    },
-  );
+  it.each(names)("%s does not import the vscode API", (name) => {
+    expect(importsVsCode(readFileSync(join(SRC, name), "utf-8"))).toBe(false);
+  });
 });

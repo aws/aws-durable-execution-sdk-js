@@ -15,7 +15,7 @@ import type {
   HostPort,
   SaveFileRequest,
   SettingValue,
-} from "durable-insight-core";
+} from "@aws/durable-insight-core";
 import {
   readDesktopConfig,
   readDesktopFavorites,

@@ -1,4 +1,4 @@
-# durable-insight-core
+# @aws/durable-insight-core
 
 The host-free core of Workflow Insight: everything that queries a destination,
 understands the record schema, and keeps queries safe — with no dependency on any
@@ -8,7 +8,7 @@ It exists so the hosts can share one implementation instead of copying it.
 
 ```
                  ┌──────────────────────────────────┐
-                 │       durable-insight-core       │
+                 │    @aws/durable-insight-core     │
                  │  data access · schema · safety   │
                  │  configCore · destinationTest    │
                  └──────────────────────────────────┘
@@ -65,10 +65,14 @@ repository. If a published package ever needs to depend on it, bundle it in rath
 than adding it to the dependency tree.
 
 `src/index.ts` is a barrel re-exporting every module. That is safe here because no
-two modules export the same name — 103 exported declarations across the 25 modules,
-of which 66 are runtime values and the rest type-only, with zero collisions. A
-collision would silently shadow one module's export, so it is worth knowing that
-the barrel was checked rather than assumed.
+two modules export the same name — zero collisions across every exported
+declaration, checked rather than assumed. A collision would silently shadow one
+module's export.
+
+The package is **scoped but still private**. Scoping removes the question an
+unscoped, unclaimed name invites: nothing else can ever publish under `@aws/`, so
+there is no name for a third party to take even though workspace resolution always
+wins in-repo. Consumers pin the exact version rather than using `*`.
 
 ## Working on it
 
@@ -81,4 +85,11 @@ npm run typecheck -w packages/durable-insight-core
 hosts together, which is what CI runs.
 
 Note that `tsconfig.json` excludes `*.test.ts`, so `typecheck` does not cover test
-files — `ts-jest` compiles those when the suite runs.
+files — `ts-jest` compiles those when the suite runs. It also sets `noEmit`, because
+this package has no build step; running `tsc` here should not leave a `dist/`.
+
+The root `eslint.config.js` additionally restricts these packages from importing
+`vscode` (in core) or reaching a sibling package by relative path (in all three).
+Those rules are the earliest signal, not the enforcement: eslint currently runs only
+via lint-staged on pre-commit, and there is no lint job in CI, so the tests above are
+what actually gate a pull request.

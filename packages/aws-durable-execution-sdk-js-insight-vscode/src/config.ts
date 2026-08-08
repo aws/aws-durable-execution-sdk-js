@@ -13,7 +13,7 @@ import {
   SECTION,
   normalizeConfig,
   type InsightConfig,
-} from "durable-insight-core";
+} from "@aws/durable-insight-core";
 
 export {
   SECTION,
@@ -22,7 +22,7 @@ export {
   resolveCredentials,
   type InsightConfig,
   type ConfigSource,
-} from "durable-insight-core";
+} from "@aws/durable-insight-core";
 
 /** Read the user's persisted VS Code settings as an {@link InsightConfig}. */
 export function readConfig(): InsightConfig {

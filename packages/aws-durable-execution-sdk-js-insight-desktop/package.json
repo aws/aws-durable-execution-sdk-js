@@ -22,7 +22,8 @@
     "test": "jest"
   },
   "dependencies": {
-    "durable-insight-core": "*"
+    "@aws/durable-insight-core": "0.1.0-alpha.0",
+    "node-llama-cpp": "^3.18.1"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",
