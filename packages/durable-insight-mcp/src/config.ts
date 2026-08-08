@@ -105,7 +105,19 @@ export function missingRequiredEnvVars(cfg: InsightConfig): string[] {
       break;
     case "s3":
       if (!cfg.athenaDatabase) need("athenaDatabase");
-      if (!cfg.athenaS3Location) need("athenaS3Location");
+      // Querying Athena needs somewhere to put RESULTS: either a workgroup that
+      // has an output location configured, or an explicit one. This mirrors
+      // destinationTest.ts, which treats "no workgroup and no output location"
+      // as the incomplete case.
+      //
+      // Note this is deliberately NOT athenaS3Location. That is the SOURCE data
+      // location, required only to CREATE the table -- something this host never
+      // does. Requiring it here would demand a variable the customer does not
+      // need, while leaving the one they do need unreported.
+      if (!cfg.athenaWorkgroup && !cfg.athenaOutputLocation) {
+        need("athenaWorkgroup");
+        need("athenaOutputLocation");
+      }
       break;
     case "aurora":
       if (!cfg.auroraResourceArn) need("auroraResourceArn");

@@ -209,13 +209,20 @@ describe("missingRequiredEnvVars — every DestinationType", () => {
     },
     {
       type: "s3",
+      // Querying Athena needs a RESULTS destination: a workgroup (which
+      // carries its own output location) or an explicit output location.
+      // athenaS3Location is the SOURCE data bucket, required only to CREATE
+      // the table -- something this host never does -- so it is deliberately
+      // not required here. Confusing the two would write query result files
+      // into the data being queried.
       complete: {
         athenaDatabase: "insights",
-        athenaS3Location: "s3://bucket/prefix/",
+        athenaWorkgroup: "primary",
       },
       expectedMissing: [
         envVarFor("athenaDatabase"),
-        envVarFor("athenaS3Location"),
+        envVarFor("athenaWorkgroup"),
+        envVarFor("athenaOutputLocation"),
       ],
     },
     {

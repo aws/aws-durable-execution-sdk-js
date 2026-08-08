@@ -17,8 +17,20 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { testDestination, type InsightConfig } from "durable-insight-core";
+import { z } from "zod";
 import { readConfigFromEnv } from "./config";
 import { missingRequiredEnvVars } from "./config";
+import { MAX_ROWS, runReadOnlyQuery } from "./readOnlyQuery";
+import {
+  buildDescribeSchemaResult,
+  DESCRIBE_SCHEMA_DESCRIPTION,
+  GET_EXECUTION_DESCRIPTION,
+  LIST_EXECUTIONS_DESCRIPTION,
+  QUERY_DESCRIPTION,
+  runGetExecution,
+  runListExecutions,
+  TEST_DESTINATION_DESCRIPTION,
+} from "./tools";
 
 /**
  * The package's own version. esbuild replaces this token at build time with the
@@ -34,19 +46,40 @@ function logStderr(message: string): void {
   process.stderr.write(`${message}\n`);
 }
 
-/**
- * One or two sentences, well under the 10,000-char cap. Bulk detail lives in the
- * tool result (machine-readable JSON), not in this description.
- */
-const TEST_DESTINATION_DESCRIPTION =
-  "Run read-only connectivity and completeness checks against the configured " +
-  "Insight destination (configured via DURABLE_INSIGHT_* environment variables) " +
-  "and return a machine-readable JSON report. If required environment variables " +
-  "are unset it names them and returns without making any AWS calls.";
+/** Wrap a JSON-serializable payload in the MCP text-content result shape. */
+function jsonResult(payload: unknown, isError = false) {
+  const result = {
+    content: [
+      { type: "text" as const, text: JSON.stringify(payload, null, 2) },
+    ],
+  };
+  return isError ? { ...result, isError: true } : result;
+}
 
 /**
- * Registers the single `test_destination` tool. The `config` is captured from
- * startup (read once) so the tool never re-reads the environment.
+ * The tools that make AWS calls (`query`, `get_execution`, `list_executions`)
+ * must never touch the network with incomplete config. Returns a
+ * SUCCESSFUL-tool-call result naming the missing DURABLE_INSIGHT_* variables
+ * when any are unset, or `null` when config is complete and the tool may
+ * proceed. A missing-config finding is not a tool error — the tool did exactly
+ * what it was asked to.
+ */
+function missingConfigResult(config: InsightConfig) {
+  const missingEnvVars = missingRequiredEnvVars(config);
+  if (missingEnvVars.length === 0) return null;
+  return jsonResult({
+    ok: false,
+    summary:
+      `Destination configuration is incomplete: ${missingEnvVars.length} ` +
+      `required environment variable(s) unset. Set them and try again.`,
+    destinationType: config.destinationType,
+    missingEnvVars,
+  });
+}
+
+/**
+ * Registers the `test_destination` and `query` tools. The `config` is captured
+ * from startup (read once) so the tools never re-read the environment.
  */
 function registerTools(server: McpServer, config: InsightConfig): void {
   server.registerTool(
@@ -120,6 +153,233 @@ function registerTools(server: McpServer, config: InsightConfig): void {
           ],
           isError: true,
         };
+      }
+    },
+  );
+
+  server.registerTool(
+    "query",
+    {
+      title: "Run a read-only query",
+      description: QUERY_DESCRIPTION,
+      inputSchema: {
+        sql: z
+          .string()
+          .describe(
+            "A single read-only SQL/PartiQL SELECT (or WITH ... SELECT) " +
+              "statement. Data-modifying and DDL statements are rejected.",
+          ),
+        // `limit` is validated at the protocol boundary to be within the hard
+        // cap. The real bound is MAX_ROWS, enforced inside runReadOnlyQuery, so
+        // this parameter is advisory — it cannot raise the cap.
+        limit: z
+          .number()
+          .int()
+          .positive()
+          .max(MAX_ROWS)
+          .optional()
+          .describe(
+            `Optional hint for the maximum number of rows to return (<= ${MAX_ROWS}). ` +
+              `Results are always capped at ${MAX_ROWS} regardless.`,
+          ),
+      },
+    },
+    async ({ sql }) => {
+      // 1. Completeness check first — a missing-config finding must never make a
+      //    network call (mirrors test_destination). Returns actionable
+      //    DURABLE_INSIGHT_* variable NAMES.
+      const missingEnvVars = missingRequiredEnvVars(config);
+      if (missingEnvVars.length > 0) {
+        const payload = {
+          ok: false,
+          summary:
+            `Destination configuration is incomplete: ${missingEnvVars.length} ` +
+            `required environment variable(s) unset. Set them and try again.`,
+          destinationType: config.destinationType,
+          missingEnvVars,
+        };
+        // A missing-config finding is a SUCCESSFUL tool call, not an error.
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify(payload, null, 2) },
+          ],
+        };
+      }
+
+      // 2. Execute through the single choke point. This is the ONLY place the
+      //    tool does anything — it never touches a runner directly.
+      try {
+        const result = await runReadOnlyQuery(config, sql);
+        const payload = {
+          columns: result.columns,
+          rows: result.rows,
+          count: result.count,
+          truncated: result.truncated,
+          engine: result.engine,
+          destinationType: config.destinationType,
+        };
+        // A query that runs and returns zero rows is a SUCCESS with an empty
+        // result — not an error.
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify(payload, null, 2) },
+          ],
+        };
+      } catch (err) {
+        // A rejected (non-read-only) or failed query is a legitimate tool ERROR:
+        // the agent should see that it failed and why. assertReadOnly's message
+        // is already specific and actionable, so surface it verbatim.
+        const message = err instanceof Error ? err.message : String(err);
+        const payload = {
+          error: message,
+          destinationType: config.destinationType,
+        };
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify(payload, null, 2) },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  // describe_schema — pure guidance, no AWS call. Returns the destination's
+  // record schema + dialect guidance (from core's buildSystemPrompt) in the
+  // RESULT, never the description. No missing-config gate: it makes no network
+  // call, so it can help the agent even before a destination is fully set up.
+  server.registerTool(
+    "describe_schema",
+    {
+      title: "Describe the Insight destination schema",
+      description: DESCRIBE_SCHEMA_DESCRIPTION,
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        return jsonResult(buildDescribeSchemaResult(config));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return jsonResult(
+          { error: message, destinationType: config.destinationType },
+          true,
+        );
+      }
+    },
+  );
+
+  // get_execution — single-record lookup by execution ARN. One required
+  // parameter; optional Athena partition components for pruning. A missing
+  // record is a success with found=false.
+  server.registerTool(
+    "get_execution",
+    {
+      title: "Get a single execution record",
+      description: GET_EXECUTION_DESCRIPTION,
+      inputSchema: {
+        executionArn: z
+          .string()
+          .describe(
+            "The execution ARN to fetch (DynamoDB partition key / Athena " +
+              "executionarn column).",
+          ),
+        year: z
+          .string()
+          .optional()
+          .describe(
+            "Optional Athena/S3 partition year (digits) for partition pruning.",
+          ),
+        month: z
+          .string()
+          .optional()
+          .describe(
+            "Optional Athena/S3 partition month (digits) for partition pruning.",
+          ),
+        day: z
+          .string()
+          .optional()
+          .describe(
+            "Optional Athena/S3 partition day (digits) for partition pruning.",
+          ),
+      },
+    },
+    async ({ executionArn, year, month, day }) => {
+      const gate = missingConfigResult(config);
+      if (gate) return gate;
+      try {
+        return jsonResult(
+          await runGetExecution(config, { executionArn, year, month, day }),
+        );
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return jsonResult(
+          { error: message, destinationType: config.destinationType },
+          true,
+        );
+      }
+    },
+  );
+
+  // list_executions — the common "show me executions" case with no SQL from the
+  // agent. Every filter is validated/escaped in tools.ts before the SELECT is
+  // built, then executed through the same read-only choke point as `query`.
+  server.registerTool(
+    "list_executions",
+    {
+      title: "List execution records",
+      description: LIST_EXECUTIONS_DESCRIPTION,
+      inputSchema: {
+        status: z
+          .string()
+          .optional()
+          .describe("Filter by status: RUNNING, SUCCEEDED, or FAILED."),
+        functionName: z
+          .string()
+          .optional()
+          .describe("Filter by Lambda function name (exact match)."),
+        since: z
+          .string()
+          .optional()
+          .describe(
+            "Only executions with startTime >= this ISO-8601 date/date-time.",
+          ),
+        until: z
+          .string()
+          .optional()
+          .describe(
+            "Only executions with startTime <= this ISO-8601 date/date-time.",
+          ),
+        limit: z
+          .number()
+          .int()
+          .positive()
+          .max(MAX_ROWS)
+          .optional()
+          .describe(
+            `Maximum rows to return (<= ${MAX_ROWS}). Defaults to a bounded ` +
+              `page; the ${MAX_ROWS} cap always applies.`,
+          ),
+      },
+    },
+    async ({ status, functionName, since, until, limit }) => {
+      const gate = missingConfigResult(config);
+      if (gate) return gate;
+      try {
+        return jsonResult(
+          await runListExecutions(config, {
+            status,
+            functionName,
+            since,
+            until,
+            limit,
+          }),
+        );
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return jsonResult(
+          { error: message, destinationType: config.destinationType },
+          true,
+        );
       }
     },
   );
