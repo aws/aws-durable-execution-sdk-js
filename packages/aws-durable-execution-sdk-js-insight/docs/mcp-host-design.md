@@ -2,7 +2,7 @@
 
 |              |                                                                                                       |
 | ------------ | ----------------------------------------------------------------------------------------------------- |
-| **Status**   | Phase 0 complete — Phase 1 unblocked                                                                  |
+| **Status**   | Phases 0–2 complete — Phase 3 next                                                                    |
 | **Scope**    | New package `@aws/durable-insight-mcp`, plus extraction of `durable-insight-core`                     |
 | **Baseline** | `main` @ `49b88f84`, i.e. after #795 (dual host) and #804 (disclosure)                                |
 | **Legal**    | **Confirmed** — disclosure only, no consent gate. See [§8](#8-disclosure-readme-only-no-consent-gate) |
@@ -556,14 +556,14 @@ and should be re-estimated by whoever picks the work up.
 client config paths verified against documentation (§6.4). **Phase 0 complete — Phase 1
 is unblocked.**
 
-### Phase 1 — Extract the core (L)
+### Phase 1 — Extract the core (L) — **DONE** (`ee4784da`)
 
-| ID       | Task                                                                                                          | Size | Depends |
-| -------- | ------------------------------------------------------------------------------------------------------------- | ---- | ------- |
-| **T1.1** | Create `durable-insight-core`; move host-free modules (§4)                                                    | M    | T0.2    |
-| **T1.2** | Repoint `-insight-vscode` and `-insight-desktop` imports; declare real dependencies                           | M    | T1.1    |
-| **T1.3** | Move the relevant tests of the 19 in `-insight-vscode/src`; extend `hostAgnostic.test.ts` to the new boundary | S    | T1.2    |
-| **T1.4** | Add `durable-insight-core` to root `test`, `build`, `typecheck:hosts` and the `insight-hosts` CI job          | S    | T1.1    |
+| ID       | Task                                                                                                                                | Size | Depends |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---- | ------- |
+| **T1.1** | Create `durable-insight-core`; move host-free modules (§4)                                                                          | M    | T0.2    |
+| **T1.2** | Repoint `-insight-vscode` and `-insight-desktop` imports; declare real dependencies                                                 | M    | T1.1    |
+| **T1.3** | Move the relevant tests of the 19 in `-insight-vscode/src`; extend `hostAgnostic.test.ts` to the new boundary                       | S    | T1.2    |
+| **T1.4** | Add `durable-insight-core` to root `test` and `typecheck:hosts` and the `insight-hosts` CI job (NOT `build` — it has no build step) | S    | T1.1    |
 
 **AC:**
 
@@ -579,7 +579,7 @@ is unblocked.**
 - **AC-1.4** Zero behavior change: both bundles build, and the VS Code extension
   and desktop app launch and run a query.
 
-### Phase 2 — Server skeleton (M)
+### Phase 2 — Server skeleton (M) — **DONE** (`ed03fc31`)
 
 | ID       | Task                                                                                       | Size | Depends |
 | -------- | ------------------------------------------------------------------------------------------ | ---- | ------- |
@@ -594,8 +594,13 @@ is unblocked.**
   tools in at least one real client (Kiro or Claude Code).
 - **AC-2.2** `test_destination` reports success against a live destination and, on
   misconfiguration, returns an error naming the missing env var.
-- **AC-2.3** A missing required key fails at startup with an actionable message —
-  never a silent default that queries the wrong table.
+- **AC-2.3** ~~A missing required key fails at startup~~ **Revised during Phase 2.**
+  Missing config must NOT prevent startup: a server that refuses to start appears in
+  an MCP client as an unexplained failure, whereas one that starts can tell the agent
+  exactly what is wrong. Instead `test_destination` returns the precise unset
+  `DURABLE_INSIGHT_*` variable names with no network call, and no tool will query with
+  incomplete config — so the "silent default querying the wrong table" concern is still
+  covered.
 - **AC-T3** _(contract test)_ Every `SETTING_KEY` except the 8 excluded maps to
   exactly one env var and round-trips; the 8 excluded are rejected if set.
   Mirrors `settingsKeys.test.ts`.
@@ -698,6 +703,19 @@ reason and could not fail; both were caught only by deliberately breaking the co
 they claimed to protect. Every AC above marked _mutation-verified_ means exactly
 that: break the thing, watch the test fail, restore. A green suite is not evidence
 that a test works.
+
+Phases 1–2 justified the rule twice over:
+
+- **stdout purity is not proven by a working session.** stdout is the MCP transport, so
+  a stray `console.log` corrupts it — yet adding one did **not** fail an end-to-end
+  session test. The SDK client catches per-line parse errors, reports them to an unset
+  handler, and continues, so the handshake completes and the bad line is skipped. Only
+  a direct assertion that the spawned binary emits nothing on stdout catches it. Any
+  future stdio server test must assert this explicitly.
+- **The plan's redshift requirements were wrong.** This document asserted
+  `redshiftSecretArn` was required; `destinationTest.ts` does not require it (IAM with
+  a db user is a valid alternative) and wants a workgroup _or_ a cluster identifier.
+  The code was right. `missingRequiredEnvVars` follows the code, not this document.
 
 ---
 
