@@ -8,14 +8,14 @@
   "type": "module",
   "scripts": {
     "install-all": "npm install && npm install --workspaces",
-    "test": "npm run test -w packages/aws-durable-execution-sdk-js && npm run test -w packages/aws-durable-execution-sdk-js-testing && npm run test -w packages/aws-durable-execution-sdk-js-otel && npm run test -w packages/aws-durable-execution-sdk-js-examples && npm run test -w packages/aws-durable-execution-sdk-js-eslint-plugin && npm run test -w packages/aws-durable-execution-sdk-js-insight && npm run test -w packages/cjs-integration-test && npm run test -w packages/esm-integration-test && npm run test -w packages/cdk-bundling-integration-test && npm run test -w packages/lambda-runtime-detection-integration-test && npm run test -w packages/aws-durable-execution-sdk-js-insight-vscode && npm run test -w packages/aws-durable-execution-sdk-js-insight-desktop",
+    "test": "npm run test -w packages/aws-durable-execution-sdk-js && npm run test -w packages/aws-durable-execution-sdk-js-testing && npm run test -w packages/aws-durable-execution-sdk-js-otel && npm run test -w packages/aws-durable-execution-sdk-js-examples && npm run test -w packages/aws-durable-execution-sdk-js-eslint-plugin && npm run test -w packages/aws-durable-execution-sdk-js-insight && npm run test -w packages/cjs-integration-test && npm run test -w packages/esm-integration-test && npm run test -w packages/cdk-bundling-integration-test && npm run test -w packages/lambda-runtime-detection-integration-test && npm run test -w packages/durable-insight-core && npm run test -w packages/aws-durable-execution-sdk-js-insight-vscode && npm run test -w packages/aws-durable-execution-sdk-js-insight-desktop",
     "test:integration": "node .github/workflows/scripts/integration-test/integration-test.js",
     "build": "npm run build -w packages/aws-durable-execution-sdk-js && npm run build -w packages/aws-durable-execution-sdk-js-testing && npm run build -w packages/aws-durable-execution-sdk-js-otel && npm run build -w packages/aws-durable-execution-sdk-js-examples && npm run build -w packages/aws-durable-execution-sdk-js-eslint-plugin && npm run build -w packages/aws-durable-execution-sdk-js-insight",
     "postpublish": "git restore .",
     "clean": "rm -rf node_modules && npm run clean --workspaces --if-present",
     "prepare": "husky install",
     "run-durable": "NODE_OPTIONS=\"--import tsx\" npx run-durable --",
-    "typecheck:hosts": "npm run typecheck -w packages/aws-durable-execution-sdk-js-insight-vscode && npm run typecheck -w packages/aws-durable-execution-sdk-js-insight-desktop"
+    "typecheck:hosts": "npm run typecheck -w packages/durable-insight-core && npm run typecheck -w packages/aws-durable-execution-sdk-js-insight-vscode && npm run typecheck -w packages/aws-durable-execution-sdk-js-insight-desktop"
   },
   "repository": {
     "type": "git",

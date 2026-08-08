@@ -269,22 +269,8 @@
     "clean": "rm -rf dist media/webview.js media/webview.css"
   },
   "dependencies": {
-    "@aws-crypto/sha256-js": "^5.2.0",
-    "@aws-sdk/client-athena": "^3.658.0",
-    "@aws-sdk/client-bedrock": "^3.1086.0",
-    "@aws-sdk/client-bedrock-runtime": "^3.658.0",
-    "@aws-sdk/client-cloudwatch-logs": "^3.658.0",
-    "@aws-sdk/client-dynamodb": "^3.658.0",
-    "@aws-sdk/client-glue": "^3.658.0",
-    "@aws-sdk/client-rds-data": "^3.658.0",
-    "@aws-sdk/client-redshift-data": "^3.658.0",
-    "@aws-sdk/client-sqs": "^3.658.0",
-    "@aws-sdk/credential-providers": "^3.658.0",
-    "@aws-sdk/util-dynamodb": "^3.658.0",
-    "@jitl/quickjs-singlefile-cjs-release-sync": "^0.32.0",
-    "@smithy/signature-v4": "^5.0.0",
-    "node-llama-cpp": "^3.18.1",
-    "quickjs-emscripten-core": "^0.32.0"
+    "durable-insight-core": "*",
+    "node-llama-cpp": "^3.18.1"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",

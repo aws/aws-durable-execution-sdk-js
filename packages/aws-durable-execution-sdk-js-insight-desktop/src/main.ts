@@ -16,10 +16,7 @@ import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
-import {
-  ExplorerSession,
-  type InboundMessage,
-} from "../../aws-durable-execution-sdk-js-insight-vscode/src/explorerSession";
+import { ExplorerSession, type InboundMessage } from "durable-insight-core";
 import { contentTypeFor, resolveAssetPath } from "./assetPath";
 import { ElectronHost } from "./host";
 

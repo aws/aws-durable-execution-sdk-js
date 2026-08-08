@@ -90,7 +90,7 @@ jobs:
       - name: Install webview-ui dependencies
         working-directory: packages/aws-durable-execution-sdk-js-insight-vscode/webview-ui
         run: npm ci
-      - name: Typecheck both hosts
+      - name: Typecheck core and both hosts
         run: npm run typecheck:hosts
       - name: Typecheck the renderer
         working-directory: packages/aws-durable-execution-sdk-js-insight-vscode/webview-ui
