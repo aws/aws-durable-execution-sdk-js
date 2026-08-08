@@ -2,7 +2,7 @@
 
 |              |                                                                                                       |
 | ------------ | ----------------------------------------------------------------------------------------------------- |
-| **Status**   | Phases 0–3 complete — Phase 4 next                                                                    |
+| **Status**   | Phases 0–4 complete — Phase 5 (skill delivery) next                                                   |
 | **Scope**    | New package `@aws/durable-insight-mcp`, plus extraction of `durable-insight-core`                     |
 | **Baseline** | `main` @ `49b88f84`, i.e. after #795 (dual host) and #804 (disclosure)                                |
 | **Legal**    | **Confirmed** — disclosure only, no consent gate. See [§8](#8-disclosure-readme-only-no-consent-gate) |
@@ -398,6 +398,22 @@ the highest-value test target in the package.
   exceptions, enforced by test (§10, AC-T2).
 - Every result set is bounded by `ensureLimit`; unbounded queries are a token-cost
   denial-of-service as much as a data risk.
+- **CloudWatch Logs Insights is a deliberate exception, verified in Phase 4.**
+  `assertReadOnly` must NOT be applied to it: Logs Insights is a pipe language
+  (`fields @timestamp | filter … | stats …`), so a `SELECT`/`WITH` prefix check would
+  reject _every valid query_. Read-only is guaranteed by the API surface instead — the
+  language has no write forms and `StartQuery` can only read — so its absence removes
+  no protection, and `explorerSession.ts` draws the same line. Because "add the guard
+  here too, for consistency" is a plausible future change, the test is **inverted**: it
+  asserts valid pipe queries are _accepted_. Adding `assertReadOnly` there fails 22
+  tests.
+  `ensureLimit` is correspondingly right here and wrong everywhere else, and the
+  **escaping differs**: Logs Insights literals are double-quoted, so core's
+  `escapeQuotedString` (backslashes first, then quotes) is required — the SQL
+  quote-doubling escaper would leave the trailing-backslash breakout CodeQL flags.
+- **Row bounding is per engine.** Athena stops paging at `maxRows`; DynamoDB issues one
+  non-paginating statement; Aurora, Redshift and OpenSearch do **not** cap at all
+  (Redshift pages every `NextToken`), so the MCP layer slices to `MAX_ROWS`.
 - **`sandbox.ts:runSandboxedJs` is NOT exposed as a tool in v1.** Arbitrary
   agent-authored JS execution is a different risk class from a bounded read-only
   query, and the agent already has its own code execution. Revisit only with an
@@ -648,15 +664,16 @@ is unblocked.**
   the entire result set into the process), with DynamoDB page-bounded by a single
   `ExecuteStatement`.
 
-### Phase 4 — Remaining destinations (M)
+### Phase 4 — Remaining destinations (M) — **DONE** (`d18ec289`)
 
-| ID       | Task                                                   | Size | Depends |
-| -------- | ------------------------------------------------------ | ---- | ------- |
-| **T4.1** | Aurora, Redshift, OpenSearch, CloudWatch Logs, SQS, S3 | M    | T3.4    |
+| ID       | Task                                                                                                                    | Size | Depends |
+| -------- | ----------------------------------------------------------------------------------------------------------------------- | ---- | ------- |
+| **T4.1** | Aurora, Redshift, OpenSearch, and the two CloudWatch Logs destinations (S3 landed in Phase 3; SQS is **not queryable**) | M    | T3.4    |
 
-**AC:** **AC-4.1** All 8 `DestinationType` values are reachable, each with
-`describe_schema` output matching its real dialect and `assertReadOnly` coverage
-per AC-T2.
+**AC:** **AC-4.1** All 8 `DestinationType` values are handled — **7 queryable**, each
+with `describe_schema` output matching its real dialect, plus `sqs` explicitly refused.
+`assertReadOnly` coverage per AC-T2 holds for the **five SQL engines**; the two
+CloudWatch Logs destinations are the documented exception below.
 
 ### Phase 5 — Skill delivery (M)
 
