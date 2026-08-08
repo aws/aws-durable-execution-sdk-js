@@ -2,7 +2,7 @@
 
 |              |                                                                                                       |
 | ------------ | ----------------------------------------------------------------------------------------------------- |
-| **Status**   | Phases 0–4 complete — Phase 5 (skill delivery) next                                                   |
+| **Status**   | Phases 0–5 complete — v1 feature-complete; see §12                                                    |
 | **Scope**    | New package `@aws/durable-insight-mcp`, plus extraction of `durable-insight-core`                     |
 | **Baseline** | `main` @ `49b88f84`, i.e. after #795 (dual host) and #804 (disclosure)                                |
 | **Legal**    | **Confirmed** — disclosure only, no consent gate. See [§8](#8-disclosure-readme-only-no-consent-gate) |
@@ -675,7 +675,7 @@ with `describe_schema` output matching its real dialect, plus `sqs` explicitly r
 `assertReadOnly` coverage per AC-T2 holds for the **five SQL engines**; the two
 CloudWatch Logs destinations are the documented exception below.
 
-### Phase 5 — Skill delivery (M)
+### Phase 5 — Skill delivery (M) — **DONE** (`94ed0bf9`)
 
 | ID       | Task                                                                | Size | Depends |
 | -------- | ------------------------------------------------------------------- | ---- | ------- |
@@ -688,9 +688,15 @@ CloudWatch Logs destinations are the documented exception below.
 - **AC-5.1** Prompts appear in a real client's prompt list.
 - **AC-5.2** `SKILL.md` loads in Kiro via `skill://` and its frontmatter
   `description` is specific enough to trigger on a relevant question.
-- **AC-T4** _(anti-drift test)_ Schema facts in the skill and prompts derive from
-  `schema.ts`; a change there that is not reflected fails a test. No hand-copied
-  schema prose.
+- **AC-T4** _(anti-drift test)_ **Strengthened in Phase 5.** Rather than deriving schema
+  facts and testing for drift, the skill and prompts contain **zero**
+  destination-specific schema facts and delegate to `describe_schema`, which makes drift
+  impossible rather than merely detectable — and avoids loading Athena's 10,143
+  characters for a DynamoDB user. `skillDrift.test.ts` asserts a list of schema-owned
+  tokens appears nowhere in the skill or prompts, **and first asserts each token really
+  occurs in some destination's `buildSystemPrompt` output** so the guard cannot pass
+  vacuously. That check immediately caught a candidate token (`executionarn`) that
+  appears in no prompt output at all.
 - **AC-5.3** A new user reaches a successful `test_destination` from the README
   alone, unaided.
 
