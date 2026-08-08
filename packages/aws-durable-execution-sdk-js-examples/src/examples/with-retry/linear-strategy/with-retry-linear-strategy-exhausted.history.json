@@ -1,0 +1,202 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "69b9e4a2-394e-4e8e-9d4b-4f02deca9b32",
+    "EventTimestamp": "2026-08-07T22:29:51.526Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"succeedOnAttempt\":9,\"maxDelaySeconds\":3}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "RunInChildContext",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2026-08-07T22:29:51.529Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "EventTimestamp": "2026-08-07T22:29:51.529Z",
+    "ParentId": "c4ca4238a0b92382",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2026-08-07T22:29:52.529Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2026-08-07T22:29:51.551Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-07T22:29:51.526Z",
+      "EndTimestamp": "2026-08-07T22:29:51.551Z",
+      "Error": {},
+      "RequestId": "61eb0120-b1b8-4d79-9b04-32b8d1571ff5"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 5,
+    "Id": "ea66c06c1e1c05fa",
+    "EventTimestamp": "2026-08-07T22:29:52.531Z",
+    "ParentId": "c4ca4238a0b92382",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 6,
+    "Id": "98c6f2c2287f4c73",
+    "EventTimestamp": "2026-08-07T22:29:52.533Z",
+    "ParentId": "c4ca4238a0b92382",
+    "WaitStartedDetails": {
+      "Duration": 2,
+      "ScheduledEndTimestamp": "2026-08-07T22:29:54.533Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 7,
+    "EventTimestamp": "2026-08-07T22:29:52.554Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-07T22:29:52.531Z",
+      "EndTimestamp": "2026-08-07T22:29:52.554Z",
+      "Error": {},
+      "RequestId": "0d81df42-6166-436e-841a-dd7379e3fe64"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 8,
+    "Id": "98c6f2c2287f4c73",
+    "EventTimestamp": "2026-08-07T22:29:54.534Z",
+    "ParentId": "c4ca4238a0b92382",
+    "WaitSucceededDetails": {
+      "Duration": 2
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 9,
+    "Id": "13cee27a2bd93915",
+    "EventTimestamp": "2026-08-07T22:29:54.541Z",
+    "ParentId": "c4ca4238a0b92382",
+    "WaitStartedDetails": {
+      "Duration": 3,
+      "ScheduledEndTimestamp": "2026-08-07T22:29:57.541Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 10,
+    "EventTimestamp": "2026-08-07T22:29:54.564Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-07T22:29:54.534Z",
+      "EndTimestamp": "2026-08-07T22:29:54.564Z",
+      "Error": {},
+      "RequestId": "8f0a5261-52a3-4043-abf6-62666d26e56a"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 11,
+    "Id": "13cee27a2bd93915",
+    "EventTimestamp": "2026-08-07T22:29:57.542Z",
+    "ParentId": "c4ca4238a0b92382",
+    "WaitSucceededDetails": {
+      "Duration": 3
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 12,
+    "Id": "3a170a9fe4f47efa",
+    "EventTimestamp": "2026-08-07T22:29:57.551Z",
+    "ParentId": "c4ca4238a0b92382",
+    "WaitStartedDetails": {
+      "Duration": 3,
+      "ScheduledEndTimestamp": "2026-08-07T22:30:00.551Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 13,
+    "EventTimestamp": "2026-08-07T22:29:57.574Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-07T22:29:57.543Z",
+      "EndTimestamp": "2026-08-07T22:29:57.574Z",
+      "Error": {},
+      "RequestId": "ac6d0177-1e68-4ff5-ab52-39de6463f90c"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 14,
+    "Id": "3a170a9fe4f47efa",
+    "EventTimestamp": "2026-08-07T22:30:00.552Z",
+    "ParentId": "c4ca4238a0b92382",
+    "WaitSucceededDetails": {
+      "Duration": 3
+    }
+  },
+  {
+    "EventType": "ContextFailed",
+    "SubType": "RunInChildContext",
+    "EventId": 15,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2026-08-07T22:30:00.555Z",
+    "ContextFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorMessage": "Upstream temporarily unavailable (attempt 5)",
+          "ErrorType": "Error"
+        }
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 16,
+    "EventTimestamp": "2026-08-07T22:30:00.555Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-07T22:30:00.553Z",
+      "EndTimestamp": "2026-08-07T22:30:00.555Z",
+      "Error": {
+        "Payload": {
+          "ErrorType": "ChildContextError",
+          "ErrorMessage": "Upstream temporarily unavailable (attempt 5)"
+        }
+      },
+      "RequestId": "0b217582-74ff-4ae0-83eb-49d37ba3db7e"
+    }
+  },
+  {
+    "EventType": "ExecutionFailed",
+    "EventId": 17,
+    "Id": "69b9e4a2-394e-4e8e-9d4b-4f02deca9b32",
+    "EventTimestamp": "2026-08-07T22:30:00.555Z",
+    "ExecutionFailedDetails": {
+      "Error": {
+        "Payload": {
+          "ErrorType": "ChildContextError",
+          "ErrorMessage": "Upstream temporarily unavailable (attempt 5)"
+        }
+      }
+    }
+  }
+]

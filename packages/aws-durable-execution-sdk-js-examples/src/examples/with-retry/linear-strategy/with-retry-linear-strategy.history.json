@@ -1,0 +1,157 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "3321b914-5275-44fe-a8fe-3063706328a6",
+    "EventTimestamp": "2026-08-07T22:29:45.394Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"succeedOnAttempt\":4}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "RunInChildContext",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2026-08-07T22:29:45.401Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "EventTimestamp": "2026-08-07T22:29:45.403Z",
+    "ParentId": "c4ca4238a0b92382",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2026-08-07T22:29:46.403Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 4,
+    "EventTimestamp": "2026-08-07T22:29:45.425Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-07T22:29:45.394Z",
+      "EndTimestamp": "2026-08-07T22:29:45.424Z",
+      "Error": {},
+      "RequestId": "fb3908bd-a514-4a43-811c-56b9e482b2ec"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 5,
+    "Id": "ea66c06c1e1c05fa",
+    "EventTimestamp": "2026-08-07T22:29:46.403Z",
+    "ParentId": "c4ca4238a0b92382",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 6,
+    "Id": "98c6f2c2287f4c73",
+    "EventTimestamp": "2026-08-07T22:29:46.409Z",
+    "ParentId": "c4ca4238a0b92382",
+    "WaitStartedDetails": {
+      "Duration": 2,
+      "ScheduledEndTimestamp": "2026-08-07T22:29:48.409Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 7,
+    "EventTimestamp": "2026-08-07T22:29:46.431Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-07T22:29:46.405Z",
+      "EndTimestamp": "2026-08-07T22:29:46.431Z",
+      "Error": {},
+      "RequestId": "0e7c92e9-ffdf-4df5-b169-af8c49bf8250"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 8,
+    "Id": "98c6f2c2287f4c73",
+    "EventTimestamp": "2026-08-07T22:29:48.409Z",
+    "ParentId": "c4ca4238a0b92382",
+    "WaitSucceededDetails": {
+      "Duration": 2
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 9,
+    "Id": "13cee27a2bd93915",
+    "EventTimestamp": "2026-08-07T22:29:48.414Z",
+    "ParentId": "c4ca4238a0b92382",
+    "WaitStartedDetails": {
+      "Duration": 3,
+      "ScheduledEndTimestamp": "2026-08-07T22:29:51.414Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 10,
+    "EventTimestamp": "2026-08-07T22:29:48.436Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-07T22:29:48.410Z",
+      "EndTimestamp": "2026-08-07T22:29:48.436Z",
+      "Error": {},
+      "RequestId": "1378bd9a-eccd-4c56-aa15-836afc7aa9dc"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 11,
+    "Id": "13cee27a2bd93915",
+    "EventTimestamp": "2026-08-07T22:29:51.414Z",
+    "ParentId": "c4ca4238a0b92382",
+    "WaitSucceededDetails": {
+      "Duration": 3
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "RunInChildContext",
+    "EventId": 12,
+    "Id": "c4ca4238a0b92382",
+    "EventTimestamp": "2026-08-07T22:29:51.417Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"message\":\"request confirmed on attempt 4\",\"attempts\":4}"
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 13,
+    "EventTimestamp": "2026-08-07T22:29:51.417Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-08-07T22:29:51.414Z",
+      "EndTimestamp": "2026-08-07T22:29:51.417Z",
+      "Error": {},
+      "RequestId": "86fe5f0b-df58-4bf2-bc40-9081463cee88"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 14,
+    "Id": "3321b914-5275-44fe-a8fe-3063706328a6",
+    "EventTimestamp": "2026-08-07T22:29:51.417Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"message\":\"request confirmed on attempt 4\",\"attempts\":4}"
+      }
+    }
+  }
+]
