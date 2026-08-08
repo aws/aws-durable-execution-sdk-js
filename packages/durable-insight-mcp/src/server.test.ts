@@ -170,4 +170,48 @@ describeIfBuilt("durable-insight MCP server (spawned binary)", () => {
     },
     TIMEOUT_MS,
   );
+
+  it(
+    "lists both registered prompts over the real protocol (AC-5.1)",
+    async () => {
+      const { prompts } = await client.listPrompts();
+      const names = prompts.map((p) => p.name);
+      // Prove reachability through the protocol, not by unit-testing handlers.
+      expect(names).toContain("investigate_workflow_failure");
+      expect(names).toContain("explore_recent_executions");
+
+      const investigate = prompts.find(
+        (p) => p.name === "investigate_workflow_failure",
+      );
+      expect(investigate?.description).toBeDefined();
+      expect(investigate!.description!.length).toBeGreaterThan(0);
+    },
+    TIMEOUT_MS,
+  );
+
+  it(
+    "returns usable messages from prompts/get, honoring arguments",
+    async () => {
+      const result = await client.getPrompt({
+        name: "investigate_workflow_failure",
+        arguments: { functionName: "checkout-fn", lookbackHours: "12" },
+      });
+
+      expect(Array.isArray(result.messages)).toBe(true);
+      expect(result.messages.length).toBeGreaterThan(0);
+
+      const first = result.messages[0];
+      expect(first.role).toBe("user");
+      expect(first.content.type).toBe("text");
+      const text = (first.content as { type: "text"; text: string }).text;
+      // The guidance encodes the ORDER of operations and delegates schema to
+      // describe_schema — never inlines destination-specific schema facts.
+      expect(text).toContain("describe_schema");
+      expect(text).toContain("list_executions");
+      // Supplied arguments are woven into the rendered guidance.
+      expect(text).toContain("checkout-fn");
+      expect(text).toContain("12");
+    },
+    TIMEOUT_MS,
+  );
 });

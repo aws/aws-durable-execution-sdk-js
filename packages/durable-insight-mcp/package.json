@@ -14,6 +14,10 @@
   "bin": {
     "durable-insight-mcp": "dist/server.js"
   },
+  "files": [
+    "dist",
+    "src/skill/SKILL.md"
+  ],
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "npm run build && jest",

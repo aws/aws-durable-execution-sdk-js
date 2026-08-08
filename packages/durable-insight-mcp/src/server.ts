@@ -21,6 +21,7 @@ import { z } from "zod";
 import { readConfigFromEnv } from "./config";
 import { missingRequiredEnvVars } from "./config";
 import { MAX_ROWS, runReadOnlyQuery } from "./readOnlyQuery";
+import { registerPrompts } from "./prompts";
 import {
   buildDescribeSchemaResult,
   DESCRIBE_SCHEMA_DESCRIPTION,
@@ -425,6 +426,7 @@ async function main(): Promise<void> {
   });
 
   registerTools(server, config);
+  registerPrompts(server);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
