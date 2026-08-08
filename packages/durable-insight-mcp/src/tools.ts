@@ -172,6 +172,41 @@ export interface DescribeSchemaResult {
   maxRows: number;
   guidance: string;
   guidanceLength: number;
+  /**
+   * How to actually run the SQL that `guidance` teaches you to write. Present
+   * because `guidance` comes from a function shared with the VS Code extension,
+   * whose closing instruction names tools that do not exist in this host -- see
+   * `stripForeignToolInstruction`.
+   */
+  howToRun: string;
+}
+
+/**
+ * Tools that exist in the VS Code extension's own LLM loop but NOT in this MCP
+ * host. `buildSystemPrompt` ends with an instruction to call one of them, which
+ * is wrong here: an agent that followed it would call an unknown tool and stall.
+ *
+ * Found by running `describe_schema` against a real Aurora destination -- the
+ * unit tests asserted the guidance was long and self-consistent, which it was;
+ * they could not know that its closing sentence addressed a different host.
+ */
+const FOREIGN_TOOL_MARKERS = ['Call the "emit_query" tool', "emit_query"];
+
+/**
+ * Remove the trailing "call <extension tool>" instruction from shared guidance,
+ * keeping the part that is actually valuable here: the record schema and the
+ * per-destination query idioms.
+ *
+ * Deliberately conservative. If the marker is absent (because core reworded it)
+ * the guidance is returned untouched rather than being cut at a guess, and
+ * `howToRun` still tells the agent what to do. `describeSchema.test.ts` asserts
+ * the returned guidance never mentions a foreign tool, so a reword that breaks
+ * this is caught rather than silently shipped.
+ */
+function stripForeignToolInstruction(guidance: string): string {
+  const idx = guidance.indexOf(FOREIGN_TOOL_MARKERS[0]);
+  if (idx === -1) return guidance.trim();
+  return guidance.slice(0, idx).trim();
 }
 
 /**
@@ -185,9 +220,11 @@ export function buildDescribeSchemaResult(
   cfg: InsightConfig,
 ): DescribeSchemaResult {
   const { engine, table } = engineAndTable(cfg);
-  const guidance = buildSystemPrompt(cfg.destinationType, {
-    tableName: table || undefined,
-  });
+  const guidance = stripForeignToolInstruction(
+    buildSystemPrompt(cfg.destinationType, {
+      tableName: table || undefined,
+    }),
+  );
   return {
     destinationType: cfg.destinationType,
     engine,
@@ -195,6 +232,11 @@ export function buildDescribeSchemaResult(
     maxRows: MAX_ROWS,
     guidance,
     guidanceLength: guidance.length,
+    howToRun:
+      `Run the SQL you write with the "query" tool. Prefer "list_executions" ` +
+      `for simple filtered listings and "get_execution" to fetch one record by ` +
+      `ARN. Results are capped at ${MAX_ROWS} rows. Only read queries are ` +
+      `permitted; anything that is not SELECT/WITH is refused.`,
   };
 }
 
