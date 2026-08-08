@@ -13,8 +13,8 @@
  */
 import { buildDescribeSchemaResult } from "./tools";
 import { TOOL_DESCRIPTIONS } from "./tools";
-import type { InsightConfig } from "durable-insight-core";
-import { configFromWireSettings } from "durable-insight-core";
+import type { InsightConfig } from "@aws/durable-insight-core";
+import { configFromWireSettings } from "@aws/durable-insight-core";
 
 /** Every destination `describe_schema` supports. */
 const SUPPORTED = [

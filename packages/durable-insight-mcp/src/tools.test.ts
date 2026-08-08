@@ -9,7 +9,7 @@ import {
   runDynamoDBQuery,
   resolveCredentials,
   type InsightConfig,
-} from "durable-insight-core";
+} from "@aws/durable-insight-core";
 import { MAX_ROWS } from "./readOnlyQuery";
 import {
   buildDescribeSchemaResult,
@@ -17,9 +17,9 @@ import {
   runListExecutions,
 } from "./tools";
 
-jest.mock("durable-insight-core", () => {
-  const actual = jest.requireActual<typeof import("durable-insight-core")>(
-    "durable-insight-core",
+jest.mock("@aws/durable-insight-core", () => {
+  const actual = jest.requireActual<typeof import("@aws/durable-insight-core")>(
+    "@aws/durable-insight-core",
   );
   return {
     ...actual,

@@ -13,7 +13,7 @@ import {
   configFromWireSettings,
   type InsightConfig,
   type DestinationType,
-} from "durable-insight-core";
+} from "@aws/durable-insight-core";
 import {
   envVarFor,
   MCP_SETTING_KEYS,

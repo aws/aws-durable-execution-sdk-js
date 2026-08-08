@@ -24,8 +24,8 @@
     "build": "node esbuild.mjs"
   },
   "dependencies": {
+    "@aws/durable-insight-core": "0.1.0-alpha.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "durable-insight-core": "*",
     "zod": "^4.4.3"
   },
   "devDependencies": {

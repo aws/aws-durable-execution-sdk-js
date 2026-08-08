@@ -9,7 +9,7 @@
  * below cannot drift from the extension's manifest (envKeys.test.ts enforces
  * this as a contract).
  */
-import { SETTING_KEYS } from "durable-insight-core";
+import { SETTING_KEYS } from "@aws/durable-insight-core";
 
 /**
  * The environment variable name for a setting key.

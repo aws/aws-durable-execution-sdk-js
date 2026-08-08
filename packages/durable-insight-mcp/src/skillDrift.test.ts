@@ -22,7 +22,7 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { buildSystemPrompt } from "durable-insight-core";
+import { buildSystemPrompt } from "@aws/durable-insight-core";
 import { TOOL_DESCRIPTIONS } from "./tools";
 import { allPromptText, PROMPTS } from "./prompts";
 

@@ -34,7 +34,7 @@ import {
   fetchLogsInsightsRecord,
   resolveCredentials,
   type InsightConfig,
-} from "durable-insight-core";
+} from "@aws/durable-insight-core";
 import {
   LOGS_INSIGHTS_ENGINE,
   MAX_ROWS,
