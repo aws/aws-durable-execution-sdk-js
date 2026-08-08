@@ -2,7 +2,7 @@
 
 |              |                                                                                                       |
 | ------------ | ----------------------------------------------------------------------------------------------------- |
-| **Status**   | Phases 0–2 complete — Phase 3 next                                                                    |
+| **Status**   | Phases 0–3 complete — Phase 4 next                                                                    |
 | **Scope**    | New package `@aws/durable-insight-mcp`, plus extraction of `durable-insight-core`                     |
 | **Baseline** | `main` @ `49b88f84`, i.e. after #795 (dual host) and #804 (disclosure)                                |
 | **Legal**    | **Confirmed** — disclosure only, no consent gate. See [§8](#8-disclosure-readme-only-no-consent-gate) |
@@ -363,7 +363,10 @@ Increasing polish, decreasing portability. Ship all three.
 
 **Source of truth.** `schema.ts:buildSystemPrompt(destinationType, options)` (a
 ~130-line builder over 8 destinations) already emits exactly this material for our
-own prompts: which destinations expose `operationsByName` as a dot-path-queryable
+own prompts. Measured in Phase 3: **3,414 characters for DynamoDB and 10,143 for
+Athena/s3** — the latter alone exceeds the 10,000-character description limit, which
+settles empirically that this content belongs in tool _results_ and the skill, never in
+a description. It covers: which destinations expose `operationsByName` as a dot-path-queryable
 map versus a stringified field, how to reach operations by name via a JSONB
 predicate on Aurora, PartiQL path syntax on DynamoDB. Layers 1–3 must all derive
 from it, not restate it (§10, AC-T4). Retargeting is editing, not authoring.
@@ -377,6 +380,19 @@ loop, on behalf of a user who may approve without reading.
 
 They move from a safety net to **the** security boundary of the host, and become
 the highest-value test target in the package.
+
+> **Structural hazard, verified in Phase 3.** `assertReadOnly` and `ensureLimit` are
+> called _only_ inside `explorerSession.ts` — never inside the engine runners. Since
+> this host deliberately bypasses `ExplorerSession` (§6.3), `runAthenaQuery` and
+> `runDynamoDBQuery` are reachable with **no read-only enforcement at all**; nothing in
+> core would stop a `DELETE`. The mitigation is deliberately not a call at each site,
+> which is the pattern that let it be forgotten: `runReadOnlyQuery` is the single choke
+> point, and a test mechanically asserts no other non-test file in the package imports a
+> runner. **Follow-up worth considering for core:** push enforcement into the runners
+> themselves, default-on, with an explicit opt-out for the one legitimate DDL caller
+> (`ensureAthenaTable`, which executes `CREATE EXTERNAL TABLE` through
+> `runAthenaQuery`). That would protect every future consumer, but it touches the
+> extension's table-creation path and deserves its own PR.
 
 - Every engine path routes through `assertReadOnly` before execution — no
   exceptions, enforced by test (§10, AC-T2).
@@ -605,7 +621,7 @@ is unblocked.**
   exactly one env var and round-trips; the 8 excluded are rejected if set.
   Mirrors `settingsKeys.test.ts`.
 
-### Phase 3 — Query core, two destinations (M)
+### Phase 3 — Query core, two destinations (M) — **DONE** (`06a83b0c`)
 
 | ID       | Task                                                                    | Size | Depends |
 | -------- | ----------------------------------------------------------------------- | ---- | ------- |
@@ -626,6 +642,11 @@ is unblocked.**
   `assertReadOnly` call from any engine path must fail a test (mutation-verified,
   not assumed).
 - **AC-T2b** Every result path bounds rows; an unbounded query cannot be issued.
+  **Mechanism corrected in Phase 3:** not `ensureLimit`, which emits `" | limit N"` —
+  CloudWatch Logs Insights syntax that is a syntax error appended to Trino or PartiQL.
+  The SQL bound is Athena's `maxRows` pagination cap (`GetQueryResults` otherwise pages
+  the entire result set into the process), with DynamoDB page-bounded by a single
+  `ExecuteStatement`.
 
 ### Phase 4 — Remaining destinations (M)
 
