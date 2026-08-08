@@ -182,9 +182,26 @@ function registerTools(server: McpServer, config: InsightConfig): void {
             `Optional hint for the maximum number of rows to return (<= ${MAX_ROWS}). ` +
               `Results are always capped at ${MAX_ROWS} regardless.`,
           ),
+        // Time window for CloudWatch Logs Insights destinations ONLY
+        // (cloudwatch-logs-exporter / lambda-log-exporter). Logs Insights has no
+        // "all time" — it requires an explicit [start, end] window — so this
+        // controls how far back the query looks: [now - lookbackHours, now].
+        // Ignored by the five SQL destinations, which are not time-windowed.
+        // Defaults to 24 hours when omitted. Fractional values are allowed
+        // (e.g. 0.5 = last 30 minutes) so an agent investigating a narrow
+        // incident window ("last night") can control it.
+        lookbackHours: z
+          .number()
+          .positive()
+          .optional()
+          .describe(
+            "For CloudWatch Logs destinations only: how many hours back to " +
+              "search, measured from now (default 24). Logs Insights requires " +
+              "an explicit time window. Ignored for SQL destinations.",
+          ),
       },
     },
-    async ({ sql }) => {
+    async ({ sql, lookbackHours }) => {
       // 1. Completeness check first — a missing-config finding must never make a
       //    network call (mirrors test_destination). Returns actionable
       //    DURABLE_INSIGHT_* variable NAMES.
@@ -209,7 +226,14 @@ function registerTools(server: McpServer, config: InsightConfig): void {
       // 2. Execute through the single choke point. This is the ONLY place the
       //    tool does anything — it never touches a runner directly.
       try {
-        const result = await runReadOnlyQuery(config, sql);
+        // Translate the log-only lookback window (hours) into the choke point's
+        // millisecond option. Undefined for SQL destinations (and when the
+        // agent omits it), letting runReadOnlyQuery apply its 24h default.
+        const timeRangeMs =
+          lookbackHours !== undefined
+            ? lookbackHours * 60 * 60 * 1000
+            : undefined;
+        const result = await runReadOnlyQuery(config, sql, { timeRangeMs });
         const payload = {
           columns: result.columns,
           rows: result.rows,

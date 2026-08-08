@@ -72,9 +72,47 @@ describe("describe_schema result", () => {
     expect(r.guidance.length).toBeGreaterThan(500);
   });
 
-  it("throws for an unsupported destination this phase", () => {
-    expect(() => buildDescribeSchemaResult(cfgFor("aurora"))).toThrow(/aurora/);
+  // T4.1: describe_schema now covers all five SQL destinations. buildSystemPrompt
+  // already had guidance for all 8 types, so this needed no per-engine work —
+  // this asserts each supported type returns a sensible, non-trivial result with
+  // the right engine label and a self-consistent guidanceLength.
+  it.each([
+    ["s3", "Trino/Presto SQL", "Trino/Presto SQL"],
+    ["dynamodb", "PartiQL", "PartiQL"],
+    ["aurora", "PostgreSQL", "PostgreSQL"],
+    ["redshift", "Redshift SQL", "Redshift SQL"],
+    ["opensearch", "OpenSearch SQL", "OpenSearch SQL"],
+  ] as const)(
+    "%s: engine=%s, guidance is non-trivial and self-consistent",
+    (dest, engine, needle) => {
+      const r = buildDescribeSchemaResult(cfgFor(dest));
+      expect(r.destinationType).toBe(dest);
+      expect(r.engine).toBe(engine);
+      expect(r.maxRows).toBe(MAX_ROWS);
+      expect(r.guidance.length).toBeGreaterThan(500);
+      expect(r.guidanceLength).toBe(r.guidance.length);
+      expect(r.guidance).toContain(needle);
+    },
+  );
+
+  it("throws for a non-queryable destination (SQS)", () => {
+    // SQS is a message queue, not a queryable store; describe_schema must
+    // reject it by naming the type.
+    expect(() => buildDescribeSchemaResult(cfgFor("sqs"))).toThrow(/sqs/);
   });
+
+  it.each([["cloudwatch-logs-exporter"], ["lambda-log-exporter"]] as const)(
+    "%s: now supported — reports the CloudWatch Logs Insights engine with guidance",
+    (dest) => {
+      // As of Phase 4 the log destinations ARE supported (Logs Insights, not
+      // SQL). describe_schema returns the logs engine and non-empty guidance
+      // rather than throwing.
+      const r = buildDescribeSchemaResult(cfgFor(dest));
+      expect(r.engine).toBe("CloudWatch Logs Insights");
+      expect(r.guidance.length).toBeGreaterThan(0);
+      expect(r.guidanceLength).toBe(r.guidance.length);
+    },
+  );
 });
 
 describe("get_execution found semantics", () => {

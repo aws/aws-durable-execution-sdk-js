@@ -28,8 +28,18 @@
  *   description. `toolDescriptions.test.ts` asserts every description here is
  *   non-empty and under the cap.
  */
-import { buildSystemPrompt, type InsightConfig } from "durable-insight-core";
-import { MAX_ROWS, runReadOnlyQuery } from "./readOnlyQuery";
+import {
+  buildSystemPrompt,
+  escapeQuotedString,
+  fetchLogsInsightsRecord,
+  resolveCredentials,
+  type InsightConfig,
+} from "durable-insight-core";
+import {
+  LOGS_INSIGHTS_ENGINE,
+  MAX_ROWS,
+  runReadOnlyQuery,
+} from "./readOnlyQuery";
 import {
   coerceLimit,
   escapeSqlString,
@@ -59,11 +69,15 @@ export const TEST_DESTINATION_DESCRIPTION =
  * knows a write will be refused rather than silently mutating data.
  */
 export const QUERY_DESCRIPTION =
-  "Execute a single READ-ONLY SQL/PartiQL query against the configured Insight " +
+  "Execute a single READ-ONLY query against the configured Insight " +
   "destination (set via DURABLE_INSIGHT_* environment variables) and return the " +
   "result as machine-readable JSON (columns, rows, count, truncated, engine, " +
-  "destinationType). Only SELECT/WITH is permitted: any data-modifying or DDL " +
-  "statement is rejected before any AWS call is made. Results are capped at " +
+  "destinationType). For the SQL destinations (dynamodb, s3, aurora, redshift, " +
+  "opensearch) only SELECT/WITH is permitted: any data-modifying or DDL " +
+  "statement is rejected before any AWS call is made. For the CloudWatch Logs " +
+  "destinations (cloudwatch-logs-exporter, lambda-log-exporter) pass a CloudWatch " +
+  "Logs Insights pipe query (e.g. `filter ... | stats ...`), NOT SQL; use " +
+  "`lookbackHours` to set the time window. Results are capped at " +
   `${MAX_ROWS} rows; "truncated" is true when the cap was hit. If required ` +
   "environment variables are unset it names them and returns without calling AWS.";
 
@@ -109,6 +123,14 @@ export const TOOL_DESCRIPTIONS: ReadonlyArray<{
 
 // ── describe_schema ──────────────────────────────────────────────────────────
 
+/** True for the two CloudWatch Logs Insights destinations (NOT SQL). */
+function isLogDestination(cfg: InsightConfig): boolean {
+  return (
+    cfg.destinationType === "cloudwatch-logs-exporter" ||
+    cfg.destinationType === "lambda-log-exporter"
+  );
+}
+
 /** Engine label + table name for a destination, matching `readOnlyQuery.ts`. */
 function engineAndTable(cfg: InsightConfig): { engine: string; table: string } {
   switch (cfg.destinationType) {
@@ -116,11 +138,29 @@ function engineAndTable(cfg: InsightConfig): { engine: string; table: string } {
       return { engine: "PartiQL", table: cfg.dynamodbTableName };
     case "s3":
       return { engine: "Trino/Presto SQL", table: cfg.athenaTable };
+    case "aurora":
+      return { engine: "PostgreSQL", table: cfg.auroraTable };
+    case "redshift":
+      return { engine: "Redshift SQL", table: cfg.redshiftTable };
+    case "opensearch":
+      // The OpenSearch "table" is the index; buildSystemPrompt wraps it in
+      // backticks in the FROM clause it generates.
+      return { engine: "OpenSearch SQL", table: cfg.opensearchIndex };
+    case "cloudwatch-logs-exporter":
+    case "lambda-log-exporter":
+      // Logs Insights is not SQL and has no "table" — the query runs over one
+      // or more LOG GROUPS. Report them (comma-joined) so the agent sees what
+      // it is querying; buildSystemPrompt ignores tableName for these types.
+      return {
+        engine: LOGS_INSIGHTS_ENGINE,
+        table: cfg.logGroupNames.join(", "),
+      };
     default:
       throw new Error(
         `describe_schema is not supported for destination type ` +
           `"${cfg.destinationType}" in this version. Supported destinations: ` +
-          `"dynamodb", "s3".`,
+          `"dynamodb", "s3", "aurora", "redshift", "opensearch", ` +
+          `"cloudwatch-logs-exporter", "lambda-log-exporter".`,
       );
   }
 }
@@ -168,6 +208,129 @@ export interface GetExecutionParams {
 }
 
 /**
+ * Per-destination SQL idioms for the structured tools.
+ *
+ * The dialects genuinely DIVERGE — table quoting, column casing, whether a
+ * `recordType` discriminator column even exists, and whether ORDER BY/LIMIT are
+ * usable all differ — so each field is sourced from core's `buildSystemPrompt`
+ * guidance for that destination (schema.ts), never assumed portable:
+ *   - Table quoting: bare for Athena/Aurora/Redshift, double-quoted for DynamoDB
+ *     PartiQL, backtick-quoted for OpenSearch (its index name has a hyphen).
+ *   - Column casing: lowercase (Athena), snake_case (Aurora/Redshift),
+ *     camelCase (DynamoDB/OpenSearch).
+ *   - `recordType` guard: Athena/DynamoDB/OpenSearch store a recordType field
+ *     and filter on it; Aurora/Redshift store insight records in a DEDICATED
+ *     table with NO such column, so the guard is omitted (emitting it would be
+ *     a "column does not exist" error).
+ *   - ORDER BY/LIMIT: the four SQL engines support it; PartiQL for DynamoDB
+ *     supports neither (the runReadOnlyQuery cap bounds it instead).
+ */
+interface Dialect {
+  /** Engine label, matching runReadOnlyQuery / assertReadOnly. */
+  engine: string;
+  /** FROM-clause target, quoted the way THIS engine requires. */
+  from: string;
+  /** Column holding the execution id (get_execution equality predicate). */
+  idColumn: string;
+  /** Projection for list_executions. */
+  listSelect: string;
+  /** status column name (list_executions filter). */
+  statusColumn: string;
+  /** functionName column name (list_executions filter). */
+  functionNameColumn: string;
+  /** start-time column name (list_executions since/until filter + ordering). */
+  startTimeColumn: string;
+  /**
+   * The `recordType = 'WorkflowInsight'` discriminator column, or undefined when
+   * the destination has no such column (Aurora/Redshift dedicated table).
+   */
+  recordTypeColumn?: string;
+  /**
+   * Whether ORDER BY <startTime> DESC LIMIT n is appended in list_executions.
+   * For OpenSearch this is safe only because startTime is a DATE field — its SQL
+   * plugin forbids ORDER BY on a raw text field.
+   */
+  orderByAndLimit: boolean;
+}
+
+/** Resolve the {@link Dialect} for the configured destination. */
+function dialectFor(cfg: InsightConfig): Dialect {
+  switch (cfg.destinationType) {
+    case "s3":
+      return {
+        engine: "Trino/Presto SQL",
+        from: cfg.athenaTable,
+        idColumn: "executionarn",
+        listSelect:
+          "executionarn, status, functionname, starttime, endtime, durationms",
+        statusColumn: "status",
+        functionNameColumn: "functionname",
+        startTimeColumn: "starttime",
+        recordTypeColumn: "recordtype",
+        orderByAndLimit: true,
+      };
+    case "dynamodb":
+      return {
+        engine: "PartiQL",
+        from: `"${cfg.dynamodbTableName}"`,
+        idColumn: "pk",
+        listSelect: "pk, status, functionName, startTime, endTime, durationMs",
+        statusColumn: "status",
+        functionNameColumn: "functionName",
+        startTimeColumn: "startTime",
+        recordTypeColumn: "recordType",
+        orderByAndLimit: false,
+      };
+    case "aurora":
+      return {
+        engine: "PostgreSQL",
+        from: cfg.auroraTable,
+        idColumn: "execution_arn",
+        listSelect:
+          "execution_arn, status, function_name, start_time, end_time, duration_ms",
+        statusColumn: "status",
+        functionNameColumn: "function_name",
+        startTimeColumn: "start_time",
+        recordTypeColumn: undefined,
+        orderByAndLimit: true,
+      };
+    case "redshift":
+      return {
+        engine: "Redshift SQL",
+        from: cfg.redshiftTable,
+        idColumn: "execution_arn",
+        listSelect:
+          "execution_arn, status, function_name, start_time, end_time, duration_ms",
+        statusColumn: "status",
+        functionNameColumn: "function_name",
+        startTimeColumn: "start_time",
+        recordTypeColumn: undefined,
+        orderByAndLimit: true,
+      };
+    case "opensearch":
+      return {
+        engine: "OpenSearch SQL",
+        // Index name contains a hyphen -> MUST be backtick-quoted in FROM.
+        from: `\`${cfg.opensearchIndex}\``,
+        idColumn: "executionArn",
+        listSelect:
+          "executionArn, status, functionName, startTime, endTime, durationMs",
+        statusColumn: "status",
+        functionNameColumn: "functionName",
+        startTimeColumn: "startTime",
+        recordTypeColumn: "recordType",
+        orderByAndLimit: true,
+      };
+    default:
+      throw new Error(
+        `The structured tools are not supported for destination type ` +
+          `"${cfg.destinationType}" in this version. Supported destinations: ` +
+          `"dynamodb", "s3", "aurora", "redshift", "opensearch".`,
+      );
+  }
+}
+
+/**
  * Build the single-record lookup SELECT for `executionArn`.
  *
  * The id is quote-escaped (never interpolated raw), so the predicate is always
@@ -181,6 +344,8 @@ export function buildGetExecutionSql(
   params: GetExecutionParams,
 ): string {
   const id = escapeSqlString(params.executionArn);
+  const d = dialectFor(cfg);
+
   if (cfg.destinationType === "s3") {
     const parts: string[] = [];
     if (params.year !== undefined) {
@@ -196,13 +361,21 @@ export function buildGetExecutionSql(
     }
     const partitionPredicate = parts.map((p) => `${p} AND `).join("");
     return (
-      `SELECT * FROM ${cfg.athenaTable} ` +
-      `WHERE ${partitionPredicate}executionarn = '${id}' LIMIT 1`
+      `SELECT * FROM ${d.from} ` +
+      `WHERE ${partitionPredicate}${d.idColumn} = '${id}' LIMIT 1`
     );
   }
-  // dynamodb (PartiQL): no LIMIT clause (unsupported); the row cap in
-  // runReadOnlyQuery bounds it. Table name is double-quoted per the dialect.
-  return `SELECT * FROM "${cfg.dynamodbTableName}" WHERE pk = '${id}'`;
+
+  if (cfg.destinationType === "dynamodb") {
+    // PartiQL: no LIMIT clause (unsupported); the row cap in runReadOnlyQuery
+    // bounds it. Table name is double-quoted per the dialect.
+    return `SELECT * FROM ${d.from} WHERE ${d.idColumn} = '${id}'`;
+  }
+
+  // aurora / redshift / opensearch: a standard single-row lookup. All three
+  // support LIMIT 1; identifier quoting and the id column name come from the
+  // dialect (execution_arn for Aurora/Redshift, executionArn for OpenSearch).
+  return `SELECT * FROM ${d.from} WHERE ${d.idColumn} = '${id}' LIMIT 1`;
 }
 
 export interface GetExecutionResult {
@@ -221,6 +394,42 @@ export async function runGetExecution(
   cfg: InsightConfig,
   params: GetExecutionParams,
 ): Promise<GetExecutionResult> {
+  // CloudWatch Logs Insights: there is no SQL to build and no point-lookup API.
+  // We deliberately route this ONE case around the SQL choke point and call
+  // core's `fetchLogsInsightsRecord` instead, for reasons that are all
+  // load-bearing:
+  //   - It correctly handles BOTH log record shapes — "direct"
+  //     (cloudwatch-logs-exporter, raw JSON fields) and "nested"
+  //     (lambda-log-exporter, a JSON string inside a `message` field) — trying a
+  //     field match then a message-substring match. Rebuilding that
+  //     two-shape fallback here would duplicate core logic we must not touch.
+  //   - It already escapes the agent-supplied `executionArn` with
+  //     `escapeQuotedString` (backslashes-then-quotes) before embedding it in a
+  //     double-quoted Logs Insights literal — the correct escaper for this
+  //     language (NOT the SQL single-quote doubler).
+  //   - It is already bounded (`| limit 1`), and Logs Insights has no write
+  //     constructs, so the choke point's two jobs — `assertReadOnly` and the row
+  //     cap — add nothing on this path (the choke point does not apply
+  //     `assertReadOnly` to logs anyway). `fetchLogsInsightsRecord` is a fetch
+  //     helper, NOT a core runner, so calling it here does not violate the
+  //     one-runner-import rule that `queryChokePoint.test.ts` enforces.
+  if (isLogDestination(cfg)) {
+    const credentials = resolveCredentials(cfg.awsProfile);
+    const record = await fetchLogsInsightsRecord({
+      region: cfg.region,
+      credentials,
+      logGroupNames: cfg.logGroupNames,
+      executionArn: params.executionArn,
+    });
+    return {
+      destinationType: cfg.destinationType,
+      engine: LOGS_INSIGHTS_ENGINE,
+      found: record !== undefined,
+      executionArn: params.executionArn,
+      ...(record !== undefined ? { record } : {}),
+    };
+  }
+
   const sql = buildGetExecutionSql(cfg, params);
   const result = await runReadOnlyQuery(cfg, sql);
   if (result.rows.length === 0) {
@@ -262,58 +471,163 @@ export interface ListExecutionsParams {
  * `since`/`until` are validated as ISO timestamps (rejected if malformed) —
  * both are then safe to interpolate because their validated shapes cannot
  * contain a quote. `functionName` is free-form text, so it is quote-escaped.
- * Column names differ per engine (lowercase for Athena, camelCase for
- * DynamoDB); the `recordType`/`recordtype` guard isolates insight records.
+ * Everything engine-specific — column casing, table quoting, whether a
+ * `recordType` guard exists, and whether ORDER BY/LIMIT are appended — comes
+ * from {@link dialectFor}, because these idioms are NOT portable across Trino,
+ * PartiQL, PostgreSQL, Redshift and OpenSearch SQL.
  */
 export function buildListExecutionsSql(
   cfg: InsightConfig,
   params: ListExecutionsParams,
 ): string {
-  const isS3 = cfg.destinationType === "s3";
-  const col = {
-    recordType: isS3 ? "recordtype" : "recordType",
-    status: "status",
-    functionName: isS3 ? "functionname" : "functionName",
-    startTime: isS3 ? "starttime" : "startTime",
-  };
-  const select = isS3
-    ? "executionarn, status, functionname, starttime, endtime, durationms"
-    : "pk, status, functionName, startTime, endTime, durationMs";
-  const from = isS3 ? cfg.athenaTable : `"${cfg.dynamodbTableName}"`;
+  const d = dialectFor(cfg);
 
-  const where: string[] = [`${col.recordType} = 'WorkflowInsight'`];
+  const where: string[] = [];
+  // Aurora/Redshift have no recordType column (dedicated table) — omit the
+  // discriminator entirely there; it would be a "column does not exist" error.
+  if (d.recordTypeColumn !== undefined) {
+    where.push(`${d.recordTypeColumn} = 'WorkflowInsight'`);
+  }
   if (params.status !== undefined) {
-    where.push(`${col.status} = '${validateStatus(params.status)}'`);
+    where.push(`${d.statusColumn} = '${validateStatus(params.status)}'`);
   }
   if (params.functionName !== undefined) {
     where.push(
-      `${col.functionName} = '${escapeSqlString(params.functionName)}'`,
+      `${d.functionNameColumn} = '${escapeSqlString(params.functionName)}'`,
     );
   }
   if (params.since !== undefined) {
     where.push(
-      `${col.startTime} >= '${validateTimestamp("since", params.since)}'`,
+      `${d.startTimeColumn} >= '${validateTimestamp("since", params.since)}'`,
     );
   }
   if (params.until !== undefined) {
     where.push(
-      `${col.startTime} <= '${validateTimestamp("until", params.until)}'`,
+      `${d.startTimeColumn} <= '${validateTimestamp("until", params.until)}'`,
     );
   }
 
   const limit = coerceLimit(params.limit, DEFAULT_LIST_LIMIT, MAX_ROWS);
-  const whereClause = where.join(" AND ");
+  // With no recordType guard and no filters, the WHERE list can be empty
+  // (Aurora/Redshift with no params) — emit no WHERE clause in that case.
+  const whereClause = where.length > 0 ? ` WHERE ${where.join(" AND ")}` : "";
 
-  if (isS3) {
-    // Trino supports ORDER BY + LIMIT; most-recent-first is the useful default.
+  if (d.orderByAndLimit) {
+    // Trino, PostgreSQL, Redshift and OpenSearch SQL all support ORDER BY +
+    // LIMIT; most-recent-first is the useful default. (OpenSearch orders on
+    // startTime, a DATE field — ordering a raw text field there is rejected.)
     return (
-      `SELECT ${select} FROM ${from} WHERE ${whereClause} ` +
-      `ORDER BY ${col.startTime} DESC LIMIT ${limit}`
+      `SELECT ${d.listSelect} FROM ${d.from}${whereClause} ` +
+      `ORDER BY ${d.startTimeColumn} DESC LIMIT ${limit}`
     );
   }
   // dynamodb (PartiQL): ORDER BY and LIMIT are unsupported; the row cap in
   // runReadOnlyQuery bounds the result to MAX_ROWS.
-  return `SELECT ${select} FROM ${from} WHERE ${whereClause}`;
+  return `SELECT ${d.listSelect} FROM ${d.from}${whereClause}`;
+}
+
+/**
+ * Build the filtered `list_executions` query for a CloudWatch Logs Insights
+ * destination — a pipe query, NOT SQL.
+ *
+ * This is the log counterpart to {@link buildListExecutionsSql}. The two log
+ * shapes require different queries, both sourced from core's `buildSystemPrompt`
+ * dialect guidance (`schema.ts`):
+ *   - "direct" (cloudwatch-logs-exporter): fields are top-level, so filters read
+ *     them directly and the base discriminator is
+ *     `filter recordType = "WorkflowInsight"`.
+ *   - "nested" (lambda-log-exporter): the record is a JSON string inside
+ *     `message`, so we isolate insight records with
+ *     `filter level = "INFO" and message like /WorkflowInsight/`, `parse` the
+ *     needed fields out of the message, then filter on the parsed aliases.
+ *
+ * In BOTH shapes every agent-supplied value is interpolated into a
+ * DOUBLE-QUOTED Logs Insights literal and escaped with core's
+ * `escapeQuotedString` (the correct escaper for this language — NOT the SQL
+ * single-quote doubler). `status` is validated against the closed enum and
+ * `since`/`until` against the ISO-timestamp shape (rejected if malformed),
+ * exactly as the SQL builder does. A `limit` is appended here (bounded by
+ * {@link MAX_ROWS}); the choke point's `ensureLimit` then leaves it untouched.
+ */
+export function buildListExecutionsLogsQuery(
+  cfg: InsightConfig,
+  params: ListExecutionsParams,
+): string {
+  const limit = coerceLimit(params.limit, DEFAULT_LIST_LIMIT, MAX_ROWS);
+  const direct = cfg.destinationType === "cloudwatch-logs-exporter";
+  const stages: string[] = [];
+
+  if (direct) {
+    // Top-level fields: filter on them directly, discriminate on recordType.
+    const filters = ['recordType = "WorkflowInsight"'];
+    if (params.status !== undefined) {
+      filters.push(
+        `status = "${escapeQuotedString(validateStatus(params.status))}"`,
+      );
+    }
+    if (params.functionName !== undefined) {
+      filters.push(
+        `functionName = "${escapeQuotedString(params.functionName)}"`,
+      );
+    }
+    if (params.since !== undefined) {
+      filters.push(
+        `startTime >= "${escapeQuotedString(validateTimestamp("since", params.since))}"`,
+      );
+    }
+    if (params.until !== undefined) {
+      filters.push(
+        `startTime <= "${escapeQuotedString(validateTimestamp("until", params.until))}"`,
+      );
+    }
+    stages.push(`filter ${filters.join(" and ")}`);
+    stages.push(
+      "fields executionArn, status, functionName, startTime, endTime, durationMs",
+    );
+    stages.push("sort @timestamp desc");
+    stages.push(`limit ${limit}`);
+    return stages.join(" | ");
+  }
+
+  // Nested (lambda-log-exporter): isolate insight records, parse the fields we
+  // filter/return out of the JSON string, then filter on the parsed aliases so
+  // every agent value still lands in a double-quoted literal.
+  stages.push('filter level = "INFO" and message like /WorkflowInsight/');
+  stages.push('parse message "\\"executionArn\\":\\"*\\"" as executionArn');
+  stages.push('parse message "\\"status\\":\\"*\\"" as status');
+  stages.push('parse message "\\"functionName\\":\\"*\\"" as functionName');
+  stages.push('parse message "\\"startTime\\":\\"*\\"" as startTime');
+
+  const postFilters: string[] = [];
+  if (params.status !== undefined) {
+    postFilters.push(
+      `status = "${escapeQuotedString(validateStatus(params.status))}"`,
+    );
+  }
+  if (params.functionName !== undefined) {
+    postFilters.push(
+      `functionName = "${escapeQuotedString(params.functionName)}"`,
+    );
+  }
+  if (params.since !== undefined) {
+    postFilters.push(
+      `startTime >= "${escapeQuotedString(validateTimestamp("since", params.since))}"`,
+    );
+  }
+  if (params.until !== undefined) {
+    postFilters.push(
+      `startTime <= "${escapeQuotedString(validateTimestamp("until", params.until))}"`,
+    );
+  }
+  if (postFilters.length > 0) {
+    stages.push(`filter ${postFilters.join(" and ")}`);
+  }
+  stages.push(
+    "fields @timestamp, executionArn, status, functionName, startTime",
+  );
+  stages.push("sort @timestamp desc");
+  stages.push(`limit ${limit}`);
+  return stages.join(" | ");
 }
 
 export interface ListExecutionsResult {
@@ -333,8 +647,13 @@ export async function runListExecutions(
   cfg: InsightConfig,
   params: ListExecutionsParams,
 ): Promise<ListExecutionsResult> {
-  const sql = buildListExecutionsSql(cfg, params);
-  const result = await runReadOnlyQuery(cfg, sql);
+  // Log destinations build a Logs Insights pipe query; SQL destinations build
+  // SELECT. Both run through the single choke point, which applies the
+  // destination-appropriate bound (`ensureLimit` for logs, the row cap for SQL).
+  const query = isLogDestination(cfg)
+    ? buildListExecutionsLogsQuery(cfg, params)
+    : buildListExecutionsSql(cfg, params);
+  const result = await runReadOnlyQuery(cfg, query);
   return {
     destinationType: cfg.destinationType,
     engine: result.engine,

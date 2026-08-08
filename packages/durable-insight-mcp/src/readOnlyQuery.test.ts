@@ -12,11 +12,18 @@
  * `assertReadOnly` itself is deliberately NOT mocked: this suite exercises the
  * real validator from `durable-insight-core`. Only the runners and credential
  * resolution are stubbed.
+ *
+ * As of Phase 4 T4.1 the matrix runs across ALL FIVE SQL destinations
+ * (s3/Athena, DynamoDB, Aurora, Redshift, OpenSearch), not just the original
+ * two — the read-only guard and the row cap must hold for every one.
  */
 import {
   configFromWireSettings,
   runAthenaQuery,
+  runAuroraQuery,
   runDynamoDBQuery,
+  runOpenSearchQuery,
+  runRedshiftQuery,
   resolveCredentials,
   type InsightConfig,
 } from "durable-insight-core";
@@ -29,10 +36,13 @@ jest.mock("durable-insight-core", () => {
   return {
     ...actual,
     // Real: assertReadOnly, configFromWireSettings, normalizeConfig, ...
-    // Stubbed: the runners (so a rejection cannot reach the network) and the
-    // credential resolver (so no provider chain is constructed).
+    // Stubbed: every engine runner (so a rejection cannot reach the network)
+    // and the credential resolver (so no provider chain is constructed).
     runAthenaQuery: jest.fn(),
     runDynamoDBQuery: jest.fn(),
+    runAuroraQuery: jest.fn(),
+    runRedshiftQuery: jest.fn(),
+    runOpenSearchQuery: jest.fn(),
     resolveCredentials: jest.fn(() => "FAKE_CREDENTIALS"),
   };
 });
@@ -43,7 +53,17 @@ const runAthenaMock = runAthenaQuery as jest.MockedFunction<
 const runDynamoDBMock = runDynamoDBQuery as jest.MockedFunction<
   typeof runDynamoDBQuery
 >;
+const runAuroraMock = runAuroraQuery as jest.MockedFunction<
+  typeof runAuroraQuery
+>;
+const runRedshiftMock = runRedshiftQuery as jest.MockedFunction<
+  typeof runRedshiftQuery
+>;
+const runOpenSearchMock = runOpenSearchQuery as jest.MockedFunction<
+  typeof runOpenSearchQuery
+>;
 
+/** A one-row Athena result (Athena's shape carries `truncated`). */
 const ATHENA_OK = {
   columns: ["n"],
   rows: [["1"]],
@@ -51,7 +71,8 @@ const ATHENA_OK = {
   numericColumns: [true],
   truncated: false,
 };
-const DYNAMODB_OK = {
+/** A one-row result for the runners that DON'T carry `truncated`. */
+const PLAIN_OK = {
   columns: ["n"],
   rows: [["1"]],
   count: 1,
@@ -61,7 +82,10 @@ const DYNAMODB_OK = {
 beforeEach(() => {
   jest.clearAllMocks();
   runAthenaMock.mockResolvedValue(ATHENA_OK);
-  runDynamoDBMock.mockResolvedValue(DYNAMODB_OK);
+  runDynamoDBMock.mockResolvedValue(PLAIN_OK);
+  runAuroraMock.mockResolvedValue(PLAIN_OK);
+  runRedshiftMock.mockResolvedValue(PLAIN_OK);
+  runOpenSearchMock.mockResolvedValue(PLAIN_OK);
 });
 
 function cfgFor(
@@ -74,6 +98,10 @@ function cfgFor(
     dynamodbTableName: "workflow_insight",
     athenaDatabase: "insight_db",
     athenaS3Location: "s3://bucket/prefix/",
+    auroraResourceArn: "arn:aws:rds:us-east-1:111:cluster:c1",
+    auroraSecretArn: "arn:aws:secretsmanager:us-east-1:111:secret:s1",
+    redshiftWorkgroupName: "wg1",
+    opensearchEndpoint: "https://os.example.com",
     ...extra,
   });
 }
@@ -123,29 +151,49 @@ const ACCEPTED: Array<[string, string]> = [
   ],
 ];
 
-describe.each([
+/** Every supported SQL destination, its runner mock getter, and engine label. */
+const ENGINES = [
   ["s3", () => runAthenaMock, "Trino/Presto SQL"],
   ["dynamodb", () => runDynamoDBMock, "PartiQL"],
-] as const)("runReadOnlyQuery on %s", (destinationType, getMock, engine) => {
-  const cfg = () => cfgFor(destinationType);
+  ["aurora", () => runAuroraMock, "PostgreSQL"],
+  ["redshift", () => runRedshiftMock, "Redshift SQL"],
+  ["opensearch", () => runOpenSearchMock, "OpenSearch SQL"],
+] as const;
 
-  describe("rejects writes without issuing any AWS call", () => {
-    it.each(REJECTED)("rejects %s", async (_label, sql) => {
-      await expect(runReadOnlyQuery(cfg(), sql)).rejects.toThrow();
-      // THE assertion: the runner was never reached, so nothing hit the network.
-      expect(getMock()).not.toHaveBeenCalled();
-      expect(resolveCredentials).not.toHaveBeenCalled();
-    });
-  });
+/** Assert NONE of the five runners were invoked (a rejection reached no AWS). */
+function expectNoRunnerCalled(): void {
+  expect(runAthenaMock).not.toHaveBeenCalled();
+  expect(runDynamoDBMock).not.toHaveBeenCalled();
+  expect(runAuroraMock).not.toHaveBeenCalled();
+  expect(runRedshiftMock).not.toHaveBeenCalled();
+  expect(runOpenSearchMock).not.toHaveBeenCalled();
+}
 
-  describe("accepts and forwards read-only queries", () => {
-    it.each(ACCEPTED)("accepts %s", async (_label, sql) => {
-      const result = await runReadOnlyQuery(cfg(), sql);
-      expect(getMock()).toHaveBeenCalledTimes(1);
-      expect(result.engine).toBe(engine);
+describe.each(ENGINES)(
+  "runReadOnlyQuery on %s",
+  (destinationType, getMock, engine) => {
+    const cfg = () => cfgFor(destinationType);
+
+    describe("rejects writes without issuing any AWS call", () => {
+      it.each(REJECTED)("rejects %s", async (_label, sql) => {
+        await expect(runReadOnlyQuery(cfg(), sql)).rejects.toThrow();
+        // THE assertion: no runner was reached, so nothing hit the network.
+        expectNoRunnerCalled();
+        expect(resolveCredentials).not.toHaveBeenCalled();
+      });
     });
-  });
-});
+
+    describe("accepts and forwards read-only queries", () => {
+      it.each(ACCEPTED)("accepts %s", async (_label, sql) => {
+        const result = await runReadOnlyQuery(cfg(), sql);
+        expect(getMock()).toHaveBeenCalledTimes(1);
+        expect(result.engine).toBe(engine);
+        // Accept path is also bounded: a one-row result is under the cap.
+        expect(result.rows.length).toBeLessThanOrEqual(MAX_ROWS);
+      });
+    });
+  },
+);
 
 describe("Athena dispatch is always bounded", () => {
   it.each(ACCEPTED)(
@@ -194,21 +242,76 @@ describe("Athena results go to the output location, not the data bucket", () => 
   });
 });
 
-describe("DynamoDB truncation", () => {
-  it("reports truncated=true when the row count reaches the cap", async () => {
-    const capped = {
+// ── Per-engine row bounding ──────────────────────────────────────────────────
+//
+// Every destination must come back bounded by MAX_ROWS — but the MECHANISM
+// differs, and these tests assert the correct one per engine so a regression in
+// any single engine's bound is caught in isolation:
+//   - Athena self-bounds (maxRows passed to the runner); the MCP layer must NOT
+//     double-slice — it forwards the runner's rows/truncated as-is.
+//   - DynamoDB returns a single page; the MCP layer slices at the cap.
+//   - Aurora/Redshift/OpenSearch runners apply NO cap, so the MCP layer slices
+//     to MAX_ROWS and sets truncated when the runner returned more.
+
+describe("row bounding — runners that do NOT cap (MCP layer slices)", () => {
+  const oversized = () => ({
+    columns: ["n"],
+    rows: Array.from({ length: MAX_ROWS + 5 }, (_, i) => [String(i)]),
+    count: MAX_ROWS + 5,
+    numericColumns: [true],
+  });
+
+  describe.each([
+    ["aurora", () => runAuroraMock],
+    ["redshift", () => runRedshiftMock],
+    ["opensearch", () => runOpenSearchMock],
+  ] as const)("%s", (dest, getMock) => {
+    it("slices to MAX_ROWS and sets truncated when the runner returns more", async () => {
+      getMock().mockResolvedValueOnce(oversized());
+      const result = await runReadOnlyQuery(cfgFor(dest), "SELECT * FROM t");
+      expect(result.rows.length).toBe(MAX_ROWS);
+      expect(result.count).toBe(MAX_ROWS);
+      expect(result.truncated).toBe(true);
+    });
+
+    it("does not truncate a result at or under the cap", async () => {
+      const result = await runReadOnlyQuery(cfgFor(dest), "SELECT * FROM t");
+      expect(result.truncated).toBe(false);
+      expect(result.rows.length).toBeLessThanOrEqual(MAX_ROWS);
+    });
+  });
+});
+
+describe("row bounding — Athena self-bounds via maxRows", () => {
+  it("passes maxRows and surfaces the runner's truncated flag without re-slicing", async () => {
+    runAthenaMock.mockResolvedValueOnce({
       columns: ["n"],
-      rows: Array.from({ length: MAX_ROWS }, (_, i) => [String(i)]),
-      count: MAX_ROWS,
+      rows: [["1"]],
+      count: 1,
       numericColumns: [true],
-    };
-    runDynamoDBMock.mockResolvedValueOnce(capped);
+      truncated: true,
+    });
+    const result = await runReadOnlyQuery(cfgFor("s3"), "SELECT * FROM t");
+    expect(runAthenaMock.mock.calls[0][0].maxRows).toBe(MAX_ROWS);
+    expect(result.truncated).toBe(true);
+  });
+});
+
+describe("row bounding — DynamoDB single page sliced at the cap", () => {
+  it("reports truncated=true and slices when the row count reaches the cap", async () => {
+    runDynamoDBMock.mockResolvedValueOnce({
+      columns: ["n"],
+      rows: Array.from({ length: MAX_ROWS + 5 }, (_, i) => [String(i)]),
+      count: MAX_ROWS + 5,
+      numericColumns: [true],
+    });
     const result = await runReadOnlyQuery(
       cfgFor("dynamodb"),
       "SELECT * FROM t",
     );
-    expect(result.truncated).toBe(true);
+    expect(result.rows.length).toBe(MAX_ROWS);
     expect(result.count).toBe(MAX_ROWS);
+    expect(result.truncated).toBe(true);
   });
 
   it("reports truncated=false for a small result", async () => {
@@ -220,12 +323,26 @@ describe("DynamoDB truncation", () => {
   });
 });
 
-describe("unsupported destination", () => {
-  it("throws naming the type, without any AWS call", async () => {
-    await expect(
-      runReadOnlyQuery(cfgFor("aurora"), "SELECT 1"),
-    ).rejects.toThrow(/aurora/);
-    expect(runAthenaMock).not.toHaveBeenCalled();
-    expect(runDynamoDBMock).not.toHaveBeenCalled();
+// ── Non-queryable and unsupported destinations ───────────────────────────────
+
+describe("sqs is explicitly rejected as non-queryable", () => {
+  it("throws an error explaining SQS is tailed, not queried, without any AWS call", async () => {
+    await expect(runReadOnlyQuery(cfgFor("sqs"), "SELECT 1")).rejects.toThrow(
+      /tail|message queue/i,
+    );
+    // The rejection must name SQS as non-queryable specifically — not the
+    // generic "unsupported destination" text (which would pass a bare toThrow).
+    await expect(runReadOnlyQuery(cfgFor("sqs"), "SELECT 1")).rejects.toThrow(
+      /sqs/i,
+    );
+    expectNoRunnerCalled();
+    expect(resolveCredentials).not.toHaveBeenCalled();
   });
 });
+
+// NOTE: CloudWatch Logs destinations (cloudwatch-logs-exporter,
+// lambda-log-exporter) were previously rejected here as "unsupported". As of
+// Phase 4 they ARE supported, on a deliberately separate (non-SQL) code path
+// that does NOT apply assertReadOnly. That path mocks a different core runner
+// (runLogsInsightsQuery), so its coverage lives in its own suite —
+// logsInsights.test.ts — rather than in this SQL-runner harness.
