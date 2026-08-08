@@ -55,8 +55,12 @@ So the rule is enforced mechanically, and against all three:
 - A test asserts the module list still has all three, so a fourth host cannot be
   added without noticing.
 
-Each host runs the mirror image of this guard -- "my own host API and no other" --
-so the extension host is stopped from importing `electron`, and so on.
+Each host package runs the mirror image of this guard -- "my own host API and no
+other" -- so the extension host is stopped from importing `electron`, the desktop app
+from importing `vscode`, and so on. The VS Code package additionally guards its
+**renderer** separately: `webview-ui` runs in a browser and may import none of the
+three, since it reaches the extension host through the `acquireVsCodeApi()` global
+rather than by importing the API.
 
 If you need a host API, your code belongs in that host's package. `HostPort` is the
 seam: define what you need in terms of that interface and let each host implement it.
