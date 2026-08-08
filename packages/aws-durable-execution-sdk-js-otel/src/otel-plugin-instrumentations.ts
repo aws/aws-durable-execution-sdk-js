@@ -3,24 +3,22 @@ import { AwsInstrumentation } from "@opentelemetry/instrumentation-aws-sdk";
 import { HttpInstrumentation } from "@opentelemetry/instrumentation-http";
 import { registerInstrumentations } from "@opentelemetry/instrumentation";
 import type { OtelPluginConfig } from "./otel-plugin-config";
+import { ProviderSource } from "./otel-plugin-provider";
 
 /**
  * Registers HTTP and AWS SDK instrumentations for the ExecutionOtelPlugin
  * and InvocationOtelPlugin.
  *
- * Skips ALL instrumentation registration when a custom `tracerProvider` is
- * provided in the config (the caller owns instrumentation in that case).
+ * Behavior is driven by the resolved {@link ProviderSource}:
  *
- * When `useDefaultTracerProvider` is true (and no explicit `tracerProvider`):
- * - Registers `@opentelemetry/instrumentation-aws-sdk` on the provided
- *   tracerProvider (preserving InvocationOtelPlugin's existing behavior)
- * - Skips HTTP instrumentation (the external auto-instrumentation layer
- *   is expected to handle HTTP spans)
- *
- * When neither `tracerProvider` nor `useDefaultTracerProvider` is set:
- * - Always registers `@opentelemetry/instrumentation-aws-sdk`
- * - Registers `@opentelemetry/instrumentation-http` unless
- *   `enableHttpInstrumentation` is explicitly `false`
+ * - `EXPLICIT` — skips ALL instrumentation registration (the caller owns the
+ *   provider and its instrumentation).
+ * - `GLOBAL` — registers `@opentelemetry/instrumentation-aws-sdk` on the
+ *   provided tracerProvider, but skips HTTP instrumentation (the external
+ *   auto-instrumentation layer is expected to handle HTTP spans).
+ * - `AUTO_OTLP` — registers `@opentelemetry/instrumentation-aws-sdk` and
+ *   `@opentelemetry/instrumentation-http` (unless `enableHttpInstrumentation`
+ *   is explicitly `false`).
  *
  * The HTTP instrumentation is configured to suppress spans for requests
  * whose hostname matches `127.0.0.1` or the value of the
@@ -29,19 +27,20 @@ import type { OtelPluginConfig } from "./otel-plugin-config";
  */
 export function registerStandaloneInstrumentations(
   tracerProvider: TracerProvider,
+  source: ProviderSource,
   config?: OtelPluginConfig,
 ): void {
-  // Skip all instrumentation when an explicit custom provider is given (caller owns instrumentation)
-  if (config?.tracerProvider) {
+  // Skip all instrumentation for an explicit custom provider (caller owns it)
+  if (source === ProviderSource.EXPLICIT) {
     return;
   }
 
   const instrumentations = [];
 
-  // Register HTTP instrumentation only when NOT using the default provider
+  // Register HTTP instrumentation only for the auto-configured (owned) provider
   // and not explicitly disabled
   if (
-    !config?.useDefaultTracerProvider &&
+    source === ProviderSource.AUTO_OTLP &&
     config?.enableHttpInstrumentation !== false
   ) {
     instrumentations.push(

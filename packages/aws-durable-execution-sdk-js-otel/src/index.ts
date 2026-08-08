@@ -5,6 +5,7 @@ export { ExecutionOtelPlugin } from "./execution-plugin";
 
 // Shared Plugin Config
 export type { OtelPluginConfig } from "./otel-plugin-config";
+export { ProviderSource } from "./otel-plugin-config";
 
 // Invocation Plugin
 export { InvocationOtelPlugin } from "./invocation-plugin";

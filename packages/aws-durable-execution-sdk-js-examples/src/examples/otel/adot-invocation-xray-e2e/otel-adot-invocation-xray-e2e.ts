@@ -2,12 +2,17 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
-import { InvocationOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+import {
+  InvocationOtelPlugin,
+  ProviderSource,
+} from "@aws/durable-execution-sdk-js-otel";
 import { ExampleConfig } from "../../../types";
 import { xrayE2eWorkflow } from "../shared/xray-e2e-workflow";
 
-// ADOT layer registers a global TracerProvider — use it via useDefaultTracerProvider
-const plugin = new InvocationOtelPlugin({ useDefaultTracerProvider: true });
+// ADOT layer registers a global TracerProvider — use it via ProviderSource.GLOBAL
+const plugin = new InvocationOtelPlugin({
+  providerSource: ProviderSource.GLOBAL,
+});
 
 export const config: ExampleConfig = {
   name: "OTel ADOT Invocation XRay E2E",

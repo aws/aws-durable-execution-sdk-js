@@ -2,7 +2,10 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
-import { InvocationOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+import {
+  InvocationOtelPlugin,
+  ProviderSource,
+} from "@aws/durable-execution-sdk-js-otel";
 import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
@@ -30,8 +33,10 @@ let exporter: InMemorySpanExporter | undefined;
 let plugin: InvocationOtelPlugin;
 
 if (isCloudEnvironment()) {
-  // Cloud mode: InvocationOtelPlugin with default OTLP export (useDefaultTracerProvider: true)
-  plugin = new InvocationOtelPlugin();
+  // Cloud mode: build our own OTLP exporter to the community collector sidecar
+  plugin = new InvocationOtelPlugin({
+    providerSource: ProviderSource.AUTO_OTLP,
+  });
 } else {
   // Local mode: custom TracerProvider with InMemorySpanExporter
   exporter = new InMemorySpanExporter();
@@ -39,7 +44,10 @@ if (isCloudEnvironment()) {
     spanProcessors: [new SimpleSpanProcessor(exporter)],
   });
 
-  plugin = new InvocationOtelPlugin({ tracerProvider: provider });
+  plugin = new InvocationOtelPlugin({
+    providerSource: ProviderSource.EXPLICIT,
+    tracerProvider: provider,
+  });
 }
 
 export function getSerializedSpans(): SerializedSpan[] {

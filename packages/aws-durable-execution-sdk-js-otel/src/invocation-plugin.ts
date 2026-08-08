@@ -43,7 +43,6 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   private readonly tracer: Tracer;
   private readonly idGenerator: DeterministicIdGenerator;
   private readonly contextExtractor: ContextExtractor;
-  private readonly useDefaultTracerProvider: boolean;
   private readonly workflowSpanName: string;
   private readonly enrichLogger: boolean;
 
@@ -60,18 +59,17 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
 
     this.idGenerator = new DeterministicIdGenerator();
     this.contextExtractor = config?.contextExtractor ?? xRayContextExtractor;
-    this.useDefaultTracerProvider = config?.useDefaultTracerProvider ?? false;
     this.workflowSpanName = config?.workflowSpanName ?? "Workflow";
     this.enrichLogger = config?.enrichLogger ?? true;
 
-    // Pass config directly to createTracerProvider — when neither tracerProvider
-    // nor useDefaultTracerProvider is set, option 3 creates an internal provider
-    // with OTLP export (same behavior as ExecutionOtelPlugin).
-    const { tracerProvider } = createTracerProvider(config);
+    // Pass config directly to createTracerProvider — with the default
+    // providerSource (AUTO_OTLP) it creates an internal provider with OTLP
+    // export (same behavior as ExecutionOtelPlugin).
+    const { tracerProvider, source } = createTracerProvider(config);
     this.tracerProvider = tracerProvider;
 
     // Register instrumentations using the shared module
-    registerStandaloneInstrumentations(this.tracerProvider, config);
+    registerStandaloneInstrumentations(this.tracerProvider, source, config);
 
     this.tracer = this.tracerProvider.getTracer(instrumentationName);
 
