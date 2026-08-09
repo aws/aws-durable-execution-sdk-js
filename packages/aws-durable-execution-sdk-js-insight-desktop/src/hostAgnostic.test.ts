@@ -19,9 +19,15 @@
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
-import { HOST_MODULES, findHostModules } from "@aws/durable-insight-core";
+import {
+  HOST_MODULES,
+  findEscapingImports,
+  findHostModules,
+} from "@aws/durable-insight-core";
 
 const SRC = __dirname;
+/** The package root, i.e. the directory holding package.json. */
+const PACKAGE_ROOT = join(__dirname, "..");
 
 /** The only host API this package may import. */
 const PERMITTED = HOST_MODULES.electron;
@@ -53,6 +59,18 @@ describe("desktop package imports only its own host API", () => {
     for (const expected of ["main.ts", "host.ts", "settings.ts"]) {
       expect(names).toContain(expected);
     }
+  });
+
+  // Per-file host scans cannot see a host API reached THROUGH a sibling package,
+  // and reaching sideways is itself the defect the core extraction existed to fix.
+  it.each(names)("%s does not reach into a sibling package", (name) => {
+    const file = join(SRC, name);
+    const escaping = findEscapingImports(
+      file,
+      readFileSync(file, "utf-8"),
+      PACKAGE_ROOT,
+    );
+    expect(escaping).toEqual([]);
   });
 
   it.each(names)("%s imports no other host's API", (name) => {

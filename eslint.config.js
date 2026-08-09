@@ -59,6 +59,11 @@ export default [
       "**/coverage/**",
       "**/node_modules/**",
       "**/dist/**",
+      // Build outputs, not sources. Without these, `eslint .` lints generated
+      // JavaScript that carries `eslint-disable` comments for rules this config does
+      // not enable, and fails with "Definition for rule ... was not found".
+      "**/dist-cjs/**",
+      "**/.rollup.cache/**",
       "**/build/**",
     ],
   },

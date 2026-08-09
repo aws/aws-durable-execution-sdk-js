@@ -27,9 +27,15 @@
  */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
-import { HOST_MODULES, findHostModules } from "@aws/durable-insight-core";
+import {
+  HOST_MODULES,
+  findEscapingImports,
+  findHostModules,
+} from "@aws/durable-insight-core";
 
 const EXTENSION_SRC = __dirname;
+/** The package root, i.e. the directory holding package.json. */
+const PACKAGE_ROOT = join(__dirname, "..");
 const WEBVIEW_SRC = join(__dirname, "..", "webview-ui", "src");
 
 function collectSourceFiles(dir: string, exts: readonly string[]): string[] {
@@ -65,6 +71,18 @@ describe("extension host imports only its own host API", () => {
     for (const expected of ["extension.ts", "config.ts"]) {
       expect(names).toContain(expected);
     }
+  });
+
+  // Per-file host scans cannot see a host API reached THROUGH a sibling package,
+  // and reaching sideways is itself the defect the core extraction existed to fix.
+  it.each(names)("%s does not reach into a sibling package", (name) => {
+    const file = join(EXTENSION_SRC, name);
+    const escaping = findEscapingImports(
+      file,
+      readFileSync(file, "utf-8"),
+      PACKAGE_ROOT,
+    );
+    expect(escaping).toEqual([]);
   });
 
   it.each(names)("%s imports no other host's API", (name) => {

@@ -26,9 +26,15 @@
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
-import { ALL_HOST_MODULES, findHostModules } from "./hostModuleScan";
+import {
+  ALL_HOST_MODULES,
+  findEscapingImports,
+  findHostModules,
+} from "./hostModuleScan";
 
 const SRC = __dirname;
+/** The package root, i.e. the directory holding package.json. */
+const PACKAGE_ROOT = join(__dirname, "..");
 
 /** Every non-test `.ts` file under core's src, recursively (includes index.ts). */
 function collectSourceFiles(dir: string): string[] {
@@ -74,5 +80,20 @@ describe("@aws/durable-insight-core is host-free", () => {
     const found = findHostModules(readFileSync(join(SRC, name), "utf-8"));
     // Naming what was found makes the failure actionable rather than a bare false.
     expect(found).toEqual([]);
+  });
+
+  // The scan above is per-file, so it cannot see a host API reached THROUGH a
+  // sibling package: a file that imports "../../other-package/src/x" contains no
+  // host module itself while pulling one in transitively. This is also the exact
+  // defect the extraction existed to fix, and until now nothing that runs on a pull
+  // request rejected it -- only eslint, which CI does not run.
+  it.each(names)("%s does not reach into a sibling package", (name) => {
+    const file = join(SRC, name);
+    const escaping = findEscapingImports(
+      file,
+      readFileSync(file, "utf-8"),
+      PACKAGE_ROOT,
+    );
+    expect(escaping).toEqual([]);
   });
 });

@@ -20,6 +20,7 @@
 import {
   ALL_HOST_MODULES,
   HOST_MODULES,
+  findEscapingImports,
   findHostModules,
   importsHostModule,
 } from "./hostModuleScan";
@@ -79,5 +80,72 @@ describe("importsHostModule detects every form, for every host module", () => {
   it("covers all three hosts, so a new host cannot be forgotten silently", () => {
     // If a fourth host arrives, this fails until HOST_MODULES learns about it.
     expect(ALL_HOST_MODULES).toEqual([vscode, electron, mcpSdk]);
+  });
+});
+
+describe("findEscapingImports finds relative imports that leave the package", () => {
+  const ROOT = "/repo/packages/mine";
+
+  it.each([
+    ["a sibling package", "/repo/packages/mine/src/a.ts", "../../other/src/b"],
+    ["the packages dir itself", "/repo/packages/mine/src/a.ts", "../.."],
+    ["further up still", "/repo/packages/mine/src/a.ts", "../../../x"],
+    [
+      "a sibling from a nested dir",
+      "/repo/packages/mine/src/deep/nest/a.ts",
+      "../../../../other/src/b",
+    ],
+  ])("flags %s", (_label, file, spec) => {
+    const found = findEscapingImports(file, `import x from "${spec}";`, ROOT);
+    expect(found).toEqual([spec]);
+  });
+
+  it.each([
+    ["a sibling file", "/repo/packages/mine/src/a.ts", "./b"],
+    ["a parent inside the package", "/repo/packages/mine/src/a.ts", "../b"],
+    [
+      "a deep relative path that stays inside",
+      "/repo/packages/mine/src/deep/nest/a.ts",
+      "../../b",
+    ],
+    ["the package root itself", "/repo/packages/mine/src/a.ts", ".."],
+  ])("does not flag %s", (_label, file, spec) => {
+    expect(findEscapingImports(file, `import x from "${spec}";`, ROOT)).toEqual(
+      [],
+    );
+  });
+
+  it("is depth-aware, not a ../../ string match", () => {
+    // The same specifier escapes from one depth and not from another -- which is why
+    // this resolves paths instead of matching on "../../".
+    const spec = "../../b";
+    expect(
+      findEscapingImports(
+        "/repo/packages/mine/src/a.ts",
+        `import x from "${spec}";`,
+        ROOT,
+      ),
+    ).toEqual([spec]);
+    expect(
+      findEscapingImports(
+        "/repo/packages/mine/src/deep/nest/a.ts",
+        `import x from "${spec}";`,
+        ROOT,
+      ),
+    ).toEqual([]);
+  });
+
+  it("finds every import form, and bare specifiers are not relative", () => {
+    const src = [
+      'import a from "../../x/one";',
+      'import "../../x/two";',
+      'const c = require("../../x/three");',
+      'const d = await import("../../x/four");',
+      'import e from "@scope/pkg";',
+      'import f from "node:path";',
+    ].join("\n");
+    expect(
+      findEscapingImports("/repo/packages/mine/src/a.ts", src, ROOT).sort(),
+    ).toEqual(["../../x/four", "../../x/one", "../../x/three", "../../x/two"]);
   });
 });
