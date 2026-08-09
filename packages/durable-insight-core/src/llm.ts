@@ -9,6 +9,7 @@ import { sendConverse } from "./bedrockConverse";
 import { buildSystemPrompt, type DestinationType } from "./schema";
 import { parseChartSpec } from "./chartSpec";
 import { parseLocalServerQueryResponse } from "./localServerParse";
+import { stripTrailingSlashes } from "./hostModuleScan";
 import {
   parseVerdict,
   buildVerifyInstruction,
@@ -103,7 +104,7 @@ export function setLocalServer(
 ): void {
   localServerUrl =
     url && url.trim()
-      ? url.trim().replace(/\/+$/, "")
+      ? stripTrailingSlashes(url.trim())
       : DEFAULT_LOCAL_SERVER_URL;
   localServerModel =
     model && model.trim() ? model.trim() : DEFAULT_LOCAL_SERVER_MODEL;

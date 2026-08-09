@@ -23,6 +23,7 @@ import {
   findEscapingImports,
   findHostModules,
   importsHostModule,
+  stripTrailingSlashes,
 } from "./hostModuleScan";
 
 const { vscode, electron, mcpSdk } = HOST_MODULES;
@@ -80,6 +81,43 @@ describe("importsHostModule detects every form, for every host module", () => {
   it("covers all three hosts, so a new host cannot be forgotten silently", () => {
     // If a fourth host arrives, this fails until HOST_MODULES learns about it.
     expect(ALL_HOST_MODULES).toEqual([vscode, electron, mcpSdk]);
+  });
+});
+
+describe("stripTrailingSlashes is equivalent to the regex it replaced, and linear", () => {
+  // The regex it replaced was `/\/+$/`, flagged by CodeQL as js/polynomial-redos
+  // (high). Measured before fixing: 170ms at 10k slashes, 2.7s at 40k, 43s at 160k,
+  // 174s at 320k -- quadratic. This loop is flat at microseconds.
+  it.each([
+    ["", ""],
+    ["/", ""],
+    ["///", ""],
+    ["a", "a"],
+    ["a/", "a"],
+    ["a///", "a"],
+    ["/a/b/", "/a/b"],
+    ["//a//b//", "//a//b"],
+    ["no-slash", "no-slash"],
+    ["http://host/path///", "http://host/path"],
+    ["  /x/  ", "  /x/  "],
+  ])("%j -> %j", (input, expected) => {
+    expect(stripTrailingSlashes(input)).toBe(expected);
+  });
+
+  it("handles the pathological input that made the regex quadratic", () => {
+    // 200k slashes followed by a non-slash: the shape that never satisfies the old
+    // regex's end anchor, so it retried from every start position. If this ever takes
+    // measurable time again, the quantifier-at-anchor pattern has come back.
+    const pathological = "/".repeat(200_000) + "x";
+    const started = Date.now();
+    expect(stripTrailingSlashes(pathological)).toBe(pathological);
+    // Deliberately generous: this asserts "not catastrophic", not a benchmark. The old
+    // regex needed ~60s on this input; anything near the bound means a regression.
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
+  it("strips a long run of trailing slashes", () => {
+    expect(stripTrailingSlashes("x" + "/".repeat(200_000))).toBe("x");
   });
 });
 

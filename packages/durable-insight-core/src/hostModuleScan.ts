@@ -120,11 +120,27 @@ export function findEscapingImports(
   packageRoot: string,
 ): string[] {
   const dir = pathDirname(filePath);
-  const root = normalizeSlashes(packageRoot).replace(/\/+$/, "");
+  const root = stripTrailingSlashes(normalizeSlashes(packageRoot));
   return relativeImportSpecifiers(source).filter((spec) => {
     const resolved = normalizeSlashes(pathResolve(dir, spec));
     return resolved !== root && !resolved.startsWith(root + "/");
   });
+}
+
+/**
+ * Removes any trailing `/` characters.
+ *
+ * Deliberately NOT `replace(/\/+$/, "")`. That regex is a polynomial-ReDoS shape (a
+ * greedy quantifier anchored at the end): on a string of many slashes that does not end
+ * where the anchor requires, the engine retries from every start position and each
+ * attempt rescans the run. CodeQL flagged it as `js/polynomial-redos`, and measuring it
+ * confirmed the cost is quadratic -- 170ms at 10k slashes, 43s at 160k, 174s at 320k.
+ * This loop is linear and flat at microseconds.
+ */
+export function stripTrailingSlashes(p: string): string {
+  let end = p.length;
+  while (end > 0 && p[end - 1] === "/") end--;
+  return p.slice(0, end);
 }
 
 function normalizeSlashes(p: string): string {
