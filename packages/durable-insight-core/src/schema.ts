@@ -33,6 +33,36 @@ export type DestinationType =
   | "sqs"
   | "s3";
 
+/**
+ * The same set as {@link DestinationType}, available at runtime.
+ *
+ * A union type vanishes at compile time, so a caller holding an arbitrary string
+ * -- an environment variable, a wire setting -- has no way to ask whether it names
+ * a real destination. `normalizeConfig` consumes this, and so does the MCP host,
+ * which needs to tell a user that `DURABLE_INSIGHT_DESTINATION_TYPE=dynamo` is a
+ * typo rather than silently treating it as the default.
+ *
+ * `satisfies readonly DestinationType[]` ties the two together: adding a member to
+ * the union without adding it here still compiles, but `isDestinationType` would
+ * then reject a valid type -- so `configCore.test.ts` asserts the two agree by
+ * exhaustively switching over the union.
+ */
+export const DESTINATION_TYPES = [
+  "cloudwatch-logs-exporter",
+  "lambda-log-exporter",
+  "dynamodb",
+  "aurora",
+  "redshift",
+  "opensearch",
+  "sqs",
+  "s3",
+] as const satisfies readonly DestinationType[];
+
+/** Narrow an arbitrary string to a {@link DestinationType}. */
+export function isDestinationType(value: string): value is DestinationType {
+  return (DESTINATION_TYPES as readonly string[]).includes(value);
+}
+
 // ─── DIRECT (CloudWatchLogsExporter) ─────────────────────────────────────────
 
 const RECORD_SCHEMA_DIRECT = `Each log event is a raw JSON WorkflowInsightRecord with fields at the top level:

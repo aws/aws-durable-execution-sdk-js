@@ -36,8 +36,38 @@ export type KnownStatus = (typeof KNOWN_STATUSES)[number];
  * value therefore cannot terminate the literal, so the value can never break
  * out into surrounding SQL — it stays one literal, and any `OR`/`;`/`--` inside
  * it is just literal text.
+ *
+ * BACKSLASHES ARE REJECTED, NOT ESCAPED, and that asymmetry is deliberate.
+ *
+ * Quote-doubling alone is not sufficient on every engine here. Redshift's own
+ * `QUOTE_LITERAL` "appropriately doubles any embedded single quotation marks AND
+ * BACKSLASHES", which only makes sense because backslash is an escape character in
+ * its string literals (Redshift derives from PostgreSQL 8.0.2, before
+ * `standard_conforming_strings` defaulted on). So a value ending in a single
+ * backslash yields `'foo\'`, where the doubled quote is itself escaped and the
+ * literal continues — the same trailing-backslash breakout that made the log path
+ * need core's `escapeQuotedString`.
+ *
+ * Escaping backslashes instead would be WRONG for the other engines: in
+ * Athena/Trino a backslash is an ordinary character, so doubling it would turn a
+ * search for `foo\` into a search for `foo\\` and quietly return nothing. There is
+ * no single escaping that is correct everywhere.
+ *
+ * Rejection avoids the choice entirely and is lossless in practice: the only values
+ * that reach this function are execution ARNs and Lambda function names, and neither
+ * can legally contain a backslash. Anything that does is malformed input, not a
+ * search term someone lost.
  */
 export function escapeSqlString(value: string): string {
+  if (value.includes("\\")) {
+    throw new Error(
+      `Value contains a backslash, which is not permitted: ${JSON.stringify(value)}. ` +
+        `Backslash is an escape character in some SQL dialects (Redshift) and a ` +
+        `literal character in others (Athena), so no single escaping is correct for ` +
+        `all destinations. Execution ARNs and Lambda function names cannot contain ` +
+        `one.`,
+    );
+  }
   return value.replace(/'/g, "''");
 }
 

@@ -29,6 +29,7 @@ else
     "packages/aws-durable-execution-sdk-js-eslint-plugin"
     "packages/aws-durable-execution-sdk-js-otel"
     "packages/aws-durable-execution-sdk-js-insight"
+    "packages/durable-insight-mcp"
   )
 fi
 

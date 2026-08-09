@@ -113,7 +113,11 @@ needs read access to whichever destination you point at.
 `DURABLE_INSIGHT_DESTINATION_TYPE` selects the backend. Seven destination types
 are **queryable**; each requires the variables below (anything not listed has a
 working default, shown in parentheses). If `DURABLE_INSIGHT_DESTINATION_TYPE` is
-unset it defaults to `cloudwatch-logs-exporter`.
+unset it defaults to `cloudwatch-logs-exporter`. A value that is **set but not
+recognized** (a typo such as `dynamo`, or wrong casing such as `DynamoDB`) also
+falls back to that default, so the server warns on startup and names the valid
+values — otherwise it would report a CloudWatch variable as missing to someone who
+had configured DynamoDB correctly.
 
 | `DURABLE_INSIGHT_DESTINATION_TYPE` | Required variables                                                                                                              | Notable defaults                                                                                                                                                                                                                      |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -170,12 +174,20 @@ The server registers five tools. Call them roughly in this order.
 ### Result bounding
 
 - **Row cap.** Every result from every destination is capped at **1000 rows**
-  (`MAX_ROWS`). A `truncated: true` flag tells you the cap was hit — narrow your
-  filters rather than assuming you saw everything.
+  (`MAX_ROWS`). Pass a smaller `limit` when you only need a few rows: it is honored,
+  and rows you did not want still cost tokens to read. `limit` cannot raise the cap.
+- **`truncated` means "there may be more matching data than this."** It does not
+  mean the returned array was trimmed. Reaching the cap sets it; on DynamoDB a
+  response that hit the service's ~1 MB limit also sets it, which can happen far
+  below 1000 rows. Either way, narrow your filters rather than assuming you saw
+  everything.
 - **Log lookback window.** CloudWatch Logs Insights has no "all time"; a query
-  must carry an explicit `[start, end]` window. When you do not pass one, the
-  server uses the **last 24 hours** by default. This window is ignored by the SQL
-  destinations, which are not time-windowed.
+  must carry an explicit `[start, end]` window. When you do not pass one, `query`
+  uses the **last 24 hours** and `get_execution` the **last 7 days**. Both are
+  overridable with `lookbackHours`, and `get_execution` reports the window it
+  searched as `searchedLookbackHours` — so a `found: false` on a log destination
+  means "not in that window", not "does not exist". This window is ignored by the
+  SQL destinations, which are not time-windowed.
 
 ## Prompts
 

@@ -20,6 +20,7 @@ import {
   MCP_EXCLUDED_SETTING_KEYS,
 } from "./envKeys";
 import { readConfigFromEnv, missingRequiredEnvVars } from "./config";
+import { DESTINATION_TYPES } from "@aws/durable-insight-core";
 
 describe("envVarFor", () => {
   it("1. every MCP setting key round-trips to a valid DURABLE_INSIGHT_ variable", () => {
@@ -281,5 +282,90 @@ describe("missingRequiredEnvVars — every DestinationType", () => {
   it("covers all eight DestinationType values", () => {
     const covered = new Set(CASES.map((c) => c.type));
     expect(covered.size).toBe(8);
+  });
+});
+/**
+ * An unrecognized DESTINATION_TYPE must be reported, not absorbed.
+ *
+ * THE FAILURE THIS PREVENTS:
+ * `normalizeConfig` ends its destination-type resolution in a fallback to
+ * "cloudwatch-logs-exporter". In the extension that is correct -- the value comes
+ * from a dropdown, so an invalid one is unreachable. Here configuration is
+ * environment-only, so a typo is the expected failure mode, and it was silent:
+ * DESTINATION_TYPE=dynamo produced a server that reported
+ * DURABLE_INSIGHT_LOG_GROUP_NAME as the missing variable to a user who had set
+ * every DynamoDB variable correctly. `missingRequiredEnvVars` can never name the
+ * real problem, because by the time it runs the typo is gone.
+ */
+describe("unrecognized destination type is surfaced", () => {
+  const findWarning = (warnings: string[]) =>
+    warnings.find((w) => w.includes("not a recognized destination type"));
+
+  it.each(["dynamo", "DynamoDB", "athena", "postgres", " s3 x"])(
+    "warns for %s",
+    (value) => {
+      const { warnings } = readConfigFromEnv({
+        DURABLE_INSIGHT_DESTINATION_TYPE: value,
+      } as NodeJS.ProcessEnv);
+      const warning = findWarning(warnings);
+      expect(warning).toBeDefined();
+      // The value must appear, or the user cannot see their own typo.
+      expect(warning).toContain(value);
+      // And the valid set, or they cannot fix it without reading the source.
+      expect(warning).toContain("dynamodb");
+    },
+  );
+
+  it.each(DESTINATION_TYPES)("stays silent for the valid type %s", (value) => {
+    // Acceptance matters as much as rejection: a check that warned for everything
+    // would pass the cases above while making every correct config noisy.
+    const { warnings, config } = readConfigFromEnv({
+      DURABLE_INSIGHT_DESTINATION_TYPE: value,
+    } as NodeJS.ProcessEnv);
+    expect(findWarning(warnings)).toBeUndefined();
+    expect(config.destinationType).toBe(value);
+  });
+
+  it("stays silent when the variable is unset", () => {
+    // Unset is not a typo -- it is the documented default, and warning about it
+    // would train users to ignore warnings.
+    const { warnings } = readConfigFromEnv({} as NodeJS.ProcessEnv);
+    expect(findWarning(warnings)).toBeUndefined();
+  });
+
+  it("tolerates surrounding whitespace, as normalizeConfig does", () => {
+    const { warnings, config } = readConfigFromEnv({
+      DURABLE_INSIGHT_DESTINATION_TYPE: "  dynamodb  ",
+    } as NodeJS.ProcessEnv);
+    expect(findWarning(warnings)).toBeUndefined();
+    expect(config.destinationType).toBe("dynamodb");
+  });
+});
+
+describe("region falls back to both standard AWS variables", () => {
+  it("uses AWS_DEFAULT_REGION when AWS_REGION is unset", () => {
+    // This function shadows normalizeConfig's own fallback, which reads both. The
+    // local copy read only AWS_REGION, making it the narrower of the two.
+    const { config } = readConfigFromEnv({
+      AWS_DEFAULT_REGION: "eu-west-2",
+    } as NodeJS.ProcessEnv);
+    expect(config.region).toBe("eu-west-2");
+  });
+
+  it("prefers AWS_REGION over AWS_DEFAULT_REGION", () => {
+    const { config } = readConfigFromEnv({
+      AWS_REGION: "us-west-2",
+      AWS_DEFAULT_REGION: "eu-west-2",
+    } as NodeJS.ProcessEnv);
+    expect(config.region).toBe("us-west-2");
+  });
+
+  it("prefers the prefixed variable over both", () => {
+    const { config } = readConfigFromEnv({
+      DURABLE_INSIGHT_REGION: "ap-south-1",
+      AWS_REGION: "us-west-2",
+      AWS_DEFAULT_REGION: "eu-west-2",
+    } as NodeJS.ProcessEnv);
+    expect(config.region).toBe("ap-south-1");
   });
 });

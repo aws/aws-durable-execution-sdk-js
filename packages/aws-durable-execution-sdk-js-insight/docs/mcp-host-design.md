@@ -783,6 +783,38 @@ unmerged:
 
 ---
 
+Review of this change added five more, all of them the same shape as the two above
+-- a guard that could not fail, or a promise with no implementation:
+
+- **A declared parameter with no implementation.** `query` declared `limit`,
+  validated it, described it to the model as the row maximum, and never read it. The
+  schema and the handler are only comparable at the source level, so
+  `toolWiring.test.ts` now parses the TypeScript AST and asserts every declared
+  parameter is destructured, in both directions.
+- **Enumerating a rule by name prefix instead of by capability.** The choke-point
+  guard forbade the six `run*Query` runners. Core exports six MORE functions that
+  execute a query -- `fetchAthenaRecord`, `fetchDynamoDBRecord`,
+  `fetchAuroraRecord`, `fetchRedshiftRecord`, `tableExists`, and `ensureAthenaTable`,
+  which runs DDL -- so importing one executed SQL while mentioning no runner and the
+  guard stayed green. The list is now derived from core's AST and a meta-test fails
+  when a new core export falls outside it. This is the `electron` blind spot again:
+  the invariant was named too narrowly.
+- **A scanner that flagged its own documentation.** Widening that guard by matching
+  names as text immediately flagged `sqlSafe.ts` and `tools.ts`, which discuss
+  `fetchAthenaRecord` in doc comments while never importing it. Reading import
+  declarations from the AST fixes it. Third occurrence of this mistake in this
+  project; a name in prose is not a use.
+- **`private: false` is not "published".** `packaging.test.ts` asserted the manifest
+  flag and read as coverage for installability, but the release script publishes from
+  a hard-coded list this package was absent from -- so `npx` could not have worked
+  whatever the manifest said. The invariant is keyed on the `@aws/` scope, because
+  three packages here are non-private and correctly never published.
+- **Truncation reported from the wrong evidence.** `truncated` came from the row
+  count alone, but DynamoDB bounds a response at ~1 MB and signals more via
+  `NextToken`, so 400 rows of a matching 5,000 reported complete. Core now surfaces
+  `hasMore`. Note the MCP host's own tests could not have caught a regression here --
+  they mock the runner -- so the pinning test lives in core, against the SDK response.
+
 ## 14. Risks
 
 | Risk                                                         | Severity | Mitigation                                                                         |

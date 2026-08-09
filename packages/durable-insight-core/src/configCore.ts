@@ -11,7 +11,7 @@
  */
 import { fromIni, fromNodeProviderChain } from "@aws-sdk/credential-providers";
 import type { AwsCredentialIdentityProvider } from "@aws-sdk/types";
-import type { DestinationType } from "./schema";
+import { isDestinationType, type DestinationType } from "./schema";
 
 export interface InsightConfig {
   region: string;
@@ -93,23 +93,15 @@ export function normalizeConfig(src: ConfigSource): InsightConfig {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+  // An unrecognized value falls back to the default rather than throwing, which is
+  // what the extension needs: its setting comes from a dropdown, so a bad value is
+  // not a case a user can reach. A host whose configuration is environment-only
+  // CAN reach it, so `isDestinationType` is exported for callers that must warn --
+  // this function must not become the place that decides how to report it.
   const raw = (src.getString("destinationType") || "").trim();
-  const destinationType =
-    raw === "lambda-log-exporter"
-      ? ("lambda-log-exporter" as const)
-      : raw === "dynamodb"
-        ? ("dynamodb" as const)
-        : raw === "aurora"
-          ? ("aurora" as const)
-          : raw === "redshift"
-            ? ("redshift" as const)
-            : raw === "opensearch"
-              ? ("opensearch" as const)
-              : raw === "sqs"
-                ? ("sqs" as const)
-                : raw === "s3"
-                  ? ("s3" as const)
-                  : ("cloudwatch-logs-exporter" as const);
+  const destinationType: DestinationType = isDestinationType(raw)
+    ? raw
+    : "cloudwatch-logs-exporter";
   const dynamodbTableName = (src.getString("dynamodbTableName") || "").trim();
   const auroraResourceArn = (src.getString("auroraResourceArn") || "").trim();
   const auroraSecretArn = (src.getString("auroraSecretArn") || "").trim();

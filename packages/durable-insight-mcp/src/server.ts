@@ -31,6 +31,7 @@ import {
   runGetExecution,
   runListExecutions,
   TEST_DESTINATION_DESCRIPTION,
+  DEFAULT_RECORD_LOOKBACK_HOURS,
 } from "./tools";
 
 /**
@@ -170,9 +171,9 @@ function registerTools(server: McpServer, config: InsightConfig): void {
             "A single read-only SQL/PartiQL SELECT (or WITH ... SELECT) " +
               "statement. Data-modifying and DDL statements are rejected.",
           ),
-        // `limit` is validated at the protocol boundary to be within the hard
-        // cap. The real bound is MAX_ROWS, enforced inside runReadOnlyQuery, so
-        // this parameter is advisory — it cannot raise the cap.
+        // Validated at the protocol boundary to be within the hard cap, then
+        // passed to runReadOnlyQuery, which clamps it into [1, MAX_ROWS]. It can
+        // therefore lower the bound but never raise it.
         limit: z
           .number()
           .int()
@@ -180,8 +181,9 @@ function registerTools(server: McpServer, config: InsightConfig): void {
           .max(MAX_ROWS)
           .optional()
           .describe(
-            `Optional hint for the maximum number of rows to return (<= ${MAX_ROWS}). ` +
-              `Results are always capped at ${MAX_ROWS} regardless.`,
+            `Maximum rows to return (<= ${MAX_ROWS}). Lowering this is worth doing ` +
+              `whenever you only need a few rows: every row costs tokens to read. ` +
+              `Results are capped at ${MAX_ROWS} whether or not this is set.`,
           ),
         // Time window for CloudWatch Logs Insights destinations ONLY
         // (cloudwatch-logs-exporter / lambda-log-exporter). Logs Insights has no
@@ -202,7 +204,7 @@ function registerTools(server: McpServer, config: InsightConfig): void {
           ),
       },
     },
-    async ({ sql, lookbackHours }) => {
+    async ({ sql, limit, lookbackHours }) => {
       // 1. Completeness check first — a missing-config finding must never make a
       //    network call (mirrors test_destination). Returns actionable
       //    DURABLE_INSIGHT_* variable NAMES.
@@ -234,7 +236,10 @@ function registerTools(server: McpServer, config: InsightConfig): void {
           lookbackHours !== undefined
             ? lookbackHours * 60 * 60 * 1000
             : undefined;
-        const result = await runReadOnlyQuery(config, sql, { timeRangeMs });
+        const result = await runReadOnlyQuery(config, sql, {
+          timeRangeMs,
+          maxRows: limit,
+        });
         const payload = {
           columns: result.columns,
           rows: result.rows,
@@ -324,16 +329,36 @@ function registerTools(server: McpServer, config: InsightConfig): void {
           .string()
           .optional()
           .describe(
-            "Optional Athena/S3 partition day (digits) for partition pruning.",
+            "Optional Athena/S3 partition day (digits) for partition pruning. " +
+              "Ignored on other destinations, which report it back in " +
+              "`ignoredParams`.",
+          ),
+        lookbackHours: z
+          .number()
+          .positive()
+          .optional()
+          .describe(
+            `For CloudWatch Logs destinations only: how many hours back to ` +
+              `search (default ${DEFAULT_RECORD_LOOKBACK_HOURS}). Logs Insights ` +
+              `requires an explicit window, so an execution older than this ` +
+              `reports found=false; widen it before concluding the execution ` +
+              `does not exist. The window searched is returned as ` +
+              `searchedLookbackHours.`,
           ),
       },
     },
-    async ({ executionArn, year, month, day }) => {
+    async ({ executionArn, year, month, day, lookbackHours }) => {
       const gate = missingConfigResult(config);
       if (gate) return gate;
       try {
         return jsonResult(
-          await runGetExecution(config, { executionArn, year, month, day }),
+          await runGetExecution(config, {
+            executionArn,
+            year,
+            month,
+            day,
+            lookbackHours,
+          }),
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

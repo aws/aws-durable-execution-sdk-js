@@ -11,6 +11,8 @@
 import {
   configFromWireSettings,
   type InsightConfig,
+  DESTINATION_TYPES,
+  isDestinationType,
 } from "@aws/durable-insight-core";
 import {
   envVarFor,
@@ -54,8 +56,13 @@ export function readConfigFromEnv(
 
   // Standard AWS fallbacks. The prefixed form already collected above wins;
   // only fill in from the standard variable when the prefixed one is unset.
-  if (wire["region"] === undefined && env.AWS_REGION !== undefined) {
-    wire["region"] = env.AWS_REGION;
+  if (wire["region"] === undefined) {
+    // Both, and in this order — `normalizeConfig` honors AWS_DEFAULT_REGION too, so
+    // reading only AWS_REGION here made this the narrower of two overlapping
+    // fallbacks: a user with only AWS_DEFAULT_REGION set got core's default region
+    // in the config this function returns, while core would have resolved it.
+    const region = env.AWS_REGION ?? env.AWS_DEFAULT_REGION;
+    if (region !== undefined) wire["region"] = region;
   }
   if (wire["awsProfile"] === undefined && env.AWS_PROFILE !== undefined) {
     wire["awsProfile"] = env.AWS_PROFILE;
@@ -71,6 +78,30 @@ export function readConfigFromEnv(
           `so provider/model settings do not apply.`,
       );
     }
+  }
+
+  // An unrecognized DESTINATION_TYPE is the expected failure mode for a host
+  // configured only by environment variables, and it is silent: `normalizeConfig`
+  // falls back to "cloudwatch-logs-exporter", so `DESTINATION_TYPE=dynamo` yields a
+  // server that reports DURABLE_INSIGHT_LOG_GROUP_NAME as missing to a user who set
+  // every DynamoDB variable correctly. The default is right for the extension, where
+  // the value comes from a dropdown and cannot be misspelled; it is a trap here.
+  //
+  // A warning rather than a throw, for the same reason missing destination config is
+  // a warning: a server that refuses to start appears in an MCP client as an
+  // unexplained failure, while one that starts can say what is wrong.
+  const rawDestination = wire["destinationType"];
+  if (
+    rawDestination !== undefined &&
+    !isDestinationType(rawDestination.trim())
+  ) {
+    warnings.push(
+      `${envVarFor("destinationType")}="${rawDestination}" is not a recognized ` +
+        `destination type, so it was ignored and the default ` +
+        `"cloudwatch-logs-exporter" is in use — which is why a required variable ` +
+        `for that destination may be reported as missing. Valid values: ` +
+        `${DESTINATION_TYPES.join(", ")}.`,
+    );
   }
 
   return { config: configFromWireSettings(wire), warnings };

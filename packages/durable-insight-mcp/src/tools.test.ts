@@ -7,6 +7,9 @@ import {
   configFromWireSettings,
   runAthenaQuery,
   runDynamoDBQuery,
+  runAuroraQuery,
+  runRedshiftQuery,
+  fetchLogsInsightsRecord,
   resolveCredentials,
   type InsightConfig,
 } from "@aws/durable-insight-core";
@@ -15,6 +18,7 @@ import {
   buildDescribeSchemaResult,
   runGetExecution,
   runListExecutions,
+  DEFAULT_RECORD_LOOKBACK_HOURS,
 } from "./tools";
 
 jest.mock("@aws/durable-insight-core", () => {
@@ -25,10 +29,24 @@ jest.mock("@aws/durable-insight-core", () => {
     ...actual,
     runAthenaQuery: jest.fn(),
     runDynamoDBQuery: jest.fn(),
+    runAuroraQuery: jest.fn(),
+    runRedshiftQuery: jest.fn(),
+    fetchLogsInsightsRecord: jest.fn(),
     resolveCredentials: jest.fn(() => "FAKE_CREDENTIALS"),
   };
 });
 
+const runAuroraMock = runAuroraQuery as jest.MockedFunction<
+  typeof runAuroraQuery
+>;
+const runRedshiftMock = runRedshiftQuery as jest.MockedFunction<
+  typeof runRedshiftQuery
+>;
+const logsRecordMock = fetchLogsInsightsRecord as jest.MockedFunction<
+  typeof fetchLogsInsightsRecord
+>;
+/** A representative execution ARN for point lookups. */
+const ARN = "arn:aws:lambda:us-east-1:123456789012:function:fn:1#exec-1";
 const runAthenaMock = runAthenaQuery as jest.MockedFunction<
   typeof runAthenaQuery
 >;
@@ -122,6 +140,7 @@ describe("get_execution found semantics", () => {
       rows: [],
       count: 0,
       numericColumns: [],
+      hasMore: false,
     });
     const r = await runGetExecution(cfgFor("dynamodb"), {
       executionArn: "nope",
@@ -137,6 +156,7 @@ describe("get_execution found semantics", () => {
       rows: [["arn:1", "SUCCEEDED"]],
       count: 1,
       numericColumns: [false, false],
+      hasMore: false,
     });
     const r = await runGetExecution(cfgFor("dynamodb"), {
       executionArn: "arn:1",
@@ -160,5 +180,97 @@ describe("list_executions result shape", () => {
     expect(r.columns).toEqual(["executionarn", "status"]);
     expect(r.count).toBe(1);
     expect(r.truncated).toBe(false);
+  });
+});
+
+/**
+ * `get_execution` must say what it searched, and what it ignored.
+ *
+ * TWO FAILURES THIS PREVENTS:
+ *
+ *   1. On a log destination the lookup inherited core's 7-day window with no way to
+ *      widen it, and reported a miss as `found: false` -- identical to the result for
+ *      an execution that never existed. An agent cannot distinguish "not in the last
+ *      week" from "does not exist", so it will confidently report the wrong one.
+ *
+ *   2. `year`/`month`/`day` are Athena partition hints. Passing them to any other
+ *      destination produced no error, no warning and no change in behavior, which
+ *      teaches an agent they worked.
+ */
+describe("get_execution reports its window and its ignored parameters", () => {
+  it("reports the default window when none is given", async () => {
+    logsRecordMock.mockResolvedValueOnce(undefined);
+    const result = await runGetExecution(cfgFor("cloudwatch-logs-exporter"), {
+      executionArn: ARN,
+    });
+    expect(result.found).toBe(false);
+    // Without this an agent cannot tell a miss from an absence.
+    expect(result.searchedLookbackHours).toBe(DEFAULT_RECORD_LOOKBACK_HOURS);
+  });
+
+  it("passes a wider window through to core and reports it", async () => {
+    logsRecordMock.mockResolvedValueOnce(undefined);
+    const result = await runGetExecution(cfgFor("cloudwatch-logs-exporter"), {
+      executionArn: ARN,
+      lookbackHours: 720,
+    });
+    expect(logsRecordMock.mock.calls[0][0].lookbackMs).toBe(
+      720 * 60 * 60 * 1000,
+    );
+    expect(result.searchedLookbackHours).toBe(720);
+  });
+
+  it.each([0, -5])(
+    "falls back to the default for a %s window",
+    async (lookbackHours) => {
+      logsRecordMock.mockResolvedValueOnce(undefined);
+      const result = await runGetExecution(cfgFor("cloudwatch-logs-exporter"), {
+        executionArn: ARN,
+        lookbackHours,
+      });
+      // A zero-hour window would search nothing and always report found=false.
+      expect(result.searchedLookbackHours).toBe(DEFAULT_RECORD_LOOKBACK_HOURS);
+    },
+  );
+
+  it.each(["dynamodb", "aurora", "redshift"])(
+    "reports year/month/day as ignored on %s",
+    async (destination) => {
+      const empty = {
+        columns: [],
+        rows: [],
+        count: 0,
+        numericColumns: [],
+        hasMore: false,
+      };
+      runDynamoDBMock.mockResolvedValue(empty);
+      runAuroraMock.mockResolvedValue(empty);
+      runRedshiftMock.mockResolvedValue(empty);
+      const result = await runGetExecution(cfgFor(destination), {
+        executionArn: ARN,
+        year: "2024",
+        month: "01",
+      });
+      expect(result.ignoredParams).toEqual(["year", "month"]);
+    },
+  );
+
+  it("does not report partition params as ignored on s3", async () => {
+    // Acceptance: on Athena they prune the scan, so flagging them there would be
+    // wrong and would train the agent to stop sending them.
+    const result = await runGetExecution(cfgFor("s3"), {
+      executionArn: ARN,
+      year: "2024",
+      month: "01",
+      day: "31",
+    });
+    expect(result.ignoredParams).toBeUndefined();
+  });
+
+  it("omits ignoredParams entirely when nothing was ignored", async () => {
+    const result = await runGetExecution(cfgFor("dynamodb"), {
+      executionArn: ARN,
+    });
+    expect(result.ignoredParams).toBeUndefined();
   });
 });

@@ -76,3 +76,59 @@ describe("published package is installable by a customer", () => {
     );
   });
 });
+
+/**
+ * `"private": false` is a manifest flag. It permits publishing; it does not cause it.
+ * The release script decides that, from a hard-coded list, and this package was missing
+ * from it -- so `npx -y @aws/durable-insight-mcp` could not have worked no matter what
+ * the manifest said. Every test above passed throughout, because none of them knew the
+ * release pipeline existed.
+ *
+ * The invariant is deliberately keyed on the `@aws/` SCOPE rather than on
+ * `private !== true`. Three packages in this workspace are non-private and are
+ * correctly never published -- `cdk-bundling-integration-test`, `esm-integration-test`,
+ * `lambda-runtime-detection-integration-test` -- so the broader rule would fail on
+ * pre-existing, correct state. A scoped name is the actual signal of intent to publish:
+ * nothing else can claim `@aws/`.
+ */
+describe("release pipeline actually publishes what claims to be published", () => {
+  const PUBLISH_SCRIPT = join(
+    __dirname,
+    "..",
+    "..",
+    "..",
+    ".github",
+    "workflows",
+    "iterate-publish-npm.sh",
+  );
+  const script = readFileSync(PUBLISH_SCRIPT, "utf-8");
+
+  /** Directory names listed in the script's PACKAGES array. */
+  const listedDirs = new Set(
+    [...script.matchAll(/^\s*"packages\/([^"]+)"\s*$/gm)].map((m) => m[1]),
+  );
+
+  it("finds the publish list", () => {
+    // Non-vacuity: a renamed script or a restructured array must fail loudly here
+    // rather than silently making every assertion below trivially true.
+    expect(listedDirs.size).toBeGreaterThan(3);
+    expect(listedDirs).toContain("aws-durable-execution-sdk-js");
+  });
+
+  it("lists every publishable @aws/-scoped workspace package", () => {
+    const missing: string[] = [];
+    for (const dir of readdirSync(PACKAGES_DIR)) {
+      const m = read(join(PACKAGES_DIR, dir, "package.json"));
+      if (!m?.name || m.private === true) continue;
+      if (!m.name.startsWith("@aws/")) continue;
+      if (!listedDirs.has(dir)) missing.push(`${m.name} (packages/${dir})`);
+    }
+    // A package here is one a customer is told to install and cannot.
+    expect(missing).toEqual([]);
+  });
+
+  it("lists this package specifically", () => {
+    // Stated separately so the failure names this package rather than a set.
+    expect(listedDirs).toContain("durable-insight-mcp");
+  });
+});

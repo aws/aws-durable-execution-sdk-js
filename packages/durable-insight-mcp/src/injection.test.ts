@@ -27,6 +27,7 @@ import {
   type InsightConfig,
 } from "@aws/durable-insight-core";
 import { runGetExecution, runListExecutions } from "./tools";
+import { escapeSqlString } from "./sqlSafe";
 
 jest.mock("@aws/durable-insight-core", () => {
   const actual = jest.requireActual<typeof import("@aws/durable-insight-core")>(
@@ -68,7 +69,15 @@ const EMPTY_ATHENA = {
   numericColumns: [],
   truncated: false,
 };
-const EMPTY_PLAIN = { columns: [], rows: [], count: 0, numericColumns: [] };
+const EMPTY_PLAIN = {
+  columns: [],
+  rows: [],
+  count: 0,
+  numericColumns: [],
+  // `hasMore` is DynamoDB-only; false keeps these fixtures complete-by-default so a
+  // test that cares about incompleteness has to say so.
+  hasMore: false,
+};
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -340,5 +349,54 @@ describe("list_executions — validated filters build the expected per-dialect S
     expect(sql).toContain("functionName = 'my-fn'");
     // startTime is a DATE field, so ORDER BY on it is allowed by the SQL plugin.
     expect(sql).toMatch(/ORDER BY startTime DESC LIMIT 100$/);
+  });
+});
+
+/**
+ * A trailing backslash must be rejected rather than escaped.
+ *
+ * THE FAILURE THIS PREVENTS:
+ * `escapeSqlString` doubled single quotes only. On Redshift that is incomplete:
+ * backslash is an escape character in its string literals (its own `QUOTE_LITERAL`
+ * doubles backslashes as well as quotes), so a value ending in `\` produces `'foo\'`
+ * where the doubled closing quote is itself escaped and the literal runs on into the
+ * surrounding SQL. The log path already had this closed via core's
+ * `escapeQuotedString`; the SQL path did not.
+ *
+ * WHY REJECTION AND NOT ESCAPING:
+ * Doubling backslashes would be correct for Redshift and WRONG for Athena/Trino,
+ * where a backslash is an ordinary character -- there, doubling turns a search for
+ * `foo\` into a search for `foo\\`. No single escaping is right for all six engines.
+ * Rejection sidesteps it and loses nothing real: only execution ARNs and Lambda
+ * function names reach this code, and neither can contain a backslash.
+ */
+describe("backslashes are rejected on the SQL path", () => {
+  it.each([
+    ["trailing backslash", "fn\\"],
+    ["backslash before a quote", "fn\\'"],
+    ["interior backslash", "a\\b"],
+    ["double backslash", "fn\\\\"],
+  ])("rejects a %s", (_label, value) => {
+    expect(() => escapeSqlString(value)).toThrow(/backslash/i);
+  });
+
+  it("still escapes quotes in values without a backslash", () => {
+    // Acceptance: a check that threw for everything would satisfy the cases above
+    // while breaking every legitimate value.
+    expect(escapeSqlString("O'Brien")).toBe("O''Brien");
+    expect(escapeSqlString("plain-name")).toBe("plain-name");
+    expect(escapeSqlString("")).toBe("");
+  });
+
+  it("names the offending value so a caller can see what was wrong", () => {
+    expect(() => escapeSqlString("bad\\name")).toThrow(/bad\\\\name/);
+  });
+
+  it("rejects at the tool boundary, before any query is built", async () => {
+    // The unit above proves the helper throws; this proves the throw reaches the
+    // caller instead of being swallowed into a malformed query.
+    await expect(
+      runListExecutions(cfgFor("redshift"), { functionName: "fn\\" }),
+    ).rejects.toThrow(/backslash/i);
   });
 });

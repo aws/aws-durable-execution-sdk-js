@@ -77,6 +77,7 @@ const PLAIN_OK = {
   rows: [["1"]],
   count: 1,
   numericColumns: [true],
+  hasMore: false,
 };
 
 beforeEach(() => {
@@ -304,6 +305,7 @@ describe("row bounding — DynamoDB single page sliced at the cap", () => {
       rows: Array.from({ length: MAX_ROWS + 5 }, (_, i) => [String(i)]),
       count: MAX_ROWS + 5,
       numericColumns: [true],
+      hasMore: false,
     });
     const result = await runReadOnlyQuery(
       cfgFor("dynamodb"),
@@ -321,6 +323,153 @@ describe("row bounding — DynamoDB single page sliced at the cap", () => {
     );
     expect(result.truncated).toBe(false);
   });
+
+  /**
+   * DynamoDB has a SECOND, independent reason a result can be incomplete, and it is
+   * invisible in the row count.
+   *
+   * THE FAILURE THIS PREVENTS:
+   * `runDynamoDBQuery` issues one non-paginating `ExecuteStatement`, and DynamoDB
+   * bounds a response at ~1 MB however many items match. Truncation used to be
+   * derived from `count >= cap` alone, so a query matching 5,000 items that returned
+   * 400 reported `truncated: false` -- a complete answer as far as the agent could
+   * tell, which it would then state as one. Silently wrong beats loudly wrong for
+   * getting through review, which is why this needed a test rather than a comment.
+   */
+  it("reports truncated=true when DynamoDB signals more results, even far below the cap", async () => {
+    runDynamoDBMock.mockResolvedValueOnce({
+      columns: ["n"],
+      rows: ROWS_DDB(400),
+      count: 400,
+      numericColumns: [true],
+      hasMore: true,
+    });
+    const result = await runReadOnlyQuery(
+      cfgFor("dynamodb"),
+      "SELECT * FROM t",
+    );
+    // 400 is nowhere near MAX_ROWS, so a count-based check cannot catch this.
+    expect(result.count).toBe(400);
+    expect(result.truncated).toBe(true);
+  });
+
+  it("keeps every row when DynamoDB signals more but the cap was not reached", async () => {
+    // Incomplete is not the same as over-long: flagging truncation must not also
+    // start discarding rows the caller did receive.
+    runDynamoDBMock.mockResolvedValueOnce({
+      columns: ["n"],
+      rows: ROWS_DDB(400),
+      count: 400,
+      numericColumns: [true],
+      hasMore: true,
+    });
+    const result = await runReadOnlyQuery(
+      cfgFor("dynamodb"),
+      "SELECT * FROM t",
+    );
+    expect(result.rows.length).toBe(400);
+  });
+});
+
+/** Rows for DynamoDB fixtures. */
+const ROWS_DDB = (n: number) =>
+  Array.from({ length: n }, (_, i) => [String(i)]);
+
+/**
+ * A per-call `maxRows` must actually bound the result on EVERY engine.
+ *
+ * THE FAILURE THIS PREVENTS:
+ * `query` declared a `limit` parameter, described it as the maximum number of rows
+ * to return, and then never read it -- the handler destructured only `{ sql,
+ * lookbackHours }`. An agent asking for 10 rows received up to MAX_ROWS, which is
+ * precisely the token cost the structured tools exist to avoid. Nothing failed,
+ * because no test passed the parameter.
+ *
+ * Each engine is asserted separately because each bounds differently: Athena is
+ * told the cap, DynamoDB is sliced afterwards, and the three unbounded runners go
+ * through `capUnbounded`. A single shared assertion would pass while one engine
+ * ignored the cap entirely.
+ */
+describe("per-call maxRows bounds every engine", () => {
+  const ROWS = (n: number) => Array.from({ length: n }, (_, i) => [String(i)]);
+
+  it("is handed to Athena as its own maxRows, not applied afterwards", async () => {
+    runAthenaMock.mockResolvedValueOnce({ ...ATHENA_OK });
+    await runReadOnlyQuery(cfgFor("s3"), "SELECT * FROM t", { maxRows: 10 });
+    // Athena pages server-side, so the cap has to reach the runner: slicing after
+    // the fact would still have transferred every row.
+    expect(runAthenaMock.mock.calls[0][0].maxRows).toBe(10);
+  });
+
+  it("slices the DynamoDB page to the per-call cap", async () => {
+    runDynamoDBMock.mockResolvedValueOnce({
+      columns: ["n"],
+      rows: ROWS(50),
+      count: 50,
+      numericColumns: [true],
+      hasMore: false,
+    });
+    const result = await runReadOnlyQuery(
+      cfgFor("dynamodb"),
+      "SELECT * FROM t",
+      {
+        maxRows: 10,
+      },
+    );
+    expect(result.rows.length).toBe(10);
+    expect(result.count).toBe(10);
+    expect(result.truncated).toBe(true);
+  });
+
+  it.each([
+    ["aurora", () => runAuroraMock],
+    ["redshift", () => runRedshiftMock],
+    ["opensearch", () => runOpenSearchMock],
+  ] as const)(
+    "slices the unbounded %s runner to the per-call cap",
+    async (destination, mock) => {
+      mock().mockResolvedValueOnce({
+        columns: ["n"],
+        rows: ROWS(50),
+        count: 50,
+        numericColumns: [true],
+      });
+      const result = await runReadOnlyQuery(
+        cfgFor(destination),
+        "SELECT * FROM t",
+        { maxRows: 10 },
+      );
+      expect(result.rows.length).toBe(10);
+      expect(result.truncated).toBe(true);
+    },
+  );
+
+  it("cannot raise the hard cap", async () => {
+    runAthenaMock.mockResolvedValueOnce({ ...ATHENA_OK });
+    await runReadOnlyQuery(cfgFor("s3"), "SELECT * FROM t", {
+      maxRows: MAX_ROWS * 10,
+    });
+    expect(runAthenaMock.mock.calls[0][0].maxRows).toBe(MAX_ROWS);
+  });
+
+  it.each([
+    ["absent", undefined],
+    ["zero", 0],
+    ["negative", -5],
+    ["NaN", Number.NaN],
+    ["Infinity", Number.POSITIVE_INFINITY],
+  ])(
+    "falls back to the hard cap when the hint is %s",
+    async (_label, value) => {
+      runAthenaMock.mockResolvedValueOnce({ ...ATHENA_OK });
+      await runReadOnlyQuery(cfgFor("s3"), "SELECT * FROM t", {
+        maxRows: value,
+      });
+      // Falling back to zero rows would read as "no data" to an agent rather than
+      // as a bad parameter, which is a worse failure than ignoring the hint.
+      expect(runAthenaMock.mock.calls[0][0].maxRows).toBe(MAX_ROWS);
+    },
+  );
 });
 
 // ── Non-queryable and unsupported destinations ───────────────────────────────

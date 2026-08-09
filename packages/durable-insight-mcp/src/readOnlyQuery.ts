@@ -54,6 +54,49 @@ import {
 export const MAX_ROWS = 1000;
 
 /**
+ * WHY `truncated` IS DERIVED THREE DIFFERENT WAYS.
+ *
+ * A reader comparing the engine branches below will find three comparisons and no
+ * explanation, which reads like drift. It is not: the runners genuinely differ in
+ * what they hand back, and each comparison is the correct one for its source.
+ *
+ *   - Athena (`>= cap`, plus the runner's own flag): the runner is TOLD the cap and
+ *     stops paging there, so it knows whether it stopped early and says so. We
+ *     surface its flag rather than re-deriving one.
+ *
+ *   - DynamoDB (`>= cap` OR `hasMore`): one non-paginating `ExecuteStatement`
+ *     bounded by DynamoDB's ~1 MB response limit. Reaching the cap is one reason to
+ *     be incomplete; the response's `NextToken` is a second, INDEPENDENT one that
+ *     the row count cannot reveal -- 400 rows of 5,000 look like a complete 400.
+ *
+ *   - Aurora / Redshift / OpenSearch (`> cap`): these runners apply no bound at all
+ *     and return everything they got, so a result LARGER than the cap is the only
+ *     evidence of truncation. `>=` would be wrong here: exactly `cap` rows means the
+ *     result happened to fit, not that it was cut.
+ *
+ *   - Logs Insights (`>= cap`): bounded by `ensureLimit` appending `| limit cap` to
+ *     the query, so reaching the cap means the limit bit. An aggregating or
+ *     already-limited query returns fewer and correctly reports false.
+ *
+ * The distinction that matters in all four: `truncated` means "there may be more
+ * matching data than this", never "we trimmed the array we were given".
+ */
+
+/**
+ * Clamp a requested row ceiling into `[1, MAX_ROWS]`.
+ *
+ * Absent, zero, negative and non-finite all fall back to the hard cap rather than
+ * to zero rows: a malformed hint must not silently turn a query into an empty
+ * result, which an agent reads as "no data" rather than as a bad parameter.
+ */
+export function effectiveCap(requested?: number): number {
+  if (requested === undefined || !Number.isFinite(requested)) return MAX_ROWS;
+  const floored = Math.floor(requested);
+  if (floored < 1) return MAX_ROWS;
+  return Math.min(floored, MAX_ROWS);
+}
+
+/**
  * The engine label for the two CloudWatch Logs Insights destinations
  * (`cloudwatch-logs-exporter`, `lambda-log-exporter`). Unlike the five SQL
  * labels this is NOT a SQL dialect — Logs Insights is a pipe language — and it
@@ -83,6 +126,16 @@ export interface RunReadOnlyQueryOptions {
    * SQL destinations.
    */
   timeRangeMs?: number;
+
+  /**
+   * Per-call ceiling on returned rows. Clamped into `[1, MAX_ROWS]`, so a caller
+   * can ask for FEWER rows but never more -- {@link MAX_ROWS} stays the hard cap.
+   *
+   * This exists because rows cost tokens. In an agent an unbounded-but-capped
+   * result is not free the way it is in a UI: 1000 rows the caller did not want
+   * are still 1000 rows it pays to read.
+   */
+  maxRows?: number;
 }
 
 /** True for the two CloudWatch Logs Insights destinations. */
@@ -125,6 +178,10 @@ export async function runReadOnlyQuery(
   sql: string,
   opts: RunReadOnlyQueryOptions = {},
 ): Promise<ReadOnlyQueryResult> {
+  // Resolve the effective row ceiling ONCE so every engine path below is bounded
+  // by the same number and none can drift. A caller may lower it; nothing raises it.
+  const cap = effectiveCap(opts.maxRows);
+
   // ── CloudWatch Logs Insights path — DELIBERATELY NOT SQL ──────────────────
   //
   // This path is fundamentally different from the five SQL engines below and is
@@ -154,7 +211,7 @@ export async function runReadOnlyQuery(
   //      exactly as `explorerSession.ts` does: `endTimeMs = Date.now()`,
   //      `startTimeMs = endTimeMs - timeRangeMs`.
   if (isLogDestination(cfg)) {
-    return runLogsInsightsReadOnly(cfg, sql, opts);
+    return runLogsInsightsReadOnly(cfg, sql, opts, cap);
   }
 
   // 1. Engine label per destination. Unsupported types are rejected up front.
@@ -226,7 +283,7 @@ export async function runReadOnlyQuery(
       // error text names it.
       outputLocation: cfg.athenaOutputLocation || undefined,
       query: sql,
-      maxRows: MAX_ROWS,
+      maxRows: cap,
     });
     return {
       columns: result.columns,
@@ -247,8 +304,15 @@ export async function runReadOnlyQuery(
       tableName: cfg.dynamodbTableName,
       statement: sql,
     });
-    const truncated = result.count >= MAX_ROWS;
-    const rows = truncated ? result.rows.slice(0, MAX_ROWS) : result.rows;
+    // Two independent reasons this result may be incomplete, and BOTH must be
+    // reported. Reaching the cap is ours. `hasMore` is DynamoDB's: this runner
+    // issues one non-paginating ExecuteStatement and DynamoDB bounds a response at
+    // ~1 MB, so a query matching 5,000 items can return 400 with a NextToken. Before
+    // `hasMore` existed, that came back as `truncated: false` — a complete answer as
+    // far as the agent could tell, which it would then state as one.
+    const cappedHere = result.count >= cap;
+    const truncated = cappedHere || result.hasMore;
+    const rows = cappedHere ? result.rows.slice(0, cap) : result.rows;
     return {
       columns: result.columns,
       rows,
@@ -273,7 +337,7 @@ export async function runReadOnlyQuery(
       database: cfg.auroraDatabase,
       sql,
     });
-    return capUnbounded(result, engine);
+    return capUnbounded(result, engine, cap);
   }
 
   if (cfg.destinationType === "redshift") {
@@ -287,7 +351,7 @@ export async function runReadOnlyQuery(
       secretArn: cfg.redshiftSecretArn || undefined,
       sql,
     });
-    return capUnbounded(result, engine);
+    return capUnbounded(result, engine, cap);
   }
 
   if (cfg.destinationType === "opensearch") {
@@ -297,7 +361,7 @@ export async function runReadOnlyQuery(
       endpoint: cfg.opensearchEndpoint,
       sql,
     });
-    return capUnbounded(result, engine);
+    return capUnbounded(result, engine, cap);
   }
 
   // Unreachable: the engine-label switch above returns a label only for the
@@ -322,9 +386,10 @@ export async function runReadOnlyQuery(
 function capUnbounded(
   result: { columns: string[]; rows: string[][] },
   engine: string,
+  cap: number,
 ): ReadOnlyQueryResult {
-  const truncated = result.rows.length > MAX_ROWS;
-  const rows = truncated ? result.rows.slice(0, MAX_ROWS) : result.rows;
+  const truncated = result.rows.length > cap;
+  const rows = truncated ? result.rows.slice(0, cap) : result.rows;
   return {
     columns: result.columns,
     rows,
@@ -357,11 +422,12 @@ async function runLogsInsightsReadOnly(
   cfg: InsightConfig,
   queryString: string,
   opts: RunReadOnlyQueryOptions,
+  cap: number,
 ): Promise<ReadOnlyQueryResult> {
   // Bound the result with the function written for this syntax. `ensureLimit`
   // is a no-op for queries that already carry a `limit` (e.g. the structured
   // tools, which append their own) or that aggregate with `stats`.
-  const bounded = ensureLimit(queryString, MAX_ROWS);
+  const bounded = ensureLimit(queryString, cap);
 
   const credentials = resolveCredentials(cfg.awsProfile);
 
@@ -387,7 +453,7 @@ async function runLogsInsightsReadOnly(
   // The runner does not carry a `truncated` flag; `ensureLimit` caps a
   // non-aggregating query at MAX_ROWS, so reaching the cap is our truncation
   // signal (a `stats`/pre-limited query that returns fewer rows reports false).
-  const truncated = table.rows.length >= MAX_ROWS;
+  const truncated = table.rows.length >= cap;
   return {
     columns: table.columns,
     rows: table.rows,

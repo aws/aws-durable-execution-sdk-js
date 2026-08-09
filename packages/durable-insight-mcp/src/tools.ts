@@ -190,7 +190,7 @@ export interface DescribeSchemaResult {
  * unit tests asserted the guidance was long and self-consistent, which it was;
  * they could not know that its closing sentence addressed a different host.
  */
-const FOREIGN_TOOL_MARKERS = ['Call the "emit_query" tool', "emit_query"];
+const FOREIGN_TOOL_MARKER = 'Call the "emit_query" tool';
 
 /**
  * Remove the trailing "call <extension tool>" instruction from shared guidance,
@@ -200,11 +200,13 @@ const FOREIGN_TOOL_MARKERS = ['Call the "emit_query" tool', "emit_query"];
  * Deliberately conservative. If the marker is absent (because core reworded it)
  * the guidance is returned untouched rather than being cut at a guess, and
  * `howToRun` still tells the agent what to do. `describeSchema.test.ts` asserts
- * the returned guidance never mentions a foreign tool, so a reword that breaks
- * this is caught rather than silently shipped.
+ * the returned guidance never mentions any foreign tool -- it keeps its own,
+ * broader list for that -- so a reword that breaks this is caught rather than
+ * silently shipped. There is deliberately ONE marker here: a second entry existed
+ * briefly and was never read, which read as a guard while guarding nothing.
  */
 function stripForeignToolInstruction(guidance: string): string {
-  const idx = guidance.indexOf(FOREIGN_TOOL_MARKERS[0]);
+  const idx = guidance.indexOf(FOREIGN_TOOL_MARKER);
   if (idx === -1) return guidance.trim();
   return guidance.slice(0, idx).trim();
 }
@@ -242,11 +244,27 @@ export function buildDescribeSchemaResult(
 
 // ── get_execution ────────────────────────────────────────────────────────────
 
+/**
+ * Default window for a log-destination point lookup, in hours.
+ *
+ * Mirrors core's `fetchLogsInsightsRecord` default (7 days) so that omitting
+ * `lookbackHours` behaves identically to before this parameter existed -- but now
+ * the value is reported back, so `found: false` says which window was searched.
+ */
+export const DEFAULT_RECORD_LOOKBACK_HOURS = 7 * 24;
+
 export interface GetExecutionParams {
   executionArn: string;
   year?: string;
   month?: string;
   day?: string;
+  /**
+   * Log destinations only: how many hours back to search. Logs Insights requires an
+   * explicit window, so without this the search is bounded by core's 7-day default
+   * and an older execution reports `found: false` -- indistinguishable from one that
+   * never existed.
+   */
+  lookbackHours?: number;
 }
 
 /**
@@ -426,6 +444,18 @@ export interface GetExecutionResult {
   found: boolean;
   executionArn: string;
   record?: Record<string, string>;
+  /**
+   * The window actually searched, for log destinations. Present so that
+   * `found: false` is interpretable: "not in the last 168 hours" is a different
+   * statement from "does not exist", and an agent cannot tell them apart without
+   * being told which one it got.
+   */
+  searchedLookbackHours?: number;
+  /**
+   * Parameters that were supplied and had no effect on this destination. Silently
+   * ignoring an argument teaches an agent that it worked.
+   */
+  ignoredParams?: string[];
 }
 
 /**
@@ -455,19 +485,39 @@ export async function runGetExecution(
   //     `assertReadOnly` to logs anyway). `fetchLogsInsightsRecord` is a fetch
   //     helper, NOT a core runner, so calling it here does not violate the
   //     one-runner-import rule that `queryChokePoint.test.ts` enforces.
+  // Partition components prune an Athena/S3 scan and mean nothing anywhere else.
+  // Report them rather than dropping them: a passed-but-ignored parameter that
+  // produces no signal is indistinguishable, from the agent's side, from one that
+  // was honored.
+  const ignoredParams =
+    cfg.destinationType === "s3"
+      ? []
+      : (["year", "month", "day"] as const).filter(
+          (k) => params[k] !== undefined,
+        );
+
   if (isLogDestination(cfg)) {
     const credentials = resolveCredentials(cfg.awsProfile);
+    const lookbackHours =
+      params.lookbackHours !== undefined && params.lookbackHours > 0
+        ? params.lookbackHours
+        : DEFAULT_RECORD_LOOKBACK_HOURS;
     const record = await fetchLogsInsightsRecord({
       region: cfg.region,
       credentials,
       logGroupNames: cfg.logGroupNames,
       executionArn: params.executionArn,
+      lookbackMs: lookbackHours * 60 * 60 * 1000,
     });
     return {
       destinationType: cfg.destinationType,
       engine: LOGS_INSIGHTS_ENGINE,
       found: record !== undefined,
       executionArn: params.executionArn,
+      searchedLookbackHours: lookbackHours,
+      ...(ignoredParams.length > 0
+        ? { ignoredParams: [...ignoredParams] }
+        : {}),
       ...(record !== undefined ? { record } : {}),
     };
   }
@@ -480,6 +530,9 @@ export async function runGetExecution(
       engine: result.engine,
       found: false,
       executionArn: params.executionArn,
+      ...(ignoredParams.length > 0
+        ? { ignoredParams: [...ignoredParams] }
+        : {}),
     };
   }
   const row = result.rows[0];
@@ -492,6 +545,7 @@ export async function runGetExecution(
     engine: result.engine,
     found: true,
     executionArn: params.executionArn,
+    ...(ignoredParams.length > 0 ? { ignoredParams: [...ignoredParams] } : {}),
     record,
   };
 }
@@ -563,8 +617,9 @@ export function buildListExecutionsSql(
       `ORDER BY ${d.startTimeColumn} DESC LIMIT ${limit}`
     );
   }
-  // dynamodb (PartiQL): ORDER BY and LIMIT are unsupported; the row cap in
-  // runReadOnlyQuery bounds the result to MAX_ROWS.
+  // dynamodb (PartiQL): ORDER BY and LIMIT are unsupported, so this statement
+  // carries no bound. `runListExecutions` passes the caller's limit as the row cap
+  // instead, which is what actually bounds this path.
   return `SELECT ${d.listSelect} FROM ${d.from}${whereClause}`;
 }
 
@@ -695,7 +750,14 @@ export async function runListExecutions(
   const query = isLogDestination(cfg)
     ? buildListExecutionsLogsQuery(cfg, params)
     : buildListExecutionsSql(cfg, params);
-  const result = await runReadOnlyQuery(cfg, query);
+  // Also pass the caller's limit as the row cap, NOT only as query text. For most
+  // destinations the generated `LIMIT`/`limit` already bounds the result, but
+  // DynamoDB PartiQL supports neither ORDER BY nor LIMIT, so its statement carries
+  // no bound at all -- without this, `limit: 10` on DynamoDB returns up to MAX_ROWS
+  // rows, which is the token cost this tool exists to avoid.
+  const result = await runReadOnlyQuery(cfg, query, {
+    maxRows: coerceLimit(params.limit, DEFAULT_LIST_LIMIT, MAX_ROWS),
+  });
   return {
     destinationType: cfg.destinationType,
     engine: result.engine,
