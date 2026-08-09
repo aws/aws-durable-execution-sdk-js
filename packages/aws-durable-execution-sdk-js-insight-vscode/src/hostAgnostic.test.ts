@@ -1,186 +1,133 @@
 /**
- * Guards the property the desktop app depends on: the shared modules are
- * host-free.
+ * Guards that this package's two contexts each import only what they actually have.
  *
- * `explorerSession.ts` and its dependencies get bundled into an Electron app
- * where `vscode` does not exist, so a single `import * as vscode` anywhere in
- * that graph breaks the desktop build. That failure is easy to reintroduce —
- * `./config` and `./configCore` differ by four characters — and the error it
- * produces ("Could not resolve vscode") points at the imported file rather than
- * the import that pulled it in.
+ * WHY THIS FILE EXISTS:
+ * Core and the desktop package gained boundary guards after review found that a
+ * host-specific import in shared code was invisible to every mechanism — an Electron
+ * import in a core module that no test covered passed eslint, `typecheck:hosts`, both
+ * bundles, and the whole suite. This package was the one host left without the mirror
+ * guard, which also made a claim in the core README literally untrue.
  *
- * So this walks the real import graph from the modules the desktop entry points
- * consume and asserts none of them reaches the VS Code API. When it fails, it
- * prints the chain, which is the part that actually tells you what to fix.
+ * There are TWO contexts here, with different rules:
+ *
+ *   1. `src/` runs in the VS Code EXTENSION HOST. It may import `vscode` — that is
+ *      the whole point of the package — but it has no Electron main process and does
+ *      not speak the MCP protocol.
+ *
+ *   2. `webview-ui/src/` runs in a BROWSER. It has none of the three, including
+ *      `vscode`: the renderer reaches the host through the `acquireVsCodeApi()`
+ *      global and postMessage, never by importing the extension API. An `import`
+ *      there would fail at runtime in the webview, where no bundler alias supplies
+ *      it.
+ *
+ * The detector comes from `@aws/durable-insight-core`, where it is self-tested
+ * against every module in every import form including subpaths. It is deliberately
+ * not re-implemented: two divergent copies of a correctness-critical regex is the
+ * duplication this package boundary exists to remove.
  */
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join, relative } from "node:path";
 import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve } from "node:path";
+  HOST_MODULES,
+  findEscapingImports,
+  findHostModules,
+} from "@aws/durable-insight-core";
 
-const SRC = __dirname;
+const EXTENSION_SRC = __dirname;
+/** The package root, i.e. the directory holding package.json. */
+const PACKAGE_ROOT = join(__dirname, "..");
+const WEBVIEW_SRC = join(__dirname, "..", "webview-ui", "src");
 
-/** The desktop package's own sources, which are what pull these modules in. */
-const DESKTOP_SRC = resolve(
-  SRC,
-  "..",
-  "..",
-  "aws-durable-execution-sdk-js-insight-desktop",
-  "src",
-);
-
-/**
- * The modules the desktop package actually imports from this one.
- *
- * Derived from the desktop sources rather than listed by hand. A hardcoded list
- * is the same kind of second source of truth this change argues against, and it
- * fails in the direction that hides problems: import a new module from the
- * desktop host, forget to add it here, and the guard silently stops covering the
- * thing you just added.
- */
-function desktopEntryPoints(): string[] {
-  const entries = new Set<string>();
-  const files = readdirSync(DESKTOP_SRC).filter(
-    (f) => f.endsWith(".ts") && !f.endsWith(".test.ts"),
-  );
-  for (const file of files) {
-    const src = readFileSync(join(DESKTOP_SRC, file), "utf-8");
-    // Relative specifiers that climb out of the desktop package into this
-    // package's src, e.g. "../../aws-durable-execution-sdk-js-insight-vscode/src/x".
-    const re =
-      /["'](?:\.\.\/)+aws-durable-execution-sdk-js-insight-vscode\/src\/([^"']+)["']/g;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(src))) entries.add(`${m[1]}.ts`);
-  }
-  return [...entries].sort();
-}
-
-function resolveImport(fromFile: string, spec: string): string | undefined {
-  const base = resolve(dirname(fromFile), spec);
-  for (const candidate of [
-    base,
-    `${base}.ts`,
-    `${base}.tsx`,
-    join(base, "index.ts"),
-  ]) {
-    if (existsSync(candidate) && candidate.endsWith(".ts")) return candidate;
-  }
-  return undefined;
-}
-
-/** Relative-import specifiers in `src`, including side-effect-only imports. */
-function importSpecifiers(src: string): string[] {
-  const specs = new Set<string>();
-  for (const re of [
-    /\bfrom\s*["'](\.[^"']+)["']/g,
-    /\bimport\s*\(\s*["'](\.[^"']+)["']\s*\)/g,
-    /\brequire\s*\(\s*["'](\.[^"']+)["']\s*\)/g,
-    // `import "./x";` binds nothing, so it has no `from` — and it can still
-    // pull in a module that imports vscode.
-    /^\s*import\s*["'](\.[^"']+)["']/gm,
-  ]) {
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(src))) specs.add(m[1]);
-  }
-  return [...specs];
-}
-
-function importsVsCode(src: string): boolean {
-  return (
-    /\bfrom\s*["']vscode["']/.test(src) ||
-    /\brequire\s*\(\s*["']vscode["']\s*\)/.test(src)
-  );
-}
-
-/**
- * Walk from `entry` and return the first path that reaches a `vscode` import,
- * as a chain of repo-relative filenames, or undefined if none does.
- */
-function findVsCodePath(entry: string, root = SRC): string[] | undefined {
-  const seen = new Set<string>();
-  const stack: { file: string; chain: string[] }[] = [
-    { file: entry, chain: [relative(root, entry)] },
-  ];
-
-  while (stack.length > 0) {
-    const { file, chain } = stack.pop()!;
-    if (seen.has(file)) continue;
-    seen.add(file);
-
-    const src = readFileSync(file, "utf-8");
-    if (importsVsCode(src)) return chain;
-
-    for (const spec of importSpecifiers(src)) {
-      const target = resolveImport(file, spec);
-      // A specifier that resolves to nothing is a package import (or a .json),
-      // neither of which can pull in `vscode`.
-      if (target && !target.endsWith(".test.ts")) {
-        stack.push({ file: target, chain: [...chain, relative(root, target)] });
-      }
+function collectSourceFiles(dir: string, exts: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...collectSourceFiles(full, exts));
+    } else if (
+      exts.some((e) => entry.name.endsWith(e)) &&
+      !entry.name.endsWith(".test.ts") &&
+      !entry.name.endsWith(".test.tsx")
+    ) {
+      out.push(full);
     }
   }
-  return undefined;
+  return out;
 }
 
-describe("host-agnostic module graph", () => {
-  it("derives the desktop's entry points from its actual imports", () => {
-    // A derivation that silently found nothing would make every assertion below
-    // vacuous, so pin that it sees the real ones.
-    const derived = desktopEntryPoints();
-    expect(derived.length).toBeGreaterThan(0);
-    expect(derived).toContain("explorerSession.ts");
-    expect(derived).toContain("hostPort.ts");
-    for (const entry of derived) {
-      expect(existsSync(join(SRC, entry))).toBe(true);
+describe("extension host imports only its own host API", () => {
+  /** The only host API the extension host may import. */
+  const PERMITTED = HOST_MODULES.vscode;
+  /** The other hosts' APIs, which do not exist in the extension host. */
+  const FORBIDDEN = [HOST_MODULES.electron, HOST_MODULES.mcpSdk];
+
+  const names = collectSourceFiles(EXTENSION_SRC, [".ts"])
+    .map((f) => relative(EXTENSION_SRC, f))
+    .sort();
+
+  // Guards against the guard passing by finding nothing.
+  it("finds its own sources, including known members", () => {
+    expect(names.length).toBeGreaterThan(1);
+    for (const expected of ["extension.ts", "config.ts"]) {
+      expect(names).toContain(expected);
     }
   });
 
-  it.each(desktopEntryPoints())(
-    "%s does not reach the vscode API",
-    (entryName) => {
-      const entry = join(SRC, entryName);
-      expect(existsSync(entry)).toBe(true);
-      const chain = findVsCodePath(entry);
-      if (chain) {
-        // The chain is the useful part of the failure: it names the import that
-        // reintroduced the dependency, not just the file that ended up with it.
-        throw new Error(
-          `${entryName} reaches the vscode API via:\n  ${chain.join("\n  -> ")}`,
-        );
-      }
-      expect(chain).toBeUndefined();
-    },
-  );
-
-  it("still detects a vscode import when there is one (guards the guard)", () => {
-    // extension.ts is the VS Code adapter and must import vscode, so it doubles
-    // as proof that the walk above can actually fail rather than being vacuous.
-    expect(findVsCodePath(join(SRC, "extension.ts"))).toEqual(["extension.ts"]);
-    expect(findVsCodePath(join(SRC, "config.ts"))).toEqual(["config.ts"]);
+  // Per-file host scans cannot see a host API reached THROUGH a sibling package,
+  // and reaching sideways is itself the defect the core extraction existed to fix.
+  it.each(names)("%s does not reach into a sibling package", (name) => {
+    const file = join(EXTENSION_SRC, name);
+    const escaping = findEscapingImports(
+      file,
+      readFileSync(file, "utf-8"),
+      PACKAGE_ROOT,
+    );
+    expect(escaping).toEqual([]);
   });
 
-  it("follows transitive imports, not just direct ones", () => {
-    // Built as a fixture because the real graph has no module that reaches
-    // vscode indirectly — which is the point of this PR. A walk that only
-    // checked direct imports would pass the assertions above and fail here.
-    const dir = mkdtempSync(join(tmpdir(), "insight-graph-"));
-    try {
-      writeFileSync(
-        join(dir, "leaf.ts"),
-        'import * as vscode from "vscode";\n',
-      );
-      writeFileSync(join(dir, "middle.ts"), 'import "./leaf";\n');
-      writeFileSync(join(dir, "entry.ts"), 'import { x } from "./middle";\n');
-      const chain = findVsCodePath(join(dir, "entry.ts"), dir);
-      expect(chain).toEqual(["entry.ts", "middle.ts", "leaf.ts"]);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+  it.each(names)("%s imports no other host's API", (name) => {
+    const found = findHostModules(
+      readFileSync(join(EXTENSION_SRC, name), "utf-8"),
+      FORBIDDEN,
+    );
+    expect(found).toEqual([]);
+  });
+
+  it("does import vscode somewhere, so the check above is not vacuous", () => {
+    // If this package stopped using the VS Code API, the FORBIDDEN list would be
+    // quietly checking the wrong thing and this file should be revisited.
+    const usesVsCode = names.some(
+      (n) =>
+        findHostModules(readFileSync(join(EXTENSION_SRC, n), "utf-8"), [
+          PERMITTED,
+        ]).length > 0,
+    );
+    expect(usesVsCode).toBe(true);
+  });
+});
+
+describe("webview renderer imports no host API at all", () => {
+  // The renderer is a browser context. It talks to the extension host through the
+  // acquireVsCodeApi() global, so even `vscode` is forbidden here -- an import would
+  // fail at runtime, where nothing supplies that module.
+  const names = existsSync(WEBVIEW_SRC)
+    ? collectSourceFiles(WEBVIEW_SRC, [".ts", ".tsx"])
+        .map((f) => relative(WEBVIEW_SRC, f))
+        .sort()
+    : [];
+
+  it("finds the renderer's sources", () => {
+    // Fails loudly rather than skipping if the directory moves, so the guard cannot
+    // silently stop covering the renderer.
+    expect(existsSync(WEBVIEW_SRC)).toBe(true);
+    expect(names.length).toBeGreaterThan(3);
+    expect(names).toContain("App.tsx");
+  });
+
+  it.each(names)("%s imports no host API", (name) => {
+    const found = findHostModules(
+      readFileSync(join(WEBVIEW_SRC, name), "utf-8"),
+    );
+    expect(found).toEqual([]);
   });
 });

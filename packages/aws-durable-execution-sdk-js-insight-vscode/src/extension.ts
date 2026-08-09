@@ -17,15 +17,14 @@ import {
   setCopilotBridge,
   type CopilotBridge,
   type CopilotModel,
-} from "./copilotBridge";
-import { ExplorerSession, type InboundMessage } from "./explorerSession";
-import type {
-  Favorite,
-  HostPort,
-  PromptRequest,
-  SaveFileRequest,
-  SettingValue,
-} from "./hostPort";
+  ExplorerSession,
+  type InboundMessage,
+  type Favorite,
+  type HostPort,
+  type PromptRequest,
+  type SaveFileRequest,
+  type SettingValue,
+} from "@aws/durable-insight-core";
 
 export function activate(context: vscode.ExtensionContext): void {
   // Copilot-backed generation lives behind a port so llm.ts stays host-free;

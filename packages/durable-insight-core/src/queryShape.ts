@@ -136,7 +136,10 @@ export function ensureIdentifierColumn(
     // "fieldA, fieldBidColumn|" (missing space before the next pipe) — the
     // match's trailing whitespace (if the fields command is directly
     // followed by " |") is preserved separately in `rest` further down.
-    const trimmedFieldsMatch = fieldsMatch[0].replace(/\s+$/, "");
+    // `trimEnd()`, not `replace(/\s+$/, "")`: the latter is a polynomial-ReDoS shape
+    // (a greedy quantifier anchored at the end), measured quadratic on a long run of
+    // whitespace. trimEnd is native, linear, and identical in effect.
+    const trimmedFieldsMatch = fieldsMatch[0].trimEnd();
     const trailingWhitespace = fieldsMatch[0].slice(trimmedFieldsMatch.length);
     const injected = trimmed.replace(
       fieldsMatch[0],

@@ -13,7 +13,7 @@ import {
   NUMBER_SETTING_KEYS,
   SETTING_KEYS,
   isSettingKey,
-} from "./settingsKeys";
+} from "@aws/durable-insight-core";
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const manifest = require("../package.json") as {
   contributes: {

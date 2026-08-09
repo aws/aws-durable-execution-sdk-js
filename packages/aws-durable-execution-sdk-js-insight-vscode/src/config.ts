@@ -9,7 +9,11 @@
  * The re-exports below keep `./config` a drop-in import for existing callers.
  */
 import * as vscode from "vscode";
-import { SECTION, normalizeConfig, type InsightConfig } from "./configCore";
+import {
+  SECTION,
+  normalizeConfig,
+  type InsightConfig,
+} from "@aws/durable-insight-core";
 
 export {
   SECTION,
@@ -18,7 +22,7 @@ export {
   resolveCredentials,
   type InsightConfig,
   type ConfigSource,
-} from "./configCore";
+} from "@aws/durable-insight-core";
 
 /** Read the user's persisted VS Code settings as an {@link InsightConfig}. */
 export function readConfig(): InsightConfig {

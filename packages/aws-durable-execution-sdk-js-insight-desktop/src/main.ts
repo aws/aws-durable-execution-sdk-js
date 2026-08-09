@@ -19,7 +19,7 @@ import { join, resolve } from "node:path";
 import {
   ExplorerSession,
   type InboundMessage,
-} from "../../aws-durable-execution-sdk-js-insight-vscode/src/explorerSession";
+} from "@aws/durable-insight-core";
 import { contentTypeFor, resolveAssetPath } from "./assetPath";
 import { ElectronHost } from "./host";
 

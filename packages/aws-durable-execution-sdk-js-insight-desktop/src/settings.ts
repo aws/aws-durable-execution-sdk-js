@@ -25,12 +25,10 @@ import { join } from "node:path";
 import {
   normalizeConfig,
   type InsightConfig,
-} from "../../aws-durable-execution-sdk-js-insight-vscode/src/configCore";
-import { isSettingKey } from "../../aws-durable-execution-sdk-js-insight-vscode/src/settingsKeys";
-import type {
-  Favorite,
-  SettingValue,
-} from "../../aws-durable-execution-sdk-js-insight-vscode/src/hostPort";
+  isSettingKey,
+  type Favorite,
+  type SettingValue,
+} from "@aws/durable-insight-core";
 
 /** What lands in insight-settings.json: recognized keys and scalar values. */
 type StoredSettings = Record<string, string | number | boolean>;

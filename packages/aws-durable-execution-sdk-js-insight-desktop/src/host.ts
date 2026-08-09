@@ -9,13 +9,13 @@
  */
 import { BrowserWindow, dialog } from "electron";
 import { writeFile } from "node:fs/promises";
-import type { InsightConfig } from "../../aws-durable-execution-sdk-js-insight-vscode/src/configCore";
 import type {
+  InsightConfig,
   Favorite,
   HostPort,
   SaveFileRequest,
   SettingValue,
-} from "../../aws-durable-execution-sdk-js-insight-vscode/src/hostPort";
+} from "@aws/durable-insight-core";
 import {
   readDesktopConfig,
   readDesktopFavorites,

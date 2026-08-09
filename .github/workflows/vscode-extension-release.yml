@@ -204,6 +204,25 @@ jobs:
           # the build if this platform's native binary didn't resolve,
           # instead of silently shipping a .vsix that would only fail for an
           # end user on first use of the local (on-device) LLM provider.
+          # Stage the private, unpublished workspace packages this extension
+          # depends on. Without this, `npm install --no-workspaces` tries to
+          # resolve @aws/durable-insight-core from the public registry and fails
+          # with E404 -- that package is `"private": true` and is never
+          # published. This workflow is workflow_dispatch-only, so PR checks do
+          # not exercise it; src/packaging.test.ts asserts every private
+          # dependency is staged here and fails in normal CI if one is added
+          # without being listed below.
+          #
+          # A packed tarball, not a `file:<dir>` spec: npm treats a directory
+          # spec as a LINK (like npm link) and does not install the linked
+          # package's own dependencies, so core's 16 AWS SDK deps would be
+          # missing and esbuild would fail to resolve them. Installing from a
+          # tarball pulls the full dependency tree, which the bundle needs.
+          for PRIVATE_DEP in durable-insight-core; do
+            TGZ="$(cd "$WORKSPACE_DIR/../$PRIVATE_DEP" && npm pack --pack-destination "$ISOLATED" | tail -1)"
+            DEP_NAME="$(node -p "require('$WORKSPACE_DIR/../$PRIVATE_DEP/package.json').name")"
+            npm pkg set "dependencies.$DEP_NAME=file:./$TGZ"
+          done
           npm install --no-workspaces
           test -d node_modules/node-llama-cpp || { echo "node-llama-cpp did not install"; exit 1; }
           node --input-type=module -e "
