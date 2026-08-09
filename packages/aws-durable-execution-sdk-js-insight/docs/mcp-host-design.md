@@ -2,9 +2,9 @@
 
 |              |                                                                                                       |
 | ------------ | ----------------------------------------------------------------------------------------------------- |
-| **Status**   | Phases 0–5 complete — v1 feature-complete; see §12                                                    |
+| **Status**   | Phases 0–5 complete. Phase 1 merged (#809); Phases 2–5 await review                                   |
 | **Scope**    | New package `@aws/durable-insight-mcp`, plus extraction of `durable-insight-core`                     |
-| **Baseline** | `main` @ `49b88f84`, i.e. after #795 (dual host) and #804 (disclosure)                                |
+| **Baseline** | `main` @ `556bfd40`, i.e. after #795 (dual host), #804 (disclosure), #809 (core)                      |
 | **Legal**    | **Confirmed** — disclosure only, no consent gate. See [§8](#8-disclosure-readme-only-no-consent-gate) |
 
 ---
@@ -85,7 +85,7 @@ false.
 
 ## 4. Background: what #795 left us
 
-Measured on `main` @ `49b88f84`, in `packages/aws-durable-execution-sdk-js-insight-vscode/src`:
+Measured on `main` @ `556bfd40`, in `packages/aws-durable-execution-sdk-js-insight-vscode/src`:
 
 | Category                | Files                                                                                                           | Lines     | Fate in MCP host                   |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------- | --------- | ---------------------------------- |
@@ -588,7 +588,7 @@ and should be re-estimated by whoever picks the work up.
 client config paths verified against documentation (§6.4). **Phase 0 complete — Phase 1
 is unblocked.**
 
-### Phase 1 — Extract the core (L) — **DONE** (`ee4784da`)
+### Phase 1 — Extract the core (L) — **MERGED** (#809)
 
 | ID       | Task                                                                                                                                | Size | Depends |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---- | ------- |
@@ -611,7 +611,7 @@ is unblocked.**
 - **AC-1.4** Zero behavior change: both bundles build, and the VS Code extension
   and desktop app launch and run a query.
 
-### Phase 2 — Server skeleton (M) — **DONE** (`ed03fc31`)
+### Phase 2 — Server skeleton (M) — **DONE**, on `feat/insight-mcp-server` (unmerged)
 
 | ID       | Task                                                                                       | Size | Depends |
 | -------- | ------------------------------------------------------------------------------------------ | ---- | ------- |
@@ -637,7 +637,7 @@ is unblocked.**
   exactly one env var and round-trips; the 8 excluded are rejected if set.
   Mirrors `settingsKeys.test.ts`.
 
-### Phase 3 — Query core, two destinations (M) — **DONE** (`06a83b0c`)
+### Phase 3 — Query core, two destinations (M) — **DONE**, on `feat/insight-mcp-server` (unmerged)
 
 | ID       | Task                                                                    | Size | Depends |
 | -------- | ----------------------------------------------------------------------- | ---- | ------- |
@@ -664,7 +664,7 @@ is unblocked.**
   the entire result set into the process), with DynamoDB page-bounded by a single
   `ExecuteStatement`.
 
-### Phase 4 — Remaining destinations (M) — **DONE** (`d18ec289`)
+### Phase 4 — Remaining destinations (M) — **DONE**, on `feat/insight-mcp-server` (unmerged)
 
 | ID       | Task                                                                                                                    | Size | Depends |
 | -------- | ----------------------------------------------------------------------------------------------------------------------- | ---- | ------- |
@@ -675,7 +675,7 @@ with `describe_schema` output matching its real dialect, plus `sqs` explicitly r
 `assertReadOnly` coverage per AC-T2 holds for the **five SQL engines**; the two
 CloudWatch Logs destinations are the documented exception below.
 
-### Phase 5 — Skill delivery (M) — **DONE** (`94ed0bf9`)
+### Phase 5 — Skill delivery (M) — **DONE**, on `feat/insight-mcp-server` (unmerged)
 
 | ID       | Task                                                                | Size | Depends |
 | -------- | ------------------------------------------------------------------- | ---- | ------- |
@@ -760,6 +760,22 @@ Phases 1–2 justified the rule twice over:
   `redshiftSecretArn` was required; `destinationTest.ts` does not require it (IAM with
   a db user is a valid alternative) and wants a workgroup _or_ a cluster identifier.
   The code was right. `missingRequiredEnvVars` follows the code, not this document.
+
+Review of #809 added two more, both of which apply directly to the phases still
+unmerged:
+
+- **A gate that only runs pre-commit is not a gate.** The boundary rules existed as
+  eslint config but eslint ran only through lint-staged, which `--no-verify` bypasses,
+  and there was no lint job. `npm run lint` is now a step in the `insight-hosts` job.
+  When adding a rule, ask which CI job executes it.
+- **`workflow_dispatch`-only workflows are invisible to PR checks.** The extraction broke
+  the VSIX release workflow — it copies one package out of the workspace and runs
+  `npm install --no-workspaces`, which cannot resolve a private dependency — and every
+  check stayed green because no pull request runs that workflow. The same class then
+  turned out to affect the MCP package more severely: it is **published**, so a private
+  dependency would have failed `npx` for every customer. Both now have a
+  `packaging.test.ts` asserting the invariant offline, since the real path cannot run on
+  a PR. Any package this project publishes needs that check before it ships.
 
 ---
 
