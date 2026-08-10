@@ -11,6 +11,17 @@ export interface DynamoDBQueryResult {
   count: number;
   /** Per-column numeric flag (aligned with `columns`) — see AthenaQueryResult.numericColumns. */
   numericColumns: boolean[];
+  /**
+   * True when DynamoDB reported more results than this single page returned, i.e.
+   * `ExecuteStatement` came back with a `NextToken`.
+   *
+   * This runner issues ONE `ExecuteStatement` and does not paginate, and DynamoDB
+   * bounds a response at ~1 MB regardless of how many items match. So a caller that
+   * infers completeness from the row count is wrong whenever this is true: 400 rows
+   * of a matching 5,000 look exactly like a complete answer of 400. Callers that
+   * report truncation to a user MUST consult this rather than comparing counts.
+   */
+  hasMore: boolean;
 }
 
 /**
@@ -34,9 +45,12 @@ export async function runDynamoDBQuery(opts: {
   );
 
   const items = (result.Items ?? []).map((item) => unmarshall(item));
+  // Presence, not the value: this runner does not paginate, so the token is only
+  // ever a signal that what it returned is incomplete.
+  const hasMore = result.NextToken !== undefined;
 
   if (items.length === 0) {
-    return { columns: [], rows: [], count: 0, numericColumns: [] };
+    return { columns: [], rows: [], count: 0, numericColumns: [], hasMore };
   }
 
   // Collect all unique keys across all items as columns
@@ -85,7 +99,7 @@ export async function runDynamoDBQuery(opts: {
     return sawNumber;
   });
 
-  return { columns, rows, count: items.length, numericColumns };
+  return { columns, rows, count: items.length, numericColumns, hasMore };
 }
 
 /**
