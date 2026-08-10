@@ -239,17 +239,32 @@ const ANY_QUANTIFIER =
 const REPEATED_GROUP = /\)(?:[*+]|\{\d+,\})/;
 
 /**
- * Split a pattern into the fragments that an anchor could independently govern:
- * on `|` at any depth, and at group boundaries.
+ * Split a pattern into its top-level alternation branches, with groups left INTACT.
  *
- * Deliberately over-splits. A fragment that is not really a separate branch can only
- * cause an extra finding, which the allowlist absorbs after a measurement; a branch that
- * is missed hides a quadratic path, which is the defect this rule exists to catch.
- * Character classes are stepped over so a `|` or `(` inside one is not a boundary.
+ * WHY GROUPS MUST NOT BE SPLIT:
+ * An earlier version also split at `(` and `)`, justified as "over-splitting can only
+ * over-flag". That justification was wrong, and the error was in the direction that
+ * matters. Splitting at a parenthesis separates a quantified atom from the trailing
+ * anchor in its own branch, so `/^x|(?:a+)$/` became the fragments `?:a+` and `$` --
+ * neither of which carries both halves of the risk -- while the whole pattern was
+ * skipped for starting with `^`. R2 returned nothing for a pattern measured at 6ms per
+ * 2k characters rising to 399ms at 16k. Planting it in `verdict.ts` left the guard green.
+ *
+ * Splitting only on `|` at depth zero keeps each branch's groups with it, so
+ * `(?:a+)$` stays one fragment and the quantifier and anchor are seen together.
+ *
+ * Nested alternation inside a group is deliberately NOT descended into. `/^(?:x|a+$)/`
+ * reads like a risk and is not: the leading `^` means the engine can only start at
+ * position 0, so backtracking is bounded by the input once rather than repeated per
+ * start position. Measured flat -- 0.1ms at 2k characters and 0.0ms at 16k. Descending
+ * into groups would flag it, which is why the earlier splitter appeared to pass a
+ * self-test for that pattern: the finding was an artifact of over-splitting, not a real
+ * detection.
  */
 function alternationBranches(source: string): string[] {
   const out: string[] = [];
   let current = "";
+  let depth = 0;
   let inClass = false;
   for (let i = 0; i < source.length; i++) {
     const char = source[i];
@@ -270,7 +285,9 @@ function alternationBranches(source: string): string[] {
       current += char;
       continue;
     }
-    if (char === "|" || char === "(" || char === ")") {
+    if (char === "(") depth++;
+    else if (char === ")") depth--;
+    else if (char === "|" && depth === 0) {
       out.push(current);
       current = "";
       continue;
@@ -278,8 +295,7 @@ function alternationBranches(source: string): string[] {
     current += char;
   }
   out.push(current);
-  // The whole pattern counts as a branch too, for the single-alternative case.
-  return [source, ...out].filter((s) => s.length > 0);
+  return out.filter((branch) => branch.length > 0);
 }
 
 /** True when a fragment ends in `$`, is not start-anchored, and has a quantifier. */
@@ -409,8 +425,13 @@ describe("the detector catches every shape this package has had to remove", () =
     // per-branch.
     [String.raw`a+$|x`, "R2"],
     [String.raw`^x|a+$`, "R2"],
-    // The same escape inside a group rather than a bare alternation.
-    [String.raw`^(?:x|a+$)`, "R2"],
+    // A quantifier inside a GROUP, with the anchor outside it. These are the cases an
+    // earlier splitter missed by cutting at every parenthesis: `(?:a+)` and `$` landed
+    // in separate fragments, so neither carried both halves of the risk. Measured 6ms
+    // at 2k characters rising to 399ms at 16k.
+    [String.raw`^x|(?:a+)$`, "R2"],
+    [String.raw`^x|(?:a+)b$`, "R2"],
+    [String.raw`(?:a+)$`, "R2"],
   ])("flags %s under %s", (pattern, rule) => {
     const risks = riskRules(pattern);
     expect(risks.length).toBeGreaterThan(0);
@@ -426,6 +447,16 @@ describe("the detector catches every shape this package has had to remove", () =
     String.raw`\bselect\b`,
     // Every branch start-anchored: no branch can retry from many positions.
     String.raw`^a+$|^b+$`,
+    // Nested alternation behind a leading `^`. This LOOKS like a risk and is not: the
+    // anchor means the engine can only start at position 0, so backtracking is bounded
+    // by the input once instead of repeated per start position. Measured flat — 0.1ms
+    // at 2k characters, 0.0ms at 16k.
+    //
+    // It is here because an earlier version of this file asserted the OPPOSITE, and
+    // that assertion passed: the splitter cut at every parenthesis and produced a
+    // spurious `a+$` fragment. A test can pass for the wrong reason and encode a false
+    // claim, which is worth one case to pin.
+    String.raw`^(?:x|a+$)`,
   ])("does not flag the benign pattern %s", (pattern) => {
     // Acceptance matters as much as detection: a detector that flagged everything
     // would satisfy the cases above while making the allowlist meaningless.
