@@ -97,17 +97,24 @@ function makePlugin(): DurableInstrumentationPlugin {
 
 export const handler = withDurableExecution(
   async (_event: any, context: DurableContext) => {
-    // Real context.parallel with two branches, max-concurrency 1 so branch A
-    // suspends mid-run (on its 2s wait) and re-runs on replay before branch B.
+    // Real context.parallel with two NAMED branches (branch-a / branch-b),
+    // max-concurrency 1 so branch-a suspends mid-run (on its 2s wait) and
+    // re-runs on replay before branch-b.
     const results = await context.parallel<string>(
       "ctx",
       [
-        async (ctx: DurableContext) => {
-          await ctx.step("inner", async () => "x");
-          await ctx.wait({ seconds: 2 });
-          return "a-done";
+        {
+          name: "branch-a",
+          func: async (ctx: DurableContext) => {
+            await ctx.step("inner", async () => "x");
+            await ctx.wait({ seconds: 2 });
+            return "a-done";
+          },
         },
-        async (_ctx: DurableContext) => "b-done",
+        {
+          name: "branch-b",
+          func: async (_ctx: DurableContext) => "b-done",
+        },
       ],
       { maxConcurrency: 1 },
     );
