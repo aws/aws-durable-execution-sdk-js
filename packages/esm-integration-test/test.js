@@ -55,6 +55,49 @@ try {
   }
 
   console.log("✓ ESM plugin loaded from simulated Lambda layer");
+
+  process.env.DURABLE_EXECUTION_PLUGINS =
+    "@example/durable-plugin-missing-peer";
+  const failingHandler = withDurableExecution(async () => ({
+    message: "This handler should not run",
+  }));
+  const failureResult = await failingHandler(
+    {
+      CheckpointToken: "checkpoint-token",
+      DurableExecutionArn:
+        "arn:aws:lambda:us-east-1:123456789012:function:test",
+      InitialExecutionState: { Operations: [], NextMarker: "" },
+    },
+    {
+      awsRequestId: "request-id",
+      getRemainingTimeInMillis: () => 30_000,
+    },
+  );
+  const failureMessage = failureResult.Error?.ErrorMessage ?? "";
+  if (failureResult.Status !== "FAILED") {
+    throw new Error(`Expected FAILED, received ${failureResult.Status}`);
+  }
+  if (
+    !failureMessage.includes(
+      "@example/durable-plugin-peer-that-is-not-installed",
+    )
+  ) {
+    throw new Error(
+      `Missing peer dependency was not reported: ${failureMessage}`,
+    );
+  }
+  if (
+    failureMessage.includes(
+      "Unable to resolve '@example/durable-plugin-missing-peer'",
+    ) ||
+    failureMessage.includes(
+      "Ensure the package is installed in the function artifact",
+    )
+  ) {
+    throw new Error(`Evaluation failure was mislabeled: ${failureMessage}`);
+  }
+
+  console.log("✓ ESM layer evaluation errors preserve the missing peer cause");
   console.log("✓ ESM integration test passed");
 } catch (error) {
   console.error("✗ ESM integration test failed:", error.message);

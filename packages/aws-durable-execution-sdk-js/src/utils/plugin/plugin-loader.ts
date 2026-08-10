@@ -14,10 +14,27 @@ export const PLUGIN_PROVIDER_EXPORT = "durableExecutionPluginProvider";
 type Environment = Readonly<Record<string, string | undefined>>;
 type PluginModule = Readonly<Record<string, unknown>>;
 type PluginModuleImporter = (specifier: string) => Promise<unknown>;
+type PluginModuleResolver = (specifier: string) => string;
+
+interface ModuleImporterDependencies {
+  importModule?: PluginModuleImporter;
+  resolveModule?: PluginModuleResolver;
+}
 
 interface PluginLoaderOptions {
   environment?: Environment;
   importModule?: PluginModuleImporter;
+  moduleImporterDependencies?: ModuleImporterDependencies;
+}
+
+class PluginModuleResolutionError extends AggregateError {
+  constructor(specifier: string, errors: readonly unknown[]) {
+    super(
+      errors,
+      `Unable to resolve '${specifier}' from the application or configured Node.js module paths.`,
+    );
+    this.name = "PluginModuleResolutionError";
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -26,6 +43,53 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function packageNameFromSpecifier(specifier: string): string | undefined {
+  if (
+    specifier.startsWith(".") ||
+    specifier.startsWith("/") ||
+    /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(specifier)
+  ) {
+    return undefined;
+  }
+
+  const segments = specifier.split("/");
+  return specifier.startsWith("@")
+    ? segments.slice(0, 2).join("/")
+    : segments[0];
+}
+
+function isConfiguredSpecifierNotFound(
+  error: unknown,
+  specifier: string,
+): boolean {
+  if (!isRecord(error)) {
+    return false;
+  }
+
+  if (
+    error.code !== "ERR_MODULE_NOT_FOUND" &&
+    error.code !== "MODULE_NOT_FOUND"
+  ) {
+    return false;
+  }
+
+  const message = errorMessage(error);
+  const targets = new Set(
+    [specifier, packageNameFromSpecifier(specifier)].filter(
+      (target): target is string => target != null && target !== "",
+    ),
+  );
+
+  return [...targets].some((target) =>
+    [
+      `Cannot find package '${target}'`,
+      `Cannot find package "${target}"`,
+      `Cannot find module '${target}'`,
+      `Cannot find module "${target}"`,
+    ].some((prefix) => message.includes(prefix)),
+  );
 }
 
 function parseConfiguredSpecifiers(environment: Environment): string[] {
@@ -54,27 +118,41 @@ function parseConfiguredSpecifiers(environment: Environment): string[] {
   return specifiers;
 }
 
-function createDefaultModuleImporter(
+/** @internal */
+export function createDefaultModuleImporter(
   environment: Environment,
+  dependencies: ModuleImporterDependencies = {},
 ): PluginModuleImporter {
   const applicationRoot = environment.LAMBDA_TASK_ROOT?.trim() || process.cwd();
   const requireFromApplication = createRequire(
     join(applicationRoot, "package.json"),
   );
+  const importModule =
+    dependencies.importModule ??
+    ((specifier: string): Promise<unknown> => import(specifier));
+  const resolveModule =
+    dependencies.resolveModule ??
+    ((specifier: string): string => requireFromApplication.resolve(specifier));
 
   return async (specifier: string): Promise<unknown> => {
     try {
-      return await import(specifier);
+      return await importModule(specifier);
     } catch (importError) {
-      try {
-        const resolvedPath = requireFromApplication.resolve(specifier);
-        return await import(pathToFileURL(resolvedPath).href);
-      } catch (layerImportError) {
-        throw new AggregateError(
-          [importError, layerImportError],
-          `Unable to resolve '${specifier}' from the application or configured Node.js module paths.`,
-        );
+      if (!isConfiguredSpecifierNotFound(importError, specifier)) {
+        throw importError;
       }
+
+      let resolvedPath: string;
+      try {
+        resolvedPath = resolveModule(specifier);
+      } catch (resolveError) {
+        throw new PluginModuleResolutionError(specifier, [
+          importError,
+          resolveError,
+        ]);
+      }
+
+      return importModule(pathToFileURL(resolvedPath).href);
     }
   };
 }
@@ -203,16 +281,23 @@ export async function loadConfiguredPlugins(
   }
 
   const importModule =
-    options.importModule ?? createDefaultModuleImporter(environment);
+    options.importModule ??
+    createDefaultModuleImporter(
+      environment,
+      options.moduleImporterDependencies,
+    );
 
   for (const specifier of specifiers) {
     let importedModule: unknown;
     try {
       importedModule = await importModule(specifier);
     } catch (error) {
+      const packagingGuidance =
+        error instanceof PluginModuleResolutionError
+          ? " Ensure the package is installed in the function artifact or an attached Lambda layer under 'nodejs/node_modules'."
+          : "";
       throw new PluginLoadError(
-        `Failed to load plugin module '${specifier}': ${errorMessage(error)} ` +
-          "Ensure the package is installed in the function artifact or an attached Lambda layer under 'nodejs/node_modules'.",
+        `Failed to load plugin module '${specifier}': ${errorMessage(error)}${packagingGuidance}`,
         { cause: error },
       );
     }

@@ -5,10 +5,12 @@ import {
   DurableInstrumentationPluginProvider,
 } from "../../types/plugin";
 import {
+  createDefaultModuleImporter,
   loadConfiguredPlugins,
   PLUGIN_ENVIRONMENT_VARIABLE,
   PLUGIN_PROVIDER_EXPORT,
 } from "./plugin-loader";
+import { pathToFileURL } from "url";
 
 class ExplicitPlugin implements DurableInstrumentationPlugin {}
 class FirstDynamicPlugin implements DurableInstrumentationPlugin {}
@@ -28,6 +30,103 @@ function providerFor<Plugin extends DurableInstrumentationPlugin>(
 function moduleFor(provider: unknown): Record<string, unknown> {
   return { [PLUGIN_PROVIDER_EXPORT]: provider };
 }
+
+function moduleNotFoundError(
+  missingModule: string,
+  code: "ERR_MODULE_NOT_FOUND" | "MODULE_NOT_FOUND" = "ERR_MODULE_NOT_FOUND",
+): Error & { code: string } {
+  return Object.assign(
+    new Error(`Cannot find package '${missingModule}' imported from test.mjs`),
+    { code },
+  );
+}
+
+describe("createDefaultModuleImporter", () => {
+  it("does not fall back when a resolved provider fails during evaluation", async () => {
+    const evaluationError = new Error("provider evaluation failed");
+    const importModule = jest.fn(async (): Promise<unknown> => {
+      throw evaluationError;
+    });
+    const resolveModule = jest.fn();
+    const importer = createDefaultModuleImporter(
+      {},
+      { importModule, resolveModule },
+    );
+
+    await expect(importer("@example/plugin")).rejects.toBe(evaluationError);
+    expect(resolveModule).not.toHaveBeenCalled();
+  });
+
+  it("does not fall back when a provider dependency is missing", async () => {
+    const dependencyError = moduleNotFoundError("@example/missing-peer");
+    const importModule = jest.fn(async (): Promise<unknown> => {
+      throw dependencyError;
+    });
+    const resolveModule = jest.fn();
+    const importer = createDefaultModuleImporter(
+      {},
+      { importModule, resolveModule },
+    );
+
+    await expect(importer("@example/plugin")).rejects.toBe(dependencyError);
+    expect(resolveModule).not.toHaveBeenCalled();
+  });
+
+  it("loads a configured provider from the application resolution path", async () => {
+    const nativeImportError = moduleNotFoundError("@example/plugin");
+    const importedModule = { provider: true };
+    const resolvedPath = "/opt/nodejs/node_modules/@example/plugin/index.mjs";
+    const importModule = jest
+      .fn<Promise<unknown>, [string]>()
+      .mockRejectedValueOnce(nativeImportError)
+      .mockResolvedValueOnce(importedModule);
+    const resolveModule = jest.fn(() => resolvedPath);
+    const importer = createDefaultModuleImporter(
+      {},
+      { importModule, resolveModule },
+    );
+
+    await expect(importer("@example/plugin")).resolves.toBe(importedModule);
+    expect(resolveModule).toHaveBeenCalledWith("@example/plugin");
+    expect(importModule.mock.calls).toEqual([
+      ["@example/plugin"],
+      [pathToFileURL(resolvedPath).href],
+    ]);
+  });
+
+  it("preserves both resolution errors when the provider is unavailable", async () => {
+    const nativeImportError = moduleNotFoundError("@example/missing");
+    const applicationResolveError = moduleNotFoundError(
+      "@example/missing",
+      "MODULE_NOT_FOUND",
+    );
+    const importer = createDefaultModuleImporter(
+      {},
+      {
+        importModule: async () => {
+          throw nativeImportError;
+        },
+        resolveModule: () => {
+          throw applicationResolveError;
+        },
+      },
+    );
+
+    try {
+      await importer("@example/missing");
+      throw new Error("Expected the importer to reject");
+    } catch (error) {
+      expect(error).toBeInstanceOf(AggregateError);
+      expect(error).toMatchObject({
+        name: "PluginModuleResolutionError",
+        message: expect.stringContaining(
+          "Unable to resolve '@example/missing'",
+        ),
+        errors: [nativeImportError, applicationResolveError],
+      });
+    }
+  });
+});
 
 describe("loadConfiguredPlugins", () => {
   it("preserves explicit plugins without importing modules when configuration is unset", async () => {
@@ -129,16 +228,47 @@ describe("loadConfiguredPlugins", () => {
     );
   });
 
-  it("wraps module import failures with layer packaging guidance", async () => {
+  it("wraps module evaluation failures without masking their cause", async () => {
     const importError = new Error("module not found");
+
+    const result = loadConfiguredPlugins([], {
+      environment: {
+        [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin",
+      },
+      importModule: async () => {
+        throw importError;
+      },
+    });
+
+    await expect(result).rejects.toMatchObject({
+      name: "PluginLoadError",
+      message: expect.stringContaining("module not found"),
+      cause: importError,
+    });
+    await expect(result).rejects.not.toThrow(
+      "Ensure the package is installed in the function artifact",
+    );
+  });
+
+  it("adds layer packaging guidance when the provider cannot be resolved", async () => {
+    const nativeImportError = moduleNotFoundError("@example/missing");
+    const applicationResolveError = moduleNotFoundError(
+      "@example/missing",
+      "MODULE_NOT_FOUND",
+    );
 
     await expect(
       loadConfiguredPlugins([], {
         environment: {
           [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/missing",
         },
-        importModule: async () => {
-          throw importError;
+        moduleImporterDependencies: {
+          importModule: async () => {
+            throw nativeImportError;
+          },
+          resolveModule: () => {
+            throw applicationResolveError;
+          },
         },
       }),
     ).rejects.toMatchObject({
@@ -146,7 +276,10 @@ describe("loadConfiguredPlugins", () => {
       message: expect.stringContaining(
         "Ensure the package is installed in the function artifact or an attached Lambda layer",
       ),
-      cause: importError,
+      cause: expect.objectContaining({
+        name: "PluginModuleResolutionError",
+        errors: [nativeImportError, applicationResolveError],
+      }),
     });
   });
 
