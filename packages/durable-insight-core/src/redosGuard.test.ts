@@ -74,79 +74,120 @@ const SRC = __dirname;
  * linear, each with the reason. Keyed by the regex SOURCE rather than by file and line,
  * so ordinary edits do not invalidate the list.
  */
-const ALLOWED = new Map<string, string>([
-  [
-    String.raw`\bfrom\s*["'](\.[^"']*)["']`,
-    "hostModuleScan: `\\s*` matches only whitespace and `[^\"']*` stops at a quote, " +
+const ALLOWED_ENTRIES: ReadonlyArray<{
+  file: string;
+  source: string;
+  reason: string;
+}> = [
+  {
+    file: "hostModuleScan.ts",
+    source: String.raw`\bfrom\s*["'](\.[^"']*)["']`,
+    reason:
+      "hostModuleScan: `\\s*` matches only whitespace and `[^\"']*` stops at a quote, " +
       "so the two cannot compete for the same characters. Measured flat from 2k to 8k.",
-  ],
-  [
-    String.raw`(?:^|;)\s*import\s*["'](\.[^"']*)["']`,
-    "hostModuleScan: as above — disjoint character classes separated by literals.",
-  ],
-  [
-    String.raw`\brequire\s*\(\s*["'](\.[^"']*)["']\s*\)`,
-    "hostModuleScan: as above.",
-  ],
-  [
-    String.raw`\bimport\s*\(\s*["'](\.[^"']*)["']\s*\)`,
-    "hostModuleScan: as above.",
-  ],
-  [
-    String.raw`\blimit\s+\d+`,
-    "agentLoop: `\\s+` and `\\d+` are disjoint, so neither can absorb the other's " +
+  },
+  {
+    file: "hostModuleScan.ts",
+    source: String.raw`(?:^|;)\s*import\s*["'](\.[^"']*)["']`,
+    reason:
+      "hostModuleScan: as above — disjoint character classes separated by literals.",
+  },
+  {
+    file: "hostModuleScan.ts",
+    source: String.raw`\brequire\s*\(\s*["'](\.[^"']*)["']\s*\)`,
+    reason: "hostModuleScan: as above.",
+  },
+  {
+    file: "hostModuleScan.ts",
+    source: String.raw`\bimport\s*\(\s*["'](\.[^"']*)["']\s*\)`,
+    reason: "hostModuleScan: as above.",
+  },
+  {
+    file: "agentLoop.ts",
+    source: String.raw`\blimit\s+\d+`,
+    reason:
+      "agentLoop: `\\s+` and `\\d+` are disjoint, so neither can absorb the other's " +
       "characters. Measured flat.",
-  ],
-  [
-    String.raw`\|\s*fields\s+([^|]+)`,
-    "queryShape: `[^|]+` runs to the next pipe or end of input, and the `fields` " +
+  },
+  {
+    file: "queryShape.ts",
+    source: String.raw`\|\s*fields\s+([^|]+)`,
+    reason:
+      "queryShape: `[^|]+` runs to the next pipe or end of input, and the `fields` " +
       "literal pins the start. Measured flat.",
-  ],
-  [
-    String.raw`^\s*\*\s*$`,
-    "queryShape: anchored at both ends with a literal `*` between the quantifiers, " +
+  },
+  {
+    file: "queryShape.ts",
+    source: String.raw`^\s*\*\s*$`,
+    reason:
+      "queryShape: anchored at both ends with a literal `*` between the quantifiers, " +
       "so there is one candidate split. Measured flat.",
-  ],
-  [
-    String.raw`\*\s*,|\bselect\s+\*`,
-    "queryShape: an alternation of two short anchored branches, not nested " +
+  },
+  {
+    file: "queryShape.ts",
+    source: String.raw`\*\s*,|\bselect\s+\*`,
+    reason:
+      "queryShape: an alternation of two short anchored branches, not nested " +
       "quantifiers. Measured flat.",
-  ],
-  [
-    String.raw`^([\s\S]*?)(\s+from\s)`,
-    "queryShape: start-anchored, and the first quantifier is LAZY, so it extends one " +
+  },
+  {
+    file: "queryShape.ts",
+    source: String.raw`^([\s\S]*?)(\s+from\s)`,
+    reason:
+      "queryShape: start-anchored, and the first quantifier is LAZY, so it extends one " +
       "character at a time toward a single required literal rather than backtracking " +
       "over the whole input. Measured flat.",
-  ],
-  [
-    String.raw`\s*\(.*\)$`,
-    "jsonExtract.test.ts: this IS the vulnerable pattern, kept deliberately to assert " +
+  },
+  {
+    file: "jsonExtract.test.ts",
+    source: String.raw`\s*\(.*\)$`,
+    reason:
+      "jsonExtract.test.ts: this IS the vulnerable pattern, kept deliberately to assert " +
       "that `stripTrailingParenthetical` is equivalent to what it replaced. Applied only " +
       "to the short literals in that file, never to input. Removing it would remove the " +
       "equivalence proof, which is worth more than the shape is worth avoiding in a " +
       "fixture.",
-  ],
-  [
-    String.raw`(\[\^?(?:\\.|[^\]\\])*\]|\.|\\[sSwWdD])(?:[*+]|\{\d+,\})`,
-    "This file's WIDE_QUANTIFIER. R3 fires on the outer capture group, but that group is " +
+  },
+  {
+    file: "redosGuard.test.ts",
+    source: String.raw`(\[\^?(?:\\.|[^\]\\])*\]|\.|\\[sSwWdD])(?:[*+]|\{\d+,\})`,
+    reason:
+      "This file's WIDE_QUANTIFIER. R3 fires on the outer capture group, but that group is " +
       "not repeated -- a quantifier alternation follows it -- and the alternatives inside " +
       "begin with distinct characters. Measured flat to 4k characters on the witness " +
       "CodeQL named for alert 248.",
-  ],
-  [
-    String.raw`(\\.|\[\^?(?:\\.|[^\]\\])*\]|\.|\([^)]*\)|[^\\[\](){}*+?|^$])(?:[*+]|\{\d+,\})`,
-    "This file's ANY_QUANTIFIER. As above; measured flat to 4k characters across four " +
+  },
+  {
+    file: "redosGuard.test.ts",
+    source: String.raw`(\\.|\[\^?(?:\\.|[^\]\\])*\]|\.|\([^)]*\)|[^\\[\](){}*+?|^$])(?:[*+]|\{\d+,\})`,
+    reason:
+      "This file's ANY_QUANTIFIER. As above; measured flat to 4k characters across four " +
       "witness shapes.",
-  ],
-  [
-    String.raw`\/((?:\\.|\[(?:\\.|[^\]\\])*\]|[^/\n\\[])+)\/[gimsuy]*`,
-    "This file's regex-literal extractor. It WAS exponential -- 2x per `[]`, 40ms at 22 " +
+  },
+  {
+    file: "redosGuard.test.ts",
+    source: String.raw`\/((?:\\.|\[(?:\\.|[^\]\\])*\]|[^/\n\\[])+)\/[gimsuy]*`,
+    reason:
+      "This file's regex-literal extractor. It WAS exponential -- 2x per `[]`, 40ms at 22 " +
       "repetitions, CodeQL alerts 249/251 -- because a `[` could be consumed either by " +
       "the character-class alternative or as a plain character. Excluding `[` from the " +
       "fallback leaves one parse; measured flat to 2k repetitions and verified to extract " +
       "identically across all 11,417 lines of this package.",
-  ],
-]);
+  },
+];
+
+/**
+ * `file\u0000source` for every exemption.
+ *
+ * KEYED BY FILE AS WELL AS PATTERN, and that is the whole point. Keying on the pattern
+ * alone meant the exemption written for the deliberately-vulnerable fixture in
+ * `jsonExtract.test.ts` ALSO exempted the identical regex anywhere else -- including
+ * production code. Demonstrated: adding `/\s*\(.*\)$/` to `verdict.ts` left the guard
+ * green. A justification is about a pattern IN A PLACE, so the key has to carry both.
+ */
+const ALLOWED = new Set(
+  ALLOWED_ENTRIES.map((e) => `${e.file}\u0000${e.source}`),
+);
 
 /**
  * Every `.ts` file in this package, TESTS INCLUDED, recursively.
@@ -198,6 +239,56 @@ const ANY_QUANTIFIER =
 const REPEATED_GROUP = /\)(?:[*+]|\{\d+,\})/;
 
 /**
+ * Split a pattern into the fragments that an anchor could independently govern:
+ * on `|` at any depth, and at group boundaries.
+ *
+ * Deliberately over-splits. A fragment that is not really a separate branch can only
+ * cause an extra finding, which the allowlist absorbs after a measurement; a branch that
+ * is missed hides a quadratic path, which is the defect this rule exists to catch.
+ * Character classes are stepped over so a `|` or `(` inside one is not a boundary.
+ */
+function alternationBranches(source: string): string[] {
+  const out: string[] = [];
+  let current = "";
+  let inClass = false;
+  for (let i = 0; i < source.length; i++) {
+    const char = source[i];
+    // An escape is a backslash that is not itself escaped.
+    const escaped =
+      i > 0 && source[i - 1] === "\\" && !(i > 1 && source[i - 2] === "\\");
+    if (escaped) {
+      current += char;
+      continue;
+    }
+    if (inClass) {
+      current += char;
+      if (char === "]") inClass = false;
+      continue;
+    }
+    if (char === "[") {
+      inClass = true;
+      current += char;
+      continue;
+    }
+    if (char === "|" || char === "(" || char === ")") {
+      out.push(current);
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  out.push(current);
+  // The whole pattern counts as a branch too, for the single-alternative case.
+  return [source, ...out].filter((s) => s.length > 0);
+}
+
+/** True when a fragment ends in `$`, is not start-anchored, and has a quantifier. */
+function hasTrailingAnchorRisk(fragment: string): boolean {
+  if (!fragment.endsWith("$") || fragment.startsWith("^")) return false;
+  return [...fragment.matchAll(ANY_QUANTIFIER)].length >= 1;
+}
+
+/**
  * Score one pattern against the three shapes that produce super-linear backtracking.
  *
  * The first version of this guard implemented only R1, which is how it managed to pass
@@ -213,12 +304,17 @@ function riskRules(source: string): string[] {
   const wide = [...source.matchAll(WIDE_QUANTIFIER)].length;
   if (wide >= 2) found.push(`R1: ${wide} wide quantifiers`);
 
-  // R2 -- one quantifier plus an END anchor and no START anchor. When the anchor is
+  // R2 -- a quantifier plus an END anchor and no START anchor. When the anchor is
   // unreachable the engine retries from every position, which is exactly the shape
   // CodeQL flagged in #809 (`/\/+$/`, `/\s+$/`). A start anchor removes it: there is
   // then only one place to begin.
-  const anyQuantifier = [...source.matchAll(ANY_QUANTIFIER)].length;
-  if (anyQuantifier >= 1 && source.endsWith("$") && !source.startsWith("^")) {
+  //
+  // APPLIED PER BRANCH, not to the whole pattern. Testing `source.endsWith("$")` and
+  // `source.startsWith("^")` assumes those anchors govern every alternative, and they
+  // do not: `/a+$|x/` does not end with `$`, `/^x|a+$/` does start with `^`, and BOTH
+  // have a quadratic `a+$` branch -- measured 6ms at 2k characters rising 4x per
+  // doubling to 394ms at 16k. Both scored zero before this.
+  if (alternationBranches(source).some(hasTrailingAnchorRisk)) {
     found.push("R2: quantifier with a trailing $ and no leading ^");
   }
 
@@ -306,6 +402,15 @@ describe("the detector catches every shape this package has had to remove", () =
     [String.raw`(a|aa)+$`, "R3"],
     // Repeated group without nesting: still worth a justification.
     [String.raw`(ab)+c`, "R3"],
+    // ALTERNATION. Neither of these is caught by testing the whole pattern's first and
+    // last characters -- the first does not end with `$`, the second does start with
+    // `^` -- yet both have a quadratic `a+$` branch, measured 6ms at 2k characters
+    // rising 4x per doubling to 394ms at 16k. Both scored zero until R2 became
+    // per-branch.
+    [String.raw`a+$|x`, "R2"],
+    [String.raw`^x|a+$`, "R2"],
+    // The same escape inside a group rather than a bare alternation.
+    [String.raw`^(?:x|a+$)`, "R2"],
   ])("flags %s under %s", (pattern, rule) => {
     const risks = riskRules(pattern);
     expect(risks.length).toBeGreaterThan(0);
@@ -319,6 +424,8 @@ describe("the detector catches every shape this package has had to remove", () =
     String.raw`\s*`,
     // No quantifier at all.
     String.raw`\bselect\b`,
+    // Every branch start-anchored: no branch can retry from many positions.
+    String.raw`^a+$|^b+$`,
   ])("does not flag the benign pattern %s", (pattern) => {
     // Acceptance matters as much as detection: a detector that flagged everything
     // would satisfy the cases above while making the allowlist meaningless.
@@ -331,23 +438,46 @@ describe("no unjustified polynomial-ReDoS candidates", () => {
     // Non-vacuity. A scan that silently matched nothing — a changed literal syntax, a
     // renamed directory — would make the assertion below trivially true, which is the
     // failure mode of every scanner in this repo that has needed fixing.
-    expect(risky.length).toBeGreaterThanOrEqual(ALLOWED.size);
+    expect(risky.length).toBeGreaterThanOrEqual(ALLOWED_ENTRIES.length);
     const sources = risky.map((r) => r.source);
     expect(sources).toContain(String.raw`^([\s\S]*?)(\s+from\s)`);
     expect(sources).toContain(String.raw`\blimit\s+\d+`);
   });
 
+  it("does not exempt a pattern outside the file it was justified in", () => {
+    // THE LEAK THIS CLOSES:
+    // `ALLOWED` was keyed by regex source alone, so the exemption written for the
+    // deliberately-vulnerable fixture in `jsonExtract.test.ts` also exempted the
+    // identical regex in production. Demonstrated by adding `/\s*\(.*\)$/` to
+    // `verdict.ts`, which left the guard green.
+    //
+    // Fixing that structurally is not enough on its own -- reverting the key to
+    // source-only passes every other test in this file, which is how the leak existed
+    // in the first place. This asserts the keying directly.
+    const fixture = ALLOWED_ENTRIES.find(
+      (e) => e.file === "jsonExtract.test.ts",
+    );
+    expect(fixture).toBeDefined();
+    const source = fixture?.source ?? "";
+    expect(ALLOWED.has(`jsonExtract.test.ts\u0000${source}`)).toBe(true);
+    // The same pattern in production code is NOT covered by that justification.
+    expect(ALLOWED.has(`verdict.ts\u0000${source}`)).toBe(false);
+    expect(ALLOWED.has(`llm.ts\u0000${source}`)).toBe(false);
+  });
+
   it("has no allowlist entry that is no longer present", () => {
     // A stale entry silently widens the rule. If a pattern is gone, its exemption
     // should go with it.
-    const sources = new Set(risky.map((r) => r.source));
-    const orphans = [...ALLOWED.keys()].filter((k) => !sources.has(k));
+    const present = new Set(risky.map((r) => `${r.file}\u0000${r.source}`));
+    const orphans = ALLOWED_ENTRIES.filter(
+      (e) => !present.has(`${e.file}\u0000${e.source}`),
+    ).map((e) => `${e.file}  /${e.source}/`);
     expect(orphans).toEqual([]);
   });
 
   it("every risky pattern is allowlisted with a reason", () => {
     const unjustified = risky
-      .filter((r) => !ALLOWED.has(r.source))
+      .filter((r) => !ALLOWED.has(`${r.file}\u0000${r.source}`))
       .map(
         (r) => `${r.file}:${r.line}  /${r.source}/  [${r.risks.join("; ")}]`,
       );
