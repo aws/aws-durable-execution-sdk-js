@@ -48,6 +48,22 @@ interface DefaultDurableLogEntry extends DurableLogData {
 const FORMAT_OPTIONS = { breakLength: Infinity } as const;
 
 /**
+ * `util.formatWithOptions`, with a fallback for runtimes that do not provide it.
+ *
+ * Lightweight JavaScript runtimes targeting Lambda — LLRT, for example — ship a `node:util`
+ * with `format` but not `formatWithOptions`, which would make every multi-argument log
+ * record throw `TypeError: not a function` from inside the logger. The fallback loses only
+ * the single-line rendering of inspected objects.
+ */
+const formatWithOptions: (
+  options: typeof FORMAT_OPTIONS,
+  ...args: unknown[]
+) => string =
+  typeof util.formatWithOptions === "function"
+    ? util.formatWithOptions
+    : (_options, ...args): string => util.format(...args);
+
+/**
  * JSON.stringify replacer function for Error objects.
  * Based on AWS Lambda Runtime Interface Client LogPatch functionality.
  * Transforms Error instances into serializable objects with structured error information,
@@ -144,12 +160,12 @@ function formatDurableLogData(
     try {
       return JSON.stringify(result, jsonErrorReplacer);
     } catch (_) {
-      result.message = util.formatWithOptions(FORMAT_OPTIONS, result.message);
+      result.message = formatWithOptions(FORMAT_OPTIONS, result.message);
       return JSON.stringify(result);
     }
   }
 
-  result.message = util.formatWithOptions(FORMAT_OPTIONS, ...messageParams);
+  result.message = formatWithOptions(FORMAT_OPTIONS, ...messageParams);
   for (const param of messageParams) {
     if (param instanceof Error) {
       result.errorType = param?.constructor?.name ?? "UnknownError";

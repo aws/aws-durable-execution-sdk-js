@@ -1,4 +1,4 @@
-import { AsyncLocalStorage } from "async_hooks";
+import { createContextStorage } from "./context-storage";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
 import { DurableExecutionMode } from "../../types";
@@ -11,7 +11,7 @@ interface ContextInfo {
   operationName?: string;
 }
 
-const asyncLocalStorage = new AsyncLocalStorage<ContextInfo>();
+const asyncLocalStorage = createContextStorage<ContextInfo>();
 
 export const getActiveContext = (): ContextInfo | undefined => {
   return asyncLocalStorage.getStore();

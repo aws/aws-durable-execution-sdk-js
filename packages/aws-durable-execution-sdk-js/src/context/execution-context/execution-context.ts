@@ -14,6 +14,7 @@ import { Context } from "aws-lambda";
 import { DurableExecutionApiClient } from "../../durable-execution-api-client/durable-execution-api-client";
 import { DurableExecutionClient } from "../../types/durable-execution";
 import { DurableExecutionInvocationInputWithClient } from "../../utils/durable-execution-invocation-input/durable-execution-invocation-input";
+import { warnOnceIfContextStorageIsDegraded } from "../../utils/context-tracker/context-storage";
 import { normalizeOperations } from "../../utils/operation/normalize-operation";
 
 /**
@@ -70,6 +71,11 @@ export const initializeExecutionContext = async (
     requestId: context.awsRequestId,
     tenantId: context.tenantId,
   });
+
+  // Runtimes without AsyncLocalStorage run with degraded operation-context tracking. Say so
+  // here, where a logger first exists, rather than leaving it to be inferred from log records
+  // that are missing their operation metadata.
+  warnOnceIfContextStorageIsDegraded(initLogger);
 
   const operationsArray: Operation[] = normalizeOperations(
     event.InitialExecutionState.Operations || [],

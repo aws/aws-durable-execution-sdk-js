@@ -1,0 +1,77 @@
+name: LLRT Container Tests
+
+# Proves a durable function *on LLRT* works end to end on real Lambda, deployed the only way a
+# runtime Lambda does not manage can be: as a container image.
+#
+# The in-repo counterpart is constrained-runtime.composed.test.ts, which runs the engine with the
+# APIs such runtimes lack mocked away. That covers behaviour on every pull request; this covers
+# the deployment shape, which cannot be simulated.
+#
+# Opt-in rather than part of the PR build. It pushes a container image to ECR and creates a
+# function, so its cost and blast radius differ from the other integration jobs, and it depends
+# on an ECR repository existing (or being creatable) in the test account.
+#
+# Verified end to end before being committed: the Lambda control plane does accept DurableConfig
+# on a container image whose bootstrap is not a Lambda-managed runtime, and the execution
+# completed on LLRT with the same result a Node run produces.
+
+on:
+  workflow_dispatch:
+    inputs:
+      node-version:
+        description: "Node.js version used to run the test driver"
+        required: false
+        default: "22.x"
+        type: string
+  workflow_call:
+    inputs:
+      node-version:
+        required: true
+        type: string
+
+# Serialize: the job reuses one ECR repository and creates run-scoped functions.
+concurrency:
+  group: llrt-container-integ
+  cancel-in-progress: false
+
+env:
+  ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+
+jobs:
+  llrt-container:
+    # Skip for PRs from forked repos (no access to secrets)
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Required for AWS credentials
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ inputs.node-version || '22.x' }}
+          cache: "npm"
+
+      - name: Get AWS Credentials
+        if: github.actor != 'nektos/act'
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: "${{ secrets.TEST_ROLE_ARN }}"
+          role-session-name: githubLlrtContainerTest
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Run LLRT container cloud test
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          TEST_LAMBDA_EXECUTION_ROLE_ARN: ${{ secrets.TEST_LAMBDA_EXECUTION_ROLE_ARN }}
+          LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
+          LLRT_ECR_REPOSITORY: durable-llrt-integ
+        run: node .github/workflows/scripts/llrt/llrt-cloud-test.js
