@@ -409,9 +409,20 @@ function registerTools(server: McpServer, config: InsightConfig): void {
             `Maximum rows to return (<= ${MAX_ROWS}). Defaults to a bounded ` +
               `page; the ${MAX_ROWS} cap always applies.`,
           ),
+        lookbackHours: z
+          .number()
+          .positive()
+          .optional()
+          .describe(
+            "For CloudWatch Logs destinations only: how many hours back to scan. " +
+              "Usually unnecessary — when `since` is given the scanned window is " +
+              "derived from it. Set this to widen a search that has no `since`. " +
+              "The window scanned is returned as searchedLookbackHours; if it is " +
+              "narrower than you expected, results may be partial.",
+          ),
       },
     },
-    async ({ status, functionName, since, until, limit }) => {
+    async ({ status, functionName, since, until, limit, lookbackHours }) => {
       const gate = missingConfigResult(config);
       if (gate) return gate;
       try {
@@ -422,6 +433,7 @@ function registerTools(server: McpServer, config: InsightConfig): void {
             since,
             until,
             limit,
+            lookbackHours,
           }),
         );
       } catch (err) {

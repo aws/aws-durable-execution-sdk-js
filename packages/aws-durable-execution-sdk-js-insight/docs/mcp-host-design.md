@@ -815,6 +815,26 @@ Review of this change added five more, all of them the same shape as the two abo
   `hasMore`. Note the MCP host's own tests could not have caught a regression here --
   they mock the runner -- so the pinning test lives in core, against the SDK response.
 
+A second review round added two more, both of which passed every test for the same
+reason -- the default value made the bug invisible:
+
+- **Two bounds that can disagree.** On a log destination `since`/`until` become
+  `filter` stages inside the pipe query, while the `StartQuery` window is a separate
+  parameter that stayed at its 24-hour default. Asking for executions since last week
+  scanned one day, applied a filter everything in that day satisfied, and returned a
+  plausible partial answer with `truncated: false`. The window is now derived from the
+  bounds, deliberately as a superset, and reported as `searchedLookbackHours`. General
+  lesson: when a result is bounded in two places, assert on the bound the caller cannot
+  see, not on the query text -- the query text was correct throughout.
+- **A default that hid a missing qualification.** The Redshift target was the bare
+  table name while core qualifies it with `redshiftSchema` in four places. It passed
+  because the default schema is `public`, where an unqualified name resolves through
+  `search_path` to the same table; set the documented setting to anything else and the
+  same SQL reads a different table. An existing test asserted `FROM workflow_insight`
+  and so pinned the bug. Both the generated SQL and the target `describe_schema`
+  teaches now go through one helper, because a target the agent is taught that differs
+  from the one queried is its own failure.
+
 ## 14. Risks
 
 | Risk                                                         | Severity | Mitigation                                                                         |

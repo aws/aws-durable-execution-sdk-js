@@ -331,7 +331,13 @@ describe("list_executions — validated filters build the expected per-dialect S
     await runListExecutions(cfgFor("redshift"), { status: "RUNNING" });
     const sql = redshiftSql();
     expect(sql).not.toMatch(/recordtype/i);
-    expect(sql).toContain("FROM workflow_insight");
+    // Schema-qualified. This assertion previously pinned the BUG: it read
+    // `FROM workflow_insight`, which passed only because the default schema is
+    // `public` and an unqualified name resolves through `search_path` to the
+    // same table. Core qualifies Redshift wherever it builds SQL; so does this
+    // package now. Aurora above stays unqualified on purpose -- it has no
+    // schema setting, and core does not qualify it either.
+    expect(sql).toContain("FROM public.workflow_insight");
     expect(sql).toContain("status = 'RUNNING'");
     expect(sql).toMatch(/ORDER BY start_time DESC LIMIT 100$/);
   });

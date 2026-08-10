@@ -159,7 +159,8 @@ The server registers five tools. Call them roughly in this order.
   of `status`, `functionName`, `since`, and `until`, with a bounded `limit` — no
   query language required. **Prefer this over a hand-written `query`:** it cannot
   be got wrong and costs fewer tokens. Reach for `query` only when a question
-  cannot be expressed through these filters.
+  cannot be expressed through these filters. On log destinations the scanned window
+  follows `since`, so filtering to last week scans last week.
 - **`get_execution`** — Fetch a single execution record by its execution ARN. A
   record that does not exist is a success with `found: false`, not an error. For
   the Athena/`s3` destination you may also pass `year`/`month`/`day` to prune to
@@ -181,13 +182,18 @@ The server registers five tools. Call them roughly in this order.
   response that hit the service's ~1 MB limit also sets it, which can happen far
   below 1000 rows. Either way, narrow your filters rather than assuming you saw
   everything.
-- **Log lookback window.** CloudWatch Logs Insights has no "all time"; a query
-  must carry an explicit `[start, end]` window. When you do not pass one, `query`
-  uses the **last 24 hours** and `get_execution` the **last 7 days**. Both are
-  overridable with `lookbackHours`, and `get_execution` reports the window it
-  searched as `searchedLookbackHours` — so a `found: false` on a log destination
-  means "not in that window", not "does not exist". This window is ignored by the
-  SQL destinations, which are not time-windowed.
+- **Log lookback window.** CloudWatch Logs Insights has no "all time"; a query must
+  carry an explicit `[start, end]` window, and that window is separate from any
+  filtering inside the query. All three tools report the window they scanned as
+  `searchedLookbackHours`, because a window narrower than your filters ask for returns
+  a partial answer that otherwise looks complete.
+  - `list_executions` **derives the window from `since`**, so filtering to last week
+    scans last week. Pass `lookbackHours` to widen a search that has no `since`.
+  - `query` defaults to the **last 24 hours**, `get_execution` to the **last 7 days**;
+    both accept `lookbackHours`.
+  - A `found: false` from `get_execution` therefore means "not in that window", not
+    "does not exist".
+  - This window is ignored by the SQL destinations, which are not time-windowed.
 
 ## Prompts
 

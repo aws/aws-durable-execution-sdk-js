@@ -9,6 +9,7 @@ import {
   runDynamoDBQuery,
   runAuroraQuery,
   runRedshiftQuery,
+  runLogsInsightsQuery,
   fetchLogsInsightsRecord,
   resolveCredentials,
   type InsightConfig,
@@ -31,6 +32,7 @@ jest.mock("@aws/durable-insight-core", () => {
     runDynamoDBQuery: jest.fn(),
     runAuroraQuery: jest.fn(),
     runRedshiftQuery: jest.fn(),
+    runLogsInsightsQuery: jest.fn(),
     fetchLogsInsightsRecord: jest.fn(),
     resolveCredentials: jest.fn(() => "FAKE_CREDENTIALS"),
   };
@@ -41,6 +43,9 @@ const runAuroraMock = runAuroraQuery as jest.MockedFunction<
 >;
 const runRedshiftMock = runRedshiftQuery as jest.MockedFunction<
   typeof runRedshiftQuery
+>;
+const runLogsMock = runLogsInsightsQuery as jest.MockedFunction<
+  typeof runLogsInsightsQuery
 >;
 const logsRecordMock = fetchLogsInsightsRecord as jest.MockedFunction<
   typeof fetchLogsInsightsRecord
@@ -272,5 +277,167 @@ describe("get_execution reports its window and its ignored parameters", () => {
       executionArn: ARN,
     });
     expect(result.ignoredParams).toBeUndefined();
+  });
+});
+
+/**
+ * The Logs Insights API window must cover the range the caller asked to filter on.
+ *
+ * THE FAILURE THIS PREVENTS:
+ * A Logs Insights result is bounded by TWO things: the `StartQuery` window, and the
+ * `filter` stages inside the pipe query. `since`/`until` only ever became filters,
+ * while the window stayed at its 24-hour default -- so `list_executions({ since:
+ * <a week ago> })` scanned one day, applied a filter that everything in that day
+ * satisfied, and returned a plausible partial answer with `truncated: false`. Nothing
+ * in the result hinted six days were missing, which is the worst version of this bug:
+ * an agent will state a partial answer as a complete one.
+ *
+ * These assert on the window handed to the runner, not on the query text, because the
+ * query text was already correct -- that is exactly why the bug was invisible.
+ */
+describe("list_executions derives the log scan window from its bounds", () => {
+  const LOGS = "cloudwatch-logs-exporter";
+  const emptyLogs = { columns: [], rows: [], count: 0 };
+  const windowHours = () => {
+    const call = runLogsMock.mock.calls[0][0];
+    return (call.endTimeMs - call.startTimeMs) / (60 * 60 * 1000);
+  };
+
+  beforeEach(() => {
+    runLogsMock.mockResolvedValue(emptyLogs);
+  });
+
+  it("scans back to `since` rather than the 24-hour default", async () => {
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const result = await runListExecutions(cfgFor(LOGS), { since });
+    // A week, not a day. Anything at or below 24 means the window ignored `since`.
+    expect(windowHours()).toBeGreaterThan(7 * 24);
+    expect(result.searchedLookbackHours).toBeGreaterThan(7 * 24);
+  });
+
+  it("never scans less than the requested span", async () => {
+    // The margin exists so an exact boundary cannot clip the oldest matching event.
+    for (const days of [1, 3, 30, 365]) {
+      runLogsMock.mockClear();
+      const since = new Date(
+        Date.now() - days * 24 * 60 * 60 * 1000,
+      ).toISOString();
+      await runListExecutions(cfgFor(LOGS), { since });
+      expect(windowHours()).toBeGreaterThanOrEqual(days * 24);
+    }
+  });
+
+  it("uses the 24-hour default when no bound is given", async () => {
+    const result = await runListExecutions(cfgFor(LOGS), {});
+    expect(windowHours()).toBe(24);
+    expect(result.searchedLookbackHours).toBe(24);
+  });
+
+  it("lets an explicit lookbackHours win over since", async () => {
+    const since = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    await runListExecutions(cfgFor(LOGS), { since, lookbackHours: 500 });
+    // The caller stated the window outright; deriving a narrower one from `since`
+    // would override an explicit instruction.
+    expect(windowHours()).toBe(500);
+  });
+
+  it.each(["not-a-date", ""])(
+    "rejects an unparseable since (%s) before any window is computed",
+    async (since) => {
+      // Worth pinning the ORDER: the query builder runs first and validates the
+      // timestamp shape, so a malformed bound is a clean rejection rather than a
+      // silent fall back to 24 hours. `logWindowFor`'s own fallback is therefore
+      // unreachable through this tool -- it exists so the helper is total, not
+      // because a bad value can arrive here.
+      await expect(runListExecutions(cfgFor(LOGS), { since })).rejects.toThrow(
+        /Invalid since/,
+      );
+      expect(runLogsMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it("ignores a future since rather than scanning a negative window", async () => {
+    const since = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    await runListExecutions(cfgFor(LOGS), { since });
+    expect(windowHours()).toBe(24);
+  });
+
+  it("reports no window for SQL destinations, which are not time-scoped", async () => {
+    // Acceptance: reporting one on Aurora would imply a bound that does not exist.
+    runAuroraMock.mockResolvedValue({
+      columns: [],
+      rows: [],
+      count: 0,
+      numericColumns: [],
+    });
+    const result = await runListExecutions(cfgFor("aurora"), {
+      since: new Date(Date.now() - 7 * 864e5).toISOString(),
+    });
+    expect(result.searchedLookbackHours).toBeUndefined();
+  });
+});
+
+/**
+ * The Redshift query target must be schema-qualified.
+ *
+ * THE FAILURE THIS PREVENTS:
+ * `redshiftSchema` is a documented setting defaulting to `public`, and core qualifies
+ * with it everywhere it builds Redshift SQL. This package used the bare table name,
+ * which passed every test because with `public` the unqualified name resolves through
+ * `search_path` identically. With DURABLE_INSIGHT_REDSHIFT_SCHEMA set to anything
+ * else, the same SQL silently reads a DIFFERENT table, or fails.
+ *
+ * `describe_schema` is asserted alongside the generated SQL because a target the agent
+ * is TAUGHT that differs from the one queried is its own bug: it would write
+ * correct-looking SQL against a table nobody is reading.
+ */
+describe("redshift targets are schema-qualified", () => {
+  const withSchema = (schema: string): InsightConfig =>
+    configFromWireSettings({
+      destinationType: "redshift",
+      redshiftWorkgroupName: "wg",
+      redshiftSchema: schema,
+      redshiftTable: "workflow_insight",
+    });
+
+  beforeEach(() => {
+    runRedshiftMock.mockResolvedValue({
+      columns: [],
+      rows: [],
+      count: 0,
+      numericColumns: [],
+    });
+  });
+
+  it.each(["analytics", "reporting"])(
+    "qualifies list_executions SQL with schema %s",
+    async (schema) => {
+      await runListExecutions(withSchema(schema), {});
+      expect(runRedshiftMock.mock.calls[0][0].sql).toContain(
+        `${schema}.workflow_insight`,
+      );
+    },
+  );
+
+  it("qualifies get_execution SQL", async () => {
+    await runGetExecution(withSchema("analytics"), { executionArn: ARN });
+    expect(runRedshiftMock.mock.calls[0][0].sql).toContain(
+      "analytics.workflow_insight",
+    );
+  });
+
+  it("teaches describe_schema the same qualified target", async () => {
+    const result = buildDescribeSchemaResult(withSchema("analytics"));
+    // If these two ever disagree the agent writes SQL against the wrong table.
+    expect(result.table).toBe("analytics.workflow_insight");
+  });
+
+  it("still qualifies with the public default", async () => {
+    // The default is where this hid: `public.workflow_insight` and
+    // `workflow_insight` behave the same, so only an explicit assertion pins it.
+    await runListExecutions(withSchema(""), {});
+    expect(runRedshiftMock.mock.calls[0][0].sql).toContain(
+      "public.workflow_insight",
+    );
   });
 });

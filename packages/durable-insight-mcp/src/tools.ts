@@ -36,6 +36,7 @@ import {
   type InsightConfig,
 } from "@aws/durable-insight-core";
 import {
+  DEFAULT_LOG_TIME_RANGE_MS,
   LOGS_INSIGHTS_ENGINE,
   MAX_ROWS,
   runReadOnlyQuery,
@@ -132,6 +133,30 @@ function isLogDestination(cfg: InsightConfig): boolean {
 }
 
 /** Engine label + table name for a destination, matching `readOnlyQuery.ts`. */
+/**
+ * The Redshift query target, schema-qualified.
+ *
+ * `redshiftSchema` is a documented setting that defaults to `public`, and core
+ * qualifies with it everywhere it builds Redshift SQL (`explorerSession.ts` in three
+ * places, `destinationTest.ts` in one). This package used the bare table name, which
+ * survived every test for a reason worth knowing: with the default `public` the
+ * unqualified name resolves through `search_path` and behaves identically. Set
+ * DURABLE_INSIGHT_REDSHIFT_SCHEMA to anything else and the same SQL silently reads a
+ * DIFFERENT table, or fails.
+ *
+ * Both the generated SQL and the guidance `describe_schema` hands the agent go
+ * through here, because a target the agent is TAUGHT that differs from the target
+ * queried is its own bug: the agent would write correct-looking SQL against a table
+ * that is not the one being read.
+ *
+ * Only Redshift is qualified this way, matching core exactly: Aurora has no schema
+ * setting, Athena's database is passed to the runner as a separate parameter, and
+ * DynamoDB and OpenSearch have no schema concept.
+ */
+function redshiftTarget(cfg: InsightConfig): string {
+  return `${cfg.redshiftSchema}.${cfg.redshiftTable}`;
+}
+
 function engineAndTable(cfg: InsightConfig): { engine: string; table: string } {
   switch (cfg.destinationType) {
     case "dynamodb":
@@ -141,7 +166,7 @@ function engineAndTable(cfg: InsightConfig): { engine: string; table: string } {
     case "aurora":
       return { engine: "PostgreSQL", table: cfg.auroraTable };
     case "redshift":
-      return { engine: "Redshift SQL", table: cfg.redshiftTable };
+      return { engine: "Redshift SQL", table: redshiftTarget(cfg) };
     case "opensearch":
       // The OpenSearch "table" is the index; buildSystemPrompt wraps it in
       // backticks in the FROM clause it generates.
@@ -357,7 +382,7 @@ function dialectFor(cfg: InsightConfig): Dialect {
     case "redshift":
       return {
         engine: "Redshift SQL",
-        from: cfg.redshiftTable,
+        from: redshiftTarget(cfg),
         idColumn: "execution_arn",
         listSelect:
           "execution_arn, status, function_name, start_time, end_time, duration_ms",
@@ -552,12 +577,65 @@ export async function runGetExecution(
 
 // ── list_executions ──────────────────────────────────────────────────────────
 
+/**
+ * Resolve the Logs Insights API window for a `list_executions` call.
+ *
+ * PRECEDENCE, and why:
+ *   1. An explicit `lookbackHours` wins -- the caller stated the window outright.
+ *   2. Otherwise `since` derives it, because a lower bound the caller asked to filter
+ *      on is worthless if the API never scanned that far back.
+ *   3. Otherwise the 24-hour default, matching `query`.
+ *
+ * The derived window is rounded UP to the next whole hour and given a small margin,
+ * so a `since` of "exactly 7 days ago" cannot land a fraction of a second inside the
+ * boundary and clip the oldest matching event.
+ *
+ * An unparseable `since` falls back to the default rather than throwing, which keeps
+ * this helper total. Note that this branch is UNREACHABLE through the tool: the query
+ * is built first, and `validateTimestamp` rejects a malformed bound there, so a bad
+ * value never arrives here. `tools.test.ts` pins that ordering, since it is the
+ * difference between a clean rejection and a silent 24-hour window.
+ */
+function logWindowFor(params: ListExecutionsParams): {
+  timeRangeMs: number;
+  lookbackHours: number;
+} {
+  const fromHours = (hours: number) => ({
+    timeRangeMs: hours * 60 * 60 * 1000,
+    lookbackHours: hours,
+  });
+
+  if (params.lookbackHours !== undefined && params.lookbackHours > 0) {
+    return fromHours(params.lookbackHours);
+  }
+
+  if (params.since !== undefined) {
+    const sinceMs = Date.parse(params.since);
+    if (!Number.isNaN(sinceMs)) {
+      const spanMs = Date.now() - sinceMs;
+      if (spanMs > 0) {
+        // +1 hour of margin, then round up: never scan less than asked for.
+        const hours = Math.ceil(spanMs / (60 * 60 * 1000)) + 1;
+        return fromHours(hours);
+      }
+    }
+  }
+
+  return fromHours(DEFAULT_LOG_TIME_RANGE_MS / (60 * 60 * 1000));
+}
+
 export interface ListExecutionsParams {
   status?: string;
   since?: string;
   until?: string;
   functionName?: string;
   limit?: number;
+  /**
+   * Log destinations only: how many hours back `StartQuery` should scan. Normally
+   * unnecessary -- when `since` is given the window is derived from it -- but needed
+   * to widen a search that has no lower bound.
+   */
+  lookbackHours?: number;
 }
 
 /**
@@ -734,6 +812,15 @@ export interface ListExecutionsResult {
   rows: string[][];
   count: number;
   truncated: boolean;
+  /**
+   * The window `StartQuery` actually scanned, in hours, for log destinations.
+   *
+   * Reported because a Logs Insights result is bounded by TWO things that can
+   * disagree: the API window, and the `filter` stages inside the query. If the window
+   * is narrower than the filters ask for, the result is silently partial -- so the
+   * window has to be visible to be trusted.
+   */
+  searchedLookbackHours?: number;
 }
 
 /**
@@ -750,6 +837,19 @@ export async function runListExecutions(
   const query = isLogDestination(cfg)
     ? buildListExecutionsLogsQuery(cfg, params)
     : buildListExecutionsSql(cfg, params);
+
+  // On a log destination `since`/`until` are only `filter` stages INSIDE the pipe
+  // query. The API window is separate, and defaulted to 24 hours -- so asking for
+  // executions since last week scanned one day, applied a filter that everything in
+  // that day satisfied, and returned a plausible partial answer with
+  // `truncated: false`. Nothing in the result hinted that six days were missing.
+  //
+  // The window is therefore derived from the bounds the caller actually gave. It is
+  // deliberately a SUPERSET of `[since, until]`: `timeRangeMs` is a duration measured
+  // back from now, so an `until` in the past cannot narrow the top of the window --
+  // the in-query filters do that. A superset returns correct results; a subset is the
+  // bug being fixed.
+  const logWindow = isLogDestination(cfg) ? logWindowFor(params) : undefined;
   // Also pass the caller's limit as the row cap, NOT only as query text. For most
   // destinations the generated `LIMIT`/`limit` already bounds the result, but
   // DynamoDB PartiQL supports neither ORDER BY nor LIMIT, so its statement carries
@@ -757,6 +857,7 @@ export async function runListExecutions(
   // rows, which is the token cost this tool exists to avoid.
   const result = await runReadOnlyQuery(cfg, query, {
     maxRows: coerceLimit(params.limit, DEFAULT_LIST_LIMIT, MAX_ROWS),
+    ...(logWindow !== undefined ? { timeRangeMs: logWindow.timeRangeMs } : {}),
   });
   return {
     destinationType: cfg.destinationType,
@@ -765,5 +866,8 @@ export async function runListExecutions(
     rows: result.rows,
     count: result.count,
     truncated: result.truncated,
+    ...(logWindow !== undefined
+      ? { searchedLookbackHours: logWindow.lookbackHours }
+      : {}),
   };
 }
