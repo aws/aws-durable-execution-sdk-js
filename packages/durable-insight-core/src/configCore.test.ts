@@ -8,6 +8,11 @@ jest.mock("@aws-sdk/credential-providers", () => ({
   fromNodeProviderChain: jest.fn(),
 }));
 
+import {
+  DESTINATION_TYPES,
+  isDestinationType,
+  type DestinationType,
+} from "./schema";
 import { configFromWireSettings } from "./configCore";
 
 describe("configFromWireSettings", () => {
@@ -105,5 +110,56 @@ describe("configFromWireSettings", () => {
     expect(configFromWireSettings({ awsProfile: "dev" }).awsProfile).toBe(
       "dev",
     );
+  });
+});
+
+/**
+ * `DESTINATION_TYPES` is a runtime array that must stay identical to the
+ * `DestinationType` union it shadows. Nothing in the compiler enforces the
+ * direction that matters: `satisfies readonly DestinationType[]` catches an entry
+ * that is NOT a valid type, but adding a member to the union and forgetting the
+ * array still compiles -- and would make `isDestinationType` reject a destination
+ * the rest of the code supports.
+ *
+ * The exhaustive switch below is what closes that gap: a new union member makes
+ * `assertExhaustive` a compile error, so this file stops building until the array
+ * is updated too.
+ */
+describe("DESTINATION_TYPES matches the DestinationType union", () => {
+  it("contains every member of the union, checked exhaustively", () => {
+    const seen: DestinationType[] = [];
+    const visit = (t: DestinationType): void => {
+      switch (t) {
+        case "cloudwatch-logs-exporter":
+        case "lambda-log-exporter":
+        case "dynamodb":
+        case "aurora":
+        case "redshift":
+        case "opensearch":
+        case "sqs":
+        case "s3":
+          seen.push(t);
+          return;
+        default: {
+          // A new union member reaches here and fails to compile, which is the
+          // point: the array below cannot silently fall behind the type.
+          const assertExhaustive: never = t;
+          throw new Error(
+            `unhandled destination type: ${String(assertExhaustive)}`,
+          );
+        }
+      }
+    };
+    for (const t of DESTINATION_TYPES) visit(t);
+    expect(seen.sort()).toEqual([...DESTINATION_TYPES].sort());
+    // Non-vacuity: an empty array would satisfy the loop above trivially.
+    expect(DESTINATION_TYPES.length).toBe(8);
+  });
+
+  it("narrows only real destination types", () => {
+    for (const t of DESTINATION_TYPES) expect(isDestinationType(t)).toBe(true);
+    for (const bad of ["dynamo", "DynamoDB", "", " s3", "athena", "postgres"]) {
+      expect(isDestinationType(bad)).toBe(false);
+    }
   });
 });
