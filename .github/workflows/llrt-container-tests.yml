@@ -15,6 +15,9 @@ name: LLRT Container Tests
 # on a container image whose bootstrap is not a Lambda-managed runtime, and the execution
 # completed on LLRT with the same result a Node run produces.
 
+# Dispatch only. There is deliberately no `workflow_call`: nothing calls this today, and an unused
+# trigger with a required input reads as though a caller exists somewhere. Add one alongside the
+# nightly, if a nightly ever wants it.
 on:
   workflow_dispatch:
     inputs:
@@ -22,11 +25,6 @@ on:
         description: "Node.js version used to run the test driver"
         required: false
         default: "22.x"
-        type: string
-  workflow_call:
-    inputs:
-      node-version:
-        required: true
         type: string
 
 # Serialize: the job reuses one ECR repository and creates run-scoped functions.
@@ -39,8 +37,6 @@ env:
 
 jobs:
   llrt-container:
-    # Skip for PRs from forked repos (no access to secrets)
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -52,16 +52,22 @@ const FORMAT_OPTIONS = { breakLength: Infinity } as const;
  *
  * Lightweight JavaScript runtimes targeting Lambda — LLRT, for example — ship a `node:util`
  * with `format` but not `formatWithOptions`, which would make every multi-argument log
- * record throw `TypeError: not a function` from inside the logger. The fallback loses only
- * the single-line rendering of inspected objects.
+ * record throw `TypeError: not a function` from inside the logger.
+ *
+ * The fallback drops `breakLength: Infinity`, so an inspected object is rendered over several
+ * lines instead of one. Nothing user-visible changes: the result becomes the `message` field of
+ * a `JSON.stringify`d record, which escapes the newlines either way.
+ *
+ * Called through a wrapper rather than referenced directly, so the runtime's implementation
+ * keeps its receiver.
  */
-const formatWithOptions: (
+const formatWithOptions = (
   options: typeof FORMAT_OPTIONS,
   ...args: unknown[]
-) => string =
+): string =>
   typeof util.formatWithOptions === "function"
-    ? util.formatWithOptions
-    : (_options, ...args): string => util.format(...args);
+    ? util.formatWithOptions(options, ...args)
+    : util.format(...args);
 
 /**
  * JSON.stringify replacer function for Error objects.

@@ -292,7 +292,7 @@ async function runWorkflow({
 
   if (constrained) {
     // LLRT exposes the low-level async_hooks surface but no AsyncLocalStorage.
-    jest.doMock("async_hooks", () => ({}));
+    jest.doMock("node:async_hooks", () => ({}));
     jest.doMock("node:util", partialUtil);
   }
 
@@ -397,7 +397,7 @@ async function runWorkflow({
       warnings: records.filter((record) => record.startsWith("WARN")),
     };
   } finally {
-    jest.dontMock("async_hooks");
+    jest.dontMock("node:async_hooks");
     jest.dontMock("node:util");
     jest.dontMock("node:console");
     jest.resetModules();

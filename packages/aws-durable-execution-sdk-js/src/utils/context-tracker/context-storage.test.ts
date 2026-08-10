@@ -2,25 +2,26 @@ import {
   SynchronousContextStorage,
   createContextStorage,
   isContextStorageDegraded,
-  resetContextStorageDegradationForTesting,
   warnOnceIfContextStorageIsDegraded,
 } from "./context-storage";
 
 describe("context-storage", () => {
   afterEach(() => {
-    resetContextStorageDegradationForTesting();
+    // `resetModules` alone leaves the mock registry in place, so a later suite would still get
+    // the stubbed async_hooks.
+    jest.dontMock("node:async_hooks");
     jest.resetModules();
   });
 
   describe("createContextStorage", () => {
     it("uses the runtime's AsyncLocalStorage when available", async () => {
-      const { AsyncLocalStorage } = await import("async_hooks");
+      const { AsyncLocalStorage } = await import("node:async_hooks");
       expect(createContextStorage()).toBeInstanceOf(AsyncLocalStorage);
       expect(isContextStorageDegraded()).toBe(false);
     });
 
-    it("falls back and marks itself degraded when AsyncLocalStorage is absent", async () => {
-      jest.doMock("async_hooks", () => ({}));
+    it("falls back and reports itself degraded when AsyncLocalStorage is absent", async () => {
+      jest.doMock("node:async_hooks", () => ({}));
 
       const storage = await import("./context-storage");
 
@@ -85,18 +86,16 @@ describe("context-storage", () => {
   describe("warnOnceIfContextStorageIsDegraded", () => {
     it("stays quiet when the runtime provides AsyncLocalStorage", () => {
       const logger = { warn: jest.fn() };
-      createContextStorage();
       warnOnceIfContextStorageIsDegraded(logger);
       expect(logger.warn).not.toHaveBeenCalled();
     });
 
-    it("warns exactly once per process when degraded", async () => {
-      jest.doMock("async_hooks", () => ({}));
+    it("warns exactly once per execution environment when degraded", async () => {
+      jest.doMock("node:async_hooks", () => ({}));
 
       const storage = await import("./context-storage");
       const logger = { warn: jest.fn() };
 
-      storage.createContextStorage();
       storage.warnOnceIfContextStorageIsDegraded(logger);
       storage.warnOnceIfContextStorageIsDegraded(logger);
 

@@ -11,24 +11,20 @@
  * runner itself runs here on Node, so nothing about the assertions depends on LLRT.
  *
  * Deliberately not wired into the default PR build: it needs an ECR repository and pushes a
- * container image, and its cost and blast radius are unlike the other integration jobs. Run it
- * from the Actions tab, or on a schedule.
- *
- * Verified end to end against real Lambda (us-east-1, arm64 image, LLRT v0.8.1-beta): the
- * execution succeeded across 3 invocations and 10 operations, the 30-second wait suspended and
- * resumed, the retrying step recorded 2 attempts, and the result matched a Node run byte for
- * byte. Peak memory 33 MB; init 1.6 s; the two replay invocations billed 101 ms and 157 ms.
+ * container image, and its cost and blast radius are unlike the other integration jobs. The
+ * in-repo counterpart is `constrained-runtime.composed.test.ts`, which covers the SDK's
+ * behaviour on such a runtime without leaving the Jest process; this covers the deployment
+ * shape, which cannot be simulated.
  *
  * Requires: AWS credentials, TEST_LAMBDA_EXECUTION_ROLE_ARN (with
- * lambda:CheckpointDurableExecution and lambda:GetDurableExecutionState), AWS_REGION, and
- * docker.
- *
- * The image and function architecture follow the host, so nothing is emulated: x86_64 on the
- * hosted runners, arm64 on an Apple Silicon laptop. Set CONTAINER_CLI=finch to build without a
- * Docker daemon.
+ * lambda:CheckpointDurableExecution and lambda:GetDurableExecutionState), AWS_REGION, and a
+ * container CLI. The image and function architecture follow the host, so nothing is emulated:
+ * x86_64 on the hosted runners, arm64 on an Apple Silicon laptop. Set CONTAINER_CLI=finch to
+ * build without a Docker daemon.
  */
 
 import { execFileSync } from "child_process";
+import { createHash } from "crypto";
 import { mkdirSync, rmSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
@@ -38,6 +34,7 @@ import {
   CreateFunctionCommand,
   DeleteFunctionCommand,
   GetFunctionCommand,
+  ListFunctionsCommand,
   PublishVersionCommand,
   ResourceNotFoundException,
   UpdateFunctionCodeCommand,
@@ -59,7 +56,8 @@ const REGION = process.env.AWS_REGION || "us-east-1";
 const ROLE_ARN = process.env.TEST_LAMBDA_EXECUTION_ROLE_ARN;
 const ECR_REPO = process.env.LLRT_ECR_REPOSITORY || "durable-llrt-integ";
 const RUN_ID = process.env.GITHUB_RUN_ID || String(Date.now());
-const FUNCTION_NAME = `durable-llrt-integ-${RUN_ID}`;
+const FUNCTION_NAME_PREFIX = "durable-llrt-integ-";
+const FUNCTION_NAME = `${FUNCTION_NAME_PREFIX}${RUN_ID}`;
 
 /**
  * Container CLI. Docker on the hosted runners; `CONTAINER_CLI=finch` covers a local run on a
@@ -112,32 +110,21 @@ const run = (
 
 const lambda = new LambdaClient({ region: REGION });
 
-/** Bundles the handler exactly as an LLRT user would: Node builtins and the AWS SDK stay external. */
+/**
+ * Bundles the handler the way an LLRT user would: the runtime supplies the Node builtins and the
+ * AWS SDK, so both stay external and the image needs no `node_modules`.
+ *
+ * `platform: "neutral"` rather than `"browser"`, which LLRT's own docs suggest: `browser` makes
+ * esbuild honour the `browser` field in package.json, which could silently substitute a
+ * browser-targeted build of a dependency into a server-side runtime. For this graph the two
+ * produce byte-identical output, so `neutral` costs nothing and states the intent.
+ *
+ * `node:*` covers the prefixed specifiers; the short list below is only for the unprefixed ones
+ * still in the graph. It cannot rot silently: under `neutral` esbuild does not treat builtins as
+ * external implicitly, so a new unprefixed import that is missing here fails the build.
+ */
 async function bundleHandler() {
-  const NODE_BUILTINS = [
-    "assert",
-    "async_hooks",
-    "buffer",
-    "console",
-    "crypto",
-    "dns",
-    "events",
-    "fs",
-    "fs/promises",
-    "module",
-    "net",
-    "os",
-    "path",
-    "perf_hooks",
-    "process",
-    "stream",
-    "string_decoder",
-    "timers",
-    "tty",
-    "url",
-    "util",
-    "zlib",
-  ];
+  const UNPREFIXED_BUILTINS = ["crypto", "events"];
   writeFileSync(
     join(WORK_DIR, "entry.mjs"),
     'export { handler } from "' +
@@ -149,18 +136,51 @@ async function bundleHandler() {
     outfile: join(WORK_DIR, "handler.mjs"),
     bundle: true,
     format: "esm",
-    platform: "browser",
+    platform: "neutral",
     target: "es2023",
     minify: true,
-    external: [
-      "@aws-sdk/*",
-      "@smithy/*",
-      ...NODE_BUILTINS,
-      ...NODE_BUILTINS.map((m) => `node:${m}`),
-    ],
+    external: ["@aws-sdk/*", "@smithy/*", "node:*", ...UNPREFIXED_BUILTINS],
     logLevel: "warning",
     absWorkingDir: REPO_ROOT,
   });
+}
+
+/**
+ * SHA-256 of each `llrt-container-*-full-sdk` asset for {@link LLRT_VERSION}.
+ *
+ * The release is tagged `-beta` and tags are mutable, so the binary is verified rather than
+ * trusted. If upstream re-tags, the build fails here instead of silently running something else.
+ */
+const LLRT_CHECKSUMS = {
+  arm64: "7f0f2e50295ab2075c82267af62471d7360f905ed5eb4692eb9ad9778d6ba9fa",
+  x64: "5a3795f06eee588da6601f12e7684f41ef3810637bb0bcdc1a3d974d5b4ef3b7",
+};
+
+/**
+ * Fetches the LLRT binary and checks it against {@link LLRT_CHECKSUMS}, so the image is built
+ * from a known artifact rather than from whatever the mutable tag points at during the build.
+ */
+async function fetchLlrtBinary() {
+  const asset = `llrt-container-${ARCH}-full-sdk`;
+  const url = `https://github.com/awslabs/llrt/releases/download/${LLRT_VERSION}/${asset}`;
+  log.info(`downloading ${asset}`);
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(
+      `download failed: ${response.status} ${response.statusText} for ${url}`,
+    );
+  }
+  const binary = Buffer.from(await response.arrayBuffer());
+  const digest = createHash("sha256").update(binary).digest("hex");
+  const expected = LLRT_CHECKSUMS[ARCH];
+  if (digest !== expected) {
+    throw new Error(
+      `checksum mismatch for ${asset}: expected ${expected}, got ${digest}. ` +
+        "If upstream re-tagged the release, update LLRT_CHECKSUMS after reviewing the change.",
+    );
+  }
+  writeFileSync(join(WORK_DIR, "llrt"), binary);
 }
 
 /**
@@ -168,13 +188,10 @@ async function bundleHandler() {
  * so the `@aws-sdk/client-lambda` the SDK loads to call CheckpointDurableExecution resolves to
  * the copy compiled into the LLRT binary.
  *
- * The standard LLRT build is enough for that. Its `sdk.cfg` marks `client-lambda` as not
- * full-SDK-only (`client-lambda,Lambda,lambda,0`), and the standard build does resolve
- * `CheckpointDurableExecutionCommand` — despite LLRT's README compatibility table listing the
- * client under full-sdk alone. The `*-full-sdk` variant is used here anyway because it is the
- * combination this test has actually been run against end to end; it costs ~1.7 MB of image
- * size. Switching to `llrt-container-${ARCH}` should work and would be worth re-verifying with
- * a real run before being committed.
+ * TODO: the standard build should be enough and is ~1.7 MB smaller. Its `sdk.cfg` marks
+ * `client-lambda` as not full-SDK-only (`client-lambda,Lambda,lambda,0`) and the standard binary
+ * does resolve `CheckpointDurableExecutionCommand`, despite LLRT's README compatibility table
+ * listing the client under full-sdk alone. Switching needs one real run to confirm.
  */
 function writeDockerfile() {
   writeFileSync(
@@ -183,7 +200,7 @@ function writeDockerfile() {
       `FROM --platform=${DOCKER_PLATFORM} busybox`,
       "WORKDIR /var/task/",
       "COPY handler.mjs ./",
-      `ADD https://github.com/awslabs/llrt/releases/download/${LLRT_VERSION}/llrt-container-${ARCH}-full-sdk /usr/bin/llrt`,
+      "COPY llrt /usr/bin/llrt",
       "RUN chmod +x /usr/bin/llrt",
       'ENV LAMBDA_HANDLER="handler.handler"',
       'CMD [ "llrt" ]',
@@ -222,6 +239,32 @@ async function pushImage() {
       ECR_REPO,
       "--region",
       REGION,
+    ]);
+    // Backstop for images this test does not get to delete itself, e.g. when a job is cancelled
+    // between the push and the cleanup.
+    run("aws", [
+      "ecr",
+      "put-lifecycle-policy",
+      "--repository-name",
+      ECR_REPO,
+      "--region",
+      REGION,
+      "--lifecycle-policy-text",
+      JSON.stringify({
+        rules: [
+          {
+            rulePriority: 1,
+            description: "Expire test images after a day",
+            selection: {
+              tagStatus: "any",
+              countType: "sinceImagePushed",
+              countUnit: "days",
+              countNumber: 1,
+            },
+            action: { type: "expire" },
+          },
+        ],
+      }),
     ]);
   }
 
@@ -350,11 +393,72 @@ async function reportFunctionLogs() {
   }
 }
 
+/**
+ * Removes this run's function and image.
+ *
+ * The image matters as much as the function: `pushImage` adds a tag per run, and without this the
+ * repository would grow forever.
+ */
+async function cleanUp(imageUri) {
+  log.info(`deleting ${FUNCTION_NAME}`);
+  await lambda
+    .send(new DeleteFunctionCommand({ FunctionName: FUNCTION_NAME }))
+    .catch((error) => log.fail(`deleting the function failed: ${error}`));
+
+  try {
+    run("aws", [
+      "ecr",
+      "batch-delete-image",
+      "--repository-name",
+      ECR_REPO,
+      "--region",
+      REGION,
+      "--image-ids",
+      `imageTag=${imageUri.split(":").pop()}`,
+    ]);
+  } catch (error) {
+    log.fail(`deleting the image failed: ${error}`);
+  }
+}
+
+/**
+ * Deletes functions left behind by earlier runs.
+ *
+ * A cancelled job never reaches its own cleanup, so without this each cancellation would leak a
+ * function permanently. Anything older than an hour cannot belong to a run still in progress.
+ */
+async function sweepAbandonedFunctions() {
+  const cutoff = Date.now() - 60 * 60 * 1000;
+  let marker;
+
+  do {
+    const page = await lambda.send(
+      new ListFunctionsCommand({ Marker: marker, MaxItems: 50 }),
+    );
+    marker = page.NextMarker;
+
+    for (const fn of page.Functions ?? []) {
+      const name = fn.FunctionName ?? "";
+      if (!name.startsWith(FUNCTION_NAME_PREFIX) || name === FUNCTION_NAME)
+        continue;
+      if (fn.LastModified && Date.parse(fn.LastModified) > cutoff) continue;
+
+      log.info(`sweeping abandoned function ${name}`);
+      await lambda
+        .send(new DeleteFunctionCommand({ FunctionName: name }))
+        .catch((error) => log.fail(`sweeping ${name} failed: ${error}`));
+    }
+  } while (marker);
+}
+
 async function main() {
   rmSync(WORK_DIR, { recursive: true, force: true });
   mkdirSync(WORK_DIR, { recursive: true });
 
+  await sweepAbandonedFunctions();
+
   await bundleHandler();
+  await fetchLlrtBinary();
   writeDockerfile();
   const imageUri = await pushImage();
   const qualifiedName = await deployFunction(imageUri);
@@ -398,10 +502,7 @@ async function main() {
     );
     await reportFunctionLogs();
   } finally {
-    log.info(`deleting ${FUNCTION_NAME}`);
-    await lambda
-      .send(new DeleteFunctionCommand({ FunctionName: FUNCTION_NAME }))
-      .catch((error) => log.fail(`cleanup failed: ${error}`));
+    await cleanUp(imageUri);
   }
 
   if (failures.length > 0) {

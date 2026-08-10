@@ -1,4 +1,4 @@
-import * as asyncHooks from "async_hooks";
+import * as asyncHooks from "node:async_hooks";
 import type { DurableLogger } from "../../types/durable-logger";
 
 /**
@@ -12,18 +12,44 @@ export interface ContextStorage<T> {
 }
 
 /**
+ * The runtime's `AsyncLocalStorage`, if it has one.
+ *
+ * Resolved once at module scope rather than recorded as a side effect of
+ * `createContextStorage()`, so that whether the runtime is degraded does not depend on any
+ * module having been evaluated first. The reader of this state
+ * (`context/execution-context`) imports this module directly, not through `context-tracker`
+ * which is what constructs the storage.
+ */
+const RuntimeAsyncLocalStorage = (asyncHooks as Partial<typeof asyncHooks>)
+  .AsyncLocalStorage;
+
+/**
  * Fallback used on runtimes whose `async_hooks` has no `AsyncLocalStorage`.
  *
  * Lightweight JavaScript runtimes targeting Lambda — LLRT, for example — implement only the
- * low-level `async_hooks` surface. A polyfill is not possible there either: those runtimes
- * emit `init` for promise resources but no `before`/`after`, so there is no callback in which
- * to reinstate a store when a promise continuation runs.
+ * low-level `async_hooks` surface. A polyfill built on that surface is not possible either:
+ * while `AsyncHook` accepts `before` and `after` callbacks, those are not invoked for promise
+ * resources, so there is no callback in which to reinstate a store when a promise continuation
+ * runs. Measured on LLRT release v0.8.1-beta (binary reports v0.8.0-beta) with
+ * `LLRT_ASYNC_HOOKS=1`: a chain of two awaited async functions plus one timer emits
+ * `init` six times for `PROMISE` and never `before` or `after` for any of them, where Node 22
+ * emits four and three respectively. Patching `Promise.prototype.then` does not help, since
+ * `await` on a native promise never calls it.
  *
  * This fallback keeps the store for the synchronous portion of `run()`, including nested
  * `run()` frames entered synchronously, and reports `undefined` — "unknown" — once `fn`
  * suspends. Reporting `undefined` rather than a stale value is the important property:
  * `validateContextUsage` skips when there is no active context, whereas a stale store would
  * make it terminate a perfectly correct execution.
+ *
+ * That guarantee depends on how callers use `run()`, not on this class alone. Every current
+ * call site passes an async callback whose promise the caller awaits, so `run()` returns — and
+ * the store reverts — at the callback's first suspension, leaving no window in which a stale
+ * store could be observed. **A caller that re-entered `run()` across a suspension, or resumed
+ * one store's callback inside another's synchronous frame, would break that invariant, and
+ * nothing here would fail loudly.** Keep the contract: `run()` is for wrapping a callback that
+ * either completes synchronously or suspends exactly once, at which point the context is
+ * deliberately forgotten.
  *
  * What degrades on such a runtime is observability, not checkpoint/replay correctness:
  * log records emitted after an `await` lose `operationId`/`operationName`/`attempt`,
@@ -57,28 +83,24 @@ export class SynchronousContextStorage<T> implements ContextStorage<T> {
  *
  * @internal
  */
-export const createContextStorage = <T>(): ContextStorage<T> => {
-  const AsyncLocalStorage = (asyncHooks as Partial<typeof asyncHooks>)
-    .AsyncLocalStorage;
-  if (AsyncLocalStorage) {
-    return new AsyncLocalStorage<T>();
-  }
-  contextStorageIsDegraded = true;
-  return new SynchronousContextStorage<T>();
-};
-
-let contextStorageIsDegraded = false;
-let degradationWarningEmitted = false;
+export const createContextStorage = <T>(): ContextStorage<T> =>
+  RuntimeAsyncLocalStorage
+    ? new RuntimeAsyncLocalStorage<T>()
+    : new SynchronousContextStorage<T>();
 
 /**
- * Whether the fallback storage is in use, meaning async context tracking is degraded.
+ * Whether operation-context tracking is degraded, because the runtime has no
+ * `AsyncLocalStorage`.
  *
  * @internal
  */
-export const isContextStorageDegraded = (): boolean => contextStorageIsDegraded;
+export const isContextStorageDegraded = (): boolean =>
+  !RuntimeAsyncLocalStorage;
+
+let degradationWarningEmitted = false;
 
 /**
- * Warns once per execution environment when the fallback storage is in use.
+ * Warns once per execution environment when context tracking is degraded.
  *
  * The fallback is silent about *which* context is active outside synchronous code, and it is
  * better for that to be stated than inferred from a missing `operationId`. Emitted once per
@@ -90,7 +112,7 @@ export const isContextStorageDegraded = (): boolean => contextStorageIsDegraded;
 export const warnOnceIfContextStorageIsDegraded = (
   logger: Pick<DurableLogger, "warn">,
 ): void => {
-  if (!contextStorageIsDegraded || degradationWarningEmitted) {
+  if (!isContextStorageDegraded() || degradationWarningEmitted) {
     return;
   }
   degradationWarningEmitted = true;
@@ -104,14 +126,4 @@ export const warnOnceIfContextStorageIsDegraded = (
       "@aws/durable-execution-sdk-js-eslint-plugin to catch the remaining cases at build " +
       "time.",
   );
-};
-
-/**
- * Resets the module-level warning state. Test-only.
- *
- * @internal
- */
-export const resetContextStorageDegradationForTesting = (): void => {
-  contextStorageIsDegraded = false;
-  degradationWarningEmitted = false;
 };

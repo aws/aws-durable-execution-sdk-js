@@ -33,7 +33,7 @@ export const workflow = async (event, ctx) => {
     {
       retryStrategy: createRetryStrategy({
         maxAttempts: 3,
-        initialIntervalSeconds: 1,
+        initialDelay: { seconds: 1 },
       }),
     },
   );
