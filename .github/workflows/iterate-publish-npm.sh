@@ -29,10 +29,7 @@ else
     "packages/aws-durable-execution-sdk-js-eslint-plugin"
     "packages/aws-durable-execution-sdk-js-otel"
     "packages/aws-durable-execution-sdk-js-insight"
-    # packages/durable-insight-mcp is intentionally NOT published yet. It is
-    # unpublished on npm, so leaving it here would make the next GitHub Release
-    # first-publish it as a side effect of releasing an unrelated package. Add
-    # it back when we deliberately want to cut its first release.
+    "packages/durable-insight-mcp"
   )
 fi
 
