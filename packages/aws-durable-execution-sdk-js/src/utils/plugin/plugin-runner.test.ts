@@ -720,6 +720,7 @@ describe("createPluginRunner", () => {
     const sampleEndInfo: InvocationEndInfo = {
       requestId: "req-isolation",
       executionArn: "arn:aws:lambda:us-east-1:123:function:fn:1/exec/abc",
+      isFirstInvocation: true,
       status: PluginInvocationStatus.SUCCEEDED,
       executionResult: { data: "test" },
       executionInput: { event: "input" },

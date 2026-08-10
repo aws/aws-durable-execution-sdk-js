@@ -37,6 +37,7 @@ import { validateReplayConsistency } from "../../utils/replay-validation/replay-
 import { DurableLogger } from "../../types/durable-logger";
 import {
   DurableInstrumentationPlugin,
+  AttemptEndInfo,
   AttemptEndInfoOutcome,
   CustomerFnResult,
   PluginOperationStatus,
@@ -299,6 +300,19 @@ export const createStepHandler = <Logger extends DurableLogger>(
           await plugin.onOperationStart?.({ ...operationInfo, isReplay: true });
         }
 
+        // Attempt-scoped wall-clock bounds for the attempt-end info. The
+        // checkpointed operation cannot supply them for a retryable failure:
+        // the operation is left awaiting its next attempt, so it carries no
+        // end time, and its start time belongs to the first attempt rather
+        // than this one. The attempt therefore stamps its own bounds.
+        let attemptStartTimestamp: Date | undefined;
+        const stampAttemptTimes = (info: AttemptEndInfo): void => {
+          if (attemptStartTimestamp) {
+            info.startTimestamp = attemptStartTimestamp;
+          }
+          info.endTimestamp = new Date();
+        };
+
         try {
           stepData = context.getStepData(stepId);
           const currentAttempt = (stepData?.StepDetails?.Attempt || 0) + 1;
@@ -323,7 +337,8 @@ export const createStepHandler = <Logger extends DurableLogger>(
           );
           const attemptInfo = toAttemptInfo(stepData, currentAttempt);
           backfillOperationInfo(attemptInfo, opInfo);
-          attemptInfo.startTimestamp = new Date();
+          attemptStartTimestamp = new Date();
+          attemptInfo.startTimestamp = attemptStartTimestamp;
           await plugin.onOperationAttemptStart?.(attemptInfo);
           let result: T;
           const stepFn = (): Promise<T> => fn(stepContext);
@@ -366,8 +381,19 @@ export const createStepHandler = <Logger extends DurableLogger>(
             },
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
+          // onOperationEnd describes the whole operation, so it keeps the
+          // operation-level window; only the attempt info is re-stamped.
+          const operationWindow = {
+            startTimestamp: attemptEndInfo.startTimestamp,
+            endTimestamp: attemptEndInfo.endTimestamp,
+          };
+          stampAttemptTimes(attemptEndInfo);
           await plugin.onOperationAttemptEnd?.(attemptEndInfo);
-          await plugin.onOperationEnd?.({ ...attemptEndInfo, isReplay: false });
+          await plugin.onOperationEnd?.({
+            ...attemptEndInfo,
+            ...operationWindow,
+            isReplay: false,
+          });
           checkpoint.markOperationState(
             stepId,
             OperationLifecycleState.COMPLETED,
@@ -427,9 +453,15 @@ export const createStepHandler = <Logger extends DurableLogger>(
               },
             );
             backfillOperationInfo(attemptEndInfo, opInfo);
+            const operationWindow = {
+              startTimestamp: attemptEndInfo.startTimestamp,
+              endTimestamp: attemptEndInfo.endTimestamp,
+            };
+            stampAttemptTimes(attemptEndInfo);
             await plugin.onOperationAttemptEnd?.(attemptEndInfo);
             await plugin.onOperationEnd?.({
               ...attemptEndInfo,
+              ...operationWindow,
               isReplay: false,
               error: error instanceof Error ? error : new Error(String(error)),
             });
@@ -463,6 +495,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
             },
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
+          stampAttemptTimes(attemptEndInfo);
           await plugin.onOperationAttemptEnd?.(attemptEndInfo);
           checkpoint.markOperationState(
             stepId,
