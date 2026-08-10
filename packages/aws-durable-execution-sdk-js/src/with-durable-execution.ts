@@ -583,7 +583,15 @@ export const withDurableExecution = <
       };
     }
 
-    const plugin = await pluginPromise;
+    let plugin: DurableInstrumentationPlugin;
+    try {
+      plugin = await pluginPromise;
+    } catch (error) {
+      return {
+        Status: InvocationStatus.FAILED,
+        Error: createErrorObjectFromError(error),
+      };
+    }
 
     try {
       const { executionContext, durableExecutionMode, checkpointToken } =

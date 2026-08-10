@@ -14,6 +14,7 @@ import {
 } from "./types/plugin";
 import { TEST_CONSTANTS } from "./testing/test-constants";
 import { loadConfiguredPlugins } from "./utils/plugin/plugin-loader";
+import { PluginLoadError } from "./errors/plugin-load-error/plugin-load-error";
 
 jest.mock("./context/execution-context/execution-context");
 jest.mock("./context/durable-context/durable-context");
@@ -312,15 +313,23 @@ describe("plugin hooks", () => {
     expect(dynamicPlugin.onInvocationStart).toHaveBeenCalledTimes(2);
   });
 
-  it("surfaces plugin loading failures before reading execution state", async () => {
-    const pluginLoadError = new Error("invalid dynamic plugin configuration");
+  it("fails plugin loading errors before reading execution state", async () => {
+    const pluginLoadError = new PluginLoadError(
+      "invalid dynamic plugin configuration",
+    );
     (
       loadConfiguredPlugins as jest.MockedFunction<typeof loadConfiguredPlugins>
     ).mockRejectedValueOnce(pluginLoadError);
 
     const handler = withDurableExecution(jest.fn().mockResolvedValue({}));
 
-    await expect(handler(mockEvent, mockContext)).rejects.toBe(pluginLoadError);
+    await expect(handler(mockEvent, mockContext)).resolves.toEqual({
+      Status: InvocationStatus.FAILED,
+      Error: expect.objectContaining({
+        ErrorMessage: pluginLoadError.message,
+        ErrorType: pluginLoadError.name,
+      }),
+    });
     expect(initializeExecutionContext).not.toHaveBeenCalled();
   });
 

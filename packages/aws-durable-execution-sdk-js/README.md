@@ -316,8 +316,8 @@ plugin-layer.zip
 ```
 
 Malformed configuration, missing modules or exports, incompatible provider API
-versions, invalid plugin types, and provider construction failures raise
-`PluginLoadError` before execution state is read.
+versions, invalid plugin types, and provider construction failures are reported
+as `PluginLoadError` failures before execution state is read.
 
 ### Retry Strategies
 
