@@ -5,7 +5,7 @@ import {
   DurableInstrumentationPlugin,
   InvocationInfo,
   OperationInfo,
-  AttemptInfo,
+  ChildContextFnInfo,
 } from "@aws/durable-execution-sdk-js";
 
 const PLUGIN = "CONFPLUGIN";
@@ -33,8 +33,9 @@ function compact(rec: Record<string, unknown>): Record<string, unknown> {
 
 // Runtime probe: only report the children-replay indicator if the hook info
 // object ACTUALLY exposes it as a boolean own field (like the 10-19 end-info
-// first probe). The JS AttemptInfo does not declare isReplayingChildren, so
-// this returns undefined and the key is omitted -- the intended red signal.
+// first probe). When the info type does not declare it this returns undefined
+// and the key is omitted -- the honest missing-surface signal. `isReplay` is a
+// DIFFERENT value and is never substituted for it.
 function probeReplayingChildren(info: object): boolean | undefined {
   const rec = info as Record<string, unknown>;
   if ("isReplayingChildren" in rec && typeof rec.isReplayingChildren === "boolean") {
@@ -73,24 +74,32 @@ function makePlugin(): DurableInstrumentationPlugin {
         isReplay: info.isReplay,
       });
     },
-    // CANONICAL DUMP of the per-attempt / user-function start hook for the
-    // CONTEXT-type branch functions. isReplayingChildren is included ONLY when
-    // the info object actually exposes it (probed); omitted otherwise.
-    async onOperationAttemptStart(info: AttemptInfo): Promise<void> {
-      if (!isContext(info.type)) return;
-      emit({
-        plugin: PLUGIN,
-        hook: "fn-start",
-        id: info.id,
-        name: info.name,
-        type: info.type != null ? info.type.toUpperCase() : undefined,
-        subType: info.subType,
-        parentId: info.parentId,
-        attempt: info.attempt,
-        startTimestamp: iso(info.startTimestamp),
-        isReplay: info.isReplay,
-        isReplayingChildren: probeReplayingChildren(info),
-      });
+    // CANONICAL DUMP of the SDK's user-function start hook for the CONTEXT-type
+    // branch functions. In JS that hook is wrapChildContextFn, the invoke-style
+    // wrapper around a parallel branch / map item / child-context body: the
+    // record is emitted on entry, then the wrapped function is invoked and its
+    // result returned unchanged so execution semantics are untouched.
+    // isReplayingChildren is included ONLY when the info object actually
+    // exposes it (probed); omitted otherwise.
+    wrapChildContextFn(
+      info: ChildContextFnInfo,
+      fn: () => unknown,
+    ): unknown {
+      if (isContext(info.type)) {
+        emit({
+          plugin: PLUGIN,
+          hook: "fn-start",
+          id: info.id,
+          name: info.name,
+          type: info.type != null ? info.type.toUpperCase() : undefined,
+          subType: info.subType,
+          parentId: info.parentId,
+          startTimestamp: iso(info.startTimestamp),
+          isReplay: info.isReplay,
+          isReplayingChildren: probeReplayingChildren(info),
+        });
+      }
+      return fn();
     },
   };
 }
