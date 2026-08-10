@@ -118,17 +118,56 @@ const ALLOWED = new Map<string, string>([
       "character at a time toward a single required literal rather than backtracking " +
       "over the whole input. Measured flat.",
   ],
+  [
+    String.raw`\s*\(.*\)$`,
+    "jsonExtract.test.ts: this IS the vulnerable pattern, kept deliberately to assert " +
+      "that `stripTrailingParenthetical` is equivalent to what it replaced. Applied only " +
+      "to the short literals in that file, never to input. Removing it would remove the " +
+      "equivalence proof, which is worth more than the shape is worth avoiding in a " +
+      "fixture.",
+  ],
+  [
+    String.raw`(\[\^?(?:\\.|[^\]\\])*\]|\.|\\[sSwWdD])(?:[*+]|\{\d+,\})`,
+    "This file's WIDE_QUANTIFIER. R3 fires on the outer capture group, but that group is " +
+      "not repeated -- a quantifier alternation follows it -- and the alternatives inside " +
+      "begin with distinct characters. Measured flat to 4k characters on the witness " +
+      "CodeQL named for alert 248.",
+  ],
+  [
+    String.raw`(\\.|\[\^?(?:\\.|[^\]\\])*\]|\.|\([^)]*\)|[^\\[\](){}*+?|^$])(?:[*+]|\{\d+,\})`,
+    "This file's ANY_QUANTIFIER. As above; measured flat to 4k characters across four " +
+      "witness shapes.",
+  ],
+  [
+    String.raw`\/((?:\\.|\[(?:\\.|[^\]\\])*\]|[^/\n\\[])+)\/[gimsuy]*`,
+    "This file's regex-literal extractor. It WAS exponential -- 2x per `[]`, 40ms at 22 " +
+      "repetitions, CodeQL alerts 249/251 -- because a `[` could be consumed either by " +
+      "the character-class alternative or as a plain character. Excluding `[` from the " +
+      "fallback leaves one parse; measured flat to 2k repetitions and verified to extract " +
+      "identically across all 11,417 lines of this package.",
+  ],
 ]);
 
-/** Every non-test `.ts` file in this package, recursively. */
+/**
+ * Every `.ts` file in this package, TESTS INCLUDED, recursively.
+ *
+ * Tests were excluded at first, to stop the sweep flagging the pattern text in this
+ * file's own documentation. That exclusion also blinded it to the one place a regex is
+ * most likely to be exotic: the scanner below. CodeQL then flagged three regexes in this
+ * very file (alerts 248-251, `js/redos`, EXPONENTIAL) which the guard could not
+ * structurally have found -- a ReDoS in the ReDoS detector, invisible to itself.
+ *
+ * So tests are scanned, and the narrower fix is used instead: skip COMMENT LINES rather
+ * than whole files. Prose about a pattern is not a pattern. The `String.raw` entries in
+ * ALLOWED and in the self-tests are string literals rather than regex literals, so the
+ * extractor never saw them anyway.
+ */
 function sourceFiles(dir: string): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) out.push(...sourceFiles(full));
-    else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) {
-      out.push(full);
-    }
+    else if (entry.name.endsWith(".ts")) out.push(full);
   }
   return out;
 }
@@ -209,7 +248,15 @@ function findRiskyRegexes(): Found[] {
         // Skip comment lines: prose about a pattern is not a pattern.
         if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
         for (const match of line.matchAll(
-          /\/((?:\\.|\[(?:\\.|[^\]\\])*\]|[^/\n\\])+)\/[gimsuy]*/g,
+          // `[^/\n\\[]` — the trailing `[` exclusion is load-bearing, not tidiness.
+          // Without it a `[` could be consumed EITHER by the character-class
+          // alternative or as a plain character, so `/[][][]...` had two parses per
+          // repetition and this regex was EXPONENTIAL: 2x per `[]`, 40ms at 22
+          // repetitions, ~40s at 32. CodeQL alerts 249/251 (js/redos, high). Excluding
+          // `[` from the fallback leaves exactly one parse, and a bare `[` outside a
+          // class is not valid in a regex literal anyway. Verified to extract
+          // identically across all 11,417 lines of this package.
+          /\/((?:\\.|\[(?:\\.|[^\]\\])*\]|[^/\n\\[])+)\/[gimsuy]*/g,
         )) {
           const risks = riskRules(match[1]);
           if (risks.length > 0) {
@@ -314,12 +361,21 @@ describe("no unjustified polynomial-ReDoS candidates", () => {
   it("the JSON extraction that caused this guard is gone", () => {
     // The specific regression, named. `extractJsonObject` replaced three copies of
     // this; if one comes back, fail here rather than waiting for the next CodeQL scan.
-    // CODE lines only. `jsonExtract.ts` DOCUMENTS the pattern it replaced, and a
-    // whole-file scan flags that documentation — the fourth time a scanner in this
-    // repo has reported its own prose. The rule is now settled: a name or a pattern in
-    // a comment is not a use, so every scanner here skips comments.
+    // NON-TEST files, and CODE lines only, for two different reasons.
+    //
+    // Comments: `jsonExtract.ts` DOCUMENTS the pattern it replaced, and a whole-file
+    // scan flags that documentation — the fourth time a scanner in this repo has
+    // reported its own prose.
+    //
+    // Tests: this file's own self-tests carry the pattern as DATA, on ordinary code
+    // lines, so scanning tests here would flag the very assertions that prove the
+    // detector works. Unlike the class sweep above, which handles tests through
+    // ALLOWED, this check is a hardcoded assertion about production code — so it is
+    // scoped to production code.
     const offenders: string[] = [];
-    for (const file of sourceFiles(SRC)) {
+    for (const file of sourceFiles(SRC).filter(
+      (f) => !f.endsWith(".test.ts"),
+    )) {
       const codeLines = readFileSync(file, "utf-8")
         .split("\n")
         .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line));
