@@ -5,7 +5,7 @@ import tseslint from "typescript-eslint";
  * and each host may import only its own.
  *
  * This list mirrors `HOST_MODULES` in
- * `packages/durable-insight-core/src/hostModuleScan.ts`, which is where the tested,
+ * `packages/aws-durable-execution-sdk-js-insight-core/src/hostModuleScan.ts`, which is where the tested,
  * authoritative version lives. It is restated here because a flat eslint config
  * cannot import from a workspace package that has no build output.
  */
@@ -31,7 +31,7 @@ function boundaryRule(ownHostModule) {
         name,
         message:
           `"${name}" belongs to a different host process and is not available here. ` +
-          `Shared, host-free code belongs in @aws/durable-insight-core; express what ` +
+          `Shared, host-free code belongs in @aws/durable-execution-sdk-js-insight-core; express what ` +
           `you need through the HostPort interface and let each host implement it.`,
       })),
       patterns: [
@@ -45,7 +45,7 @@ function boundaryRule(ownHostModule) {
           group: ["../../*"],
           message:
             "Do not reach into a sibling package by relative path. Depend on it " +
-            "(e.g. `@aws/durable-insight-core`) and import by name, so the " +
+            "(e.g. `@aws/durable-execution-sdk-js-insight-core`) and import by name, so the " +
             "dependency is declared and the boundary is real.",
         },
       ],
@@ -72,7 +72,7 @@ export default [
    * Structural rules for the Workflow Insight packages.
    *
    * These exist because the alternative is a convention nobody can enforce. The
-   * refactor that created `@aws/durable-insight-core` was motivated by a
+   * refactor that created `@aws/durable-execution-sdk-js-insight-core` was motivated by a
    * cross-package relative import that had grown up unnoticed, and review then
    * showed that a host-specific import in shared code was equally invisible: an
    * `electron` import in a core module that no test happened to cover passed every
@@ -87,8 +87,11 @@ export default [
    */
   ...[
     // package glob                                          own host module
-    ["packages/durable-insight-core/**/*.ts", null],
-    ["packages/durable-insight-mcp/**/*.ts", HOST_MODULES.mcpSdk],
+    ["packages/aws-durable-execution-sdk-js-insight-core/**/*.ts", null],
+    [
+      "packages/aws-durable-execution-sdk-js-insight-mcp/**/*.ts",
+      HOST_MODULES.mcpSdk,
+    ],
     [
       "packages/aws-durable-execution-sdk-js-insight-vscode/**/*.{ts,tsx}",
       HOST_MODULES.vscode,

@@ -10,7 +10,7 @@
  *
  * That install resolves from the public registry. The moment this package depends on
  * a `"private": true` workspace package -- as it now does, on
- * `@aws/durable-insight-core` -- the install fails with E404 unless the workflow
+ * `@aws/durable-execution-sdk-js-insight-core` -- the install fails with E404 unless the workflow
  * stages that package first. It did not, and the extraction PR shipped that break
  * without noticing, because the workflow is `workflow_dispatch`-only: no pull request
  * ever runs it.

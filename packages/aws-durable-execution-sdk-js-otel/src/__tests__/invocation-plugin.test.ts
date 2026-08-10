@@ -116,6 +116,20 @@ function findSpan(name: string): ReadableSpan | undefined {
   return getExportedSpans().find((s) => s.name === name);
 }
 
+function compareHrTime(
+  left: ReadableSpan["startTime"],
+  right: ReadableSpan["startTime"],
+): number {
+  return left[0] - right[0] || left[1] - right[1];
+}
+
+function expectSpanInside(child: ReadableSpan, parent: ReadableSpan): void {
+  expect(compareHrTime(child.startTime, parent.startTime)).toBeGreaterThanOrEqual(
+    0,
+  );
+  expect(compareHrTime(child.endTime, parent.endTime)).toBeLessThanOrEqual(0);
+}
+
 let idGenerator: DeterministicIdGenerator;
 
 beforeEach(() => {
@@ -534,47 +548,83 @@ describe("InvocationOtelPlugin", () => {
   });
 
   describe("operation span timing envelope", () => {
-    it("times operation spans with wall-clock so they nest within the Invocation span", async () => {
-      await plugin.onInvocationStart(makeInvocationInfo());
-      await plugin.onOperationStart(
-        makeOperationInfo({
-          id: "op-t",
-          type: "STEP",
-          name: "timed-step",
-          // Durable timestamp deliberately predates this invocation.
-          startTimestamp: new Date(Date.now() - 60_000),
-        }),
-      );
-      await plugin.onOperationEnd(
-        makeOperationEndInfo({
-          id: "op-t",
-          type: "STEP",
-          name: "timed-step",
-          status: "SUCCEEDED" as any,
-          endTimestamp: new Date(Date.now() + 60_000),
-        }),
-      );
-      await plugin.onInvocationEnd(makeInvocationEndInfo());
+    it("uses a shared monotonic clock so nested spans stay strictly contained", async () => {
+      const wallClockStart = Date.now();
+      let wallClockCalls = 0;
+      const dateNow = jest
+        .spyOn(Date, "now")
+        .mockImplementation(() => wallClockStart + wallClockCalls++ * 100);
 
-      const inv = findSpan("Invocation")!;
-      const op = findSpan("timed-step")!;
-      const toMs = (t: [number, number]): number => t[0] * 1000 + t[1] / 1e6;
-      // The Invocation and operation spans are each anchored to an independent
-      // hrTime() reading taken when they were created, and this test does no
-      // work between their end() calls. Sub-millisecond disagreement between
-      // those anchors is enough to invert the comparison, so allow a small
-      // tolerance. The invariant worth protecting is that the op span is NOT
-      // backdated to the durable timestamp (which would put it ~60s outside the
-      // Invocation window) — a few ms of clock noise does not threaten that.
-      const CLOCK_TOLERANCE_MS = 5;
-      // The op span is NOT backdated to the durable timestamp; it nests inside
-      // the Invocation span's wall-clock [start, end] window.
-      expect(toMs(op.startTime)).toBeGreaterThanOrEqual(
-        toMs(inv.startTime) - CLOCK_TOLERANCE_MS,
-      );
-      expect(toMs(op.endTime)).toBeLessThanOrEqual(
-        toMs(inv.endTime) + CLOCK_TOLERANCE_MS,
-      );
+      try {
+        await plugin.onInvocationStart(makeInvocationInfo());
+        await plugin.onOperationStart(
+          makeOperationInfo({
+            id: "ctx-t",
+            type: "CONTEXT",
+            name: "timed-context",
+            startTimestamp: new Date(wallClockStart - 60_000),
+          }),
+        );
+        await plugin.onOperationStart(
+          makeOperationInfo({
+            id: "op-t",
+            parentId: "ctx-t",
+            type: "STEP",
+            name: "timed-step",
+            startTimestamp: new Date(wallClockStart - 60_000),
+          }),
+        );
+        await plugin.onOperationAttemptStart(
+          makeAttemptInfo({
+            id: "op-t",
+            type: "STEP",
+            name: "timed-step",
+            attempt: 1,
+            startTimestamp: new Date(wallClockStart - 60_000),
+          }),
+        );
+        await plugin.onOperationAttemptEnd(
+          makeAttemptEndInfo({
+            id: "op-t",
+            type: "STEP",
+            name: "timed-step",
+            attempt: 1,
+            outcome: "SUCCEEDED" as any,
+            endTimestamp: new Date(wallClockStart + 60_000),
+          }),
+        );
+        await plugin.onOperationEnd(
+          makeOperationEndInfo({
+            id: "op-t",
+            parentId: "ctx-t",
+            type: "STEP",
+            name: "timed-step",
+            status: "SUCCEEDED" as any,
+            endTimestamp: new Date(wallClockStart + 60_000),
+          }),
+        );
+        await plugin.onOperationEnd(
+          makeOperationEndInfo({
+            id: "ctx-t",
+            type: "CONTEXT",
+            name: "timed-context",
+            status: "SUCCEEDED" as any,
+            endTimestamp: new Date(wallClockStart + 60_000),
+          }),
+        );
+        await plugin.onInvocationEnd(makeInvocationEndInfo());
+      } finally {
+        dateNow.mockRestore();
+      }
+
+      const invocation = findSpan("Invocation")!;
+      const contextSpan = findSpan("timed-context")!;
+      const operation = findSpan("timed-step")!;
+      const attempt = findSpan("timed-step attempt 1")!;
+
+      expectSpanInside(contextSpan, invocation);
+      expectSpanInside(operation, contextSpan);
+      expectSpanInside(attempt, operation);
     });
   });
 

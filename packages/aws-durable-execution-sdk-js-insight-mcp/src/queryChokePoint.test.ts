@@ -34,8 +34,14 @@ import { join, relative } from "node:path";
 import * as ts from "typescript";
 
 const SRC = __dirname;
-const CORE_SRC = join(SRC, "..", "..", "durable-insight-core", "src");
-const CORE_MODULE = "@aws/durable-insight-core";
+const CORE_SRC = join(
+  SRC,
+  "..",
+  "..",
+  "aws-durable-execution-sdk-js-insight-core",
+  "src",
+);
+const CORE_MODULE = "@aws/durable-execution-sdk-js-insight-core";
 
 /** The single file permitted to import core's query surface. */
 const CHOKE_POINT = "readOnlyQuery.ts";

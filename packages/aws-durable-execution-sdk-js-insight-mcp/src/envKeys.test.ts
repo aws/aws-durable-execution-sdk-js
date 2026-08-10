@@ -13,14 +13,14 @@ import {
   configFromWireSettings,
   type InsightConfig,
   type DestinationType,
-} from "@aws/durable-insight-core";
+} from "@aws/durable-execution-sdk-js-insight-core";
 import {
   envVarFor,
   MCP_SETTING_KEYS,
   MCP_EXCLUDED_SETTING_KEYS,
 } from "./envKeys";
 import { readConfigFromEnv, missingRequiredEnvVars } from "./config";
-import { DESTINATION_TYPES } from "@aws/durable-insight-core";
+import { DESTINATION_TYPES } from "@aws/durable-execution-sdk-js-insight-core";
 
 describe("envVarFor", () => {
   it("1. every MCP setting key round-trips to a valid DURABLE_INSIGHT_ variable", () => {
