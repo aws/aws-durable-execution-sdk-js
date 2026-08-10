@@ -62,6 +62,14 @@ export function extractJsonObject(
  * Strip a trailing parenthetical from a label: `"Phi-3.5-mini (smaller, ~2.4 GB)"`
  * becomes `"Phi-3.5-mini"`.
  *
+ * CONTRACT, where it differs from the regex it replaces: a parenthetical containing a
+ * NEWLINE is stripped here, whereas the regex left it in place because `.` does not
+ * match a line terminator. This is the only divergence, it is unreachable today -- the
+ * only inputs are three single-line preset labels -- and stripping is the behavior the
+ * caller wants, so it is the intended contract rather than an accident. Every
+ * single-line input agrees exactly, which `jsonExtract.test.ts` asserts against the
+ * original pattern.
+ *
  * Replaces `label.replace(/\s*\(.*\)$/, "")`, which has the same polynomial shape as
  * the extraction above (unbounded `.*` before an anchored `\)`). That instance was
  * NOT exploitable — its input is one of three hardcoded preset labels, which is why

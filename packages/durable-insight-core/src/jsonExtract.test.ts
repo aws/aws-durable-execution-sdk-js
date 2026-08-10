@@ -136,6 +136,15 @@ describe("stripTrailingParenthetical", () => {
     );
   });
 
+  it("strips a multi-line parenthetical, the one intended divergence", () => {
+    // The regex left this alone because `.` does not match a newline. Stripping is
+    // what a caller wants, and no current input can reach it -- the only labels are
+    // three single-line constants -- so it is documented as the contract rather than
+    // asserted as equivalence.
+    expect(stripTrailingParenthetical("name (a\nb)")).toBe("name");
+    expect("name (a\nb)".replace(/\s*\(.*\)$/, "")).toBe("name (a\nb)");
+  });
+
   it("is linear on a whitespace run that does not end the trimmed prefix", () => {
     // The naive fix here is `.replace(/\s+$/, "")`, the SAME trailing-anchor shape
     // removed from this package in #809.

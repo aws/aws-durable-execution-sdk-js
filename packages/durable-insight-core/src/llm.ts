@@ -598,14 +598,14 @@ async function generateViaCopilot(
   ]);
 
   // Parse JSON from the response (handle potential markdown wrapping)
-  const jsonMatch = extractJsonObject(text, '"query"');
-  if (jsonMatch === undefined) {
+  const jsonText = extractJsonObject(text, '"query"');
+  if (jsonText === undefined) {
     throw new Error(
       "Copilot did not return a valid query. Try rephrasing your question.",
     );
   }
 
-  const parsed = JSON.parse(jsonMatch) as {
+  const parsed = JSON.parse(jsonText) as {
     query?: string;
     explanation?: string;
     timeRangeMs?: number;
@@ -825,14 +825,14 @@ async function generateViaLocal(
     await context.dispose();
   }
 
-  const jsonMatch = extractJsonObject(response, '"query"');
-  if (jsonMatch === undefined) {
+  const jsonText = extractJsonObject(response, '"query"');
+  if (jsonText === undefined) {
     throw new Error(
       "Local model did not return a valid query. Try rephrasing your question.",
     );
   }
 
-  const parsed = JSON.parse(jsonMatch) as {
+  const parsed = JSON.parse(jsonText) as {
     query?: string;
     explanation?: string;
     timeRangeMs?: number;

@@ -29,15 +29,15 @@ export interface ResultVerdict {
  * never wedge the loop or hide results.
  */
 export function parseVerdict(text: string): ResultVerdict {
-  const jsonMatch = extractJsonObject(text, '"satisfied"');
-  if (jsonMatch === undefined) {
+  const jsonText = extractJsonObject(text, '"satisfied"');
+  if (jsonText === undefined) {
     return {
       satisfied: true,
       reason: "Could not parse a verdict; accepting the results as-is.",
     };
   }
   try {
-    const parsed = JSON.parse(jsonMatch) as {
+    const parsed = JSON.parse(jsonText) as {
       satisfied?: unknown;
       reason?: unknown;
       suggestion?: unknown;
