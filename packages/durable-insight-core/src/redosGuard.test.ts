@@ -1,5 +1,5 @@
 /**
- * Class-level guard against polynomial-ReDoS regexes in this package.
+ * Class-level guard against super-linear-backtracking regexes in this package.
  *
  * WHY THIS EXISTS:
  * This is the third round of the same finding. #809 fixed three trailing-anchor
@@ -11,30 +11,58 @@
  * Each round fixed instances. The recurring mistake was scoping the sweep to the
  * shape that had just been found, so the next shape was invisible: exactly the
  * mistake made with `HOST_MODULES` (guarding `vscode` and missing `electron`) and with
- * the query choke point (guarding `run*Query` and missing `fetchAthenaRecord`). So
- * this guard is about the CLASS: any regex with two or more unbounded quantifiers must
- * be justified, whatever its shape.
+ * the query choke point (guarding `run*Query` and missing `fetchAthenaRecord`).
+ *
+ * This guard was itself written that way first, which is the best evidence that the
+ * mistake is easy to make. Its original rule was "two or more wide quantifiers", so it
+ * scored BOTH regexes #809 removed below threshold — `/\/+$/` at literally zero,
+ * because an escaped literal is not a wide character class — and `(a+)+$`, the textbook
+ * exponential case, at zero as well. The paragraphs above were already here while the
+ * code enforced something narrower than they described.
  *
  * HOW IT WORKS:
  * Every regex literal in this package's non-test sources is extracted and scored by
- * how many unbounded quantifiers it contains (`.*`, `.+`, `[^x]*`, `\s+`, ...). Two or
- * more means the engine can be made to retry an inner scan from many start positions,
- * which is the necessary condition for polynomial backtracking. Such a pattern must
- * appear in ALLOWED below, with a note on why it is safe.
+ * `riskRules` against THREE independent shapes. Matching any one of them means the
+ * pattern must appear in ALLOWED below with a note on why it is safe:
+ *
+ *   R1  Two or more WIDE quantifiers (`.*`, `[^x]+`, `\s*`, ...). Two atoms that can
+ *       each consume many different characters may compete for the same input, which
+ *       is the JSON-extraction shape that prompted this file.
+ *
+ *   R2  Any quantifier — wide or a single escaped literal — together with a trailing
+ *       `$` and no leading `^`. When the anchor is unreachable the engine retries from
+ *       every start position. This is precisely the #809 shape, and it needs no wide
+ *       class at all: `/\/+$/` is quadratic on a run of slashes. A leading `^` removes
+ *       the risk, because there is then only one place to begin.
+ *
+ *   R3  A repeated GROUP — `(...)*`, `(...)+`, `(...){2,}`. `(a+)+` is EXPONENTIAL
+ *       rather than merely polynomial, and even `(ab)+` can backtrack across
+ *       alternatives. None exist here today; the rule is cheap and the failure mode is
+ *       the worst of the three.
+ *
+ * The three rules are necessary conditions, not proofs of a defect — see below.
  *
  * WHY AN ALLOWLIST RATHER THAN A BAN:
- * Two unbounded quantifiers are necessary but not sufficient — seven patterns here are
- * genuinely linear because their quantifiers cannot overlap (different character
- * classes, or a literal pinned between them). Every entry was MEASURED, not reasoned
- * about: growth from 2k to 8k characters of adversarial input, where quadratic shows
- * as ~16x and linear as ~1x. Banning the shape outright would force pointless rewrites
- * of correct code, and a guard that cries wolf gets deleted.
+ * Nine patterns in this package match a rule and are genuinely linear, because their
+ * quantifiers cannot overlap: disjoint character classes, a literal pinned between
+ * them, a lazy quantifier, or an anchor at both ends. Every entry was MEASURED, not
+ * reasoned about — growth from 2k to 8k characters of adversarial input, where
+ * quadratic shows as ~16x and linear as ~1x. Banning these shapes outright would force
+ * pointless rewrites of correct code, and a guard that cries wolf gets deleted.
  *
  * ADDING AN ENTRY IS THE POINT AT WHICH TO MEASURE. If you cannot state the input that
- * would be pathological and show it is not, the pattern does not belong here.
+ * would be pathological and show that it is not, the pattern does not belong here.
  *
- * Test files are excluded from the scan on purpose: this file's own ALLOWLIST contains
- * pattern text, and two earlier scanners in this repo flagged their own documentation.
+ * THE DETECTOR HAS ITS OWN TESTS, and they matter more than the sweep. Asserting that
+ * today's sources are clean says nothing about whether the detector can find anything —
+ * those assertions pass just as well against a detector narrowed to uselessness, which
+ * is how the R1-only version shipped. `riskRules` is therefore tested directly against
+ * every shape this repository has actually had to remove, plus canonical exponential
+ * cases, plus benign patterns it must NOT flag.
+ *
+ * Test files are excluded from the sweep on purpose: this file's own ALLOWED map and
+ * self-tests contain pattern text, and three earlier scanners in this repo flagged
+ * their own documentation.
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -42,9 +70,9 @@ import { join } from "node:path";
 const SRC = __dirname;
 
 /**
- * Patterns with two or more unbounded quantifiers that are nonetheless linear.
- * Keyed by the regex SOURCE rather than by file and line, so ordinary edits do not
- * invalidate the list.
+ * Patterns that match one of the three rules in `riskRules` and are nonetheless
+ * linear, each with the reason. Keyed by the regex SOURCE rather than by file and line,
+ * so ordinary edits do not invalidate the list.
  */
 const ALLOWED = new Map<string, string>([
   [
@@ -273,10 +301,13 @@ describe("no unjustified polynomial-ReDoS candidates", () => {
   it("every risky pattern is allowlisted with a reason", () => {
     const unjustified = risky
       .filter((r) => !ALLOWED.has(r.source))
-      .map((r) => `${r.file}:${r.line}  /${r.source}/`);
-    // A pattern here has two or more unbounded quantifiers and no measured
-    // justification. Measure it: build the adversarial input, time it at 2k and 8k
-    // characters, and either fix it or add it to ALLOWED with the numbers.
+      .map(
+        (r) => `${r.file}:${r.line}  /${r.source}/  [${r.risks.join("; ")}]`,
+      );
+    // A pattern here matches R1, R2 or R3 and has no measured justification. The
+    // failure message names the file, line, pattern and rule. Measure it: build the
+    // adversarial input the rule implies, time it at 2k and 8k characters, then either
+    // fix it or add it to ALLOWED with the numbers.
     expect(unjustified).toEqual([]);
   });
 
