@@ -14,7 +14,7 @@
  * package each gained a guard; this package is the third host and needs the same one,
  * or it inherits exactly the gap that was just closed elsewhere.
  *
- * The detector comes from `@aws/durable-insight-core`, where it is self-tested against
+ * The detector comes from `@aws/durable-execution-sdk-js-insight-core`, where it is self-tested against
  * every module in every import form including subpaths. It is deliberately not
  * re-implemented: two divergent copies of a correctness-critical regex is the
  * duplication this whole stack exists to remove.
@@ -25,7 +25,7 @@ import {
   HOST_MODULES,
   findEscapingImports,
   findHostModules,
-} from "@aws/durable-insight-core";
+} from "@aws/durable-execution-sdk-js-insight-core";
 
 const SRC = __dirname;
 /** The package root, i.e. the directory holding package.json. */

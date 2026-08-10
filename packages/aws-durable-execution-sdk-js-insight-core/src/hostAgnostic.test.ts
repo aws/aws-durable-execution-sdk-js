@@ -1,5 +1,5 @@
 /**
- * Guards the core invariant: NO file in `@aws/durable-insight-core` may import ANY
+ * Guards the core invariant: NO file in `@aws/durable-execution-sdk-js-insight-core` may import ANY
  * host-specific module.
  *
  * WHY THIS IS BROADER THAN `vscode`:
@@ -54,7 +54,7 @@ const names = collectSourceFiles(SRC)
   .map((f) => relative(SRC, f))
   .sort();
 
-describe("@aws/durable-insight-core is host-free", () => {
+describe("@aws/durable-execution-sdk-js-insight-core is host-free", () => {
   // Without this, the guard below would pass by finding nothing to check -- the
   // failure mode of every file-enumerating test.
   it("finds the package's sources, including known members", () => {
