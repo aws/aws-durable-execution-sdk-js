@@ -107,6 +107,8 @@ jobs:
         run: npm run build -w packages/aws-durable-execution-sdk-js-insight-vscode
       - name: Bundle the desktop app
         run: npm run build -w packages/aws-durable-execution-sdk-js-insight-desktop
+      - name: Bundle the MCP server
+        run: npm run build -w packages/durable-insight-mcp
 
   unit-tests:
     needs: build
