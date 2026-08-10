@@ -377,6 +377,8 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     const wrapInfo = {
       ...opInfo,
       isReplay: childReplayMode !== DurableExecutionMode.ExecutionMode,
+      isReplayingChildren:
+        childReplayMode === DurableExecutionMode.ReplaySucceededContext,
     };
     const result = (await runWithContext(
       entityId,
