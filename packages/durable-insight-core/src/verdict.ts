@@ -4,6 +4,8 @@
  * `vscode` or AWS SDK imports and can be unit-tested directly.
  */
 
+import { extractJsonObject } from "./jsonExtract";
+
 /**
  * The model's verdict on whether a query's results actually answer the
  * user's question. Used by the verify/refine provider path (Copilot/local) to
@@ -27,15 +29,15 @@ export interface ResultVerdict {
  * never wedge the loop or hide results.
  */
 export function parseVerdict(text: string): ResultVerdict {
-  const jsonMatch = text.match(/\{[\s\S]*"satisfied"[\s\S]*\}/);
-  if (!jsonMatch) {
+  const jsonMatch = extractJsonObject(text, '"satisfied"');
+  if (jsonMatch === undefined) {
     return {
       satisfied: true,
       reason: "Could not parse a verdict; accepting the results as-is.",
     };
   }
   try {
-    const parsed = JSON.parse(jsonMatch[0]) as {
+    const parsed = JSON.parse(jsonMatch) as {
       satisfied?: unknown;
       reason?: unknown;
       suggestion?: unknown;

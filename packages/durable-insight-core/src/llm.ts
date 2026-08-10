@@ -10,6 +10,7 @@ import { buildSystemPrompt, type DestinationType } from "./schema";
 import { parseChartSpec } from "./chartSpec";
 import { parseLocalServerQueryResponse } from "./localServerParse";
 import { stripTrailingSlashes } from "./hostModuleScan";
+import { extractJsonObject, stripTrailingParenthetical } from "./jsonExtract";
 import {
   parseVerdict,
   buildVerifyInstruction,
@@ -597,14 +598,14 @@ async function generateViaCopilot(
   ]);
 
   // Parse JSON from the response (handle potential markdown wrapping)
-  const jsonMatch = text.match(/\{[\s\S]*"query"[\s\S]*\}/);
-  if (!jsonMatch) {
+  const jsonMatch = extractJsonObject(text, '"query"');
+  if (jsonMatch === undefined) {
     throw new Error(
       "Copilot did not return a valid query. Try rephrasing your question.",
     );
   }
 
-  const parsed = JSON.parse(jsonMatch[0]) as {
+  const parsed = JSON.parse(jsonMatch) as {
     query?: string;
     explanation?: string;
     timeRangeMs?: number;
@@ -724,7 +725,7 @@ export async function ensureModel(
 
   fs.mkdirSync(MODEL_DIR, { recursive: true });
   statusCallback?.(
-    `Downloading ${preset.label.replace(/\s*\(.*\)$/, "")} (${preset.sizeLabel}, one time)...`,
+    `Downloading ${stripTrailingParenthetical(preset.label)} (${preset.sizeLabel}, one time)...`,
   );
 
   const response = await fetch(preset.url);
@@ -824,14 +825,14 @@ async function generateViaLocal(
     await context.dispose();
   }
 
-  const jsonMatch = response.match(/\{[\s\S]*"query"[\s\S]*\}/);
-  if (!jsonMatch) {
+  const jsonMatch = extractJsonObject(response, '"query"');
+  if (jsonMatch === undefined) {
     throw new Error(
       "Local model did not return a valid query. Try rephrasing your question.",
     );
   }
 
-  const parsed = JSON.parse(jsonMatch[0]) as {
+  const parsed = JSON.parse(jsonMatch) as {
     query?: string;
     explanation?: string;
     timeRangeMs?: number;
