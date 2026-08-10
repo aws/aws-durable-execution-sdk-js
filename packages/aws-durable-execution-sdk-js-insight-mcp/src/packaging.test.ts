@@ -3,8 +3,8 @@
  *
  * THE FAILURE THIS PREVENTS:
  * This package is published (`"private": false`) and customers run it with
- * `npx -y @aws/durable-insight-mcp`. So every entry in `dependencies` must be
- * resolvable from the public registry. It briefly was not: `@aws/durable-insight-core`
+ * `npx -y @aws/durable-execution-sdk-js-insight-mcp`. So every entry in `dependencies` must be
+ * resolvable from the public registry. It briefly was not: `@aws/durable-execution-sdk-js-insight-core`
  * is a `"private": true` workspace package that is never published, and listing it as
  * a runtime dependency made `npm install` fail with E404 for every user — reproduced
  * by packing this package and installing it outside the workspace.
@@ -52,7 +52,7 @@ describe("published package is installable by a customer", () => {
   it("finds the workspace and this manifest", () => {
     // Guards against passing because it read nothing.
     expect(workspacePackages.size).toBeGreaterThan(5);
-    expect(self.name).toBe("@aws/durable-insight-mcp");
+    expect(self.name).toBe("@aws/durable-execution-sdk-js-insight-mcp");
   });
 
   it("is published, which is what makes the rule below apply", () => {
@@ -72,7 +72,7 @@ describe("published package is installable by a customer", () => {
     // Not merely absent from `dependencies` -- present where a build input belongs, so
     // the build cannot silently lose it either.
     expect(Object.keys(self.devDependencies ?? {})).toContain(
-      "@aws/durable-insight-core",
+      "@aws/durable-execution-sdk-js-insight-core",
     );
   });
 });
@@ -80,7 +80,7 @@ describe("published package is installable by a customer", () => {
 /**
  * `"private": false` is a manifest flag. It permits publishing; it does not cause it.
  * The release script decides that, from a hard-coded list, and this package was missing
- * from it -- so `npx -y @aws/durable-insight-mcp` could not have worked no matter what
+ * from it -- so `npx -y @aws/durable-execution-sdk-js-insight-mcp` could not have worked no matter what
  * the manifest said. Every test above passed throughout, because none of them knew the
  * release pipeline existed.
  *
@@ -129,6 +129,6 @@ describe("release pipeline actually publishes what claims to be published", () =
 
   it("lists this package specifically", () => {
     // Stated separately so the failure names this package rather than a set.
-    expect(listedDirs).toContain("durable-insight-mcp");
+    expect(listedDirs).toContain("aws-durable-execution-sdk-js-insight-mcp");
   });
 });

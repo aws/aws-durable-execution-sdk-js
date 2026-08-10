@@ -19,7 +19,7 @@ of its own (see [Data handling and AI disclosure](#data-handling-and-ai-disclosu
 ## Install
 
 The package is published; you never clone or build it. Every client launches it
-the same way — `npx -y @aws/durable-insight-mcp` — and every client takes the
+the same way — `npx -y @aws/durable-execution-sdk-js-insight-mcp` — and every client takes the
 same `mcpServers` JSON shape. Only the file the config lives in differs.
 
 **Lead with the CLI helper for your client.** The config-file paths below move
@@ -32,7 +32,7 @@ file for you is the durable instruction.
 kiro-cli mcp add \
   --name durable-insight \
   --command npx \
-  --args "-y,@aws/durable-insight-mcp" \
+  --args "-y,@aws/durable-execution-sdk-js-insight-mcp" \
   --env DURABLE_INSIGHT_DESTINATION_TYPE=dynamodb \
   --env DURABLE_INSIGHT_DYNAMODB_TABLE_NAME=my-workflow-table \
   --env DURABLE_INSIGHT_REGION=us-east-1 \
@@ -51,7 +51,7 @@ claude mcp add durable-insight \
   --env DURABLE_INSIGHT_DESTINATION_TYPE=dynamodb \
   --env DURABLE_INSIGHT_DYNAMODB_TABLE_NAME=my-workflow-table \
   --env DURABLE_INSIGHT_REGION=us-east-1 \
-  -- npx -y @aws/durable-insight-mcp
+  -- npx -y @aws/durable-execution-sdk-js-insight-mcp
 ```
 
 `--scope project` writes `.mcp.json` at the repo root; the default (user) scope
@@ -67,7 +67,7 @@ block. The shape is identical everywhere:
   "mcpServers": {
     "durable-insight": {
       "command": "npx",
-      "args": ["-y", "@aws/durable-insight-mcp"],
+      "args": ["-y", "@aws/durable-execution-sdk-js-insight-mcp"],
       "env": {
         "DURABLE_INSIGHT_DESTINATION_TYPE": "dynamodb",
         "DURABLE_INSIGHT_DYNAMODB_TABLE_NAME": "my-workflow-table",

@@ -27,7 +27,7 @@ import {
   resolveCredentials,
   type InsightConfig,
   type QueryResultTable,
-} from "@aws/durable-insight-core";
+} from "@aws/durable-execution-sdk-js-insight-core";
 import {
   DEFAULT_LOG_TIME_RANGE_MS,
   LOGS_INSIGHTS_ENGINE,
@@ -41,10 +41,10 @@ import {
   runListExecutions,
 } from "./tools";
 
-jest.mock("@aws/durable-insight-core", () => {
-  const actual = jest.requireActual<typeof import("@aws/durable-insight-core")>(
-    "@aws/durable-insight-core",
-  );
+jest.mock("@aws/durable-execution-sdk-js-insight-core", () => {
+  const actual = jest.requireActual<
+    typeof import("@aws/durable-execution-sdk-js-insight-core")
+  >("@aws/durable-execution-sdk-js-insight-core");
   return {
     ...actual,
     // Real: assertReadOnly, ensureLimit, escapeQuotedString, buildSystemPrompt,

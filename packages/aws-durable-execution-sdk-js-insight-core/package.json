@@ -1,5 +1,5 @@
 {
-  "name": "@aws/durable-insight-core",
+  "name": "@aws/durable-execution-sdk-js-insight-core",
   "version": "0.1.0-alpha.0",
   "private": true,
   "main": "src/index.ts",

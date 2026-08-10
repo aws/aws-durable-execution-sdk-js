@@ -22,7 +22,7 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { detectCapabilities } from "@aws/durable-insight-core";
+import { detectCapabilities } from "@aws/durable-execution-sdk-js-insight-core";
 
 const WEBVIEW_SRC = join(__dirname, "..", "webview-ui", "src");
 
