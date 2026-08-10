@@ -16,7 +16,10 @@
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { testDestination, type InsightConfig } from "@aws/durable-insight-core";
+import {
+  testDestination,
+  type InsightConfig,
+} from "@aws/durable-execution-sdk-js-insight-core";
 import { z } from "zod";
 import { readConfigFromEnv } from "./config";
 import { missingRequiredEnvVars } from "./config";

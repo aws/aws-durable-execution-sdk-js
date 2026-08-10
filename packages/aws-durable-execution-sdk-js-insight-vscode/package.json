@@ -269,7 +269,7 @@
     "clean": "rm -rf dist media/webview.js media/webview.css"
   },
   "dependencies": {
-    "@aws/durable-insight-core": "0.1.0-alpha.0",
+    "@aws/durable-execution-sdk-js-insight-core": "0.1.0-alpha.0",
     "node-llama-cpp": "^3.18.1"
   },
   "devDependencies": {

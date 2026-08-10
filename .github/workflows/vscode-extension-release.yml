@@ -206,7 +206,7 @@ jobs:
           # end user on first use of the local (on-device) LLM provider.
           # Stage the private, unpublished workspace packages this extension
           # depends on. Without this, `npm install --no-workspaces` tries to
-          # resolve @aws/durable-insight-core from the public registry and fails
+          # resolve @aws/durable-execution-sdk-js-insight-core from the public registry and fails
           # with E404 -- that package is `"private": true` and is never
           # published. This workflow is workflow_dispatch-only, so PR checks do
           # not exercise it; src/packaging.test.ts asserts every private
@@ -218,7 +218,7 @@ jobs:
           # package's own dependencies, so core's 16 AWS SDK deps would be
           # missing and esbuild would fail to resolve them. Installing from a
           # tarball pulls the full dependency tree, which the bundle needs.
-          for PRIVATE_DEP in durable-insight-core; do
+          for PRIVATE_DEP in aws-durable-execution-sdk-js-insight-core; do
             TGZ="$(cd "$WORKSPACE_DIR/../$PRIVATE_DEP" && npm pack --pack-destination "$ISOLATED" | tail -1)"
             DEP_NAME="$(node -p "require('$WORKSPACE_DIR/../$PRIVATE_DEP/package.json').name")"
             npm pkg set "dependencies.$DEP_NAME=file:./$TGZ"

@@ -20,7 +20,7 @@
  *      there would fail at runtime in the webview, where no bundler alias supplies
  *      it.
  *
- * The detector comes from `@aws/durable-insight-core`, where it is self-tested
+ * The detector comes from `@aws/durable-execution-sdk-js-insight-core`, where it is self-tested
  * against every module in every import form including subpaths. It is deliberately
  * not re-implemented: two divergent copies of a correctness-critical regex is the
  * duplication this package boundary exists to remove.
@@ -31,7 +31,7 @@ import {
   HOST_MODULES,
   findEscapingImports,
   findHostModules,
-} from "@aws/durable-insight-core";
+} from "@aws/durable-execution-sdk-js-insight-core";
 
 const EXTENSION_SRC = __dirname;
 /** The package root, i.e. the directory holding package.json. */

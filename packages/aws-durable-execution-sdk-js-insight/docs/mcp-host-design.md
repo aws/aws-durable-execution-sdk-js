@@ -1,11 +1,11 @@
 # Workflow Insight as an MCP Host — Design
 
-|              |                                                                                                       |
-| ------------ | ----------------------------------------------------------------------------------------------------- |
-| **Status**   | Phases 0–5 complete. Phase 1 merged (#809); Phases 2–5 are **this** change                            |
-| **Scope**    | New package `@aws/durable-insight-mcp`, plus extraction of `durable-insight-core`                     |
-| **Baseline** | `main` @ `556bfd40`, i.e. after #795 (dual host), #804 (disclosure), #809 (core)                      |
-| **Legal**    | **Confirmed** — disclosure only, no consent gate. See [§8](#8-disclosure-readme-only-no-consent-gate) |
+|              |                                                                                                                         |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| **Status**   | Phases 0–5 complete. Phase 1 merged (#809); Phases 2–5 are **this** change                                              |
+| **Scope**    | New package `@aws/durable-execution-sdk-js-insight-mcp`, plus extraction of `aws-durable-execution-sdk-js-insight-core` |
+| **Baseline** | `main` @ `556bfd40`, i.e. after #795 (dual host), #804 (disclosure), #809 (core)                                        |
+| **Legal**    | **Confirmed** — disclosure only, no consent gate. See [§8](#8-disclosure-readme-only-no-consent-gate)                   |
 
 > This document ships with the implementation it describes. Phase 1 (the shared core)
 > merged separately as #809; Phases 2–5 are the change you are reading. Phase 6 is
@@ -30,7 +30,7 @@ _deletes_ a subsystem rather than adding one: the agent is the model, so roughly
 
 Phase 0 is complete: Legal confirmed the disclosure position (§8), design review
 ratified that the MCP host bypasses `ExplorerSession` (§6.3), and client config paths
-are verified (§6.4). Phase 1 — extracting `durable-insight-core` — is unblocked. The
+are verified (§6.4). Phase 1 — extracting `aws-durable-execution-sdk-js-insight-core` — is unblocked. The
 remaining open items (§15) are scoping calls, not blockers.
 
 ---
@@ -117,14 +117,14 @@ addon, and the Electron binary/packaging friction that dominated #795's review.
 
 ```
                        ┌──────────────────────────────────┐
-                       │ durable-insight-core (host-free) │
+                       │ insight-core (host-free) │
                        │  data access · schema · safety   │
                        │   configCore · destinationTest   │
                        └──────────────────────────────────┘
                                 ▲        ▲       ▲
                 ┌───────────────┘        │       └────────────────┐
      ┌──────────┴──────────┐  ┌──────────┴──────────┐  ┌──────────┴──────────┐
-     │  …-insight-vscode   │  │  …-insight-desktop  │  │ durable-insight-mcp │
+     │  …-insight-vscode   │  │  …-insight-desktop  │  │    …-insight-mcp    │
      │   (existing name)   │  │   (existing name)   │  │        (NEW)        │
      │    extension.ts     │  │    main/host.ts     │  │      server.ts      │
      │    + webview UI     │  │     + Electron      │  │    stdio, no UI     │
@@ -159,8 +159,8 @@ driving.
 ### 6.1 New package
 
 ```
-packages/durable-insight-mcp/
-├── package.json          # @aws/durable-insight-mcp, bin: durable-insight-mcp
+packages/aws-durable-execution-sdk-js-insight-mcp/
+├── package.json          # @aws/durable-execution-sdk-js-insight-mcp, bin: durable-insight-mcp (unchanged)
 ├── src/
 │   ├── server.ts         # MCP server, transport, registration
 │   ├── tools/            # one module per tool
@@ -174,12 +174,12 @@ packages/durable-insight-mcp/
 
 **Four names, deliberately distinct:**
 
-| Layer                         | Value                          |
-| ----------------------------- | ------------------------------ |
-| Directory                     | `packages/durable-insight-mcp` |
-| npm package                   | `@aws/durable-insight-mcp`     |
-| `bin`                         | `durable-insight-mcp`          |
-| Server key in customer config | `durable-insight`              |
+| Layer                         | Value                                               |
+| ----------------------------- | --------------------------------------------------- |
+| Directory                     | `packages/aws-durable-execution-sdk-js-insight-mcp` |
+| npm package                   | `@aws/durable-execution-sdk-js-insight-mcp`         |
+| `bin`                         | `durable-insight-mcp`                               |
+| Server key in customer config | `durable-insight`                                   |
 
 The server key is the customer's choice but the README should suggest
 `durable-insight`: prefixed tool names are capped at 64 characters, and
@@ -194,11 +194,11 @@ on publishability, not on package kind:
 | Hosts     | unscoped, `private: true`        | `-insight-vscode`, `-insight-desktop`                                    |
 
 Both existing hosts are private because they ship as a VSIX and an app. This one
-ships through npm — `npx -y @aws/durable-insight-mcp` cannot resolve anything
+ships through npm — `npx -y @aws/durable-execution-sdk-js-insight-mcp` cannot resolve anything
 else — so it is the first host needing `@aws/` scope and `private: false`. Version
 starts at `0.1.0-alpha.0` to match the insight family.
 
-### 6.2 Prerequisite: extract `durable-insight-core`
+### 6.2 Prerequisite: extract `aws-durable-execution-sdk-js-insight-core`
 
 The desktop host currently reaches the shared core by relative path with **no
 declared dependency**:
@@ -211,7 +211,7 @@ Tolerable at two hosts. At three it becomes an MCP package importing across two
 sibling packages to reach code that lives, misleadingly, inside the _VS Code_
 package.
 
-Extract `packages/durable-insight-core` containing every host-free module in §4 (data access, schema, safety, `destinationTest`,
+Extract `packages/aws-durable-execution-sdk-js-insight-core` containing every host-free module in §4 (data access, schema, safety, `destinationTest`,
 `configCore`, `hostPort`, `hostCapabilities`, `settingsKeys`). Mostly `git mv` plus
 import rewrites, guarded by the existing test suites (222 in `-insight-vscode`,
 36 in `-insight-desktop`).
@@ -300,7 +300,7 @@ Customer-facing config, identical in shape across clients:
   "mcpServers": {
     "durable-insight": {
       "command": "npx",
-      "args": ["-y", "@aws/durable-insight-mcp"],
+      "args": ["-y", "@aws/durable-execution-sdk-js-insight-mcp"],
       "env": {
         "AWS_REGION": "us-east-1",
         "AWS_PROFILE": "prod",
@@ -594,12 +594,12 @@ is unblocked.**
 
 ### Phase 1 — Extract the core (L) — **MERGED** (#809)
 
-| ID       | Task                                                                                                                                | Size | Depends |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---- | ------- |
-| **T1.1** | Create `durable-insight-core`; move host-free modules (§4)                                                                          | M    | T0.2    |
-| **T1.2** | Repoint `-insight-vscode` and `-insight-desktop` imports; declare real dependencies                                                 | M    | T1.1    |
-| **T1.3** | Move the relevant tests of the 19 in `-insight-vscode/src`; extend `hostAgnostic.test.ts` to the new boundary                       | S    | T1.2    |
-| **T1.4** | Add `durable-insight-core` to root `test` and `typecheck:hosts` and the `insight-hosts` CI job (NOT `build` — it has no build step) | S    | T1.1    |
+| ID       | Task                                                                                                                                                     | Size | Depends |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | ------- |
+| **T1.1** | Create `aws-durable-execution-sdk-js-insight-core`; move host-free modules (§4)                                                                          | M    | T0.2    |
+| **T1.2** | Repoint `-insight-vscode` and `-insight-desktop` imports; declare real dependencies                                                                      | M    | T1.1    |
+| **T1.3** | Move the relevant tests of the 19 in `-insight-vscode/src`; extend `hostAgnostic.test.ts` to the new boundary                                            | S    | T1.2    |
+| **T1.4** | Add `aws-durable-execution-sdk-js-insight-core` to root `test` and `typecheck:hosts` and the `insight-hosts` CI job (NOT `build` — it has no build step) | S    | T1.1    |
 
 **AC:**
 
@@ -716,7 +716,7 @@ CloudWatch Logs destinations are the documented exception below.
 
 ## 12. Definition of done (v1)
 
-- **D1** `npx @aws/durable-insight-mcp` works in Kiro and Claude Code with only a
+- **D1** `npx @aws/durable-execution-sdk-js-insight-mcp` works in Kiro and Claude Code with only a
   config block — no install, no build.
 - **D2** All 8 destinations queryable read-only, verified per AC-T2.
 - **D3** Agent answers a realistic multi-turn failure investigation end to end
@@ -853,7 +853,7 @@ reason -- the default value made the bug invisible:
 - ~~**OQ1** Legal confirmation of §8.3.~~ **Resolved** — confirmed; see §8.3.
 - ~~**OQ2** Ratify §6.3 — MCP bypasses `ExplorerSession`.~~ **Resolved** — ratified;
   Phase 1 unblocked.
-- ~~**OQ3** Publish `durable-insight-core`, or bundle it?~~ **Resolved — bundle.** Both
+- ~~**OQ3** Publish `aws-durable-execution-sdk-js-insight-core`, or bundle it?~~ **Resolved — bundle.** Both
   existing hosts already bundle with esbuild, so core stays `private: true` and remains
   an internal boundary refactorable without semver obligations. Publishing it would be
   _forced_ only if a public package depended on it directly.

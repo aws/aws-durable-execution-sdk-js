@@ -13,7 +13,7 @@ import {
   fetchLogsInsightsRecord,
   resolveCredentials,
   type InsightConfig,
-} from "@aws/durable-insight-core";
+} from "@aws/durable-execution-sdk-js-insight-core";
 import { MAX_ROWS } from "./readOnlyQuery";
 import {
   buildDescribeSchemaResult,
@@ -22,10 +22,10 @@ import {
   DEFAULT_RECORD_LOOKBACK_HOURS,
 } from "./tools";
 
-jest.mock("@aws/durable-insight-core", () => {
-  const actual = jest.requireActual<typeof import("@aws/durable-insight-core")>(
-    "@aws/durable-insight-core",
-  );
+jest.mock("@aws/durable-execution-sdk-js-insight-core", () => {
+  const actual = jest.requireActual<
+    typeof import("@aws/durable-execution-sdk-js-insight-core")
+  >("@aws/durable-execution-sdk-js-insight-core");
   return {
     ...actual,
     runAthenaQuery: jest.fn(),
