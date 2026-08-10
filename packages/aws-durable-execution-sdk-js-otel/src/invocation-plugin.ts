@@ -17,6 +17,7 @@ import {
   SpanStatusCode,
   ROOT_CONTEXT,
 } from "@opentelemetry/api";
+import { hrTime } from "@opentelemetry/core";
 import {
   DeterministicIdGenerator,
   deriveTraceIdFromArn,
@@ -137,6 +138,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
           "durable.execution.arn": info.executionArn,
           "durable.invocation.first": info.isFirstInvocation,
         },
+        startTime: hrTime(),
       },
       context.active(),
     );
@@ -156,10 +158,12 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onInvocationEnd(info: InvocationEndInfo): Promise<void> {
+    const endTime = hrTime();
+
     // 1. End all spans in the stack in reverse order
     while (this.spanStack.length > 0) {
       const span = this.spanStack.pop()!;
-      span.end();
+      span.end(endTime);
     }
 
     // 2. End the invocation span if it exists
@@ -185,7 +189,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       }
       // RETRYING: leave status UNSET (default)
 
-      this.invocationSpan.end();
+      this.invocationSpan.end(endTime);
     }
 
     // 3. Handle Workflow span based on terminal status. The Workflow span is
@@ -205,7 +209,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         } else {
           this.workflowSpan.setStatus({ code: SpanStatusCode.OK });
         }
-        this.workflowSpan.end();
+        this.workflowSpan.end(endTime);
       }
       // Non-terminal (PENDING/RETRYING): do NOT end — status stays UNSET and the
       // span is dropped without export
@@ -241,15 +245,12 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       return;
     }
 
-    // Operation, continuation, and attempt spans are timed with wall-clock
-    // (the tracer's current time) rather than the durable start/end
-    // timestamps. The Invocation span is a wall-clock span for the current
-    // invocation, and these spans parent to it; using durable timestamps
-    // (which can predate this invocation's start, e.g. an operation created in
-    // an earlier invocation of the same execution) would push a child outside
-    // its parent's [start, end] window and break the parent-timing envelope
-    // the conformance suite enforces. Only the root Workflow span keeps a
-    // backdated start (it is parentless). Matches the Python/Java reference.
+    // Operation, continuation, and attempt spans use explicit monotonic
+    // timestamps rather than durable start/end timestamps. Durable timestamps
+    // can predate this invocation, while letting each span use the tracer's
+    // default timestamp can give it an independent wall-clock anchor. A shared
+    // monotonic clock keeps children inside their parent timing envelopes.
+    // Only the parentless Workflow span keeps a backdated start.
     const deterministicSpanId = deriveSpanIdFromOperationId(
       info.id,
       this.executionArn,
@@ -296,6 +297,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         {
           attributes,
           links: this.workflowLinks(),
+          startTime: hrTime(),
         },
         parentContext,
       );
@@ -316,6 +318,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
             },
             ...this.workflowLinks(),
           ],
+          startTime: hrTime(),
         },
         parentContext,
       );
@@ -393,7 +396,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       }
 
       // End the span
-      span.end();
+      span.end(hrTime());
 
       // Remove from map
       this.spanMap.delete(info.id);
@@ -448,6 +451,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
             },
             ...this.workflowLinks(),
           ],
+          startTime: hrTime(),
         },
         parentContext,
       );
@@ -469,7 +473,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       }
 
       // Immediately end
-      continuationSpan.end();
+      continuationSpan.end(hrTime());
     }
   }
 
@@ -525,6 +529,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
           },
           ...this.workflowLinks(),
         ],
+        startTime: hrTime(),
       },
       parentContext,
     );
@@ -559,7 +564,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         // Non-failed attempt: stamp explicit OK (matches Python OTel #604).
         attemptSpan.setStatus({ code: SpanStatusCode.OK });
       }
-      attemptSpan.end();
+      attemptSpan.end(hrTime());
       this.spanMap.delete(key);
     }
   }
