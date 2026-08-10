@@ -7,7 +7,7 @@
  * "this host and no other", which is why the permitted module is stated explicitly
  * rather than the whole list being banned.
  *
- * The detector is imported from `@aws/durable-insight-core`, not re-implemented. It
+ * The detector is imported from `@aws/durable-execution-sdk-js-insight-core`, not re-implemented. It
  * used to be a verbatim copy of core's regex with no self-tests of its own, which
  * meant a regression in this copy would have passed silently forever while still
  * reporting green. Core's `hostModuleScan.test.ts` covers every module in every
@@ -23,7 +23,7 @@ import {
   HOST_MODULES,
   findEscapingImports,
   findHostModules,
-} from "@aws/durable-insight-core";
+} from "@aws/durable-execution-sdk-js-insight-core";
 
 const SRC = __dirname;
 /** The package root, i.e. the directory holding package.json. */

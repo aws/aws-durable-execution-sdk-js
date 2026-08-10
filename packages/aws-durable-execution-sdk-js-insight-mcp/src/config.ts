@@ -13,7 +13,7 @@ import {
   type InsightConfig,
   DESTINATION_TYPES,
   isDestinationType,
-} from "@aws/durable-insight-core";
+} from "@aws/durable-execution-sdk-js-insight-core";
 import {
   envVarFor,
   MCP_SETTING_KEYS,

@@ -29,7 +29,7 @@ import {
   runOpenSearchQuery,
   runRedshiftQuery,
   type InsightConfig,
-} from "@aws/durable-insight-core";
+} from "@aws/durable-execution-sdk-js-insight-core";
 
 /**
  * Hard cap on rows pulled into this process from any single query.

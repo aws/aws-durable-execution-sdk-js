@@ -28,7 +28,7 @@ import {
   isSettingKey,
   type Favorite,
   type SettingValue,
-} from "@aws/durable-insight-core";
+} from "@aws/durable-execution-sdk-js-insight-core";
 
 /** What lands in insight-settings.json: recognized keys and scalar values. */
 type StoredSettings = Record<string, string | number | boolean>;

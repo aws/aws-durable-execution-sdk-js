@@ -1,12 +1,12 @@
 {
-  "name": "@aws/durable-insight-mcp",
+  "name": "@aws/durable-execution-sdk-js-insight-mcp",
   "version": "0.1.0-alpha.0",
   "license": "Apache-2.0",
   "private": false,
   "repository": {
     "type": "git",
     "url": "git+ssh://git@github.com/aws/aws-durable-execution-sdk-js.git",
-    "directory": "packages/durable-insight-mcp"
+    "directory": "packages/aws-durable-execution-sdk-js-insight-mcp"
   },
   "engines": {
     "node": ">=20"
@@ -28,12 +28,12 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@aws/durable-insight-core": "0.1.0-alpha.0",
     "@types/jest": "^29.5.0",
     "esbuild": "^0.24.0",
     "jest": "^29.7.0",
     "ts-jest": "^29.2.0",
-    "typescript": "~5.8.0"
+    "typescript": "~5.8.0",
+    "@aws/durable-execution-sdk-js-insight-core": "0.1.0-alpha.0"
   },
   "jest": {
     "preset": "ts-jest",

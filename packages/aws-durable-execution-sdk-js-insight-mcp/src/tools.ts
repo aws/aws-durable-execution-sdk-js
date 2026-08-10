@@ -34,7 +34,7 @@ import {
   fetchLogsInsightsRecord,
   resolveCredentials,
   type InsightConfig,
-} from "@aws/durable-insight-core";
+} from "@aws/durable-execution-sdk-js-insight-core";
 import {
   DEFAULT_LOG_TIME_RANGE_MS,
   LOGS_INSIGHTS_ENGINE,

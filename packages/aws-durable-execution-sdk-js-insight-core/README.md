@@ -1,4 +1,4 @@
-# @aws/durable-insight-core
+# @aws/durable-execution-sdk-js-insight-core
 
 The host-free core of Workflow Insight: everything that queries a destination,
 understands the record schema, and keeps queries safe — with no dependency on any
@@ -8,7 +8,7 @@ It exists so the hosts can share one implementation instead of copying it.
 
 ```
                  ┌──────────────────────────────────┐
-                 │    @aws/durable-insight-core     │
+                 │    @aws/durable-execution-sdk-js-insight-core     │
                  │  data access · schema · safety   │
                  │  configCore · destinationTest    │
                  └──────────────────────────────────┘
@@ -101,8 +101,8 @@ wins in-repo. Consumers pin the exact version rather than using `*`.
 ## Working on it
 
 ```bash
-npm test      -w packages/durable-insight-core   # jest
-npm run typecheck -w packages/durable-insight-core
+npm test      -w packages/aws-durable-execution-sdk-js-insight-core   # jest
+npm run typecheck -w packages/aws-durable-execution-sdk-js-insight-core
 ```
 
 `npm run typecheck:hosts` from the repository root checks this package and both
