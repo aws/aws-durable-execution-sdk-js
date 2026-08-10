@@ -23,6 +23,7 @@ Both plugins can be deployed with either the **ADOT Lambda layer** or the **Open
 
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [Dynamic Loading from a Lambda Layer](#dynamic-loading-from-a-lambda-layer)
 - [Choosing a Plugin](#choosing-a-plugin)
 - [Lambda Layer Options](#lambda-layer-options)
 - [Deployment Matrix](#deployment-matrix)
@@ -82,6 +83,37 @@ With no configuration, both plugins auto-create a TracerProvider with:
 - HTTP and AWS SDK instrumentations
 - AWSXRay + W3C TraceContext propagators
 - Deterministic trace and span ID generation
+
+---
+
+## Dynamic Loading from a Lambda Layer
+
+The SDK can load either OTel plugin without importing it in the function code.
+Package this module and its OpenTelemetry peer dependencies in a Lambda layer
+under `nodejs/node_modules`, attach the layer, and select one provider:
+
+```text
+DURABLE_EXECUTION_PLUGINS=@aws/durable-execution-sdk-js-otel/otel-execution
+```
+
+or:
+
+```text
+DURABLE_EXECUTION_PLUGINS=@aws/durable-execution-sdk-js-otel/otel-invocation
+```
+
+The handler only needs the normal SDK wrapper:
+
+```typescript
+import { withDurableExecution } from "@aws/durable-execution-sdk-js";
+
+export const handler = withDurableExecution(async (event, context) => {
+  return context.step("process", async () => process(event));
+});
+```
+
+The dynamic providers construct the plugins with their default configuration.
+Use code-based registration when you need a custom `OtelPluginConfig`.
 
 ---
 

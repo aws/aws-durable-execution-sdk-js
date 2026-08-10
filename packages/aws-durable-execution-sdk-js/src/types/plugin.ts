@@ -1,6 +1,14 @@
 import { DurableExecutionInvocationOutput } from "./core";
 
 /**
+ * Current version of the dynamic instrumentation plugin provider contract.
+ *
+ * @beta
+ * @experimental This constant is experimental and may be changed or removed in future releases.
+ */
+export const DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION = 1;
+
+/**
  * Status enumeration for plugin invocation end hooks.
  *
  * This enum is separate from the core InvocationStatus and provides
@@ -250,6 +258,44 @@ export interface DurableInstrumentationPlugin {
   onOperationAttemptEnd?(info: AttemptEndInfo): Promise<void>;
   onOperationChange?(info: OperationChangeInfo): Promise<void>;
   enrichLogContext?(): Record<string, string | number | boolean> | undefined;
+}
+
+/**
+ * Constructor for a concrete durable instrumentation plugin implementation.
+ *
+ * @beta
+ * @experimental This type is experimental and may be changed or removed in future releases.
+ */
+export type DurableInstrumentationPluginType<
+  Plugin extends DurableInstrumentationPlugin = DurableInstrumentationPlugin,
+> = abstract new (...args: never[]) => Plugin;
+
+/**
+ * Versioned factory exported by packages that support environment-based plugin loading.
+ *
+ * Provider modules must export an object named `durableExecutionPluginProvider`.
+ * The SDK loads only modules explicitly listed in `DURABLE_EXECUTION_PLUGINS`.
+ *
+ * @beta
+ * @experimental This interface is experimental and may be changed or removed in future releases.
+ */
+export interface DurableInstrumentationPluginProvider<
+  Plugin extends DurableInstrumentationPlugin = DurableInstrumentationPlugin,
+> {
+  /**
+   * Provider contract version expected by the SDK.
+   */
+  readonly pluginApiVersion: number;
+
+  /**
+   * Concrete class returned by `createPlugin`.
+   */
+  readonly pluginType: DurableInstrumentationPluginType<Plugin>;
+
+  /**
+   * Creates one plugin instance during wrapped handler initialization.
+   */
+  createPlugin(): Plugin;
 }
 
 /**

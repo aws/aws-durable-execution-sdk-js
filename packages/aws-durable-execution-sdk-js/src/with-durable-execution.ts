@@ -37,6 +37,7 @@ import {
   DurableLambdaHandler,
 } from "./types/durable-execution";
 import { createPluginRunner } from "./utils/plugin/plugin-runner";
+import { loadConfiguredPlugins } from "./utils/plugin/plugin-loader";
 import { toOperationInfoMap } from "./utils/operation/operation";
 import {
   DurableInstrumentationPlugin,
@@ -553,6 +554,15 @@ export const withDurableExecution = <
   handler: DurableExecutionHandler<TEvent, TResult, TLogger>,
   config?: DurableExecutionConfig,
 ): DurableLambdaHandler => {
+  const pluginPromise = loadConfiguredPlugins(config?.plugins).then(
+    createPluginRunner,
+  );
+  // Plugin loading starts during handler initialization. Attach a rejection handler
+  // immediately so a cold-start configuration error cannot become an unhandled
+  // rejection before Lambda invokes the exported handler; awaiting the original
+  // promise below still reports the same error to the invocation.
+  void pluginPromise.catch(() => undefined);
+
   return async (
     event: DurableExecutionInvocationInput,
     context: Context,
@@ -573,10 +583,11 @@ export const withDurableExecution = <
       };
     }
 
+    const plugin = await pluginPromise;
+
     try {
       const { executionContext, durableExecutionMode, checkpointToken } =
         await initializeExecutionContext(event, context, config);
-      const plugin = createPluginRunner(config?.plugins ?? []);
       return await runHandler(
         event,
         context,

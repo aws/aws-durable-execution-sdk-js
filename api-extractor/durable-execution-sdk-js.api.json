@@ -4548,6 +4548,33 @@
           }
         },
         {
+          "kind": "Variable",
+          "canonicalReference": "@aws/durable-execution-sdk-js!DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION:var",
+          "docComment": "/**\n * Current version of the dynamic instrumentation plugin provider contract.\n *\n * This constant is experimental and may be changed or removed in future releases.\n *\n * @beta @experimental\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION = "
+            },
+            {
+              "kind": "Content",
+              "text": "1"
+            }
+          ],
+          "fileUrlPath": "src/types/plugin.ts",
+          "initializerTokenRange": {
+            "startIndex": 1,
+            "endIndex": 2
+          },
+          "isReadonly": true,
+          "releaseTag": "Beta",
+          "name": "DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION",
+          "variableTypeTokenRange": {
+            "startIndex": 0,
+            "endIndex": 0
+          }
+        },
+        {
           "kind": "Interface",
           "canonicalReference": "@aws/durable-execution-sdk-js!DurableContext:interface",
           "docComment": "/**\n * @public\n */\n",
@@ -8888,6 +8915,199 @@
             }
           ],
           "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@aws/durable-execution-sdk-js!DurableInstrumentationPluginProvider:interface",
+          "docComment": "/**\n * Versioned factory exported by packages that support environment-based plugin loading.\n *\n * Provider modules must export an object named `durableExecutionPluginProvider`. The SDK loads only modules explicitly listed in `DURABLE_EXECUTION_PLUGINS`.\n *\n * This interface is experimental and may be changed or removed in future releases.\n *\n * @beta @experimental\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface DurableInstrumentationPluginProvider<Plugin extends "
+            },
+            {
+              "kind": "Reference",
+              "text": "DurableInstrumentationPlugin",
+              "canonicalReference": "@aws/durable-execution-sdk-js!DurableInstrumentationPlugin:interface"
+            },
+            {
+              "kind": "Content",
+              "text": " = "
+            },
+            {
+              "kind": "Reference",
+              "text": "DurableInstrumentationPlugin",
+              "canonicalReference": "@aws/durable-execution-sdk-js!DurableInstrumentationPlugin:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "> "
+            }
+          ],
+          "fileUrlPath": "src/types/plugin.ts",
+          "releaseTag": "Beta",
+          "typeParameters": [
+            {
+              "typeParameterName": "Plugin",
+              "constraintTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "defaultTypeTokenRange": {
+                "startIndex": 3,
+                "endIndex": 4
+              }
+            }
+          ],
+          "name": "DurableInstrumentationPluginProvider",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!DurableInstrumentationPluginProvider#createPlugin:member(1)",
+              "docComment": "/**\n * Creates one plugin instance during wrapped handler initialization.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "createPlugin(): "
+                },
+                {
+                  "kind": "Content",
+                  "text": "Plugin"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "releaseTag": "Beta",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "createPlugin"
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!DurableInstrumentationPluginProvider#pluginApiVersion:member",
+              "docComment": "/**\n * Provider contract version expected by the SDK.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly pluginApiVersion: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Beta",
+              "name": "pluginApiVersion",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!DurableInstrumentationPluginProvider#pluginType:member",
+              "docComment": "/**\n * Concrete class returned by `createPlugin`.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly pluginType: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "DurableInstrumentationPluginType",
+                  "canonicalReference": "@aws/durable-execution-sdk-js!DurableInstrumentationPluginType:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<Plugin>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Beta",
+              "name": "pluginType",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "@aws/durable-execution-sdk-js!DurableInstrumentationPluginType:type",
+          "docComment": "/**\n * Constructor for a concrete durable instrumentation plugin implementation.\n *\n * This type is experimental and may be changed or removed in future releases.\n *\n * @beta @experimental\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type DurableInstrumentationPluginType<Plugin extends "
+            },
+            {
+              "kind": "Reference",
+              "text": "DurableInstrumentationPlugin",
+              "canonicalReference": "@aws/durable-execution-sdk-js!DurableInstrumentationPlugin:interface"
+            },
+            {
+              "kind": "Content",
+              "text": " = "
+            },
+            {
+              "kind": "Reference",
+              "text": "DurableInstrumentationPlugin",
+              "canonicalReference": "@aws/durable-execution-sdk-js!DurableInstrumentationPlugin:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "> = "
+            },
+            {
+              "kind": "Content",
+              "text": "abstract new (...args: never[]) => Plugin"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/types/plugin.ts",
+          "releaseTag": "Beta",
+          "name": "DurableInstrumentationPluginType",
+          "typeParameters": [
+            {
+              "typeParameterName": "Plugin",
+              "constraintTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "defaultTypeTokenRange": {
+                "startIndex": 3,
+                "endIndex": 4
+              }
+            }
+          ],
+          "typeTokenRange": {
+            "startIndex": 5,
+            "endIndex": 6
+          }
         },
         {
           "kind": "TypeAlias",
@@ -14183,6 +14403,87 @@
             "startIndex": 1,
             "endIndex": 2
           }
+        },
+        {
+          "kind": "Class",
+          "canonicalReference": "@aws/durable-execution-sdk-js!PluginLoadError:class",
+          "docComment": "/**\n * Error raised when an environment-selected instrumentation plugin cannot be loaded.\n *\n * This error is experimental and may be changed or removed in future releases.\n *\n * @beta @experimental\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export declare class PluginLoadError extends "
+            },
+            {
+              "kind": "Reference",
+              "text": "Error",
+              "canonicalReference": "!Error:interface"
+            },
+            {
+              "kind": "Content",
+              "text": " "
+            }
+          ],
+          "fileUrlPath": "src/errors/plugin-load-error/plugin-load-error.ts",
+          "releaseTag": "Beta",
+          "isAbstract": false,
+          "name": "PluginLoadError",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "Constructor",
+              "canonicalReference": "@aws/durable-execution-sdk-js!PluginLoadError:constructor(1)",
+              "docComment": "/**\n * Constructs a new instance of the `PluginLoadError` class\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "constructor(message: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ", options?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "ErrorOptions",
+                  "canonicalReference": "!ErrorOptions:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ");"
+                }
+              ],
+              "releaseTag": "Beta",
+              "isProtected": false,
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "message",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": false
+                },
+                {
+                  "parameterName": "options",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 4
+                  },
+                  "isOptional": true
+                }
+              ]
+            }
+          ],
+          "extendsTokenRange": {
+            "startIndex": 1,
+            "endIndex": 2
+          },
+          "implementsTokenRanges": []
         },
         {
           "kind": "TypeAlias",

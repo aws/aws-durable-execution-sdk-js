@@ -13,11 +13,15 @@ import {
   PluginInvocationStatus,
 } from "./types/plugin";
 import { TEST_CONSTANTS } from "./testing/test-constants";
+import { loadConfiguredPlugins } from "./utils/plugin/plugin-loader";
 
 jest.mock("./context/execution-context/execution-context");
 jest.mock("./context/durable-context/durable-context");
 jest.mock("./utils/checkpoint/checkpoint-manager");
 jest.mock("./utils/logger/logger", () => ({ log: jest.fn() }));
+jest.mock("./utils/plugin/plugin-loader", () => ({
+  loadConfiguredPlugins: jest.fn(),
+}));
 
 const mockEvent: DurableExecutionInvocationInput = {
   CheckpointToken: "token",
@@ -55,6 +59,9 @@ const mockExecutionContext = {
 beforeEach(() => {
   jest.clearAllMocks();
   jest.useFakeTimers();
+  (
+    loadConfiguredPlugins as jest.MockedFunction<typeof loadConfiguredPlugins>
+  ).mockImplementation(async (plugins) => [...(plugins ?? [])]);
   (initializeExecutionContext as jest.Mock).mockResolvedValue({
     executionContext: mockExecutionContext,
     checkpointToken: TEST_CONSTANTS.CHECKPOINT_TOKEN,
@@ -279,6 +286,42 @@ describe("plugin hooks", () => {
         operations: expect.any(Object),
       }),
     );
+  });
+
+  it("loads configured plugins once when the wrapped handler is initialized", async () => {
+    const dynamicPlugin: jest.Mocked<DurableInstrumentationPlugin> = {
+      onInvocationStart: jest.fn(),
+      onInvocationEnd: jest.fn(),
+    };
+    (
+      loadConfiguredPlugins as jest.MockedFunction<typeof loadConfiguredPlugins>
+    ).mockResolvedValueOnce([plugin, dynamicPlugin]);
+
+    const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
+      plugins: [plugin],
+    });
+
+    expect(loadConfiguredPlugins).toHaveBeenCalledTimes(1);
+    expect(loadConfiguredPlugins).toHaveBeenCalledWith([plugin]);
+
+    await handler(mockEvent, mockContext);
+    await handler(mockEvent, mockContext);
+
+    expect(loadConfiguredPlugins).toHaveBeenCalledTimes(1);
+    expect(plugin.onInvocationStart).toHaveBeenCalledTimes(2);
+    expect(dynamicPlugin.onInvocationStart).toHaveBeenCalledTimes(2);
+  });
+
+  it("surfaces plugin loading failures before reading execution state", async () => {
+    const pluginLoadError = new Error("invalid dynamic plugin configuration");
+    (
+      loadConfiguredPlugins as jest.MockedFunction<typeof loadConfiguredPlugins>
+    ).mockRejectedValueOnce(pluginLoadError);
+
+    const handler = withDurableExecution(jest.fn().mockResolvedValue({}));
+
+    await expect(handler(mockEvent, mockContext)).rejects.toBe(pluginLoadError);
+    expect(initializeExecutionContext).not.toHaveBeenCalled();
   });
 
   it("plugin errors do not affect SDK execution", async () => {
