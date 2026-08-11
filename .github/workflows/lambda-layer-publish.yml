@@ -1,0 +1,301 @@
+name: Publish OTel Plugin Lambda Layer
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      regions:
+        description: "Comma-separated AWS Regions; defaults to all commercial Regions"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lambda-layer-publish-${{ github.event.release.tag_name || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  LAYER_NAME: aws-durable-execution-sdk-js-otel-plugin
+  SOURCE_REF: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.event.release.tag_name }}
+  ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+  DEFAULT_LAYER_REGIONS: >-
+    af-south-1,
+    ap-east-1,
+    ap-east-2,
+    ap-northeast-1,
+    ap-northeast-2,
+    ap-northeast-3,
+    ap-south-1,
+    ap-south-2,
+    ap-southeast-1,
+    ap-southeast-2,
+    ap-southeast-3,
+    ap-southeast-4,
+    ap-southeast-5,
+    ap-southeast-6,
+    ap-southeast-7,
+    ca-central-1,
+    ca-west-1,
+    eu-central-1,
+    eu-central-2,
+    eu-north-1,
+    eu-south-1,
+    eu-south-2,
+    eu-west-1,
+    eu-west-2,
+    eu-west-3,
+    il-central-1,
+    me-central-1,
+    me-south-1,
+    mx-central-1,
+    sa-east-1,
+    us-east-1,
+    us-east-2,
+    us-west-1,
+    us-west-2
+
+jobs:
+  build-distributions:
+    if: >-
+      (github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main') ||
+      contains(github.event.release.tag_name, 'otel-')
+    runs-on: ubuntu-latest
+    outputs:
+      sdk_version: ${{ steps.versions.outputs.sdk_version }}
+      otel_version: ${{ steps.versions.outputs.otel_version }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.SOURCE_REF }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Read package versions
+        id: versions
+        run: |
+          SDK_VERSION=$(node -p "require('./packages/aws-durable-execution-sdk-js/package.json').version")
+          OTEL_VERSION=$(node -p "require('./packages/aws-durable-execution-sdk-js-otel/package.json').version")
+          echo "sdk_version=${SDK_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "otel_version=${OTEL_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Build distributions
+        run: |
+          npm run build -w packages/aws-durable-execution-sdk-js
+          npm run build -w packages/aws-durable-execution-sdk-js-otel
+
+      - name: Pack distributions
+        run: |
+          mkdir release-dists
+          npm pack \
+            --workspace packages/aws-durable-execution-sdk-js \
+            --ignore-scripts \
+            --pack-destination release-dists
+          npm pack \
+            --workspace packages/aws-durable-execution-sdk-js-otel \
+            --ignore-scripts \
+            --pack-destination release-dists
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v7
+        with:
+          name: lambda-layer-distributions
+          path: release-dists/
+          if-no-files-found: error
+          retention-days: 7
+
+  build-layer:
+    needs: build-distributions
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.SOURCE_REF }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Download distributions
+        uses: actions/download-artifact@v8
+        with:
+          name: lambda-layer-distributions
+          path: release-dists/
+
+      - name: Build layer zip
+        id: build-layer
+        env:
+          LAYER_ZIP: dist/${{ env.LAYER_NAME }}.zip
+        run: |
+          SDK_PACKAGE=$(find release-dists -name 'aws-durable-execution-sdk-js-[0-9]*.tgz' -print -quit)
+          OTEL_PACKAGE=$(find release-dists -name 'aws-durable-execution-sdk-js-otel-*.tgz' -print -quit)
+          mkdir -p layer/nodejs dist
+          npm install \
+            --prefix layer/nodejs \
+            --omit=dev \
+            --ignore-scripts \
+            "$SDK_PACKAGE" \
+            "$OTEL_PACKAGE"
+          cd layer
+          zip -qr "../$LAYER_ZIP" nodejs
+          echo "layer_zip=${LAYER_ZIP}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify layer contents
+        run: |
+          test -f layer/nodejs/node_modules/@aws/durable-execution-sdk-js/package.json
+          test -f layer/nodejs/node_modules/@aws/durable-execution-sdk-js-otel/package.json
+          node -e "require('./layer/nodejs/node_modules/@aws/durable-execution-sdk-js')"
+          node -e "require('./layer/nodejs/node_modules/@aws/durable-execution-sdk-js-otel')"
+          unzip -t "${{ steps.build-layer.outputs.layer_zip }}"
+
+      - name: Upload layer artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: otel-plugin-layer
+          path: ${{ steps.build-layer.outputs.layer_zip }}
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-layer:
+    needs: [build-distributions, build-layer]
+    runs-on: ubuntu-latest
+    environment:
+      name: lambda-layer-publish
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      LAYER_REGIONS: ${{ inputs.regions || vars.LAYER_PUBLISH_REGIONS }}
+
+    steps:
+      - name: Download layer artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: otel-plugin-layer
+          path: dist/
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.LAYER_PUBLISH_ROLE_ARN }}
+          role-session-name: otelLayerPublish
+          aws-region: us-east-1
+
+      - name: Publish layer versions
+        env:
+          LAYER_ZIP: dist/${{ env.LAYER_NAME }}.zip
+          SDK_VERSION: ${{ needs.build-distributions.outputs.sdk_version }}
+          OTEL_VERSION: ${{ needs.build-distributions.outputs.otel_version }}
+        run: |
+          PUBLISHED=false
+          FAILED_REGIONS=()
+          LOCAL_CODE_SHA256=$(openssl dgst -sha256 -binary "$LAYER_ZIP" | openssl base64 -A)
+          REGION_LIST=${LAYER_REGIONS:-$DEFAULT_LAYER_REGIONS}
+          IFS=',' read -ra REGIONS <<< "$REGION_LIST"
+          for REGION in "${REGIONS[@]}"; do
+            REGION=$(echo "$REGION" | xargs)
+            if [ -z "$REGION" ]; then
+              continue
+            fi
+
+            LAYER_DESCRIPTION="AWS Durable Execution SDK JS ${SDK_VERSION} OTel plugin ${OTEL_VERSION} sha256:${LOCAL_CODE_SHA256}"
+            if ! EXISTING_RESULT=$(aws lambda list-layer-versions \
+                --layer-name "$LAYER_NAME" \
+                --region "$REGION" \
+                --query "LayerVersions[?Description=='${LAYER_DESCRIPTION}'] | [0].[LayerVersionArn,Version]" \
+                --output text 2>&1); then
+              if [[ "$EXISTING_RESULT" == *"ResourceNotFoundException"* ]]; then
+                EXISTING_RESULT=""
+              else
+                echo "$EXISTING_RESULT" >&2
+                echo "::warning::Failed to list existing layer versions in ${REGION}"
+                FAILED_REGIONS+=("$REGION")
+                continue
+              fi
+            fi
+
+            if [ -n "$EXISTING_RESULT" ] && [ "$EXISTING_RESULT" != "None" ]; then
+              read -r LAYER_VERSION_ARN VERSION_NUMBER <<< "$EXISTING_RESULT"
+              if ! EXISTING_CODE_SHA256=$(aws lambda get-layer-version \
+                  --layer-name "$LAYER_NAME" \
+                  --version-number "$VERSION_NUMBER" \
+                  --region "$REGION" \
+                  --query 'Content.CodeSha256' \
+                  --output text 2>&1); then
+                echo "$EXISTING_CODE_SHA256" >&2
+                echo "::warning::Failed to read ${LAYER_VERSION_ARN}"
+                FAILED_REGIONS+=("$REGION")
+                continue
+              fi
+              if [ "$EXISTING_CODE_SHA256" != "$LOCAL_CODE_SHA256" ]; then
+                echo "::error::Artifact hash mismatch for ${LAYER_VERSION_ARN}"
+                FAILED_REGIONS+=("$REGION")
+                continue
+              fi
+              echo "Reusing ${LAYER_VERSION_ARN}"
+            else
+              if ! PUBLISH_RESULT=$(aws lambda publish-layer-version \
+                  --layer-name "$LAYER_NAME" \
+                  --description "$LAYER_DESCRIPTION" \
+                  --zip-file "fileb://${LAYER_ZIP}" \
+                  --compatible-runtimes nodejs22.x nodejs24.x \
+                  --compatible-architectures x86_64 arm64 \
+                  --license-info Apache-2.0 \
+                  --region "$REGION" \
+                  --query '[LayerVersionArn,Version,Content.CodeSha256]' \
+                  --output text); then
+                echo "::warning::Failed to publish the layer in ${REGION}"
+                FAILED_REGIONS+=("$REGION")
+                continue
+              fi
+              read -r LAYER_VERSION_ARN VERSION_NUMBER PUBLISHED_CODE_SHA256 <<< "$PUBLISH_RESULT"
+              if [ "$PUBLISHED_CODE_SHA256" != "$LOCAL_CODE_SHA256" ]; then
+                echo "::error::Published artifact hash mismatch for ${LAYER_VERSION_ARN}"
+                FAILED_REGIONS+=("$REGION")
+                continue
+              fi
+            fi
+
+            if ! PERMISSION_RESULT=$(aws lambda add-layer-version-permission \
+                --layer-name "$LAYER_NAME" \
+                --version-number "$VERSION_NUMBER" \
+                --statement-id public-layer-access \
+                --action lambda:GetLayerVersion \
+                --principal "*" \
+                --region "$REGION" \
+                2>&1); then
+              if [[ "$PERMISSION_RESULT" != *"ResourceConflictException"* ]]; then
+                echo "$PERMISSION_RESULT" >&2
+                echo "::warning::Failed to grant public access to ${LAYER_VERSION_ARN}"
+                FAILED_REGIONS+=("$REGION")
+                continue
+              fi
+            fi
+
+            echo "Available ${LAYER_VERSION_ARN}"
+            echo "- \`${LAYER_VERSION_ARN}\`" >> "$GITHUB_STEP_SUMMARY"
+            PUBLISHED=true
+          done
+
+          if [ "${#FAILED_REGIONS[@]}" -gt 0 ]; then
+            echo "::error::Layer publishing failed in: ${FAILED_REGIONS[*]}"
+            exit 1
+          fi
+
+          if [ "$PUBLISHED" != true ]; then
+            echo "No AWS regions were configured for layer publishing."
+            exit 1
+          fi
