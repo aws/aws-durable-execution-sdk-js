@@ -37,3 +37,5 @@ mise.toml
 
 # Durable executions local emulator files
 **/.durable-executions-local/
+# Scratch space for the LLRT container test (bundles, Dockerfile, image context).
+.github/workflows/scripts/llrt/.cloud-work/
