@@ -31,6 +31,16 @@
       "types": "./dist-types/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist-cjs/index.js"
+    },
+    "./otel-execution": {
+      "types": "./dist-types/execution-plugin-provider.d.ts",
+      "import": "./dist/otel-execution.mjs",
+      "require": "./dist-cjs/otel-execution.js"
+    },
+    "./otel-invocation": {
+      "types": "./dist-types/invocation-plugin-provider.d.ts",
+      "import": "./dist/otel-invocation.mjs",
+      "require": "./dist-cjs/otel-invocation.js"
     }
   },
   "files": [

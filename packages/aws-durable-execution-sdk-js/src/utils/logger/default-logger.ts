@@ -48,6 +48,28 @@ interface DefaultDurableLogEntry extends DurableLogData {
 const FORMAT_OPTIONS = { breakLength: Infinity } as const;
 
 /**
+ * `util.formatWithOptions`, with a fallback for runtimes that do not provide it.
+ *
+ * Lightweight JavaScript runtimes targeting Lambda — LLRT, for example — ship a `node:util`
+ * with `format` but not `formatWithOptions`, which would make every multi-argument log
+ * record throw `TypeError: not a function` from inside the logger.
+ *
+ * The fallback drops `breakLength: Infinity`, so an inspected object is rendered over several
+ * lines instead of one. Nothing user-visible changes: the result becomes the `message` field of
+ * a `JSON.stringify`d record, which escapes the newlines either way.
+ *
+ * Called through a wrapper rather than referenced directly, so the runtime's implementation
+ * keeps its receiver.
+ */
+const formatWithOptions = (
+  options: typeof FORMAT_OPTIONS,
+  ...args: unknown[]
+): string =>
+  typeof util.formatWithOptions === "function"
+    ? util.formatWithOptions(options, ...args)
+    : util.format(...args);
+
+/**
  * JSON.stringify replacer function for Error objects.
  * Based on AWS Lambda Runtime Interface Client LogPatch functionality.
  * Transforms Error instances into serializable objects with structured error information,
@@ -144,12 +166,12 @@ function formatDurableLogData(
     try {
       return JSON.stringify(result, jsonErrorReplacer);
     } catch (_) {
-      result.message = util.formatWithOptions(FORMAT_OPTIONS, result.message);
+      result.message = formatWithOptions(FORMAT_OPTIONS, result.message);
       return JSON.stringify(result);
     }
   }
 
-  result.message = util.formatWithOptions(FORMAT_OPTIONS, ...messageParams);
+  result.message = formatWithOptions(FORMAT_OPTIONS, ...messageParams);
   for (const param of messageParams) {
     if (param instanceof Error) {
       result.errorType = param?.constructor?.name ?? "UnknownError";

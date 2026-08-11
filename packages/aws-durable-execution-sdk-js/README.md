@@ -265,6 +265,60 @@ const results = await context.promise.allSettled([operation1(), operation2()]);
 
 ## Configuration
 
+### Dynamic Instrumentation Plugins
+
+Instrumentation plugins can be selected at Lambda cold start without importing
+them in the function artifact. Install a provider package in the function or a
+Lambda layer, then set an ordered list of package or module specifiers:
+
+```text
+DURABLE_EXECUTION_PLUGINS=@example/durable-otel,@example/durable-audit/provider
+```
+
+The SDK imports each module once when `withDurableExecution(...)` initializes
+the wrapped handler. An unset or blank variable preserves the existing
+behavior. Plugins passed through `DurableExecutionConfig.plugins` run first in
+their configured order; environment-selected plugins follow in the order listed
+in `DURABLE_EXECUTION_PLUGINS`. Both sources are additive, including when they
+create the same plugin type.
+
+Provider modules export a versioned factory named
+`durableExecutionPluginProvider`:
+
+```typescript
+import {
+  DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION,
+  type DurableInstrumentationPlugin,
+  type DurableInstrumentationPluginProvider,
+} from "@aws/durable-execution-sdk-js";
+
+class AuditPlugin implements DurableInstrumentationPlugin {
+  // Implement the lifecycle hooks needed by this plugin.
+}
+
+export const durableExecutionPluginProvider = {
+  pluginApiVersion: DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION,
+  pluginType: AuditPlugin,
+  createPlugin: () => new AuditPlugin(),
+} satisfies DurableInstrumentationPluginProvider<AuditPlugin>;
+```
+
+The module specifier must be resolvable through normal application module
+resolution or Node.js module paths. For a Lambda layer, package the provider and
+its dependencies under `nodejs/node_modules`:
+
+```text
+plugin-layer.zip
+`-- nodejs
+    `-- node_modules
+        `-- @example
+            `-- durable-audit
+```
+
+Malformed configuration, missing modules or exports, incompatible provider API
+versions, invalid plugin types, and provider construction failures are reported
+as `PluginLoadError` failures before execution state is read.
+
 ### Retry Strategies
 
 Custom retry strategy:
@@ -477,6 +531,53 @@ context.configureLogger({
 ```typescript
 context.configureLogger({ modeAware: false });
 ```
+
+## Runtime requirements
+
+The SDK targets the Lambda managed Node.js runtimes (`nodejs22.x`, `nodejs24.x`), where
+everything below is satisfied automatically. It also runs on a **container image carrying your
+own JavaScript runtime**, which is how durable functions can be deployed on a runtime Lambda
+does not manage.
+
+At load, the SDK imports these Node builtins: `async_hooks`, `crypto`, `events`,
+`node:console`, `node:crypto`, `node:fs/promises` (`mkdir`, `readFile`, `writeFile`),
+`node:path`, `node:url` and `node:util`. Note that a **named ESM import of a missing export is
+fatal at module load**, not at first use — so a runtime that provides a module but not the
+member the SDK imports from it will fail with a `SyntaxError` before your handler runs.
+
+It also loads `@aws-sdk/client-lambda` on first checkpoint, via a dynamic import. If you bundle
+with `@aws-sdk` marked external, the runtime must provide that client.
+
+### Runtimes without AsyncLocalStorage
+
+Some lightweight runtimes — [LLRT](https://github.com/awslabs/llrt), for example — implement
+only part of the Node API. The SDK detects and works around the two gaps that would otherwise be
+fatal:
+
+- **`async_hooks.AsyncLocalStorage`** is used to track which durable operation is active across
+  `await` boundaries. Without it the SDK falls back to tracking only within synchronous code.
+- **`util.formatWithOptions`** is used by the default logger. Without it the SDK falls back to
+  `util.format`.
+
+**Checkpointing and replay are unaffected**, and the checkpoint data is byte-for-byte the same.
+What degrades is observability, and the SDK emits one warning per execution environment when it
+does:
+
+|                                                              | Effect on a runtime without `AsyncLocalStorage`                                                                                                                  |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Log records emitted after an `await`                         | lose `operationId`, `operationName` and `attempt`                                                                                                                |
+| Replay-aware logging                                         | cannot suppress replayed records, so a log statement behind the replay frontier is re-emitted on **every replay** — this adds CloudWatch cost on long executions |
+| Using a parent or sibling context inside `runInChildContext` | only detected when it happens synchronously                                                                                                                      |
+
+That last item is a guard against a real determinism bug, so if you deploy on such a runtime,
+enable the `no-nested-durable-operations` rule from
+[`@aws/durable-execution-sdk-js-eslint-plugin`](https://www.npmjs.com/package/@aws/durable-execution-sdk-js-eslint-plugin),
+which catches the same mistake at build time.
+
+Performance is a separate question from support. Durable executions replay, and replay cost grows
+with the number of completed operations, so a runtime without a JIT can be slower overall for
+workflows with large operation counts or compute-heavy steps — even where it starts faster.
+Measure your own workload before switching.
 
 ## License
 

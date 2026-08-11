@@ -5,6 +5,21 @@ All notable changes to the AWS Durable Execution SDK for JavaScript are document
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Support for JavaScript runtimes that do not provide `async_hooks.AsyncLocalStorage` or
+  `util.formatWithOptions`, so durable functions can be deployed on a container image carrying
+  a runtime Lambda does not manage (for example [LLRT](https://github.com/awslabs/llrt)).
+  Previously, importing `withDurableExecution` on such a runtime threw at module load.
+
+  Both capabilities are feature-detected, so this changes nothing on a managed Node.js runtime.
+  Checkpointing and replay are unaffected and checkpoint data is unchanged; what degrades is
+  observability, and the SDK now emits one warning per execution environment describing exactly
+  what. See "Runtime requirements" in the SDK README for the details, including the replayed-log
+  behaviour that carries a CloudWatch cost on long executions.
+
 ## [2.0.0]
 
 First major release. Upgrade target for users on the `1.x` line (last release:

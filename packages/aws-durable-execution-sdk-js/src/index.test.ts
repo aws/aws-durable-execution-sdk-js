@@ -62,6 +62,11 @@ describe("package entry point", () => {
     expect(typeof sdk.StepError).toBe("function");
     expect(typeof sdk.CallbackError).toBe("function");
     expect(typeof sdk.StepInterruptedError).toBe("function");
+    expect(typeof sdk.PluginLoadError).toBe("function");
+  });
+
+  it("exports the dynamic plugin provider API version", () => {
+    expect(sdk.DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION).toBe(1);
   });
 
   it("exports the retry and wait strategy helpers", () => {

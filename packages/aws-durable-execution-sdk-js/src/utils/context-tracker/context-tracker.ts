@@ -1,4 +1,4 @@
-import { AsyncLocalStorage } from "async_hooks";
+import { createContextStorage } from "./context-storage";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
 import { DurableExecutionMode } from "../../types";
@@ -11,12 +11,21 @@ interface ContextInfo {
   operationName?: string;
 }
 
-const asyncLocalStorage = new AsyncLocalStorage<ContextInfo>();
+const asyncLocalStorage = createContextStorage<ContextInfo>();
 
 export const getActiveContext = (): ContextInfo | undefined => {
   return asyncLocalStorage.getStore();
 };
 
+/**
+ * Runs `fn` with the given operation as the active context.
+ *
+ * On a runtime without `AsyncLocalStorage` the storage is a synchronous fallback, which is only
+ * safe because every call site passes an async callback whose promise the caller awaits: the
+ * context is forgotten at the callback's first suspension rather than leaking into an unrelated
+ * frame. Re-entering this across a suspension would silently break that — see
+ * `SynchronousContextStorage` in ./context-storage.
+ */
 export const runWithContext = <T>(
   contextId: string,
   parentId: string | undefined,
