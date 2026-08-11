@@ -3,26 +3,19 @@ import { handler } from "./callback-resolves-during-submitter";
 import { createTests } from "../../../utils/test-helper";
 
 /**
- * Regression test for #544: TimerScheduler.hasScheduledFunction() must remain
- * true while a fired timer's updateCheckpoint / startInvocation chain is still
- * settling.
+ * Covers waitForCallback when an external caller resolves the callback while
+ * the submitter is still running.
  *
- * Scenario (skipTime: false → TimerScheduler):
- *   1. Handler calls waitForCallback with a slow async submitter (~500 ms).
- *   2. The callback operation reaches STARTED immediately; the test sends
- *      callbackSuccess while the submitter is still running.
- *   3. The callback-completion timer fires, synchronously deletes itself from
- *      runningTimers, removes the callback from pendingOperations, and attempts
- *      startInvocation — which is skipped because the first invocation is
- *      still active.
- *   4. The submitter finishes; the handler returns PENDING.
- *   5. invokeHandler checks hasScheduledFunction() and pendingOperations. With
- *      the old code both are empty → spurious rejection
- *      "Cannot return PENDING status with no pending operations."
+ * The completion is delivered to the running invocation in the response to the
+ * submitter step's own checkpoint, so the execution never suspends and finishes
+ * in a single invocation.
  *
- * The fix keeps the timer entry in runningTimers until the full
- * updateCheckpoint → startInvocation chain settles, so hasScheduledFunction()
- * correctly returns true at step 5.
+ * This is coverage for the callback flow, not a regression test for the
+ * TimerScheduler PENDING-validation race (#544). That race needs an invocation
+ * to return PENDING while a fired timer's checkpoint update is still in flight,
+ * which an example handler cannot schedule deterministically. It is covered by
+ * "should not reject when a fired timer's checkpoint update is still in flight"
+ * in test-execution-orchestrator-pending-rejection.test.ts.
  */
 createTests({
   handler,
