@@ -143,10 +143,12 @@ jobs:
           SDK_PACKAGE=$(find release-dists -name 'aws-durable-execution-sdk-js-[0-9]*.tgz' -print -quit)
           OTEL_PACKAGE=$(find release-dists -name 'aws-durable-execution-sdk-js-otel-*.tgz' -print -quit)
           mkdir -p layer/nodejs dist
+          # ADOT and community layers provide the OTel runtime dependencies.
           npm install \
             --prefix layer/nodejs \
             --omit=dev \
             --ignore-scripts \
+            --legacy-peer-deps \
             "$SDK_PACKAGE" \
             "$OTEL_PACKAGE"
           cd layer
@@ -157,9 +159,17 @@ jobs:
         run: |
           test -f layer/nodejs/node_modules/@aws/durable-execution-sdk-js/package.json
           test -f layer/nodejs/node_modules/@aws/durable-execution-sdk-js-otel/package.json
+          test ! -d layer/nodejs/node_modules/@opentelemetry
           node -e "require('./layer/nodejs/node_modules/@aws/durable-execution-sdk-js')"
-          node -e "require('./layer/nodejs/node_modules/@aws/durable-execution-sdk-js-otel')"
+          node -e "require.resolve('./layer/nodejs/node_modules/@aws/durable-execution-sdk-js-otel')"
+          NODE_PATH="$PWD/layer/nodejs/node_modules" node -e \
+            "require.resolve('@aws/durable-execution-sdk-js-otel/otel-execution'); require.resolve('@aws/durable-execution-sdk-js-otel/otel-invocation')"
           unzip -t "${{ steps.build-layer.outputs.layer_zip }}"
+          if unzip -Z1 "${{ steps.build-layer.outputs.layer_zip }}" |
+            grep -q '^nodejs/node_modules/@opentelemetry/'; then
+            echo "::error::The layer must use OTel dependencies from its companion layer."
+            exit 1
+          fi
 
       - name: Upload layer artifact
         uses: actions/upload-artifact@v7
