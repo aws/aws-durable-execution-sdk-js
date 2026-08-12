@@ -93,9 +93,14 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
               }
             : undefined;
 
+        const callbackOperationName = name ? `${name}-callback` : "callback";
+        const submitterOperationName = name ? `${name}-submitter` : "submitter";
+
         // Create callback and get the promise + callbackId
-        const [callbackPromise, callbackId] =
-          await childCtx.createCallback(createCallbackConfig);
+        const [callbackPromise, callbackId] = await childCtx.createCallback(
+          callbackOperationName,
+          createCallbackConfig,
+        );
 
         log("🆔", "Callback created:", {
           callbackId,
@@ -104,6 +109,7 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
 
         // Execute the submitter step (submitter is now mandatory)
         await childCtx.step(
+          submitterOperationName,
           async (stepContext: StepContext<Logger>) => {
             // Use the step's built-in logger instead of creating a new one
             const callbackContext: WaitForCallbackContext<Logger> = {

@@ -40,6 +40,29 @@ describe("waitForCallback handler", () => {
   it("should handle waitForCallback with submitter function", async () => {
     const submitter = jest.fn().mockResolvedValue(undefined);
     const expectedResult = "callback result";
+    const createCallback = jest
+      .fn()
+      .mockResolvedValue([Promise.resolve(expectedResult), "callback-123"]);
+    const step = jest
+      .fn()
+      .mockImplementation(async (stepNameOrFn: any, maybeFn?: any) => {
+        const mockTelemetry = {
+          logger: {
+            log: jest.fn(),
+            error: jest.fn(),
+            warn: jest.fn(),
+            info: jest.fn(),
+            debug: jest.fn(),
+          },
+        };
+
+        if (typeof stepNameOrFn === "function") {
+          return await stepNameOrFn(mockTelemetry);
+        } else if (typeof maybeFn === "function") {
+          return await maybeFn(mockTelemetry);
+        }
+        return undefined;
+      });
 
     // Mock runInChildContext to handle the unified signature (name, function)
     mockRunInChildContext.mockImplementation(async (name: any, fn: any) => {
@@ -48,31 +71,8 @@ describe("waitForCallback handler", () => {
 
       // Create a mock child context
       const mockChildCtx = {
-        createCallback: jest
-          .fn()
-          .mockResolvedValue([Promise.resolve(expectedResult), "callback-123"]),
-        step: jest
-          .fn()
-          .mockImplementation(async (stepNameOrFn: any, maybeFn?: any) => {
-            // Create mock telemetry object
-            const mockTelemetry = {
-              logger: {
-                log: jest.fn(),
-                error: jest.fn(),
-                warn: jest.fn(),
-                info: jest.fn(),
-                debug: jest.fn(),
-              },
-            };
-
-            // Handle both overloads of step function
-            if (typeof stepNameOrFn === "function") {
-              return await stepNameOrFn(mockTelemetry);
-            } else if (typeof maybeFn === "function") {
-              return await maybeFn(mockTelemetry);
-            }
-            return undefined;
-          }),
+        createCallback,
+        step,
       };
 
       return await fn(mockChildCtx);
@@ -99,40 +99,46 @@ describe("waitForCallback handler", () => {
         logger: expect.any(Object),
       }),
     );
+    expect(createCallback).toHaveBeenCalledWith("callback", undefined);
+    expect(step).toHaveBeenCalledWith(
+      "submitter",
+      expect.any(Function),
+      undefined,
+    );
   });
 
   it("should handle waitForCallback with name and submitter", async () => {
     const submitter = jest.fn().mockResolvedValue(undefined);
     const expectedResult = "named callback result";
     const callbackName = "myCallback";
+    const createCallback = jest
+      .fn()
+      .mockResolvedValue([Promise.resolve(expectedResult), "callback-456"]);
+    const step = jest
+      .fn()
+      .mockImplementation(async (stepNameOrFn: any, maybeFn?: any) => {
+        const mockTelemetry = {
+          logger: {
+            log: jest.fn(),
+            error: jest.fn(),
+            warn: jest.fn(),
+            info: jest.fn(),
+            debug: jest.fn(),
+          },
+        };
+
+        if (typeof stepNameOrFn === "function") {
+          return await stepNameOrFn(mockTelemetry);
+        } else if (typeof maybeFn === "function") {
+          return await maybeFn(mockTelemetry);
+        }
+        return undefined;
+      });
 
     mockRunInChildContext.mockImplementation(async (name: string, fn: any) => {
       const mockChildCtx = {
-        createCallback: jest
-          .fn()
-          .mockResolvedValue([Promise.resolve(expectedResult), "callback-456"]),
-        step: jest
-          .fn()
-          .mockImplementation(async (stepNameOrFn: any, maybeFn?: any) => {
-            // Create mock telemetry object
-            const mockTelemetry = {
-              logger: {
-                log: jest.fn(),
-                error: jest.fn(),
-                warn: jest.fn(),
-                info: jest.fn(),
-                debug: jest.fn(),
-              },
-            };
-
-            // Handle both overloads of step function
-            if (typeof stepNameOrFn === "function") {
-              return await stepNameOrFn(mockTelemetry);
-            } else if (typeof maybeFn === "function") {
-              return await maybeFn(mockTelemetry);
-            }
-            return undefined;
-          }),
+        createCallback,
+        step,
       };
 
       return await fn(mockChildCtx);
@@ -157,6 +163,15 @@ describe("waitForCallback handler", () => {
       expect.objectContaining({
         logger: expect.any(Object),
       }),
+    );
+    expect(createCallback).toHaveBeenCalledWith(
+      "myCallback-callback",
+      undefined,
+    );
+    expect(step).toHaveBeenCalledWith(
+      "myCallback-submitter",
+      expect.any(Function),
+      undefined,
     );
   });
 
@@ -339,6 +354,7 @@ describe("waitForCallback handler", () => {
     const submitter = jest.fn().mockResolvedValue(undefined);
     const expectedResult = "config result";
 
+    let capturedName: string | undefined;
     let capturedConfig: any;
     mockRunInChildContext.mockImplementation(
       async (fnOrName: any, maybeFn?: any) => {
@@ -346,7 +362,8 @@ describe("waitForCallback handler", () => {
         const fn = maybeFn || fnOrName;
 
         const mockChildCtx = {
-          createCallback: jest.fn().mockImplementation((cfg) => {
+          createCallback: jest.fn().mockImplementation((name, cfg) => {
+            capturedName = name;
             capturedConfig = cfg;
             return Promise.resolve([
               Promise.resolve(expectedResult),
@@ -391,6 +408,7 @@ describe("waitForCallback handler", () => {
     const result = await handler(submitter, config);
 
     expect(result).toBe(expectedResult);
+    expect(capturedName).toBe("callback");
     expect(capturedConfig).toMatchObject({
       timeout: { minutes: 5 },
       heartbeatTimeout: { seconds: 30 },
@@ -484,6 +502,7 @@ describe("waitForCallback handler", () => {
         const deserializedResult = `deserialized-${name}`;
 
         let capturedRunInChildContextOptions: any;
+        let capturedCreateCallbackName: string | undefined;
         let capturedCreateCallbackConfig: any;
 
         // Mock safeDeserialize to return our expected result
@@ -501,7 +520,8 @@ describe("waitForCallback handler", () => {
             capturedRunInChildContextOptions = options;
 
             const mockChildCtx = {
-              createCallback: jest.fn().mockImplementation((cfg) => {
+              createCallback: jest.fn().mockImplementation((name, cfg) => {
+                capturedCreateCallbackName = name;
                 capturedCreateCallbackConfig = cfg;
                 return Promise.resolve([
                   Promise.resolve(rawResult),
@@ -556,6 +576,7 @@ describe("waitForCallback handler", () => {
 
         // Verify passthrough serdes is NOT passed to createCallback when no
         // defaultCallbackDeserializer is configured
+        expect(capturedCreateCallbackName).toBe("callback");
         expect(capturedCreateCallbackConfig).toMatchObject({
           timeout: config.timeout || undefined,
           heartbeatTimeout: config.heartbeatTimeout || undefined,
