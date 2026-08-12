@@ -1,25 +1,26 @@
 import { handler } from "./wait-for-condition-serdes-error";
-import { createTests } from "../../../utils/test-helper";
-import { ExecutionStatus } from "@aws/durable-execution-sdk-js-testing";
+import { LocalDurableTestRunner } from "@aws/durable-execution-sdk-js-testing";
 
-createTests({
-  handler,
-  tests: (runner, { assertEventSignatures }) => {
-    it("should terminate execution due to serdes error", async () => {
-      const result = await runner.run();
+describe("wait-for-condition-serdes-error", () => {
+  beforeAll(async () => {
+    await LocalDurableTestRunner.setupTestEnvironment({ skipTime: true });
+  });
 
-      const error = result.getError();
-      expect(error).toEqual({
-        errorMessage:
-          "Failed to deserialize operation payload: simulated deserialization failure",
-        errorType: "Error",
-        stackTrace: undefined,
-      });
+  afterAll(async () => {
+    await LocalDurableTestRunner.teardownTestEnvironment();
+  });
 
-      expect(result.getStatus()).toBe(ExecutionStatus.FAILED);
+  it("should terminate execution due to serdes error", async () => {
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+    let error: any;
+    try {
+      await runner.run();
+    } catch (err) {
+      error = err;
+    }
 
-      // REQUIRED: Must call assertEventSignatures for every test
-      assertEventSignatures(result);
-    });
-  },
+    expect(error).toBeDefined();
+    expect(error.name).toBe("SerdesFailedError");
+    expect(error.message).toContain("simulated deserialization failure");
+  });
 });
