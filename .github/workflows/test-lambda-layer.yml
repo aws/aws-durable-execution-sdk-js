@@ -1,0 +1,74 @@
+name: Test Lambda Layer
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/lambda-layer-publish.yml"
+      - ".github/workflows/test-lambda-layer.yml"
+      - ".github/workflows/scripts/lambda-layer/**"
+      - "package-lock.json"
+      - "packages/aws-durable-execution-sdk-js/package.json"
+      - "packages/aws-durable-execution-sdk-js-otel/package.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22.23.2"
+  ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Run unit tests
+        run: node --test .github/workflows/scripts/lambda-layer/*.test.mjs
+
+      - name: Verify reproducible layer archives
+        run: bash .github/workflows/scripts/lambda-layer/build-layer.test.sh
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build distributions
+        run: |
+          npm run build -w packages/aws-durable-execution-sdk-js
+          npm run build -w packages/aws-durable-execution-sdk-js-otel
+
+      - name: Pack distributions
+        run: |
+          mkdir release-dists
+          npm pack \
+            --workspace packages/aws-durable-execution-sdk-js \
+            --ignore-scripts \
+            --pack-destination release-dists
+          npm pack \
+            --workspace packages/aws-durable-execution-sdk-js-otel \
+            --ignore-scripts \
+            --pack-destination release-dists
+
+      - name: Verify real layer reproducibility
+        run: |
+          SDK_PACKAGE=$(find release-dists -name 'aws-durable-execution-sdk-js-[0-9]*.tgz' -print -quit)
+          OTEL_PACKAGE=$(find release-dists -name 'aws-durable-execution-sdk-js-otel-*.tgz' -print -quit)
+          for BUILD in first second; do
+            bash .github/workflows/scripts/lambda-layer/build-layer.sh \
+              "$SDK_PACKAGE" \
+              "$OTEL_PACKAGE" \
+              package-lock.json \
+              "${BUILD}-layer" \
+              "${BUILD}.zip"
+          done
+          test "$(sha256sum first.zip | cut -d' ' -f1)" = \
+            "$(sha256sum second.zip | cut -d' ' -f1)"
+          test ! -d first-layer/nodejs/node_modules/@opentelemetry
+          NODE_PATH="$PWD/first-layer/nodejs/node_modules" node -e \
+            "require.resolve('@aws/durable-execution-sdk-js-otel/otel-execution'); require.resolve('@aws/durable-execution-sdk-js-otel/otel-invocation')"

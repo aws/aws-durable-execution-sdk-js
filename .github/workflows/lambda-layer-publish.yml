@@ -19,7 +19,8 @@ concurrency:
 
 env:
   LAYER_NAME: aws-durable-execution-sdk-js-otel-plugin
-  SOURCE_REF: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.event.release.tag_name }}
+  SOURCE_REF: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.release.tag_name }}
+  NODE_VERSION: "22.23.2"
   ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
   DEFAULT_LAYER_REGIONS: >-
     af-south-1,
@@ -76,7 +77,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
 
       - name: Install dependencies
@@ -127,7 +128,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Download distributions
         uses: actions/download-artifact@v8
@@ -142,17 +143,12 @@ jobs:
         run: |
           SDK_PACKAGE=$(find release-dists -name 'aws-durable-execution-sdk-js-[0-9]*.tgz' -print -quit)
           OTEL_PACKAGE=$(find release-dists -name 'aws-durable-execution-sdk-js-otel-*.tgz' -print -quit)
-          mkdir -p layer/nodejs dist
-          # ADOT and community layers provide the OTel runtime dependencies.
-          npm install \
-            --prefix layer/nodejs \
-            --omit=dev \
-            --ignore-scripts \
-            --legacy-peer-deps \
+          bash .github/workflows/scripts/lambda-layer/build-layer.sh \
             "$SDK_PACKAGE" \
-            "$OTEL_PACKAGE"
-          cd layer
-          zip -qr "../$LAYER_ZIP" nodejs
+            "$OTEL_PACKAGE" \
+            package-lock.json \
+            layer \
+            "$LAYER_ZIP"
           echo "layer_zip=${LAYER_ZIP}" >> "$GITHUB_OUTPUT"
 
       - name: Verify layer contents
@@ -287,7 +283,27 @@ jobs:
                 --principal "*" \
                 --region "$REGION" \
                 2>&1); then
-              if [[ "$PERMISSION_RESULT" != *"ResourceConflictException"* ]]; then
+              if [[ "$PERMISSION_RESULT" == *"ResourceConflictException"* ]]; then
+                if ! POLICY_DOCUMENT=$(aws lambda get-layer-version-policy \
+                    --layer-name "$LAYER_NAME" \
+                    --version-number "$VERSION_NUMBER" \
+                    --region "$REGION" \
+                    --query Policy \
+                    --output text 2>&1); then
+                  echo "$POLICY_DOCUMENT" >&2
+                  echo "::warning::Failed to read the policy for ${LAYER_VERSION_ARN}"
+                  FAILED_REGIONS+=("$REGION")
+                  continue
+                fi
+                if ! printf '%s' "$POLICY_DOCUMENT" |
+                    node .github/workflows/scripts/lambda-layer/validate-public-policy.mjs \
+                      public-layer-access \
+                      "$LAYER_VERSION_ARN"; then
+                  echo "::warning::The existing permission for ${LAYER_VERSION_ARN} is not public"
+                  FAILED_REGIONS+=("$REGION")
+                  continue
+                fi
+              else
                 echo "$PERMISSION_RESULT" >&2
                 echo "::warning::Failed to grant public access to ${LAYER_VERSION_ARN}"
                 FAILED_REGIONS+=("$REGION")
