@@ -882,7 +882,7 @@ describe("InvocationOtelPlugin", () => {
       expect(attemptSpan!.attributes["durable.attempt.number"]).toBe(2);
     });
 
-    it("attempt span has Link to deterministic span ID", async () => {
+    it("attempt span links to Workflow without duplicating its parent", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onOperationStart(
         makeOperationInfo({ id: "op-link", name: "link-step" }),
@@ -898,13 +898,74 @@ describe("InvocationOtelPlugin", () => {
       );
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
-      const expectedSpanId = deriveSpanIdFromOperationId("op-link", TEST_ARN);
+      const operationSpan = findSpan("link-step");
+      const workflowSpan = findSpan("Workflow");
       const attemptSpan = getExportedSpans().find(
         (s) => s.attributes["durable.attempt.number"] === 1,
       );
       expect(attemptSpan).toBeDefined();
-      expect(attemptSpan!.links.length).toBeGreaterThan(0);
-      expect(attemptSpan!.links[0].context.spanId).toBe(expectedSpanId);
+      expect(attemptSpan!.parentSpanContext?.spanId).toBe(
+        operationSpan!.spanContext().spanId,
+      );
+      expect(attemptSpan!.links).toHaveLength(1);
+      expect(attemptSpan!.links[0].context.spanId).toBe(
+        workflowSpan!.spanContext().spanId,
+      );
+      expect(attemptSpan!.links[0].context.spanId).not.toBe(
+        attemptSpan!.parentSpanContext?.spanId,
+      );
+    });
+
+    it("replay attempt also omits its operation parent link", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onOperationStart(
+        makeOperationInfo({
+          id: "op-replay-link",
+          name: "replay-link-step",
+          type: "STEP",
+          isReplay: true,
+        }),
+      );
+      await plugin.onOperationAttemptStart(
+        makeAttemptInfo({
+          id: "op-replay-link",
+          name: "replay-link-step",
+          attempt: 2,
+          isReplay: true,
+        }),
+      );
+      await plugin.onOperationAttemptEnd(
+        makeAttemptEndInfo({
+          id: "op-replay-link",
+          attempt: 2,
+          isReplay: true,
+        }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({
+          id: "op-replay-link",
+          name: "replay-link-step",
+          type: "STEP",
+          isReplay: true,
+        }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      const workflowSpan = findSpan("Workflow");
+      const attemptSpan = getExportedSpans().find(
+        (s) => s.attributes["durable.attempt.number"] === 2,
+      );
+      expect(attemptSpan).toBeDefined();
+      expect(attemptSpan!.links).toHaveLength(1);
+      expect(attemptSpan!.links[0].context.spanId).toBe(
+        workflowSpan!.spanContext().spanId,
+      );
+      expect(
+        attemptSpan!.links.some(
+          (link) =>
+            link.context.spanId === attemptSpan!.parentSpanContext?.spanId,
+        ),
+      ).toBe(false);
     });
 
     it("onOperationAttemptEnd ends the attempt span", async () => {

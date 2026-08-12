@@ -265,6 +265,60 @@ const results = await context.promise.allSettled([operation1(), operation2()]);
 
 ## Configuration
 
+### Dynamic Instrumentation Plugins
+
+Instrumentation plugins can be selected at Lambda cold start without importing
+them in the function artifact. Install a provider package in the function or a
+Lambda layer, then set an ordered list of package or module specifiers:
+
+```text
+DURABLE_EXECUTION_PLUGINS=@example/durable-otel,@example/durable-audit/provider
+```
+
+The SDK imports each module once when `withDurableExecution(...)` initializes
+the wrapped handler. An unset or blank variable preserves the existing
+behavior. Plugins passed through `DurableExecutionConfig.plugins` run first in
+their configured order; environment-selected plugins follow in the order listed
+in `DURABLE_EXECUTION_PLUGINS`. Both sources are additive, including when they
+create the same plugin type.
+
+Provider modules export a versioned factory named
+`durableExecutionPluginProvider`:
+
+```typescript
+import {
+  DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION,
+  type DurableInstrumentationPlugin,
+  type DurableInstrumentationPluginProvider,
+} from "@aws/durable-execution-sdk-js";
+
+class AuditPlugin implements DurableInstrumentationPlugin {
+  // Implement the lifecycle hooks needed by this plugin.
+}
+
+export const durableExecutionPluginProvider = {
+  pluginApiVersion: DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION,
+  pluginType: AuditPlugin,
+  createPlugin: () => new AuditPlugin(),
+} satisfies DurableInstrumentationPluginProvider<AuditPlugin>;
+```
+
+The module specifier must be resolvable through normal application module
+resolution or Node.js module paths. For a Lambda layer, package the provider and
+its dependencies under `nodejs/node_modules`:
+
+```text
+plugin-layer.zip
+`-- nodejs
+    `-- node_modules
+        `-- @example
+            `-- durable-audit
+```
+
+Malformed configuration, missing modules or exports, incompatible provider API
+versions, invalid plugin types, and provider construction failures are reported
+as `PluginLoadError` failures before execution state is read.
+
 ### Retry Strategies
 
 Custom retry strategy:

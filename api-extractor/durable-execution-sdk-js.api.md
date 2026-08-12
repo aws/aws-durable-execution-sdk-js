@@ -313,6 +313,9 @@ type CustomerFnResult = unknown;
 // @public
 export const defaultSerdes: Serdes<any>;
 
+// @beta
+export const DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION = 1;
+
 // @public (undocumented)
 export interface DurableContext<TLogger extends DurableLogger = DurableLogger> {
     // Warning: (ae-forgotten-export) The symbol "LoggerConfig" needs to be exported by the entry point index.d.ts
@@ -499,6 +502,16 @@ export interface DurableInstrumentationPlugin {
     // (undocumented)
     wrapOperationAttemptFn?(info: AttemptInfo, fn: CustomerFn): CustomerFnResult;
 }
+
+// @beta
+export interface DurableInstrumentationPluginProvider<Plugin extends DurableInstrumentationPlugin = DurableInstrumentationPlugin> {
+    createPlugin(): Plugin;
+    readonly pluginApiVersion: number;
+    readonly pluginType: DurableInstrumentationPluginType<Plugin>;
+}
+
+// @beta
+export type DurableInstrumentationPluginType<Plugin extends DurableInstrumentationPlugin = DurableInstrumentationPlugin> = abstract new (...args: never[]) => Plugin;
 
 // @public
 export type DurableLambdaHandler = (event: DurableExecutionInvocationInput, context: Context) => Promise<DurableExecutionInvocationOutput>;
@@ -917,6 +930,11 @@ export const PluginInvocationStatus: {
 
 // @public (undocumented)
 export type PluginInvocationStatus = (typeof PluginInvocationStatus)[keyof typeof PluginInvocationStatus];
+
+// @beta
+export class PluginLoadError extends Error {
+    constructor(message: string, options?: ErrorOptions);
+}
 
 // @public
 export const PluginOperationStatus: {
