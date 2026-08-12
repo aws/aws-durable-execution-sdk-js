@@ -478,10 +478,6 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onOperationAttemptStart(info: AttemptInfo): Promise<void> {
-    const deterministicSpanId = deriveSpanIdFromOperationId(
-      info.id,
-      this.executionArn,
-    );
     const baseName = info.name ?? info.type;
     const spanName = `${baseName} attempt ${info.attempt}`;
 
@@ -490,11 +486,6 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     const parentContext = parentSpan
       ? trace.setSpan(context.active(), parentSpan)
       : context.active();
-
-    // Get current trace ID for the link
-    const currentTraceId =
-      this.invocationSpan?.spanContext().traceId ??
-      this.idGenerator.generateTraceId();
 
     const attributes: Record<string, string | number> = {
       "durable.execution.arn": this.executionArn,
@@ -512,23 +503,13 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       attributes["durable.operation.subtype"] = info.subType;
     }
 
-    // Create Attempt_Span as child of Operation_Span with Link to deterministic span
+    // The operation is already represented by the attempt's parent. Do not
+    // duplicate that relationship as a link in the invocation view.
     const attemptSpan = this.tracer.startSpan(
       spanName,
       {
         attributes,
-        // Self-link to the deterministic operation span first, then the
-        // Workflow link (order-significant per the conformance contract).
-        links: [
-          {
-            context: {
-              traceId: currentTraceId,
-              spanId: deterministicSpanId,
-              traceFlags: 1,
-            },
-          },
-          ...this.workflowLinks(),
-        ],
+        links: this.workflowLinks(),
         startTime: hrTime(),
       },
       parentContext,

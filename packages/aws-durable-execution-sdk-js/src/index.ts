@@ -88,6 +88,7 @@ export {
  */
 export { SDK_VERSION } from "./utils/constants/version";
 export { StepInterruptedError } from "./errors/step-errors/step-errors";
+export { PluginLoadError } from "./errors/plugin-load-error/plugin-load-error";
 export {
   DurableExecutionClientError,
   DurableExecutionClientErrorScope,
@@ -146,7 +147,10 @@ export { retryPresets } from "./utils/retry/retry-presets/retry-presets";
 export { withRetry, WithRetryConfig, RetryableFunc } from "./utils/with-retry";
 export { DurableExecutionInvocationInputWithClient } from "./utils/durable-execution-invocation-input/durable-execution-invocation-input";
 export {
+  DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION,
   DurableInstrumentationPlugin,
+  DurableInstrumentationPluginProvider,
+  DurableInstrumentationPluginType,
   InvocationInfo,
   InvocationEndInfo,
   PluginInvocationStatus,
