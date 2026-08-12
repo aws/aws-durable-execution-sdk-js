@@ -610,9 +610,10 @@ describe("WaitForCondition Handler", () => {
         initialState: "initial",
       };
 
-      const handlerPromise = handler(checkFunc, config);
-
-      // We need to yield to the event loop so the handler can execute up to the termination point
+      // The returned promise never resolves (execution is terminated), so we
+      // don't await it -- just yield to the event loop so the handler can run
+      // up to the termination point, then assert termination was requested.
+      void handler(checkFunc, config);
       await Promise.resolve();
 
       expect(mockContext.terminationManager.terminate).toHaveBeenCalledWith({
@@ -666,9 +667,10 @@ describe("WaitForCondition Handler", () => {
         initialState: "initial",
       };
 
-      const handlerPromise = handler(checkFunc, config);
-
-      // We need to yield to the event loop so the handler can execute up to the termination point
+      // The returned promise never resolves (execution is terminated), so we
+      // don't await it -- just yield to the event loop so the handler can run
+      // up to the termination point, then assert termination was requested.
+      void handler(checkFunc, config);
       await Promise.resolve();
 
       expect(mockContext.terminationManager.terminate).toHaveBeenCalledWith({

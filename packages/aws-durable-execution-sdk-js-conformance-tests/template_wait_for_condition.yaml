@@ -248,4 +248,4 @@ Resources:
         - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
-        ExecutionTimeout: 300
+        ExecutionTimeout: 300
