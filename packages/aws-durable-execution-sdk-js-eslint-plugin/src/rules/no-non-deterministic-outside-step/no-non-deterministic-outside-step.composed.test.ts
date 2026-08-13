@@ -77,6 +77,21 @@ describe("no-non-deterministic-outside-step composed tests", () => {
             }
           `,
         },
+        {
+          name: "does not report same-named deterministic functions",
+          code: `
+            function a() { function h() { return 1; } return h(); }
+            function b() { function h() { return 2; } return h(); }
+          `,
+        },
+        {
+          name: "ignores calls to functions it cannot resolve",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              return externalHelper();
+            }
+          `,
+        },
       ],
       invalid: [
         // Math.random() outside step (reports both call and member expression)
@@ -191,6 +206,96 @@ describe("no-non-deterministic-outside-step composed tests", () => {
             }
           `,
           errors: 2, // CallExpression + MemberExpression
+        },
+        // Callees are resolved through scope analysis, so a non-deterministic
+        // function does not taint an unrelated function of the same name.
+        {
+          name: "does not taint a same-named function in another scope",
+          code: `
+            function moduleA() { function h() { Date.now(); } h(); }
+            function moduleB() { function h() { return 1; } return h(); }
+          `,
+          errors: [
+            {
+              messageId: "nonDeterministicOutsideStep",
+              data: { operation: "Date.now()" },
+            },
+            {
+              messageId: "nonDeterministicOutsideStep",
+              data: { operation: "Date.now" },
+            },
+            {
+              messageId: "nonDeterministicFunction",
+              data: { functionName: "h" },
+            },
+          ],
+        },
+        // Callee resolution happens after the traversal, so declaration order
+        // does not matter.
+        {
+          name: "reports calls to functions declared after the call site",
+          code: `
+            function outer() { return inner(); }
+            function inner() { return Date.now(); }
+            outer();
+          `,
+          errors: [
+            {
+              messageId: "nonDeterministicFunction",
+              data: { functionName: "inner" },
+            },
+            {
+              messageId: "nonDeterministicOutsideStep",
+              data: { operation: "Date.now()" },
+            },
+            {
+              messageId: "nonDeterministicOutsideStep",
+              data: { operation: "Date.now" },
+            },
+            {
+              messageId: "nonDeterministicFunction",
+              data: { functionName: "outer" },
+            },
+          ],
+        },
+        // Arrow functions assigned to a variable resolve the same way.
+        {
+          name: "resolves arrow functions bound to variables",
+          code: `
+            const getTime = () => Date.now();
+            async function handler(event: any, context: DurableContext) {
+              return getTime();
+            }
+          `,
+          errors: [
+            {
+              messageId: "nonDeterministicOutsideStep",
+              data: { operation: "Date.now()" },
+            },
+            {
+              messageId: "nonDeterministicOutsideStep",
+              data: { operation: "Date.now" },
+            },
+            {
+              messageId: "nonDeterministicFunction",
+              data: { functionName: "getTime" },
+            },
+          ],
+        },
+        {
+          name: "reports namespaced UUID generation outside a step",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              const id = uuid.v4();
+              await context.step(async () => id);
+            }
+          `,
+          errors: [
+            {
+              messageId: "nonDeterministicOutsideStep",
+              data: { operation: "UUID generation" },
+            },
+          ],
         },
       ],
     },
