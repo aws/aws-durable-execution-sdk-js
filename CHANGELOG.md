@@ -20,6 +20,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   what. See "Runtime requirements" in the SDK README for the details, including the replayed-log
   behaviour that carries a CloudWatch cost on long executions.
 
+### Fixed
+
+- `waitForCondition` no longer discards checkpointed state when a custom serdes fails to
+  deserialize it on a resumed invocation. Previously the restore path caught the
+  deserialization error and silently fell back to `initialState`, so the condition loop
+  restarted from scratch and the operation could succeed carrying a result computed from
+  the wrong state. That path now goes through the same `safeDeserialize` helper the rest
+  of the SDK already used, which terminates the invocation with `SERDES_FAILED` instead.
+
+  This is a behaviour change for anyone whose custom serdes can fail while restoring
+  state: such an execution now terminates rather than continuing from `initialState`.
+  Termination is retryable at the service level, so a transient serdes failure is not
+  permanently fatal.
+
 ## [2.0.0]
 
 First major release. Upgrade target for users on the `1.x` line (last release:

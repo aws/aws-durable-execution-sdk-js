@@ -11,7 +11,6 @@ import { OperationType, OperationStatus } from "../../types/wire";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 import { createDefaultLogger } from "../../utils/logger/default-logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
-import { TerminationReason } from "../../termination-manager/types";
 
 jest.mock("../../utils/logger/logger");
 jest.mock("../../errors/serdes-errors/serdes-errors");
@@ -584,15 +583,12 @@ describe("WaitForCondition Handler", () => {
         (mockContext as any)._stepData[hashedStepId],
       );
 
-      // Force safeDeserialize to fail for state deserialization
-      mockSafeDeserialize.mockImplementationOnce(async () => {
-        mockContext.terminationManager.terminate({
-          reason: TerminationReason.SERDES_FAILED,
-          message: "Failed to deserialize operation payload",
-          error: expect.any(Error),
-        });
-        return new Promise(() => {}); // Never resolves, simulating termination
-      });
+      // safeDeserialize is mocked for this suite, so production code never
+      // reaches the real terminate call. Return a never-resolving promise, as
+      // the real helper does after requesting termination.
+      mockSafeDeserialize.mockImplementationOnce(
+        () => new Promise(() => {}) as Promise<string>,
+      );
 
       const handler = createWaitForConditionHandler(
         mockContext,
@@ -612,15 +608,21 @@ describe("WaitForCondition Handler", () => {
 
       // The returned promise never resolves (execution is terminated), so we
       // don't await it -- just yield to the event loop so the handler can run
-      // up to the termination point, then assert termination was requested.
+      // up to the checkpoint-restore point.
       void handler(checkFunc, config);
       await Promise.resolve();
 
-      expect(mockContext.terminationManager.terminate).toHaveBeenCalledWith({
-        reason: TerminationReason.SERDES_FAILED,
-        message: "Failed to deserialize operation payload",
-        error: expect.any(Error),
-      });
+      // The contract this change introduces: the STARTED restore path delegates
+      // to safeDeserialize, handing it the termination manager. Terminating on
+      // failure is safeDeserialize's own separately tested responsibility.
+      expect(mockSafeDeserialize).toHaveBeenCalledWith(
+        expect.anything(),
+        JSON.stringify("checkpointed-state"),
+        stepId,
+        undefined,
+        mockContext.terminationManager,
+        mockContext.durableExecutionArn,
+      );
       expect(checkFunc).not.toHaveBeenCalled();
     });
 
@@ -641,15 +643,12 @@ describe("WaitForCondition Handler", () => {
         (mockContext as any)._stepData[hashedStepId],
       );
 
-      // Force safeDeserialize to fail for state deserialization
-      mockSafeDeserialize.mockImplementationOnce(async () => {
-        mockContext.terminationManager.terminate({
-          reason: TerminationReason.SERDES_FAILED,
-          message: "Failed to deserialize operation payload",
-          error: expect.any(Error),
-        });
-        return new Promise(() => {}); // Never resolves, simulating termination
-      });
+      // safeDeserialize is mocked for this suite, so production code never
+      // reaches the real terminate call. Return a never-resolving promise, as
+      // the real helper does after requesting termination.
+      mockSafeDeserialize.mockImplementationOnce(
+        () => new Promise(() => {}) as Promise<string>,
+      );
 
       const handler = createWaitForConditionHandler(
         mockContext,
@@ -669,15 +668,21 @@ describe("WaitForCondition Handler", () => {
 
       // The returned promise never resolves (execution is terminated), so we
       // don't await it -- just yield to the event loop so the handler can run
-      // up to the termination point, then assert termination was requested.
+      // up to the checkpoint-restore point.
       void handler(checkFunc, config);
       await Promise.resolve();
 
-      expect(mockContext.terminationManager.terminate).toHaveBeenCalledWith({
-        reason: TerminationReason.SERDES_FAILED,
-        message: "Failed to deserialize operation payload",
-        error: expect.any(Error),
-      });
+      // The contract this change introduces: the READY restore path delegates
+      // to safeDeserialize, handing it the termination manager. Terminating on
+      // failure is safeDeserialize's own separately tested responsibility.
+      expect(mockSafeDeserialize).toHaveBeenCalledWith(
+        expect.anything(),
+        JSON.stringify("checkpointed-state"),
+        stepId,
+        undefined,
+        mockContext.terminationManager,
+        mockContext.durableExecutionArn,
+      );
       expect(checkFunc).not.toHaveBeenCalled();
     });
   });
