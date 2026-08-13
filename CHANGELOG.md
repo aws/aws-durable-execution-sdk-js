@@ -20,6 +20,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   what. See "Runtime requirements" in the SDK README for the details, including the replayed-log
   behaviour that carries a CloudWatch cost on long executions.
 
+### Changed
+
+- **eslint-plugin** (`1.1.0`): `no-closure-in-durable-operations` and
+  `no-non-deterministic-outside-step` now derive their answers from the scope information ESLint
+  computes while parsing, instead of re-walking the AST. Both rules were super-linear in file
+  size; the worst case measured 263.9ms on a 400-assignment callback, now 1.8ms.
+
+  Because the rules previously missed cases their own documentation described, upgrading surfaces
+  new errors on code that already violated the replay model:
+  - Mutating a **module-scope** variable inside a durable operation is now reported. Only
+    enclosing _function_ scopes were checked before, so a top-level `let counter = 0`,
+    `export let count`, or a `catch` binding was silently allowed. Module-level mutable state
+    around a handler is a common pattern, so this is the most likely source of new errors.
+  - **Destructuring and for-of assignment targets** are now reported: `[a] = [1]`,
+    `({ a } = obj)` and `for (a of xs)`.
+  - Calls to a **non-deterministic function declared after the call site** are now reported;
+    hoisted declarations were previously skipped.
+
+  One case reports less: assigning a function to a member
+  (`obj.method = function () { Date.now(); }`) used to register it under the property name, so a
+  call to an unrelated bare `method()` was reported.
+
+### Fixed
+
+- **eslint-plugin** (`1.1.0`): false positives in `no-closure-in-durable-operations` and
+  `no-non-deterministic-outside-step`.
+  - A non-deterministic function no longer taints unrelated same-named functions in other
+    scopes. Callees are resolved through scope analysis rather than by bare identifier name.
+  - Mutating a variable that **shadows** an outer one inside a nested function is no longer
+    reported.
+  - A named function expression assigning to **its own name** is no longer reported.
+  - Mutating a variable from a **destructured declaration** (`let { total } = event`) or one
+    declared in an **outer nested block** is now correctly reported rather than missed.
+
 ## [2.0.0]
 
 First major release. Upgrade target for users on the `1.x` line (last release:
