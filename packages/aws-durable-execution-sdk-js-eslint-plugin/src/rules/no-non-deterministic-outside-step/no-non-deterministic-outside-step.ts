@@ -1,5 +1,23 @@
 import { Rule } from "eslint";
 
+/**
+ * ESLint rule to keep non-deterministic operations inside steps.
+ *
+ * Implementation notes:
+ * - "Am I inside a step?" is tracked with a depth counter maintained by the
+ *   enter/exit visitors instead of walking every node's ancestors, which turns
+ *   an O(nodes x depth) check into O(1).
+ * - Transitive non-determinism across functions is resolved by building a caller
+ *   graph during the single traversal ESLint already performs and then
+ *   propagating over it with a worklist at `Program:exit`. This replaces a
+ *   fixpoint loop that re-walked every function body on every pass, reducing
+ *   O(functions x total size) to O(functions + calls). Only the innermost
+ *   enclosing function is recorded per call site; outer functions are reached
+ *   through the nesting tree during propagation, so nothing is per-depth.
+ * - The graph is keyed on the function nodes that callees resolve to via scope
+ *   analysis, not on identifier names. Keying on names would let same-named
+ *   functions in unrelated scopes taint each other.
+ */
 export const noNonDeterministicOutsideStep: Rule.RuleModule = {
   meta: {
     type: "problem",
@@ -18,24 +36,51 @@ export const noNonDeterministicOutsideStep: Rule.RuleModule = {
     schema: [],
   },
   create(context) {
-    const functionNodes = new Map<string, any>();
-    const nonDeterministicFunctions = new Set<string>();
-    const callsToCheck: Array<{ node: any; functionName: string }> = [];
+    // `context.sourceCode` is preferred and is the only form available in
+    // ESLint v10, where `context.getSourceCode()` was removed (see #472). The
+    // optional fallback is kept because the plugin supports eslint >=8.0.0 and
+    // `context.sourceCode` only landed in 8.40. Because the property is checked
+    // first and the call is optional, neither branch can throw at startup the
+    // way the unconditional call removed in #472 did.
+    const sourceCode: any =
+      (context as any).sourceCode ?? (context as any).getSourceCode?.();
 
-    function isStepFunction(node: any): boolean {
-      let current = node;
-      while (current && current.parent) {
-        current = current.parent;
+    /** Function nodes known to contain non-deterministic operations. */
+    const nonDeterministicFunctions = new Set<any>();
 
-        if (
-          current.type === "CallExpression" &&
-          current.callee?.type === "MemberExpression" &&
-          current.callee?.property?.name === "step"
-        ) {
-          return true;
-        }
-      }
-      return false;
+    /** Enclosing function nodes at the current traversal point. */
+    const functionStack: any[] = [];
+
+    /** Function node -> the function that lexically encloses it. */
+    const enclosingFunction = new Map<any, any>();
+
+    /**
+     * Recorded call sites: (callee identifier, innermost enclosing function).
+     * Callees are resolved to declarations at `Program:exit`, once scope
+     * analysis for the whole file can be consulted in one pass.
+     */
+    const callEdges: Array<{ callee: any; enclosing: any }> = [];
+
+    /** Calls outside a step, checked once the caller graph is complete. */
+    const callsToCheck: Array<{ node: any; callee: any }> = [];
+
+    /** Number of enclosing step calls; > 0 means "inside a step". */
+    let stepDepth = 0;
+
+    function isFunctionNode(node: any): boolean {
+      return (
+        node?.type === "FunctionDeclaration" ||
+        node?.type === "FunctionExpression" ||
+        node?.type === "ArrowFunctionExpression"
+      );
+    }
+
+    function isStepCall(node: any): boolean {
+      return (
+        node.type === "CallExpression" &&
+        node.callee?.type === "MemberExpression" &&
+        node.callee?.property?.name === "step"
+      );
     }
 
     function isDirectlyNonDeterministic(node: any): string | null {
@@ -115,135 +160,178 @@ export const noNonDeterministicOutsideStep: Rule.RuleModule = {
       return null;
     }
 
-    function analyzeFunction(functionNode: any): boolean {
-      function walkNode(node: any): boolean {
-        if (!node) return false;
-
-        const operation = isDirectlyNonDeterministic(node);
-        if (operation) return true;
-
-        if (
-          node.type === "CallExpression" &&
-          node.callee?.type === "Identifier" &&
-          nonDeterministicFunctions.has(node.callee.name)
-        ) {
-          return true;
-        }
-
-        for (const key in node) {
-          if (key === "parent") continue;
-          const child = node[key];
-          if (Array.isArray(child)) {
-            if (child.some(walkNode)) return true;
-          } else if (child && typeof child === "object") {
-            if (walkNode(child)) return true;
-          }
-        }
-        return false;
-      }
-
-      return walkNode(functionNode.body);
+    /**
+     * Marks the innermost enclosing function as non-deterministic.
+     *
+     * Outer functions are reached through the nesting tree during propagation.
+     * This happens regardless of step depth: a function that wraps a step
+     * containing `Date.now()` still cannot be safely called outside a step.
+     */
+    function markEnclosingFunction() {
+      const fn = functionStack[functionStack.length - 1];
+      if (fn) nonDeterministicFunctions.add(fn);
     }
 
-    function getFunctionName(node: any): string | null {
-      if (node.type === "FunctionDeclaration" && node.id?.name) {
-        return node.id.name;
-      }
+    /** Reports a direct violation, and attributes it to the enclosing function. */
+    function checkNode(node: any, insideStep: boolean): boolean {
+      const operation = isDirectlyNonDeterministic(node);
+      if (!operation) return false;
 
-      if (node.parent?.type === "VariableDeclarator" && node.parent.id?.name) {
-        return node.parent.id.name;
-      }
+      markEnclosingFunction();
 
-      if (
-        node.parent?.type === "AssignmentExpression" &&
-        node.parent.left?.type === "MemberExpression" &&
-        node.parent.left.property?.name
-      ) {
-        return node.parent.left.property.name;
+      if (!insideStep) {
+        context.report({
+          node,
+          messageId: "nonDeterministicOutsideStep",
+          data: { operation },
+        });
       }
+      return true;
+    }
 
-      return null;
+    /**
+     * Maps the recorded callee identifiers to their variables in one pass over
+     * the scope tree. Only the identifiers actually referenced by the caller
+     * graph are retained, so memory stays proportional to the call sites rather
+     * than to every reference in the file.
+     */
+    function resolveCallees(wanted: Set<any>): Map<any, any> {
+      const resolved = new Map<any, any>();
+      const rootScope = sourceCode?.scopeManager?.globalScope;
+      if (!rootScope) return resolved;
+
+      const stack = [rootScope];
+      while (stack.length > 0) {
+        const scope = stack.pop()!;
+        for (const reference of scope.references) {
+          if (reference.resolved && wanted.has(reference.identifier)) {
+            resolved.set(reference.identifier, reference.resolved);
+          }
+        }
+        stack.push(...scope.childScopes);
+      }
+      return resolved;
+    }
+
+    /**
+     * Returns the function nodes a variable is declared as, so a callee can be
+     * matched against the declaration it actually refers to.
+     */
+    function declaredFunctions(variable: any): any[] {
+      const targets: any[] = [];
+      for (const def of variable.defs) {
+        if (def.type === "FunctionName" && isFunctionNode(def.node)) {
+          targets.push(def.node);
+        } else if (
+          def.node?.type === "VariableDeclarator" &&
+          isFunctionNode(def.node.init)
+        ) {
+          targets.push(def.node.init);
+        }
+      }
+      return targets;
+    }
+
+    function enterFunction(node: any) {
+      const parent = functionStack[functionStack.length - 1];
+      if (parent) enclosingFunction.set(node, parent);
+      functionStack.push(node);
+    }
+
+    function exitFunction() {
+      functionStack.pop();
     }
 
     return {
-      "FunctionDeclaration, FunctionExpression, ArrowFunctionExpression"(
-        node: any,
-      ) {
-        const functionName = getFunctionName(node);
-        if (functionName) {
-          functionNodes.set(functionName, node);
+      FunctionDeclaration: enterFunction,
+      FunctionExpression: enterFunction,
+      ArrowFunctionExpression: enterFunction,
+      "FunctionDeclaration:exit": exitFunction,
+      "FunctionExpression:exit": exitFunction,
+      "ArrowFunctionExpression:exit": exitFunction,
+
+      CallExpression(node: any) {
+        // Evaluated before the counter is updated, so a step call is not
+        // considered to be inside itself - matching the previous
+        // strict-ancestor semantics.
+        const insideStep = stepDepth > 0;
+        if (isStepCall(node)) stepDepth++;
+
+        if (checkNode(node, insideStep)) return;
+
+        if (node.callee?.type === "Identifier") {
+          const enclosing = functionStack[functionStack.length - 1];
+          if (enclosing) {
+            callEdges.push({ callee: node.callee, enclosing });
+          }
+          if (!insideStep) {
+            callsToCheck.push({ node, callee: node.callee });
+          }
         }
       },
 
-      CallExpression(node: any) {
-        if (isStepFunction(node)) return;
-
-        const operation = isDirectlyNonDeterministic(node);
-        if (operation) {
-          context.report({
-            node,
-            messageId: "nonDeterministicOutsideStep",
-            data: { operation },
-          });
-          return;
-        }
-
-        if (node.callee?.type === "Identifier") {
-          const functionName = node.callee.name;
-          if (functionNodes.has(functionName)) {
-            callsToCheck.push({ node, functionName });
-          }
-        }
+      "CallExpression:exit"(node: any) {
+        if (isStepCall(node)) stepDepth--;
       },
 
       NewExpression(node: any) {
-        if (isStepFunction(node)) return;
-
-        const operation = isDirectlyNonDeterministic(node);
-        if (operation) {
-          context.report({
-            node,
-            messageId: "nonDeterministicOutsideStep",
-            data: { operation },
-          });
-        }
+        checkNode(node, stepDepth > 0);
       },
 
       MemberExpression(node: any) {
-        if (isStepFunction(node)) return;
-
-        const operation = isDirectlyNonDeterministic(node);
-        if (operation) {
-          context.report({
-            node,
-            messageId: "nonDeterministicOutsideStep",
-            data: { operation },
-          });
-        }
+        checkNode(node, stepDepth > 0);
       },
 
       "Program:exit"() {
-        // Analyze functions iteratively until no new non-deterministic functions are found
-        let changed = true;
-        while (changed) {
-          changed = false;
-          for (const [functionName, functionNode] of functionNodes) {
-            if (!nonDeterministicFunctions.has(functionName)) {
-              if (analyzeFunction(functionNode)) {
-                nonDeterministicFunctions.add(functionName);
-                changed = true;
-              }
+        const wanted = new Set<any>();
+        for (const { callee } of callEdges) wanted.add(callee);
+        for (const { callee } of callsToCheck) wanted.add(callee);
+
+        const resolvedCallees = resolveCallees(wanted);
+
+        /** Resolves a callee identifier to the function nodes it may refer to. */
+        const targetsOf = (callee: any): any[] => {
+          const variable = resolvedCallees.get(callee);
+          return variable ? declaredFunctions(variable) : [];
+        };
+
+        // target function -> functions that call it
+        const dependents = new Map<any, Set<any>>();
+        for (const { callee, enclosing } of callEdges) {
+          for (const target of targetsOf(callee)) {
+            let callers = dependents.get(target);
+            if (!callers) {
+              callers = new Set<any>();
+              dependents.set(target, callers);
             }
+            callers.add(enclosing);
           }
         }
 
-        // Check all deferred function calls
-        for (const { node, functionName } of callsToCheck) {
-          if (nonDeterministicFunctions.has(functionName)) {
+        // Propagate non-determinism to callers and to lexically enclosing
+        // functions, which are equally unsafe to call outside a step.
+        const worklist = [...nonDeterministicFunctions];
+        const mark = (fn: any) => {
+          if (fn && !nonDeterministicFunctions.has(fn)) {
+            nonDeterministicFunctions.add(fn);
+            worklist.push(fn);
+          }
+        };
+
+        while (worklist.length > 0) {
+          const fn = worklist.pop()!;
+          for (const caller of dependents.get(fn) ?? []) mark(caller);
+          mark(enclosingFunction.get(fn));
+        }
+
+        for (const { node, callee } of callsToCheck) {
+          if (
+            targetsOf(callee).some((fn) => nonDeterministicFunctions.has(fn))
+          ) {
             context.report({
               node,
               messageId: "nonDeterministicFunction",
-              data: { functionName },
+              data: { functionName: callee.name },
             });
           }
         }
