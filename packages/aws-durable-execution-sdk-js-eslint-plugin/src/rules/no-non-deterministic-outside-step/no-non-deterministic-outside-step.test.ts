@@ -113,15 +113,15 @@ describe("no-non-deterministic-outside-step", () => {
 
     const rule = noNonDeterministicOutsideStep.create(mockContext as any);
 
-    // Mock being inside a step function
     const stepCallNode = {
       type: "CallExpression",
       callee: {
         type: "MemberExpression",
+        object: { name: "context" },
         property: { name: "step" },
       },
-      parent: null,
-    };
+      arguments: [],
+    } as any;
 
     const randomNode = {
       type: "CallExpression",
@@ -134,9 +134,65 @@ describe("no-non-deterministic-outside-step", () => {
       parent: stepCallNode,
     } as any;
 
-    stepCallNode.parent = randomNode;
-
+    // Visited in traversal order: the step call is entered before its contents.
+    rule.CallExpression!(stepCallNode);
     rule.CallExpression!(randomNode);
+
+    expect(mockContext.report).not.toHaveBeenCalled();
+  });
+
+  it("should report again once the step function has been exited", () => {
+    const mockContext = {
+      report: jest.fn(),
+    };
+
+    const rule = noNonDeterministicOutsideStep.create(mockContext as any);
+
+    const stepCallNode = {
+      type: "CallExpression",
+      callee: {
+        type: "MemberExpression",
+        object: { name: "context" },
+        property: { name: "step" },
+      },
+      arguments: [],
+    } as any;
+
+    const randomNode = {
+      type: "CallExpression",
+      callee: {
+        type: "MemberExpression",
+        object: { name: "Math" },
+        property: { name: "random" },
+      },
+      arguments: [],
+    } as any;
+
+    rule.CallExpression!(stepCallNode);
+    rule["CallExpression:exit"]!(stepCallNode);
+    rule.CallExpression!(randomNode);
+
+    expect(mockContext.report).toHaveBeenCalledWith({
+      node: randomNode,
+      messageId: "nonDeterministicOutsideStep",
+      data: { operation: "Math.random()" },
+    });
+  });
+
+  it("should not throw at Program:exit when no scope information is available", () => {
+    const mockContext = {
+      report: jest.fn(),
+    };
+
+    const rule = noNonDeterministicOutsideStep.create(mockContext as any);
+
+    rule.CallExpression!({
+      type: "CallExpression",
+      callee: { type: "Identifier", name: "helper" },
+      arguments: [],
+    } as any);
+
+    expect(() => rule["Program:exit"]!({} as any)).not.toThrow();
     expect(mockContext.report).not.toHaveBeenCalled();
   });
 
