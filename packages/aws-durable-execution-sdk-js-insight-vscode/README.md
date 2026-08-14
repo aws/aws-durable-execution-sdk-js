@@ -101,10 +101,6 @@ Package a shareable `.vsix` (build + bundle into `vsix/`, git-ignored):
 npm run package   # writes vsix/<name>-<version>.vsix
 ```
 
-Publishing a preview to testers: create a GitHub Release and attach that `.vsix`
-(e.g. `gh release create workflow-insight-vscode-v<version> vsix/*.vsix
---title "Workflow Insight Explorer <version>" --notes "Preview build"`).
-
 ## Getting Started
 
 ### 1. Launch the extension
