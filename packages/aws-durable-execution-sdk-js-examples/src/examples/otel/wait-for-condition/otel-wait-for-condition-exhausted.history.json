@@ -2,8 +2,8 @@
   {
     "EventType": "ExecutionStarted",
     "EventId": 1,
-    "Id": "2efddea4-cafb-4304-afca-cec70fa8dabc",
-    "EventTimestamp": "2026-07-03T22:50:15.438Z",
+    "Id": "d02a1df1-8f4a-41de-883f-da0213821d71",
+    "EventTimestamp": "2026-08-13T19:43:27.321Z",
     "ExecutionStartedDetails": {
       "Input": {
         "Payload": "{\"mode\":\"exhausted\"}"
@@ -15,7 +15,7 @@
     "SubType": "WaitForCondition",
     "EventId": 2,
     "Id": "c4ca4238a0b92382",
-    "EventTimestamp": "2026-07-03T22:50:15.442Z",
+    "EventTimestamp": "2026-08-13T19:43:27.324Z",
     "StepStartedDetails": {}
   },
   {
@@ -23,7 +23,7 @@
     "SubType": "WaitForCondition",
     "EventId": 3,
     "Id": "c4ca4238a0b92382",
-    "EventTimestamp": "2026-07-03T22:50:15.442Z",
+    "EventTimestamp": "2026-08-13T19:43:27.324Z",
     "StepSucceededDetails": {
       "Result": {
         "Payload": "{\"counter\":1}"
@@ -36,12 +36,12 @@
   {
     "EventType": "InvocationCompleted",
     "EventId": 4,
-    "EventTimestamp": "2026-07-03T22:50:15.464Z",
+    "EventTimestamp": "2026-08-13T19:43:27.347Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-07-03T22:50:15.438Z",
-      "EndTimestamp": "2026-07-03T22:50:15.464Z",
+      "StartTimestamp": "2026-08-13T19:43:27.321Z",
+      "EndTimestamp": "2026-08-13T19:43:27.347Z",
       "Error": {},
-      "RequestId": "a2df664e-ab9c-43a0-b9ba-83ca8b07b431"
+      "RequestId": "574dbb3d-4beb-4319-9ec5-7fc3f48e3759"
     }
   },
   {
@@ -49,7 +49,7 @@
     "SubType": "WaitForCondition",
     "EventId": 5,
     "Id": "c4ca4238a0b92382",
-    "EventTimestamp": "2026-07-03T22:50:16.445Z",
+    "EventTimestamp": "2026-08-13T19:43:28.327Z",
     "StepStartedDetails": {}
   },
   {
@@ -57,7 +57,7 @@
     "SubType": "WaitForCondition",
     "EventId": 6,
     "Id": "c4ca4238a0b92382",
-    "EventTimestamp": "2026-07-03T22:50:16.445Z",
+    "EventTimestamp": "2026-08-13T19:43:28.327Z",
     "StepSucceededDetails": {
       "Result": {
         "Payload": "{\"counter\":2}"
@@ -71,12 +71,12 @@
   {
     "EventType": "InvocationCompleted",
     "EventId": 7,
-    "EventTimestamp": "2026-07-03T22:50:16.469Z",
+    "EventTimestamp": "2026-08-13T19:43:28.350Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-07-03T22:50:16.443Z",
-      "EndTimestamp": "2026-07-03T22:50:16.469Z",
+      "StartTimestamp": "2026-08-13T19:43:28.325Z",
+      "EndTimestamp": "2026-08-13T19:43:28.350Z",
       "Error": {},
-      "RequestId": "8ad92083-d19a-4bfb-ab36-16ac0ce7e8f1"
+      "RequestId": "cb025f44-782b-45b4-9208-51054e97fe98"
     }
   },
   {
@@ -84,7 +84,7 @@
     "SubType": "WaitForCondition",
     "EventId": 8,
     "Id": "c4ca4238a0b92382",
-    "EventTimestamp": "2026-07-03T22:50:17.448Z",
+    "EventTimestamp": "2026-08-13T19:43:29.330Z",
     "StepStartedDetails": {}
   },
   {
@@ -92,7 +92,7 @@
     "SubType": "WaitForCondition",
     "EventId": 9,
     "Id": "c4ca4238a0b92382",
-    "EventTimestamp": "2026-07-03T22:50:17.448Z",
+    "EventTimestamp": "2026-08-13T19:43:29.330Z",
     "StepSucceededDetails": {
       "Result": {
         "Payload": "{\"counter\":3}"
@@ -106,12 +106,12 @@
   {
     "EventType": "InvocationCompleted",
     "EventId": 10,
-    "EventTimestamp": "2026-07-03T22:50:17.470Z",
+    "EventTimestamp": "2026-08-13T19:43:29.353Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-07-03T22:50:17.446Z",
-      "EndTimestamp": "2026-07-03T22:50:17.470Z",
+      "StartTimestamp": "2026-08-13T19:43:29.328Z",
+      "EndTimestamp": "2026-08-13T19:43:29.353Z",
       "Error": {},
-      "RequestId": "bf14019c-cc7f-4e73-974d-5d0d6f40efa9"
+      "RequestId": "d3a6c359-7c27-413d-aee6-388bb18419a5"
     }
   },
   {
@@ -119,7 +119,7 @@
     "SubType": "WaitForCondition",
     "EventId": 11,
     "Id": "c4ca4238a0b92382",
-    "EventTimestamp": "2026-07-03T22:50:18.451Z",
+    "EventTimestamp": "2026-08-13T19:43:30.334Z",
     "StepStartedDetails": {}
   },
   {
@@ -127,7 +127,7 @@
     "SubType": "WaitForCondition",
     "EventId": 12,
     "Id": "c4ca4238a0b92382",
-    "EventTimestamp": "2026-07-03T22:50:18.451Z",
+    "EventTimestamp": "2026-08-13T19:43:30.334Z",
     "StepSucceededDetails": {
       "Result": {
         "Payload": "{\"counter\":4}"
@@ -141,12 +141,12 @@
   {
     "EventType": "InvocationCompleted",
     "EventId": 13,
-    "EventTimestamp": "2026-07-03T22:50:18.475Z",
+    "EventTimestamp": "2026-08-13T19:43:30.357Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-07-03T22:50:18.449Z",
-      "EndTimestamp": "2026-07-03T22:50:18.475Z",
+      "StartTimestamp": "2026-08-13T19:43:30.332Z",
+      "EndTimestamp": "2026-08-13T19:43:30.357Z",
       "Error": {},
-      "RequestId": "43858eb7-59a1-4897-aad9-1f2c82b6d1cf"
+      "RequestId": "d5700d7f-2095-49b9-a9df-0da33ba79d4f"
     }
   },
   {
@@ -154,7 +154,7 @@
     "SubType": "WaitForCondition",
     "EventId": 14,
     "Id": "c4ca4238a0b92382",
-    "EventTimestamp": "2026-07-03T22:50:19.455Z",
+    "EventTimestamp": "2026-08-13T19:43:31.339Z",
     "StepStartedDetails": {}
   },
   {
@@ -162,7 +162,7 @@
     "SubType": "WaitForCondition",
     "EventId": 15,
     "Id": "c4ca4238a0b92382",
-    "EventTimestamp": "2026-07-03T22:50:19.455Z",
+    "EventTimestamp": "2026-08-13T19:43:31.339Z",
     "StepFailedDetails": {
       "Error": {
         "Payload": {
@@ -178,22 +178,22 @@
   {
     "EventType": "InvocationCompleted",
     "EventId": 16,
-    "EventTimestamp": "2026-07-03T22:50:19.491Z",
+    "EventTimestamp": "2026-08-13T19:43:31.396Z",
     "InvocationCompletedDetails": {
-      "StartTimestamp": "2026-07-03T22:50:19.452Z",
-      "EndTimestamp": "2026-07-03T22:50:19.491Z",
+      "StartTimestamp": "2026-08-13T19:43:31.335Z",
+      "EndTimestamp": "2026-08-13T19:43:31.396Z",
       "Error": {},
-      "RequestId": "3b062093-5f3c-4a05-b1ce-a34eaeefbbff"
+      "RequestId": "4dd5dfac-18e9-4ae6-9c8f-fe0575d6c0ed"
     }
   },
   {
     "EventType": "ExecutionSucceeded",
     "EventId": 17,
-    "Id": "2efddea4-cafb-4304-afca-cec70fa8dabc",
-    "EventTimestamp": "2026-07-03T22:50:19.492Z",
+    "Id": "d02a1df1-8f4a-41de-883f-da0213821d71",
+    "EventTimestamp": "2026-08-13T19:43:31.397Z",
     "ExecutionSucceededDetails": {
       "Result": {
-        "Payload": "{\"failed\":true,\"errorMessage\":\"waitForCondition exceeded maximum attempts (5)\",\"mode\":\"exhausted\",\"spans\":[{\"name\":\"STEP attempt 1\",\"traceId\":\"7e37b1d7667efbb25457929c80182f33\",\"spanId\":\"6a9aca416715ad43\",\"parentSpanId\":\"4c4e02358eca2775\",\"attributes\":{\"durable.execution.arn\":\"a0ecdbf6-00f3-4d28-bea6-92a9104bfd10\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":1,\"durable.operation.subtype\":\"WaitForCondition\",\"durable.attempt.outcome\":\"FAILED\"},\"links\":[{\"traceId\":\"7e37b1d7667efbb25457929c80182f33\",\"spanId\":\"4c4e02358eca2775\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"STEP\",\"traceId\":\"7e37b1d7667efbb25457929c80182f33\",\"spanId\":\"4c4e02358eca2775\",\"parentSpanId\":\"a2dc1a018a1e7174\",\"attributes\":{\"durable.execution.arn\":\"a0ecdbf6-00f3-4d28-bea6-92a9104bfd10\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.subtype\":\"WaitForCondition\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"invocation\",\"traceId\":\"7e37b1d7667efbb25457929c80182f33\",\"spanId\":\"a2dc1a018a1e7174\",\"attributes\":{\"durable.execution.arn\":\"a0ecdbf6-00f3-4d28-bea6-92a9104bfd10\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"STEP attempt 2\",\"traceId\":\"7e37b1d7667efbb25457929c80182f33\",\"spanId\":\"b887df52d992d5e6\",\"parentSpanId\":\"729028c37305e2d7\",\"attributes\":{\"durable.execution.arn\":\"a0ecdbf6-00f3-4d28-bea6-92a9104bfd10\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":2,\"durable.operation.subtype\":\"WaitForCondition\",\"durable.attempt.outcome\":\"FAILED\"},\"links\":[{\"traceId\":\"7e37b1d7667efbb25457929c80182f33\",\"spanId\":\"4c4e02358eca2775\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"STEP\",\"traceId\":\"7e37b1d7667efbb25457929c80182f33\",\"spanId\":\"729028c37305e2d7\",\"parentSpanId\":\"dbb815104654d9d7\",\"attributes\":{\"durable.execution.arn\":\"a0ecdbf6-00f3-4d28-bea6-92a9104bfd10\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.subtype\":\"WaitForCondition\"},\"links\":[{\"traceId\":\"7e37b1d7667efbb25457929c80182f33\",\"spanId\":\"4c4e02358eca2775\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"invocation\",\"traceId\":\"7e37b1d7667efbb25457929c80182f33\",\"spanId\":\"dbb815104654d9d7\",\"attributes\":{\"durable.execution.arn\":\"a0ecdbf6-00f3-4d28-bea6-92a9104bfd10\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"STEP attempt 3\",\"traceId\":\"7e37b1d7667efbb25457929c80182f33\",\"spanId\":\"25c2d88ec21ac4db\",\"parentSpanId\":\"4f2c03adfe8842e3\",\"attributes\":{\"durable.execution.arn\":\"a0ecdbf6-00f3-4d28-bea6-92a9104bfd10\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":3,\"durable.operation.subtype\":\"WaitForCondition\",\"durable.attempt.outcome\":\"FAILED\"},\"links\":[{\"traceId\":\"7e37b1d7667efbb25457929c80182f33\",\"spanId\":\"4c4e02358eca2775\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"STEP\",\"traceId\":\"7e37b1d7667efbb25457929c80182f33\",\"spanId\":\"4f2c03adfe8842e3\",\"parentSpanId\":\"11aaa7b9bf511ab5\",\"attributes\":{\"durable.execution.arn\":\"a0ecdbf6-00f3-4d28-bea6-92a9104bfd10\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.subtype\":\"WaitForCondition\"},\"links\":[{\"traceId\":\"7e37b1d7667efbb25457929c80182f33\",\"spanId\":\"4c4e02358eca2775\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"invocation\",\"traceId\":\"7e37b1d7667efbb25457929c80182f33\",\"spanId\":\"11aaa7b9bf511ab5\",\"attributes\":{\"durable.execution.arn\":\"a0ecdbf6-00f3-4d28-bea6-92a9104bfd10\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"STEP attempt 4\",\"traceId\":\"7e37b1d7667efbb25457929c80182f33\",\"spanId\":\"074406d7ebea2bc8\",\"parentSpanId\":\"c23c8e1dcb4a301b\",\"attributes\":{\"durable.execution.arn\":\"a0ecdbf6-00f3-4d28-bea6-92a9104bfd10\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":4,\"durable.operation.subtype\":\"WaitForCondition\",\"durable.attempt.outcome\":\"FAILED\"},\"links\":[{\"traceId\":\"7e37b1d7667efbb25457929c80182f33\",\"spanId\":\"4c4e02358eca2775\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"STEP\",\"traceId\":\"7e37b1d7667efbb25457929c80182f33\",\"spanId\":\"c23c8e1dcb4a301b\",\"parentSpanId\":\"c522928a1e6bf49f\",\"attributes\":{\"durable.execution.arn\":\"a0ecdbf6-00f3-4d28-bea6-92a9104bfd10\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.subtype\":\"WaitForCondition\"},\"links\":[{\"traceId\":\"7e37b1d7667efbb25457929c80182f33\",\"spanId\":\"4c4e02358eca2775\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"invocation\",\"traceId\":\"7e37b1d7667efbb25457929c80182f33\",\"spanId\":\"c522928a1e6bf49f\",\"attributes\":{\"durable.execution.arn\":\"a0ecdbf6-00f3-4d28-bea6-92a9104bfd10\"},\"links\":[],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"STEP attempt 5\",\"traceId\":\"7e37b1d7667efbb25457929c80182f33\",\"spanId\":\"635c24f71a840523\",\"parentSpanId\":\"41da40cfefd7f617\",\"attributes\":{\"durable.execution.arn\":\"a0ecdbf6-00f3-4d28-bea6-92a9104bfd10\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.attempt\":5,\"durable.operation.subtype\":\"WaitForCondition\",\"durable.attempt.outcome\":\"FAILED\"},\"links\":[{\"traceId\":\"7e37b1d7667efbb25457929c80182f33\",\"spanId\":\"4c4e02358eca2775\"}],\"status\":{\"code\":2,\"message\":\"waitForCondition exceeded maximum attempts (5)\"},\"events\":[{\"name\":\"exception\",\"attributes\":{\"exception.type\":\"Error\",\"exception.message\":\"waitForCondition exceeded maximum attempts (5)\",\"exception.stacktrace\":\"Error: waitForCondition exceeded maximum attempts (5)\\n    at Object.waitStrategy (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/utils/wait-strategy/wait-strategy-config.ts:60:13)\\n    at executeCheckLogic (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/wait-for-condition-handler/wait-for-condition-handler.ts:282:61)\\n    at /Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/wait-for-condition-handler/wait-for-condition-handler.ts:171:14\"}}]},{\"name\":\"STEP\",\"traceId\":\"7e37b1d7667efbb25457929c80182f33\",\"spanId\":\"41da40cfefd7f617\",\"parentSpanId\":\"57ad62655484d287\",\"attributes\":{\"durable.execution.arn\":\"a0ecdbf6-00f3-4d28-bea6-92a9104bfd10\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.subtype\":\"WaitForCondition\"},\"links\":[{\"traceId\":\"7e37b1d7667efbb25457929c80182f33\",\"spanId\":\"4c4e02358eca2775\"}],\"status\":{\"code\":2,\"message\":\"waitForCondition exceeded maximum attempts (5)\"},\"events\":[{\"name\":\"exception\",\"attributes\":{\"exception.type\":\"Error\",\"exception.message\":\"waitForCondition exceeded maximum attempts (5)\",\"exception.stacktrace\":\"Error: waitForCondition exceeded maximum attempts (5)\\n    at Object.waitStrategy (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/utils/wait-strategy/wait-strategy-config.ts:60:13)\\n    at executeCheckLogic (/Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/wait-for-condition-handler/wait-for-condition-handler.ts:282:61)\\n    at /Users/hsilan/github/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/wait-for-condition-handler/wait-for-condition-handler.ts:171:14\"}}]}]}"
+        "Payload": "{\"failed\":true,\"errorMessage\":\"waitForCondition exceeded maximum attempts (5)\",\"mode\":\"exhausted\",\"spans\":[{\"name\":\"STEP attempt 1\",\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"00f2662ffe2bf7b5\",\"parentSpanId\":\"edf3780cb5d2938f\",\"attributes\":{\"durable.execution.arn\":\"4d61a72b-9017-417f-ac50-9240a4c2a2d4\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.attempt.number\":1,\"durable.operation.subtype\":\"WaitForCondition\",\"durable.attempt.outcome\":\"SUCCEEDED\"},\"links\":[{\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"0ba608da44eb63d7\"}],\"status\":{\"code\":1},\"events\":[]},{\"name\":\"STEP\",\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"edf3780cb5d2938f\",\"parentSpanId\":\"3b9ee65463d06421\",\"attributes\":{\"durable.execution.arn\":\"4d61a72b-9017-417f-ac50-9240a4c2a2d4\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.status\":\"STARTED\",\"durable.operation.subtype\":\"WaitForCondition\"},\"links\":[{\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"0ba608da44eb63d7\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"Invocation\",\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"3b9ee65463d06421\",\"attributes\":{\"durable.execution.arn\":\"4d61a72b-9017-417f-ac50-9240a4c2a2d4\",\"durable.invocation.status\":\"PENDING\"},\"links\":[],\"status\":{\"code\":1},\"events\":[]},{\"name\":\"STEP attempt 2\",\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"cf1486a40a290bad\",\"parentSpanId\":\"5054ab62908fb74f\",\"attributes\":{\"durable.execution.arn\":\"4d61a72b-9017-417f-ac50-9240a4c2a2d4\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.attempt.number\":2,\"durable.operation.subtype\":\"WaitForCondition\",\"durable.attempt.outcome\":\"SUCCEEDED\"},\"links\":[{\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"0ba608da44eb63d7\"}],\"status\":{\"code\":1},\"events\":[]},{\"name\":\"STEP\",\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"5054ab62908fb74f\",\"parentSpanId\":\"e6c5c2f9eda4b825\",\"attributes\":{\"durable.execution.arn\":\"4d61a72b-9017-417f-ac50-9240a4c2a2d4\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.status\":\"STARTED\",\"durable.operation.subtype\":\"WaitForCondition\"},\"links\":[{\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"edf3780cb5d2938f\"},{\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"0ba608da44eb63d7\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"Invocation\",\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"e6c5c2f9eda4b825\",\"attributes\":{\"durable.execution.arn\":\"4d61a72b-9017-417f-ac50-9240a4c2a2d4\",\"durable.invocation.status\":\"PENDING\"},\"links\":[],\"status\":{\"code\":1},\"events\":[]},{\"name\":\"STEP attempt 3\",\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"d0040a9bf2b9eace\",\"parentSpanId\":\"6fde4ea64cc9cc97\",\"attributes\":{\"durable.execution.arn\":\"4d61a72b-9017-417f-ac50-9240a4c2a2d4\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.attempt.number\":3,\"durable.operation.subtype\":\"WaitForCondition\",\"durable.attempt.outcome\":\"SUCCEEDED\"},\"links\":[{\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"0ba608da44eb63d7\"}],\"status\":{\"code\":1},\"events\":[]},{\"name\":\"STEP\",\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"6fde4ea64cc9cc97\",\"parentSpanId\":\"ec70de6adb5087f3\",\"attributes\":{\"durable.execution.arn\":\"4d61a72b-9017-417f-ac50-9240a4c2a2d4\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.status\":\"STARTED\",\"durable.operation.subtype\":\"WaitForCondition\"},\"links\":[{\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"edf3780cb5d2938f\"},{\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"0ba608da44eb63d7\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"Invocation\",\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"ec70de6adb5087f3\",\"attributes\":{\"durable.execution.arn\":\"4d61a72b-9017-417f-ac50-9240a4c2a2d4\",\"durable.invocation.status\":\"PENDING\"},\"links\":[],\"status\":{\"code\":1},\"events\":[]},{\"name\":\"STEP attempt 4\",\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"9eae56203c82b597\",\"parentSpanId\":\"8a51830785c83f91\",\"attributes\":{\"durable.execution.arn\":\"4d61a72b-9017-417f-ac50-9240a4c2a2d4\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.attempt.number\":4,\"durable.operation.subtype\":\"WaitForCondition\",\"durable.attempt.outcome\":\"SUCCEEDED\"},\"links\":[{\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"0ba608da44eb63d7\"}],\"status\":{\"code\":1},\"events\":[]},{\"name\":\"STEP\",\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"8a51830785c83f91\",\"parentSpanId\":\"62bd40f666b81f39\",\"attributes\":{\"durable.execution.arn\":\"4d61a72b-9017-417f-ac50-9240a4c2a2d4\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.status\":\"STARTED\",\"durable.operation.subtype\":\"WaitForCondition\"},\"links\":[{\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"edf3780cb5d2938f\"},{\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"0ba608da44eb63d7\"}],\"status\":{\"code\":0},\"events\":[]},{\"name\":\"Invocation\",\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"62bd40f666b81f39\",\"attributes\":{\"durable.execution.arn\":\"4d61a72b-9017-417f-ac50-9240a4c2a2d4\",\"durable.invocation.status\":\"PENDING\"},\"links\":[],\"status\":{\"code\":1},\"events\":[]},{\"name\":\"STEP attempt 5\",\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"f06bfafdd773a934\",\"parentSpanId\":\"4045346640aafb72\",\"attributes\":{\"durable.execution.arn\":\"4d61a72b-9017-417f-ac50-9240a4c2a2d4\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.attempt.number\":5,\"durable.operation.subtype\":\"WaitForCondition\",\"durable.attempt.outcome\":\"FAILED\"},\"links\":[{\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"0ba608da44eb63d7\"}],\"status\":{\"code\":2,\"message\":\"waitForCondition exceeded maximum attempts (5)\"},\"events\":[{\"name\":\"exception\",\"attributes\":{\"exception.type\":\"Error\",\"exception.message\":\"waitForCondition exceeded maximum attempts (5)\",\"exception.stacktrace\":\"Error: waitForCondition exceeded maximum attempts (5)\\n    at Object.waitStrategy (/Volumes/workplace/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/utils/wait-strategy/wait-strategy-config.ts:60:13)\\n    at executeCheckLogic (/Volumes/workplace/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/wait-for-condition-handler/wait-for-condition-handler.ts:285:61)\\n    at /Volumes/workplace/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/wait-for-condition-handler/wait-for-condition-handler.ts:171:14\"}}]},{\"name\":\"STEP\",\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"4045346640aafb72\",\"parentSpanId\":\"a571a36c36fa7704\",\"attributes\":{\"durable.execution.arn\":\"4d61a72b-9017-417f-ac50-9240a4c2a2d4\",\"durable.operation.id\":\"c4ca4238a0b92382\",\"durable.operation.type\":\"STEP\",\"durable.operation.status\":\"FAILED\",\"durable.operation.subtype\":\"WaitForCondition\",\"durable.attempt.number\":5},\"links\":[{\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"edf3780cb5d2938f\"},{\"traceId\":\"6aacb0322c46230eddb5c0c5d5c59455\",\"spanId\":\"0ba608da44eb63d7\"}],\"status\":{\"code\":2,\"message\":\"waitForCondition exceeded maximum attempts (5)\"},\"events\":[{\"name\":\"exception\",\"attributes\":{\"exception.type\":\"Error\",\"exception.message\":\"waitForCondition exceeded maximum attempts (5)\",\"exception.stacktrace\":\"Error: waitForCondition exceeded maximum attempts (5)\\n    at Object.waitStrategy (/Volumes/workplace/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/utils/wait-strategy/wait-strategy-config.ts:60:13)\\n    at executeCheckLogic (/Volumes/workplace/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/wait-for-condition-handler/wait-for-condition-handler.ts:285:61)\\n    at /Volumes/workplace/aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js/src/handlers/wait-for-condition-handler/wait-for-condition-handler.ts:171:14\"}}]}]}"
       }
     }
   }

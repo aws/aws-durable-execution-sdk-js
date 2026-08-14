@@ -70,8 +70,10 @@ createTests({
         // Local mode: assert spans via InMemorySpanExporter
         const spans = getSerializedSpans();
         // All spans across all invocations: before-callback (op + attempt),
-        // STEP (submitter op + attempt), CALLBACK, my-callback (CONTEXT), invocation,
-        // my-callback (continuation), after-callback (op + attempt), invocation (2nd) + Workflow = 12 spans
+        // my-callback-submitter (submitter op + attempt), my-callback-callback
+        // (CALLBACK), my-callback (CONTEXT), invocation, my-callback
+        // (continuation), after-callback (op + attempt), invocation (2nd) +
+        // Workflow = 12 spans
         expect(spans).toHaveLength(12);
 
         // All spans share the same traceId
@@ -104,10 +106,53 @@ createTests({
         expect(callbackCtxSpan).toBeDefined();
 
         // --- CALLBACK span ---
+        // The user never names the inner CALLBACK, but waitForCallback passes a
+        // derived plugin name, so the span is labelled "<parent>-callback" and
+        // is parented to the waitForCallback CONTEXT span.
         const callbackSpan = spans.find(
           (s) => s.attributes["durable.operation.type"] === "CALLBACK",
         );
         expect(callbackSpan).toBeDefined();
+        expect(callbackSpan!.attributes["durable.operation.name"]).toBe(
+          "my-callback-callback",
+        );
+        const callbackParent = spans.find(
+          (s) => s.spanId === callbackSpan!.parentSpanId,
+        );
+        expect(callbackParent?.attributes["durable.operation.name"]).toBe(
+          "my-callback",
+        );
+        expect(callbackParent?.attributes["durable.operation.type"]).toBe(
+          "CONTEXT",
+        );
+
+        // --- submitter STEP span ---
+        // The (also unnamed) submitter step is labelled "<parent>-submitter"
+        // and parented to the same CONTEXT span.
+        const submitterOp = spans.find(
+          (s) =>
+            s.attributes["durable.operation.name"] ===
+              "my-callback-submitter" &&
+            s.attributes["durable.operation.type"] === "STEP" &&
+            s.attributes["durable.attempt.outcome"] === undefined,
+        );
+        expect(submitterOp).toBeDefined();
+        const submitterParent = spans.find(
+          (s) => s.spanId === submitterOp!.parentSpanId,
+        );
+        expect(submitterParent?.attributes["durable.operation.name"]).toBe(
+          "my-callback",
+        );
+        expect(submitterParent?.attributes["durable.operation.type"]).toBe(
+          "CONTEXT",
+        );
+
+        const submitterAttempt = spans.find(
+          (s) =>
+            s.parentSpanId === submitterOp!.spanId &&
+            s.attributes["durable.attempt.number"] === 1,
+        );
+        expect(submitterAttempt).toBeDefined();
 
         // --- after-callback step ---
         const afterCallbackOp = spans.find(

@@ -9,12 +9,7 @@ import type {
   OperationChangeInfo,
 } from "@aws/durable-execution-sdk-js";
 import type { DurableExecutionInvocationOutput } from "@aws/durable-execution-sdk-js";
-import type {
-  TracerProvider,
-  Tracer,
-  Span,
-  Link,
-} from "@opentelemetry/api";
+import type { TracerProvider, Tracer, Span, Link } from "@opentelemetry/api";
 import {
   context,
   trace,
