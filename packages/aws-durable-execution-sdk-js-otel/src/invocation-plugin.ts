@@ -34,6 +34,7 @@ import { xRayContextExtractor } from "./context-extractors";
 import type { ContextExtractor } from "./context-extractors";
 import type { OtelPluginConfig } from "./otel-plugin-config";
 import { createTracerProvider } from "./otel-plugin-provider";
+import { tryInstallGlobalIdGenerator } from "./global-id-generator";
 
 const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
 
@@ -45,10 +46,14 @@ const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
  * durable execution.
  */
 export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
-  private readonly tracerProvider: TracerProvider;
-  private readonly tracer: Tracer;
-  private readonly idGenerator: DeterministicIdGenerator;
+  private tracerProvider: TracerProvider;
+  private tracer: Tracer;
+  private idGenerator: DeterministicIdGenerator;
   private readonly contextExtractor: ContextExtractor;
+  private readonly instrumentationName: string;
+  private readonly usesGlobalProvider: boolean;
+  private globalIdGeneratorInstalled: boolean;
+  private globalIdGeneratorErrorLogged = false;
   private readonly workflowSpanName: string;
   private readonly enrichLogger: boolean;
 
@@ -63,19 +68,34 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   constructor(config?: OtelPluginConfig) {
     const instrumentationName =
       config?.instrumentationName ?? DEFAULT_INSTRUMENTATION_NAME;
+    this.instrumentationName = instrumentationName;
 
     this.idGenerator = new DeterministicIdGenerator();
     this.contextExtractor = config?.contextExtractor ?? xRayContextExtractor;
     this.workflowSpanName = config?.workflowSpanName ?? "Workflow";
     this.enrichLogger = config?.enrichLogger ?? true;
 
-    const { tracerProvider } = createTracerProvider(config, this.idGenerator);
+    const { tracerProvider, usesGlobalProvider } = createTracerProvider(
+      config,
+      this.idGenerator,
+    );
     this.tracerProvider = tracerProvider;
+    this.usesGlobalProvider = usesGlobalProvider;
 
     this.tracer = this.tracerProvider.getTracer(instrumentationName);
+    this.globalIdGeneratorInstalled = !this.usesGlobalProvider;
+    if (this.usesGlobalProvider) {
+      const installedIdGenerator = tryInstallGlobalIdGenerator(this.tracer);
+      if (installedIdGenerator) {
+        this.idGenerator = installedIdGenerator;
+        this.globalIdGeneratorInstalled = true;
+      }
+    }
   }
 
   async onInvocationStart(info: InvocationInfo): Promise<void> {
+    this.ensureGlobalIdGeneratorInstalled();
+
     // 1. Store the execution ARN
     this.executionArn = info.executionArn;
 
@@ -233,6 +253,32 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     this.workflowSpan = undefined;
     this.executionArn = "";
     this.executionTraceId = "";
+  }
+
+  private ensureGlobalIdGeneratorInstalled(): void {
+    if (!this.usesGlobalProvider || this.globalIdGeneratorInstalled) {
+      return;
+    }
+
+    // A plugin constructed before zero-code instrumentation is registered sees
+    // a ProxyTracer without the SDK's ID generator. Resolve the global provider
+    // again at invocation start, after preload initialization has completed.
+    this.tracerProvider = trace.getTracerProvider();
+    this.tracer = this.tracerProvider.getTracer(this.instrumentationName);
+
+    const installedIdGenerator = tryInstallGlobalIdGenerator(this.tracer);
+    if (installedIdGenerator) {
+      this.idGenerator = installedIdGenerator;
+      this.globalIdGeneratorInstalled = true;
+      return;
+    }
+
+    if (!this.globalIdGeneratorErrorLogged) {
+      console.error(
+        "[InvocationOtelPlugin] Failed to install deterministic ID generation on the global OpenTelemetry tracer after retrying at invocation start. The registered tracer does not expose a compatible _idGenerator field.",
+      );
+      this.globalIdGeneratorErrorLogged = true;
+    }
   }
 
   async onOperationStart(info: OperationInfo): Promise<void> {

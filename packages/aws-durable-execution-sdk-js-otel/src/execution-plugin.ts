@@ -27,6 +27,7 @@ import { xRayContextExtractor } from "./context-extractors";
 import type { ContextExtractor } from "./context-extractors";
 import type { OtelPluginConfig } from "./otel-plugin-config";
 import { createTracerProvider } from "./otel-plugin-provider";
+import { tryInstallGlobalIdGenerator } from "./global-id-generator";
 
 const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
 
@@ -39,12 +40,13 @@ const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
  */
 export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   // Shared utilities (reused from existing package)
-  private readonly idGenerator: DeterministicIdGenerator;
+  private idGenerator: DeterministicIdGenerator;
   private readonly contextExtractor: ContextExtractor;
 
   // TracerProvider (global or application-owned)
-  private readonly tracerProvider: TracerProvider;
-  private readonly tracer: Tracer;
+  private tracerProvider: TracerProvider;
+  private tracer: Tracer;
+  private readonly instrumentationName: string;
 
   // Per-invocation state
   private workflowSpan: Span | undefined;
@@ -54,6 +56,8 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   private executionTraceId: string;
 
   private readonly usesGlobalProvider: boolean;
+  private globalIdGeneratorInstalled: boolean;
+  private globalIdGeneratorErrorLogged = false;
 
   // Workflow span name (configurable)
   private readonly workflowSpanName: string;
@@ -64,6 +68,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   constructor(config?: OtelPluginConfig) {
     const instrumentationName =
       config?.instrumentationName ?? DEFAULT_INSTRUMENTATION_NAME;
+    this.instrumentationName = instrumentationName;
 
     this.idGenerator = new DeterministicIdGenerator();
     this.contextExtractor = config?.contextExtractor ?? xRayContextExtractor;
@@ -78,6 +83,14 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     this.usesGlobalProvider = usesGlobalProvider;
 
     this.tracer = this.tracerProvider.getTracer(instrumentationName);
+    this.globalIdGeneratorInstalled = !this.usesGlobalProvider;
+    if (this.usesGlobalProvider) {
+      const installedIdGenerator = tryInstallGlobalIdGenerator(this.tracer);
+      if (installedIdGenerator) {
+        this.idGenerator = installedIdGenerator;
+        this.globalIdGeneratorInstalled = true;
+      }
+    }
 
     // Initialize per-invocation state
     this.spanMap = new Map();
@@ -86,6 +99,8 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onInvocationStart(info: InvocationInfo): Promise<void> {
+    this.ensureGlobalIdGeneratorInstalled();
+
     // 1. Store the execution ARN
     this.executionArn = info.executionArn;
 
@@ -269,6 +284,32 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     this.invocationSpan = undefined;
     this.executionArn = "";
     this.executionTraceId = "";
+  }
+
+  private ensureGlobalIdGeneratorInstalled(): void {
+    if (!this.usesGlobalProvider || this.globalIdGeneratorInstalled) {
+      return;
+    }
+
+    // A plugin constructed before zero-code instrumentation is registered sees
+    // a ProxyTracer without the SDK's ID generator. Resolve the global provider
+    // again at invocation start, after preload initialization has completed.
+    this.tracerProvider = trace.getTracerProvider();
+    this.tracer = this.tracerProvider.getTracer(this.instrumentationName);
+
+    const installedIdGenerator = tryInstallGlobalIdGenerator(this.tracer);
+    if (installedIdGenerator) {
+      this.idGenerator = installedIdGenerator;
+      this.globalIdGeneratorInstalled = true;
+      return;
+    }
+
+    if (!this.globalIdGeneratorErrorLogged) {
+      console.error(
+        "[ExecutionOtelPlugin] Failed to install deterministic ID generation on the global OpenTelemetry tracer after retrying at invocation start. The registered tracer does not expose a compatible _idGenerator field.",
+      );
+      this.globalIdGeneratorErrorLogged = true;
+    }
   }
 
   /**

@@ -5,8 +5,9 @@
 
 OpenTelemetry instrumentation for the AWS Durable Execution SDK. The package
 provides two plugins that emit durable workflow, invocation, operation, and
-attempt spans. Providers created through `tracerProviderFactory` receive the
-plugin's execution-scoped deterministic ID generator.
+attempt spans. The plugins install an execution-scoped deterministic ID
+generator on global SDK tracers or providers created through
+`tracerProviderFactory`.
 
 | Plugin                 | Trace structure                                                          |
 | ---------------------- | ------------------------------------------------------------------------ |
@@ -53,17 +54,27 @@ When using ADOT, activate its auto-instrumentation wrapper:
 AWS_LAMBDA_EXEC_WRAPPER=/opt/otel-instrument
 ```
 
+For a globally registered OpenTelemetry SDK provider, the plugin replaces the
+tracer's runtime `_idGenerator` field with a deterministic wrapper. The
+provider's existing generator remains the fallback for unrelated spans.
+OpenTelemetry JavaScript does not expose this field through its public API, so
+the plugin validates its runtime shape before replacing it.
+
+If the plugin is constructed before zero-code instrumentation registers the
+provider, its initial tracer is a proxy without `_idGenerator`. The plugin
+resolves the global provider again and retries at `onInvocationStart`. If the
+registered tracer still does not expose a compatible field, it logs one error
+and continues using the provider without deterministic durable IDs.
+
 If no SDK provider has been globally registered, OpenTelemetry returns a no-op
-provider and the plugin emits no exported spans. A global provider retains its
-own ID generator; OpenTelemetry JavaScript does not expose a public API for the
-plugin to replace it after provider construction.
+provider and the plugin emits no exported spans.
 
 ## Application-Owned Provider
 
-OpenTelemetry JavaScript accepts an ID generator only when constructing an SDK
-provider. To preserve deterministic durable IDs without mutating private
-OpenTelemetry fields, the plugin passes an ID generator factory to
-`tracerProviderFactory`.
+OpenTelemetry JavaScript accepts an ID generator through its supported API when
+constructing an SDK provider. The plugin passes an ID generator factory to
+`tracerProviderFactory`, avoiding runtime field replacement for
+application-owned providers.
 
 ```typescript
 import { InvocationOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
@@ -268,9 +279,11 @@ type TracerProviderFactory = (
 ### `DeterministicIdGenerator`
 
 An OpenTelemetry `IdGenerator` with execution-scoped deterministic overrides.
-All unrelated ID generation is delegated to its fallback generator. The plugin
-passes a factory to `tracerProviderFactory` so applications can chain the
-deterministic generator to their normal provider generator.
+All unrelated ID generation is delegated to its fallback generator. For global
+SDK providers, the plugin discovers the tracer's existing generator at runtime
+and installs this wrapper around it. For application-owned providers, the
+plugin passes a factory to `tracerProviderFactory` so applications can install
+the wrapper during provider construction.
 
 ### `deriveWorkflowSpanId(executionArn: string): string`
 

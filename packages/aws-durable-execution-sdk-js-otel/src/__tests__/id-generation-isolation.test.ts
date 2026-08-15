@@ -62,7 +62,7 @@ function workflowSpan(plugin: DurableInstrumentationPlugin): Span {
 describe.each([
   ["ExecutionOtelPlugin", ExecutionOtelPlugin],
   ["InvocationOtelPlugin", InvocationOtelPlugin],
-] as const)("%s ID generation isolation", (_name, Plugin) => {
+] as const)("%s ID generation isolation", (pluginName, Plugin) => {
   afterEach(() => {
     trace.disable();
     context.disable();
@@ -127,49 +127,99 @@ describe.each([
     },
   );
 
-  it("delegates unrelated explicit-provider IDs to the application fallback", async () => {
-    let traceIdCounter = 0;
-    let spanIdCounter = 0;
-    const fallbackIdGenerator: IdGenerator = {
-      generateTraceId: jest.fn(() =>
-        (++traceIdCounter).toString(16).padStart(32, "0"),
-      ),
-      generateSpanId: jest.fn(() =>
-        (++spanIdCounter).toString(16).padStart(16, "0"),
-      ),
-    };
-    let provider: NodeTracerProvider | undefined;
-    const plugin = new Plugin({
-      tracerProviderFactory: (createIdGenerator) => {
+  it.each(["global", "explicit"] as const)(
+    "delegates unrelated %s-provider IDs to the provider fallback",
+    async (providerOwnership) => {
+      let traceIdCounter = 0;
+      let spanIdCounter = 0;
+      const fallbackIdGenerator: IdGenerator = {
+        generateTraceId: jest.fn(() =>
+          (++traceIdCounter).toString(16).padStart(32, "0"),
+        ),
+        generateSpanId: jest.fn(() =>
+          (++spanIdCounter).toString(16).padStart(16, "0"),
+        ),
+      };
+      let provider: NodeTracerProvider | undefined;
+      let config: OtelPluginConfig;
+      if (providerOwnership === "global") {
         provider = new NodeTracerProvider({
-          idGenerator: createIdGenerator(fallbackIdGenerator),
+          idGenerator: fallbackIdGenerator,
         });
-        return provider;
-      },
-    });
-    if (!provider) {
-      throw new Error("TracerProvider factory was not called");
-    }
+        provider.register();
+        config = {};
+      } else {
+        config = {
+          tracerProviderFactory: (createIdGenerator) => {
+            provider = new NodeTracerProvider({
+              idGenerator: createIdGenerator(fallbackIdGenerator),
+            });
+            return provider;
+          },
+        };
+      }
+      const plugin = new Plugin(config);
+      if (!provider) {
+        throw new Error("TracerProvider factory was not called");
+      }
 
-    const unrelatedSpan = provider
-      .getTracer("application-library")
-      .startSpan("unrelated", undefined, ROOT_CONTEXT);
-    expect(unrelatedSpan.spanContext()).toMatchObject({
-      traceId: "0".repeat(31) + "1",
-      spanId: "0".repeat(15) + "1",
-    });
+      const unrelatedSpan = provider
+        .getTracer(INSTRUMENTATION_NAME)
+        .startSpan("unrelated", undefined, ROOT_CONTEXT);
+      expect(unrelatedSpan.spanContext()).toMatchObject({
+        traceId: "0".repeat(31) + "1",
+        spanId: "0".repeat(15) + "1",
+      });
+
+      await plugin.onInvocationStart(invocationInfo(EXECUTION_ARN_A));
+      expect(workflowSpan(plugin).spanContext()).toMatchObject({
+        traceId: deriveTraceIdFromArn(EXECUTION_ARN_A),
+        spanId: deriveWorkflowSpanId(EXECUTION_ARN_A),
+      });
+      await plugin.onInvocationEnd(invocationEndInfo(EXECUTION_ARN_A));
+
+      expect(fallbackIdGenerator.generateTraceId).toHaveBeenCalled();
+      expect(fallbackIdGenerator.generateSpanId).toHaveBeenCalled();
+      unrelatedSpan.end();
+      await provider.shutdown();
+    },
+  );
+
+  it("retries global installation after the provider registers", async () => {
+    const plugin = new Plugin();
+    const provider = new NodeTracerProvider();
+    provider.register();
 
     await plugin.onInvocationStart(invocationInfo(EXECUTION_ARN_A));
+
     expect(workflowSpan(plugin).spanContext()).toMatchObject({
       traceId: deriveTraceIdFromArn(EXECUTION_ARN_A),
       spanId: deriveWorkflowSpanId(EXECUTION_ARN_A),
     });
-    await plugin.onInvocationEnd(invocationEndInfo(EXECUTION_ARN_A));
 
-    expect(fallbackIdGenerator.generateTraceId).toHaveBeenCalled();
-    expect(fallbackIdGenerator.generateSpanId).toHaveBeenCalled();
-    unrelatedSpan.end();
+    await plugin.onInvocationEnd(invocationEndInfo(EXECUTION_ARN_A));
     await provider.shutdown();
+  });
+
+  it("logs one error when global installation keeps failing", async () => {
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const plugin = new Plugin();
+
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+
+    await plugin.onInvocationStart(invocationInfo(EXECUTION_ARN_A));
+    await plugin.onInvocationEnd(invocationEndInfo(EXECUTION_ARN_A));
+    await plugin.onInvocationStart(invocationInfo(EXECUTION_ARN_B));
+    await plugin.onInvocationEnd(invocationEndInfo(EXECUTION_ARN_B));
+
+    expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      `[${pluginName}] Failed to install deterministic ID generation on the global OpenTelemetry tracer after retrying at invocation start. The registered tracer does not expose a compatible _idGenerator field.`,
+    );
+
+    consoleErrorSpy.mockRestore();
   });
 
   it("keeps interleaved plugin instances scoped to their executions", async () => {
