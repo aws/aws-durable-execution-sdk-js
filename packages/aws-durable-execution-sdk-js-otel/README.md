@@ -15,7 +15,7 @@ Both plugins share the same configuration interface (`OtelPluginConfig`) and sup
 
 1. **Global** (`ProviderSource.GLOBAL`, default) — use the globally registered provider (e.g., from the ADOT layer)
 2. **Auto-created** (`ProviderSource.AUTO_OTLP`) — the plugin creates its own TracerProvider with OTLP export to `localhost:4318`
-3. **Explicit** (`ProviderSource.EXPLICIT`) — you pass your own `tracerProvider` instance
+3. **Explicit** (`ProviderSource.EXPLICIT`) — you provide a factory for a caller-owned TracerProvider
 
 Both plugins can be deployed with either the **ADOT Lambda layer** or the **OpenTelemetry community collector-only layer**.
 
@@ -319,8 +319,8 @@ Both plugins accept the same `OtelPluginConfig` interface:
 
 ```typescript
 interface OtelPluginConfig {
-  /** Custom TracerProvider, used only with providerSource: ProviderSource.EXPLICIT. */
-  tracerProvider?: TracerProvider;
+  /** Creates a caller-owned provider with the plugin's deterministic ID generator. */
+  tracerProviderFactory?: (idGenerator: IdGenerator) => TracerProvider;
 
   /** Selects the provider mode. Defaults to ProviderSource.GLOBAL. */
   providerSource?: ProviderSource;
@@ -348,7 +348,7 @@ interface OtelPluginConfig {
 }
 ```
 
-**Provider selection:** `providerSource` selects the mode (defaulting to `ProviderSource.GLOBAL`). `tracerProvider` is required with — and only valid with — `ProviderSource.EXPLICIT`; supplying it with any other source throws.
+**Provider selection:** `providerSource` selects the mode (defaulting to `ProviderSource.GLOBAL`). `tracerProviderFactory` is required with — and only valid with — `ProviderSource.EXPLICIT`; supplying it with any other source throws.
 
 **Usage examples:**
 
@@ -367,16 +367,37 @@ const plugin = new ExecutionOtelPlugin({
   },
 });
 
-// Bring your own TracerProvider
-import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
-const provider = new NodeTracerProvider({
-  /* your config */
-});
+// Build a caller-owned TracerProvider. The plugin supplies its deterministic
+// generator because OpenTelemetry only accepts it during provider construction.
+import {
+  NodeTracerProvider,
+  SimpleSpanProcessor,
+} from "@opentelemetry/sdk-trace-node";
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+
 const plugin = new InvocationOtelPlugin({
   providerSource: ProviderSource.EXPLICIT,
-  tracerProvider: provider,
+  tracerProviderFactory: (idGenerator) => {
+    const provider = new NodeTracerProvider({
+      idGenerator,
+      spanProcessors: [
+        new SimpleSpanProcessor(
+          new OTLPTraceExporter({
+            url: "http://localhost:4318/v1/traces",
+          }),
+        ),
+      ],
+    });
+    provider.register();
+    return provider;
+  },
 });
 ```
+
+In explicit mode, the factory configures and owns the returned provider,
+including its exporters, processors, sampler, resource, registration, and
+shutdown. Use the supplied `idGenerator`; creating a separate generator is not
+necessary.
 
 ---
 
@@ -676,7 +697,10 @@ new InvocationOtelPlugin(config?: OtelPluginConfig)
 
 ### `DeterministicIdGenerator`
 
-Custom OpenTelemetry `IdGenerator` that produces reproducible trace and span IDs from execution metadata.
+Custom OpenTelemetry `IdGenerator` that applies execution-scoped deterministic
+IDs and delegates unrelated spans to a random fallback generator. Plugins
+install it automatically for `AUTO_OTLP`, and pass it to
+`tracerProviderFactory` in `EXPLICIT` mode.
 
 ### `deriveWorkflowSpanId(executionArn: string): string`
 

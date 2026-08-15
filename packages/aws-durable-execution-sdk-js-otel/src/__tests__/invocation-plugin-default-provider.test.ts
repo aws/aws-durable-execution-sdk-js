@@ -22,7 +22,10 @@ import {
 } from "@opentelemetry/api";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
 import { InvocationOtelPlugin } from "../invocation-plugin";
-import { ProviderSource } from "../otel-plugin-config";
+import {
+  ProviderSource,
+  type TracerProviderFactory,
+} from "../otel-plugin-config";
 import type {
   InvocationInfo,
   InvocationEndInfo,
@@ -259,12 +262,17 @@ describe("InvocationOtelPlugin - Global provider mode", () => {
 describe("InvocationOtelPlugin - custom instrumentationName", () => {
   let exporter: InMemorySpanExporter;
   let provider: NodeTracerProvider;
+  let tracerProviderFactory: TracerProviderFactory;
 
   beforeEach(() => {
     exporter = new InMemorySpanExporter();
-    provider = new NodeTracerProvider({
-      spanProcessors: [new SimpleSpanProcessor(exporter)],
-    });
+    tracerProviderFactory = (idGenerator) => {
+      provider = new NodeTracerProvider({
+        spanProcessors: [new SimpleSpanProcessor(exporter)],
+        idGenerator,
+      });
+      return provider;
+    };
   });
 
   afterEach(async () => {
@@ -276,7 +284,10 @@ describe("InvocationOtelPlugin - custom instrumentationName", () => {
   });
 
   it("uses default instrumentationName when not specified", async () => {
-    const plugin = new InvocationOtelPlugin({ providerSource: ProviderSource.EXPLICIT, tracerProvider: provider });
+    const plugin = new InvocationOtelPlugin({
+      providerSource: ProviderSource.EXPLICIT,
+      tracerProviderFactory,
+    });
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onInvocationEnd(makeInvocationEndInfo());
@@ -292,7 +303,7 @@ describe("InvocationOtelPlugin - custom instrumentationName", () => {
   it("uses custom instrumentationName when specified", async () => {
     const plugin = new InvocationOtelPlugin({
       providerSource: ProviderSource.EXPLICIT,
-      tracerProvider: provider,
+      tracerProviderFactory,
       instrumentationName: "my-custom-tracer",
     });
 
@@ -335,7 +346,7 @@ describe("InvocationOtelPlugin - forceFlush error handling", () => {
 
     const plugin = new InvocationOtelPlugin({
       providerSource: ProviderSource.EXPLICIT,
-      tracerProvider: failingProvider as any,
+      tracerProviderFactory: () => failingProvider as any,
     });
 
     await plugin.onInvocationStart(makeInvocationInfo());

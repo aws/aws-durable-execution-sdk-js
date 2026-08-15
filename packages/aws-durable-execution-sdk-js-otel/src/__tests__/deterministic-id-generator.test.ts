@@ -9,72 +9,106 @@ import * as fc from "fast-check";
 
 describe("DeterministicIdGenerator", () => {
   let generator: DeterministicIdGenerator;
+  const fallbackTraceId = "f".repeat(32);
+  const fallbackSpanId = "e".repeat(16);
 
   beforeEach(() => {
-    generator = new DeterministicIdGenerator();
+    generator = new DeterministicIdGenerator({
+      generateTraceId: jest.fn(() => fallbackTraceId),
+      generateSpanId: jest.fn(() => fallbackSpanId),
+    });
   });
 
   describe("generateTraceId", () => {
-    it("returns setTraceId value when set", () => {
+    it("returns the scoped trace ID", () => {
       const traceId = "abcdef1234567890abcdef1234567890";
-      generator.setTraceId(traceId);
-      expect(generator.generateTraceId()).toBe(traceId);
+      generator.withIds({ traceId }, () => {
+        expect(generator.generateTraceId()).toBe(traceId);
+      });
     });
 
-    it("persists setTraceId across multiple calls", () => {
+    it("keeps the trace ID for the duration of the scope", () => {
       const traceId = "1234567890abcdef1234567890abcdef";
-      generator.setTraceId(traceId);
-      expect(generator.generateTraceId()).toBe(traceId);
-      expect(generator.generateTraceId()).toBe(traceId);
-      expect(generator.generateTraceId()).toBe(traceId);
+      generator.withIds({ traceId }, () => {
+        expect(generator.generateTraceId()).toBe(traceId);
+        expect(generator.generateTraceId()).toBe(traceId);
+      });
     });
 
-    it("changes when setTraceId is called again", () => {
-      const traceId1 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1";
-      const traceId2 = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-      generator.setTraceId(traceId1);
-      expect(generator.generateTraceId()).toBe(traceId1);
-      generator.setTraceId(traceId2);
-      expect(generator.generateTraceId()).toBe(traceId2);
-    });
+    it("delegates to the fallback outside the scope", () => {
+      expect(generator.generateTraceId()).toBe(fallbackTraceId);
 
-    it("returns a 32-char hex string as fallback when no traceId is set", () => {
-      const traceId = generator.generateTraceId();
-      expect(traceId).toMatch(/^[0-9a-f]{32}$/);
+      generator.withIds({ traceId: "a".repeat(32) }, () => {
+        expect(generator.generateTraceId()).toBe("a".repeat(32));
+      });
+
+      expect(generator.generateTraceId()).toBe(fallbackTraceId);
     });
   });
 
   describe("generateSpanId", () => {
-    it("returns setNextSpanId value on the next call (one-shot)", () => {
+    it("returns the scoped span ID on the next call", () => {
       const spanId = "abcdef1234567890";
-      generator.setNextSpanId(spanId);
-      expect(generator.generateSpanId()).toBe(spanId);
+      generator.withIds({ spanId }, () => {
+        expect(generator.generateSpanId()).toBe(spanId);
+      });
     });
 
-    it("reverts to default after one-shot is consumed", () => {
+    it("delegates to the fallback after the scoped span ID is consumed", () => {
       const spanId = "abcdef1234567890";
-      generator.setNextSpanId(spanId);
-      expect(generator.generateSpanId()).toBe(spanId);
-      // Next call should NOT return the same value
-      const nextSpanId = generator.generateSpanId();
-      expect(nextSpanId).not.toBe(spanId);
-      expect(nextSpanId).toMatch(/^[0-9a-f]{16}$/);
+      generator.withIds({ spanId }, () => {
+        expect(generator.generateSpanId()).toBe(spanId);
+        expect(generator.generateSpanId()).toBe(fallbackSpanId);
+      });
     });
 
-    it("returns a 16-char hex string as fallback when no spanId is set", () => {
-      const spanId = generator.generateSpanId();
-      expect(spanId).toMatch(/^[0-9a-f]{16}$/);
+    it("delegates to the fallback outside the scope", () => {
+      expect(generator.generateSpanId()).toBe(fallbackSpanId);
+    });
+  });
+
+  describe("scope isolation", () => {
+    it("restores the fallback after an exception", () => {
+      expect(() =>
+        generator.withIds({ traceId: "a".repeat(32) }, () => {
+          throw new Error("boom");
+        }),
+      ).toThrow("boom");
+
+      expect(generator.generateTraceId()).toBe(fallbackTraceId);
     });
 
-    it("supports multiple sequential one-shot overrides", () => {
-      const spanId1 = "1111111111111111";
-      const spanId2 = "2222222222222222";
+    it("shares the active override across generator instances", () => {
+      const providerGenerator = new DeterministicIdGenerator({
+        generateTraceId: () => fallbackTraceId,
+        generateSpanId: () => fallbackSpanId,
+      });
 
-      generator.setNextSpanId(spanId1);
-      expect(generator.generateSpanId()).toBe(spanId1);
+      generator.withIds(
+        { traceId: "a".repeat(32), spanId: "1".repeat(16) },
+        () => {
+          expect(providerGenerator.generateTraceId()).toBe("a".repeat(32));
+          expect(providerGenerator.generateSpanId()).toBe("1".repeat(16));
+        },
+      );
+    });
 
-      generator.setNextSpanId(spanId2);
-      expect(generator.generateSpanId()).toBe(spanId2);
+    it("isolates concurrent async contexts", async () => {
+      const firstTraceId = "a".repeat(32);
+      const secondTraceId = "b".repeat(32);
+
+      await Promise.all([
+        generator.withIds({ traceId: firstTraceId }, async () => {
+          await Promise.resolve();
+          expect(generator.generateTraceId()).toBe(firstTraceId);
+        }),
+        generator.withIds({ traceId: secondTraceId }, async () => {
+          await Promise.resolve();
+          expect(generator.generateTraceId()).toBe(secondTraceId);
+        }),
+      ]);
+
+      expect(generator.generateTraceId()).toBe(fallbackTraceId);
     });
   });
 });

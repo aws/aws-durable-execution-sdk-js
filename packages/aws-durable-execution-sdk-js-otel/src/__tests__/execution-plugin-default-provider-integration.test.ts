@@ -461,8 +461,22 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
       }
     }
 
-    // All spans share the same trace ID
-    const traceIds = new Set(spans.map((s) => s.spanContext().traceId));
-    expect(traceIds.size).toBe(1);
+    // Workflow operations form one trace. The parentless Invocation span forms
+    // a separate trace instead of becoming a second root in the Workflow trace.
+    expect(validateSpan!.spanContext().traceId).toBe(
+      workflowSpan!.spanContext().traceId,
+    );
+    expect(processSpan!.spanContext().traceId).toBe(
+      workflowSpan!.spanContext().traceId,
+    );
+    expect(validateAttempt!.spanContext().traceId).toBe(
+      workflowSpan!.spanContext().traceId,
+    );
+    expect(processAttempt!.spanContext().traceId).toBe(
+      workflowSpan!.spanContext().traceId,
+    );
+    expect(invocationSpan!.spanContext().traceId).not.toBe(
+      workflowSpan!.spanContext().traceId,
+    );
   });
 });

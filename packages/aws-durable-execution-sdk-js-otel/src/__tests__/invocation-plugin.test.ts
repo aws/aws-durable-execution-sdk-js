@@ -13,10 +13,8 @@ import {
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
 import { InvocationOtelPlugin } from "../invocation-plugin";
 import { ProviderSource } from "../otel-plugin-config";
-import {
-  DeterministicIdGenerator,
-  deriveSpanIdFromOperationId,
-} from "../deterministic-id-generator";
+import { deriveSpanIdFromOperationId } from "../deterministic-id-generator";
+import type { TracerProviderFactory } from "../otel-plugin-config";
 import type {
   InvocationInfo,
   InvocationEndInfo,
@@ -27,7 +25,7 @@ import type {
 } from "@aws/durable-execution-sdk-js";
 
 let exporter: InMemorySpanExporter;
-let provider: NodeTracerProvider;
+let provider: NodeTracerProvider | undefined;
 let plugin: InvocationOtelPlugin;
 
 const TEST_ARN =
@@ -130,21 +128,29 @@ function expectSpanInside(child: ReadableSpan, parent: ReadableSpan): void {
   expect(compareHrTime(child.endTime, parent.endTime)).toBeLessThanOrEqual(0);
 }
 
-let idGenerator: DeterministicIdGenerator;
+let tracerProviderFactory: TracerProviderFactory;
 
 beforeEach(() => {
   exporter = new InMemorySpanExporter();
-  idGenerator = new DeterministicIdGenerator();
-  provider = new NodeTracerProvider({
-    spanProcessors: [new SimpleSpanProcessor(exporter)],
-    idGenerator,
+  provider = undefined;
+  tracerProviderFactory = (idGenerator) => {
+    if (!provider) {
+      provider = new NodeTracerProvider({
+        spanProcessors: [new SimpleSpanProcessor(exporter)],
+        idGenerator,
+      });
+      provider.register();
+    }
+    return provider;
+  };
+  plugin = new InvocationOtelPlugin({
+    providerSource: ProviderSource.EXPLICIT,
+    tracerProviderFactory,
   });
-  provider.register();
-  plugin = new InvocationOtelPlugin({ providerSource: ProviderSource.EXPLICIT, tracerProvider: provider });
 });
 
 afterEach(async () => {
-  await provider.shutdown();
+  await provider?.shutdown();
   exporter.reset();
   // Reset the global API registrations
   trace.disable();
@@ -179,7 +185,7 @@ describe("InvocationOtelPlugin", () => {
     it("honors custom workflowSpanName from config; invocation span name is fixed", async () => {
       const customPlugin = new InvocationOtelPlugin({
         providerSource: ProviderSource.EXPLICIT,
-        tracerProvider: provider,
+        tracerProviderFactory,
         workflowSpanName: "my-workflow",
       });
       await customPlugin.onInvocationStart(makeInvocationInfo());
@@ -1680,7 +1686,7 @@ describe("InvocationOtelPlugin", () => {
     it("returns undefined when enrichLogger is disabled, even with an active span", async () => {
       const noEnrichPlugin = new InvocationOtelPlugin({
         providerSource: ProviderSource.EXPLICIT,
-        tracerProvider: provider,
+        tracerProviderFactory,
         enrichLogger: false,
       });
       await noEnrichPlugin.onInvocationStart(makeInvocationInfo());
@@ -2024,13 +2030,13 @@ describe("InvocationOtelPlugin", () => {
       // Create parent plugin with shared provider
       const parentPlugin = new InvocationOtelPlugin({
         providerSource: ProviderSource.EXPLICIT,
-        tracerProvider: provider,
+        tracerProviderFactory,
       });
 
       // Create child plugin with shared provider
       const childPlugin = new InvocationOtelPlugin({
         providerSource: ProviderSource.EXPLICIT,
-        tracerProvider: provider,
+        tracerProviderFactory,
       });
 
       // --- Parent workflow execution ---

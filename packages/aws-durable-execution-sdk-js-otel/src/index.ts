@@ -4,7 +4,10 @@
 export { ExecutionOtelPlugin } from "./execution-plugin";
 
 // Shared Plugin Config
-export type { OtelPluginConfig } from "./otel-plugin-config";
+export type {
+  OtelPluginConfig,
+  TracerProviderFactory,
+} from "./otel-plugin-config";
 export { ProviderSource } from "./otel-plugin-config";
 
 // Invocation Plugin

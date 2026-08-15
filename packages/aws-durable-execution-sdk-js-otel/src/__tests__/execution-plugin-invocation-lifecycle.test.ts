@@ -17,7 +17,10 @@ import type {
   InvocationEndInfo,
 } from "@aws/durable-execution-sdk-js";
 import { ExecutionOtelPlugin } from "../execution-plugin";
-import { ProviderSource } from "../otel-plugin-config";
+import {
+  ProviderSource,
+  type TracerProviderFactory,
+} from "../otel-plugin-config";
 
 const TEST_ARN =
   "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-123";
@@ -66,17 +69,33 @@ function findSpan(
 describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", () => {
   let exporter: InMemorySpanExporter;
   let provider: NodeTracerProvider;
+  let explicitProviders: NodeTracerProvider[];
+  let tracerProviderFactory: TracerProviderFactory;
 
   beforeEach(() => {
     exporter = new InMemorySpanExporter();
+    explicitProviders = [];
     provider = new NodeTracerProvider({
       spanProcessors: [new SimpleSpanProcessor(exporter)],
     });
     provider.register();
+    tracerProviderFactory = (idGenerator) => {
+      const explicitProvider = new NodeTracerProvider({
+        spanProcessors: [new SimpleSpanProcessor(exporter)],
+        idGenerator,
+      });
+      explicitProviders.push(explicitProvider);
+      return explicitProvider;
+    };
   });
 
   afterEach(async () => {
-    await provider.shutdown();
+    await Promise.all([
+      provider.shutdown(),
+      ...explicitProviders.map((explicitProvider) =>
+        explicitProvider.shutdown(),
+      ),
+    ]);
     exporter.reset();
     trace.disable();
     context.disable();
@@ -110,7 +129,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     it("creates an Invocation span with providerSource Explicit", async () => {
       const plugin = new ExecutionOtelPlugin({
         providerSource: ProviderSource.EXPLICIT,
-        tracerProvider: provider,
+        tracerProviderFactory,
       });
 
       await plugin.onInvocationStart(makeInvocationInfo());
@@ -247,7 +266,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
 
       const plugin = new ExecutionOtelPlugin({
         providerSource: ProviderSource.EXPLICIT,
-        tracerProvider: mockProvider as any,
+        tracerProviderFactory: () => mockProvider as any,
       });
 
       const consoleErrorSpy = jest
@@ -280,7 +299,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
 
       const plugin = new ExecutionOtelPlugin({
         providerSource: ProviderSource.EXPLICIT,
-        tracerProvider: mockProvider as any,
+        tracerProviderFactory: () => mockProvider as any,
       });
 
       const consoleErrorSpy = jest

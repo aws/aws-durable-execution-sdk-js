@@ -11,6 +11,7 @@ import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
 import {
   AlwaysOnSampler,
   BatchSpanProcessor,
+  type IdGenerator,
   NodeTracerProvider,
   TraceIdRatioBasedSampler,
 } from "@opentelemetry/sdk-trace-node";
@@ -27,8 +28,8 @@ export interface ProviderResult {
   tracerProvider: TracerProvider;
   /**
    * Which tier produced the provider. This is the single source of truth for
-   * provider ownership: the factory created (and therefore owns) the provider
-   * only when `source === ProviderSource.AUTO_OTLP`.
+   * provider ownership: the plugin owns the provider only when
+   * `source === ProviderSource.AUTO_OTLP`.
    */
   source: ProviderSource;
 }
@@ -89,8 +90,8 @@ function buildLambdaResource() {
  * - `GLOBAL` (the default when `providerSource` is unset) — returns the
  *   globally registered provider via `trace.getTracerProvider()` as-is; no
  *   exporter, propagator, or sampler registration is performed.
- * - `EXPLICIT` — returns the supplied `config.tracerProvider` as-is, with no
- *   auto-setup.
+ * - `EXPLICIT` — calls `config.tracerProviderFactory` with the deterministic
+ *   ID generator and returns the caller-owned provider with no other auto-setup.
  * - `AUTO_OTLP` — creates a `NodeTracerProvider` with:
  *   - `OTLPTraceExporter` targeting the configured endpoint
  *   - `BatchSpanProcessor` wrapping the exporter
@@ -99,13 +100,18 @@ function buildLambdaResource() {
  *   - Lambda resource attributes when `AWS_LAMBDA_FUNCTION_NAME` is set
  */
 export function createTracerProvider(
-  config?: OtelPluginConfig,
+  config: OtelPluginConfig | undefined,
+  idGenerator: IdGenerator,
 ): ProviderResult {
   const source = resolveProviderSource(config);
 
-  // Explicit: caller supplied a provider — return it as-is, no auto-setup.
+  // Explicit: let the caller configure the provider while ensuring the plugin's
+  // deterministic generator is available at provider construction time.
   if (source === ProviderSource.EXPLICIT) {
-    return { tracerProvider: config!.tracerProvider!, source };
+    return {
+      tracerProvider: config!.tracerProviderFactory!(idGenerator),
+      source,
+    };
   }
 
   // Global: use the globally registered default provider, no auto-setup.
@@ -139,6 +145,7 @@ export function createTracerProvider(
   const tracerProvider = new NodeTracerProvider({
     sampler,
     spanProcessors: [spanProcessor],
+    idGenerator,
     ...(resource ? { resource } : {}),
   });
 

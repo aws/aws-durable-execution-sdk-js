@@ -16,6 +16,7 @@ import {
   resolveProviderSource,
 } from "../otel-plugin-config";
 import { registerStandaloneInstrumentations } from "../otel-plugin-instrumentations";
+import { DeterministicIdGenerator } from "../deterministic-id-generator";
 
 // Save original env
 const originalEnv = process.env;
@@ -46,7 +47,7 @@ describe("createTracerProvider", () => {
 
       const result = createTracerProvider({
         providerSource: ProviderSource.GLOBAL,
-      });
+      }, new DeterministicIdGenerator());
 
       expect(result.tracerProvider).toBe(trace.getTracerProvider());
       expect(result.source).toBe(ProviderSource.GLOBAL);
@@ -60,7 +61,7 @@ describe("createTracerProvider", () => {
 
       const result = createTracerProvider({
         providerSource: ProviderSource.GLOBAL,
-      });
+      }, new DeterministicIdGenerator());
 
       expect(result.source).toBe(ProviderSource.GLOBAL);
 
@@ -69,18 +70,26 @@ describe("createTracerProvider", () => {
   });
 
   describe("providerSource=EXPLICIT", () => {
-    it("uses the supplied tracerProvider and sets source=EXPLICIT", () => {
-      const explicitProvider = new NodeTracerProvider();
+    it("passes the deterministic ID generator to the explicit provider factory", () => {
+      const idGenerator = new DeterministicIdGenerator();
+      const tracerProviderFactory = jest.fn(
+        (providerIdGenerator) =>
+          new NodeTracerProvider({ idGenerator: providerIdGenerator }),
+      );
 
-      const result = createTracerProvider({
-        providerSource: ProviderSource.EXPLICIT,
-        tracerProvider: explicitProvider,
-      });
+      const result = createTracerProvider(
+        {
+          providerSource: ProviderSource.EXPLICIT,
+          tracerProviderFactory,
+        },
+        idGenerator,
+      );
 
-      expect(result.tracerProvider).toBe(explicitProvider);
+      expect(tracerProviderFactory).toHaveBeenCalledTimes(1);
+      expect(tracerProviderFactory).toHaveBeenCalledWith(idGenerator);
       expect(result.source).toBe(ProviderSource.EXPLICIT);
 
-      explicitProvider.shutdown();
+      (result.tracerProvider as NodeTracerProvider).shutdown();
     });
   });
 
@@ -88,7 +97,7 @@ describe("createTracerProvider", () => {
     it("creates an internal provider with source=AUTO_OTLP", () => {
       const result = createTracerProvider({
         providerSource: ProviderSource.AUTO_OTLP,
-      });
+      }, new DeterministicIdGenerator());
 
       expect(result.source).toBe(ProviderSource.AUTO_OTLP);
 
@@ -104,7 +113,7 @@ describe("createTracerProvider", () => {
       const globalProvider = new NodeTracerProvider();
       globalProvider.register();
 
-      const result = createTracerProvider({});
+      const result = createTracerProvider({}, new DeterministicIdGenerator());
 
       expect(result.tracerProvider).toBe(trace.getTracerProvider());
       expect(result.source).toBe(ProviderSource.GLOBAL);
@@ -116,7 +125,10 @@ describe("createTracerProvider", () => {
       const globalProvider = new NodeTracerProvider();
       globalProvider.register();
 
-      const result = createTracerProvider(undefined);
+      const result = createTracerProvider(
+        undefined,
+        new DeterministicIdGenerator(),
+      );
 
       expect(result.tracerProvider).toBe(trace.getTracerProvider());
       expect(result.source).toBe(ProviderSource.GLOBAL);
@@ -138,40 +150,39 @@ describe("resolveProviderSource validation", () => {
     ).toBe(ProviderSource.GLOBAL);
   });
 
-  it("returns EXPLICIT when providerSource=EXPLICIT and a tracerProvider is supplied", () => {
-    const explicitProvider = new NodeTracerProvider();
+  it("returns EXPLICIT when providerSource=EXPLICIT and a tracerProviderFactory is supplied", () => {
     expect(
       resolveProviderSource({
         providerSource: ProviderSource.EXPLICIT,
-        tracerProvider: explicitProvider,
+        tracerProviderFactory: (idGenerator) =>
+          new NodeTracerProvider({ idGenerator }),
       }),
     ).toBe(ProviderSource.EXPLICIT);
-    explicitProvider.shutdown();
   });
 
-  it("throws when providerSource=EXPLICIT but no tracerProvider is supplied", () => {
+  it("throws when providerSource=EXPLICIT but no tracerProviderFactory is supplied", () => {
     expect(() =>
       resolveProviderSource({ providerSource: ProviderSource.EXPLICIT }),
-    ).toThrow(/requires a `tracerProvider`/);
+    ).toThrow(/requires a `tracerProviderFactory`/);
   });
 
-  it("throws when a tracerProvider is supplied without providerSource=EXPLICIT (default source)", () => {
-    const explicitProvider = new NodeTracerProvider();
+  it("throws when a tracerProviderFactory is supplied without providerSource=EXPLICIT", () => {
     expect(() =>
-      resolveProviderSource({ tracerProvider: explicitProvider }),
+      resolveProviderSource({
+        tracerProviderFactory: (idGenerator) =>
+          new NodeTracerProvider({ idGenerator }),
+      }),
     ).toThrow(/only used with providerSource 'explicit'/);
-    explicitProvider.shutdown();
   });
 
-  it("throws when a tracerProvider is supplied with providerSource=GLOBAL", () => {
-    const explicitProvider = new NodeTracerProvider();
+  it("throws when a tracerProviderFactory is supplied with providerSource=GLOBAL", () => {
     expect(() =>
       resolveProviderSource({
         providerSource: ProviderSource.GLOBAL,
-        tracerProvider: explicitProvider,
+        tracerProviderFactory: (idGenerator) =>
+          new NodeTracerProvider({ idGenerator }),
       }),
     ).toThrow(/only used with providerSource 'explicit'/);
-    explicitProvider.shutdown();
   });
 });
 
@@ -207,8 +218,6 @@ describe("registerStandaloneInstrumentations", () => {
         }),
       };
 
-      const explicitProvider = new NodeTracerProvider();
-
       // Should not throw - returns early for the EXPLICIT source
       expect(() => {
         registerStandaloneInstrumentations(
@@ -216,12 +225,11 @@ describe("registerStandaloneInstrumentations", () => {
           ProviderSource.EXPLICIT,
           {
             providerSource: ProviderSource.EXPLICIT,
-            tracerProvider: explicitProvider,
+            tracerProviderFactory: (idGenerator) =>
+              new NodeTracerProvider({ idGenerator }),
           },
         );
       }).not.toThrow();
-
-      explicitProvider.shutdown();
     });
   });
 

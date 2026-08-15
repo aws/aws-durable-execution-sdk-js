@@ -61,6 +61,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   private invocationSpan: Span | undefined;
   private spanMap: Map<string, Span>;
   private executionArn: string;
+  private executionTraceId: string;
 
   // Default provider mode
   private readonly providerSource: ProviderSource;
@@ -81,7 +82,10 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     this.enrichLogger = config?.enrichLogger ?? true;
 
     // Create or accept TracerProvider via the provider factory
-    const { tracerProvider, source } = createTracerProvider(config);
+    const { tracerProvider, source } = createTracerProvider(
+      config,
+      this.idGenerator,
+    );
     this.tracerProvider = tracerProvider;
     this.providerSource = source;
 
@@ -90,12 +94,10 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
     this.tracer = this.tracerProvider.getTracer(instrumentationName);
 
-    // Monkey-patch the tracer's ID generator so spans use deterministic IDs.
-    (this.tracer as any)._idGenerator = this.idGenerator;
-
     // Initialize per-invocation state
     this.spanMap = new Map();
     this.executionArn = "";
+    this.executionTraceId = "";
   }
 
   async onInvocationStart(info: InvocationInfo): Promise<void> {
@@ -105,35 +107,39 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     // 2. Extract trace context via context extractor (same as InvocationOtelPlugin)
     const extractedContext = this.contextExtractor(info);
 
-    // 3. Set the trace ID on the ID generator
+    // 3. Resolve the execution trace ID used by scoped span creation
     if (extractedContext?.traceId) {
-      this.idGenerator.setTraceId(extractedContext.traceId);
+      this.executionTraceId = extractedContext.traceId;
     } else {
       // Fallback: derive trace ID from ARN
-      const derivedId = deriveTraceIdFromArn(info.executionArn);
-      this.idGenerator.setTraceId(derivedId);
+      this.executionTraceId = deriveTraceIdFromArn(info.executionArn);
     }
 
     // 4. Derive the workflow span ID from execution ARN
     const workflowSpanId = deriveWorkflowSpanId(info.executionArn);
 
-    // 5. Set it as the next span ID so the tracer uses it for the Workflow_Span
-    this.idGenerator.setNextSpanId(workflowSpanId);
-
-    // 6. Create the Workflow_Span with deterministic ID (always as root — no parent)
-    this.workflowSpan = this.tracer.startSpan(
-      this.workflowSpanName,
+    // 5. Create the Workflow_Span with deterministic IDs. The override is
+    // scoped to this single startSpan call.
+    this.workflowSpan = this.idGenerator.withIds(
       {
-        kind: SpanKind.INTERNAL,
-        attributes: {
-          "durable.execution.arn": info.executionArn,
-        },
-        startTime: info.executionStartTimestamp ?? new Date(),
+        traceId: this.executionTraceId,
+        spanId: workflowSpanId,
       },
-      ROOT_CONTEXT,
+      () =>
+        this.tracer.startSpan(
+          this.workflowSpanName,
+          {
+            kind: SpanKind.INTERNAL,
+            attributes: {
+              "durable.execution.arn": info.executionArn,
+            },
+            startTime: info.executionStartTimestamp ?? new Date(),
+          },
+          ROOT_CONTEXT,
+        ),
     );
 
-    // 7. Create Invocation_Span
+    // 6. Create Invocation_Span
     if (this.providerSource !== ProviderSource.GLOBAL) {
       // Non-default mode: child of Workflow_Span with Lambda semantic attributes
       const parentContext = trace.setSpan(context.active(), this.workflowSpan);
@@ -277,6 +283,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     this.workflowSpan = undefined;
     this.invocationSpan = undefined;
     this.executionArn = "";
+    this.executionTraceId = "";
   }
 
   /**
@@ -325,12 +332,18 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
     const links = this.buildInvocationLinks();
 
-    // Always use deterministic span ID regardless of replay status
-    this.idGenerator.setNextSpanId(deterministicSpanId);
-    const span = this.tracer.startSpan(
-      spanName,
-      { attributes, startTime: info.startTimestamp, links },
-      parentContext,
+    // Always use a deterministic span ID regardless of replay status.
+    const span = this.idGenerator.withIds(
+      {
+        traceId: this.executionTraceId,
+        spanId: deterministicSpanId,
+      },
+      () =>
+        this.tracer.startSpan(
+          spanName,
+          { attributes, startTime: info.startTimestamp, links },
+          parentContext,
+        ),
     );
 
     if (span) {
@@ -426,11 +439,17 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
       const links = this.buildInvocationLinks();
 
-      this.idGenerator.setNextSpanId(deterministicSpanId);
-      const span = this.tracer.startSpan(
-        spanName,
-        { attributes, startTime: info.startTimestamp, links },
-        parentContext,
+      const span = this.idGenerator.withIds(
+        {
+          traceId: this.executionTraceId,
+          spanId: deterministicSpanId,
+        },
+        () =>
+          this.tracer.startSpan(
+            spanName,
+            { attributes, startTime: info.startTimestamp, links },
+            parentContext,
+          ),
       );
 
       if (info.error) {
