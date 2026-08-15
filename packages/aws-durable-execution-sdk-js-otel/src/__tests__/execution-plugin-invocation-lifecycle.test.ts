@@ -17,10 +17,7 @@ import type {
   InvocationEndInfo,
 } from "@aws/durable-execution-sdk-js";
 import { ExecutionOtelPlugin } from "../execution-plugin";
-import {
-  ProviderSource,
-  type TracerProviderFactory,
-} from "../otel-plugin-config";
+import type { TracerProviderFactory } from "../otel-plugin-config";
 
 const TEST_ARN =
   "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-123";
@@ -102,11 +99,9 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     propagation.disable();
   });
 
-  describe("Invocation_Span is created when providerSource is GLOBAL", () => {
-    it("creates an Invocation span as child of ambient context when providerSource is GLOBAL", async () => {
-      const plugin = new ExecutionOtelPlugin({
-        providerSource: ProviderSource.GLOBAL,
-      });
+  describe("Invocation_Span provider behavior", () => {
+    it("creates an Invocation span as child of ambient context with the global provider", async () => {
+      const plugin = new ExecutionOtelPlugin();
 
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onInvocationEnd(
@@ -126,9 +121,8 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       expect(workflowSpan).toBeDefined();
     });
 
-    it("creates an Invocation span with providerSource Explicit", async () => {
+    it("creates an Invocation span with an application-owned provider", async () => {
       const plugin = new ExecutionOtelPlugin({
-        providerSource: ProviderSource.EXPLICIT,
         tracerProviderFactory,
       });
 
@@ -144,9 +138,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
 
   describe("Workflow_Span has no span links to saved invocation context", () => {
     it("Workflow_Span has no links when an ambient invocation span exists", async () => {
-      const plugin = new ExecutionOtelPlugin({
-        providerSource: ProviderSource.GLOBAL,
-      });
+      const plugin = new ExecutionOtelPlugin({});
 
       // Create an ambient span to simulate an invocation span from the environment
       const tracer = provider.getTracer("test");
@@ -170,9 +162,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
 
   describe("Ambient context is captured BEFORE Workflow_Span creation", () => {
     it("captures the ambient context with the active invocation span before Workflow_Span is created", async () => {
-      const plugin = new ExecutionOtelPlugin({
-        providerSource: ProviderSource.GLOBAL,
-      });
+      const plugin = new ExecutionOtelPlugin({});
 
       // Create an ambient span to simulate invocation span from the environment
       const tracer = provider.getTracer("test");
@@ -219,9 +209,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     });
 
     it("captures context even if the ambient context has no span", async () => {
-      const plugin = new ExecutionOtelPlugin({
-        providerSource: ProviderSource.GLOBAL,
-      });
+      const plugin = new ExecutionOtelPlugin({});
 
       // No ambient span - just ROOT_CONTEXT
       await plugin.onInvocationStart(makeInvocationInfo());
@@ -265,7 +253,6 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       };
 
       const plugin = new ExecutionOtelPlugin({
-        providerSource: ProviderSource.EXPLICIT,
         tracerProviderFactory: () => mockProvider as any,
       });
 
@@ -298,7 +285,6 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       };
 
       const plugin = new ExecutionOtelPlugin({
-        providerSource: ProviderSource.EXPLICIT,
         tracerProviderFactory: () => mockProvider as any,
       });
 
@@ -322,9 +308,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
 
   describe("Per-invocation state is cleared after onInvocationEnd", () => {
     it("does not leak invocation state across invocations (no ambient context on second)", async () => {
-      const plugin = new ExecutionOtelPlugin({
-        providerSource: ProviderSource.GLOBAL,
-      });
+      const plugin = new ExecutionOtelPlugin({});
 
       // Create ambient span
       const tracer = provider.getTracer("test");
@@ -381,9 +365,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     });
 
     it("clears workflowSpan, invocationSpan, and spanMap after onInvocationEnd", async () => {
-      const plugin = new ExecutionOtelPlugin({
-        providerSource: ProviderSource.GLOBAL,
-      });
+      const plugin = new ExecutionOtelPlugin({});
 
       // First invocation
       await plugin.onInvocationStart(makeInvocationInfo());
@@ -427,9 +409,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     });
 
     it("clears attemptSpan after onInvocationEnd", async () => {
-      const plugin = new ExecutionOtelPlugin({
-        providerSource: ProviderSource.GLOBAL,
-      });
+      const plugin = new ExecutionOtelPlugin({});
 
       // Start invocation and create an attempt span (but don't end it)
       await plugin.onInvocationStart(makeInvocationInfo());
@@ -491,7 +471,6 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
   describe("Invocation_Span status mapping (PluginInvocationStatus -> OTel span status)", () => {
     it("honors custom workflowSpanName from config; invocation span name is fixed", async () => {
       const plugin = new ExecutionOtelPlugin({
-        providerSource: ProviderSource.GLOBAL,
         workflowSpanName: "my-workflow",
       });
       await plugin.onInvocationStart(makeInvocationInfo());
@@ -509,7 +488,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       ["SUCCEEDED", SpanStatusCode.OK],
       ["PENDING", SpanStatusCode.OK],
     ])("maps %s -> Invocation_Span status OK", async (status, expected) => {
-      const plugin = new ExecutionOtelPlugin({ providerSource: ProviderSource.GLOBAL });
+      const plugin = new ExecutionOtelPlugin({});
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onInvocationEnd(
         makeInvocationEndInfo({ status: status as any }),
@@ -521,7 +500,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     });
 
     it("maps RETRYING -> Invocation_Span status UNSET (STOPPED/TIMED_OUT indistinguishable from RETRYING)", async () => {
-      const plugin = new ExecutionOtelPlugin({ providerSource: ProviderSource.GLOBAL });
+      const plugin = new ExecutionOtelPlugin({});
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onInvocationEnd(
         makeInvocationEndInfo({ status: "RETRYING" as any }),
@@ -533,7 +512,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     });
 
     it("maps FAILED -> Invocation_Span status ERROR with the execution error message", async () => {
-      const plugin = new ExecutionOtelPlugin({ providerSource: ProviderSource.GLOBAL });
+      const plugin = new ExecutionOtelPlugin({});
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onInvocationEnd(
         makeInvocationEndInfo({
@@ -551,7 +530,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
 
   describe("Workflow_Span status mapping (PluginInvocationStatus -> OTel span status)", () => {
     it("creates the Workflow_Span with SpanKind.INTERNAL", async () => {
-      const plugin = new ExecutionOtelPlugin({ providerSource: ProviderSource.GLOBAL });
+      const plugin = new ExecutionOtelPlugin({});
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onInvocationEnd(
         makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
@@ -563,7 +542,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     });
 
     it("maps SUCCEEDED -> span status OK", async () => {
-      const plugin = new ExecutionOtelPlugin({ providerSource: ProviderSource.GLOBAL });
+      const plugin = new ExecutionOtelPlugin({});
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onInvocationEnd(
         makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
@@ -578,7 +557,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     });
 
     it("maps FAILED -> span status ERROR with the execution error message", async () => {
-      const plugin = new ExecutionOtelPlugin({ providerSource: ProviderSource.GLOBAL });
+      const plugin = new ExecutionOtelPlugin({});
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onInvocationEnd(
         makeInvocationEndInfo({
@@ -599,9 +578,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     it.each(["PENDING", "RETRYING"])(
       "leaves the Workflow_Span un-ended (UNSET, never exported) for non-terminal status %s",
       async (status) => {
-        const plugin = new ExecutionOtelPlugin({
-          providerSource: ProviderSource.GLOBAL,
-        });
+        const plugin = new ExecutionOtelPlugin({});
         await plugin.onInvocationStart(makeInvocationInfo());
         await plugin.onInvocationEnd(
           makeInvocationEndInfo({ status: status as any }),

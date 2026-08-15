@@ -4,7 +4,6 @@ import {
   ROOT_CONTEXT,
   trace,
   type Span,
-  type TracerProvider,
 } from "@opentelemetry/api";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import type {
@@ -13,7 +12,6 @@ import type {
   InvocationInfo,
 } from "@aws/durable-execution-sdk-js";
 import {
-  DeterministicIdGenerator,
   deriveSpanIdFromOperationId,
   deriveTraceIdFromArn,
   deriveWorkflowSpanId,
@@ -21,11 +19,9 @@ import {
 import { ExecutionOtelPlugin } from "../execution-plugin";
 import { InvocationOtelPlugin } from "../invocation-plugin";
 import {
-  ProviderSource,
   type OtelPluginConfig,
   type TracerProviderFactory,
 } from "../otel-plugin-config";
-import { createTracerProvider } from "../otel-plugin-provider";
 
 const INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
 const EXECUTION_ARN_A =
@@ -62,11 +58,6 @@ function workflowSpan(plugin: DurableInstrumentationPlugin): Span {
   return (plugin as unknown as { workflowSpan: Span }).workflowSpan;
 }
 
-function pluginProvider(plugin: DurableInstrumentationPlugin): TracerProvider {
-  return (plugin as unknown as { tracerProvider: TracerProvider })
-    .tracerProvider;
-}
-
 describe.each([
   ["ExecutionOtelPlugin", ExecutionOtelPlugin],
   ["InvocationOtelPlugin", InvocationOtelPlugin],
@@ -77,18 +68,17 @@ describe.each([
     propagation.disable();
   });
 
-  it.each([ProviderSource.GLOBAL, ProviderSource.EXPLICIT] as const)(
+  it.each(["global", "explicit"] as const)(
     "does not change unrelated roots for %s providers",
-    async (source) => {
+    async (providerOwnership) => {
       let provider: NodeTracerProvider | undefined;
       let config: OtelPluginConfig;
-      if (source === ProviderSource.GLOBAL) {
+      if (providerOwnership === "global") {
         provider = new NodeTracerProvider();
         provider.register();
-        config = { providerSource: source };
+        config = {};
       } else {
         config = {
-          providerSource: source,
           tracerProviderFactory: (idGenerator) => {
             provider = new NodeTracerProvider({ idGenerator });
             return provider;
@@ -134,37 +124,6 @@ describe.each([
     },
   );
 
-  it("does not change unrelated roots for the plugin-owned provider", async () => {
-    const plugin = new Plugin({
-      providerSource: ProviderSource.AUTO_OTLP,
-      exporterConfig: { endpoint: "http://127.0.0.1:1/v1/traces" },
-    });
-    const provider = pluginProvider(plugin);
-    const unrelatedTracer = provider.getTracer(INSTRUMENTATION_NAME);
-    const before = unrelatedTracer.startSpan("before", undefined, ROOT_CONTEXT);
-
-    await plugin.onInvocationStart(invocationInfo(EXECUTION_ARN_A));
-    const workflow = workflowSpan(plugin);
-    const during = unrelatedTracer.startSpan("during", undefined, ROOT_CONTEXT);
-    const after = unrelatedTracer.startSpan("after", undefined, ROOT_CONTEXT);
-
-    expect(
-      new Set([
-        before.spanContext().traceId,
-        workflow.spanContext().traceId,
-        during.spanContext().traceId,
-        after.spanContext().traceId,
-      ]),
-    ).toHaveProperty("size", 4);
-    expect(workflow.spanContext()).toMatchObject({
-      traceId: deriveTraceIdFromArn(EXECUTION_ARN_A),
-      spanId: deriveWorkflowSpanId(EXECUTION_ARN_A),
-    });
-
-    const ownedProvider = provider as NodeTracerProvider;
-    await ownedProvider.shutdown();
-  });
-
   it("keeps interleaved plugin instances scoped to their executions", async () => {
     let provider: NodeTracerProvider | undefined;
     const tracerProviderFactory: TracerProviderFactory = (idGenerator) => {
@@ -172,11 +131,9 @@ describe.each([
       return provider;
     };
     const firstPlugin = new Plugin({
-      providerSource: ProviderSource.EXPLICIT,
       tracerProviderFactory,
     });
     const secondPlugin = new Plugin({
-      providerSource: ProviderSource.EXPLICIT,
       tracerProviderFactory,
     });
 
@@ -221,37 +178,5 @@ describe.each([
     await secondPlugin.onInvocationEnd(invocationEndInfo(EXECUTION_ARN_B));
     expect(provider).toBeDefined();
     await provider!.shutdown();
-  });
-});
-
-describe("plugin-owned provider ID generator", () => {
-  it("uses scoped deterministic IDs and random fallback IDs", async () => {
-    const generator = new DeterministicIdGenerator();
-    const { tracerProvider } = createTracerProvider(
-      {
-        providerSource: ProviderSource.AUTO_OTLP,
-        exporterConfig: { endpoint: "http://127.0.0.1:1/v1/traces" },
-      },
-      generator,
-    );
-    const tracer = tracerProvider.getTracer(INSTRUMENTATION_NAME);
-    const before = tracer.startSpan("before", undefined, ROOT_CONTEXT);
-    const durable = generator.withIds(
-      { traceId: "a".repeat(32), spanId: "1".repeat(16) },
-      () => tracer.startSpan("durable", undefined, ROOT_CONTEXT),
-    );
-    const after = tracer.startSpan("after", undefined, ROOT_CONTEXT);
-
-    expect(durable.spanContext()).toMatchObject({
-      traceId: "a".repeat(32),
-      spanId: "1".repeat(16),
-    });
-    expect(before.spanContext().traceId).not.toBe(
-      durable.spanContext().traceId,
-    );
-    expect(after.spanContext().traceId).not.toBe(durable.spanContext().traceId);
-    expect(after.spanContext().traceId).not.toBe(before.spanContext().traceId);
-
-    await (tracerProvider as NodeTracerProvider).shutdown();
   });
 });

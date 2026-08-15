@@ -12,7 +12,6 @@ import {
 } from "@opentelemetry/api";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
 import { InvocationOtelPlugin } from "../invocation-plugin";
-import { ProviderSource } from "../otel-plugin-config";
 import { deriveSpanIdFromOperationId } from "../deterministic-id-generator";
 import type { TracerProviderFactory } from "../otel-plugin-config";
 import type {
@@ -122,9 +121,9 @@ function compareHrTime(
 }
 
 function expectSpanInside(child: ReadableSpan, parent: ReadableSpan): void {
-  expect(compareHrTime(child.startTime, parent.startTime)).toBeGreaterThanOrEqual(
-    0,
-  );
+  expect(
+    compareHrTime(child.startTime, parent.startTime),
+  ).toBeGreaterThanOrEqual(0);
   expect(compareHrTime(child.endTime, parent.endTime)).toBeLessThanOrEqual(0);
 }
 
@@ -144,7 +143,6 @@ beforeEach(() => {
     return provider;
   };
   plugin = new InvocationOtelPlugin({
-    providerSource: ProviderSource.EXPLICIT,
     tracerProviderFactory,
   });
 });
@@ -184,7 +182,6 @@ describe("InvocationOtelPlugin", () => {
 
     it("honors custom workflowSpanName from config; invocation span name is fixed", async () => {
       const customPlugin = new InvocationOtelPlugin({
-        providerSource: ProviderSource.EXPLICIT,
         tracerProviderFactory,
         workflowSpanName: "my-workflow",
       });
@@ -507,7 +504,12 @@ describe("InvocationOtelPlugin", () => {
         makeOperationInfo({ id: "s2", type: "STEP", name: "retry-step" }),
       );
       await plugin.onOperationAttemptStart(
-        makeAttemptInfo({ id: "s2", type: "STEP", name: "retry-step", attempt: 1 }),
+        makeAttemptInfo({
+          id: "s2",
+          type: "STEP",
+          name: "retry-step",
+          attempt: 1,
+        }),
       );
       await plugin.onOperationAttemptEnd(
         makeAttemptEndInfo({
@@ -649,7 +651,12 @@ describe("InvocationOtelPlugin", () => {
       );
       // Attempt 1 (fails) — child of the operation span.
       await plugin.onOperationAttemptStart(
-        makeAttemptInfo({ id: "op-r", type: "STEP", name: "retried-op", attempt: 1 }),
+        makeAttemptInfo({
+          id: "op-r",
+          type: "STEP",
+          name: "retried-op",
+          attempt: 1,
+        }),
       );
       await plugin.onOperationAttemptEnd(
         makeAttemptEndInfo({
@@ -672,7 +679,12 @@ describe("InvocationOtelPlugin", () => {
       );
       // Attempt 2 (succeeds) after the replay.
       await plugin.onOperationAttemptStart(
-        makeAttemptInfo({ id: "op-r", type: "STEP", name: "retried-op", attempt: 2 }),
+        makeAttemptInfo({
+          id: "op-r",
+          type: "STEP",
+          name: "retried-op",
+          attempt: 2,
+        }),
       );
       await plugin.onOperationAttemptEnd(
         makeAttemptEndInfo({
@@ -1685,7 +1697,6 @@ describe("InvocationOtelPlugin", () => {
 
     it("returns undefined when enrichLogger is disabled, even with an active span", async () => {
       const noEnrichPlugin = new InvocationOtelPlugin({
-        providerSource: ProviderSource.EXPLICIT,
         tracerProviderFactory,
         enrichLogger: false,
       });
@@ -2029,13 +2040,11 @@ describe("InvocationOtelPlugin", () => {
 
       // Create parent plugin with shared provider
       const parentPlugin = new InvocationOtelPlugin({
-        providerSource: ProviderSource.EXPLICIT,
         tracerProviderFactory,
       });
 
       // Create child plugin with shared provider
       const childPlugin = new InvocationOtelPlugin({
-        providerSource: ProviderSource.EXPLICIT,
         tracerProviderFactory,
       });
 

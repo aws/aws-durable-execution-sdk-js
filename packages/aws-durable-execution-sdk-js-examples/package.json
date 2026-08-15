@@ -55,6 +55,7 @@
     "@aws/durable-execution-sdk-js-otel": "*",
     "@aws/durable-execution-sdk-js-testing": "*",
     "@opentelemetry/api": "^1.0.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.219.0",
     "@opentelemetry/instrumentation": "^0.219.0",
     "@opentelemetry/instrumentation-aws-sdk": "^0.74.0",
     "@opentelemetry/sdk-trace-node": "^2.6.1"

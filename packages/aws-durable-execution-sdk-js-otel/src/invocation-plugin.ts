@@ -9,7 +9,13 @@ import type {
   OperationChangeInfo,
 } from "@aws/durable-execution-sdk-js";
 import type { DurableExecutionInvocationOutput } from "@aws/durable-execution-sdk-js";
-import type { TracerProvider, Tracer, Span, SpanContext, Link } from "@opentelemetry/api";
+import type {
+  TracerProvider,
+  Tracer,
+  Span,
+  SpanContext,
+  Link,
+} from "@opentelemetry/api";
 import {
   context,
   trace,
@@ -28,7 +34,6 @@ import { xRayContextExtractor } from "./context-extractors";
 import type { ContextExtractor } from "./context-extractors";
 import type { OtelPluginConfig } from "./otel-plugin-config";
 import { createTracerProvider } from "./otel-plugin-provider";
-import { registerStandaloneInstrumentations } from "./otel-plugin-instrumentations";
 
 const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
 
@@ -64,16 +69,8 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     this.workflowSpanName = config?.workflowSpanName ?? "Workflow";
     this.enrichLogger = config?.enrichLogger ?? true;
 
-    // Resolve the configured provider. Plugin-owned providers receive the
-    // scoped generator during construction.
-    const { tracerProvider, source } = createTracerProvider(
-      config,
-      this.idGenerator,
-    );
+    const { tracerProvider } = createTracerProvider(config, this.idGenerator);
     this.tracerProvider = tracerProvider;
-
-    // Register instrumentations using the shared module
-    registerStandaloneInstrumentations(this.tracerProvider, source, config);
 
     this.tracer = this.tracerProvider.getTracer(instrumentationName);
   }
@@ -314,8 +311,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     } else if (info.type === "CONTEXT" || info.type === "STEP") {
       // Replay: use random span ID, add Link to deterministic span
       const traceId =
-        this.invocationSpan?.spanContext().traceId ??
-        this.executionTraceId;
+        this.invocationSpan?.spanContext().traceId ?? this.executionTraceId;
       span = this.tracer.startSpan(
         spanName,
         {
@@ -420,8 +416,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       // Operation was started in a prior invocation — create Continuation_Span
       const spanName = info.name ?? info.type;
       const traceId =
-        this.invocationSpan?.spanContext().traceId ??
-        this.executionTraceId;
+        this.invocationSpan?.spanContext().traceId ?? this.executionTraceId;
 
       const parentContext = this.invocationSpan
         ? trace.setSpan(context.active(), this.invocationSpan)

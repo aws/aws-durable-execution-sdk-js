@@ -8,7 +8,6 @@ export type {
   OtelPluginConfig,
   TracerProviderFactory,
 } from "./otel-plugin-config";
-export { ProviderSource } from "./otel-plugin-config";
 
 // Invocation Plugin
 export { InvocationOtelPlugin } from "./invocation-plugin";

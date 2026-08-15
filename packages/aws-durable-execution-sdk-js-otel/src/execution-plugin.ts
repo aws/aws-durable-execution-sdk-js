@@ -9,12 +9,7 @@ import type {
   OperationChangeInfo,
 } from "@aws/durable-execution-sdk-js";
 import type { DurableExecutionInvocationOutput } from "@aws/durable-execution-sdk-js";
-import type {
-  TracerProvider,
-  Tracer,
-  Span,
-  Link,
-} from "@opentelemetry/api";
+import type { TracerProvider, Tracer, Span, Link } from "@opentelemetry/api";
 import {
   context,
   trace,
@@ -31,17 +26,12 @@ import {
 import { xRayContextExtractor } from "./context-extractors";
 import type { ContextExtractor } from "./context-extractors";
 import type { OtelPluginConfig } from "./otel-plugin-config";
-import { createTracerProvider, ProviderSource } from "./otel-plugin-provider";
-import { registerStandaloneInstrumentations } from "./otel-plugin-instrumentations";
+import { createTracerProvider } from "./otel-plugin-provider";
 
 const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
 
 /**
- * Self-contained OpenTelemetry instrumentation plugin for durable executions.
- *
- * Unlike InvocationOtelPlugin (which relies on the ADOT Lambda layer for auto-instrumentation),
- * ExecutionOtelPlugin creates and manages its own TracerProvider, registers
- * instrumentations and propagators, and exports spans via OTLP to a local collector.
+ * OpenTelemetry instrumentation plugin for durable executions.
  *
  * Implements the DurableInstrumentationPlugin interface with a Workflow_Span as the
  * synthetic trace root, deferred operation span export, and invocation spans as
@@ -52,7 +42,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   private readonly idGenerator: DeterministicIdGenerator;
   private readonly contextExtractor: ContextExtractor;
 
-  // TracerProvider (internally managed or user-provided)
+  // TracerProvider (global or application-owned)
   private readonly tracerProvider: TracerProvider;
   private readonly tracer: Tracer;
 
@@ -63,8 +53,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   private executionArn: string;
   private executionTraceId: string;
 
-  // Default provider mode
-  private readonly providerSource: ProviderSource;
+  private readonly usesGlobalProvider: boolean;
 
   // Workflow span name (configurable)
   private readonly workflowSpanName: string;
@@ -81,16 +70,12 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     this.workflowSpanName = config?.workflowSpanName ?? "Workflow";
     this.enrichLogger = config?.enrichLogger ?? true;
 
-    // Create or accept TracerProvider via the provider factory
-    const { tracerProvider, source } = createTracerProvider(
+    const { tracerProvider, usesGlobalProvider } = createTracerProvider(
       config,
       this.idGenerator,
     );
     this.tracerProvider = tracerProvider;
-    this.providerSource = source;
-
-    // Register HTTP and AWS SDK instrumentations (skipped when custom provider is supplied)
-    registerStandaloneInstrumentations(this.tracerProvider, source, config);
+    this.usesGlobalProvider = usesGlobalProvider;
 
     this.tracer = this.tracerProvider.getTracer(instrumentationName);
 
@@ -140,8 +125,8 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     );
 
     // 6. Create Invocation_Span
-    if (this.providerSource !== ProviderSource.GLOBAL) {
-      // Non-default mode: child of Workflow_Span with Lambda semantic attributes
+    if (!this.usesGlobalProvider) {
+      // Application-owned provider: child of Workflow_Span with Lambda semantic attributes
       const parentContext = trace.setSpan(context.active(), this.workflowSpan);
 
       const invocationAttributes: Record<string, string | number | boolean> = {
@@ -184,7 +169,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         parentContext,
       );
     } else {
-      // Default provider mode: create invocation span as child of the ambient
+      // Global provider: create invocation span as child of the ambient
       // Lambda invocation span (from the ADOT layer or other auto-instrumentation)
       const parentContext = context.active();
 

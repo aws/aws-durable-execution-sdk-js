@@ -22,10 +22,7 @@ import {
 } from "@opentelemetry/api";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
 import { InvocationOtelPlugin } from "../invocation-plugin";
-import {
-  ProviderSource,
-  type TracerProviderFactory,
-} from "../otel-plugin-config";
+import type { TracerProviderFactory } from "../otel-plugin-config";
 import type {
   InvocationInfo,
   InvocationEndInfo,
@@ -106,8 +103,8 @@ describe("InvocationOtelPlugin - Global provider mode", () => {
     propagation.disable();
   });
 
-  it("uses the global provider when providerSource is GLOBAL", async () => {
-    const plugin = new InvocationOtelPlugin({ providerSource: ProviderSource.GLOBAL });
+  it("uses the global provider by default", async () => {
+    const plugin = new InvocationOtelPlugin();
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onOperationStart(
@@ -150,24 +147,8 @@ describe("InvocationOtelPlugin - Global provider mode", () => {
     ).toBe(true);
   });
 
-  it("creates its own internal provider with providerSource AUTO_OTLP", async () => {
-    // With AUTO_OTLP the InvocationOtelPlugin creates its own provider (option 3).
-    // Spans will NOT appear in the globally registered exporter.
-    const plugin = new InvocationOtelPlugin({
-      providerSource: ProviderSource.AUTO_OTLP,
-    });
-
-    await plugin.onInvocationStart(makeInvocationInfo());
-    await plugin.onInvocationEnd(makeInvocationEndInfo());
-
-    // The global exporter should NOT have any spans since the plugin uses its own provider
-    const globalSpans = exporter.getFinishedSpans();
-    const invocationSpan = globalSpans.find((s) => s.name === "Invocation");
-    expect(invocationSpan).toBeUndefined();
-  });
-
-  it("exports operation spans via the global provider when providerSource is GLOBAL", async () => {
-    const plugin = new InvocationOtelPlugin({ providerSource: ProviderSource.GLOBAL });
+  it("exports operation spans via the global provider", async () => {
+    const plugin = new InvocationOtelPlugin();
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onOperationStart(
@@ -185,7 +166,7 @@ describe("InvocationOtelPlugin - Global provider mode", () => {
   });
 
   it("supports multiple invocation lifecycles without leaking state", async () => {
-    const plugin = new InvocationOtelPlugin({ providerSource: ProviderSource.GLOBAL });
+    const plugin = new InvocationOtelPlugin({});
 
     // First invocation
     await plugin.onInvocationStart(makeInvocationInfo());
@@ -226,7 +207,7 @@ describe("InvocationOtelPlugin - Global provider mode", () => {
   });
 
   it("does not shutdown the global provider on invocation end", async () => {
-    const plugin = new InvocationOtelPlugin({ providerSource: ProviderSource.GLOBAL });
+    const plugin = new InvocationOtelPlugin({});
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onOperationStart(
@@ -285,7 +266,6 @@ describe("InvocationOtelPlugin - custom instrumentationName", () => {
 
   it("uses default instrumentationName when not specified", async () => {
     const plugin = new InvocationOtelPlugin({
-      providerSource: ProviderSource.EXPLICIT,
       tracerProviderFactory,
     });
 
@@ -302,7 +282,6 @@ describe("InvocationOtelPlugin - custom instrumentationName", () => {
 
   it("uses custom instrumentationName when specified", async () => {
     const plugin = new InvocationOtelPlugin({
-      providerSource: ProviderSource.EXPLICIT,
       tracerProviderFactory,
       instrumentationName: "my-custom-tracer",
     });
@@ -345,7 +324,6 @@ describe("InvocationOtelPlugin - forceFlush error handling", () => {
     };
 
     const plugin = new InvocationOtelPlugin({
-      providerSource: ProviderSource.EXPLICIT,
       tracerProviderFactory: () => failingProvider as any,
     });
 

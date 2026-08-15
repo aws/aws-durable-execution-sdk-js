@@ -2,14 +2,13 @@ import {
   DurableContext,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
+import { ExecutionOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import {
-  ExecutionOtelPlugin,
-  ProviderSource,
-} from "@aws/durable-execution-sdk-js-otel";
-import {
+  BatchSpanProcessor,
   InMemorySpanExporter,
-  SimpleSpanProcessor,
   NodeTracerProvider,
+  SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
 import { ExampleConfig } from "../../../types";
@@ -20,33 +19,45 @@ import { xrayE2eWorkflow } from "../shared/xray-e2e-workflow";
  * Detect whether we're running in Lambda (cloud) vs local test runner.
  * Unlike other OTel examples that use isAdotEnvironment() (which checks
  * AWS_LAMBDA_EXEC_WRAPPER), this function intentionally does NOT set that
- * wrapper — the ExecutionOtelPlugin manages its own TracerProvider.
+ * wrapper. The application configures a provider that exports to the collector.
  */
 function isCloudEnvironment(): boolean {
   return process.env.AWS_LAMBDA_FUNCTION_NAME !== undefined;
 }
 
 // Dual-mode setup for ExecutionOtelPlugin:
-// - Cloud (Lambda): default config (OTLP to ADOT collector at localhost:4318)
+// - Cloud (Lambda): application-owned provider exporting to localhost:4318
 // - Local: InMemorySpanExporter for direct span assertions
 let exporter: InMemorySpanExporter | undefined;
 let plugin: ExecutionOtelPlugin;
 
 if (isCloudEnvironment()) {
-  // Cloud mode: build our own OTLP exporter to the ADOT collector
+  // Cloud mode: build an OTLP exporter for the collector extension.
   plugin = new ExecutionOtelPlugin({
-    providerSource: ProviderSource.AUTO_OTLP,
+    tracerProviderFactory: (idGenerator) => {
+      const provider = new NodeTracerProvider({
+        idGenerator,
+        spanProcessors: [
+          new BatchSpanProcessor(
+            new OTLPTraceExporter({
+              url: "http://localhost:4318/v1/traces",
+            }),
+          ),
+        ],
+      });
+      provider.register();
+      return provider;
+    },
   });
 } else {
-  // Local mode: custom TracerProvider with InMemorySpanExporter
+  // Local mode: application-owned provider with InMemorySpanExporter.
   exporter = new InMemorySpanExporter();
-  const provider = new NodeTracerProvider({
-    spanProcessors: [new SimpleSpanProcessor(exporter)],
-  });
-
   plugin = new ExecutionOtelPlugin({
-    providerSource: ProviderSource.EXPLICIT,
-    tracerProvider: provider,
+    tracerProviderFactory: (idGenerator) =>
+      new NodeTracerProvider({
+        idGenerator,
+        spanProcessors: [new SimpleSpanProcessor(exporter!)],
+      }),
   });
 }
 
