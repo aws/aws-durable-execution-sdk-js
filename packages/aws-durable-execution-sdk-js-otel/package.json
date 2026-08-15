@@ -23,7 +23,7 @@
     "build:types": "tsc --project tsconfig.build.json --outDir dist-types",
     "prepublishOnly": "npm run build && npm run test",
     "lint": "eslint --fix",
-    "prebuild": "npm run lint",
+    "prebuild": "rm -rf dist dist-cjs dist-types && npm run lint",
     "test": "tsc --noEmit && jest --config jest.config.mjs --collectCoverage --collectCoverageFrom=src/**/*.{ts,js}"
   },
   "exports": {
