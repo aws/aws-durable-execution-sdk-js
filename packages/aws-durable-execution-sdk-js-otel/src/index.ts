@@ -5,6 +5,7 @@ export { ExecutionOtelPlugin } from "./execution-plugin";
 
 // Shared Plugin Config
 export type {
+  IdGeneratorFactory,
   OtelPluginConfig,
   TracerProviderFactory,
 } from "./otel-plugin-config";

@@ -132,11 +132,11 @@ let tracerProviderFactory: TracerProviderFactory;
 beforeEach(() => {
   exporter = new InMemorySpanExporter();
   provider = undefined;
-  tracerProviderFactory = (idGenerator) => {
+  tracerProviderFactory = (createIdGenerator) => {
     if (!provider) {
       provider = new NodeTracerProvider({
         spanProcessors: [new SimpleSpanProcessor(exporter)],
-        idGenerator,
+        idGenerator: createIdGenerator(),
       });
       provider.register();
     }

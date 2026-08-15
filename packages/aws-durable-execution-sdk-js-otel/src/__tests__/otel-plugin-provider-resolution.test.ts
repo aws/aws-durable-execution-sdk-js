@@ -4,6 +4,7 @@ import {
   NodeTracerProvider,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
+import type { IdGenerator } from "@opentelemetry/sdk-trace-node";
 import { DeterministicIdGenerator } from "../deterministic-id-generator";
 import { createTracerProvider } from "../otel-plugin-provider";
 
@@ -38,19 +39,54 @@ describe("createTracerProvider", () => {
     },
   );
 
-  it("passes the deterministic ID generator to the provider factory", () => {
+  it("passes a deterministic ID generator factory to the provider factory", () => {
     const idGenerator = new DeterministicIdGenerator();
     const tracerProviderFactory = jest.fn(
-      (providerIdGenerator) =>
-        new NodeTracerProvider({ idGenerator: providerIdGenerator }),
+      (createIdGenerator) =>
+        new NodeTracerProvider({ idGenerator: createIdGenerator() }),
     );
 
     const result = createTracerProvider({ tracerProviderFactory }, idGenerator);
 
     expect(tracerProviderFactory).toHaveBeenCalledTimes(1);
-    expect(tracerProviderFactory).toHaveBeenCalledWith(idGenerator);
+    const createIdGenerator = tracerProviderFactory.mock.calls[0][0];
+    expect(createIdGenerator()).toBe(idGenerator);
     expect(result.usesGlobalProvider).toBe(false);
 
+    void (result.tracerProvider as NodeTracerProvider).shutdown();
+  });
+
+  it("chains deterministic IDs to an application fallback generator", () => {
+    const fallbackTraceId = "f".repeat(32);
+    const fallbackSpanId = "e".repeat(16);
+    const fallbackIdGenerator = {
+      generateTraceId: jest.fn(() => fallbackTraceId),
+      generateSpanId: jest.fn(() => fallbackSpanId),
+    };
+    const pluginIdGenerator = new DeterministicIdGenerator();
+    let providerIdGenerator: IdGenerator | undefined;
+    const tracerProviderFactory = jest.fn((createIdGenerator) => {
+      providerIdGenerator = createIdGenerator(fallbackIdGenerator);
+      return new NodeTracerProvider({ idGenerator: providerIdGenerator });
+    });
+
+    const result = createTracerProvider(
+      { tracerProviderFactory },
+      pluginIdGenerator,
+    );
+
+    expect(providerIdGenerator?.generateTraceId()).toBe(fallbackTraceId);
+    expect(providerIdGenerator?.generateSpanId()).toBe(fallbackSpanId);
+    pluginIdGenerator.withIds(
+      { traceId: "a".repeat(32), spanId: "1".repeat(16) },
+      () => {
+        expect(providerIdGenerator?.generateTraceId()).toBe("a".repeat(32));
+        expect(providerIdGenerator?.generateSpanId()).toBe("1".repeat(16));
+      },
+    );
+
+    expect(fallbackIdGenerator.generateTraceId).toHaveBeenCalledTimes(1);
+    expect(fallbackIdGenerator.generateSpanId).toHaveBeenCalledTimes(1);
     void (result.tracerProvider as NodeTracerProvider).shutdown();
   });
 

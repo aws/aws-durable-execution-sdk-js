@@ -76,10 +76,10 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       spanProcessors: [new SimpleSpanProcessor(exporter)],
     });
     provider.register();
-    tracerProviderFactory = (idGenerator) => {
+    tracerProviderFactory = (createIdGenerator) => {
       const explicitProvider = new NodeTracerProvider({
         spanProcessors: [new SimpleSpanProcessor(exporter)],
-        idGenerator,
+        idGenerator: createIdGenerator(),
       });
       explicitProviders.push(explicitProvider);
       return explicitProvider;

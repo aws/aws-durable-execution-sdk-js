@@ -34,9 +34,9 @@ let plugin: ExecutionOtelPlugin;
 if (isCloudEnvironment()) {
   // Cloud mode: build an OTLP exporter for the collector extension.
   plugin = new ExecutionOtelPlugin({
-    tracerProviderFactory: (idGenerator) => {
+    tracerProviderFactory: (createIdGenerator) => {
       const provider = new NodeTracerProvider({
-        idGenerator,
+        idGenerator: createIdGenerator(),
         spanProcessors: [
           new BatchSpanProcessor(
             new OTLPTraceExporter({
@@ -53,9 +53,9 @@ if (isCloudEnvironment()) {
   // Local mode: application-owned provider with InMemorySpanExporter.
   exporter = new InMemorySpanExporter();
   plugin = new ExecutionOtelPlugin({
-    tracerProviderFactory: (idGenerator) =>
+    tracerProviderFactory: (createIdGenerator) =>
       new NodeTracerProvider({
-        idGenerator,
+        idGenerator: createIdGenerator(),
         spanProcessors: [new SimpleSpanProcessor(exporter!)],
       }),
   });

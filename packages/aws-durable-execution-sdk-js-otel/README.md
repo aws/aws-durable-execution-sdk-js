@@ -62,7 +62,7 @@ plugin to replace it after provider construction.
 
 OpenTelemetry JavaScript accepts an ID generator only when constructing an SDK
 provider. To preserve deterministic durable IDs without mutating private
-OpenTelemetry fields, the plugin passes its generator to
+OpenTelemetry fields, the plugin passes an ID generator factory to
 `tracerProviderFactory`.
 
 ```typescript
@@ -74,9 +74,9 @@ import {
 } from "@opentelemetry/sdk-trace-node";
 
 const plugin = new InvocationOtelPlugin({
-  tracerProviderFactory: (idGenerator) => {
+  tracerProviderFactory: (createIdGenerator) => {
     const provider = new NodeTracerProvider({
-      idGenerator,
+      idGenerator: createIdGenerator(),
       spanProcessors: [
         new SimpleSpanProcessor(
           new OTLPTraceExporter({
@@ -92,6 +92,17 @@ const plugin = new InvocationOtelPlugin({
 });
 ```
 
+`createIdGenerator()` delegates non-durable IDs to OpenTelemetry's standard
+random generator. To preserve an application-specific generator, pass it as
+the fallback:
+
+```typescript
+idGenerator: createIdGenerator(applicationIdGenerator);
+```
+
+The deterministic wrapper is active only while the plugin creates durable
+spans. All unrelated spans continue to use `applicationIdGenerator`.
+
 The application owns all configuration and lifecycle for the returned
 provider, including:
 
@@ -101,9 +112,9 @@ provider, including:
 - HTTP, AWS SDK, and other library instrumentation;
 - global registration and shutdown.
 
-Use the supplied `idGenerator`; creating a separate deterministic generator is
-not necessary. The plugin may call `forceFlush()` after an invocation, but it
-does not shut down an application-owned provider.
+Use `createIdGenerator` when constructing the provider; creating a separate
+deterministic generator is not necessary. The plugin may call `forceFlush()`
+after an invocation, but it does not shut down an application-owned provider.
 
 ## Dynamic Loading from a Lambda Layer
 
@@ -162,8 +173,10 @@ Both plugins accept `OtelPluginConfig`:
 
 ```typescript
 interface OtelPluginConfig {
-  /** Creates an application-owned provider with the supplied ID generator. */
-  tracerProviderFactory?: (idGenerator: IdGenerator) => TracerProvider;
+  /** Creates an application-owned provider with a deterministic ID wrapper. */
+  tracerProviderFactory?: (
+    createIdGenerator: (fallbackIdGenerator?: IdGenerator) => IdGenerator,
+  ) => TracerProvider;
 
   /** Extracts upstream trace context. Defaults to xRayContextExtractor. */
   contextExtractor?: ContextExtractor;
@@ -245,14 +258,19 @@ new InvocationOtelPlugin(config?: OtelPluginConfig)
 ### `TracerProviderFactory`
 
 ```typescript
-type TracerProviderFactory = (idGenerator: IdGenerator) => TracerProvider;
+type IdGeneratorFactory = (fallbackIdGenerator?: IdGenerator) => IdGenerator;
+
+type TracerProviderFactory = (
+  createIdGenerator: IdGeneratorFactory,
+) => TracerProvider;
 ```
 
 ### `DeterministicIdGenerator`
 
 An OpenTelemetry `IdGenerator` with execution-scoped deterministic overrides.
-All unrelated ID generation is delegated to a random fallback generator. The
-plugin passes it to `tracerProviderFactory` during provider construction.
+All unrelated ID generation is delegated to its fallback generator. The plugin
+passes a factory to `tracerProviderFactory` so applications can chain the
+deterministic generator to their normal provider generator.
 
 ### `deriveWorkflowSpanId(executionArn: string): string`
 

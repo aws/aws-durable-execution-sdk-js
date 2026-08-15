@@ -1,7 +1,10 @@
 import type { TracerProvider } from "@opentelemetry/api";
 import { trace } from "@opentelemetry/api";
-import type { IdGenerator } from "@opentelemetry/sdk-trace-node";
-import type { OtelPluginConfig } from "./otel-plugin-config";
+import { DeterministicIdGenerator } from "./deterministic-id-generator";
+import type {
+  IdGeneratorFactory,
+  OtelPluginConfig,
+} from "./otel-plugin-config";
 
 export interface ProviderResult {
   /** The configured TracerProvider. */
@@ -22,11 +25,16 @@ export interface ProviderResult {
  */
 export function createTracerProvider(
   config: OtelPluginConfig | undefined,
-  idGenerator: IdGenerator,
+  idGenerator: DeterministicIdGenerator,
 ): ProviderResult {
   if (config?.tracerProviderFactory) {
+    const createIdGenerator: IdGeneratorFactory = (fallbackIdGenerator) =>
+      fallbackIdGenerator
+        ? new DeterministicIdGenerator(fallbackIdGenerator)
+        : idGenerator;
+
     return {
-      tracerProvider: config.tracerProviderFactory(idGenerator),
+      tracerProvider: config.tracerProviderFactory(createIdGenerator),
       usesGlobalProvider: false,
     };
   }

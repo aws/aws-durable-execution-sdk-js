@@ -45,9 +45,9 @@ export function createOtelTestSetup(): OtelTestSetup {
   let provider!: NodeTracerProvider;
 
   const plugin = new InvocationOtelPlugin({
-    tracerProviderFactory: (idGenerator) => {
+    tracerProviderFactory: (createIdGenerator) => {
       provider = new NodeTracerProvider({
-        idGenerator,
+        idGenerator: createIdGenerator(),
         spanProcessors: [new SimpleSpanProcessor(exporter)],
       });
       return provider;

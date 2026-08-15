@@ -247,10 +247,10 @@ describe("InvocationOtelPlugin - custom instrumentationName", () => {
 
   beforeEach(() => {
     exporter = new InMemorySpanExporter();
-    tracerProviderFactory = (idGenerator) => {
+    tracerProviderFactory = (createIdGenerator) => {
       provider = new NodeTracerProvider({
         spanProcessors: [new SimpleSpanProcessor(exporter)],
-        idGenerator,
+        idGenerator: createIdGenerator(),
       });
       return provider;
     };

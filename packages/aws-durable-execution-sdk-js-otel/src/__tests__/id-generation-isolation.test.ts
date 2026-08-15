@@ -6,6 +6,7 @@ import {
   type Span,
 } from "@opentelemetry/api";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import type { IdGenerator } from "@opentelemetry/sdk-trace-node";
 import type {
   DurableInstrumentationPlugin,
   InvocationEndInfo,
@@ -79,8 +80,10 @@ describe.each([
         config = {};
       } else {
         config = {
-          tracerProviderFactory: (idGenerator) => {
-            provider = new NodeTracerProvider({ idGenerator });
+          tracerProviderFactory: (createIdGenerator) => {
+            provider = new NodeTracerProvider({
+              idGenerator: createIdGenerator(),
+            });
             return provider;
           },
         };
@@ -124,10 +127,59 @@ describe.each([
     },
   );
 
+  it("delegates unrelated explicit-provider IDs to the application fallback", async () => {
+    let traceIdCounter = 0;
+    let spanIdCounter = 0;
+    const fallbackIdGenerator: IdGenerator = {
+      generateTraceId: jest.fn(() =>
+        (++traceIdCounter).toString(16).padStart(32, "0"),
+      ),
+      generateSpanId: jest.fn(() =>
+        (++spanIdCounter).toString(16).padStart(16, "0"),
+      ),
+    };
+    let provider: NodeTracerProvider | undefined;
+    const plugin = new Plugin({
+      tracerProviderFactory: (createIdGenerator) => {
+        provider = new NodeTracerProvider({
+          idGenerator: createIdGenerator(fallbackIdGenerator),
+        });
+        return provider;
+      },
+    });
+    if (!provider) {
+      throw new Error("TracerProvider factory was not called");
+    }
+
+    const unrelatedSpan = provider
+      .getTracer("application-library")
+      .startSpan("unrelated", undefined, ROOT_CONTEXT);
+    expect(unrelatedSpan.spanContext()).toMatchObject({
+      traceId: "0".repeat(31) + "1",
+      spanId: "0".repeat(15) + "1",
+    });
+
+    await plugin.onInvocationStart(invocationInfo(EXECUTION_ARN_A));
+    expect(workflowSpan(plugin).spanContext()).toMatchObject({
+      traceId: deriveTraceIdFromArn(EXECUTION_ARN_A),
+      spanId: deriveWorkflowSpanId(EXECUTION_ARN_A),
+    });
+    await plugin.onInvocationEnd(invocationEndInfo(EXECUTION_ARN_A));
+
+    expect(fallbackIdGenerator.generateTraceId).toHaveBeenCalled();
+    expect(fallbackIdGenerator.generateSpanId).toHaveBeenCalled();
+    unrelatedSpan.end();
+    await provider.shutdown();
+  });
+
   it("keeps interleaved plugin instances scoped to their executions", async () => {
     let provider: NodeTracerProvider | undefined;
-    const tracerProviderFactory: TracerProviderFactory = (idGenerator) => {
-      provider ??= new NodeTracerProvider({ idGenerator });
+    const tracerProviderFactory: TracerProviderFactory = (
+      createIdGenerator,
+    ) => {
+      provider ??= new NodeTracerProvider({
+        idGenerator: createIdGenerator(),
+      });
       return provider;
     };
     const firstPlugin = new Plugin({

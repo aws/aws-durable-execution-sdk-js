@@ -3,11 +3,19 @@ import type { IdGenerator } from "@opentelemetry/sdk-trace-node";
 import type { ContextExtractor } from "./context-extractors";
 
 /**
- * Creates a caller-owned TracerProvider with the plugin's deterministic ID
- * generator installed during provider construction.
+ * Creates the plugin's deterministic ID generator, optionally chained to an
+ * application-supplied fallback generator.
+ */
+export type IdGeneratorFactory = (
+  fallbackIdGenerator?: IdGenerator,
+) => IdGenerator;
+
+/**
+ * Creates a caller-owned TracerProvider with a deterministic ID generator
+ * installed during provider construction.
  */
 export type TracerProviderFactory = (
-  idGenerator: IdGenerator,
+  createIdGenerator: IdGeneratorFactory,
 ) => TracerProvider;
 
 /**
@@ -18,9 +26,9 @@ export type TracerProviderFactory = (
  */
 export interface OtelPluginConfig {
   /**
-   * Factory for an application-owned TracerProvider. The plugin passes its
-   * deterministic ID generator to the factory so it can be installed during
-   * provider construction.
+   * Factory for an application-owned TracerProvider. The plugin supplies a
+   * function that creates its deterministic ID generator, optionally chained
+   * to the application's normal ID generator as a fallback.
    *
    * When omitted, the globally registered provider is used. The application
    * owns initialization, instrumentation, exporters, and shutdown for providers
