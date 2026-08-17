@@ -1527,6 +1527,35 @@ Resources:
         - arn:aws:lambda:us-west-2:184161586896:layer:opentelemetry-collector-amd64-0_22_0:1
     Metadata:
       SkipBuild: "True"
+  OtelConcurrentCallbacks:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: OTelConcurrentCallback-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: otel-concurrent-callbacks.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      Environment:
+        Variables:
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-instrument
+      Tracing: Active
+      Layers:
+        - arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7
+    Metadata:
+      SkipBuild: "True"
   OtelInvoke:
     Type: AWS::Serverless::Function
     Properties:

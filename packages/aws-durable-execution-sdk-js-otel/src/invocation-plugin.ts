@@ -9,7 +9,13 @@ import type {
   OperationChangeInfo,
 } from "@aws/durable-execution-sdk-js";
 import type { DurableExecutionInvocationOutput } from "@aws/durable-execution-sdk-js";
-import type { TracerProvider, Tracer, Span, SpanContext, Link } from "@opentelemetry/api";
+import type {
+  TracerProvider,
+  Tracer,
+  Span,
+  SpanContext,
+  Link,
+} from "@opentelemetry/api";
 import {
   context,
   trace,
@@ -413,8 +419,17 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         this.invocationSpan?.spanContext().traceId ??
         this.idGenerator.generateTraceId();
 
-      const parentContext = this.invocationSpan
-        ? trace.setSpan(context.active(), this.invocationSpan)
+      // Resolve parent span: use parentId from map (e.g. the CONTEXT span for
+      // child operations inside waitForCallback), or fall back to invocation span.
+      let continuationParentSpan: Span | undefined;
+      if (info.parentId && this.spanMap.has(info.parentId)) {
+        continuationParentSpan = this.spanMap.get(info.parentId);
+      } else {
+        continuationParentSpan = this.invocationSpan;
+      }
+
+      const parentContext = continuationParentSpan
+        ? trace.setSpan(context.active(), continuationParentSpan)
         : context.active();
 
       const attributes: Record<string, string | number> = {
