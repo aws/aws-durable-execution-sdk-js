@@ -58,6 +58,8 @@ export const createStepHandler = <Logger extends DurableLogger>(
   parentId?: string,
   getDefaultSerdes?: () => AnySerdes,
   plugin: DurableInstrumentationPlugin = {},
+  // Plugin-only operation name; never checkpointed. Labels the STEP span.
+  pluginOperationName?: string,
 ) => {
   return <T>(
     nameOrFn: string | undefined | StepFunc<T, Logger>,
@@ -96,7 +98,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
 
       const opInfo = {
         id: hashId(stepId),
-        name: name,
+        name: pluginOperationName ?? name,
         type: OperationType.STEP,
         subType: OperationSubType.STEP,
         parentId: parentId ? hashId(parentId) : undefined,

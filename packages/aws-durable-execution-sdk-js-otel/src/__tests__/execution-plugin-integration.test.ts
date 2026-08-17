@@ -528,4 +528,264 @@ describe("ExecutionOtelPlugin - Parent-child workflow span ID collision preventi
     expect(opSpan).toBeDefined();
     expect(opSpan!.status.code).toBe(SpanStatusCode.OK);
   });
+
+  // ExecutionOtelPlugin has its own span-creation paths (deterministic span IDs,
+  // Workflow_Span as the fallback parent, and a cross-invocation path in
+  // onOperationEnd), so handler-provided-name behaviour is covered separately
+  // from InvocationOtelPlugin rather than assumed to be shared.
+  describe("Handler-provided names on unnamed child operations", () => {
+    it("child operation carries durable.operation.name provided by the handler", async () => {
+      const plugin = new ExecutionOtelPlugin();
+
+      await plugin.onInvocationStart(makeInvocationInfo());
+      // Parent CONTEXT operation (the waitForCallback child context) is named.
+      await plugin.onOperationStart(
+        makeOperationInfo({
+          id: "ctx-1",
+          type: "CONTEXT",
+          subType: "WaitForCallback",
+          name: "otel-callback",
+        }),
+      );
+      // Child CALLBACK operation: the plugin doesn't derive this name — the
+      // handler passes the derived name ("otel-callback-callback") to the inner
+      // createCallback via config, so the plugin receives it directly here.
+      await plugin.onOperationStart(
+        makeOperationInfo({
+          id: "cb-1",
+          type: "CALLBACK",
+          subType: "Callback",
+          parentId: "ctx-1",
+          name: "otel-callback-callback",
+        }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({
+          id: "cb-1",
+          type: "CALLBACK",
+          parentId: "ctx-1",
+          status: "SUCCEEDED" as any,
+        }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({
+          id: "ctx-1",
+          type: "CONTEXT",
+          name: "otel-callback",
+          status: "SUCCEEDED" as any,
+        }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      const cbSpan = getExportedSpans(exporter).find(
+        (s) => s.attributes["durable.operation.id"] === "cb-1",
+      );
+      expect(cbSpan).toBeDefined();
+      expect(cbSpan!.attributes["durable.operation.name"]).toBe(
+        "otel-callback-callback",
+      );
+    });
+
+    it("child operation has no name when none is provided", async () => {
+      const plugin = new ExecutionOtelPlugin();
+
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onOperationStart(
+        makeOperationInfo({ id: "ctx-2", type: "CONTEXT" }),
+      );
+      await plugin.onOperationStart(
+        makeOperationInfo({ id: "step-2", type: "STEP", parentId: "ctx-2" }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({
+          id: "step-2",
+          type: "STEP",
+          parentId: "ctx-2",
+          status: "SUCCEEDED" as any,
+        }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({
+          id: "ctx-2",
+          type: "CONTEXT",
+          status: "SUCCEEDED" as any,
+        }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      const stepSpan = getExportedSpans(exporter).find(
+        (s) => s.attributes["durable.operation.id"] === "step-2",
+      );
+      expect(stepSpan).toBeDefined();
+      expect(stepSpan!.attributes["durable.operation.name"]).toBeUndefined();
+    });
+
+    it("attempt span carries durable.operation.name passed by the handler", async () => {
+      const plugin = new ExecutionOtelPlugin();
+
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onOperationStart(
+        makeOperationInfo({
+          id: "ctx-3",
+          type: "CONTEXT",
+          subType: "WaitForCallback",
+          name: "my-callback",
+        }),
+      );
+      // Unnamed submitter STEP inside the child context.
+      await plugin.onOperationStart(
+        makeOperationInfo({
+          id: "step-3",
+          type: "STEP",
+          subType: "Step",
+          parentId: "ctx-3",
+          name: "my-callback-submitter",
+        }),
+      );
+      await plugin.onOperationAttemptStart(
+        makeAttemptInfo({
+          id: "step-3",
+          type: "STEP",
+          attempt: 1,
+          name: "my-callback-submitter",
+        }),
+      );
+      await plugin.onOperationAttemptEnd(
+        makeAttemptEndInfo({ id: "step-3", type: "STEP", attempt: 1 }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({
+          id: "step-3",
+          type: "STEP",
+          parentId: "ctx-3",
+          status: "SUCCEEDED" as any,
+        }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({
+          id: "ctx-3",
+          type: "CONTEXT",
+          name: "my-callback",
+          status: "SUCCEEDED" as any,
+        }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      const attemptSpan = findSpan(exporter, "my-callback-submitter attempt 1");
+      expect(attemptSpan).toBeDefined();
+      expect(attemptSpan!.attributes["durable.operation.name"]).toBe(
+        "my-callback-submitter",
+      );
+      // The attempt still parents to its own operation span, not the context.
+      // Look the operation span up by name: the attempt span carries the same
+      // durable.operation.id and is exported first. The operation span's name
+      // reflects the handler-provided name ("my-callback-submitter"), not the
+      // bare operation type.
+      const stepSpan = findSpan(exporter, "my-callback-submitter");
+      expect(stepSpan).toBeDefined();
+      expect(attemptSpan!.parentSpanContext?.spanId).toBe(
+        stepSpan!.spanContext().spanId,
+      );
+    });
+
+    it("cross-invocation child span carries the handler-provided name and parents to the parent span", async () => {
+      const plugin = new ExecutionOtelPlugin();
+
+      await plugin.onInvocationStart(makeInvocationInfo());
+      // CONTEXT is replayed in this invocation, so it populates spanMap.
+      await plugin.onOperationStart(
+        makeOperationInfo({
+          id: "ctx-4",
+          type: "CONTEXT",
+          subType: "WaitForCallback",
+          name: "otel-callback",
+          isReplay: true,
+        }),
+      );
+      // The CALLBACK completed between invocations: no onOperationStart in this
+      // invocation, so onOperationEnd takes the cross-invocation span path.
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({
+          id: "cb-4",
+          type: "CALLBACK",
+          subType: "Callback",
+          parentId: "ctx-4",
+          name: "otel-callback-callback",
+          status: "SUCCEEDED" as any,
+        }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({
+          id: "ctx-4",
+          type: "CONTEXT",
+          name: "otel-callback",
+          status: "SUCCEEDED" as any,
+        }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      const ctxSpan = getExportedSpans(exporter).find(
+        (s) => s.attributes["durable.operation.id"] === "ctx-4",
+      );
+      const cbSpan = getExportedSpans(exporter).find(
+        (s) => s.attributes["durable.operation.id"] === "cb-4",
+      );
+      expect(ctxSpan).toBeDefined();
+      expect(cbSpan).toBeDefined();
+      expect(cbSpan!.attributes["durable.operation.name"]).toBe(
+        "otel-callback-callback",
+      );
+      expect(cbSpan!.parentSpanContext?.spanId).toBe(
+        ctxSpan!.spanContext().spanId,
+      );
+    });
+  });
+
+  // Guards the waitForCondition parity fix: a check that returns
+  // normally but keeps polling ends the attempt with outcome SUCCEEDED, so the
+  // attempt span must carry an explicit OK status. OTel conformance test 9
+  // asserts `status: OK` on the first, non-terminal polling attempt.
+  it("a SUCCEEDED attempt end stamps explicit OK and records no exception", async () => {
+    const plugin = new ExecutionOtelPlugin();
+
+    await plugin.onInvocationStart(makeInvocationInfo());
+    await plugin.onOperationStart(
+      makeOperationInfo({
+        id: "cond-1",
+        type: "STEP",
+        subType: "WaitForCondition",
+        name: "otel-condition",
+      }),
+    );
+    await plugin.onOperationAttemptStart(
+      makeAttemptInfo({
+        id: "cond-1",
+        type: "STEP",
+        subType: "WaitForCondition",
+        name: "otel-condition",
+        attempt: 1,
+      }),
+    );
+    // Condition not yet met: the check ran successfully and polling continues.
+    await plugin.onOperationAttemptEnd(
+      makeAttemptEndInfo({
+        id: "cond-1",
+        type: "STEP",
+        subType: "WaitForCondition",
+        name: "otel-condition",
+        attempt: 1,
+        outcome: "SUCCEEDED" as any,
+        // No error: continuing to poll is not an attempt failure.
+      }),
+    );
+    await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+    const attemptSpan = findSpan(exporter, "otel-condition attempt 1");
+    expect(attemptSpan).toBeDefined();
+    expect(attemptSpan!.attributes["durable.attempt.outcome"]).toBe(
+      "SUCCEEDED",
+    );
+    expect(attemptSpan!.status.code).toBe(SpanStatusCode.OK);
+    expect(attemptSpan!.events).toHaveLength(0);
+  });
 });
