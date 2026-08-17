@@ -119,14 +119,14 @@ Use code-based registration when you need a custom `OtelPluginConfig`.
 
 ## Choosing a Plugin
 
-| Aspect                   | `ExecutionOtelPlugin`                    | `InvocationOtelPlugin`                                                  |
-| ------------------------ | ---------------------------------------- | ----------------------------------------------------------------------- |
-| Trace root               | Workflow_Span (synthetic, deterministic) | Workflow_Span (community collector) or ADOT invocation span             |
-| Operation parent         | Workflow_Span                            | Invocation span (community collector) or ADOT invocation span           |
-| Invocation span role     | Sibling with span links                  | Parent of operations (community collector) or delegated to ADOT         |
-| Export timing            | Operations deferred until complete       | All spans exported immediately                                          |
-| Non-terminal invocations | Workflow_Span discarded (clean traces)   | Workflow_Span discarded (community collector); all spans emitted (ADOT) |
-| Trace continuity         | Single trace across all invocations      | Single trace (community collector) or per-invocation with links (ADOT)  |
+| Aspect                   | `ExecutionOtelPlugin`                                                                   | `InvocationOtelPlugin`                                                 |
+| ------------------------ | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Trace root               | Workflow_Span (synthetic, deterministic)                                                | Workflow_Span (community collector) or ADOT invocation span            |
+| Operation parent         | Workflow_Span                                                                           | Invocation span (community collector) or ADOT invocation span          |
+| Invocation span role     | Sibling with span links                                                                 | Parent of operations (community collector) or delegated to ADOT        |
+| Export timing            | Operations deferred until complete                                                      | All spans exported immediately                                         |
+| Non-terminal invocations | Workflow_Span held as a non-recording context; exported once at the terminal invocation | Same (community collector); all spans emitted (ADOT)                   |
+| Trace continuity         | Single trace across all invocations                                                     | Single trace (community collector) or per-invocation with links (ADOT) |
 
 **Use `ExecutionOtelPlugin` when** you want a single unified trace view across all invocations of a durable execution, with the workflow as the logical root.
 
@@ -153,12 +153,12 @@ Both plugins can use either Lambda layer. The layer provides span transport (a c
 
 ## Deployment Matrix
 
-| #   | Plugin                 | Layer                     | `providerSource`     | `AWS_LAMBDA_EXEC_WRAPPER` | `collector.yaml` needed? |
-| --- | ---------------------- | ------------------------- | -------------------- | ------------------------- | ------------------------ |
-| 1   | `ExecutionOtelPlugin`  | ADOT Layer                | `GLOBAL`             | `/opt/otel-instrument`    | No                       |
-| 2   | `ExecutionOtelPlugin`  | Community Collector Layer | `AUTO_OTLP`            | Do NOT set                | Yes                      |
-| 3   | `InvocationOtelPlugin` | ADOT Layer                | `GLOBAL`             | `/opt/otel-instrument`    | No                       |
-| 4   | `InvocationOtelPlugin` | Community Collector Layer | `AUTO_OTLP`            | Do NOT set                | Yes                      |
+| #   | Plugin                 | Layer                     | `providerSource` | `AWS_LAMBDA_EXEC_WRAPPER` | `collector.yaml` needed? |
+| --- | ---------------------- | ------------------------- | ---------------- | ------------------------- | ------------------------ |
+| 1   | `ExecutionOtelPlugin`  | ADOT Layer                | `GLOBAL`         | `/opt/otel-instrument`    | No                       |
+| 2   | `ExecutionOtelPlugin`  | Community Collector Layer | `AUTO_OTLP`      | Do NOT set                | Yes                      |
+| 3   | `InvocationOtelPlugin` | ADOT Layer                | `GLOBAL`         | `/opt/otel-instrument`    | No                       |
+| 4   | `InvocationOtelPlugin` | Community Collector Layer | `AUTO_OTLP`      | Do NOT set                | Yes                      |
 
 ### 1. ExecutionOtelPlugin + ADOT Layer
 
@@ -168,7 +168,9 @@ The ADOT layer provides both the collector and a global TracerProvider. The plug
 
 ```typescript
 import { ExecutionOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
-const plugin = new ExecutionOtelPlugin({ providerSource: ProviderSource.GLOBAL });
+const plugin = new ExecutionOtelPlugin({
+  providerSource: ProviderSource.GLOBAL,
+});
 ```
 
 **SAM template:**
@@ -238,7 +240,9 @@ The ADOT layer provides both the collector and a global TracerProvider. The plug
 
 ```typescript
 import { InvocationOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
-const plugin = new InvocationOtelPlugin({ providerSource: ProviderSource.GLOBAL });
+const plugin = new InvocationOtelPlugin({
+  providerSource: ProviderSource.GLOBAL,
+});
 ```
 
 **SAM template:**
@@ -267,7 +271,7 @@ MyFunction:
 
 ### 4. InvocationOtelPlugin + Community Collector Layer
 
-The plugin creates its own TracerProvider and exports spans to the collector on `localhost:4318`. Produces a Workflow_Span as the synthetic trace root (with a deterministic ID derived from the execution ARN) and an Invocation span as its child. The Workflow_Span is only exported on terminal status (SUCCEEDED/FAILED), ensuring clean traces without incomplete workflow spans from intermediate invocations.
+The plugin creates its own TracerProvider and exports spans to the collector on `localhost:4318`. Produces a Workflow_Span as the synthetic trace root (with a deterministic ID derived from the execution ARN) and an Invocation span as its child. The Workflow_Span is exported exactly once per execution, at the terminal invocation, backdated to the execution start; non-terminal invocations hold its identity as a non-recording context so no duplicate span identities are emitted.
 
 **Handler code:**
 
@@ -302,14 +306,14 @@ MyFunction:
 
 ### Which Combination Should I Use?
 
-| Scenario                                               | Recommendation                                        |
-| ------------------------------------------------------ | ----------------------------------------------------- |
-| New deployment, want unified trace per execution       | ExecutionOtelPlugin + Community Collector (option 2)  |
-| New deployment, want per-invocation traces             | InvocationOtelPlugin + Community Collector (option 4) |
-| Already have ADOT layer, want unified execution traces | ExecutionOtelPlugin + ADOT Layer (option 1)           |
-| Already have ADOT layer, want per-invocation traces    | InvocationOtelPlugin + ADOT Layer (option 3)          |
-| Want smallest layer size                               | Community Collector (collector-only, no bundled SDK)  |
-| Want zero-config auto-instrumentation from ADOT        | ADOT Layer with `providerSource: ProviderSource.GLOBAL`      |
+| Scenario                                               | Recommendation                                          |
+| ------------------------------------------------------ | ------------------------------------------------------- |
+| New deployment, want unified trace per execution       | ExecutionOtelPlugin + Community Collector (option 2)    |
+| New deployment, want per-invocation traces             | InvocationOtelPlugin + Community Collector (option 4)   |
+| Already have ADOT layer, want unified execution traces | ExecutionOtelPlugin + ADOT Layer (option 1)             |
+| Already have ADOT layer, want per-invocation traces    | InvocationOtelPlugin + ADOT Layer (option 3)            |
+| Want smallest layer size                               | Community Collector (collector-only, no bundled SDK)    |
+| Want zero-config auto-instrumentation from ADOT        | ADOT Layer with `providerSource: ProviderSource.GLOBAL` |
 
 ---
 
@@ -357,7 +361,9 @@ interface OtelPluginConfig {
 const plugin = new ExecutionOtelPlugin();
 
 // Use the ADOT layer's globally registered TracerProvider
-const plugin = new InvocationOtelPlugin({ providerSource: ProviderSource.GLOBAL });
+const plugin = new InvocationOtelPlugin({
+  providerSource: ProviderSource.GLOBAL,
+});
 
 // Custom endpoint and headers (third-party vendor)
 const plugin = new ExecutionOtelPlugin({
@@ -554,7 +560,7 @@ MyFunction:
 Produces a hierarchical trace with Workflow_Span as the synthetic root:
 
 ```
-Workflow_Span (deterministic ID from execution ARN, exported on terminal status only)
+Workflow_Span (deterministic ID from execution ARN, exported once at the terminal invocation)
 ├── Invocation_Span (one per Lambda invocation, always exported)
 ├── Operation_Span: "fetch-data" (STEP)
 │   ├── Attempt_Span: "fetch-data attempt 1"
@@ -575,7 +581,7 @@ Workflow_Span (deterministic ID from execution ARN, exported on terminal status 
 Produces a per-invocation trace with the invocation span as root:
 
 ```
-Workflow_Span (deterministic ID from execution ARN, exported on terminal status only — community collector mode)
+Workflow_Span (deterministic ID from execution ARN, exported once at the terminal invocation — community collector mode)
 ├── Invocation_Span (one per Lambda invocation)
 │   ├── Operation_Span: "fetch-data" (STEP)
 │   │   ├── Attempt_Span: "fetch-data attempt 1"
@@ -601,31 +607,33 @@ Cross-invocation operations are correlated via span links to deterministic span 
 
 ### Span Status
 
-The **Workflow_Span** OTel status is derived from the terminal `PluginInvocationStatus`:
+The **Workflow_Span** covers the whole execution, so only the terminal invocation can complete it. It is exported **exactly once per execution**, at the terminal invocation, backdated to the execution start:
 
-| `PluginInvocationStatus` | Workflow_Span status |
-| ------------------------ | -------------------- |
-| `SUCCEEDED`              | `OK`                 |
+| `PluginInvocationStatus` | Workflow_Span                              |
+| ------------------------ | ------------------------------------------ |
+| `SUCCEEDED`              | exported, `OK`                             |
+| `FAILED`                 | exported, `ERROR` (with the error message) |
+| `PENDING`                | not exported (execution still in flight)   |
+| `RETRYING`               | not exported (execution still in flight)   |
+
+On a non-terminal invocation the plugin holds the Workflow identity as a **non-recording span context** instead of starting a real span. That keeps the deterministic ID available for parenting and links without creating a recording span that would have to be either abandoned un-ended (never exported) or ended — the latter emitting several spans that all claim the same `(traceId, spanId)`, which lets a backend overcount span metrics or keep an earlier `PENDING` copy in place of the terminal status.
+
+The **Invocation_Span** is scoped to a single Lambda invocation, so it always completes and is **always** ended and exported, one per invocation:
+
+| `PluginInvocationStatus` | Invocation_Span status                     |
+| ------------------------ | ------------------------------------------ |
+| `SUCCEEDED`              | `OK`                                       |
+| `PENDING`                | `OK` (a normal suspension, not an error)   |
 | `FAILED`                 | `ERROR` (with the execution error message) |
-| `PENDING`                | `UNSET` (span not ended/exported) |
-| `RETRYING`               | `UNSET` (span not ended/exported) |
+| `RETRYING`               | `UNSET`                                    |
 
-For non-terminal outcomes (`PENDING`/`RETRYING`) the Workflow_Span is intentionally left un-ended, so it is never exported and its status stays `UNSET`.
+`RETRYING` maps to `UNSET` rather than `ERROR` because the plugin cannot tell a genuine retry apart from a `STOPPED`/`TIMED_OUT` outcome (see the note below), so it does not assert an error status for it. The raw value is also recorded in the `durable.invocation.status` attribute.
 
-> **Note:** the OTel plugin does **not** know whether a failed workflow was `TIMED_OUT` or `STOPPED`. `PluginInvocationStatus` — the only status the plugin receives at `onInvocationEnd` — distinguishes just `SUCCEEDED`/`FAILED`/`PENDING`/`RETRYING`. `TIMED_OUT` and `STOPPED` are operation-level states (`PluginOperationStatus`) and are not surfaced at the invocation/workflow level, so any such outcome is reported as `FAILED` → span status `ERROR`.
+An `Attempt_Span` still in flight when an invocation ends is now ended rather than abandoned un-ended. Attempt spans get random IDs and never span more than one invocation, so exporting one cannot collide with anything; its status is left `UNSET` since the attempt reached no outcome.
 
-The **Invocation_Span** uses a slightly different mapping, because a `PENDING` suspension is a normal outcome for an individual invocation:
+`Operation_Span` export stays **deferred**: a suspended operation's span holds the deterministic operation span ID, which the eventual completion re-derives. Exporting a partial segment at suspension would emit a second span with that same `(traceId, spanId)`, so the span is exported once, when the operation actually completes, with its full start-to-finish timing.
 
-| `PluginInvocationStatus` | Invocation_Span status |
-| ------------------------ | ---------------------- |
-| `SUCCEEDED`              | `OK`                   |
-| `PENDING`                | `OK`                   |
-| `FAILED`                 | `ERROR` (with the execution error message) |
-| `RETRYING`               | `UNSET`                |
-
-Unlike the Workflow_Span, the Invocation_Span is **always** ended and exported (one per Lambda invocation), so `PENDING`/`RETRYING` invocations are exported with the mapping above. The raw value is also recorded in the `durable.invocation.status` attribute.
-
-> **Note:** the OTel plugin does **not** know whether an invocation/workflow was `STOPPED` or `TIMED_OUT`. `PluginInvocationStatus` — the only status the plugin receives at `onInvocationEnd` — distinguishes just `SUCCEEDED`/`FAILED`/`PENDING`/`RETRYING`; `STOPPED` and `TIMED_OUT` are operation-level states (`PluginOperationStatus`) that are not surfaced at the invocation/workflow level. This is also **why `RETRYING` maps to `UNSET`** rather than `ERROR`: the plugin cannot tell a genuine retry apart from a `STOPPED`/`TIMED_OUT` outcome, so it does not assert an error status for it.
+> **Note:** the OTel plugin does **not** know whether a failed workflow/invocation was `TIMED_OUT` or `STOPPED`. `PluginInvocationStatus` — the only status the plugin receives at `onInvocationEnd` — distinguishes just `SUCCEEDED`/`FAILED`/`PENDING`/`RETRYING`. `TIMED_OUT` and `STOPPED` are operation-level states (`PluginOperationStatus`) and are not surfaced at the invocation/workflow level, so any such outcome is reported as `FAILED` → span status `ERROR`.
 
 ---
 
@@ -715,13 +723,13 @@ After deploying with either plugin and either layer:
 
 ### Troubleshooting
 
-| Symptom                         | Likely Cause                                                                                                                                 |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| No traces appear                | Collector layer not attached, or config env var not set                                                                                      |
-| No traces with ADOT layer       | `AWS_LAMBDA_EXEC_WRAPPER` not set (when using `providerSource: ProviderSource.GLOBAL`)                                                              |
-| Traces fragmented across IDs    | X-Ray active tracing not enabled on the function                                                                                             |
-| Missing operation spans         | Sampling ratio set below 1.0                                                                                                                 |
-| Collector layer errors          | Check `collector.yaml` is in the function bundle at the path specified                                                                       |
+| Symptom                         | Likely Cause                                                                                                                                     |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| No traces appear                | Collector layer not attached, or config env var not set                                                                                          |
+| No traces with ADOT layer       | `AWS_LAMBDA_EXEC_WRAPPER` not set (when using `providerSource: ProviderSource.GLOBAL`)                                                           |
+| Traces fragmented across IDs    | X-Ray active tracing not enabled on the function                                                                                                 |
+| Missing operation spans         | Sampling ratio set below 1.0                                                                                                                     |
+| Collector layer errors          | Check `collector.yaml` is in the function bundle at the path specified                                                                           |
 | Duplicate spans with ADOT layer | `AWS_LAMBDA_EXEC_WRAPPER` is set but `providerSource` is not `GLOBAL` — either remove the env var or set `providerSource: ProviderSource.GLOBAL` |
 
 ## License

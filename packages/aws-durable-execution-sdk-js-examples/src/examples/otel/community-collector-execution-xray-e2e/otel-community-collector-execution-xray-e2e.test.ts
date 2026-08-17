@@ -105,16 +105,25 @@ createTests({
         const traceId = spans[0].traceId;
         expect(spans.every((s) => s.traceId === traceId)).toBe(true);
 
-        // Verify Workflow span exists
-        const workflowSpan = spans.find((s) => s.name === "Workflow");
+        // This execution suspends on a wait, so it spans several invocations.
+        // One Workflow span, carrying the terminal status — exporting one per
+        // invocation would reuse the same deterministic span ID.
+        const workflowSpans = spans.filter((s) => s.name === "Workflow");
+        expect(workflowSpans).toHaveLength(1);
+        const workflowSpan = workflowSpans[0];
         expect(workflowSpan).toBeDefined();
         expect(workflowSpan!.attributes["durable.execution.arn"]).toBeDefined();
+        expect(workflowSpan!.attributes["durable.execution.status"]).toBe(
+          "SUCCEEDED",
+        );
 
         // Verify Invocation span exists and is child of Workflow
         const invocationSpan = spans.find((s) => s.name === "Invocation");
         expect(invocationSpan).toBeDefined();
         expect(invocationSpan!.parentSpanId).toBe(workflowSpan!.spanId);
-        expect(invocationSpan!.attributes["durable.execution.arn"]).toBeDefined();
+        expect(
+          invocationSpan!.attributes["durable.execution.arn"],
+        ).toBeDefined();
 
         // Verify operation spans exist with correct attributes.
         // Filter out Context_Execution spans (which have "execution" in name)

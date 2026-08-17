@@ -11,6 +11,7 @@ import {
   propagation,
 } from "@opentelemetry/api";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
+import type { Span } from "@opentelemetry/api";
 import { InvocationOtelPlugin } from "../invocation-plugin";
 import { ProviderSource } from "../otel-plugin-config";
 import {
@@ -110,6 +111,21 @@ function makeAttemptEndInfo(
 
 function getExportedSpans(): ReadableSpan[] {
   return exporter.getFinishedSpans();
+}
+
+/**
+ * An OTel SpanId identifies exactly one span. Because span IDs here are derived
+ * deterministically from the execution ARN / operation ID so spans correlate
+ * across invocations, it is easy to accidentally export two spans claiming the
+ * same (traceId, spanId) — which makes generic OTLP backends retain duplicates,
+ * overcount span metrics, or (as X-Ray does) let an earlier incomplete segment
+ * overwrite the terminal one.
+ */
+function expectUniqueSpanIdentities(): void {
+  const ids = getExportedSpans().map(
+    (s) => `${s.spanContext().traceId}:${s.spanContext().spanId}`,
+  );
+  expect([...new Set(ids)]).toHaveLength(ids.length);
 }
 
 function findSpan(name: string): ReadableSpan | undefined {
@@ -282,18 +298,81 @@ describe("InvocationOtelPlugin", () => {
     });
 
     it.each(["PENDING", "RETRYING"])(
-      "leaves the Workflow span un-ended (UNSET, never exported) for non-terminal status %s",
+      "creates no recording Workflow span to abandon on non-terminal status %s",
       async (status) => {
         await plugin.onInvocationStart(makeInvocationInfo());
+
+        // Non-recording identity: nothing to end, nothing exported yet.
+        const workflowSpanRef = (plugin as any).workflowSpan as Span;
+        expect(workflowSpanRef).toBeDefined();
+        expect(workflowSpanRef.isRecording()).toBe(false);
+
         await plugin.onInvocationEnd(
           makeInvocationEndInfo({ status: status as any }),
         );
 
+        expect(workflowSpanRef.isRecording()).toBe(false);
         expect(findSpan("Workflow")).toBeUndefined();
       },
     );
-  });
 
+    it("keeps a non-negative duration when executionStartTimestamp is omitted", async () => {
+      // Optional field; fallback is captured at onInvocationStart, since
+      // onInvocationEnd captures endTime first.
+      await plugin.onInvocationStart(
+        makeInvocationInfo({ executionStartTimestamp: undefined }),
+      );
+      // Real gap: Date is ms-truncated, so a late fallback must be measurable.
+      await new Promise((r) => setTimeout(r, 15));
+
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({
+          status: "SUCCEEDED" as any,
+          executionStartTimestamp: undefined,
+        }),
+      );
+
+      const workflow = findSpan("Workflow")!;
+      const invocation = findSpan("Invocation")!;
+      expect(workflow).toBeDefined();
+      expect(invocation).toBeDefined();
+
+      // The Workflow span must contain the invocation it covers; a late
+      // fallback would start it after the invocation span began.
+      expect(
+        compareHrTime(workflow.startTime, invocation.startTime),
+      ).toBeLessThanOrEqual(0);
+      expect(
+        compareHrTime(workflow.endTime, workflow.startTime),
+      ).toBeGreaterThanOrEqual(0);
+    });
+
+    it("exports exactly one Workflow span identity across a suspend/resume pair", async () => {
+      // Invocation 1 suspends.
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: "PENDING" as any }),
+      );
+
+      // Invocation 2 (same ARN) completes the execution.
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
+      );
+
+      // A second span with the same identity would let a backend keep the
+      // earlier PENDING copy over this SUCCEEDED one.
+      const workflowSpans = getExportedSpans().filter(
+        (s) => s.name === "Workflow",
+      );
+      expect(workflowSpans).toHaveLength(1);
+      expect(workflowSpans[0].attributes["durable.execution.status"]).toBe(
+        "SUCCEEDED",
+      );
+      expect(workflowSpans[0].status.code).toBe(SpanStatusCode.OK);
+      expectUniqueSpanIdentities();
+    });
+  });
   describe("onInvocationEnd", () => {
     it("ends all open operation spans and invocation span", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
@@ -340,6 +419,137 @@ describe("InvocationOtelPlugin", () => {
       );
       // Only invocation span + Workflow span from second invocation, no leftover op-1
       expect(spans.length).toBe(2);
+    });
+
+    it.each(["PENDING", "RETRYING"])(
+      "ends an in-flight attempt span left open by a non-terminal invocation (%s)",
+      async (status) => {
+        // Attempt spans live only in spanMap, not spanStack, so a suspended
+        // attempt must still be ended here, not dropped when spanMap clears.
+        await plugin.onInvocationStart(makeInvocationInfo());
+        await plugin.onOperationStart(
+          makeOperationInfo({ id: "s1", type: "STEP", name: "my-step" }),
+        );
+        await plugin.onOperationAttemptStart(
+          makeAttemptInfo({
+            id: "s1",
+            type: "STEP",
+            name: "my-step",
+            attempt: 1,
+          }),
+        );
+
+        // Retain a live reference before spanMap is cleared, so we assert the
+        // span itself stops recording — not just that it reached the exporter.
+        const attemptSpanRef = (plugin as any).spanMap.get(
+          "attempt:s1:1",
+        ) as Span;
+        expect(attemptSpanRef).toBeDefined();
+        expect(attemptSpanRef.isRecording()).toBe(true);
+
+        // Suspend without onOperationAttemptEnd / onOperationEnd firing.
+        await plugin.onInvocationEnd(
+          makeInvocationEndInfo({ status: status as any }),
+        );
+
+        expect(attemptSpanRef.isRecording()).toBe(false);
+
+        const attemptSpan = findSpan("my-step attempt 1");
+        expect(attemptSpan).toBeDefined();
+        expect(
+          attemptSpan!.attributes["durable.attempt.outcome"],
+        ).toBeUndefined();
+      },
+    );
+
+    it.each(["WAIT", "CALLBACK"] as const)(
+      "gives a suspended %s and its later completion distinct exported identities",
+      async (type) => {
+        const name = `my-${type.toLowerCase()}`;
+
+        // Invocation 1: the operation starts and suspends.
+        await plugin.onInvocationStart(makeInvocationInfo());
+        await plugin.onOperationStart(
+          makeOperationInfo({ id: "sus-1", type, name }),
+        );
+        await plugin.onInvocationEnd(
+          makeInvocationEndInfo({ status: "PENDING" as any }),
+        );
+
+        // Invocation 2: it resolves (cross-invocation continuation).
+        await plugin.onInvocationStart(makeInvocationInfo());
+        await plugin.onOperationEnd(
+          makeOperationEndInfo({
+            id: "sus-1",
+            type,
+            name,
+            status: "SUCCEEDED" as any,
+            isReplay: false,
+          }),
+        );
+        await plugin.onInvocationEnd(
+          makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
+        );
+
+        // Partial and terminal segments must not share an identity, or the
+        // incomplete copy can overwrite the terminal one.
+        expectUniqueSpanIdentities();
+        expect(
+          getExportedSpans()
+            .filter((s) => s.name === name)
+            .some(
+              (s) => s.attributes["durable.operation.status"] === "SUCCEEDED",
+            ),
+        ).toBe(true);
+      },
+    );
+
+    it("keeps exported identities unique for a STEP retried across three invocations", async () => {
+      // Regression guard: onOperationStart re-derives the deterministic ID on
+      // every replay, so ending those spans can emit duplicate identities.
+      for (let i = 1; i <= 3; i++) {
+        const isReplay = i > 1;
+        const base = { id: "op-1", type: "STEP", name: "retry-step", isReplay };
+
+        await plugin.onInvocationStart(
+          makeInvocationInfo({ isFirstInvocation: i === 1 }),
+        );
+        await plugin.onOperationStart(makeOperationInfo(base));
+        await plugin.onOperationAttemptStart(
+          makeAttemptInfo({ ...base, attempt: i }),
+        );
+        await plugin.onOperationAttemptEnd(
+          makeAttemptEndInfo({
+            ...base,
+            attempt: i,
+            outcome: (i === 3 ? "SUCCEEDED" : "FAILED") as any,
+          }),
+        );
+        if (i === 3) {
+          await plugin.onOperationEnd(
+            makeOperationEndInfo({
+              ...base,
+              isReplay: false,
+              status: "SUCCEEDED" as any,
+              attempt: 3,
+            }),
+          );
+        }
+        await plugin.onInvocationEnd(
+          makeInvocationEndInfo({
+            status: (i === 3 ? "SUCCEEDED" : "RETRYING") as any,
+          }),
+        );
+      }
+
+      expectUniqueSpanIdentities();
+      expect(
+        getExportedSpans()
+          .filter((s) => s.name === "retry-step")
+          .some(
+            (s) => s.attributes["durable.operation.status"] === "SUCCEEDED",
+          ),
+      ).toBe(true);
     });
   });
 

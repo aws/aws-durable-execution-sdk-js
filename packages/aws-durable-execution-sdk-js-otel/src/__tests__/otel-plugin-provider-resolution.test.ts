@@ -3,18 +3,31 @@
  * skipping in the shared OTel plugin infrastructure (used by both
  * ExecutionOtelPlugin and InvocationOtelPlugin), driven by `providerSource`.
  */
-import { trace, context, propagation } from "@opentelemetry/api";
-import type { TracerProvider } from "@opentelemetry/api";
 import {
+  trace,
+  context,
+  propagation,
+  ROOT_CONTEXT,
+  TraceFlags,
+} from "@opentelemetry/api";
+import type { TracerProvider } from "@opentelemetry/api";
+import type { Sampler } from "@opentelemetry/sdk-trace-node";
+import type { Attributes } from "@opentelemetry/api";
+import {
+  AlwaysOffSampler,
+  AlwaysOnSampler,
   NodeTracerProvider,
   InMemorySpanExporter,
+  ParentBasedSampler,
+  SamplingDecision,
   SimpleSpanProcessor,
+  TraceIdRatioBasedSampler,
 } from "@opentelemetry/sdk-trace-node";
-import { createTracerProvider } from "../otel-plugin-provider";
 import {
-  ProviderSource,
-  resolveProviderSource,
-} from "../otel-plugin-config";
+  createTracerProvider,
+  resolveWorkflowRoot,
+} from "../otel-plugin-provider";
+import { ProviderSource, resolveProviderSource } from "../otel-plugin-config";
 import { registerStandaloneInstrumentations } from "../otel-plugin-instrumentations";
 
 // Save original env
@@ -246,7 +259,11 @@ describe("registerStandaloneInstrumentations", () => {
       const provider = new NodeTracerProvider();
 
       expect(() => {
-        registerStandaloneInstrumentations(provider, ProviderSource.AUTO_OTLP, {});
+        registerStandaloneInstrumentations(
+          provider,
+          ProviderSource.AUTO_OTLP,
+          {},
+        );
       }).not.toThrow();
 
       provider.shutdown();
@@ -347,3 +364,307 @@ describe("ExecutionOtelPlugin integration - provider resolution", () => {
     globalProvider.shutdown();
   });
 });
+
+describe("resolveWorkflowRoot", () => {
+  const rootFlags = (tracer: any, traceId: string) =>
+    resolveWorkflowRoot(
+      tracer,
+      traceId,
+      "b".repeat(16),
+      "Workflow",
+      "arn:x",
+    ).span.spanContext().traceFlags;
+
+  const TRACE_ID = "9c1c1a2b3d4e5f60718293a4b5c6d7e8";
+
+  function tracerFor(sampler: Sampler) {
+    const provider = new NodeTracerProvider({
+      sampler,
+      spanProcessors: [new SimpleSpanProcessor(new InMemorySpanExporter())],
+    });
+    return { provider, tracer: provider.getTracer("t") };
+  }
+
+  it.each([
+    ["AlwaysOn", () => new AlwaysOnSampler(), TraceFlags.SAMPLED],
+    ["AlwaysOff", () => new AlwaysOffSampler(), TraceFlags.NONE],
+    ["ratio 1.0", () => new TraceIdRatioBasedSampler(1), TraceFlags.SAMPLED],
+    ["ratio 0.0", () => new TraceIdRatioBasedSampler(0), TraceFlags.NONE],
+    [
+      "ParentBased(AlwaysOff) — parentless root",
+      () => new ParentBasedSampler({ root: new AlwaysOffSampler() }),
+      TraceFlags.NONE,
+    ],
+  ])("returns the sampler's root decision for %s", (_n, make, expected) => {
+    const { provider, tracer } = tracerFor(make());
+    expect(rootFlags(tracer, TRACE_ID)).toBe(expected);
+    provider.shutdown();
+  });
+
+  // The whole point of the helper: reproduce what startSpan would have decided.
+  // If the SDK ever renames the internal `_sampler`, the fallback kicks in and
+  // this equivalence breaks — which is exactly what we want to be told about.
+  it.each([
+    ["AlwaysOn", () => new AlwaysOnSampler()],
+    ["AlwaysOff", () => new AlwaysOffSampler()],
+    ["ratio 0.01", () => new TraceIdRatioBasedSampler(0.01)],
+    [
+      "ParentBased(ratio 0.5)",
+      () => new ParentBasedSampler({ root: new TraceIdRatioBasedSampler(0.5) }),
+    ],
+  ])("matches the flags a real root span gets from %s", (_n, make) => {
+    for (const traceId of [
+      TRACE_ID,
+      "1111111111111111aaaaaaaaaaaaaaaa",
+      "ffffffffffffffff0000000000000000",
+    ]) {
+      const { provider, tracer } = tracerFor(make());
+      (tracer as unknown as { _idGenerator: unknown })._idGenerator = {
+        generateTraceId: () => traceId,
+        generateSpanId: () => "b".repeat(16),
+      };
+
+      const real = tracer.startSpan("Workflow", {}, ROOT_CONTEXT);
+      const automatic = real.spanContext().traceFlags;
+      real.end();
+
+      expect(rootFlags(tracer, traceId)).toBe(automatic);
+      provider.shutdown();
+    }
+  });
+
+  it("falls back to SAMPLED when the tracer exposes no sampler", () => {
+    const noopTracer = trace.getTracer("noop"); // no-op API tracer
+    expect(rootFlags(noopTracer, TRACE_ID)).toBe(TraceFlags.SAMPLED);
+  });
+});
+
+/**
+ * The plugins hold the Workflow span identity as a synthetic, non-recording span
+ * context. Its flags must carry the provider's real sampling decision: asserting
+ * SAMPLED would export operation spans while the terminal root is dropped, and
+ * make enrichLogContext() report otelTraceSampled: true for dropped traces.
+ */
+describe.each([
+  [
+    "ExecutionOtelPlugin",
+    async () => (await import("../execution-plugin")).ExecutionOtelPlugin,
+  ],
+  [
+    "InvocationOtelPlugin",
+    async () => (await import("../invocation-plugin")).InvocationOtelPlugin,
+  ],
+])("%s honors an unsampled provider", (_name, importPlugin) => {
+  const invInfo = {
+    requestId: "req-1",
+    executionArn: "arn:aws:states:us-east-1:123456789012:execution:sm:exec-1",
+    isFirstInvocation: true,
+    executionInput: {},
+    operations: {},
+    updatedOperations: {},
+  } as any;
+  const invEnd = { ...invInfo, status: "SUCCEEDED" } as any;
+
+  async function setup() {
+    const exporter = new InMemorySpanExporter();
+    const provider = new NodeTracerProvider({
+      sampler: new ParentBasedSampler({ root: new AlwaysOffSampler() }),
+      spanProcessors: [new SimpleSpanProcessor(exporter)],
+    });
+    provider.register();
+    const Plugin = await importPlugin();
+    return {
+      exporter,
+      provider,
+      plugin: new Plugin({ providerSource: ProviderSource.GLOBAL }) as any,
+    };
+  }
+
+  it("marks the synthetic Workflow context unsampled and exports nothing", async () => {
+    const { exporter, provider, plugin } = await setup();
+
+    await plugin.onInvocationStart(invInfo);
+    expect(plugin.workflowSpan.spanContext().traceFlags).toBe(TraceFlags.NONE);
+
+    await plugin.onOperationStart({
+      id: "op-1",
+      type: "STEP",
+      name: "my-step",
+      isReplay: false,
+    });
+    await plugin.onOperationEnd({
+      id: "op-1",
+      type: "STEP",
+      name: "my-step",
+      isReplay: false,
+      status: "SUCCEEDED",
+    });
+    await plugin.onInvocationEnd(invEnd);
+
+    expect(exporter.getFinishedSpans()).toHaveLength(0);
+    await provider.shutdown();
+  });
+
+  it("reports otelTraceSampled false from enrichLogContext", async () => {
+    const { provider, plugin } = await setup();
+
+    await plugin.onInvocationStart(invInfo);
+    const enriched = await plugin.wrapInvocation(invInfo, async () =>
+      plugin.enrichLogContext(),
+    );
+
+    expect(enriched?.otelTraceSampled).toBe(false);
+
+    await plugin.onInvocationEnd(invEnd);
+    await provider.shutdown();
+  });
+
+  it("still exports the root when the sampler says yes", async () => {
+    // Control, so the assertions above cannot pass vacuously.
+    const exporter = new InMemorySpanExporter();
+    const provider = new NodeTracerProvider({
+      sampler: new ParentBasedSampler({ root: new AlwaysOnSampler() }),
+      spanProcessors: [new SimpleSpanProcessor(exporter)],
+    });
+    provider.register();
+    const Plugin = await importPlugin();
+    const plugin = new Plugin({
+      providerSource: ProviderSource.GLOBAL,
+    }) as any;
+
+    await plugin.onInvocationStart(invInfo);
+    expect(plugin.workflowSpan.spanContext().traceFlags).toBe(
+      TraceFlags.SAMPLED,
+    );
+    await plugin.onInvocationEnd(invEnd);
+
+    expect(
+      exporter.getFinishedSpans().filter((s) => s.name === "Workflow"),
+    ).toHaveLength(1);
+    await provider.shutdown();
+  });
+});
+
+/**
+ * The synthetic Workflow context and the terminal Workflow span must reach the
+ * SAME sampling decision. They are sampled at different times, so the inputs
+ * have to match (identical name + attributes, ROOT_CONTEXT, same traceId) and
+ * the result is cached and reused.
+ */
+describe.each([
+  [
+    "ExecutionOtelPlugin",
+    async () => (await import("../execution-plugin")).ExecutionOtelPlugin,
+  ],
+  [
+    "InvocationOtelPlugin",
+    async () => (await import("../invocation-plugin")).InvocationOtelPlugin,
+  ],
+])(
+  "%s sampling is consistent across both Workflow sampling points",
+  (_name, importPlugin) => {
+    const ARN = "arn:aws:states:us-east-1:123456789012:execution:sm:exec-1";
+    const invInfo = {
+      requestId: "req-1",
+      executionArn: ARN,
+      isFirstInvocation: true,
+      executionInput: {},
+      operations: {},
+      updatedOperations: {},
+    } as any;
+    const invEnd = { ...invInfo, status: "SUCCEEDED" } as any;
+
+    /** Samples only spans carrying durable.execution.arn — and drops the rest. */
+    class ArnAttributeSampler implements Sampler {
+      public seen: Attributes[] = [];
+      shouldSample(
+        _ctx: unknown,
+        _traceId: string,
+        _name: string,
+        _kind: unknown,
+        attributes: Attributes,
+      ) {
+        this.seen.push({ ...attributes });
+        return {
+          decision: attributes["durable.execution.arn"]
+            ? SamplingDecision.RECORD_AND_SAMPLED
+            : SamplingDecision.NOT_RECORD,
+        };
+      }
+      toString() {
+        return "ArnAttributeSampler";
+      }
+    }
+
+    /** Samples the first root it sees, then drops everything after. */
+    class FirstOnlySampler implements Sampler {
+      public calls = 0;
+      shouldSample() {
+        this.calls += 1;
+        return {
+          decision:
+            this.calls === 1
+              ? SamplingDecision.RECORD_AND_SAMPLED
+              : SamplingDecision.NOT_RECORD,
+        };
+      }
+      toString() {
+        return "FirstOnlySampler";
+      }
+    }
+
+    async function run(sampler: Sampler) {
+      const exporter = new InMemorySpanExporter();
+      const provider = new NodeTracerProvider({
+        sampler,
+        spanProcessors: [new SimpleSpanProcessor(exporter)],
+      });
+      provider.register();
+      const Plugin = await importPlugin();
+      const plugin = new Plugin({
+        providerSource: ProviderSource.GLOBAL,
+      }) as any;
+
+      await plugin.onInvocationStart(invInfo);
+      const syntheticFlags = plugin.workflowSpan.spanContext().traceFlags;
+      await plugin.onInvocationEnd(invEnd);
+
+      const workflow = exporter
+        .getFinishedSpans()
+        .filter((s) => s.name === "Workflow");
+      await provider.shutdown();
+      return { syntheticFlags, workflow };
+    }
+
+    it("passes the Workflow attributes to an attribute-based sampler at both points", async () => {
+      const sampler = new ArnAttributeSampler();
+      const { syntheticFlags, workflow } = await run(sampler);
+
+      // Every root sampling call saw durable.execution.arn, so the sampler
+      // reached the same answer both times.
+      const rootCalls = sampler.seen.filter(
+        (a) => a["durable.execution.arn"] !== undefined,
+      );
+      expect(rootCalls.length).toBeGreaterThanOrEqual(1);
+      expect(syntheticFlags).toBe(TraceFlags.SAMPLED);
+      expect(workflow).toHaveLength(1);
+
+      // Status is stamped after creation, so it never skews the decision.
+      expect(workflow[0].attributes["durable.execution.status"]).toBe(
+        "SUCCEEDED",
+      );
+    });
+
+    it("does not export a Workflow root a stateful sampler would have dropped for children", async () => {
+      // The cached decision is what counts: if the first call said "drop", the
+      // terminal span is never created, so children and root agree.
+      const sampler = new FirstOnlySampler();
+      sampler.shouldSample(); // burn the one sampled decision before the plugin runs
+
+      const { syntheticFlags, workflow } = await run(sampler);
+
+      expect(syntheticFlags).toBe(TraceFlags.NONE);
+      expect(workflow).toHaveLength(0);
+    });
+  },
+);
