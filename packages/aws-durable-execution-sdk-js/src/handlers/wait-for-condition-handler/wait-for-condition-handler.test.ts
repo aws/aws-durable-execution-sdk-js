@@ -565,4 +565,125 @@ describe("WaitForCondition Handler", () => {
       );
     });
   });
+
+  describe("Serdes error handling", () => {
+    it("should terminate execution on Serdes error during STARTED state deserialization", async () => {
+      const stepId = "step-1";
+      const hashedStepId = hashId(stepId);
+
+      (mockContext as any)._stepData[hashedStepId] = {
+        Id: hashedStepId,
+        Status: OperationStatus.STARTED,
+        StepDetails: {
+          Result: JSON.stringify("checkpointed-state"),
+        },
+      };
+
+      (mockContext.getStepData as jest.Mock).mockReturnValue(
+        (mockContext as any)._stepData[hashedStepId],
+      );
+
+      // safeDeserialize is mocked for this suite, so production code never
+      // reaches the real terminate call. Return a never-resolving promise, as
+      // the real helper does after requesting termination.
+      mockSafeDeserialize.mockImplementationOnce(
+        () => new Promise(() => {}) as Promise<string>,
+      );
+
+      const handler = createWaitForConditionHandler(
+        mockContext,
+        mockCheckpoint,
+        createStepId,
+        createDefaultLogger(),
+        undefined,
+      );
+
+      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = jest
+        .fn()
+        .mockResolvedValue("new-result");
+      const config: WaitForConditionConfig<string> = {
+        waitStrategy: () => ({ shouldContinue: false }),
+        initialState: "initial",
+      };
+
+      // The returned promise never resolves (execution is terminated), so we
+      // don't await it -- just yield to the event loop so the handler can run
+      // up to the checkpoint-restore point.
+      void handler(checkFunc, config);
+      await Promise.resolve();
+
+      // The contract this change introduces: the STARTED restore path delegates
+      // to safeDeserialize, handing it the termination manager. Terminating on
+      // failure is safeDeserialize's own separately tested responsibility.
+      expect(mockSafeDeserialize).toHaveBeenCalledWith(
+        expect.anything(),
+        JSON.stringify("checkpointed-state"),
+        stepId,
+        undefined,
+        mockContext.terminationManager,
+        mockContext.durableExecutionArn,
+      );
+      expect(checkFunc).not.toHaveBeenCalled();
+    });
+
+    it("should terminate execution on Serdes error during READY state deserialization", async () => {
+      const stepId = "step-1";
+      const hashedStepId = hashId(stepId);
+
+      (mockContext as any)._stepData[hashedStepId] = {
+        Id: hashedStepId,
+        Status: OperationStatus.READY,
+        StepDetails: {
+          Attempt: 1,
+          Result: JSON.stringify("checkpointed-state"),
+        },
+      };
+
+      (mockContext.getStepData as jest.Mock).mockReturnValue(
+        (mockContext as any)._stepData[hashedStepId],
+      );
+
+      // safeDeserialize is mocked for this suite, so production code never
+      // reaches the real terminate call. Return a never-resolving promise, as
+      // the real helper does after requesting termination.
+      mockSafeDeserialize.mockImplementationOnce(
+        () => new Promise(() => {}) as Promise<string>,
+      );
+
+      const handler = createWaitForConditionHandler(
+        mockContext,
+        mockCheckpoint,
+        createStepId,
+        createDefaultLogger(),
+        undefined,
+      );
+
+      const checkFunc: WaitForConditionCheckFunc<string, DurableLogger> = jest
+        .fn()
+        .mockResolvedValue("new-result");
+      const config: WaitForConditionConfig<string> = {
+        waitStrategy: () => ({ shouldContinue: false }),
+        initialState: "initial",
+      };
+
+      // The returned promise never resolves (execution is terminated), so we
+      // don't await it -- just yield to the event loop so the handler can run
+      // up to the checkpoint-restore point.
+      void handler(checkFunc, config);
+      await Promise.resolve();
+
+      // The contract this change introduces: the READY restore path delegates
+      // to safeDeserialize, handing it the termination manager. Terminating on
+      // failure is safeDeserialize's own separately tested responsibility.
+      expect(mockSafeDeserialize).toHaveBeenCalledWith(
+        expect.anything(),
+        JSON.stringify("checkpointed-state"),
+        stepId,
+        undefined,
+        mockContext.terminationManager,
+        mockContext.durableExecutionArn,
+      );
+      expect(checkFunc).not.toHaveBeenCalled();
+    });
+  });
 });

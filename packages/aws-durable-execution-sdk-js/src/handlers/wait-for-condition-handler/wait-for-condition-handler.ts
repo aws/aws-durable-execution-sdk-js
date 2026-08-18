@@ -181,18 +181,14 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
         ) {
           const checkpointData = stepData.StepDetails?.Result;
           if (checkpointData) {
-            try {
-              const serdesContext = {
-                entityId: stepId,
-                durableExecutionArn: context.durableExecutionArn,
-              };
-              currentState = await serdes.deserialize(
-                checkpointData,
-                serdesContext,
-              );
-            } catch {
-              currentState = config.initialState;
-            }
+            currentState = await safeDeserialize(
+              serdes,
+              checkpointData,
+              stepId,
+              name,
+              context.terminationManager,
+              context.durableExecutionArn,
+            );
           } else {
             currentState = config.initialState;
           }
