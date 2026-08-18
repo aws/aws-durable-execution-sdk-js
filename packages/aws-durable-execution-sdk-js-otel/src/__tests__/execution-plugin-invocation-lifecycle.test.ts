@@ -121,7 +121,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       expect(workflowSpan).toBeDefined();
     });
 
-    it("creates an Invocation span with an application-owned provider", async () => {
+    it("creates a root Invocation span with an application-owned provider when no ambient span exists", async () => {
       const plugin = new ExecutionOtelPlugin({
         tracerProviderFactory,
       });
@@ -132,7 +132,67 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       );
 
       const invocationSpan = findSpan(exporter, "Invocation");
+      const workflowSpan = findSpan(exporter, "Workflow");
       expect(invocationSpan).toBeDefined();
+      expect(workflowSpan).toBeDefined();
+      expect(invocationSpan!.parentSpanContext).toBeUndefined();
+      expect(invocationSpan!.spanContext().traceId).not.toBe(
+        workflowSpan!.spanContext().traceId,
+      );
+    });
+
+    it("parents an application-owned provider's Invocation span to the ambient span", async () => {
+      const plugin = new ExecutionOtelPlugin({
+        tracerProviderFactory,
+      });
+      const ambientSpan = provider
+        .getTracer("test-ambient-provider")
+        .startSpan("ambient-invocation");
+      const ambientContext = trace.setSpan(ROOT_CONTEXT, ambientSpan);
+
+      await context.with(ambientContext, async () => {
+        await plugin.onInvocationStart(makeInvocationInfo());
+        await plugin.onInvocationEnd(
+          makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
+        );
+      });
+      ambientSpan.end();
+
+      const invocationSpan = findSpan(exporter, "Invocation");
+      expect(invocationSpan).toBeDefined();
+      expect(invocationSpan!.parentSpanContext?.spanId).toBe(
+        ambientSpan.spanContext().spanId,
+      );
+      expect(invocationSpan!.spanContext().traceId).toBe(
+        ambientSpan.spanContext().traceId,
+      );
+    });
+
+    it("parents an application-owned provider's Invocation span to extracted upstream context when no span is active", async () => {
+      const traceId = "1".repeat(32);
+      const parentSpanId = "2".repeat(16);
+      const plugin = new ExecutionOtelPlugin({
+        tracerProviderFactory,
+        contextExtractor: () => ({
+          traceId,
+          parentSpanId,
+          traceFlags: 1,
+        }),
+      });
+
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
+      );
+
+      const invocationSpan = findSpan(exporter, "Invocation");
+      expect(invocationSpan).toBeDefined();
+      expect(invocationSpan!.parentSpanContext).toMatchObject({
+        traceId,
+        spanId: parentSpanId,
+        isRemote: true,
+      });
+      expect(invocationSpan!.spanContext().traceId).toBe(traceId);
     });
   });
 

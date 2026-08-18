@@ -12,9 +12,11 @@ import type { DurableExecutionInvocationOutput } from "@aws/durable-execution-sd
 import type { TracerProvider, Tracer, Span, Link } from "@opentelemetry/api";
 import {
   context,
+  isSpanContextValid,
   trace,
   SpanKind,
   SpanStatusCode,
+  TraceFlags,
   ROOT_CONTEXT,
 } from "@opentelemetry/api";
 import {
@@ -139,16 +141,37 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         ),
     );
 
-    // 6. Create Invocation_Span
-    if (!this.usesGlobalProvider) {
-      // Application-owned provider: child of Workflow_Span with Lambda semantic attributes
-      const parentContext = trace.setSpan(context.active(), this.workflowSpan);
-
-      const invocationAttributes: Record<string, string | number | boolean> = {
-        "durable.execution.arn": info.executionArn,
-        "durable.invocation.first": info.isFirstInvocation,
+    // 6. Create Invocation_Span in the ambient Lambda trace. When no OTel span
+    // is active, fall back to the extracted upstream parent, or create a root if
+    // no valid upstream parent exists. Provider ownership must not change trace
+    // topology.
+    const activeContext = context.active();
+    const activeSpanContext = trace.getSpanContext(activeContext);
+    let invocationParentContext = activeContext;
+    if (
+      (!activeSpanContext || !isSpanContextValid(activeSpanContext)) &&
+      extractedContext?.parentSpanId
+    ) {
+      const extractedSpanContext = {
+        traceId: extractedContext.traceId,
+        spanId: extractedContext.parentSpanId,
+        traceFlags: extractedContext.traceFlags ?? TraceFlags.SAMPLED,
+        isRemote: true,
       };
+      if (isSpanContextValid(extractedSpanContext)) {
+        invocationParentContext = trace.setSpanContext(
+          activeContext,
+          extractedSpanContext,
+        );
+      }
+    }
 
+    const invocationAttributes: Record<string, string | number | boolean> = {
+      "durable.execution.arn": info.executionArn,
+      "durable.invocation.first": info.isFirstInvocation,
+    };
+
+    if (!this.usesGlobalProvider) {
       // Set cloud.resource_id from Lambda environment variables
       const functionName = process.env.AWS_LAMBDA_FUNCTION_NAME;
       if (functionName) {
@@ -174,32 +197,16 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
           invocationAttributes["faas.max_memory"] = parsed;
         }
       }
-
-      this.invocationSpan = this.tracer.startSpan(
-        "Invocation",
-        {
-          kind: SpanKind.INTERNAL,
-          attributes: invocationAttributes,
-        },
-        parentContext,
-      );
-    } else {
-      // Global provider: create invocation span as child of the ambient
-      // Lambda invocation span (from the ADOT layer or other auto-instrumentation)
-      const parentContext = context.active();
-
-      this.invocationSpan = this.tracer.startSpan(
-        "Invocation",
-        {
-          kind: SpanKind.INTERNAL,
-          attributes: {
-            "durable.execution.arn": info.executionArn,
-            "durable.invocation.first": info.isFirstInvocation,
-          },
-        },
-        parentContext,
-      );
     }
+
+    this.invocationSpan = this.tracer.startSpan(
+      "Invocation",
+      {
+        kind: SpanKind.INTERNAL,
+        attributes: invocationAttributes,
+      },
+      invocationParentContext,
+    );
   }
 
   wrapInvocation(

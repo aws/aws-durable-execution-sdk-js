@@ -155,6 +155,11 @@ Use this plugin for a workflow-centered view. The deterministic Workflow span
 is the parent of durable operation spans. Operation spans link to the Invocation
 span that observed them.
 
+The Invocation span is a child of the ambient Lambda span when one exists. If no
+span is active, the plugin uses the extracted upstream parent, or creates a root
+when no valid parent exists. This topology is the same for global and
+application-owned providers.
+
 ```text
 Workflow
 ├── Operation: fetch-data
