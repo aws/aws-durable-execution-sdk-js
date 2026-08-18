@@ -113,13 +113,11 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     // 2. Extract trace context via context extractor (same as InvocationOtelPlugin)
     const extractedContext = this.contextExtractor(info);
 
-    // 3. Resolve the execution trace ID used by scoped span creation
-    if (extractedContext?.traceId) {
-      this.executionTraceId = extractedContext.traceId;
-    } else {
-      // Fallback: derive trace ID from ARN
-      this.executionTraceId = deriveTraceIdFromArn(info.executionArn);
-    }
+    // 3. Give each durable execution its own Workflow trace. Parent and target
+    // executions in a chained invoke share the propagated Lambda/X-Ray trace,
+    // so reusing that trace ID would create multiple parentless Workflow roots
+    // in one trace.
+    this.executionTraceId = deriveTraceIdFromArn(info.executionArn);
 
     // 4. Derive the workflow span ID from execution ARN
     const workflowSpanId = deriveWorkflowSpanId(info.executionArn);

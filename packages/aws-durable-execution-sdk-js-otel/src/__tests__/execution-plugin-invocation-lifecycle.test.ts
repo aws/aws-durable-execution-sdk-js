@@ -17,6 +17,7 @@ import type {
   InvocationEndInfo,
 } from "@aws/durable-execution-sdk-js";
 import { ExecutionOtelPlugin } from "../execution-plugin";
+import { deriveTraceIdFromArn } from "../deterministic-id-generator";
 import type { TracerProviderFactory } from "../otel-plugin-config";
 
 const TEST_ARN =
@@ -193,6 +194,79 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
         isRemote: true,
       });
       expect(invocationSpan!.spanContext().traceId).toBe(traceId);
+    });
+
+    it("gives chained executions distinct Workflow traces when they share an upstream trace", async () => {
+      const upstreamTraceId = "1".repeat(32);
+      const upstreamParentSpanId = "2".repeat(16);
+      const targetArn = `${TEST_ARN}-target`;
+      const config = {
+        tracerProviderFactory,
+        contextExtractor: () => ({
+          traceId: upstreamTraceId,
+          parentSpanId: upstreamParentSpanId,
+          traceFlags: 1,
+        }),
+      };
+      const parentPlugin = new ExecutionOtelPlugin(config);
+      const targetPlugin = new ExecutionOtelPlugin(config);
+
+      await parentPlugin.onInvocationStart(makeInvocationInfo());
+      await parentPlugin.onInvocationEnd(makeInvocationEndInfo());
+      await targetPlugin.onInvocationStart(
+        makeInvocationInfo({ executionArn: targetArn }),
+      );
+      await targetPlugin.onInvocationEnd(
+        makeInvocationEndInfo({ executionArn: targetArn }),
+      );
+
+      const workflowSpans = getExportedSpans(exporter).filter(
+        (span) => span.name === "Workflow",
+      );
+      expect(workflowSpans).toHaveLength(2);
+
+      const parentWorkflow = workflowSpans.find(
+        (span) => span.attributes["durable.execution.arn"] === TEST_ARN,
+      );
+      const targetWorkflow = workflowSpans.find(
+        (span) => span.attributes["durable.execution.arn"] === targetArn,
+      );
+      expect(parentWorkflow).toBeDefined();
+      expect(targetWorkflow).toBeDefined();
+      expect(parentWorkflow!.parentSpanContext).toBeUndefined();
+      expect(targetWorkflow!.parentSpanContext).toBeUndefined();
+      expect(parentWorkflow!.spanContext().traceId).toBe(
+        deriveTraceIdFromArn(TEST_ARN),
+      );
+      expect(targetWorkflow!.spanContext().traceId).toBe(
+        deriveTraceIdFromArn(targetArn),
+      );
+      expect(parentWorkflow!.spanContext().traceId).not.toBe(
+        targetWorkflow!.spanContext().traceId,
+      );
+
+      const rootsByTrace = workflowSpans.reduce<Map<string, ReadableSpan[]>>(
+        (roots, span) => {
+          const traceId = span.spanContext().traceId;
+          roots.set(traceId, [...(roots.get(traceId) ?? []), span]);
+          return roots;
+        },
+        new Map(),
+      );
+      expect(rootsByTrace.size).toBe(2);
+      expect(
+        [...rootsByTrace.values()].every((roots) => roots.length === 1),
+      ).toBe(true);
+
+      const invocationSpans = getExportedSpans(exporter).filter(
+        (span) => span.name === "Invocation",
+      );
+      expect(invocationSpans).toHaveLength(2);
+      expect(
+        invocationSpans.every(
+          (span) => span.spanContext().traceId === upstreamTraceId,
+        ),
+      ).toBe(true);
     });
   });
 
