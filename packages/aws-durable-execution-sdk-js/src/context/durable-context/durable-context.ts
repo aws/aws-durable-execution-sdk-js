@@ -27,6 +27,7 @@ import {
   DurablePromise,
   DurableLogData,
 } from "../../types";
+import { InternalDurableContext } from "../../types/internal-context";
 import { Context } from "aws-lambda";
 import { CheckpointManager } from "../../utils/checkpoint/checkpoint-manager";
 import { EventEmitter } from "events";
@@ -76,9 +77,9 @@ export const DURABLE_CONTEXT_BRAND = Symbol.for(
   "@aws/durable-execution-sdk-js/durable-context",
 );
 
-export class DurableContextImpl<
-  Logger extends DurableLogger,
-> implements DurableContext<Logger> {
+export class DurableContextImpl<Logger extends DurableLogger>
+  implements DurableContext<Logger>, InternalDurableContext<Logger>
+{
   readonly [DURABLE_CONTEXT_BRAND] = true;
 
   private _stepPrefix?: string;
@@ -340,6 +341,34 @@ export class DurableContextImpl<
     fnOrOptions?: StepFunc<T, Logger> | StepConfig<T>,
     maybeOptions?: StepConfig<T>,
   ): DurablePromise<T> {
+    return this.stepInternal(undefined, nameOrFn, fnOrOptions, maybeOptions);
+  }
+
+  /**
+   * {@link step} variant that also labels the span with a plugin-only name.
+   * Never checkpointed. See {@link InternalDurableContext}.
+   * @internal
+   */
+  _stepWithPluginOperationName<T>(
+    pluginOperationName: string | undefined,
+    nameOrFn: string | undefined | StepFunc<T, Logger>,
+    fnOrOptions?: StepFunc<T, Logger> | StepConfig<T>,
+    maybeOptions?: StepConfig<T>,
+  ): DurablePromise<T> {
+    return this.stepInternal(
+      pluginOperationName,
+      nameOrFn,
+      fnOrOptions,
+      maybeOptions,
+    );
+  }
+
+  private stepInternal<T>(
+    pluginOperationName: string | undefined,
+    nameOrFn: string | undefined | StepFunc<T, Logger>,
+    fnOrOptions?: StepFunc<T, Logger> | StepConfig<T>,
+    maybeOptions?: StepConfig<T>,
+  ): DurablePromise<T> {
     validateContextUsage(
       this._stepPrefix,
       "step",
@@ -356,6 +385,7 @@ export class DurableContextImpl<
         this._parentId,
         () => this._defaultSerdes,
         this.durableExecution.plugin,
+        pluginOperationName,
       );
 
       return stepHandler(nameOrFn, fnOrOptions, maybeOptions);
@@ -539,6 +569,31 @@ export class DurableContextImpl<
     nameOrConfig?: string | CreateCallbackConfig<T>,
     maybeConfig?: CreateCallbackConfig<T>,
   ): DurablePromise<CreateCallbackResult<T>> {
+    return this.createCallbackInternal(undefined, nameOrConfig, maybeConfig);
+  }
+
+  /**
+   * {@link createCallback} variant that also labels the span with a
+   * plugin-only name. Never checkpointed. See {@link InternalDurableContext}.
+   * @internal
+   */
+  _createCallbackWithPluginOperationName<T>(
+    pluginOperationName: string | undefined,
+    nameOrConfig?: string | CreateCallbackConfig<T>,
+    maybeConfig?: CreateCallbackConfig<T>,
+  ): DurablePromise<CreateCallbackResult<T>> {
+    return this.createCallbackInternal(
+      pluginOperationName,
+      nameOrConfig,
+      maybeConfig,
+    );
+  }
+
+  private createCallbackInternal<T>(
+    pluginOperationName: string | undefined,
+    nameOrConfig?: string | CreateCallbackConfig<T>,
+    maybeConfig?: CreateCallbackConfig<T>,
+  ): DurablePromise<CreateCallbackResult<T>> {
     validateContextUsage(
       this._stepPrefix,
       "createCallback",
@@ -553,6 +608,7 @@ export class DurableContextImpl<
         this._parentId,
         () => this._defaultCallbackDeserializer,
         this.durableExecution.plugin,
+        pluginOperationName,
       );
       return callbackFactory(nameOrConfig, maybeConfig);
     });
