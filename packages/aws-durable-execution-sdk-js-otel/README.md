@@ -172,14 +172,18 @@ Workflow
 
 Use this plugin for invocation-centered traces. Each operation is parented to
 the current Invocation span and links back to the deterministic Workflow span.
+The Workflow span is the root of a separate execution-scoped trace, so it does
+not become a second root in the ambient Lambda trace. The Invocation span uses
+the active Lambda parent when available, then the extracted upstream parent,
+and otherwise becomes a root.
 
 ```text
-Invocation
-├── Operation: fetch-data
-│   ├── Attempt 1
-│   └── link -> Workflow
-├── Operation: wait
-└── Operation: process
+Lambda trace                  Execution trace
+└── Invocation               Workflow
+    ├── Operation: fetch-data <── link
+    │   └── Attempt 1         <── link
+    ├── Operation: wait       <── link
+    └── Operation: process    <── link
 ```
 
 ## Shared Configuration

@@ -21,7 +21,9 @@ import {
   trace,
   SpanKind,
   SpanStatusCode,
+  TraceFlags,
   ROOT_CONTEXT,
+  isSpanContextValid,
 } from "@opentelemetry/api";
 import { hrTime } from "@opentelemetry/core";
 import {
@@ -106,13 +108,10 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     // 2. Invoke the context extractor
     const extractedContext = this.contextExtractor(info);
 
-    // 3. Resolve the execution trace ID used by scoped span creation
-    if (extractedContext?.traceId) {
-      this.executionTraceId = extractedContext.traceId;
-    } else {
-      // Fallback: derive trace ID from ARN
-      this.executionTraceId = deriveTraceIdFromArn(info.executionArn);
-    }
+    // 3. Keep the execution-scoped Workflow trace separate from the ambient
+    // Lambda trace. Reusing the extracted X-Ray trace ID here would create two
+    // parentless roots in one trace: Lambda's function segment and Workflow.
+    this.executionTraceId = deriveTraceIdFromArn(info.executionArn);
 
     // 4. Create the Workflow root span.
     //
@@ -145,15 +144,37 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         ),
     );
 
-    // 5. Create the invocation span, parented to the ACTIVE context. Under
+    // 5. Create the invocation span in the ambient Lambda trace. Under
     //    ADOT/X-Ray the active context at onInvocationStart is the Lambda
-    //    execution-environment span, so the invocation span nests beneath it.
+    //    execution-environment span. When no span is active, use the extracted
+    //    upstream parent, or create a root if neither is available.
     //    The invocation span is intentionally NOT a child of the Workflow span:
     //    this plugin stays invocation-rooted. Execution-scoped correlation to
     //    the Workflow span is expressed via links on the operation/attempt
     //    spans (see onOperationStart / onOperationAttemptStart), matching the
     //    Java (aws/aws-durable-execution-sdk-java#572) and Python
     //    (aws/aws-durable-execution-sdk-python#593) reference plugins.
+    const activeContext = context.active();
+    const activeSpanContext = trace.getSpanContext(activeContext);
+    let invocationParentContext = activeContext;
+    if (
+      (!activeSpanContext || !isSpanContextValid(activeSpanContext)) &&
+      extractedContext?.parentSpanId
+    ) {
+      const extractedSpanContext = {
+        traceId: extractedContext.traceId,
+        spanId: extractedContext.parentSpanId,
+        traceFlags: extractedContext.traceFlags ?? TraceFlags.SAMPLED,
+        isRemote: true,
+      };
+      if (isSpanContextValid(extractedSpanContext)) {
+        invocationParentContext = trace.setSpanContext(
+          activeContext,
+          extractedSpanContext,
+        );
+      }
+    }
+
     this.invocationSpan = this.tracer.startSpan(
       "Invocation",
       {
@@ -164,7 +185,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         },
         startTime: hrTime(),
       },
-      context.active(),
+      invocationParentContext,
     );
   }
 

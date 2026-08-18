@@ -8,11 +8,15 @@ import {
   trace,
   SpanStatusCode,
   SpanKind,
+  TraceFlags,
   propagation,
 } from "@opentelemetry/api";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
 import { InvocationOtelPlugin } from "../invocation-plugin";
-import { deriveSpanIdFromOperationId } from "../deterministic-id-generator";
+import {
+  deriveSpanIdFromOperationId,
+  deriveTraceIdFromArn,
+} from "../deterministic-id-generator";
 import type { TracerProviderFactory } from "../otel-plugin-config";
 import type {
   InvocationInfo,
@@ -192,6 +196,118 @@ describe("InvocationOtelPlugin", () => {
       expect(findSpan("Workflow")).toBeUndefined();
       // Invocation span name is not configurable; always "Invocation"
       expect(findSpan("Invocation")).toBeDefined();
+    });
+
+    it("keeps Workflow in a separate trace from the ambient Lambda root", async () => {
+      const ambientTracer = provider!.getTracer("adot-lambda");
+      const lambdaRoot = ambientTracer.startSpan("Lambda");
+      const lambdaSpanContext = lambdaRoot.spanContext();
+      const topologyPlugin = new InvocationOtelPlugin({
+        tracerProviderFactory,
+        contextExtractor: () => ({
+          traceId: lambdaSpanContext.traceId,
+          parentSpanId: "c".repeat(16),
+          traceFlags: lambdaSpanContext.traceFlags,
+        }),
+      });
+
+      await context.with(
+        trace.setSpan(context.active(), lambdaRoot),
+        async () => {
+          await topologyPlugin.onInvocationStart(makeInvocationInfo());
+          await topologyPlugin.onOperationStart(
+            makeOperationInfo({ id: "op-topology", name: "topology-step" }),
+          );
+          await topologyPlugin.onOperationEnd(
+            makeOperationEndInfo({
+              id: "op-topology",
+              name: "topology-step",
+              status: "SUCCEEDED",
+            }),
+          );
+          await topologyPlugin.onInvocationEnd(makeInvocationEndInfo());
+        },
+      );
+      lambdaRoot.end();
+
+      const workflowSpan = findSpan("Workflow");
+      const invocationSpan = findSpan("Invocation");
+      const operationSpan = findSpan("topology-step");
+      expect(workflowSpan).toBeDefined();
+      expect(invocationSpan).toBeDefined();
+      expect(operationSpan).toBeDefined();
+
+      expect(workflowSpan!.parentSpanContext).toBeUndefined();
+      expect(workflowSpan!.spanContext().traceId).toBe(
+        deriveTraceIdFromArn(TEST_ARN),
+      );
+      expect(workflowSpan!.spanContext().traceId).not.toBe(
+        lambdaSpanContext.traceId,
+      );
+
+      expect(invocationSpan!.spanContext().traceId).toBe(
+        lambdaSpanContext.traceId,
+      );
+      expect(invocationSpan!.parentSpanContext?.spanId).toBe(
+        lambdaSpanContext.spanId,
+      );
+      expect(operationSpan!.spanContext().traceId).toBe(
+        lambdaSpanContext.traceId,
+      );
+      expect(operationSpan!.links).toHaveLength(1);
+      expect(operationSpan!.links[0].context).toEqual(
+        workflowSpan!.spanContext(),
+      );
+
+      const rootsByTrace = getExportedSpans()
+        .filter((span) => span.parentSpanContext === undefined)
+        .reduce<Map<string, ReadableSpan[]>>((roots, span) => {
+          const traceId = span.spanContext().traceId;
+          roots.set(traceId, [...(roots.get(traceId) ?? []), span]);
+          return roots;
+        }, new Map());
+      expect(
+        rootsByTrace
+          .get(lambdaSpanContext.traceId)
+          ?.map((span) => span.name),
+      ).toEqual(["Lambda"]);
+      expect(
+        rootsByTrace
+          .get(workflowSpan!.spanContext().traceId)
+          ?.map((span) => span.name),
+      ).toEqual(["Workflow"]);
+      expect(rootsByTrace.size).toBe(2);
+    });
+
+    it("uses the extracted upstream parent when no span is active", async () => {
+      const upstreamTraceId = "a".repeat(32);
+      const upstreamSpanId = "b".repeat(16);
+      const topologyPlugin = new InvocationOtelPlugin({
+        tracerProviderFactory,
+        contextExtractor: () => ({
+          traceId: upstreamTraceId,
+          parentSpanId: upstreamSpanId,
+          traceFlags: TraceFlags.SAMPLED,
+        }),
+      });
+
+      await topologyPlugin.onInvocationStart(makeInvocationInfo());
+      await topologyPlugin.onInvocationEnd(makeInvocationEndInfo());
+
+      const workflowSpan = findSpan("Workflow");
+      const invocationSpan = findSpan("Invocation");
+      expect(workflowSpan).toBeDefined();
+      expect(invocationSpan).toBeDefined();
+      expect(workflowSpan!.spanContext().traceId).toBe(
+        deriveTraceIdFromArn(TEST_ARN),
+      );
+      expect(invocationSpan!.spanContext().traceId).toBe(upstreamTraceId);
+      expect(invocationSpan!.parentSpanContext).toMatchObject({
+        traceId: upstreamTraceId,
+        spanId: upstreamSpanId,
+        traceFlags: TraceFlags.SAMPLED,
+        isRemote: true,
+      });
     });
   });
 
