@@ -91,8 +91,7 @@ describe("TimerScheduler", () => {
         mockUpdateCheckpoint,
       );
 
-      jest.advanceTimersByTime(1000);
-      await Promise.resolve();
+      await jest.advanceTimersByTimeAsync(1000);
 
       expect(executionOrder).toEqual(["updateCheckpoint", "startInvocation"]);
     });
@@ -324,17 +323,22 @@ describe("TimerScheduler", () => {
 
   describe("in-flight tracking", () => {
     it("should remove timer entry after updateCheckpoint settles, before startInvocation runs", async () => {
-      const executionOrder: string[] = [];
+      const executionOrder: {
+        phase: string;
+        hasScheduledFunction: boolean;
+      }[] = [];
       const mockFn = jest.fn().mockImplementation(() => {
-        executionOrder.push("startInvocation");
-        // Timer should already be removed by the time startInvocation runs
-        expect(scheduler.hasScheduledFunction()).toBe(false);
+        executionOrder.push({
+          phase: "startInvocation",
+          hasScheduledFunction: scheduler.hasScheduledFunction(),
+        });
         return Promise.resolve();
       });
       const mockUpdateCheckpoint = jest.fn().mockImplementation(() => {
-        executionOrder.push("updateCheckpoint");
-        // Timer should still be present during updateCheckpoint
-        expect(scheduler.hasScheduledFunction()).toBe(true);
+        executionOrder.push({
+          phase: "updateCheckpoint",
+          hasScheduledFunction: scheduler.hasScheduledFunction(),
+        });
         return Promise.resolve();
       });
       const mockOnError = jest.fn();
@@ -347,7 +351,11 @@ describe("TimerScheduler", () => {
       );
 
       await jest.advanceTimersByTimeAsync(0);
-      expect(executionOrder).toEqual(["updateCheckpoint", "startInvocation"]);
+      expect(executionOrder).toEqual([
+        { phase: "updateCheckpoint", hasScheduledFunction: true },
+        { phase: "startInvocation", hasScheduledFunction: false },
+      ]);
+      expect(mockOnError).not.toHaveBeenCalled();
       expect(scheduler.hasScheduledFunction()).toBe(false);
     });
 

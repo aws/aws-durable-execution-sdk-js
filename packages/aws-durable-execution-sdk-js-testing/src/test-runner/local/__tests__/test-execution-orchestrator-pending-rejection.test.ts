@@ -18,6 +18,7 @@ import { FunctionStorage } from "../operations/function-storage";
 import { ILocalDurableTestRunnerFactory } from "../interfaces/durable-test-runner-factory";
 import { DurableApiClient } from "../../common/create-durable-api-client";
 import { CheckpointApiClient } from "../api-client/checkpoint-api-client";
+import { CompleteInvocationResponse } from "../../../checkpoint-server/worker-api/worker-api-response";
 
 // Mock dependencies
 jest.mock("../operations/local-operation-storage");
@@ -803,10 +804,35 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
           await waitCheckpointReleased;
         });
 
-      const completeInvocationSpy = jest.spyOn(
-        checkpointApi,
-        "completeInvocation",
-      );
+      let signalCompleteInvocationCalled: (() => void) | undefined;
+      const completeInvocationCalled = new Promise<void>((resolve) => {
+        signalCompleteInvocationCalled = resolve;
+      });
+
+      let releaseCompleteInvocation:
+        | ((response: CompleteInvocationResponse) => void)
+        | undefined;
+      const completeInvocationResult =
+        new Promise<CompleteInvocationResponse>((resolve) => {
+          releaseCompleteInvocation = resolve;
+        });
+
+      jest
+        .spyOn(checkpointApi, "completeInvocation")
+        .mockImplementation(() => {
+          signalCompleteInvocationCalled?.();
+          return completeInvocationResult;
+        });
+
+      let signalInvocationRecorded: (() => void) | undefined;
+      const invocationRecorded = new Promise<void>((resolve) => {
+        signalInvocationRecorded = resolve;
+      });
+      mockOperationStorage.addHistoryEvent.mockImplementation((event) => {
+        if (event.EventType === EventType.InvocationCompleted) {
+          signalInvocationRecorded?.();
+        }
+      });
 
       jest
         .spyOn(checkpointApi, "pollCheckpointData")
@@ -853,10 +879,12 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
       // Let the first invocation complete and run its PENDING validation while
       // the WAIT checkpoint is still open.
       await waitCheckpointStarted;
-      while (completeInvocationSpy.mock.calls.length < 1) {
-        await new Promise((resolve) => setTimeout(resolve, 1));
-      }
-      await new Promise((resolve) => setTimeout(resolve, 1));
+      await completeInvocationCalled;
+      releaseCompleteInvocation?.({
+        hasDirtyOperations: false,
+        event: mockInvocationCompletedEvent,
+      });
+      await invocationRecorded;
 
       releaseWaitCheckpoint?.();
 

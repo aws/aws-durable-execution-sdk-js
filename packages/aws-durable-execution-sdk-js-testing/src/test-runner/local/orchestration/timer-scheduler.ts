@@ -41,14 +41,11 @@ export class TimerScheduler implements Scheduler {
         `Running scheduled function after ${delayMs}ms - Scheduler ID: ${id}`,
       );
       (updateCheckpoint ? updateCheckpoint() : Promise.resolve())
-        .then(() => {
+        .finally(() => {
           this.runningTimers.delete(timer);
-          return startInvocation();
         })
-        .catch((err: unknown) => {
-          this.runningTimers.delete(timer);
-          onError(err);
-        });
+        .then(() => startInvocation())
+        .catch(onError);
     }, delayMs);
     this.runningTimers.add(timer);
   }
