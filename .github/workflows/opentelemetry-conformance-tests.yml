@@ -1,0 +1,89 @@
+name: OpenTelemetry Conformance Tests
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "packages/aws-durable-execution-sdk-js/**"
+      - "packages/aws-durable-execution-sdk-js-otel/**"
+      - ".github/workflows/opentelemetry-conformance-tests.yml"
+  push:
+    branches: ["main"]
+    paths:
+      - "packages/aws-durable-execution-sdk-js/**"
+      - "packages/aws-durable-execution-sdk-js-otel/**"
+      - ".github/workflows/opentelemetry-conformance-tests.yml"
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: Run short tests, launch a long run, or check the active long run
+        required: true
+        default: short
+        type: choice
+        options:
+          - short
+          - launch
+          - check
+      delay_seconds:
+        description: Durable delay in seconds (1-86400, launch only)
+        required: true
+        default: "82800"
+        type: string
+      aws_region:
+        description: AWS region
+        required: true
+        default: us-west-2
+        type: string
+      conformance_test_ref:
+        description: Conformance test commit SHA or branch name
+        required: true
+        default: main
+        type: string
+
+permissions: {}
+
+jobs:
+  opentelemetry:
+    permissions:
+      actions: write
+      contents: read
+      id-token: write
+    uses: aws/aws-durable-execution-conformance-tests/.github/workflows/opentelemetry-orchestrator.yml@91b2c0217792d39ed6ca6bed960392d71ac6eca1
+    with:
+      language: javascript
+      resource_prefix: js
+      sdk_repository: aws/aws-durable-execution-sdk-js
+      sdk_ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      conformance_test_ref: ${{ inputs.conformance_test_ref || 'main' }}
+      checkout_sdk: true
+      setup_command: |
+        export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+        source "$NVM_DIR/nvm.sh"
+        nvm install 22
+        nvm use 22
+        node --version
+      prepare_command: |
+        export SDK_SOURCE_DIR="$SDK_CHECKOUT"
+        cd "$EXAMPLES_DIR"
+        npm ci
+        npm run install-sdk-main
+        npm run typecheck
+        npm run build
+      contract_test_command: >-
+        hatch run test:all
+        packages/aws-durable-execution-conformance-tests-otel/tests/test_javascript_examples.py
+      adot_release_repository: aws-observability/aws-otel-js-instrumentation
+      collector_compatible_runtime: nodejs22.x
+      collector_otlp_endpoint: http://localhost:4318
+      legacy_stack_prefix: durable-execution-conformance-tests-typescript
+      phase: ${{ inputs.phase || 'short' }}
+      delay_seconds: ${{ inputs.delay_seconds || '82800' }}
+      aws_region: ${{ inputs.aws_region || 'us-west-2' }}
+    secrets:
+      CONFORMANCE_TEST_ROLE_ARN: ${{ secrets.TEST_ROLE_ARN }}
+      CONFORMANCE_TEST_ACCOUNT_ID: ${{ secrets.TEST_ACCOUNT_ID }}
+      CONFORMANCE_TEST_LAMBDA_EXECUTION_ROLE_ARN: ${{ secrets.TEST_LAMBDA_EXECUTION_ROLE_ARN }}
+      DASH0_AUTH_TOKEN: ${{ secrets.DASH0_AUTH_TOKEN }}
+      DATADOG_ACCESS_TOKEN: ${{ secrets.DATADOG_ACCESS_TOKEN }}
+      DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+      DATADOG_APPLICATION_KEY: ${{ secrets.DATADOG_APPLICATION_KEY }}
