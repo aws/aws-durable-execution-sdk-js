@@ -91,8 +91,7 @@ describe("TimerScheduler", () => {
         mockUpdateCheckpoint,
       );
 
-      jest.advanceTimersByTime(1000);
-      await Promise.resolve();
+      await jest.advanceTimersByTimeAsync(1000);
 
       expect(executionOrder).toEqual(["updateCheckpoint", "startInvocation"]);
     });
@@ -319,6 +318,91 @@ describe("TimerScheduler", () => {
 
       expect(mockFn).not.toHaveBeenCalled();
       expect(mockOnError).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("in-flight tracking", () => {
+    it("should remove timer entry after updateCheckpoint settles, before startInvocation runs", async () => {
+      const executionOrder: {
+        phase: string;
+        hasScheduledFunction: boolean;
+      }[] = [];
+      const mockFn = jest.fn().mockImplementation(() => {
+        executionOrder.push({
+          phase: "startInvocation",
+          hasScheduledFunction: scheduler.hasScheduledFunction(),
+        });
+        return Promise.resolve();
+      });
+      const mockUpdateCheckpoint = jest.fn().mockImplementation(() => {
+        executionOrder.push({
+          phase: "updateCheckpoint",
+          hasScheduledFunction: scheduler.hasScheduledFunction(),
+        });
+        return Promise.resolve();
+      });
+      const mockOnError = jest.fn();
+
+      scheduler.scheduleFunction(
+        mockFn,
+        mockOnError,
+        new Date(),
+        mockUpdateCheckpoint,
+      );
+
+      await jest.advanceTimersByTimeAsync(0);
+      expect(executionOrder).toEqual([
+        { phase: "updateCheckpoint", hasScheduledFunction: true },
+        { phase: "startInvocation", hasScheduledFunction: false },
+      ]);
+      expect(mockOnError).not.toHaveBeenCalled();
+      expect(scheduler.hasScheduledFunction()).toBe(false);
+    });
+
+    it("should keep hasScheduledFunction true while updateCheckpoint is still running", async () => {
+      let resolveCheckpoint: (() => void) | undefined;
+      const checkpointPromise = new Promise<void>((resolve) => {
+        resolveCheckpoint = resolve;
+      });
+      const mockFn = jest.fn().mockResolvedValue(undefined);
+      const mockUpdateCheckpoint = jest.fn().mockReturnValue(checkpointPromise);
+      const mockOnError = jest.fn();
+
+      scheduler.scheduleFunction(
+        mockFn,
+        mockOnError,
+        new Date(),
+        mockUpdateCheckpoint,
+      );
+
+      await jest.advanceTimersByTimeAsync(0);
+      expect(mockUpdateCheckpoint).toHaveBeenCalledTimes(1);
+      expect(mockFn).not.toHaveBeenCalled();
+      expect(scheduler.hasScheduledFunction()).toBe(true);
+
+      resolveCheckpoint!();
+      await jest.advanceTimersByTimeAsync(0);
+      expect(mockFn).toHaveBeenCalledTimes(1);
+      expect(scheduler.hasScheduledFunction()).toBe(false);
+    });
+
+    it("should remove timer entry when updateCheckpoint fails", async () => {
+      const checkpointError = new Error("Checkpoint error");
+      const mockFn = jest.fn().mockResolvedValue(undefined);
+      const mockUpdateCheckpoint = jest.fn().mockRejectedValue(checkpointError);
+      const mockOnError = jest.fn();
+
+      scheduler.scheduleFunction(
+        mockFn,
+        mockOnError,
+        new Date(),
+        mockUpdateCheckpoint,
+      );
+
+      expect(scheduler.hasScheduledFunction()).toBe(true);
+      await jest.advanceTimersByTimeAsync(0);
+      expect(mockOnError).toHaveBeenCalledWith(checkpointError);
+      expect(scheduler.hasScheduledFunction()).toBe(false);
     });
   });
 
