@@ -62,12 +62,11 @@ the plugin validates its runtime shape before replacing it.
 
 If the plugin is constructed before zero-code instrumentation registers the
 provider, its initial tracer is a proxy without `_idGenerator`. The plugin
-resolves the global provider again and retries at `onInvocationStart`. If the
-registered tracer still does not expose a compatible field, it logs one error
-and continues using the provider without deterministic durable IDs.
-
-If no SDK provider has been globally registered, OpenTelemetry returns a no-op
-provider and the plugin emits no exported spans.
+resolves the global provider again at each `onInvocationStart` until it finds a
+compatible SDK tracer. If no compatible tracer is available, telemetry is
+disabled for that invocation and the plugin logs a warning. The next invocation
+retries provider resolution, allowing a provider registered later in a warm
+execution environment to recover automatically.
 
 ## Application-Owned Provider
 

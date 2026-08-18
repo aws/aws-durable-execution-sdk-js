@@ -55,8 +55,18 @@ function invocationEndInfo(executionArn: string): InvocationEndInfo {
   };
 }
 
+function currentWorkflowSpan(
+  plugin: DurableInstrumentationPlugin,
+): Span | undefined {
+  return (plugin as unknown as { workflowSpan: Span | undefined }).workflowSpan;
+}
+
 function workflowSpan(plugin: DurableInstrumentationPlugin): Span {
-  return (plugin as unknown as { workflowSpan: Span }).workflowSpan;
+  const span = currentWorkflowSpan(plugin);
+  if (!span) {
+    throw new Error("Expected plugin to create a Workflow span");
+  }
+  return span;
 }
 
 describe.each([
@@ -201,25 +211,114 @@ describe.each([
     await provider.shutdown();
   });
 
-  it("logs one error when global installation keeps failing", async () => {
-    const consoleErrorSpy = jest
-      .spyOn(console, "error")
+  it("disables the current invocation and recovers when the global provider registers later", async () => {
+    const consoleWarnSpy = jest
+      .spyOn(console, "warn")
       .mockImplementation(() => {});
     const plugin = new Plugin();
 
-    expect(consoleErrorSpy).not.toHaveBeenCalled();
-
     await plugin.onInvocationStart(invocationInfo(EXECUTION_ARN_A));
+    expect(currentWorkflowSpan(plugin)).toBeUndefined();
+    expect(consoleWarnSpy).toHaveBeenCalledTimes(1);
     await plugin.onInvocationEnd(invocationEndInfo(EXECUTION_ARN_A));
+
+    const provider = new NodeTracerProvider();
+    provider.register();
+
     await plugin.onInvocationStart(invocationInfo(EXECUTION_ARN_B));
+    expect(workflowSpan(plugin).spanContext()).toMatchObject({
+      traceId: deriveTraceIdFromArn(EXECUTION_ARN_B),
+      spanId: deriveWorkflowSpanId(EXECUTION_ARN_B),
+    });
     await plugin.onInvocationEnd(invocationEndInfo(EXECUTION_ARN_B));
 
-    expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      `[${pluginName}] Failed to install deterministic ID generation on the global OpenTelemetry tracer after retrying at invocation start. The registered tracer does not expose a compatible _idGenerator field.`,
+    expect(consoleWarnSpy).toHaveBeenCalledTimes(1);
+
+    consoleWarnSpy.mockRestore();
+    await provider.shutdown();
+  });
+
+  it("disables and warns for every invocation while global installation keeps failing", async () => {
+    const consoleWarnSpy = jest
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
+    const plugin = new Plugin();
+
+    await plugin.onInvocationStart(invocationInfo(EXECUTION_ARN_A));
+    await plugin.onOperationStart({
+      id: "disabled-operation-a",
+      type: "STEP",
+      isReplay: false,
+    });
+    expect(currentWorkflowSpan(plugin)).toBeUndefined();
+    expect(plugin.enrichLogContext?.()).toBeUndefined();
+    await plugin.onInvocationEnd(invocationEndInfo(EXECUTION_ARN_A));
+
+    await plugin.onInvocationStart(invocationInfo(EXECUTION_ARN_B));
+    await plugin.onOperationStart({
+      id: "disabled-operation-b",
+      type: "STEP",
+      isReplay: false,
+    });
+    expect(currentWorkflowSpan(plugin)).toBeUndefined();
+    await plugin.onInvocationEnd(invocationEndInfo(EXECUTION_ARN_B));
+
+    expect(consoleWarnSpy).toHaveBeenCalledTimes(2);
+    expect(consoleWarnSpy).toHaveBeenNthCalledWith(
+      1,
+      `[${pluginName}] Expected a compatible OpenTelemetry SDK tracer at invocation start; telemetry is disabled for this invocation. Ensure the OpenTelemetry SDK is configured before invocation start.`,
+    );
+    expect(consoleWarnSpy).toHaveBeenNthCalledWith(
+      2,
+      `[${pluginName}] Expected a compatible OpenTelemetry SDK tracer at invocation start; telemetry is disabled for this invocation. Ensure the OpenTelemetry SDK is configured before invocation start.`,
     );
 
-    consoleErrorSpy.mockRestore();
+    consoleWarnSpy.mockRestore();
+  });
+
+  it("does not emit spans through an incompatible registered global tracer", async () => {
+    const startSpan = jest.fn();
+    const incompatibleTracer = { startSpan };
+    const incompatibleProvider = {
+      getTracer: jest.fn(() => incompatibleTracer),
+    };
+    trace.setGlobalTracerProvider(incompatibleProvider as never);
+    const consoleWarnSpy = jest
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
+    const plugin = new Plugin();
+
+    await plugin.onInvocationStart(invocationInfo(EXECUTION_ARN_A));
+    await plugin.onOperationStart({
+      id: "disabled-operation",
+      type: "STEP",
+      isReplay: false,
+    });
+    await plugin.onOperationAttemptStart({
+      id: "disabled-operation",
+      type: "STEP",
+      isReplay: false,
+      attempt: 1,
+    });
+    await plugin.onOperationAttemptEnd({
+      id: "disabled-operation",
+      type: "STEP",
+      isReplay: false,
+      attempt: 1,
+      outcome: "SUCCEEDED",
+    });
+    await plugin.onOperationEnd({
+      id: "disabled-operation",
+      type: "STEP",
+      isReplay: false,
+      status: "SUCCEEDED",
+    });
+    await plugin.onInvocationEnd(invocationEndInfo(EXECUTION_ARN_A));
+
+    expect(startSpan).not.toHaveBeenCalled();
+    expect(consoleWarnSpy).toHaveBeenCalledTimes(1);
+
+    consoleWarnSpy.mockRestore();
   });
 
   it("keeps interleaved plugin instances scoped to their executions", async () => {

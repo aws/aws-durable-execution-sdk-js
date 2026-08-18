@@ -59,7 +59,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
   private readonly usesGlobalProvider: boolean;
   private globalIdGeneratorInstalled: boolean;
-  private globalIdGeneratorErrorLogged = false;
+  private tracingEnabled = false;
 
   // Workflow span name (configurable)
   private readonly workflowSpanName: string;
@@ -101,7 +101,11 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onInvocationStart(info: InvocationInfo): Promise<void> {
-    this.ensureGlobalIdGeneratorInstalled();
+    this.resetInvocationState();
+    this.tracingEnabled = this.ensureGlobalIdGeneratorInstalled();
+    if (!this.tracingEnabled) {
+      return;
+    }
 
     // 1. Store the execution ARN
     this.executionArn = info.executionArn;
@@ -213,13 +217,18 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     _info: InvocationInfo,
     fn: () => Promise<DurableExecutionInvocationOutput>,
   ): Promise<DurableExecutionInvocationOutput> {
-    if (!this.workflowSpan) {
+    if (!this.tracingEnabled || !this.workflowSpan) {
       return fn();
     }
     return context.with(trace.setSpan(context.active(), this.workflowSpan), fn);
   }
 
   async onInvocationEnd(info: InvocationEndInfo): Promise<void> {
+    if (!this.tracingEnabled) {
+      this.resetInvocationState();
+      return;
+    }
+
     // 1. Always end and export Invocation_Span
     if (this.invocationSpan) {
       this.invocationSpan.setAttribute(
@@ -286,16 +295,12 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     }
 
     // 5. Clear per-invocation state
-    this.spanMap.clear();
-    this.workflowSpan = undefined;
-    this.invocationSpan = undefined;
-    this.executionArn = "";
-    this.executionTraceId = "";
+    this.resetInvocationState();
   }
 
-  private ensureGlobalIdGeneratorInstalled(): void {
+  private ensureGlobalIdGeneratorInstalled(): boolean {
     if (!this.usesGlobalProvider || this.globalIdGeneratorInstalled) {
-      return;
+      return true;
     }
 
     // A plugin constructed before zero-code instrumentation is registered sees
@@ -308,15 +313,22 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     if (installedIdGenerator) {
       this.idGenerator = installedIdGenerator;
       this.globalIdGeneratorInstalled = true;
-      return;
+      return true;
     }
 
-    if (!this.globalIdGeneratorErrorLogged) {
-      console.error(
-        "[ExecutionOtelPlugin] Failed to install deterministic ID generation on the global OpenTelemetry tracer after retrying at invocation start. The registered tracer does not expose a compatible _idGenerator field.",
-      );
-      this.globalIdGeneratorErrorLogged = true;
-    }
+    console.warn(
+      "[ExecutionOtelPlugin] Expected a compatible OpenTelemetry SDK tracer at invocation start; telemetry is disabled for this invocation. Ensure the OpenTelemetry SDK is configured before invocation start.",
+    );
+    return false;
+  }
+
+  private resetInvocationState(): void {
+    this.spanMap.clear();
+    this.workflowSpan = undefined;
+    this.invocationSpan = undefined;
+    this.executionArn = "";
+    this.executionTraceId = "";
+    this.tracingEnabled = false;
   }
 
   /**
@@ -333,6 +345,10 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onOperationStart(info: OperationInfo): Promise<void> {
+    if (!this.tracingEnabled) {
+      return;
+    }
+
     const deterministicSpanId = deriveSpanIdFromOperationId(
       info.id,
       this.executionArn,
@@ -385,6 +401,10 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   wrapChildContextFn(info: OperationInfo, fn: () => unknown): unknown {
+    if (!this.tracingEnabled) {
+      return fn();
+    }
+
     const operationSpan = this.spanMap.get(info.id);
 
     if (!operationSpan) {
@@ -394,6 +414,10 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onOperationEnd(info: OperationEndInfo): Promise<void> {
+    if (!this.tracingEnabled) {
+      return;
+    }
+
     const deterministicSpanId = deriveSpanIdFromOperationId(
       info.id,
       this.executionArn,
@@ -508,6 +532,10 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onOperationAttemptStart(info: AttemptInfo): Promise<void> {
+    if (!this.tracingEnabled) {
+      return;
+    }
+
     const baseName = info.name ?? info.type;
     const spanName = `${baseName} attempt ${info.attempt}`;
 
@@ -546,6 +574,10 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   wrapOperationAttemptFn(info: AttemptInfo, fn: () => unknown): unknown {
+    if (!this.tracingEnabled) {
+      return fn();
+    }
+
     const attemptSpan = this.spanMap.get(
       this.getAttemptKey(info.id, info.attempt),
     );
@@ -556,6 +588,10 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onOperationAttemptEnd(info: AttemptEndInfo): Promise<void> {
+    if (!this.tracingEnabled) {
+      return;
+    }
+
     const key = this.getAttemptKey(info.id, info.attempt);
     const attemptSpan = this.spanMap.get(key);
     if (attemptSpan) {
@@ -582,7 +618,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   enrichLogContext(): Record<string, string | number | boolean> | undefined {
-    if (!this.enrichLogger) {
+    if (!this.tracingEnabled || !this.enrichLogger) {
       return undefined;
     }
     const span = trace.getSpan(context.active());
