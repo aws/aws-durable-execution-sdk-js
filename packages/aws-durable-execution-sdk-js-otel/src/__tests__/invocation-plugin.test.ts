@@ -365,7 +365,7 @@ describe("InvocationOtelPlugin", () => {
       );
     });
 
-    it("replay operation uses random span ID with Link to deterministic", async () => {
+    it("replay operation uses a new span ID and links only to Workflow", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       const opInfo = makeOperationInfo({
         id: "op-replay",
@@ -382,17 +382,18 @@ describe("InvocationOtelPlugin", () => {
       );
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
-      const expectedDeterministicId = deriveSpanIdFromOperationId(
+      const derivedOperationSpanId = deriveSpanIdFromOperationId(
         "op-replay",
         TEST_ARN,
       );
       const opSpan = findSpan("CONTEXT");
+      const workflowSpan = findSpan("Workflow");
       expect(opSpan).toBeDefined();
-      // Random span ID should differ from deterministic
-      expect(opSpan!.spanContext().spanId).not.toBe(expectedDeterministicId);
-      // Should have a Link pointing to deterministic span ID
-      expect(opSpan!.links.length).toBeGreaterThan(0);
-      expect(opSpan!.links[0].context.spanId).toBe(expectedDeterministicId);
+      expect(workflowSpan).toBeDefined();
+      expect(opSpan!.spanContext().spanId).not.toBe(derivedOperationSpanId);
+      expect(opSpan!.links).toHaveLength(1);
+      expect(opSpan!.links[0].context).toEqual(workflowSpan!.spanContext());
+      expect(opSpan!.links[0].context.spanId).not.toBe(derivedOperationSpanId);
     });
 
     it("uses operation name as span name when provided", async () => {
@@ -723,7 +724,7 @@ describe("InvocationOtelPlugin", () => {
   });
 
   describe("Continuation span for cross-invocation operations", () => {
-    it("creates continuation span with Link when operation was started in prior invocation", async () => {
+    it("creates continuation span linked only to Workflow when operation was started in prior invocation", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       // onOperationEnd for an operation NOT in the map (started elsewhere)
       await plugin.onOperationEnd(
@@ -735,16 +736,20 @@ describe("InvocationOtelPlugin", () => {
       );
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
-      const continuationSpan = findSpan("remote-op");
-      expect(continuationSpan).toBeDefined();
-      // Should have a Link pointing to deterministic span ID of op-cross
-      const expectedDeterministicId = deriveSpanIdFromOperationId(
+      const derivedOperationSpanId = deriveSpanIdFromOperationId(
         "op-cross",
         TEST_ARN,
       );
-      expect(continuationSpan!.links.length).toBeGreaterThan(0);
-      expect(continuationSpan!.links[0].context.spanId).toBe(
-        expectedDeterministicId,
+      const continuationSpan = findSpan("remote-op");
+      const workflowSpan = findSpan("Workflow");
+      expect(continuationSpan).toBeDefined();
+      expect(workflowSpan).toBeDefined();
+      expect(continuationSpan!.links).toHaveLength(1);
+      expect(continuationSpan!.links[0].context).toEqual(
+        workflowSpan!.spanContext(),
+      );
+      expect(continuationSpan!.links[0].context.spanId).not.toBe(
+        derivedOperationSpanId,
       );
     });
 

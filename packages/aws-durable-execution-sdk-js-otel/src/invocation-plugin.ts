@@ -371,21 +371,13 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
           ),
       );
     } else if (info.type === "CONTEXT" || info.type === "STEP") {
-      // Replay: use random span ID, add Link to deterministic span
-      const traceId =
-        this.invocationSpan?.spanContext().traceId ?? this.executionTraceId;
+      // The original span context is not checkpointed, so replay spans use a
+      // new span ID and correlate through the reproducible Workflow span.
       span = this.tracer.startSpan(
         spanName,
         {
           attributes,
-          // Self-link to the deterministic operation span first, then the
-          // Workflow link (order-significant per the conformance contract).
-          links: [
-            {
-              context: { traceId, spanId: deterministicSpanId, traceFlags: 1 },
-            },
-            ...this.workflowLinks(),
-          ],
+          links: this.workflowLinks(),
           startTime: hrTime(),
         },
         parentContext,
@@ -426,11 +418,6 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     ) {
       return;
     }
-
-    const deterministicSpanId = deriveSpanIdFromOperationId(
-      info.id,
-      this.executionArn,
-    );
 
     if (this.spanMap.has(info.id)) {
       // Operation was started in this invocation
@@ -485,8 +472,6 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     } else if (!info.isReplay) {
       // Operation was started in a prior invocation — create Continuation_Span
       const spanName = info.name ?? info.type;
-      const traceId =
-        this.invocationSpan?.spanContext().traceId ?? this.executionTraceId;
 
       // Resolve parent span: use parentId from map (e.g. the CONTEXT span for
       // child operations inside waitForCallback), or fall back to invocation span.
@@ -527,14 +512,10 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         spanName,
         {
           attributes,
-          // Self-link to the deterministic operation span first, then the
-          // Workflow link (order-significant per the conformance contract).
-          links: [
-            {
-              context: { traceId, spanId: deterministicSpanId, traceFlags: 1 },
-            },
-            ...this.workflowLinks(),
-          ],
+          // The original span context is not checkpointed, so do not fabricate
+          // a link to a derived operation span. The reproducible Workflow span
+          // provides stable cross-invocation correlation.
+          links: this.workflowLinks(),
           startTime: hrTime(),
         },
         parentContext,
