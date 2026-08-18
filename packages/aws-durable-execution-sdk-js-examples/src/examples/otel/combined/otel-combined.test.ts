@@ -2,6 +2,7 @@ import { XRayClient } from "@aws-sdk/client-xray";
 import { handler, getSerializedSpans } from "./otel-combined";
 import { createTests } from "../../../utils/test-helper";
 import { SerializedSpan } from "../shared/otel-test-setup";
+import { assertInvocationViewTraceTopology } from "../shared/otel-test-assertions";
 import {
   fetchXRayTrace,
   assertSpanNames,
@@ -86,10 +87,7 @@ createTests({
         // Local mode: assert spans via InMemorySpanExporter
         const spans = getSerializedSpans();
 
-        // All spans share the same traceId (deterministic from execution ARN)
-        const traceId = spans[0].traceId;
-        expect(traceId).toMatch(/^[0-9a-f]{32}$/);
-        expect(spans.every((s) => s.traceId === traceId)).toBe(true);
+        assertInvocationViewTraceTopology(spans);
 
         // --- Sequential step span ---
         const sequentialStepOp = spans.find(
