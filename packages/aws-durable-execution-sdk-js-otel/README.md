@@ -152,8 +152,9 @@ you need `tracerProviderFactory` or other custom configuration.
 
 Use this plugin for a workflow-centered view. The deterministic Workflow span
 is the parent of durable operation spans. Operation spans link to the Invocation
-span that observed them. Each durable execution has its own Workflow trace, so
-parent and target executions in a chained invoke remain separate trace roots.
+span that observed them. Each durable execution has its own Workflow trace,
+derived from its ARN and start time, so parent and target executions in a
+chained invoke remain separate trace roots.
 
 The Invocation span is a child of the ambient Lambda span when one exists. If no
 span is active, the plugin uses the extracted upstream parent, or creates a root
@@ -173,10 +174,10 @@ Workflow
 
 Use this plugin for invocation-centered traces. Each operation is parented to
 the current Invocation span and links back to the deterministic Workflow span.
-The Workflow span is the root of a separate execution-scoped trace, so it does
-not become a second root in the ambient Lambda trace. The Invocation span uses
-the active Lambda parent when available, then the extracted upstream parent,
-and otherwise becomes a root.
+The Workflow span is the root of a separate execution-scoped trace derived from
+the execution ARN and start time, so it does not become a second root in the
+ambient Lambda trace. The Invocation span uses the active Lambda parent when
+available, then the extracted upstream parent, and otherwise becomes a root.
 
 ```text
 Lambda trace                  Execution trace

@@ -152,18 +152,23 @@ describe("deriveTraceIdFromXRayRoot", () => {
 });
 
 describe("deriveTraceIdFromArn", () => {
+  const executionStart = new Date("2026-08-19T00:00:00.000Z");
+
   it("produces a 32-char lowercase hex string", () => {
     const arn =
       "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-id";
-    const result = deriveTraceIdFromArn(arn);
+    const result = deriveTraceIdFromArn(arn, executionStart);
     expect(result).toMatch(/^[0-9a-f]{32}$/);
   });
 
-  it("is deterministic (same input always produces same output)", () => {
+  it("is deterministic for the same ARN and execution start time", () => {
     const arn =
       "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-id";
-    const result1 = deriveTraceIdFromArn(arn);
-    const result2 = deriveTraceIdFromArn(arn);
+    const result1 = deriveTraceIdFromArn(arn, executionStart);
+    const result2 = deriveTraceIdFromArn(
+      arn,
+      new Date(executionStart.toISOString()),
+    );
     expect(result1).toBe(result2);
   });
 
@@ -172,9 +177,26 @@ describe("deriveTraceIdFromArn", () => {
       "arn:aws:lambda:us-east-1:123456789012:function:func-a:$LATEST:exec-1";
     const arn2 =
       "arn:aws:lambda:us-east-1:123456789012:function:func-b:$LATEST:exec-2";
-    const result1 = deriveTraceIdFromArn(arn1);
-    const result2 = deriveTraceIdFromArn(arn2);
+    const result1 = deriveTraceIdFromArn(arn1, executionStart);
+    const result2 = deriveTraceIdFromArn(arn2, executionStart);
     expect(result1).not.toBe(result2);
+  });
+
+  it("produces different results for different execution start times", () => {
+    const arn =
+      "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-id";
+    const result1 = deriveTraceIdFromArn(arn, executionStart);
+    const result2 = deriveTraceIdFromArn(
+      arn,
+      new Date("2026-08-19T00:00:01.000Z"),
+    );
+    expect(result1).not.toBe(result2);
+  });
+
+  it("retains deterministic ARN-only derivation when start time is unavailable", () => {
+    const arn =
+      "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-id";
+    expect(deriveTraceIdFromArn(arn)).toBe(deriveTraceIdFromArn(arn));
   });
 });
 

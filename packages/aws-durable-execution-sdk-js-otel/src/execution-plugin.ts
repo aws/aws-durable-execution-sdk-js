@@ -117,7 +117,10 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     // executions in a chained invoke share the propagated Lambda/X-Ray trace,
     // so reusing that trace ID would create multiple parentless Workflow roots
     // in one trace.
-    this.executionTraceId = deriveTraceIdFromArn(info.executionArn);
+    this.executionTraceId = deriveTraceIdFromArn(
+      info.executionArn,
+      info.executionStartTimestamp,
+    );
 
     // 4. Derive the workflow span ID from execution ARN
     const workflowSpanId = deriveWorkflowSpanId(info.executionArn);

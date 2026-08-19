@@ -29,6 +29,7 @@ const EXECUTION_ARN_A =
   "arn:aws:lambda:us-east-1:123456789012:function:test:$LATEST:execution-a";
 const EXECUTION_ARN_B =
   "arn:aws:lambda:us-east-1:123456789012:function:test:$LATEST:execution-b";
+const EXECUTION_START = new Date("2024-01-01T00:00:00.000Z");
 
 type PluginConstructor = new (
   config?: OtelPluginConfig,
@@ -38,6 +39,7 @@ function invocationInfo(executionArn: string): InvocationInfo {
   return {
     requestId: `request-${executionArn}`,
     executionArn,
+    executionStartTimestamp: EXECUTION_START,
     isFirstInvocation: true,
     executionInput: {},
     operations: {},
@@ -49,6 +51,7 @@ function invocationEndInfo(executionArn: string): InvocationEndInfo {
   return {
     requestId: `request-${executionArn}`,
     executionArn,
+    executionStartTimestamp: EXECUTION_START,
     executionInput: {},
     operations: {},
     status: "SUCCEEDED",
@@ -183,7 +186,7 @@ describe.each([
 
       await plugin.onInvocationStart(invocationInfo(EXECUTION_ARN_A));
       expect(workflowSpan(plugin).spanContext()).toMatchObject({
-        traceId: deriveTraceIdFromArn(EXECUTION_ARN_A),
+        traceId: deriveTraceIdFromArn(EXECUTION_ARN_A, EXECUTION_START),
         spanId: deriveWorkflowSpanId(EXECUTION_ARN_A),
       });
       await plugin.onInvocationEnd(invocationEndInfo(EXECUTION_ARN_A));
@@ -203,7 +206,7 @@ describe.each([
     await plugin.onInvocationStart(invocationInfo(EXECUTION_ARN_A));
 
     expect(workflowSpan(plugin).spanContext()).toMatchObject({
-      traceId: deriveTraceIdFromArn(EXECUTION_ARN_A),
+      traceId: deriveTraceIdFromArn(EXECUTION_ARN_A, EXECUTION_START),
       spanId: deriveWorkflowSpanId(EXECUTION_ARN_A),
     });
 
@@ -227,7 +230,7 @@ describe.each([
 
     await plugin.onInvocationStart(invocationInfo(EXECUTION_ARN_B));
     expect(workflowSpan(plugin).spanContext()).toMatchObject({
-      traceId: deriveTraceIdFromArn(EXECUTION_ARN_B),
+      traceId: deriveTraceIdFromArn(EXECUTION_ARN_B, EXECUTION_START),
       spanId: deriveWorkflowSpanId(EXECUTION_ARN_B),
     });
     await plugin.onInvocationEnd(invocationEndInfo(EXECUTION_ARN_B));
@@ -342,11 +345,11 @@ describe.each([
     await secondPlugin.onInvocationStart(invocationInfo(EXECUTION_ARN_B));
 
     expect(workflowSpan(firstPlugin).spanContext()).toMatchObject({
-      traceId: deriveTraceIdFromArn(EXECUTION_ARN_A),
+      traceId: deriveTraceIdFromArn(EXECUTION_ARN_A, EXECUTION_START),
       spanId: deriveWorkflowSpanId(EXECUTION_ARN_A),
     });
     expect(workflowSpan(secondPlugin).spanContext()).toMatchObject({
-      traceId: deriveTraceIdFromArn(EXECUTION_ARN_B),
+      traceId: deriveTraceIdFromArn(EXECUTION_ARN_B, EXECUTION_START),
       spanId: deriveWorkflowSpanId(EXECUTION_ARN_B),
     });
 

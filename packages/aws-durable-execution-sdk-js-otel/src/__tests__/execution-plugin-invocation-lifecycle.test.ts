@@ -23,6 +23,7 @@ import type { TracerProviderFactory } from "../otel-plugin-config";
 const TEST_ARN =
   "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-123";
 const TEST_REQUEST_ID = "req-abc-123";
+const TEST_EXECUTION_START = new Date("2024-01-01T00:00:00Z");
 
 function makeInvocationInfo(
   overrides?: Partial<InvocationInfo>,
@@ -34,6 +35,7 @@ function makeInvocationInfo(
     executionInput: {},
     operations: {},
     updatedOperations: {},
+    executionStartTimestamp: TEST_EXECUTION_START,
     ...overrides,
   };
 }
@@ -49,6 +51,7 @@ function makeInvocationEndInfo(
     status: "SUCCEEDED" as any,
     executionResult: undefined,
     executionError: undefined,
+    executionStartTimestamp: TEST_EXECUTION_START,
     ...overrides,
   };
 }
@@ -236,10 +239,10 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       expect(parentWorkflow!.parentSpanContext).toBeUndefined();
       expect(targetWorkflow!.parentSpanContext).toBeUndefined();
       expect(parentWorkflow!.spanContext().traceId).toBe(
-        deriveTraceIdFromArn(TEST_ARN),
+        deriveTraceIdFromArn(TEST_ARN, TEST_EXECUTION_START),
       );
       expect(targetWorkflow!.spanContext().traceId).toBe(
-        deriveTraceIdFromArn(targetArn),
+        deriveTraceIdFromArn(targetArn, TEST_EXECUTION_START),
       );
       expect(parentWorkflow!.spanContext().traceId).not.toBe(
         targetWorkflow!.spanContext().traceId,

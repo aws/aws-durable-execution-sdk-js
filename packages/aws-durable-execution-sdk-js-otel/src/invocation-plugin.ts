@@ -111,7 +111,10 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     // 3. Keep the execution-scoped Workflow trace separate from the ambient
     // Lambda trace. Reusing the extracted X-Ray trace ID here would create two
     // parentless roots in one trace: Lambda's function segment and Workflow.
-    this.executionTraceId = deriveTraceIdFromArn(info.executionArn);
+    this.executionTraceId = deriveTraceIdFromArn(
+      info.executionArn,
+      info.executionStartTimestamp,
+    );
 
     // 4. Create the Workflow root span.
     //

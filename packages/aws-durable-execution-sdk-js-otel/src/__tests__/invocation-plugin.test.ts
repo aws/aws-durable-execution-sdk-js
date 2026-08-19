@@ -34,6 +34,7 @@ let plugin: InvocationOtelPlugin;
 const TEST_ARN =
   "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-123";
 const TEST_REQUEST_ID = "req-abc-123";
+const TEST_EXECUTION_START = new Date("2024-01-01T00:00:00Z");
 
 function makeInvocationInfo(
   overrides?: Partial<InvocationInfo>,
@@ -45,7 +46,7 @@ function makeInvocationInfo(
     executionInput: {},
     operations: {},
     updatedOperations: {},
-    executionStartTimestamp: new Date("2024-01-01T00:00:00Z"),
+    executionStartTimestamp: TEST_EXECUTION_START,
     ...overrides,
   };
 }
@@ -61,7 +62,7 @@ function makeInvocationEndInfo(
     status: "SUCCEEDED" as any,
     executionResult: undefined,
     executionError: undefined,
-    executionStartTimestamp: new Date("2024-01-01T00:00:00Z"),
+    executionStartTimestamp: TEST_EXECUTION_START,
     ...overrides,
   };
 }
@@ -239,7 +240,7 @@ describe("InvocationOtelPlugin", () => {
 
       expect(workflowSpan!.parentSpanContext).toBeUndefined();
       expect(workflowSpan!.spanContext().traceId).toBe(
-        deriveTraceIdFromArn(TEST_ARN),
+        deriveTraceIdFromArn(TEST_ARN, TEST_EXECUTION_START),
       );
       expect(workflowSpan!.spanContext().traceId).not.toBe(
         lambdaSpanContext.traceId,
@@ -267,9 +268,7 @@ describe("InvocationOtelPlugin", () => {
           return roots;
         }, new Map());
       expect(
-        rootsByTrace
-          .get(lambdaSpanContext.traceId)
-          ?.map((span) => span.name),
+        rootsByTrace.get(lambdaSpanContext.traceId)?.map((span) => span.name),
       ).toEqual(["Lambda"]);
       expect(
         rootsByTrace
@@ -299,7 +298,7 @@ describe("InvocationOtelPlugin", () => {
       expect(workflowSpan).toBeDefined();
       expect(invocationSpan).toBeDefined();
       expect(workflowSpan!.spanContext().traceId).toBe(
-        deriveTraceIdFromArn(TEST_ARN),
+        deriveTraceIdFromArn(TEST_ARN, TEST_EXECUTION_START),
       );
       expect(invocationSpan!.spanContext().traceId).toBe(upstreamTraceId);
       expect(invocationSpan!.parentSpanContext).toMatchObject({

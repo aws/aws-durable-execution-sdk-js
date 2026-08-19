@@ -92,14 +92,28 @@ export function deriveTraceIdFromXRayRoot(
 }
 
 /**
- * Derive a deterministic trace ID from an execution ARN by hashing it
- * with SHA-256 and truncating to the first 32 lowercase hex characters.
+ * Derive a deterministic trace ID from an execution ARN and its durable start
+ * timestamp by hashing them with SHA-256 and truncating to the first 32
+ * lowercase hex characters.
+ *
+ * The timestamp is optional for callers that do not have it. When omitted, the
+ * ARN-only derivation is retained as a deterministic fallback.
  *
  * @param executionArn - The execution ARN string
+ * @param executionStartTimestamp - Stable start time of the durable execution
  * @returns A 32-char lowercase hex string
  */
-export function deriveTraceIdFromArn(executionArn: string): string {
-  return createHash("sha256").update(executionArn).digest("hex").slice(0, 32);
+export function deriveTraceIdFromArn(
+  executionArn: string,
+  executionStartTimestamp?: Date,
+): string {
+  const executionIdentity = executionStartTimestamp
+    ? `${executionArn}:${executionStartTimestamp.toISOString()}`
+    : executionArn;
+  return createHash("sha256")
+    .update(executionIdentity)
+    .digest("hex")
+    .slice(0, 32);
 }
 
 /**
