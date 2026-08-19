@@ -18,6 +18,7 @@ import { FunctionStorage } from "../operations/function-storage";
 import { ILocalDurableTestRunnerFactory } from "../interfaces/durable-test-runner-factory";
 import { DurableApiClient } from "../../common/create-durable-api-client";
 import { CheckpointApiClient } from "../api-client/checkpoint-api-client";
+import { CompleteInvocationResponse } from "../../../checkpoint-server/worker-api/worker-api-response";
 
 // Mock dependencies
 jest.mock("../operations/local-operation-storage");
@@ -757,6 +758,138 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
       const result = await executePromise;
 
       // Should succeed - there was always at least one pending operation
+      expect(result.status).toBe(OperationStatus.SUCCEEDED);
+      expect(result.result).toBe(JSON.stringify({ success: true }));
+    });
+  });
+
+  describe("Checkpoint update in flight scenarios", () => {
+    /**
+     * Regression test for #544.
+     *
+     * A scheduled function is two phases: updateCheckpoint, then startInvocation.
+     * The scheduler must keep reporting the entry while the first phase is still
+     * settling, because that phase is what applies the operation bookkeeping the
+     * PENDING validation reads.
+     *
+     * A WAIT is the case that exposes it: waits are never added to
+     * pendingOperations, so while a fired wait timer's checkpoint update is in
+     * flight, the only remaining evidence that the execution can still make
+     * progress is the scheduler entry itself.
+     */
+    it("should not reject when a fired timer's checkpoint update is still in flight", async () => {
+      const waitOperationId = "in-flight-wait-op";
+      // Ends almost immediately, so the timer fires while the first invocation
+      // is still running and its resumption is skipped as concurrent.
+      const waitEndTimestamp = new Date(Date.now() + 10);
+
+      let releaseWaitCheckpoint: (() => void) | undefined;
+      const waitCheckpointReleased = new Promise<void>((resolve) => {
+        releaseWaitCheckpoint = resolve;
+      });
+
+      let signalWaitCheckpointStarted: (() => void) | undefined;
+      const waitCheckpointStarted = new Promise<void>((resolve) => {
+        signalWaitCheckpointStarted = resolve;
+      });
+
+      // Hold the WAIT completion checkpoint open to pin the race window.
+      jest
+        .spyOn(checkpointApi, "updateCheckpointData")
+        .mockImplementation(async (params) => {
+          if (params.operationId !== waitOperationId) {
+            return;
+          }
+          signalWaitCheckpointStarted?.();
+          await waitCheckpointReleased;
+        });
+
+      let signalCompleteInvocationCalled: (() => void) | undefined;
+      const completeInvocationCalled = new Promise<void>((resolve) => {
+        signalCompleteInvocationCalled = resolve;
+      });
+
+      let releaseCompleteInvocation:
+        | ((response: CompleteInvocationResponse) => void)
+        | undefined;
+      const completeInvocationResult =
+        new Promise<CompleteInvocationResponse>((resolve) => {
+          releaseCompleteInvocation = resolve;
+        });
+
+      jest
+        .spyOn(checkpointApi, "completeInvocation")
+        .mockImplementation(() => {
+          signalCompleteInvocationCalled?.();
+          return completeInvocationResult;
+        });
+
+      let signalInvocationRecorded: (() => void) | undefined;
+      const invocationRecorded = new Promise<void>((resolve) => {
+        signalInvocationRecorded = resolve;
+      });
+      mockOperationStorage.addHistoryEvent.mockImplementation((event) => {
+        if (event.EventType === EventType.InvocationCompleted) {
+          signalInvocationRecorded?.();
+        }
+      });
+
+      jest
+        .spyOn(checkpointApi, "pollCheckpointData")
+        .mockResolvedValueOnce({
+          operations: [
+            {
+              operation: {
+                Id: waitOperationId,
+                StartTimestamp: new Date(),
+                Status: OperationStatus.STARTED,
+                Type: OperationType.WAIT,
+                WaitDetails: {
+                  ScheduledEndTimestamp: waitEndTimestamp,
+                },
+              },
+              update: {
+                Id: waitOperationId,
+                Type: OperationType.WAIT,
+                Action: OperationAction.START,
+              },
+              events: [],
+            },
+          ],
+        })
+        .mockReturnValue(nonResolvingPromise);
+
+      // The first invocation returns PENDING only once the fired timer's
+      // checkpoint update is in flight, so the validation runs inside the
+      // window. The resumed invocation then completes the execution.
+      mockInvoke
+        .mockImplementationOnce(async () => {
+          await waitCheckpointStarted;
+          return { Status: InvocationStatus.PENDING };
+        })
+        .mockResolvedValueOnce({
+          Status: InvocationStatus.SUCCEEDED,
+          Result: JSON.stringify({ success: true }),
+        });
+
+      const executePromise = orchestrator.executeHandler({
+        payload: { input: "test-checkpoint-in-flight" },
+      });
+
+      // Let the first invocation complete and run its PENDING validation while
+      // the WAIT checkpoint is still open.
+      await waitCheckpointStarted;
+      await completeInvocationCalled;
+      releaseCompleteInvocation?.({
+        hasDirtyOperations: false,
+        event: mockInvocationCompletedEvent,
+      });
+      await invocationRecorded;
+
+      releaseWaitCheckpoint?.();
+
+      const result = await executePromise;
+
       expect(result.status).toBe(OperationStatus.SUCCEEDED);
       expect(result.result).toBe(JSON.stringify({ success: true }));
     });
