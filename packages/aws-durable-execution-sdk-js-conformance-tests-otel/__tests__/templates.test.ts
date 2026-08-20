@@ -117,6 +117,10 @@ describe("requirement coverage", () => {
 describe("otel-conformance-tests workflow", () => {
   const workflow = readFileSync(WORKFLOW_PATH, "utf8");
 
+  it("schedules the long-running cycle daily", () => {
+    expect(workflow).toContain('  schedule:\n    - cron: "0 7 * * *"');
+  });
+
   it("points examples_dir at this package inside the SDK checkout", () => {
     expect(workflow).toContain(
       `examples_dir: .build/durable-sdk/packages/${PACKAGE_DIR}`,
