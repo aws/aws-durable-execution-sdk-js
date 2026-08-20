@@ -1219,3 +1219,124 @@ describe("runWithContext Integration", () => {
     expect(childFn).not.toHaveBeenCalled();
   });
 });
+
+describe("wrapChildContextFn children-replay indicator", () => {
+  // The children-replay re-run is dispatched by the SUCCEEDED branch of the
+  // handler (handleCompletedChildContext), NOT by executeChildContext: a
+  // SUCCEEDED/FAILED operation never reaches executeChildContext, and
+  // ReplayChildren is only ever written on the terminal checkpoint. So this is
+  // the only code path on which isReplayingChildren can be true.
+  let mockExecutionContext: jest.Mocked<ExecutionContext>;
+  let mockCheckpoint: jest.MockedFunction<CheckpointFunction>;
+  let wrapCalls: Array<Record<string, unknown>>;
+  let runInChildContextHandler: ReturnType<
+    typeof createRunInChildContextHandler
+  >;
+
+  const buildHandler = (): void => {
+    wrapCalls = [];
+    mockExecutionContext = {
+      state: { getStepData: jest.fn(), checkpoint: jest.fn() },
+      _stepData: {},
+      terminationManager: {
+        terminate: jest.fn(),
+        getTerminationPromise: jest.fn(),
+      },
+      mutex: { lock: jest.fn((fn: () => unknown) => fn()) },
+      getStepData: jest.fn((stepId: string) =>
+        getStepData(mockExecutionContext._stepData, stepId),
+      ),
+    } as unknown as jest.Mocked<ExecutionContext>;
+    mockCheckpoint = createMockCheckpoint();
+
+    runInChildContextHandler = createRunInChildContextHandler(
+      mockExecutionContext,
+      mockCheckpoint,
+      { awsRequestId: "mock-request-id" } as any,
+      jest.fn().mockReturnValue("child-context-id"),
+      jest.fn().mockReturnValue({
+        log: jest.fn(),
+        info: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        debug: jest.fn(),
+      }),
+      jest.fn().mockReturnValue({ _stepPrefix: "child-context-id" }),
+      "parent-step-123",
+      undefined,
+      {
+        wrapChildContextFn: (info, fn) => {
+          wrapCalls.push({ ...(info as unknown as Record<string, unknown>) });
+          return fn();
+        },
+      },
+    );
+
+    (runWithContext as jest.Mock) = jest
+      .fn()
+      .mockImplementation(async (_stepId, _parentId, fn) => await fn());
+  };
+
+  beforeEach(() => {
+    jest.resetAllMocks();
+    buildHandler();
+  });
+
+  it("reports isReplayingChildren=true when re-running a SUCCEEDED ReplayChildren context", async () => {
+    mockExecutionContext._stepData[hashId("child-context-id")] = {
+      Id: "child-context-id",
+      Name: "ctx",
+      Type: OperationType.CONTEXT,
+      SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+      Status: OperationStatus.SUCCEEDED,
+      ContextDetails: {
+        Result: '"stale"',
+        ReplayChildren: true,
+      },
+    } as any;
+
+    const childFn = jest.fn().mockResolvedValue("rebuilt");
+    const result = await runInChildContextHandler("ctx", childFn);
+
+    expect(result).toBe("rebuilt");
+    expect(childFn).toHaveBeenCalledTimes(1);
+    // The body re-ran, so the plugin must have seen it, and must be able to
+    // distinguish "children replay" from "this context's result is replayed".
+    expect(wrapCalls).toHaveLength(1);
+    expect(wrapCalls[0]).toMatchObject({
+      name: "ctx",
+      type: OperationType.CONTEXT,
+      isReplay: true,
+      isReplayingChildren: true,
+    });
+  });
+
+  it("does not re-run or wrap a SUCCEEDED context without ReplayChildren", async () => {
+    mockExecutionContext._stepData[hashId("child-context-id")] = {
+      Id: "child-context-id",
+      Name: "ctx",
+      Type: OperationType.CONTEXT,
+      Status: OperationStatus.SUCCEEDED,
+      ContextDetails: { Result: '"cached"' },
+    } as any;
+
+    const childFn = jest.fn();
+    const result = await runInChildContextHandler("ctx", childFn);
+
+    expect(result).toBe("cached");
+    expect(childFn).not.toHaveBeenCalled();
+    expect(wrapCalls).toHaveLength(0);
+  });
+
+  it("reports isReplayingChildren=false for a live first run", async () => {
+    const childFn = jest.fn().mockResolvedValue("fresh");
+    const result = await runInChildContextHandler("ctx", childFn);
+
+    expect(result).toBe("fresh");
+    expect(wrapCalls).toHaveLength(1);
+    expect(wrapCalls[0]).toMatchObject({
+      isReplay: false,
+      isReplayingChildren: false,
+    });
+  });
+});

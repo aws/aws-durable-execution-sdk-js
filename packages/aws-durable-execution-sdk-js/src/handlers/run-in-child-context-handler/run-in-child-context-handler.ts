@@ -31,6 +31,7 @@ import { DurableLogger } from "../../types/durable-logger";
 import { resolveChildArgs } from "./resolve-child-args";
 import {
   DurableInstrumentationPlugin,
+  CustomerFnResult,
   PluginOperationStatus,
 } from "../../types/plugin";
 import {
@@ -149,6 +150,8 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
           getParentLogger,
           createChildContext,
           getDefaultSerdes,
+          parentId,
+          plugin,
         );
       }
 
@@ -209,6 +212,8 @@ export const handleCompletedChildContext = async <
   ) => DurableContext<Logger>,
 
   getDefaultSerdes?: () => AnySerdes,
+  parentId?: string,
+  plugin: DurableInstrumentationPlugin = {},
 ): Promise<T> => {
   const serdes =
     options?.serdes || (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes);
@@ -253,14 +258,34 @@ export const handleCompletedChildContext = async <
       entityId, // parentId
     );
 
-    const replayedResult = await runWithContext(
+    const replayedFn = (): unknown => fn(durableChildContext);
+    // This is the one path that re-runs a context body so its checkpointed
+    // children replay, so it is the only place isReplayingChildren can be true.
+    // The context's own result is also being replayed (it is SUCCEEDED and
+    // checkpointed), hence isReplay is true as well -- the two flags together
+    // let a plugin tell this apart from a plain replayed result, which does not
+    // re-enter the body at all and fires no hook.
+    const replayWrapInfo = {
+      id: hashId(entityId),
+      name: stepName,
+      type: OperationType.CONTEXT,
+      subType: options?.subType || OperationSubType.RUN_IN_CHILD_CONTEXT,
+      parentId: parentId ? hashId(parentId) : undefined,
+      isReplay: true,
+      isReplayingChildren: true,
+    };
+
+    const replayedResult = (await runWithContext(
       entityId,
       entityId,
-      () => fn(durableChildContext),
+      plugin.wrapChildContextFn
+        ? (): CustomerFnResult =>
+            plugin.wrapChildContextFn!(replayWrapInfo, replayedFn)
+        : replayedFn,
       undefined,
       undefined,
       stepName,
-    );
+    )) as T;
 
     // Large payloads re-execute the child function on replay, so apply the
     // same serdes round-trip first-run uses, keeping the returned value
@@ -374,9 +399,19 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
   try {
     // Execute the child context function with context tracking
     const childContextFn = () => fn(durableChildContext);
+    // Both flags are derived from the replay mode, but note that a
+    // SUCCEEDED/FAILED operation never reaches executeChildContext -- the
+    // handler dispatches those to handleCompletedChildContext -- and
+    // ReplayChildren is only ever written on the terminal checkpoint. So in
+    // practice childReplayMode is ExecutionMode here and both flags are false;
+    // the children-replay re-run is wrapped in handleCompletedChildContext.
+    // The derivation is kept rather than hardcoded so it stays correct if the
+    // dispatch ever admits a terminal operation here.
     const wrapInfo = {
       ...opInfo,
       isReplay: childReplayMode !== DurableExecutionMode.ExecutionMode,
+      isReplayingChildren:
+        childReplayMode === DurableExecutionMode.ReplaySucceededContext,
     };
     const result = (await runWithContext(
       entityId,

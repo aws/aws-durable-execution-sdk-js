@@ -104,13 +104,13 @@ async function runHandler<
     executionArn: executionContext.durableExecutionArn,
     executionInput: customerHandlerEvent,
     operations: allOperations,
+    isFirstInvocation:
+      durableExecutionMode === DurableExecutionMode.ExecutionMode,
     executionStartTimestamp: initialExecutionEvent?.StartTimestamp ?? undefined,
   };
 
   const invocationInfo: InvocationInfo = {
     ...invocationBaseInfo,
-    isFirstInvocation:
-      durableExecutionMode === DurableExecutionMode.ExecutionMode,
     updatedOperations,
   };
   await plugin.onInvocationStart?.(invocationInfo);

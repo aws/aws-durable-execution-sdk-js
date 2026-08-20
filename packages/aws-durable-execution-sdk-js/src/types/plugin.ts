@@ -88,6 +88,26 @@ export interface OperationEndInfo extends OperationInfo {
 }
 
 /**
+ * Information provided to {@link DurableInstrumentationPlugin.wrapChildContextFn}
+ * about the context-type user function being invoked (a parallel branch, a map
+ * item, or a child-context body).
+ *
+ * @experimental This interface is experimental and may be changed or removed in future releases.
+ */
+export interface ChildContextFnInfo extends OperationInfo {
+  /**
+   * Whether this context function is being re-run so that its checkpointed
+   * child operations replay from the recorded state, as opposed to the
+   * context's own checkpointed result being replayed.
+   *
+   * Both cases report `isReplay: true`, so this flag is what distinguishes
+   * them: it is `true` only when the SDK re-enters the body so that the
+   * operations beneath it replay.
+   */
+  isReplayingChildren?: boolean;
+}
+
+/**
  * Information about an operation attempt.
  *
  * @experimental This interface is experimental and may be changed or removed in future releases.
@@ -130,6 +150,15 @@ export interface InvocationBaseInfo {
   executionInput: unknown;
   operations: Record<string, OperationInfo>;
   /**
+   * Whether this is the first invocation of the execution (i.e. the SDK is
+   * running in execution mode) rather than a subsequent replay invocation.
+   *
+   * Carried on both the invocation-start and invocation-end infos so an
+   * invocation-end hook does not have to correlate back to the start hook to
+   * learn whether it is closing out the first invocation.
+   */
+  isFirstInvocation: boolean;
+  /**
    * The timestamp when the overall durable execution was first started,
    * as reported by the backend. This remains the same across all
    * invocations (including replays) of a given execution.
@@ -144,7 +173,6 @@ export interface InvocationBaseInfo {
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface InvocationInfo extends InvocationBaseInfo {
-  isFirstInvocation: boolean;
   /**
    * Operations that were updated externally between the previous invocation and this one
    * (e.g., a wait timer expired, a callback was received, or a chained invoke completed).
@@ -251,7 +279,10 @@ export interface DurableInstrumentationPlugin {
    */
   onInvocationEnd?(info: InvocationEndInfo): Promise<void>;
   onOperationStart?(info: OperationInfo): Promise<void>;
-  wrapChildContextFn?(info: OperationInfo, fn: CustomerFn): CustomerFnResult;
+  wrapChildContextFn?(
+    info: ChildContextFnInfo,
+    fn: CustomerFn,
+  ): CustomerFnResult;
   onOperationEnd?(info: OperationEndInfo): Promise<void>;
   onOperationAttemptStart?(info: AttemptInfo): Promise<void>;
   wrapOperationAttemptFn?(info: AttemptInfo, fn: CustomerFn): CustomerFnResult;
