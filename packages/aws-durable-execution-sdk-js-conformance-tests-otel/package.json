@@ -1,0 +1,36 @@
+{
+  "name": "@aws/durable-execution-sdk-js-conformance-tests-otel",
+  "version": "0.0.1",
+  "description": "OpenTelemetry conformance test handlers for the Durable Execution JS SDK, exercised by the shared OTel conformance orchestrator in aws-durable-execution-conformance-tests.",
+  "license": "Apache-2.0",
+  "private": true,
+  "repository": "ssh:github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-conformance-tests-otel",
+  "homepage": "https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-conformance-tests-otel",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "clean": "rm -rf dist node_modules .rollup.cache",
+    "build": "rollup --config rollup.config.mjs --silent",
+    "test": "npm run typecheck && jest --config jest.config.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws/durable-execution-sdk-js": "*",
+    "@aws/durable-execution-sdk-js-otel": "*",
+    "@opentelemetry/api": "^1.9.0"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^28.0.9",
+    "@rollup/plugin-json": "^6.1.0",
+    "@rollup/plugin-node-resolve": "^16.0.2",
+    "@rollup/plugin-typescript": "^12.3.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.19.11",
+    "jest": "^30.0.3",
+    "rollup": "^4.57.1",
+    "ts-jest": "^29.4.0",
+    "tslib": "^2.8.1",
+    "typescript": "^5.9.3"
+  }
+}
