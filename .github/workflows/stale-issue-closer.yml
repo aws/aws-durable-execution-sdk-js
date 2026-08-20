@@ -4,7 +4,8 @@ on:
   schedule:
     # GitHub may delay or drop scheduled workflows during high-load periods.
     # Avoid scheduling at the top of the hour.
-    - cron: "37 12 * * *"
+    # - cron: "37 12 * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions: {}
