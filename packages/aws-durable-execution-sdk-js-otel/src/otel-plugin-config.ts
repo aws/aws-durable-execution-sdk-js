@@ -1,45 +1,40 @@
 import type { TracerProvider } from "@opentelemetry/api";
-import type { TextMapPropagator } from "@opentelemetry/api";
+import type { IdGenerator } from "@opentelemetry/sdk-trace-node";
 import type { ContextExtractor } from "./context-extractors";
 
 /**
- * The three tracer-provider resolution tiers a config can select.
- *
- * This is the single vocabulary for "which provider mode are we in", consumed
- * by the provider factory (to build/accept the provider) and by the plugins
- * (to shape spans). Derive it from a config with {@link resolveProviderSource}.
+ * Creates the plugin's deterministic ID generator, optionally chained to an
+ * application-supplied fallback generator.
  */
-export enum ProviderSource {
-  /** Caller supplied `config.tracerProvider`; the plugin uses it as-is. */
-  EXPLICIT = "explicit",
-  /**
-   * Default: use the globally registered provider via
-   * `trace.getTracerProvider()`.
-   */
-  GLOBAL = "global",
-  /** The plugin builds and owns an OTLP provider. */
-  AUTO_OTLP = "auto_otlp",
-}
+export type IdGeneratorFactory = (
+  fallbackIdGenerator?: IdGenerator,
+) => IdGenerator;
+
+/**
+ * Creates a caller-owned TracerProvider with a deterministic ID generator
+ * installed during provider construction.
+ */
+export type TracerProviderFactory = (
+  createIdGenerator: IdGeneratorFactory,
+) => TracerProvider;
 
 /**
  * Shared configuration options for both ExecutionOtelPlugin and InvocationOtelPlugin.
  *
- * All fields are optional. When no configuration is provided, the plugin
- * auto-configures a fully working TracerProvider with OTLP export to
- * `http://localhost:4318/v1/traces`, HTTP + AWS SDK instrumentation,
- * and AWSXRay + W3C TraceContext propagators.
+ * All fields are optional. When no provider factory is supplied, the plugin
+ * uses the globally registered TracerProvider.
  */
 export interface OtelPluginConfig {
   /**
-   * Custom TracerProvider, used only when `providerSource` is
-   * `ProviderSource.EXPLICIT`. When selected, the plugin uses this provider
-   * as-is and skips all auto-setup (no exporter, no propagators, no
-   * instrumentations are registered). The caller owns the provider.
+   * Factory for an application-owned TracerProvider. The plugin supplies a
+   * function that creates its deterministic ID generator, optionally chained
+   * to the application's normal ID generator as a fallback.
    *
-   * Required when `providerSource === ProviderSource.EXPLICIT`, and ignored
-   * (rejected) for any other source — see {@link resolveProviderSource}.
+   * When omitted, the globally registered provider is used. The application
+   * owns initialization, instrumentation, exporters, and shutdown for providers
+   * returned by this factory.
    */
-  tracerProvider?: TracerProvider;
+  tracerProviderFactory?: TracerProviderFactory;
 
   /**
    * Context extractor function used to extract upstream trace context
@@ -52,57 +47,6 @@ export interface OtelPluginConfig {
    * Defaults to `"aws-durable-execution-sdk-js"`.
    */
   instrumentationName?: string;
-
-  /**
-   * Whether to register `@opentelemetry/instrumentation-http`.
-   * Defaults to `true`. Set to `false` to skip HTTP instrumentation
-   * (AWS SDK instrumentation is always registered unless a custom
-   * `tracerProvider` is provided).
-   */
-  enableHttpInstrumentation?: boolean;
-
-  /**
-   * OTLP exporter configuration. Only used when no custom `tracerProvider`
-   * is provided.
-   */
-  exporterConfig?: {
-    /**
-     * Exporter endpoint URL. Defaults to the value of the
-     * `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable, or
-     * `http://localhost:4318` if not set.
-     */
-    endpoint?: string;
-
-    /**
-     * Custom headers sent with each export request. Useful for
-     * authentication with third-party OTLP endpoints.
-     */
-    headers?: Record<string, string>;
-  };
-
-  /**
-   * Custom propagators. When provided, replaces the default composite
-   * propagator (`[AWSXRayPropagator, W3CTraceContextPropagator]`).
-   */
-  propagators?: TextMapPropagator[];
-
-  /**
-   * Selects how the plugin obtains its `TracerProvider`:
-   *
-   * - `ProviderSource.GLOBAL` (default) — the plugin uses the globally
-   *   registered provider via `trace.getTracerProvider()` and skips all
-   *   auto-setup. The caller owns the global provider (e.g. the ADOT Lambda
-   *   layer). If no global provider is registered, OTel returns a no-op
-   *   provider and no spans are exported.
-   * - `ProviderSource.AUTO_OTLP` — the plugin builds and owns an internal
-   *   `NodeTracerProvider` with OTLP export, propagators, sampler, and
-   *   HTTP + AWS SDK instrumentation.
-   * - `ProviderSource.EXPLICIT` — the plugin uses `tracerProvider` as-is and
-   *   skips all auto-setup. `tracerProvider` is then required.
-   *
-   * Defaults to `ProviderSource.GLOBAL`.
-   */
-  providerSource?: ProviderSource;
 
   /**
    * Custom name for the root Workflow span.
@@ -127,39 +71,3 @@ export interface OtelPluginConfig {
  * @deprecated Use `OtelPluginConfig` instead.
  */
 export type ExecutionOtelPluginConfig = OtelPluginConfig;
-
-/**
- * Resolves and validates the {@link ProviderSource} for a config.
- *
- * `providerSource` is the sole selector (defaulting to
- * `ProviderSource.GLOBAL`). `tracerProvider` is a companion input consumed
- * only by the `EXPLICIT` source. This function enforces that coupling:
- *
- * - `EXPLICIT` requires `tracerProvider` — throws if it is missing.
- * - `tracerProvider` may only be supplied with `EXPLICIT` — throws otherwise,
- *   rather than silently ignoring a provider the caller expected to be used.
- *
- * It is the single source of truth for provider-mode selection: both the
- * provider factory and the plugins derive their behavior from the returned
- * `ProviderSource`.
- */
-export function resolveProviderSource(
-  config?: OtelPluginConfig,
-): ProviderSource {
-  const source = config?.providerSource ?? ProviderSource.GLOBAL;
-
-  if (source === ProviderSource.EXPLICIT && !config?.tracerProvider) {
-    throw new Error(
-      "OtelPluginConfig: providerSource 'explicit' requires a `tracerProvider` to be set.",
-    );
-  }
-
-  if (config?.tracerProvider && source !== ProviderSource.EXPLICIT) {
-    throw new Error(
-      "OtelPluginConfig: `tracerProvider` is only used with providerSource 'explicit'. " +
-        "Set providerSource: ProviderSource.EXPLICIT, or remove tracerProvider.",
-    );
-  }
-
-  return source;
-}

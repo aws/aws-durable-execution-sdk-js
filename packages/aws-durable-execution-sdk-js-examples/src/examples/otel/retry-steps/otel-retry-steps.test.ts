@@ -2,6 +2,7 @@ import { XRayClient } from "@aws-sdk/client-xray";
 import { handler, getSerializedSpans } from "./otel-retry-steps";
 import { createTests } from "../../../utils/test-helper";
 import { SerializedSpan } from "../shared/otel-test-setup";
+import { assertInvocationViewTraceTopology } from "../shared/otel-test-assertions";
 import {
   fetchXRayTrace,
   assertSpanNames,
@@ -47,10 +48,7 @@ createTests({
         // 3 attempts × (1 operation + 1 attempt) + 3 invocation spans + 1 Workflow span = 10 spans
         expect(spans).toHaveLength(10);
 
-        // All spans share the same traceId
-        const traceId = spans[0].traceId;
-        expect(traceId).toMatch(/^[0-9a-f]{32}$/);
-        expect(spans.every((s) => s.traceId === traceId)).toBe(true);
+        assertInvocationViewTraceTopology(spans);
 
         // --- Operation spans for "retry-step" ---
         const retryStepOps = spans.filter(

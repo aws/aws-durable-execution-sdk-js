@@ -1,349 +1,180 @@
-/**
- * Unit tests for provider resolution, config validation, and instrumentation
- * skipping in the shared OTel plugin infrastructure (used by both
- * ExecutionOtelPlugin and InvocationOtelPlugin), driven by `providerSource`.
- */
-import { trace, context, propagation } from "@opentelemetry/api";
-import type { TracerProvider } from "@opentelemetry/api";
+import { context, propagation, trace } from "@opentelemetry/api";
 import {
-  NodeTracerProvider,
   InMemorySpanExporter,
+  NodeTracerProvider,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
+import type { IdGenerator } from "@opentelemetry/sdk-trace-node";
+import { DeterministicIdGenerator } from "../deterministic-id-generator";
 import { createTracerProvider } from "../otel-plugin-provider";
-import {
-  ProviderSource,
-  resolveProviderSource,
-} from "../otel-plugin-config";
-import { registerStandaloneInstrumentations } from "../otel-plugin-instrumentations";
-
-// Save original env
-const originalEnv = process.env;
 
 beforeEach(() => {
-  // Reset OTel global state
   trace.disable();
   context.disable();
   propagation.disable();
 });
 
 afterEach(() => {
-  process.env = originalEnv;
   trace.disable();
   context.disable();
   propagation.disable();
 });
 
 describe("createTracerProvider", () => {
-  describe("providerSource=GLOBAL", () => {
-    it("returns the globally registered TracerProvider", () => {
-      // Register a global provider
-      const exporter = new InMemorySpanExporter();
-      const globalProvider = new NodeTracerProvider({
-        spanProcessors: [new SimpleSpanProcessor(exporter)],
-      });
-      globalProvider.register();
-
-      const result = createTracerProvider({
-        providerSource: ProviderSource.GLOBAL,
-      });
-
-      expect(result.tracerProvider).toBe(trace.getTracerProvider());
-      expect(result.source).toBe(ProviderSource.GLOBAL);
-
-      globalProvider.shutdown();
-    });
-
-    it("sets source=GLOBAL", () => {
+  it.each([undefined, {}])(
+    "uses the global provider when no factory is configured",
+    (config) => {
       const globalProvider = new NodeTracerProvider();
       globalProvider.register();
 
-      const result = createTracerProvider({
-        providerSource: ProviderSource.GLOBAL,
-      });
-
-      expect(result.source).toBe(ProviderSource.GLOBAL);
-
-      globalProvider.shutdown();
-    });
-  });
-
-  describe("providerSource=EXPLICIT", () => {
-    it("uses the supplied tracerProvider and sets source=EXPLICIT", () => {
-      const explicitProvider = new NodeTracerProvider();
-
-      const result = createTracerProvider({
-        providerSource: ProviderSource.EXPLICIT,
-        tracerProvider: explicitProvider,
-      });
-
-      expect(result.tracerProvider).toBe(explicitProvider);
-      expect(result.source).toBe(ProviderSource.EXPLICIT);
-
-      explicitProvider.shutdown();
-    });
-  });
-
-  describe("providerSource=AUTO_OTLP", () => {
-    it("creates an internal provider with source=AUTO_OTLP", () => {
-      const result = createTracerProvider({
-        providerSource: ProviderSource.AUTO_OTLP,
-      });
-
-      expect(result.source).toBe(ProviderSource.AUTO_OTLP);
-
-      // Clean up
-      if ("shutdown" in result.tracerProvider) {
-        (result.tracerProvider as NodeTracerProvider).shutdown();
-      }
-    });
-  });
-
-  describe("default source is GLOBAL when providerSource is absent", () => {
-    it("returns the global provider with source=GLOBAL for an empty config", () => {
-      const globalProvider = new NodeTracerProvider();
-      globalProvider.register();
-
-      const result = createTracerProvider({});
+      const result = createTracerProvider(
+        config,
+        new DeterministicIdGenerator(),
+      );
 
       expect(result.tracerProvider).toBe(trace.getTracerProvider());
-      expect(result.source).toBe(ProviderSource.GLOBAL);
+      expect(result.usesGlobalProvider).toBe(true);
 
-      globalProvider.shutdown();
-    });
+      void globalProvider.shutdown();
+    },
+  );
 
-    it("returns the global provider with source=GLOBAL for undefined config", () => {
-      const globalProvider = new NodeTracerProvider();
-      globalProvider.register();
-
-      const result = createTracerProvider(undefined);
-
-      expect(result.tracerProvider).toBe(trace.getTracerProvider());
-      expect(result.source).toBe(ProviderSource.GLOBAL);
-
-      globalProvider.shutdown();
-    });
-  });
-});
-
-describe("resolveProviderSource validation", () => {
-  it("defaults to Global when providerSource is absent", () => {
-    expect(resolveProviderSource(undefined)).toBe(ProviderSource.GLOBAL);
-    expect(resolveProviderSource({})).toBe(ProviderSource.GLOBAL);
-  });
-
-  it("returns the configured source verbatim for Global", () => {
-    expect(
-      resolveProviderSource({ providerSource: ProviderSource.GLOBAL }),
-    ).toBe(ProviderSource.GLOBAL);
-  });
-
-  it("returns EXPLICIT when providerSource=EXPLICIT and a tracerProvider is supplied", () => {
-    const explicitProvider = new NodeTracerProvider();
-    expect(
-      resolveProviderSource({
-        providerSource: ProviderSource.EXPLICIT,
-        tracerProvider: explicitProvider,
-      }),
-    ).toBe(ProviderSource.EXPLICIT);
-    explicitProvider.shutdown();
-  });
-
-  it("throws when providerSource=EXPLICIT but no tracerProvider is supplied", () => {
-    expect(() =>
-      resolveProviderSource({ providerSource: ProviderSource.EXPLICIT }),
-    ).toThrow(/requires a `tracerProvider`/);
-  });
-
-  it("throws when a tracerProvider is supplied without providerSource=EXPLICIT (default source)", () => {
-    const explicitProvider = new NodeTracerProvider();
-    expect(() =>
-      resolveProviderSource({ tracerProvider: explicitProvider }),
-    ).toThrow(/only used with providerSource 'explicit'/);
-    explicitProvider.shutdown();
-  });
-
-  it("throws when a tracerProvider is supplied with providerSource=GLOBAL", () => {
-    const explicitProvider = new NodeTracerProvider();
-    expect(() =>
-      resolveProviderSource({
-        providerSource: ProviderSource.GLOBAL,
-        tracerProvider: explicitProvider,
-      }),
-    ).toThrow(/only used with providerSource 'explicit'/);
-    explicitProvider.shutdown();
-  });
-});
-
-describe("registerStandaloneInstrumentations", () => {
-  describe("skips registration for non-AUTO_OTLP sources", () => {
-    it("returns without registering instrumentations for Global", () => {
-      const mockProvider: TracerProvider = {
-        getTracer: jest.fn().mockReturnValue({
-          startSpan: jest.fn(),
-          startActiveSpan: jest.fn(),
-        }),
-      };
-
-      // Should not throw and should return early
-      expect(() => {
-        registerStandaloneInstrumentations(
-          mockProvider,
-          ProviderSource.GLOBAL,
-          { providerSource: ProviderSource.GLOBAL },
-        );
-      }).not.toThrow();
-
-      // If it had registered instrumentations, it would have called into the
-      // instrumentation system. The fact that it returns immediately with a mock
-      // provider (which has no real span processor) without error confirms skipping.
-    });
-
-    it("skips instrumentation for Explicit", () => {
-      const mockProvider: TracerProvider = {
-        getTracer: jest.fn().mockReturnValue({
-          startSpan: jest.fn(),
-          startActiveSpan: jest.fn(),
-        }),
-      };
-
-      const explicitProvider = new NodeTracerProvider();
-
-      // Should not throw - returns early for the EXPLICIT source
-      expect(() => {
-        registerStandaloneInstrumentations(
-          mockProvider,
-          ProviderSource.EXPLICIT,
-          {
-            providerSource: ProviderSource.EXPLICIT,
-            tracerProvider: explicitProvider,
-          },
-        );
-      }).not.toThrow();
-
-      explicitProvider.shutdown();
-    });
-  });
-
-  describe("AUTO_OTLP source does not skip registration", () => {
-    it("proceeds with registration for AUTO_OTLP with an explicit config", () => {
-      // For the AUTO_OTLP source the function should attempt to register
-      // instrumentations. We use a real NodeTracerProvider to verify it does
-      // not return early.
-      const provider = new NodeTracerProvider();
-
-      // This should not throw and should proceed through the full registration path
-      expect(() => {
-        registerStandaloneInstrumentations(provider, ProviderSource.AUTO_OTLP, {
-          providerSource: ProviderSource.AUTO_OTLP,
-        });
-      }).not.toThrow();
-
-      provider.shutdown();
-    });
-
-    it("proceeds with registration for AUTO_OTLP with an empty config", () => {
-      const provider = new NodeTracerProvider();
-
-      expect(() => {
-        registerStandaloneInstrumentations(provider, ProviderSource.AUTO_OTLP, {});
-      }).not.toThrow();
-
-      provider.shutdown();
-    });
-  });
-});
-
-describe("ExecutionOtelPlugin integration - provider resolution", () => {
-  // These tests verify the end-to-end behavior through the ExecutionOtelPlugin
-  // constructor which calls both createTracerProvider and registerStandaloneInstrumentations
-
-  it("providerSource=GLOBAL retrieves the global provider", async () => {
-    // Register a known global provider
-    const exporter = new InMemorySpanExporter();
-    const globalProvider = new NodeTracerProvider({
-      spanProcessors: [new SimpleSpanProcessor(exporter)],
-    });
-    globalProvider.register();
-
-    // Import ExecutionOtelPlugin dynamically to avoid module-level side effects
-    const { ExecutionOtelPlugin } = await import("../execution-plugin");
-
-    const plugin = new ExecutionOtelPlugin({
-      providerSource: ProviderSource.GLOBAL,
-    });
-
-    // The plugin should be able to create spans via the global provider
-    // Verify by running through a basic lifecycle
-    await plugin.onInvocationStart({
-      requestId: "req-1",
-      executionArn: "arn:aws:states:us-east-1:123456789012:execution:sm:exec-1",
-      isFirstInvocation: true,
-      executionInput: {},
-      operations: {},
-      updatedOperations: {},
-    });
-
-    await plugin.onInvocationEnd({
-      requestId: "req-1",
-      executionArn: "arn:aws:states:us-east-1:123456789012:execution:sm:exec-1",
-      executionInput: {},
-      operations: {},
-      status: "SUCCEEDED" as any,
-      executionResult: undefined,
-      executionError: undefined,
-    });
-
-    // Spans should be exported via the global provider's exporter
-    const spans = exporter.getFinishedSpans();
-    expect(spans.length).toBeGreaterThan(0);
-
-    // The Workflow span should exist (plugin still creates it)
-    const workflowSpan = spans.find((s) => s.name === "Workflow");
-    expect(workflowSpan).toBeDefined();
-
-    globalProvider.shutdown();
-  });
-
-  it("providerSource=GLOBAL creates an Invocation span with durable.execution.arn", async () => {
-    const exporter = new InMemorySpanExporter();
-    const globalProvider = new NodeTracerProvider({
-      spanProcessors: [new SimpleSpanProcessor(exporter)],
-    });
-    globalProvider.register();
-
-    const { ExecutionOtelPlugin } = await import("../execution-plugin");
-
-    const plugin = new ExecutionOtelPlugin({
-      providerSource: ProviderSource.GLOBAL,
-    });
-
-    await plugin.onInvocationStart({
-      requestId: "req-2",
-      executionArn: "arn:aws:states:us-east-1:123456789012:execution:sm:exec-2",
-      isFirstInvocation: true,
-      executionInput: {},
-      operations: {},
-      updatedOperations: {},
-    });
-
-    await plugin.onInvocationEnd({
-      requestId: "req-2",
-      executionArn: "arn:aws:states:us-east-1:123456789012:execution:sm:exec-2",
-      executionInput: {},
-      operations: {},
-      status: "SUCCEEDED" as any,
-      executionResult: undefined,
-      executionError: undefined,
-    });
-
-    const spans = exporter.getFinishedSpans();
-    const invocationSpan = spans.find((s) => s.name === "Invocation");
-    expect(invocationSpan).toBeDefined();
-    expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(
-      "arn:aws:states:us-east-1:123456789012:execution:sm:exec-2",
+  it("passes a deterministic ID generator factory to the provider factory", () => {
+    const idGenerator = new DeterministicIdGenerator();
+    const tracerProviderFactory = jest.fn(
+      (createIdGenerator) =>
+        new NodeTracerProvider({ idGenerator: createIdGenerator() }),
     );
 
-    globalProvider.shutdown();
+    const result = createTracerProvider({ tracerProviderFactory }, idGenerator);
+
+    expect(tracerProviderFactory).toHaveBeenCalledTimes(1);
+    const createIdGenerator = tracerProviderFactory.mock.calls[0][0];
+    expect(createIdGenerator()).toBe(idGenerator);
+    expect(result.usesGlobalProvider).toBe(false);
+
+    void (result.tracerProvider as NodeTracerProvider).shutdown();
+  });
+
+  it("chains deterministic IDs to an application fallback generator", () => {
+    const fallbackTraceId = "f".repeat(32);
+    const fallbackSpanId = "e".repeat(16);
+    const fallbackIdGenerator = {
+      generateTraceId: jest.fn(() => fallbackTraceId),
+      generateSpanId: jest.fn(() => fallbackSpanId),
+    };
+    const pluginIdGenerator = new DeterministicIdGenerator();
+    let providerIdGenerator: IdGenerator | undefined;
+    const tracerProviderFactory = jest.fn((createIdGenerator) => {
+      providerIdGenerator = createIdGenerator(fallbackIdGenerator);
+      return new NodeTracerProvider({ idGenerator: providerIdGenerator });
+    });
+
+    const result = createTracerProvider(
+      { tracerProviderFactory },
+      pluginIdGenerator,
+    );
+
+    expect(providerIdGenerator?.generateTraceId()).toBe(fallbackTraceId);
+    expect(providerIdGenerator?.generateSpanId()).toBe(fallbackSpanId);
+    pluginIdGenerator.withIds(
+      { traceId: "a".repeat(32), spanId: "1".repeat(16) },
+      () => {
+        expect(providerIdGenerator?.generateTraceId()).toBe("a".repeat(32));
+        expect(providerIdGenerator?.generateSpanId()).toBe("1".repeat(16));
+      },
+    );
+
+    expect(fallbackIdGenerator.generateTraceId).toHaveBeenCalledTimes(1);
+    expect(fallbackIdGenerator.generateSpanId).toHaveBeenCalledTimes(1);
+    void (result.tracerProvider as NodeTracerProvider).shutdown();
+  });
+
+  it("treats a factory result as explicit even when it is globally registered", () => {
+    const provider = new NodeTracerProvider();
+    provider.register();
+
+    const result = createTracerProvider(
+      { tracerProviderFactory: () => provider },
+      new DeterministicIdGenerator(),
+    );
+
+    expect(result.tracerProvider).toBe(provider);
+    expect(result.usesGlobalProvider).toBe(false);
+
+    void provider.shutdown();
+  });
+});
+
+describe("ExecutionOtelPlugin provider resolution", () => {
+  it("uses the global provider by default", async () => {
+    const exporter = new InMemorySpanExporter();
+    const globalProvider = new NodeTracerProvider({
+      spanProcessors: [new SimpleSpanProcessor(exporter)],
+    });
+    globalProvider.register();
+
+    const { ExecutionOtelPlugin } = await import("../execution-plugin");
+    const plugin = new ExecutionOtelPlugin();
+
+    await plugin.onInvocationStart({
+      requestId: "req-1",
+      executionArn: "arn:aws:states:us-east-1:123456789012:execution:sm:exec-1",
+      isFirstInvocation: true,
+      executionInput: {},
+      operations: {},
+      updatedOperations: {},
+    });
+    await plugin.onInvocationEnd({
+      requestId: "req-1",
+      executionArn: "arn:aws:states:us-east-1:123456789012:execution:sm:exec-1",
+      executionInput: {},
+      operations: {},
+      status: "SUCCEEDED",
+    });
+
+    expect(
+      exporter.getFinishedSpans().some((span) => span.name === "Workflow"),
+    ).toBe(true);
+
+    await globalProvider.shutdown();
+  });
+
+  it("creates a global-provider Invocation span with the execution ARN", async () => {
+    const exporter = new InMemorySpanExporter();
+    const globalProvider = new NodeTracerProvider({
+      spanProcessors: [new SimpleSpanProcessor(exporter)],
+    });
+    globalProvider.register();
+
+    const { ExecutionOtelPlugin } = await import("../execution-plugin");
+    const plugin = new ExecutionOtelPlugin();
+    const executionArn =
+      "arn:aws:states:us-east-1:123456789012:execution:sm:exec-2";
+
+    await plugin.onInvocationStart({
+      requestId: "req-2",
+      executionArn,
+      isFirstInvocation: true,
+      executionInput: {},
+      operations: {},
+      updatedOperations: {},
+    });
+    await plugin.onInvocationEnd({
+      requestId: "req-2",
+      executionArn,
+      executionInput: {},
+      operations: {},
+      status: "SUCCEEDED",
+    });
+
+    const invocationSpan = exporter
+      .getFinishedSpans()
+      .find((span) => span.name === "Invocation");
+    expect(invocationSpan?.attributes["durable.execution.arn"]).toBe(
+      executionArn,
+    );
+
+    await globalProvider.shutdown();
   });
 });

@@ -6,6 +6,7 @@ import {
 } from "./otel-wait-for-condition";
 import { createTests } from "../../../utils/test-helper";
 import { SerializedSpan } from "../shared/otel-test-setup";
+import { assertInvocationViewTraceTopology } from "../shared/otel-test-assertions";
 import {
   fetchXRayTrace,
   assertSpanNames,
@@ -57,10 +58,7 @@ createTests({
         // Single invocation, 1 poll: STEP (op + attempt) + invocation + Workflow = 4 spans
         expect(spans).toHaveLength(4);
 
-        // All spans share the same traceId (deterministic from execution ARN)
-        const traceId = spans[0].traceId;
-        expect(traceId).toMatch(/^[0-9a-f]{32}$/);
-        expect(spans.every((s) => s.traceId === traceId)).toBe(true);
+        assertInvocationViewTraceTopology(spans);
 
         // Exactly 1 STEP operation span (single poll)
         const stepOp = spans.find(
@@ -120,10 +118,7 @@ createTests({
           // All spans across 3 poll invocations: 3 STEP ops + 3 attempts + 3 invocation spans + 1 Workflow span = 10 spans
           expect(spans).toHaveLength(10);
 
-          // All spans share the same traceId (deterministic from execution ARN)
-          const traceId = spans[0].traceId;
-          expect(traceId).toMatch(/^[0-9a-f]{32}$/);
-          expect(spans.every((s) => s.traceId === traceId)).toBe(true);
+          assertInvocationViewTraceTopology(spans);
 
           // 3 STEP operation spans (one per poll)
           const stepOps = spans.filter(

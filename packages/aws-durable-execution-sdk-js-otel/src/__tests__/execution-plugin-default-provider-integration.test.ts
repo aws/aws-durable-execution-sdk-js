@@ -14,7 +14,6 @@ import type {
   AttemptEndInfo,
 } from "@aws/durable-execution-sdk-js";
 import { ExecutionOtelPlugin } from "../execution-plugin";
-import { ProviderSource } from "../otel-plugin-config";
 
 const TEST_ARN =
   "arn:aws:states:us-east-1:123456789012:execution:my-sm:exec-integration-1";
@@ -114,7 +113,7 @@ function findSpans(
  * Integration test: End-to-end span export with default provider.
  *
  * This test registers a real NodeTracerProvider with InMemorySpanExporter globally,
- * creates a ExecutionOtelPlugin with providerSource: ProviderSource.GLOBAL, and simulates
+ * creates an ExecutionOtelPlugin with its default configuration, and simulates
  * a full invocation lifecycle verifying the complete span hierarchy is exported.
  *
  * Since this test runs locally (no Lambda environment), there is no ambient invocation
@@ -142,9 +141,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
   });
 
   it("exports spans through the globally registered provider pipeline", async () => {
-    const plugin = new ExecutionOtelPlugin({
-      providerSource: ProviderSource.GLOBAL,
-    });
+    const plugin = new ExecutionOtelPlugin({});
 
     // Simulate full invocation lifecycle:
     // onInvocationStart → onOperationStart → onOperationAttemptStart →
@@ -191,9 +188,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
   });
 
   it("Workflow_Span is a root span with no parent", async () => {
-    const plugin = new ExecutionOtelPlugin({
-      providerSource: ProviderSource.GLOBAL,
-    });
+    const plugin = new ExecutionOtelPlugin({});
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onOperationStart(
@@ -214,9 +209,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
   });
 
   it("Invocation_Span is created as child of ambient context", async () => {
-    const plugin = new ExecutionOtelPlugin({
-      providerSource: ProviderSource.GLOBAL,
-    });
+    const plugin = new ExecutionOtelPlugin({});
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onOperationStart(
@@ -246,9 +239,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
   });
 
   it("operation and attempt spans have correct parent-child hierarchy under Workflow_Span", async () => {
-    const plugin = new ExecutionOtelPlugin({
-      providerSource: ProviderSource.GLOBAL,
-    });
+    const plugin = new ExecutionOtelPlugin({});
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.wrapInvocation(makeInvocationInfo(), async () => {
@@ -292,9 +283,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
   });
 
   it("span links point to the Invocation span when there is no ambient invocation span", async () => {
-    const plugin = new ExecutionOtelPlugin({
-      providerSource: ProviderSource.GLOBAL,
-    });
+    const plugin = new ExecutionOtelPlugin({});
 
     // No ambient invocation span in local test environment
     await plugin.onInvocationStart(makeInvocationInfo());
@@ -338,9 +327,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
   it("no shutdown is called on the globally registered provider", async () => {
     const shutdownSpy = jest.spyOn(provider, "shutdown");
 
-    const plugin = new ExecutionOtelPlugin({
-      providerSource: ProviderSource.GLOBAL,
-    });
+    const plugin = new ExecutionOtelPlugin({});
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onOperationStart(
@@ -360,9 +347,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
   });
 
   it("full lifecycle with multiple operations produces correct span hierarchy", async () => {
-    const plugin = new ExecutionOtelPlugin({
-      providerSource: ProviderSource.GLOBAL,
-    });
+    const plugin = new ExecutionOtelPlugin({});
 
     // Simulate: start → op1 (with attempt) → op2 (with attempt) → end
     await plugin.onInvocationStart(makeInvocationInfo());
@@ -461,8 +446,22 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
       }
     }
 
-    // All spans share the same trace ID
-    const traceIds = new Set(spans.map((s) => s.spanContext().traceId));
-    expect(traceIds.size).toBe(1);
+    // Workflow operations form one trace. The parentless Invocation span forms
+    // a separate trace instead of becoming a second root in the Workflow trace.
+    expect(validateSpan!.spanContext().traceId).toBe(
+      workflowSpan!.spanContext().traceId,
+    );
+    expect(processSpan!.spanContext().traceId).toBe(
+      workflowSpan!.spanContext().traceId,
+    );
+    expect(validateAttempt!.spanContext().traceId).toBe(
+      workflowSpan!.spanContext().traceId,
+    );
+    expect(processAttempt!.spanContext().traceId).toBe(
+      workflowSpan!.spanContext().traceId,
+    );
+    expect(invocationSpan!.spanContext().traceId).not.toBe(
+      workflowSpan!.spanContext().traceId,
+    );
   });
 });

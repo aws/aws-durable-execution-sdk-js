@@ -21,7 +21,9 @@ import {
   trace,
   SpanKind,
   SpanStatusCode,
+  TraceFlags,
   ROOT_CONTEXT,
+  isSpanContextValid,
 } from "@opentelemetry/api";
 import { hrTime } from "@opentelemetry/core";
 import {
@@ -34,7 +36,7 @@ import { xRayContextExtractor } from "./context-extractors";
 import type { ContextExtractor } from "./context-extractors";
 import type { OtelPluginConfig } from "./otel-plugin-config";
 import { createTracerProvider } from "./otel-plugin-provider";
-import { registerStandaloneInstrumentations } from "./otel-plugin-instrumentations";
+import { tryInstallGlobalIdGenerator } from "./global-id-generator";
 
 const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
 
@@ -46,10 +48,14 @@ const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
  * durable execution.
  */
 export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
-  private readonly tracerProvider: TracerProvider;
-  private readonly tracer: Tracer;
-  private readonly idGenerator: DeterministicIdGenerator;
+  private tracerProvider: TracerProvider;
+  private tracer: Tracer;
+  private idGenerator: DeterministicIdGenerator;
   private readonly contextExtractor: ContextExtractor;
+  private readonly instrumentationName: string;
+  private readonly usesGlobalProvider: boolean;
+  private globalIdGeneratorInstalled: boolean;
+  private tracingEnabled = false;
   private readonly workflowSpanName: string;
   private readonly enrichLogger: boolean;
 
@@ -59,47 +65,56 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   private invocationSpan: Span | undefined;
   private workflowSpan: Span | undefined;
   private executionArn: string = "";
+  private executionTraceId: string = "";
 
   constructor(config?: OtelPluginConfig) {
     const instrumentationName =
       config?.instrumentationName ?? DEFAULT_INSTRUMENTATION_NAME;
+    this.instrumentationName = instrumentationName;
 
     this.idGenerator = new DeterministicIdGenerator();
     this.contextExtractor = config?.contextExtractor ?? xRayContextExtractor;
     this.workflowSpanName = config?.workflowSpanName ?? "Workflow";
     this.enrichLogger = config?.enrichLogger ?? true;
 
-    // Pass config directly to createTracerProvider — with the default
-    // providerSource (AUTO_OTLP) it creates an internal provider with OTLP
-    // export (same behavior as ExecutionOtelPlugin).
-    const { tracerProvider, source } = createTracerProvider(config);
+    const { tracerProvider, usesGlobalProvider } = createTracerProvider(
+      config,
+      this.idGenerator,
+    );
     this.tracerProvider = tracerProvider;
-
-    // Register instrumentations using the shared module
-    registerStandaloneInstrumentations(this.tracerProvider, source, config);
+    this.usesGlobalProvider = usesGlobalProvider;
 
     this.tracer = this.tracerProvider.getTracer(instrumentationName);
-
-    // Monkey-patch the tracer's ID generator so spans use deterministic IDs.
-    // The _idGenerator field is internal to @opentelemetry/sdk-trace-base's Tracer class.
-    (this.tracer as any)._idGenerator = this.idGenerator;
+    this.globalIdGeneratorInstalled = !this.usesGlobalProvider;
+    if (this.usesGlobalProvider) {
+      const installedIdGenerator = tryInstallGlobalIdGenerator(this.tracer);
+      if (installedIdGenerator) {
+        this.idGenerator = installedIdGenerator;
+        this.globalIdGeneratorInstalled = true;
+      }
+    }
   }
 
   async onInvocationStart(info: InvocationInfo): Promise<void> {
+    this.resetInvocationState();
+    this.tracingEnabled = this.ensureGlobalIdGeneratorInstalled();
+    if (!this.tracingEnabled) {
+      return;
+    }
+
     // 1. Store the execution ARN
     this.executionArn = info.executionArn;
 
     // 2. Invoke the context extractor
     const extractedContext = this.contextExtractor(info);
 
-    // 3. Set the trace ID on the ID generator
-    if (extractedContext?.traceId) {
-      this.idGenerator.setTraceId(extractedContext.traceId);
-    } else {
-      // Fallback: derive trace ID from ARN
-      const derivedId = deriveTraceIdFromArn(info.executionArn);
-      this.idGenerator.setTraceId(derivedId);
-    }
+    // 3. Keep the execution-scoped Workflow trace separate from the ambient
+    // Lambda trace. Reusing the extracted X-Ray trace ID here would create two
+    // parentless roots in one trace: Lambda's function segment and Workflow.
+    this.executionTraceId = deriveTraceIdFromArn(
+      info.executionArn,
+      info.executionStartTimestamp,
+    );
 
     // 4. Create the Workflow root span.
     //
@@ -113,29 +128,56 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     // community-collector mode previously left the invocation view without a root
     // Workflow span under ADOT/X-Ray.
     const workflowSpanId = deriveWorkflowSpanId(info.executionArn);
-    this.idGenerator.setNextSpanId(workflowSpanId);
-
-    this.workflowSpan = this.tracer.startSpan(
-      this.workflowSpanName,
+    this.workflowSpan = this.idGenerator.withIds(
       {
-        kind: SpanKind.INTERNAL,
-        attributes: {
-          "durable.execution.arn": info.executionArn,
-        },
-        startTime: info.executionStartTimestamp ?? new Date(),
+        traceId: this.executionTraceId,
+        spanId: workflowSpanId,
       },
-      ROOT_CONTEXT,
+      () =>
+        this.tracer.startSpan(
+          this.workflowSpanName,
+          {
+            kind: SpanKind.INTERNAL,
+            attributes: {
+              "durable.execution.arn": info.executionArn,
+            },
+            startTime: info.executionStartTimestamp ?? new Date(),
+          },
+          ROOT_CONTEXT,
+        ),
     );
 
-    // 5. Create the invocation span, parented to the ACTIVE context. Under
+    // 5. Create the invocation span in the ambient Lambda trace. Under
     //    ADOT/X-Ray the active context at onInvocationStart is the Lambda
-    //    execution-environment span, so the invocation span nests beneath it.
+    //    execution-environment span. When no span is active, use the extracted
+    //    upstream parent, or create a root if neither is available.
     //    The invocation span is intentionally NOT a child of the Workflow span:
     //    this plugin stays invocation-rooted. Execution-scoped correlation to
     //    the Workflow span is expressed via links on the operation/attempt
     //    spans (see onOperationStart / onOperationAttemptStart), matching the
     //    Java (aws/aws-durable-execution-sdk-java#572) and Python
     //    (aws/aws-durable-execution-sdk-python#593) reference plugins.
+    const activeContext = context.active();
+    const activeSpanContext = trace.getSpanContext(activeContext);
+    let invocationParentContext = activeContext;
+    if (
+      (!activeSpanContext || !isSpanContextValid(activeSpanContext)) &&
+      extractedContext?.parentSpanId
+    ) {
+      const extractedSpanContext = {
+        traceId: extractedContext.traceId,
+        spanId: extractedContext.parentSpanId,
+        traceFlags: extractedContext.traceFlags ?? TraceFlags.SAMPLED,
+        isRemote: true,
+      };
+      if (isSpanContextValid(extractedSpanContext)) {
+        invocationParentContext = trace.setSpanContext(
+          activeContext,
+          extractedSpanContext,
+        );
+      }
+    }
+
     this.invocationSpan = this.tracer.startSpan(
       "Invocation",
       {
@@ -146,7 +188,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         },
         startTime: hrTime(),
       },
-      context.active(),
+      invocationParentContext,
     );
   }
 
@@ -154,7 +196,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     _info: InvocationInfo,
     fn: () => Promise<DurableExecutionInvocationOutput>,
   ): Promise<DurableExecutionInvocationOutput> {
-    if (!this.invocationSpan) {
+    if (!this.tracingEnabled || !this.invocationSpan) {
       return fn();
     }
     return context.with(
@@ -164,6 +206,11 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onInvocationEnd(info: InvocationEndInfo): Promise<void> {
+    if (!this.tracingEnabled) {
+      this.resetInvocationState();
+      return;
+    }
+
     const endTime = hrTime();
 
     // 1. End all spans in the stack in reverse order
@@ -233,14 +280,48 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     }
 
     // 5. Clear all per-invocation state
+    this.resetInvocationState();
+  }
+
+  private ensureGlobalIdGeneratorInstalled(): boolean {
+    if (!this.usesGlobalProvider || this.globalIdGeneratorInstalled) {
+      return true;
+    }
+
+    // A plugin constructed before zero-code instrumentation is registered sees
+    // a ProxyTracer without the SDK's ID generator. Resolve the global provider
+    // again at invocation start, after preload initialization has completed.
+    this.tracerProvider = trace.getTracerProvider();
+    this.tracer = this.tracerProvider.getTracer(this.instrumentationName);
+
+    const installedIdGenerator = tryInstallGlobalIdGenerator(this.tracer);
+    if (installedIdGenerator) {
+      this.idGenerator = installedIdGenerator;
+      this.globalIdGeneratorInstalled = true;
+      return true;
+    }
+
+    console.warn(
+      "[InvocationOtelPlugin] Expected a compatible OpenTelemetry SDK tracer at invocation start; telemetry is disabled for this invocation. Ensure the OpenTelemetry SDK is configured before invocation start.",
+    );
+    return false;
+  }
+
+  private resetInvocationState(): void {
     this.spanMap.clear();
     this.spanStack = [];
     this.invocationSpan = undefined;
     this.workflowSpan = undefined;
     this.executionArn = "";
+    this.executionTraceId = "";
+    this.tracingEnabled = false;
   }
 
   async onOperationStart(info: OperationInfo): Promise<void> {
+    if (!this.tracingEnabled) {
+      return;
+    }
+
     // Same-invocation replay of an operation we already started: the span
     // already exists (e.g. a child context that is replayed after an internal
     // step retry, or a retried step). Reuse it rather than emitting a duplicate
@@ -297,33 +378,30 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
 
     if (!info.isReplay) {
       // Non-replay: use deterministic span ID
-      this.idGenerator.setNextSpanId(deterministicSpanId);
+      span = this.idGenerator.withIds(
+        {
+          traceId: this.executionTraceId,
+          spanId: deterministicSpanId,
+        },
+        () =>
+          this.tracer.startSpan(
+            spanName,
+            {
+              attributes,
+              links: this.workflowLinks(),
+              startTime: hrTime(),
+            },
+            parentContext,
+          ),
+      );
+    } else if (info.type === "CONTEXT" || info.type === "STEP") {
+      // The original span context is not checkpointed, so replay spans use a
+      // new span ID and correlate through the reproducible Workflow span.
       span = this.tracer.startSpan(
         spanName,
         {
           attributes,
           links: this.workflowLinks(),
-          startTime: hrTime(),
-        },
-        parentContext,
-      );
-    } else if (info.type === "CONTEXT" || info.type === "STEP") {
-      // Replay: use random span ID, add Link to deterministic span
-      const traceId =
-        this.invocationSpan?.spanContext().traceId ??
-        this.idGenerator.generateTraceId();
-      span = this.tracer.startSpan(
-        spanName,
-        {
-          attributes,
-          // Self-link to the deterministic operation span first, then the
-          // Workflow link (order-significant per the conformance contract).
-          links: [
-            {
-              context: { traceId, spanId: deterministicSpanId, traceFlags: 1 },
-            },
-            ...this.workflowLinks(),
-          ],
           startTime: hrTime(),
         },
         parentContext,
@@ -338,6 +416,10 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   wrapChildContextFn(info: OperationInfo, fn: () => unknown): unknown {
+    if (!this.tracingEnabled) {
+      return fn();
+    }
+
     const span = this.spanMap.get(info.id);
     if (!span) {
       return fn();
@@ -346,6 +428,10 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onOperationEnd(info: OperationEndInfo): Promise<void> {
+    if (!this.tracingEnabled) {
+      return;
+    }
+
     // Skip span creation for WAIT, INVOKE, CHAINED_INVOKE, and CALLBACK operations on replay
     if (
       info.isReplay &&
@@ -356,11 +442,6 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     ) {
       return;
     }
-
-    const deterministicSpanId = deriveSpanIdFromOperationId(
-      info.id,
-      this.executionArn,
-    );
 
     if (this.spanMap.has(info.id)) {
       // Operation was started in this invocation
@@ -415,9 +496,6 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     } else if (!info.isReplay) {
       // Operation was started in a prior invocation — create Continuation_Span
       const spanName = info.name ?? info.type;
-      const traceId =
-        this.invocationSpan?.spanContext().traceId ??
-        this.idGenerator.generateTraceId();
 
       // Resolve parent span: use parentId from map (e.g. the CONTEXT span for
       // child operations inside waitForCallback), or fall back to invocation span.
@@ -458,14 +536,10 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         spanName,
         {
           attributes,
-          // Self-link to the deterministic operation span first, then the
-          // Workflow link (order-significant per the conformance contract).
-          links: [
-            {
-              context: { traceId, spanId: deterministicSpanId, traceFlags: 1 },
-            },
-            ...this.workflowLinks(),
-          ],
+          // The original span context is not checkpointed, so do not fabricate
+          // a link to a derived operation span. The reproducible Workflow span
+          // provides stable cross-invocation correlation.
+          links: this.workflowLinks(),
           startTime: hrTime(),
         },
         parentContext,
@@ -493,6 +567,10 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onOperationAttemptStart(info: AttemptInfo): Promise<void> {
+    if (!this.tracingEnabled) {
+      return;
+    }
+
     const baseName = info.name ?? info.type;
     const spanName = `${baseName} attempt ${info.attempt}`;
 
@@ -534,6 +612,10 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   wrapOperationAttemptFn(info: AttemptInfo, fn: () => unknown): unknown {
+    if (!this.tracingEnabled) {
+      return fn();
+    }
+
     const attemptSpan = this.spanMap.get(
       this.attemptSpanKey(info.id, info.attempt),
     );
@@ -544,6 +626,10 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onOperationAttemptEnd(info: AttemptEndInfo): Promise<void> {
+    if (!this.tracingEnabled) {
+      return;
+    }
+
     const key = this.attemptSpanKey(info.id, info.attempt);
     const attemptSpan = this.spanMap.get(key);
     if (attemptSpan) {
@@ -570,7 +656,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   enrichLogContext(): Record<string, string | number | boolean> | undefined {
-    if (!this.enrichLogger) {
+    if (!this.tracingEnabled || !this.enrichLogger) {
       return undefined;
     }
     const span = trace.getSpan(context.active());

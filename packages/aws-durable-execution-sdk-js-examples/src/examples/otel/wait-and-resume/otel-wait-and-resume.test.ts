@@ -6,6 +6,7 @@ import {
 } from "./otel-wait-and-resume";
 import { createTests } from "../../../utils/test-helper";
 import { SerializedSpan } from "../shared/otel-test-setup";
+import { assertInvocationViewTraceTopology } from "../shared/otel-test-assertions";
 import {
   fetchXRayTrace,
   assertSpanNames,
@@ -61,10 +62,7 @@ createTests({
         // short-wait, invocation, invocation (2nd), after-wait (op + attempt) + Workflow = 8 spans
         expect(spans).toHaveLength(8);
 
-        // All spans share the same traceId (deterministic from execution ARN)
-        const traceId = spans[0].traceId;
-        expect(traceId).toMatch(/^[0-9a-f]{32}$/);
-        expect(spans.every((s) => s.traceId === traceId)).toBe(true);
+        assertInvocationViewTraceTopology(spans);
 
         // --- before-wait step ---
         const beforeWaitOp = spans.find(

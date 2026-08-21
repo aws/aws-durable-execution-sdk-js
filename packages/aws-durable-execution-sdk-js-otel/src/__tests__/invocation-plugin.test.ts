@@ -8,15 +8,16 @@ import {
   trace,
   SpanStatusCode,
   SpanKind,
+  TraceFlags,
   propagation,
 } from "@opentelemetry/api";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
 import { InvocationOtelPlugin } from "../invocation-plugin";
-import { ProviderSource } from "../otel-plugin-config";
 import {
-  DeterministicIdGenerator,
   deriveSpanIdFromOperationId,
+  deriveTraceIdFromArn,
 } from "../deterministic-id-generator";
+import type { TracerProviderFactory } from "../otel-plugin-config";
 import type {
   InvocationInfo,
   InvocationEndInfo,
@@ -27,12 +28,13 @@ import type {
 } from "@aws/durable-execution-sdk-js";
 
 let exporter: InMemorySpanExporter;
-let provider: NodeTracerProvider;
+let provider: NodeTracerProvider | undefined;
 let plugin: InvocationOtelPlugin;
 
 const TEST_ARN =
   "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-123";
 const TEST_REQUEST_ID = "req-abc-123";
+const TEST_EXECUTION_START = new Date("2024-01-01T00:00:00Z");
 
 function makeInvocationInfo(
   overrides?: Partial<InvocationInfo>,
@@ -44,7 +46,7 @@ function makeInvocationInfo(
     executionInput: {},
     operations: {},
     updatedOperations: {},
-    executionStartTimestamp: new Date("2024-01-01T00:00:00Z"),
+    executionStartTimestamp: TEST_EXECUTION_START,
     ...overrides,
   };
 }
@@ -60,7 +62,7 @@ function makeInvocationEndInfo(
     status: "SUCCEEDED" as any,
     executionResult: undefined,
     executionError: undefined,
-    executionStartTimestamp: new Date("2024-01-01T00:00:00Z"),
+    executionStartTimestamp: TEST_EXECUTION_START,
     ...overrides,
   };
 }
@@ -130,24 +132,28 @@ function expectSpanInside(child: ReadableSpan, parent: ReadableSpan): void {
   expect(compareHrTime(child.endTime, parent.endTime)).toBeLessThanOrEqual(0);
 }
 
-let idGenerator: DeterministicIdGenerator;
+let tracerProviderFactory: TracerProviderFactory;
 
 beforeEach(() => {
   exporter = new InMemorySpanExporter();
-  idGenerator = new DeterministicIdGenerator();
-  provider = new NodeTracerProvider({
-    spanProcessors: [new SimpleSpanProcessor(exporter)],
-    idGenerator,
-  });
-  provider.register();
+  provider = undefined;
+  tracerProviderFactory = (createIdGenerator) => {
+    if (!provider) {
+      provider = new NodeTracerProvider({
+        spanProcessors: [new SimpleSpanProcessor(exporter)],
+        idGenerator: createIdGenerator(),
+      });
+      provider.register();
+    }
+    return provider;
+  };
   plugin = new InvocationOtelPlugin({
-    providerSource: ProviderSource.EXPLICIT,
-    tracerProvider: provider,
+    tracerProviderFactory,
   });
 });
 
 afterEach(async () => {
-  await provider.shutdown();
+  await provider?.shutdown();
   exporter.reset();
   // Reset the global API registrations
   trace.disable();
@@ -181,8 +187,7 @@ describe("InvocationOtelPlugin", () => {
 
     it("honors custom workflowSpanName from config; invocation span name is fixed", async () => {
       const customPlugin = new InvocationOtelPlugin({
-        providerSource: ProviderSource.EXPLICIT,
-        tracerProvider: provider,
+        tracerProviderFactory,
         workflowSpanName: "my-workflow",
       });
       await customPlugin.onInvocationStart(makeInvocationInfo());
@@ -192,6 +197,116 @@ describe("InvocationOtelPlugin", () => {
       expect(findSpan("Workflow")).toBeUndefined();
       // Invocation span name is not configurable; always "Invocation"
       expect(findSpan("Invocation")).toBeDefined();
+    });
+
+    it("keeps Workflow in a separate trace from the ambient Lambda root", async () => {
+      const ambientTracer = provider!.getTracer("adot-lambda");
+      const lambdaRoot = ambientTracer.startSpan("Lambda");
+      const lambdaSpanContext = lambdaRoot.spanContext();
+      const topologyPlugin = new InvocationOtelPlugin({
+        tracerProviderFactory,
+        contextExtractor: () => ({
+          traceId: lambdaSpanContext.traceId,
+          parentSpanId: "c".repeat(16),
+          traceFlags: lambdaSpanContext.traceFlags,
+        }),
+      });
+
+      await context.with(
+        trace.setSpan(context.active(), lambdaRoot),
+        async () => {
+          await topologyPlugin.onInvocationStart(makeInvocationInfo());
+          await topologyPlugin.onOperationStart(
+            makeOperationInfo({ id: "op-topology", name: "topology-step" }),
+          );
+          await topologyPlugin.onOperationEnd(
+            makeOperationEndInfo({
+              id: "op-topology",
+              name: "topology-step",
+              status: "SUCCEEDED",
+            }),
+          );
+          await topologyPlugin.onInvocationEnd(makeInvocationEndInfo());
+        },
+      );
+      lambdaRoot.end();
+
+      const workflowSpan = findSpan("Workflow");
+      const invocationSpan = findSpan("Invocation");
+      const operationSpan = findSpan("topology-step");
+      expect(workflowSpan).toBeDefined();
+      expect(invocationSpan).toBeDefined();
+      expect(operationSpan).toBeDefined();
+
+      expect(workflowSpan!.parentSpanContext).toBeUndefined();
+      expect(workflowSpan!.spanContext().traceId).toBe(
+        deriveTraceIdFromArn(TEST_ARN, TEST_EXECUTION_START),
+      );
+      expect(workflowSpan!.spanContext().traceId).not.toBe(
+        lambdaSpanContext.traceId,
+      );
+
+      expect(invocationSpan!.spanContext().traceId).toBe(
+        lambdaSpanContext.traceId,
+      );
+      expect(invocationSpan!.parentSpanContext?.spanId).toBe(
+        lambdaSpanContext.spanId,
+      );
+      expect(operationSpan!.spanContext().traceId).toBe(
+        lambdaSpanContext.traceId,
+      );
+      expect(operationSpan!.links).toHaveLength(1);
+      expect(operationSpan!.links[0].context).toEqual(
+        workflowSpan!.spanContext(),
+      );
+
+      const rootsByTrace = getExportedSpans()
+        .filter((span) => span.parentSpanContext === undefined)
+        .reduce<Map<string, ReadableSpan[]>>((roots, span) => {
+          const traceId = span.spanContext().traceId;
+          roots.set(traceId, [...(roots.get(traceId) ?? []), span]);
+          return roots;
+        }, new Map());
+      expect(
+        rootsByTrace.get(lambdaSpanContext.traceId)?.map((span) => span.name),
+      ).toEqual(["Lambda"]);
+      expect(
+        rootsByTrace
+          .get(workflowSpan!.spanContext().traceId)
+          ?.map((span) => span.name),
+      ).toEqual(["Workflow"]);
+      expect(rootsByTrace.size).toBe(2);
+    });
+
+    it("uses the extracted upstream parent when no span is active", async () => {
+      const upstreamTraceId = "a".repeat(32);
+      const upstreamSpanId = "b".repeat(16);
+      const topologyPlugin = new InvocationOtelPlugin({
+        tracerProviderFactory,
+        contextExtractor: () => ({
+          traceId: upstreamTraceId,
+          parentSpanId: upstreamSpanId,
+          traceFlags: TraceFlags.SAMPLED,
+        }),
+      });
+
+      await topologyPlugin.onInvocationStart(makeInvocationInfo());
+      await topologyPlugin.onInvocationEnd(makeInvocationEndInfo());
+
+      const workflowSpan = findSpan("Workflow");
+      const invocationSpan = findSpan("Invocation");
+      expect(workflowSpan).toBeDefined();
+      expect(invocationSpan).toBeDefined();
+      expect(workflowSpan!.spanContext().traceId).toBe(
+        deriveTraceIdFromArn(TEST_ARN, TEST_EXECUTION_START),
+      );
+      expect(invocationSpan!.spanContext().traceId).toBe(upstreamTraceId);
+      expect(invocationSpan!.parentSpanContext).toMatchObject({
+        traceId: upstreamTraceId,
+        spanId: upstreamSpanId,
+        traceFlags: TraceFlags.SAMPLED,
+        isRemote: true,
+      });
     });
   });
 
@@ -365,7 +480,7 @@ describe("InvocationOtelPlugin", () => {
       );
     });
 
-    it("replay operation uses random span ID with Link to deterministic", async () => {
+    it("replay operation uses a new span ID and links only to Workflow", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       const opInfo = makeOperationInfo({
         id: "op-replay",
@@ -382,17 +497,18 @@ describe("InvocationOtelPlugin", () => {
       );
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
-      const expectedDeterministicId = deriveSpanIdFromOperationId(
+      const derivedOperationSpanId = deriveSpanIdFromOperationId(
         "op-replay",
         TEST_ARN,
       );
       const opSpan = findSpan("CONTEXT");
+      const workflowSpan = findSpan("Workflow");
       expect(opSpan).toBeDefined();
-      // Random span ID should differ from deterministic
-      expect(opSpan!.spanContext().spanId).not.toBe(expectedDeterministicId);
-      // Should have a Link pointing to deterministic span ID
-      expect(opSpan!.links.length).toBeGreaterThan(0);
-      expect(opSpan!.links[0].context.spanId).toBe(expectedDeterministicId);
+      expect(workflowSpan).toBeDefined();
+      expect(opSpan!.spanContext().spanId).not.toBe(derivedOperationSpanId);
+      expect(opSpan!.links).toHaveLength(1);
+      expect(opSpan!.links[0].context).toEqual(workflowSpan!.spanContext());
+      expect(opSpan!.links[0].context.spanId).not.toBe(derivedOperationSpanId);
     });
 
     it("uses operation name as span name when provided", async () => {
@@ -723,7 +839,7 @@ describe("InvocationOtelPlugin", () => {
   });
 
   describe("Continuation span for cross-invocation operations", () => {
-    it("creates continuation span with Link when operation was started in prior invocation", async () => {
+    it("creates continuation span linked only to Workflow when operation was started in prior invocation", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       // onOperationEnd for an operation NOT in the map (started elsewhere)
       await plugin.onOperationEnd(
@@ -735,16 +851,20 @@ describe("InvocationOtelPlugin", () => {
       );
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
-      const continuationSpan = findSpan("remote-op");
-      expect(continuationSpan).toBeDefined();
-      // Should have a Link pointing to deterministic span ID of op-cross
-      const expectedDeterministicId = deriveSpanIdFromOperationId(
+      const derivedOperationSpanId = deriveSpanIdFromOperationId(
         "op-cross",
         TEST_ARN,
       );
-      expect(continuationSpan!.links.length).toBeGreaterThan(0);
-      expect(continuationSpan!.links[0].context.spanId).toBe(
-        expectedDeterministicId,
+      const continuationSpan = findSpan("remote-op");
+      const workflowSpan = findSpan("Workflow");
+      expect(continuationSpan).toBeDefined();
+      expect(workflowSpan).toBeDefined();
+      expect(continuationSpan!.links).toHaveLength(1);
+      expect(continuationSpan!.links[0].context).toEqual(
+        workflowSpan!.spanContext(),
+      );
+      expect(continuationSpan!.links[0].context.spanId).not.toBe(
+        derivedOperationSpanId,
       );
     });
 
@@ -1697,8 +1817,7 @@ describe("InvocationOtelPlugin", () => {
 
     it("returns undefined when enrichLogger is disabled, even with an active span", async () => {
       const noEnrichPlugin = new InvocationOtelPlugin({
-        providerSource: ProviderSource.EXPLICIT,
-        tracerProvider: provider,
+        tracerProviderFactory,
         enrichLogger: false,
       });
       await noEnrichPlugin.onInvocationStart(makeInvocationInfo());
@@ -2041,14 +2160,12 @@ describe("InvocationOtelPlugin", () => {
 
       // Create parent plugin with shared provider
       const parentPlugin = new InvocationOtelPlugin({
-        providerSource: ProviderSource.EXPLICIT,
-        tracerProvider: provider,
+        tracerProviderFactory,
       });
 
       // Create child plugin with shared provider
       const childPlugin = new InvocationOtelPlugin({
-        providerSource: ProviderSource.EXPLICIT,
-        tracerProvider: provider,
+        tracerProviderFactory,
       });
 
       // --- Parent workflow execution ---

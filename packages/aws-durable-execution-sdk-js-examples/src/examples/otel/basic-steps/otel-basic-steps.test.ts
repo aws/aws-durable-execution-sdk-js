@@ -3,6 +3,7 @@ import { XRayClient } from "@aws-sdk/client-xray";
 import { handler, resetExporter, getSerializedSpans } from "./otel-basic-steps";
 import { createTests } from "../../../utils/test-helper";
 import { SerializedSpan } from "../shared/otel-test-setup";
+import { assertInvocationViewTraceTopology } from "../shared/otel-test-assertions";
 import {
   fetchXRayTrace,
   assertSpanNames,
@@ -58,9 +59,7 @@ createTests({
         // The plugin produces 8 spans: 3 operation spans + 3 attempt spans + 1 invocation span + 1 Workflow span
         expect(spans).toHaveLength(8);
 
-        // Assert all spans share the same traceId
-        const traceId = spans[0].traceId;
-        expect(spans.every((s) => s.traceId === traceId)).toBe(true);
+        assertInvocationViewTraceTopology(spans);
 
         // Operation spans are those with type STEP and no attempt attribute
         const opSpans = spans.filter(
