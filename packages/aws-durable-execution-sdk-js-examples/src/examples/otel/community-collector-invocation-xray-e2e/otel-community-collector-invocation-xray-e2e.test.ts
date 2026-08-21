@@ -173,9 +173,18 @@ createTests({
           failsThenSucceedsSpan!.attributes["durable.operation.type"],
         ).toBe("STEP");
 
-        // All operation spans share the same traceId
-        const traceId = operationSpans[0].traceId;
-        expect(operationSpans.every((s) => s.traceId === traceId)).toBe(true);
+        // Operations stay in their invocation trace. This workflow suspends and
+        // resumes, so multiple Invocation traces are expected and Workflow links
+        // provide execution-scoped correlation across them.
+        const invocationTraceIds = new Set(
+          spans
+            .filter((span) => span.name === "Invocation")
+            .map((span) => span.traceId),
+        );
+        expect(invocationTraceIds.size).toBeGreaterThan(1);
+        expect(
+          operationSpans.every((span) => invocationTraceIds.has(span.traceId)),
+        ).toBe(true);
 
         // Verify inner-step is nested under child-operations
         expect(innerStepSpan!.parentSpanId).toBe(childOpsSpan!.spanId);

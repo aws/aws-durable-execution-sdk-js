@@ -6,6 +6,7 @@ import {
 } from "./otel-log-enrichment";
 import { createTests } from "../../../utils/test-helper";
 import { SerializedSpan } from "../shared/otel-test-setup";
+import { assertInvocationViewTraceTopology } from "../shared/otel-test-assertions";
 import {
   fetchXRayTrace,
   assertSpanNames,
@@ -70,10 +71,7 @@ createTests({
           // log-step-2 (op + attempt) + invocation + Workflow = 6 spans
           expect(spans).toHaveLength(6);
 
-          // All spans share the same traceId
-          const traceId = spans[0].traceId;
-          expect(traceId).toMatch(/^[0-9a-f]{32}$/);
-          expect(spans.every((s) => s.traceId === traceId)).toBe(true);
+          assertInvocationViewTraceTopology(spans);
 
           // Assert operation spans for each step
           const logStep1Op = spans.find(

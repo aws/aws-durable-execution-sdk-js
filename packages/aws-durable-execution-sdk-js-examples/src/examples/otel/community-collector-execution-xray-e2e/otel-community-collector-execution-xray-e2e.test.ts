@@ -101,20 +101,22 @@ createTests({
         // - 1 Context_Execution span for child-operations
         expect(spans.length).toBeGreaterThanOrEqual(12);
 
-        // All spans share the same traceId
-        const traceId = spans[0].traceId;
-        expect(spans.every((s) => s.traceId === traceId)).toBe(true);
-
         // Verify Workflow span exists
         const workflowSpan = spans.find((s) => s.name === "Workflow");
         expect(workflowSpan).toBeDefined();
         expect(workflowSpan!.attributes["durable.execution.arn"]).toBeDefined();
 
-        // Verify Invocation span exists and is child of Workflow
-        const invocationSpan = spans.find((s) => s.name === "Invocation");
-        expect(invocationSpan).toBeDefined();
-        expect(invocationSpan!.parentSpanId).toBe(workflowSpan!.spanId);
-        expect(invocationSpan!.attributes["durable.execution.arn"]).toBeDefined();
+        // Without an ambient or extracted upstream context, Invocation is a
+        // separate root rather than a child of Workflow.
+        const invocationSpans = spans.filter((s) => s.name === "Invocation");
+        expect(invocationSpans.length).toBeGreaterThan(0);
+        for (const invocationSpan of invocationSpans) {
+          expect(invocationSpan.parentSpanId).toBeUndefined();
+          expect(invocationSpan.traceId).not.toBe(workflowSpan!.traceId);
+          expect(
+            invocationSpan.attributes["durable.execution.arn"],
+          ).toBeDefined();
+        }
 
         // Verify operation spans exist with correct attributes.
         // Filter out Context_Execution spans (which have "execution" in name)
@@ -187,7 +189,17 @@ createTests({
           (s) => s.attributes["durable.operation.type"] === "STEP",
         );
         for (const opSpan of stepSpans) {
+          expect(opSpan.traceId).toBe(workflowSpan!.traceId);
           expect(opSpan.links.length).toBeGreaterThanOrEqual(1);
+          expect(
+            opSpan.links.some((link) =>
+              invocationSpans.some(
+                (invocationSpan) =>
+                  link.traceId === invocationSpan.traceId &&
+                  link.spanId === invocationSpan.spanId,
+              ),
+            ),
+          ).toBe(true);
         }
       }
 

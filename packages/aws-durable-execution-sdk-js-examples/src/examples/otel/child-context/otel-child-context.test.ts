@@ -6,6 +6,7 @@ import {
 } from "./otel-child-context";
 import { createTests } from "../../../utils/test-helper";
 import { SerializedSpan } from "../shared/otel-test-setup";
+import { assertInvocationViewTraceTopology } from "../shared/otel-test-assertions";
 import {
   fetchXRayTrace,
   assertSpanNames,
@@ -65,9 +66,7 @@ createTests({
         // inner-step-2 (op + attempt), invocation + Workflow = 7 spans
         expect(spans.length).toBe(7);
 
-        // All spans share the same traceId
-        const traceId = spans[0].traceId;
-        expect(spans.every((s) => s.traceId === traceId)).toBe(true);
+        assertInvocationViewTraceTopology(spans);
 
         // Find the child context span
         const childCtxSpan = spans.find(

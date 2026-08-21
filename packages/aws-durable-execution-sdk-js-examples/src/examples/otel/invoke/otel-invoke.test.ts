@@ -4,6 +4,7 @@ import { handler, resetExporter, getSerializedSpans } from "./otel-invoke";
 import { handler as basicStepsHandler } from "../basic-steps/otel-basic-steps";
 import { createTests } from "../../../utils/test-helper";
 import { SerializedSpan } from "../shared/otel-test-setup";
+import { assertInvocationViewTraceTopology } from "../shared/otel-test-assertions";
 import {
   fetchXRayTrace,
   assertSpanNames,
@@ -81,10 +82,7 @@ createTests({
         // + 1 Workflow span
         expect(spans).toHaveLength(8);
 
-        // All spans share the same traceId
-        const traceId = spans[0].traceId;
-        expect(traceId).toMatch(/^[0-9a-f]{32}$/);
-        expect(spans.every((s) => s.traceId === traceId)).toBe(true);
+        assertInvocationViewTraceTopology(spans);
 
         // --- before-invoke step ---
         const beforeInvokeOp = spans.find(

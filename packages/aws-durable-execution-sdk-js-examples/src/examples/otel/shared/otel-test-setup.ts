@@ -4,10 +4,7 @@ import {
   NodeTracerProvider,
 } from "@opentelemetry/sdk-trace-node";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
-import {
-  InvocationOtelPlugin,
-  ProviderSource,
-} from "@aws/durable-execution-sdk-js-otel";
+import { InvocationOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
 
 /**
  * Serialized representation of an OpenTelemetry span for test assertions.
@@ -38,20 +35,23 @@ export interface OtelTestSetup {
  *
  * Configures a NodeTracerProvider with a SimpleSpanProcessor backed by an
  * InMemorySpanExporter, and passes the provider to InvocationOtelPlugin
- * via the `tracerProvider` option.
+ * through `tracerProviderFactory`.
  *
  * @returns An OtelTestSetup object containing the provider, exporter, plugin,
  * and helper functions for serializing and resetting spans.
  */
 export function createOtelTestSetup(): OtelTestSetup {
   const exporter = new InMemorySpanExporter();
-  const provider = new NodeTracerProvider({
-    spanProcessors: [new SimpleSpanProcessor(exporter)],
-  });
+  let provider!: NodeTracerProvider;
 
   const plugin = new InvocationOtelPlugin({
-    providerSource: ProviderSource.EXPLICIT,
-    tracerProvider: provider,
+    tracerProviderFactory: (createIdGenerator) => {
+      provider = new NodeTracerProvider({
+        idGenerator: createIdGenerator(),
+        spanProcessors: [new SimpleSpanProcessor(exporter)],
+      });
+      return provider;
+    },
   });
 
   function getSerializedSpans(): SerializedSpan[] {
@@ -124,9 +124,7 @@ export interface DualModeOtelSetup {
 export function createDualModeOtelSetup(): DualModeOtelSetup {
   if (isAdotEnvironment()) {
     // Cloud mode: use ADOT's globally registered TracerProvider for trace export to X-Ray
-    const plugin = new InvocationOtelPlugin({
-      providerSource: ProviderSource.GLOBAL,
-    });
+    const plugin = new InvocationOtelPlugin();
     return {
       plugin,
       getSerializedSpans: () => [],
