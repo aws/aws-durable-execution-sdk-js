@@ -250,12 +250,14 @@ to the execution ARN alone. It never substitutes the current time in the hash.
 The Workflow span itself uses the durable execution start timestamp when
 available and the current time otherwise.
 
-The plugins create the same Workflow span identity on each invocation, but end
-and export it only when the execution reaches `SUCCEEDED` or `FAILED`.
-Workflow spans created for `PENDING` or `RETRYING` invocations are left unended
-and are therefore not exported. This produces one exported Workflow root for
-the durable execution while allowing intermediate invocation spans to export
-normally.
+The plugins carry the same Workflow span identity on each invocation as a
+non-recording span context, and create the single recording Workflow span only
+when the execution reaches `SUCCEEDED` or `FAILED`, backdated to the execution
+start. `PENDING` and `RETRYING` invocations create no recording Workflow span,
+so none is ever left unended, and exactly one Workflow root is exported for the
+durable execution while intermediate invocation spans export normally. The
+non-recording context carries the provider's own sampling decision, so
+operations under it are sampled consistently with the eventual root.
 
 Each durable execution has its own Workflow trace. Parent and target executions
 in a chained invoke therefore remain separate roots even when their Invocation

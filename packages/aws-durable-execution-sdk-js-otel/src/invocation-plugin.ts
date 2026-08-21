@@ -35,7 +35,11 @@ import {
 import { xRayContextExtractor } from "./context-extractors";
 import type { ContextExtractor } from "./context-extractors";
 import type { OtelPluginConfig } from "./otel-plugin-config";
-import { createTracerProvider } from "./otel-plugin-provider";
+import type { WorkflowRoot } from "./otel-plugin-provider";
+import {
+  createTracerProvider,
+  resolveWorkflowRoot,
+} from "./otel-plugin-provider";
 import { tryInstallGlobalIdGenerator } from "./global-id-generator";
 
 const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
@@ -63,9 +67,14 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   private spanMap: Map<string, Span> = new Map();
   private spanStack: Span[] = [];
   private invocationSpan: Span | undefined;
+  // workflowSpan is a NON-RECORDING context carrying the deterministic Workflow
+  // identity for links; the one real span is created and ended only at the
+  // terminal invocation (see onInvocationEnd).
   private workflowSpan: Span | undefined;
+  private workflowRoot: WorkflowRoot | undefined;
   private executionArn: string = "";
   private executionTraceId: string = "";
+  private executionStartTimestamp: Date | undefined;
 
   constructor(config?: OtelPluginConfig) {
     const instrumentationName =
@@ -116,36 +125,34 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       info.executionStartTimestamp,
     );
 
-    // 4. Create the Workflow root span.
+    // 3b. Remember the execution start to backdate the terminal Workflow span.
+    // The now() fallback is taken HERE; at onInvocationEnd it would land after
+    // the span's own end time.
+    this.executionStartTimestamp =
+      info.executionStartTimestamp ??
+      this.executionStartTimestamp ??
+      new Date();
+
+    // 4. Resolve the Workflow span identity as a NON-RECORDING context.
     //
-    // The Workflow span is the parentless root of the execution-scoped trace and
-    // is emitted in BOTH provider modes (default/ADOT and owned/community
-    // collector), matching ExecutionOtelPlugin and the Python/Java reference
-    // plugins. It is keyed to a deterministic span ID derived from the execution
-    // ARN so every invocation of the same durable execution shares one root, and
-    // it is finalized (stamped with a terminal execution status and ended) only
-    // once, at the terminal invocation (see onInvocationEnd). Emitting it only in
-    // community-collector mode previously left the invocation view without a root
-    // Workflow span under ADOT/X-Ray.
+    // The Workflow span is the parentless root of the execution-scoped trace,
+    // spanning many invocations, so only the terminal one can complete it.
+    // Carrying a real recording span across invocations would leak it un-ended
+    // (issue #831); ending one per invocation would export duplicate
+    // (traceId, spanId). Its identity is keyed to a deterministic span ID so
+    // every invocation shares one root, and operation/attempt spans link to it
+    // (see workflowLinks). The single real span is created and ended once, at
+    // the terminal invocation (see onInvocationEnd). Sampling is resolved once
+    // here (see resolveWorkflowRoot) and reused for the terminal span.
     const workflowSpanId = deriveWorkflowSpanId(info.executionArn);
-    this.workflowSpan = this.idGenerator.withIds(
-      {
-        traceId: this.executionTraceId,
-        spanId: workflowSpanId,
-      },
-      () =>
-        this.tracer.startSpan(
-          this.workflowSpanName,
-          {
-            kind: SpanKind.INTERNAL,
-            attributes: {
-              "durable.execution.arn": info.executionArn,
-            },
-            startTime: info.executionStartTimestamp ?? new Date(),
-          },
-          ROOT_CONTEXT,
-        ),
+    this.workflowRoot = resolveWorkflowRoot(
+      this.tracer,
+      this.executionTraceId,
+      workflowSpanId,
+      this.workflowSpanName,
+      info.executionArn,
     );
+    this.workflowSpan = this.workflowRoot.span;
 
     // 5. Create the invocation span in the ambient Lambda trace. Under
     //    ADOT/X-Ray the active context at onInvocationStart is the Lambda
@@ -219,6 +226,15 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       span.end(endTime);
     }
 
+    // 1b. End any span still open. Attempt spans live only in spanMap (not the
+    // stack), so an attempt in flight when the invocation ends would otherwise
+    // leak un-ended. isRecording() skips spans already ended by the unwind.
+    for (const span of this.spanMap.values()) {
+      if (span.isRecording()) {
+        span.end(endTime);
+      }
+    }
+
     // 2. End the invocation span if it exists
     if (this.invocationSpan) {
       this.invocationSpan.setAttribute(
@@ -245,27 +261,40 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       this.invocationSpan.end(endTime);
     }
 
-    // 3. Handle Workflow span based on terminal status. The Workflow span is
-    //    always created (both provider modes); it is finalized only on a
-    //    terminal invocation, and dropped un-exported while non-terminal.
-    if (this.workflowSpan) {
-      if (info.status === "SUCCEEDED" || info.status === "FAILED") {
-        // PluginInvocationStatus only distinguishes SUCCEEDED/FAILED/PENDING/RETRYING,
-        // so the plugin cannot tell whether a failed workflow was TIMED_OUT or STOPPED
-        // — those are collapsed into FAILED -> ERROR here.
-        this.workflowSpan.setAttribute("durable.execution.status", info.status);
-        if (info.status === "FAILED") {
-          this.workflowSpan.setStatus({
-            code: SpanStatusCode.ERROR,
-            message: info.executionError?.message ?? "Execution failed",
-          });
-        } else {
-          this.workflowSpan.setStatus({ code: SpanStatusCode.OK });
-        }
-        this.workflowSpan.end(endTime);
+    // 3. Terminal invocation ONLY: create and end the one real Workflow span,
+    //    so a single span ever claims the deterministic (traceId, spanId).
+    //    Skipped when the cached decision was "drop", so a stateful sampler
+    //    cannot export a root whose children were dropped. Attributes match
+    //    resolveWorkflowRoot. TIMED_OUT/STOPPED arrive as FAILED -> ERROR.
+    if (
+      this.workflowRoot?.sampled &&
+      (info.status === "SUCCEEDED" || info.status === "FAILED")
+    ) {
+      const workflowSpanId = deriveWorkflowSpanId(this.executionArn);
+      const workflowSpan = this.idGenerator.withIds(
+        { traceId: this.executionTraceId, spanId: workflowSpanId },
+        () =>
+          this.tracer.startSpan(
+            this.workflowSpanName,
+            {
+              kind: SpanKind.INTERNAL,
+              attributes: this.workflowRoot!.attributes,
+              startTime: this.executionStartTimestamp!,
+            },
+            ROOT_CONTEXT,
+          ),
+      );
+      // Set status after creation so the sampler saw the same attributes.
+      workflowSpan.setAttribute("durable.execution.status", info.status);
+      if (info.status === "FAILED") {
+        workflowSpan.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: info.executionError?.message ?? "Execution failed",
+        });
+      } else {
+        workflowSpan.setStatus({ code: SpanStatusCode.OK });
       }
-      // Non-terminal (PENDING/RETRYING): do NOT end — status stays UNSET and the
-      // span is dropped without export
+      workflowSpan.end(endTime);
     }
 
     // 4. Force flush the tracer provider
@@ -312,8 +341,10 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     this.spanStack = [];
     this.invocationSpan = undefined;
     this.workflowSpan = undefined;
+    this.workflowRoot = undefined;
     this.executionArn = "";
     this.executionTraceId = "";
+    this.executionStartTimestamp = undefined;
     this.tracingEnabled = false;
   }
 

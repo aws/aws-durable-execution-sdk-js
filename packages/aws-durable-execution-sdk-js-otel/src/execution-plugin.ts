@@ -28,7 +28,11 @@ import {
 import { xRayContextExtractor } from "./context-extractors";
 import type { ContextExtractor } from "./context-extractors";
 import type { OtelPluginConfig } from "./otel-plugin-config";
-import { createTracerProvider } from "./otel-plugin-provider";
+import type { WorkflowRoot } from "./otel-plugin-provider";
+import {
+  createTracerProvider,
+  resolveWorkflowRoot,
+} from "./otel-plugin-provider";
 import { tryInstallGlobalIdGenerator } from "./global-id-generator";
 
 const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
@@ -50,12 +54,16 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   private tracer: Tracer;
   private readonly instrumentationName: string;
 
-  // Per-invocation state
+  // Per-invocation state. workflowSpan is a NON-RECORDING context carrying the
+  // deterministic Workflow identity for parenting/links; the one real span is
+  // created and ended only at the terminal invocation (see onInvocationEnd).
   private workflowSpan: Span | undefined;
+  private workflowRoot: WorkflowRoot | undefined;
   private invocationSpan: Span | undefined;
   private spanMap: Map<string, Span>;
   private executionArn: string;
   private executionTraceId: string;
+  private executionStartTimestamp: Date | undefined;
 
   private readonly usesGlobalProvider: boolean;
   private globalIdGeneratorInstalled: boolean;
@@ -122,29 +130,29 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       info.executionStartTimestamp,
     );
 
-    // 4. Derive the workflow span ID from execution ARN
-    const workflowSpanId = deriveWorkflowSpanId(info.executionArn);
+    // 4. Remember the execution start to backdate the terminal Workflow_Span.
+    // The now() fallback is taken HERE; at onInvocationEnd it would land after
+    // the span's own end time.
+    this.executionStartTimestamp =
+      info.executionStartTimestamp ??
+      this.executionStartTimestamp ??
+      new Date();
 
-    // 5. Create the Workflow_Span with deterministic IDs. The override is
-    // scoped to this single startSpan call.
-    this.workflowSpan = this.idGenerator.withIds(
-      {
-        traceId: this.executionTraceId,
-        spanId: workflowSpanId,
-      },
-      () =>
-        this.tracer.startSpan(
-          this.workflowSpanName,
-          {
-            kind: SpanKind.INTERNAL,
-            attributes: {
-              "durable.execution.arn": info.executionArn,
-            },
-            startTime: info.executionStartTimestamp ?? new Date(),
-          },
-          ROOT_CONTEXT,
-        ),
+    // 5. Resolve the Workflow_Span identity as a NON-RECORDING context. A whole
+    // execution spans many invocations, so only the terminal one can complete
+    // the real span; carrying a real recording span across invocations would
+    // leak it un-ended, and ending one per invocation would export duplicate
+    // (traceId, spanId). Sampling is resolved once here (see resolveWorkflowRoot)
+    // and reused for the terminal span.
+    const workflowSpanId = deriveWorkflowSpanId(info.executionArn);
+    this.workflowRoot = resolveWorkflowRoot(
+      this.tracer,
+      this.executionTraceId,
+      workflowSpanId,
+      this.workflowSpanName,
+      info.executionArn,
     );
+    this.workflowSpan = this.workflowRoot.span;
 
     // 6. Create Invocation_Span in the ambient Lambda trace. When no OTel span
     // is active, fall back to the extracted upstream parent, or create a root if
@@ -256,30 +264,52 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       this.invocationSpan.end();
     }
 
-    // 2. Handle Workflow_Span based on terminal status
-    if (info.status === "SUCCEEDED" || info.status === "FAILED") {
-      // Terminal: set status attribute, map to span status, end (causes export).
-      // PluginInvocationStatus only distinguishes SUCCEEDED/FAILED/PENDING/RETRYING,
-      // so the plugin cannot tell whether a failed workflow was TIMED_OUT or STOPPED
-      // — those are collapsed into FAILED -> ERROR here.
-      if (this.workflowSpan) {
-        this.workflowSpan.setAttribute("durable.execution.status", info.status);
-        if (info.status === "FAILED") {
-          this.workflowSpan.setStatus({
-            code: SpanStatusCode.ERROR,
-            message: info.executionError?.message ?? "Execution failed",
-          });
-        } else {
-          this.workflowSpan.setStatus({ code: SpanStatusCode.OK });
-        }
-        this.workflowSpan.end();
+    // 2. Terminal invocation ONLY: create and end the one real Workflow_Span,
+    // so a single span ever claims the deterministic (traceId, spanId). Skipped
+    // when the cached decision was "drop", so a stateful sampler cannot export a
+    // root whose children were dropped. Attributes match resolveWorkflowRoot.
+    // TIMED_OUT/STOPPED arrive as FAILED -> ERROR.
+    if (
+      this.workflowRoot?.sampled &&
+      (info.status === "SUCCEEDED" || info.status === "FAILED")
+    ) {
+      const workflowSpanId = deriveWorkflowSpanId(this.executionArn);
+      const workflowSpan = this.idGenerator.withIds(
+        { traceId: this.executionTraceId, spanId: workflowSpanId },
+        () =>
+          this.tracer.startSpan(
+            this.workflowSpanName,
+            {
+              kind: SpanKind.INTERNAL,
+              attributes: this.workflowRoot!.attributes,
+              startTime: this.executionStartTimestamp!,
+            },
+            ROOT_CONTEXT,
+          ),
+      );
+      // Set status after creation so the sampler saw the same attributes.
+      workflowSpan.setAttribute("durable.execution.status", info.status);
+      if (info.status === "FAILED") {
+        workflowSpan.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: info.executionError?.message ?? "Execution failed",
+        });
+      } else {
+        workflowSpan.setStatus({ code: SpanStatusCode.OK });
+      }
+      workflowSpan.end();
+    }
+
+    // 3. End every span still open — a suspended operation, or an attempt in
+    // flight. Status stays UNSET: no terminal outcome was reached this
+    // invocation. A segment that resumes later is exported under its own random
+    // ID (see onOperationStart / onOperationEnd), so ending here cannot
+    // duplicate an identity.
+    for (const span of this.spanMap.values()) {
+      if (span.isRecording()) {
+        span.end();
       }
     }
-    // Non-terminal (PENDING/RETRYING): do NOT end workflowSpan — just drop the reference.
-    // Its status stays UNSET and the span is never exported (spans that are never
-    // .end()'d are never exported by the OTel SDK).
-
-    // 3. Discard open Operation_Spans without ending (they won't be exported)
 
     // 4. Always flush TracerProvider at invocation boundaries
     if ("forceFlush" in this.tracerProvider) {
@@ -326,9 +356,11 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   private resetInvocationState(): void {
     this.spanMap.clear();
     this.workflowSpan = undefined;
+    this.workflowRoot = undefined;
     this.invocationSpan = undefined;
     this.executionArn = "";
     this.executionTraceId = "";
+    this.executionStartTimestamp = undefined;
     this.tracingEnabled = false;
   }
 
@@ -347,6 +379,14 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
   async onOperationStart(info: OperationInfo): Promise<void> {
     if (!this.tracingEnabled) {
+      return;
+    }
+
+    // Same-invocation replay of an operation we already started (e.g. a step
+    // retried internally). Reuse the existing span rather than overwriting the
+    // map entry, which would orphan the first span un-ended. A genuine
+    // cross-invocation continuation has no span in the map and falls through.
+    if (info.isReplay && this.spanMap.has(info.id)) {
       return;
     }
 
@@ -382,19 +422,28 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
     const links = this.buildInvocationLinks();
 
-    // Always use a deterministic span ID regardless of replay status.
-    const span = this.idGenerator.withIds(
-      {
-        traceId: this.executionTraceId,
-        spanId: deterministicSpanId,
-      },
-      () =>
-        this.tracer.startSpan(
+    // The first start claims the deterministic ID. A cross-invocation replay
+    // gets a random ID: the earlier segment was ended and exported under the
+    // deterministic ID, so reusing it would emit a duplicate identity.
+    // Correlation is preserved via the shared execution trace and links.
+    const span = info.isReplay
+      ? this.tracer.startSpan(
           spanName,
           { attributes, startTime: info.startTimestamp, links },
           parentContext,
-        ),
-    );
+        )
+      : this.idGenerator.withIds(
+          {
+            traceId: this.executionTraceId,
+            spanId: deterministicSpanId,
+          },
+          () =>
+            this.tracer.startSpan(
+              spanName,
+              { attributes, startTime: info.startTimestamp, links },
+              parentContext,
+            ),
+        );
 
     if (span) {
       this.spanMap.set(info.id, span);
@@ -418,11 +467,6 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     if (!this.tracingEnabled) {
       return;
     }
-
-    const deterministicSpanId = deriveSpanIdFromOperationId(
-      info.id,
-      this.executionArn,
-    );
 
     if (this.spanMap.has(info.id)) {
       // Operation was started in this invocation
@@ -497,17 +541,15 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
       const links = this.buildInvocationLinks();
 
-      const span = this.idGenerator.withIds(
-        {
-          traceId: this.executionTraceId,
-          spanId: deterministicSpanId,
-        },
-        () =>
-          this.tracer.startSpan(
-            spanName,
-            { attributes, startTime: info.startTimestamp, links },
-            parentContext,
-          ),
+      // Completion of an operation started in an earlier invocation. Use a
+      // random ID: the partial segment was already ended and exported under the
+      // deterministic ID at that invocation's cleanup, so reusing it would emit
+      // a duplicate identity. Correlation is preserved via the shared execution
+      // trace and links.
+      const span = this.tracer.startSpan(
+        spanName,
+        { attributes, startTime: info.startTimestamp, links },
+        parentContext,
       );
 
       if (info.error) {

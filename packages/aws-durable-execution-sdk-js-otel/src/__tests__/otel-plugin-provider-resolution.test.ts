@@ -1,12 +1,20 @@
-import { context, propagation, trace } from "@opentelemetry/api";
+import { context, propagation, trace, ROOT_CONTEXT } from "@opentelemetry/api";
+import { TraceFlags } from "@opentelemetry/api";
 import {
+  AlwaysOffSampler,
+  AlwaysOnSampler,
   InMemorySpanExporter,
   NodeTracerProvider,
+  ParentBasedSampler,
   SimpleSpanProcessor,
+  TraceIdRatioBasedSampler,
 } from "@opentelemetry/sdk-trace-node";
-import type { IdGenerator } from "@opentelemetry/sdk-trace-node";
+import type { IdGenerator, Sampler } from "@opentelemetry/sdk-trace-node";
 import { DeterministicIdGenerator } from "../deterministic-id-generator";
-import { createTracerProvider } from "../otel-plugin-provider";
+import {
+  createTracerProvider,
+  resolveWorkflowRoot,
+} from "../otel-plugin-provider";
 
 beforeEach(() => {
   trace.disable();
@@ -176,5 +184,95 @@ describe("ExecutionOtelPlugin provider resolution", () => {
     );
 
     await globalProvider.shutdown();
+  });
+});
+
+describe("resolveWorkflowRoot", () => {
+  const TRACE_ID = "9c1c1a2b3d4e5f60718293a4b5c6d7e8";
+  const SPAN_ID = "b1b2b3b4b5b6b7b8";
+  const ARN = "arn:aws:states:us-east-1:123456789012:execution:sm:exec-1";
+
+  function tracerFor(sampler: Sampler) {
+    const provider = new NodeTracerProvider({
+      sampler,
+      spanProcessors: [new SimpleSpanProcessor(new InMemorySpanExporter())],
+    });
+    return { provider, tracer: provider.getTracer("t") };
+  }
+
+  it.each([
+    ["AlwaysOn", () => new AlwaysOnSampler(), TraceFlags.SAMPLED],
+    ["AlwaysOff", () => new AlwaysOffSampler(), TraceFlags.NONE],
+    ["ratio 1.0", () => new TraceIdRatioBasedSampler(1), TraceFlags.SAMPLED],
+    ["ratio 0.0", () => new TraceIdRatioBasedSampler(0), TraceFlags.NONE],
+    [
+      "ParentBased(AlwaysOff) — parentless root",
+      () => new ParentBasedSampler({ root: new AlwaysOffSampler() }),
+      TraceFlags.NONE,
+    ],
+  ])("carries the sampler's root decision for %s", (_n, make, expected) => {
+    const { provider, tracer } = tracerFor(make());
+    const root = resolveWorkflowRoot(
+      tracer,
+      TRACE_ID,
+      SPAN_ID,
+      "Workflow",
+      ARN,
+    );
+    expect(root.span.spanContext().traceFlags).toBe(expected);
+    expect(root.sampled).toBe(expected === TraceFlags.SAMPLED);
+    expect(root.attributes).toEqual({ "durable.execution.arn": ARN });
+    void provider.shutdown();
+  });
+
+  // The whole point: reproduce what a real root startSpan would have decided.
+  // If the SDK ever renames the internal `_sampler`, the fallback engages and
+  // this equivalence breaks — which is exactly what we want to be told about.
+  it.each([
+    ["AlwaysOn", () => new AlwaysOnSampler()],
+    ["AlwaysOff", () => new AlwaysOffSampler()],
+    ["ratio 0.01", () => new TraceIdRatioBasedSampler(0.01)],
+    [
+      "ParentBased(ratio 0.5)",
+      () => new ParentBasedSampler({ root: new TraceIdRatioBasedSampler(0.5) }),
+    ],
+  ])("matches the flags a real root span gets from %s", (_n, make) => {
+    for (const traceId of [
+      TRACE_ID,
+      "1111111111111111aaaaaaaaaaaaaaaa",
+      "ffffffffffffffff0000000000000000",
+    ]) {
+      const { provider, tracer } = tracerFor(make());
+      (tracer as unknown as { _idGenerator: unknown })._idGenerator = {
+        generateTraceId: () => traceId,
+        generateSpanId: () => SPAN_ID,
+      };
+      const real = tracer.startSpan("Workflow", {}, ROOT_CONTEXT);
+      const automatic = real.spanContext().traceFlags;
+      real.end();
+
+      const root = resolveWorkflowRoot(
+        tracer,
+        traceId,
+        SPAN_ID,
+        "Workflow",
+        ARN,
+      );
+      expect(root.span.spanContext().traceFlags).toBe(automatic);
+      void provider.shutdown();
+    }
+  });
+
+  it("falls back to sampled when the tracer exposes no sampler", () => {
+    const noopTracer = trace.getTracer("noop"); // no-op API tracer
+    const root = resolveWorkflowRoot(
+      noopTracer,
+      TRACE_ID,
+      SPAN_ID,
+      "Workflow",
+      ARN,
+    );
+    expect(root.span.spanContext().traceFlags).toBe(TraceFlags.SAMPLED);
+    expect(root.sampled).toBe(true);
   });
 });

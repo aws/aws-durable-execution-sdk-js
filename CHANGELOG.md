@@ -44,6 +44,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **otel**: the OTel plugins no longer leave recording spans un-ended on non-terminal
+  (`PENDING`/`RETRYING`) invocations, and no longer export two spans sharing one
+  `(traceId, spanId)`. The Workflow span identity is now carried as a non-recording span
+  context while the execution is in flight, and the single recording Workflow span is created
+  and ended once, at the terminal invocation, backdated to the execution start. In-flight
+  attempt spans and suspended operation spans are ended at invocation cleanup; a later
+  invocation that resumes an operation exports it under its own ID rather than reusing the
+  deterministic one. The non-recording context carries the provider's own sampling decision,
+  so operations are sampled consistently with the eventual root and `enrichLogContext()` no
+  longer reports `otelTraceSampled: true` for dropped traces. Fixes
+  [#831](https://github.com/aws/aws-durable-execution-sdk-js/issues/831).
+
 - `waitForCondition` no longer discards checkpointed state when a custom serdes fails to
   deserialize it on a resumed invocation. Previously the restore path caught the
   deserialization error and silently fell back to `initialState`, so the condition loop
