@@ -41,6 +41,25 @@ jobs:
         run: |
           node "$GITHUB_WORKSPACE/.github/workflows/lintcommit.js"
 
+  # Legal metadata on every workspace package: a declared `license`, and for the
+  # released packages the LICENSE/NOTICE files themselves, listed in `files` so
+  # npm actually packs them. The ESLint plugin shipped five versions to npm with
+  # no `license` field before anyone noticed (fixed by hand in d7bbfc3); this is
+  # the gate that catches it. Pure file reads, so no `npm ci` and no build.
+  legal-files:
+    needs: lint-commits
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+      - name: Check legal files
+        run: node .github/workflows/scripts/legal/check-legal-files.js
+      - name: Test the checker itself
+        run: node --test .github/workflows/scripts/legal/*.test.js
+
   build:
     needs: lint-commits
     runs-on: ubuntu-latest

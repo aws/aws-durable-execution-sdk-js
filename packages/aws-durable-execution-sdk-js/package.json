@@ -25,7 +25,9 @@
   "files": [
     "dist/",
     "dist-cjs/",
-    "dist-types/"
+    "dist-types/",
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "prebuild": "npm run lint:fix",

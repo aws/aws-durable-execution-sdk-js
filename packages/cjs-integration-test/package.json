@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "CJS integration test for AWS Durable Execution SDK",
+  "license": "Apache-2.0",
   "type": "commonjs",
   "scripts": {
     "test": "NODE_PATH=../../test-fixtures/dynamic-plugin-layer/modules node test.js"

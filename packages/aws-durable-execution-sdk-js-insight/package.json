@@ -26,7 +26,9 @@
   "files": [
     "dist/",
     "dist-cjs/",
-    "dist-types/"
+    "dist-types/",
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "build": "concurrently npm:build:esm npm:build:cjs npm:build:types",
