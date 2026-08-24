@@ -13,8 +13,11 @@
 //
 // The rules, applied to every directory under `packages/`:
 //
-//   1. `license` is declared. Private packages included -- a package that is
-//      private today can be published tomorrow, and the field costs nothing.
+//   1. `license` is declared, and is the SPDX id matching the LICENSE text this
+//      repo ships. Presence alone is not enough: "MIT", or a near-miss like
+//      "Apache 2.0", would pass while the tarball carries Apache-2.0 text.
+//      Private packages included -- a package that is private today can be
+//      published tomorrow, and the field costs nothing.
 //   2. A package is either `private: true` or listed for release in
 //      iterate-publish-npm.sh. Anything else is publishable by accident:
 //      `npm publish --workspaces` would push it to the registry. Three
@@ -28,7 +31,21 @@
 // The release list is parsed out of iterate-publish-npm.sh rather than
 // duplicated here: adding a package to the release list without giving it legal
 // files is precisely the mistake this should fail on, and a second hand-kept
-// list would just drift.
+// list would just drift. The cost is coupling to that file's shell syntax --
+// parseReleaseList throws rather than silently returning nothing if the array
+// stops matching, so the failure is loud.
+//
+// Scope: npm only. Rules 3 and 4 key off the npm release list, so artifacts
+// distributed through other channels are NOT covered -- notably the
+// insight-vscode `.vsix` (VS Code Marketplace, via `vsce package`) and the
+// insight-desktop app, both of which are `private: true` and so only see rules 1
+// and 2. `vsce` merely warns about a missing license, so the same
+// "declares a license, ships none of its text" gap can exist there. Extending
+// coverage to those channels is follow-up work, not something this script
+// implies is already handled. Nested non-workspace manifests
+// (insight/cdk, insight-vscode/webview-ui, and similar) are also out of scope:
+// `workspaces` is `packages/*`, so `npm publish --workspaces` cannot reach them
+// and they never land in a tarball.
 //
 // Deliberately dependency-free and I/O-only-on-the-repo, so CI can run it
 // without `npm ci`.
@@ -46,6 +63,8 @@ const REPO_ROOT = resolve(
 );
 const PUBLISH_SCRIPT = ".github/workflows/iterate-publish-npm.sh";
 const LEGAL_FILES = ["LICENSE", "NOTICE"];
+// SPDX id for the root LICENSE. Every package in this repo is under it.
+const LICENSE_ID = "Apache-2.0";
 
 /**
  * The package directories the release workflow publishes, read from the
@@ -115,9 +134,17 @@ export function check(repoRoot = REPO_ROOT) {
     const manifest = readJson(manifestPath);
     const isReleased = released.has(dir);
 
-    // Rule 1: everything declares a license.
+    // Rule 1: everything declares the repo's license, and declares it as valid
+    // SPDX. Presence alone would let "MIT" or "Apache 2.0" (not an SPDX id) sit
+    // next to a tarball full of Apache-2.0 text -- a metadata/content mismatch,
+    // the same class of bug as having no field at all.
     if (!manifest.license) {
       errors.push(`${dir}/package.json: missing "license" field`);
+    } else if (manifest.license !== LICENSE_ID) {
+      errors.push(
+        `${dir}/package.json: "license" is "${manifest.license}", expected "${LICENSE_ID}" ` +
+          `(the SPDX id matching the LICENSE text this repo ships)`,
+      );
     }
 
     // Rule 2: private, or intentionally released. Nothing in between.
@@ -130,7 +157,17 @@ export function check(repoRoot = REPO_ROOT) {
 
     if (!isReleased) continue;
 
-    // Rules 3 and 4 apply to what actually reaches the registry.
+    // Rules 3 and 4 apply to what actually reaches the registry. The `files`
+    // array is checked once, outside the per-file loop: a package missing it
+    // entirely has one problem, not one per legal file.
+    const files = manifest.files;
+    if (!Array.isArray(files)) {
+      errors.push(
+        `${dir}/package.json: released packages must declare a "files" array so the tarball ` +
+          `contents are explicit`,
+      );
+    }
+
     for (const legalFile of LEGAL_FILES) {
       const legalPath = join(repoRoot, dir, legalFile);
       if (!existsSync(legalPath)) {
@@ -144,13 +181,7 @@ export function check(repoRoot = REPO_ROOT) {
         );
       }
 
-      const files = manifest.files;
-      if (!Array.isArray(files)) {
-        errors.push(
-          `${dir}/package.json: released packages must declare a "files" array so the tarball ` +
-            `contents are explicit`,
-        );
-      } else if (!files.includes(legalFile)) {
+      if (Array.isArray(files) && !files.includes(legalFile)) {
         errors.push(
           `${dir}/package.json: "files" does not include "${legalFile}"`,
         );
@@ -182,7 +213,7 @@ function main() {
   const released = parseReleaseList(join(REPO_ROOT, PUBLISH_SCRIPT));
   console.log(
     `LICENSE and NOTICE present and listed in "files" for all ${released.length} released ` +
-      `packages; every workspace package declares a license.`,
+      `packages; every workspace package declares "${LICENSE_ID}".`,
   );
   return 0;
 }

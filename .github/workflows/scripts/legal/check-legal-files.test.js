@@ -187,11 +187,49 @@ test("catches legal files present on disk but absent from the files array", () =
   assert.match(errors[0], /"files" does not include "NOTICE"/);
 });
 
-test("catches a released package with no files array at all", () => {
+test("catches a released package with no files array at all, reporting it once", () => {
+  // Regression: the `files` check used to sit inside the per-legal-file loop, so
+  // a package with no `files` array reported the same problem twice.
   const pkg = compliantReleased("sdk");
   delete pkg.manifest.files;
   const errors = checkFixture({ sdk: pkg }, ["packages/sdk"]);
-  assert.ok(errors.some((e) => /must declare a "files" array/.test(e)));
+  const filesErrors = errors.filter((e) =>
+    /must declare a "files" array/.test(e),
+  );
+  assert.equal(filesErrors.length, 1);
+  // The two LICENSE/NOTICE files themselves are present, so nothing else fires.
+  assert.equal(errors.length, 1);
+});
+
+test("reports each problem once when files array and legal files are all absent", () => {
+  // The reviewer's reproduction: previously this emitted the "files" array error
+  // twice, interleaved with the two missing-file errors.
+  const pkg = compliantReleased("sdk");
+  delete pkg.manifest.files;
+  pkg.legalFiles = {};
+  const errors = checkFixture({ sdk: pkg }, ["packages/sdk"]);
+  assert.deepEqual(errors.map((e) => e.replace(/\. .*/, "")).sort(), [
+    "packages/sdk/LICENSE: missing",
+    "packages/sdk/NOTICE: missing",
+    'packages/sdk/package.json: released packages must declare a "files" array so the tarball contents are explicit',
+  ]);
+});
+
+test("catches a license that is not the repo's license", () => {
+  const pkg = compliantReleased("sdk");
+  pkg.manifest.license = "MIT";
+  const errors = checkFixture({ sdk: pkg }, ["packages/sdk"]);
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /"license" is "MIT", expected "Apache-2\.0"/);
+});
+
+test("catches a license that is not a valid SPDX id", () => {
+  // "Apache 2.0" reads fine to a human and is wrong to every tool.
+  const pkg = compliantReleased("sdk");
+  pkg.manifest.license = "Apache 2.0";
+  const errors = checkFixture({ sdk: pkg }, ["packages/sdk"]);
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /expected "Apache-2\.0"/);
 });
 
 test("catches a release list entry that points at nothing", () => {
