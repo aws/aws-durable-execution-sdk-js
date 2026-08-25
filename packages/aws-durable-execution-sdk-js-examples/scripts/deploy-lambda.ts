@@ -402,12 +402,20 @@ async function pinCapacityProviderRuntime(
 
   console.log(`Pinning Managed Instances runtime to ${runtimeVersionArn}`);
   try {
-    await lambdaClient.send(
-      new PutRuntimeManagementConfigCommand({
-        FunctionName: functionName,
-        UpdateRuntimeOn: UpdateRuntimeOn.Manual,
-        RuntimeVersionArn: runtimeVersionArn,
-      }),
+    // PutRuntimeManagementConfig rejects a function that is still Pending/Creating with
+    // ResourceConflictException, and CreateFunction returns well before a capacity-provider
+    // function reaches Active (typically 90s+, since Lambda launches three instances for AZ
+    // resiliency first). Retry on conflict with the same budget the publish call below uses.
+    await retryOnConflict(
+      () =>
+        lambdaClient.send(
+          new PutRuntimeManagementConfigCommand({
+            FunctionName: functionName,
+            UpdateRuntimeOn: UpdateRuntimeOn.Manual,
+            RuntimeVersionArn: runtimeVersionArn,
+          }),
+        ),
+      180,
     );
     console.log("Runtime pinned successfully");
   } catch (error) {
