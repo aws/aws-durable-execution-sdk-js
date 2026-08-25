@@ -22,6 +22,8 @@ import {
   State,
   LastUpdateStatusReasonCode,
   PutFunctionScalingConfigCommand,
+  PutRuntimeManagementConfigCommand,
+  UpdateRuntimeOn,
   CreateFunctionCommandInput,
 } from "@aws-sdk/client-lambda";
 import { ExamplesWithConfig } from "../src/types";
@@ -35,6 +37,27 @@ import {
 
 const DEBUG = false;
 const INTEGRATION_TEST_LOG_RETENTION_DAYS = 7;
+
+// TEMPORARY WORKAROUND — pin the Managed Instances runtime.
+//
+// The managed-instances durable runtime nodejs:24.DurableFunction.v33 has no outbound
+// network connectivity from the execution sandbox: DNS resolves, but TCP/TLS to every AWS
+// service endpoint (lambda, sqs, sts) black-holes. The durable SDK's first checkpoint
+// therefore never returns — `client.send(CheckpointDurableExecutionCommand)` neither
+// resolves nor rejects — and the execution dies at its ExecutionTimeout. This surfaces as
+// `capacity-provider-tests` failing with `getOperations()` returning [].
+//
+// Runtime v29 is unaffected. Pinning it restores connectivity (verified in us-west-2:
+// TCP to the Lambda endpoint 1ms, checkpoint round trip 102ms, execution succeeds in ~1s).
+// Only functions on a capacity provider are affected; on-demand functions are fine.
+//
+// Remove this block, and the PutRuntimeManagementConfig call below, once Lambda ships a
+// fixed managed-instances runtime. Pinning opts these functions out of automatic runtime
+// patching, so it must not outlive the underlying fix.
+const PINNED_CAPACITY_PROVIDER_RUNTIME_ARNS: Record<string, string> = {
+  "us-west-2":
+    "arn:aws:lambda:us-west-2::runtime:33c885f25b2bbcf5fe2728c23ed25a2d438e49c5d08c29476328b3a18e0ca9d1",
+};
 
 // ADOT Layer ARN mapping for X-Ray E2E test
 // Format: arn:aws:lambda:${region}:615299751070:layer:AWSOpenTelemetryDistroJs:<version>
@@ -352,6 +375,82 @@ async function ensureLogGroupRetention(functionName: string): Promise<void> {
       retentionInDays: INTEGRATION_TEST_LOG_RETENTION_DAYS,
     }),
   );
+}
+
+/**
+ * TEMPORARY WORKAROUND. Pins the runtime version for a function that
+ * runs on a Managed Instances capacity provider, so it does not pick up the broken
+ * nodejs:24.DurableFunction.v33 runtime. See PINNED_CAPACITY_PROVIDER_RUNTIME_ARNS.
+ *
+ * No-op in regions without a known-good pinned ARN — runtime ARNs are region-scoped, and
+ * only us-west-2 has been verified. Failures are logged but not fatal: an unpinned function
+ * still deploys, and failing the deploy here would be worse than letting the test report
+ * the real symptom.
+ */
+async function pinCapacityProviderRuntime(
+  lambdaClient: LambdaClient,
+  functionName: string,
+  region: string,
+): Promise<void> {
+  const runtimeVersionArn = PINNED_CAPACITY_PROVIDER_RUNTIME_ARNS[region];
+  if (!runtimeVersionArn) {
+    console.log(
+      `No pinned Managed Instances runtime configured for ${region}; using the default runtime`,
+    );
+    return;
+  }
+
+  console.log(`Pinning Managed Instances runtime to ${runtimeVersionArn}`);
+  try {
+    // PutRuntimeManagementConfig rejects a function that is still Pending/Creating with
+    // ResourceConflictException, and CreateFunction returns well before a capacity-provider
+    // function reaches Active (typically 90s+, since Lambda launches three instances for AZ
+    // resiliency first). Retry on conflict with the same budget the publish call below uses.
+    await retryOnConflict(
+      () =>
+        lambdaClient.send(
+          new PutRuntimeManagementConfigCommand({
+            FunctionName: functionName,
+            UpdateRuntimeOn: UpdateRuntimeOn.Manual,
+            RuntimeVersionArn: runtimeVersionArn,
+          }),
+        ),
+      180,
+    );
+    console.log("Runtime pinned successfully");
+
+    // PutRuntimeManagementConfig starts an update. Publishing while that update is in
+    // flight fails with "An update is in progress for resource ...", which the caller's
+    // outer retry turns into a re-run of CreateFunction and then an unrecoverable
+    // "Function already exist". Wait for the function to settle before returning.
+    await runWithRetry(
+      () => getCurrentConfiguration(lambdaClient, functionName),
+      (config) => {
+        if (
+          config.LastUpdateStatus === LastUpdateStatus.Failed ||
+          config.State === State.Failed
+        ) {
+          throw new Error(
+            `Function ${functionName} failed to settle after pinning the runtime. ` +
+              `${config.LastUpdateStatusReason ?? config.StateReason}`,
+          );
+        }
+        if (config.LastUpdateStatus === LastUpdateStatus.InProgress) {
+          return {
+            shouldRetry: true,
+            reason: `Runtime pin update is ${config.LastUpdateStatus}`,
+          };
+        }
+        return { shouldRetry: false, reason: "Runtime pin update completed" };
+      },
+      300,
+    );
+  } catch (error) {
+    console.error(
+      `Failed to pin Managed Instances runtime for ${functionName}:`,
+      error,
+    );
+  }
 }
 
 async function createFunction(
@@ -710,6 +809,15 @@ async function main(): Promise<void> {
         }
 
         if (useCapacityProvider) {
+          // Must happen before PublishVersion: the published version snapshots the
+          // function's runtime management config, so pinning afterwards has no effect on
+          // the version that actually serves invocations.
+          await pinCapacityProviderRuntime(
+            lambdaClient,
+            functionName,
+            env.AWS_REGION,
+          );
+
           for (let attempts = 1; attempts <= 2; attempts++) {
             console.log(
               "Publishing LATEST_PUBLISHED for function with capacity provider",
