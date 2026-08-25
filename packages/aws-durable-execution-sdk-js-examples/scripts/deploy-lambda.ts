@@ -418,6 +418,33 @@ async function pinCapacityProviderRuntime(
       180,
     );
     console.log("Runtime pinned successfully");
+
+    // PutRuntimeManagementConfig starts an update. Publishing while that update is in
+    // flight fails with "An update is in progress for resource ...", which the caller's
+    // outer retry turns into a re-run of CreateFunction and then an unrecoverable
+    // "Function already exist". Wait for the function to settle before returning.
+    await runWithRetry(
+      () => getCurrentConfiguration(lambdaClient, functionName),
+      (config) => {
+        if (
+          config.LastUpdateStatus === LastUpdateStatus.Failed ||
+          config.State === State.Failed
+        ) {
+          throw new Error(
+            `Function ${functionName} failed to settle after pinning the runtime. ` +
+              `${config.LastUpdateStatusReason ?? config.StateReason}`,
+          );
+        }
+        if (config.LastUpdateStatus === LastUpdateStatus.InProgress) {
+          return {
+            shouldRetry: true,
+            reason: `Runtime pin update is ${config.LastUpdateStatus}`,
+          };
+        }
+        return { shouldRetry: false, reason: "Runtime pin update completed" };
+      },
+      300,
+    );
   } catch (error) {
     console.error(
       `Failed to pin Managed Instances runtime for ${functionName}:`,
