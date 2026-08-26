@@ -107,22 +107,6 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
       name,
     });
 
-    const stepData = context.getStepData(entityId);
-
-    // Validate replay consistency
-    validateReplayConsistency(
-      entityId,
-      {
-        type: OperationType.CONTEXT,
-        name,
-        subType:
-          (options?.subType as OperationSubType) ||
-          OperationSubType.RUN_IN_CHILD_CONTEXT,
-      },
-      stepData,
-      context,
-    );
-
     // Two-phase execution: Phase 1 starts immediately, Phase 2 returns result when awaited
     let phase1Result: T | undefined;
     let phase1Error: unknown;
@@ -130,6 +114,25 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
     // Phase 1: Start execution immediately and capture result/error
     const phase1Promise = (async (): Promise<T> => {
       const currentStepData = context.getStepData(entityId);
+
+      // Validate replay consistency. This lives inside phase 1, unlike the other
+      // handlers where it precedes one: the halt promise has to be returned to
+      // something that stops on it, and the enclosing function must hand back a
+      // DurablePromise. Phase 1 runs synchronously up to its first await, so the
+      // check still happens as early as it did before.
+      const replayMismatch = validateReplayConsistency(
+        entityId,
+        {
+          type: OperationType.CONTEXT,
+          name,
+          subType:
+            (options?.subType as OperationSubType) ||
+            OperationSubType.RUN_IN_CHILD_CONTEXT,
+        },
+        currentStepData,
+        context,
+      );
+      if (replayMismatch) return replayMismatch;
 
       // If already completed, return cached result
       if (

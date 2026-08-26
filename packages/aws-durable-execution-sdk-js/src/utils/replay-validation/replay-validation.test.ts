@@ -13,7 +13,7 @@ describe("validateReplayConsistency", () => {
   });
 
   it("should not validate when checkpoint data is undefined", () => {
-    validateReplayConsistency(
+    const result = validateReplayConsistency(
       "step1",
       {
         type: OperationType.STEP,
@@ -25,6 +25,7 @@ describe("validateReplayConsistency", () => {
     );
 
     expect(terminateForUnrecoverableError).not.toHaveBeenCalled();
+    expect(result).toBeUndefined();
   });
 
   it("should pass validation when all fields match", () => {
@@ -37,7 +38,7 @@ describe("validateReplayConsistency", () => {
       Status: "SUCCEEDED",
     };
 
-    validateReplayConsistency(
+    const result = validateReplayConsistency(
       "step1",
       {
         type: OperationType.STEP,
@@ -49,6 +50,7 @@ describe("validateReplayConsistency", () => {
     );
 
     expect(terminateForUnrecoverableError).not.toHaveBeenCalled();
+    expect(result).toBeUndefined();
   });
 
   it("should pass validation when name is undefined in both", () => {
@@ -190,6 +192,74 @@ describe("validateReplayConsistency", () => {
       mockContext,
       expect.objectContaining({
         message: expect.stringContaining("Operation subtype mismatch"),
+      }),
+      "step1",
+    );
+  });
+
+  it("should hand back the halt promise so the caller stops on a mismatch", async () => {
+    // The caller must be able to stop. Reporting the mismatch is not enough on its
+    // own: termination resolves asynchronously, and until it does, a caller that
+    // carried on would act on checkpoint data belonging to a different operation --
+    // deserializing another step's result, or re-running a step body for its side
+    // effects.
+    const haltPromise = new Promise<never>(() => {});
+    (terminateForUnrecoverableError as jest.Mock).mockReturnValue(haltPromise);
+
+    const checkpointData: Operation = {
+      Id: "step1",
+      Type: OperationType.STEP,
+      Name: "step-a",
+      SubType: OperationSubType.STEP,
+      StartTimestamp: new Date(),
+      Status: "SUCCEEDED",
+    };
+
+    const result = validateReplayConsistency(
+      "step1",
+      {
+        type: OperationType.STEP,
+        name: "step-b",
+        subType: OperationSubType.STEP,
+      },
+      checkpointData,
+      mockContext,
+    );
+
+    expect(result).toBe(haltPromise);
+    await expect(
+      Promise.race([result, Promise.resolve("still-pending")]),
+    ).resolves.toBe("still-pending");
+  });
+
+  it("should report only the first mismatch it finds", () => {
+    // Type is checked first; the name and subtype comparisons that follow describe the
+    // same divergence, so reporting them as well would add nothing.
+    const checkpointData: Operation = {
+      Id: "step1",
+      Type: OperationType.STEP,
+      Name: "step-a",
+      SubType: OperationSubType.STEP,
+      StartTimestamp: new Date(),
+      Status: "SUCCEEDED",
+    };
+
+    validateReplayConsistency(
+      "step1",
+      {
+        type: OperationType.WAIT,
+        name: "step-b",
+        subType: OperationSubType.WAIT,
+      },
+      checkpointData,
+      mockContext,
+    );
+
+    expect(terminateForUnrecoverableError).toHaveBeenCalledTimes(1);
+    expect(terminateForUnrecoverableError).toHaveBeenCalledWith(
+      mockContext,
+      expect.objectContaining({
+        message: expect.stringContaining("Operation type mismatch"),
       }),
       "step1",
     );

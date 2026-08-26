@@ -7,6 +7,7 @@ import {
   DurableContext,
   DurableExecutionMode,
   DurableLogger,
+  OperationSubType,
 } from "../../types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import {
@@ -429,6 +430,8 @@ describe("Run In Child Context Integration Tests", () => {
       [hashId("1")]: {
         Id: "1",
         Type: OperationType.CONTEXT,
+        SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+        Name: "test-replay-child-context",
         StartTimestamp: new Date(),
         Status: OperationStatus.SUCCEEDED,
         ContextDetails: {

@@ -34,6 +34,9 @@ describe("termination helpers", () => {
         reason: TerminationReason.CUSTOM,
         message:
           "Unrecoverable error in step test-step: Test unrecoverable error",
+        // The error itself, not only its message: invocation-level handling
+        // reports it to plugins and serializes it into the Lambda response.
+        error: mockError,
       });
     });
 
