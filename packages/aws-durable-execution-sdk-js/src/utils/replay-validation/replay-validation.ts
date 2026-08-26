@@ -3,6 +3,21 @@ import { OperationSubType, ExecutionContext } from "../../types";
 import { terminateForUnrecoverableError } from "../termination-helper/termination-helper";
 import { NonDeterministicExecutionError } from "../../errors/non-deterministic-error/non-deterministic-error";
 
+/**
+ * Checks that an operation about to be replayed is the same operation that was
+ * checkpointed at this position. A mismatch means the workflow took a different
+ * path than it did on the invocation that produced the checkpoint, so the
+ * checkpoint at hand belongs to a different operation and nothing after this point
+ * can be trusted.
+ *
+ * @returns `undefined` when the operation matches its checkpoint. On a mismatch the
+ *   execution has already been terminated and a never-resolving promise is returned:
+ *   the caller MUST return or await it, so that handler code stops instead of racing
+ *   the termination while acting on checkpoint data known to be the wrong operation's
+ *   (deserializing another step's result, or re-running a step body for its side
+ *   effects). Termination is what turns this into a FAILED invocation carrying the
+ *   diagnostic below; the promise only stops the caller from continuing meanwhile.
+ */
 export const validateReplayConsistency = (
   stepId: string,
   currentOperation: {
@@ -12,10 +27,10 @@ export const validateReplayConsistency = (
   },
   checkpointData: Operation | undefined,
   context: ExecutionContext,
-): void => {
+): Promise<never> | undefined => {
   // Skip validation if no checkpoint data exists or if Type is undefined (first execution)
   if (!checkpointData || !checkpointData.Type) {
-    return;
+    return undefined;
   }
 
   // Validate operation type
@@ -25,7 +40,7 @@ export const validateReplayConsistency = (
         `Expected type "${checkpointData.Type}", but got "${currentOperation.type}". ` +
         `This indicates non-deterministic control flow in your workflow code.`,
     );
-    terminateForUnrecoverableError(context, error, stepId);
+    return terminateForUnrecoverableError(context, error, stepId);
   }
 
   // Validate operation name (including undefined)
@@ -35,7 +50,7 @@ export const validateReplayConsistency = (
         `Expected name "${checkpointData.Name ?? "undefined"}", but got "${currentOperation.name ?? "undefined"}". ` +
         `This indicates non-deterministic control flow in your workflow code.`,
     );
-    terminateForUnrecoverableError(context, error, stepId);
+    return terminateForUnrecoverableError(context, error, stepId);
   }
 
   // Validate operation subtype
@@ -45,6 +60,8 @@ export const validateReplayConsistency = (
         `Expected subtype "${checkpointData.SubType}", but got "${currentOperation.subType}". ` +
         `This indicates non-deterministic control flow in your workflow code.`,
     );
-    terminateForUnrecoverableError(context, error, stepId);
+    return terminateForUnrecoverableError(context, error, stepId);
   }
+
+  return undefined;
 };

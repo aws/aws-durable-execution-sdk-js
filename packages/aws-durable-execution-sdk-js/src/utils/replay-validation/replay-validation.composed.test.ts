@@ -41,19 +41,25 @@ const lambdaContext = {
 } as unknown as Context;
 
 /**
+ * The EXECUTION operation every replay state starts with.
+ */
+const executionOperation = (): WireOperation =>
+  ({
+    Id: hashId("execution"),
+    Type: OperationType.EXECUTION,
+    Status: OperationStatus.STARTED,
+    StartTimestamp: new Date().toISOString(),
+    ExecutionDetails: { InputPayload: "{}" },
+  }) as unknown as WireOperation;
+
+/**
  * Replay state for a single completed step, checkpointed under `checkpointedName`.
  * `hashId("1")` is the id the engine derives for the first operation of the root context,
  * so this is the checkpoint the handler's first `context.step` call will be matched
  * against.
  */
 const replayStateFor = (checkpointedName: string): WireOperation[] => [
-  {
-    Id: hashId("execution"),
-    Type: OperationType.EXECUTION,
-    Status: OperationStatus.STARTED,
-    StartTimestamp: new Date().toISOString(),
-    ExecutionDetails: { InputPayload: "{}" },
-  } as unknown as WireOperation,
+  executionOperation(),
   {
     Id: hashId("1"),
     Type: OperationType.STEP,
@@ -81,24 +87,27 @@ describe("non-deterministic replay reaches the invocation response", () => {
     },
   };
 
-  const invoke = (
+  const invokeAgainst = (
+    operations: WireOperation[],
     handler: (event: unknown, context: DurableContext) => Promise<unknown>,
-    checkpointedName: string,
   ): Promise<unknown> =>
     withDurableExecution(handler)(
       new DurableExecutionInvocationInputWithClient(
         {
           DurableExecutionArn: EXECUTION_ARN,
           CheckpointToken: "token-1",
-          InitialExecutionState: {
-            Operations: replayStateFor(checkpointedName),
-            NextMarker: "",
-          },
+          InitialExecutionState: { Operations: operations, NextMarker: "" },
         },
         client,
       ),
       lambdaContext,
     );
+
+  const invoke = (
+    handler: (event: unknown, context: DurableContext) => Promise<unknown>,
+    checkpointedName: string,
+  ): Promise<unknown> =>
+    invokeAgainst(replayStateFor(checkpointedName), handler);
 
   beforeEach(() => {
     checkpoints.length = 0;
@@ -121,6 +130,48 @@ describe("non-deterministic replay reaches the invocation response", () => {
     });
 
     expect(checkpoints).toEqual([]);
+  });
+
+  it("does not run the operation when the mismatched checkpoint is not yet terminal", async () => {
+    // The case that makes halting on a mismatch load-bearing rather than tidy. Position 1
+    // was checkpointed as a WAIT that is still STARTED, and the handler now replays a STEP
+    // there. Nothing about that checkpoint short-circuits the execute path, so reporting
+    // the mismatch without stopping leaves the step body to run for real -- an externally
+    // visible side effect fired on a replay the SDK has already determined it cannot
+    // trust. Termination settles afterwards and the invocation still answers FAILED, so
+    // the response alone cannot tell the two behaviours apart; only the side effect can.
+    const sideEffect = jest.fn();
+
+    const response = await invokeAgainst(
+      [
+        executionOperation(),
+        {
+          Id: hashId("1"),
+          Type: OperationType.WAIT,
+          SubType: OperationSubType.WAIT,
+          Name: "some-wait",
+          Status: OperationStatus.STARTED,
+          StartTimestamp: new Date().toISOString(),
+        } as unknown as WireOperation,
+      ],
+      async (_event, context: DurableContext) => {
+        await context.step("charge-the-card", async () => {
+          sideEffect();
+          return "charged";
+        });
+        return "done";
+      },
+    );
+
+    expect(sideEffect).not.toHaveBeenCalled();
+    expect(checkpoints).toEqual([]);
+    expect(response).toEqual({
+      Status: InvocationStatus.FAILED,
+      Error: expect.objectContaining({
+        ErrorType: "NonDeterministicExecutionError",
+        ErrorMessage: expect.stringContaining("Operation type mismatch"),
+      }),
+    });
   });
 
   it("succeeds on the same history when the step name is stable", async () => {

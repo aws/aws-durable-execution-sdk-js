@@ -89,12 +89,13 @@ export const createStepHandler = <Logger extends DurableLogger>(
     const phase1Promise = (async (): Promise<T> => {
       let stepData = context.getStepData(stepId);
 
-      validateReplayConsistency(
+      const replayMismatch = validateReplayConsistency(
         stepId,
         { type: OperationType.STEP, name, subType: OperationSubType.STEP },
         stepData,
         context,
       );
+      if (replayMismatch) return replayMismatch;
 
       const opInfo = {
         id: hashId(stepId),

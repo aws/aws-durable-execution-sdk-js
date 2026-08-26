@@ -94,7 +94,7 @@ export const createInvokeHandler = (
       let stepData = context.getStepData(stepId);
 
       // Validate replay consistency
-      validateReplayConsistency(
+      const replayMismatch = validateReplayConsistency(
         stepId,
         {
           type: OperationType.CHAINED_INVOKE,
@@ -104,6 +104,7 @@ export const createInvokeHandler = (
         stepData,
         context,
       );
+      if (replayMismatch) return replayMismatch;
 
       // Check if already completed
       if (stepData?.Status === OperationStatus.SUCCEEDED) {

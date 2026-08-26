@@ -65,7 +65,7 @@ export const createWaitHandler = (
       let stepData = context.getStepData(stepId);
 
       // Validate replay consistency
-      validateReplayConsistency(
+      const replayMismatch = validateReplayConsistency(
         stepId,
         {
           type: OperationType.WAIT,
@@ -75,6 +75,7 @@ export const createWaitHandler = (
         stepData,
         context,
       );
+      if (replayMismatch) return replayMismatch;
 
       // Check if already completed
       if (stepData?.Status === OperationStatus.SUCCEEDED) {

@@ -7,6 +7,7 @@ import {
   DurableContext,
   DurableExecutionMode,
   DurableLogger,
+  OperationSubType,
 } from "../../types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import {
@@ -199,6 +200,8 @@ describe("runInChildContext serdes round-trip", () => {
       [hashId("1")]: {
         Id: "1",
         Type: OperationType.CONTEXT,
+        SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+        Name: "serdes-child",
         StartTimestamp: new Date(),
         Status: OperationStatus.SUCCEEDED,
         ContextDetails: {
@@ -235,6 +238,8 @@ describe("runInChildContext serdes round-trip", () => {
       [hashId("1")]: {
         Id: "1",
         Type: OperationType.CONTEXT,
+        SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+        Name: "serdes-child",
         StartTimestamp: new Date(),
         Status: OperationStatus.SUCCEEDED,
         ContextDetails: {
@@ -272,6 +277,8 @@ describe("runInChildContext serdes round-trip", () => {
       [hashId("1")]: {
         Id: "1",
         Type: OperationType.CONTEXT,
+        SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+        Name: "large-child",
         StartTimestamp: new Date(),
         Status: OperationStatus.SUCCEEDED,
         ContextDetails: {

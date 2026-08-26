@@ -81,7 +81,7 @@ export const createCallback = (
       let stepData = context.getStepData(stepId);
 
       // Validate replay consistency
-      validateReplayConsistency(
+      const replayMismatch = validateReplayConsistency(
         stepId,
         {
           type: OperationType.CALLBACK,
@@ -91,6 +91,7 @@ export const createCallback = (
         stepData,
         context,
       );
+      if (replayMismatch) return replayMismatch;
 
       // Check if already completed
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
