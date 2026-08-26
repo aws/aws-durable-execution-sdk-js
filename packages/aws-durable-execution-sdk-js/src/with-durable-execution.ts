@@ -50,6 +50,32 @@ import {
 // Lambda response size limit is 6MB
 const LAMBDA_RESPONSE_SIZE_LIMIT = 6 * 1024 * 1024 - 50; // 6MB in bytes, minus 50 bytes for envelope
 
+/**
+ * Termination reasons that mean "this invocation is done for now, the execution
+ * continues later" -- a wait, a scheduled retry, or a pending callback. These are
+ * the only reasons that may answer PENDING, which tells the service to keep the
+ * execution alive and invoke again.
+ *
+ * Everything else is a fault, and the default for an unlisted reason is FAILED.
+ * The list is an allowlist rather than a denylist deliberately: a reason added
+ * later without a corresponding branch here then fails closed with its error
+ * reported, instead of silently claiming the execution is still progressing.
+ * Answering PENDING for a deterministic, permanent fault is worse than useless --
+ * every replay reproduces it, the error never reaches the customer, and once no
+ * operation is actually pending the service rejects the response outright
+ * ("Cannot return PENDING status with no pending operations").
+ *
+ * CHECKPOINT_FAILED and SERDES_FAILED are absent because they are handled before
+ * this point: both rethrow, which fails the invocation rather than the execution.
+ */
+const SUSPEND_TERMINATION_REASONS: ReadonlySet<TerminationReason> = new Set([
+  TerminationReason.OPERATION_TERMINATED,
+  TerminationReason.WAIT_SCHEDULED,
+  TerminationReason.RETRY_SCHEDULED,
+  TerminationReason.RETRY_INTERRUPTED_STEP,
+  TerminationReason.CALLBACK_PENDING,
+]);
+
 async function runHandler<
   Input,
   Output,
@@ -244,72 +270,57 @@ async function runHandler<
           throw new SerdesFailedError(result.message);
         }
 
-        // If termination was due to context validation error, return FAILED
-        if (
-          resultType === "termination" &&
-          result.reason === TerminationReason.CONTEXT_VALIDATION_ERROR
-        ) {
-          log("🛑", "Context validation error - returning FAILED status");
-          const response = {
-            Status: InvocationStatus.FAILED,
-            Error: createErrorObjectFromError(
-              result.error || new Error(result.message),
-            ),
-          };
-          await plugin.onInvocationEnd?.({
-            ...invocationBaseInfo,
-            status: PluginInvocationStatus.FAILED,
-            executionInput: customerHandlerEvent,
-            executionError: result.error || new Error(result.message),
-            executionResult: undefined,
-            operations: toOperationInfoMap(executionContext._stepData),
-          });
-          return response;
-        }
-
-        // If termination was due to a config validation error (e.g. an
-        // invalid maxConcurrency or a mutually-exclusive completionConfig),
-        // return FAILED. This is a deterministic, non-retryable caller
-        // mistake -- same category as CONTEXT_VALIDATION_ERROR above, not a
-        // suspend/pause, so it must not fall through to the generic
-        // termination handling below (which returns PENDING).
-        if (
-          resultType === "termination" &&
-          result.reason === TerminationReason.CONFIG_VALIDATION_ERROR
-        ) {
-          log("🛑", "Config validation error - returning FAILED status");
-          const response = {
-            Status: InvocationStatus.FAILED,
-            Error: createErrorObjectFromError(
-              result.error || new Error(result.message),
-            ),
-          };
-          await plugin.onInvocationEnd?.({
-            ...invocationBaseInfo,
-            status: PluginInvocationStatus.FAILED,
-            executionInput: customerHandlerEvent,
-            executionError: result.error || new Error(result.message),
-            executionResult: undefined,
-            operations: toOperationInfoMap(executionContext._stepData),
-          });
-          return response;
-        }
-
+        // Every remaining termination reason is decided here. A suspend answers
+        // PENDING; anything else is a fault and answers FAILED with the error the
+        // terminating code carried (see SUSPEND_TERMINATION_REASONS).
         if (resultType === "termination") {
-          log("🛑", "Returning termination response");
+          if (SUSPEND_TERMINATION_REASONS.has(result.reason)) {
+            log("🛑", "Returning termination response", {
+              reason: result.reason,
+            });
 
+            await plugin.onInvocationEnd?.({
+              ...invocationBaseInfo,
+              status: PluginInvocationStatus.PENDING,
+              executionInput: customerHandlerEvent,
+              executionResult: undefined,
+              executionError: undefined,
+              operations: toOperationInfoMap(executionContext._stepData),
+            });
+
+            return {
+              Status: InvocationStatus.PENDING,
+            };
+          }
+
+          // Deterministic, non-retryable faults: an invalid maxConcurrency or
+          // completionConfig (CONFIG_VALIDATION_ERROR), use of a parent or sibling
+          // context inside runInChildContext (CONTEXT_VALIDATION_ERROR), and
+          // non-deterministic workflow code detected during replay (CUSTOM, raised
+          // by validateReplayConsistency). Retrying reproduces all of them, so the
+          // execution fails now and the diagnostic reaches the customer.
+          const error = result.error ?? new Error(result.message);
+          log(
+            "🛑",
+            `Terminated with ${result.reason} - returning FAILED status`,
+            {
+              message: result.message,
+            },
+          );
+
+          const response = {
+            Status: InvocationStatus.FAILED,
+            Error: createErrorObjectFromError(error),
+          };
           await plugin.onInvocationEnd?.({
             ...invocationBaseInfo,
-            status: PluginInvocationStatus.PENDING,
+            status: PluginInvocationStatus.FAILED,
             executionInput: customerHandlerEvent,
+            executionError: error,
             executionResult: undefined,
-            executionError: undefined,
             operations: toOperationInfoMap(executionContext._stepData),
           });
-
-          return {
-            Status: InvocationStatus.PENDING,
-          };
+          return response;
         }
 
         log("✅", "Returning normal completion response");
