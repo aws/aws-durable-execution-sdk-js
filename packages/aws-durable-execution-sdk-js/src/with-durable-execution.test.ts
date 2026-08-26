@@ -277,19 +277,19 @@ describe("withDurableExecution", () => {
     });
   });
 
-  it("should return FAILED response carrying the error for CUSTOM reason", async () => {
-    // CUSTOM is how replay validation reports non-deterministic workflow code. It used
-    // to fall through to the generic handling and answer PENDING, which asked the
-    // service to retry an error that reproduces on every replay and hid the diagnostic
-    // from the customer entirely -- until the execution eventually failed with
-    // "Cannot return PENDING status with no pending operations" instead.
+  it("should return FAILED response carrying the error for NON_DETERMINISM reason", async () => {
+    // How replay validation reports non-deterministic workflow code. It used to fall
+    // through to the generic handling and answer PENDING, which asked the service to
+    // retry an error that reproduces on every replay and hid the diagnostic from the
+    // customer entirely -- until the execution eventually failed with "Cannot return
+    // PENDING status with no pending operations" instead.
     const mockHandler = jest.fn().mockReturnValue(new Promise(() => {})); // Never resolves
     const nonDeterminismError = new NonDeterministicExecutionError(
       'Non-deterministic execution detected: Operation name mismatch for step "1". ' +
         'Expected name "step-a", but got "step-b".',
     );
     mockTerminationManager.getTerminationPromise.mockResolvedValue({
-      reason: TerminationReason.CUSTOM,
+      reason: TerminationReason.NON_DETERMINISM,
       message: `Unrecoverable error in step 1: ${nonDeterminismError.message}`,
       error: nonDeterminismError,
     });
@@ -304,6 +304,30 @@ describe("withDurableExecution", () => {
       Error: expect.objectContaining({
         ErrorType: "NonDeterministicExecutionError",
         ErrorMessage: nonDeterminismError.message,
+      }),
+    });
+  });
+
+  it("should return FAILED response for CUSTOM reason", async () => {
+    // CUSTOM says nothing about whether the execution can continue, so it is treated as a
+    // fault. Pinned separately from NON_DETERMINISM above: that reason exists precisely so
+    // non-determinism no longer relies on CUSTOM's default, and this asserts the default
+    // itself did not change with it.
+    const mockHandler = jest.fn().mockReturnValue(new Promise(() => {})); // Never resolves
+    mockTerminationManager.getTerminationPromise.mockResolvedValue({
+      reason: TerminationReason.CUSTOM,
+      message: "terminated for a reason the SDK does not classify",
+    });
+
+    const response = await withDurableExecution(mockHandler)(
+      mockEvent,
+      mockContext,
+    );
+
+    expect(response).toEqual({
+      Status: InvocationStatus.FAILED,
+      Error: expect.objectContaining({
+        ErrorMessage: "terminated for a reason the SDK does not classify",
       }),
     });
   });

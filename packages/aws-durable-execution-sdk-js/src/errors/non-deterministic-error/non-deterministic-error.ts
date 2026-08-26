@@ -5,7 +5,7 @@ import { TerminationReason } from "../../termination-manager/types";
  * Error thrown when non-deterministic code is detected during replay
  */
 export class NonDeterministicExecutionError extends UnrecoverableExecutionError {
-  readonly terminationReason = TerminationReason.CUSTOM;
+  readonly terminationReason = TerminationReason.NON_DETERMINISM;
 
   constructor(message: string) {
     super(message);

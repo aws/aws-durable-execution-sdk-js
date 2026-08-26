@@ -8,7 +8,10 @@ import { initializeExecutionContext } from "./context/execution-context/executio
 import { SerdesFailedError } from "./errors/serdes-errors/serdes-errors";
 import { isUnrecoverableInvocationError } from "./errors/unrecoverable-error/unrecoverable-error";
 import { isNonRetryableCustomerError } from "./errors/non-retryable-errors";
-import { TerminationReason } from "./termination-manager/types";
+import {
+  TerminationReason,
+  classifyTermination,
+} from "./termination-manager/types";
 import { resolveRootPreserveChildDepth } from "./utils/child-operations-depth/child-operations-depth";
 import {
   validateDurableExecutionConfig,
@@ -49,32 +52,6 @@ import {
 
 // Lambda response size limit is 6MB
 const LAMBDA_RESPONSE_SIZE_LIMIT = 6 * 1024 * 1024 - 50; // 6MB in bytes, minus 50 bytes for envelope
-
-/**
- * Termination reasons that mean "this invocation is done for now, the execution
- * continues later" -- a wait, a scheduled retry, or a pending callback. These are
- * the only reasons that may answer PENDING, which tells the service to keep the
- * execution alive and invoke again.
- *
- * Everything else is a fault, and the default for an unlisted reason is FAILED.
- * The list is an allowlist rather than a denylist deliberately: a reason added
- * later without a corresponding branch here then fails closed with its error
- * reported, instead of silently claiming the execution is still progressing.
- * Answering PENDING for a deterministic, permanent fault is worse than useless --
- * every replay reproduces it, the error never reaches the customer, and once no
- * operation is actually pending the service rejects the response outright
- * ("Cannot return PENDING status with no pending operations").
- *
- * CHECKPOINT_FAILED and SERDES_FAILED are absent because they are handled before
- * this point: both rethrow, which fails the invocation rather than the execution.
- */
-const SUSPEND_TERMINATION_REASONS: ReadonlySet<TerminationReason> = new Set([
-  TerminationReason.OPERATION_TERMINATED,
-  TerminationReason.WAIT_SCHEDULED,
-  TerminationReason.RETRY_SCHEDULED,
-  TerminationReason.RETRY_INTERRUPTED_STEP,
-  TerminationReason.CALLBACK_PENDING,
-]);
 
 async function runHandler<
   Input,
@@ -270,11 +247,11 @@ async function runHandler<
           throw new SerdesFailedError(result.message);
         }
 
-        // Every remaining termination reason is decided here. A suspend answers
-        // PENDING; anything else is a fault and answers FAILED with the error the
-        // terminating code carried (see SUSPEND_TERMINATION_REASONS).
+        // Every remaining termination reason is decided by its class: a suspend means the
+        // execution continues later and answers PENDING, a fault answers FAILED carrying
+        // the error. See TERMINATION_CLASS for what each reason is and why.
         if (resultType === "termination") {
-          if (SUSPEND_TERMINATION_REASONS.has(result.reason)) {
+          if (classifyTermination(result.reason) === "suspend") {
             log("🛑", "Returning termination response", {
               reason: result.reason,
             });
@@ -293,12 +270,6 @@ async function runHandler<
             };
           }
 
-          // Deterministic, non-retryable faults: an invalid maxConcurrency or
-          // completionConfig (CONFIG_VALIDATION_ERROR), use of a parent or sibling
-          // context inside runInChildContext (CONTEXT_VALIDATION_ERROR), and
-          // non-deterministic workflow code detected during replay (CUSTOM, raised
-          // by validateReplayConsistency). Retrying reproduces all of them, so the
-          // execution fails now and the diagnostic reaches the customer.
           const error = result.error ?? new Error(result.message);
           log(
             "🛑",

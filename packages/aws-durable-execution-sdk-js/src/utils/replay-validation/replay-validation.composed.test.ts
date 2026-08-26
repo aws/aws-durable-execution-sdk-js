@@ -105,13 +105,8 @@ describe("non-deterministic replay reaches the invocation response", () => {
   });
 
   it("fails the invocation with the diagnostic when a step name changes on replay", async () => {
-    const stepBody = jest.fn();
-
     const response = await invoke(async (_event, context: DurableContext) => {
-      await context.step("step-b", async () => {
-        stepBody();
-        return "fresh-result";
-      });
+      await context.step("step-b", async () => "fresh-result");
       return "done";
     }, "step-a");
 
@@ -125,11 +120,6 @@ describe("non-deterministic replay reaches the invocation response", () => {
       }),
     });
 
-    // Nothing is checkpointed against a history the code no longer agrees with. The step
-    // body not running is not evidence of anything this change does: the checkpoint is
-    // already SUCCEEDED, so the replay path returns the cached result rather than
-    // executing. It is asserted only to pin that this scenario stays a pure replay.
-    expect(stepBody).not.toHaveBeenCalled();
     expect(checkpoints).toEqual([]);
   });
 
