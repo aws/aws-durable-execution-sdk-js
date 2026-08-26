@@ -487,6 +487,8 @@ describe("Run In Child Context Handler", () => {
     stepData[hashId(TEST_CONSTANTS.CHILD_CONTEXT_ID)] = {
       Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
       Type: OperationType.CONTEXT,
+      SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+      Name: TEST_CONSTANTS.CHILD_CONTEXT_NAME,
       StartTimestamp: new Date(),
       Status: OperationStatus.SUCCEEDED,
       ContextDetails: {
@@ -655,9 +657,10 @@ describe("Run In Child Context Handler", () => {
       [hashId(TEST_CONSTANTS.CHILD_CONTEXT_ID)]: {
         Id: TEST_CONSTANTS.CHILD_CONTEXT_ID,
         Type: OperationType.CONTEXT,
+        SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
         StartTimestamp: new Date(),
         Status: OperationStatus.STARTED,
-        name: TEST_CONSTANTS.CHILD_CONTEXT_NAME,
+        Name: TEST_CONSTANTS.CHILD_CONTEXT_NAME,
       },
     } as any;
 
@@ -884,6 +887,8 @@ describe("runInChildContext with custom serdes", () => {
       [hashId("test-step-id")]: {
         Id: "test-step-id",
         Type: OperationType.CONTEXT,
+        SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+        Name: "test-child-with-serdes",
         StartTimestamp: new Date(),
         Status: OperationStatus.SUCCEEDED,
         ContextDetails: {
@@ -917,6 +922,8 @@ describe("runInChildContext with custom serdes", () => {
     stepData[hashId("test-step-id")] = {
       Id: "test-step-id",
       Type: OperationType.CONTEXT,
+      SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+      Name: "test-child",
       StartTimestamp: new Date(),
       Status: OperationStatus.FAILED,
       ContextDetails: {
@@ -941,6 +948,8 @@ describe("runInChildContext with custom serdes", () => {
     stepData[hashId("test-step-id")] = {
       Id: "test-step-id",
       Type: OperationType.CONTEXT,
+      SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+      Name: "test-child",
       StartTimestamp: new Date(),
       Status: OperationStatus.FAILED,
       ContextDetails: {}, // No Error field (legacy data)
@@ -1046,6 +1055,8 @@ describe("runWithContext Integration", () => {
     mockExecutionContext._stepData[hashId("child-context-id")] = {
       Id: "child-context-id",
       Type: OperationType.CONTEXT,
+      SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+      Name: "test-child",
       Status: OperationStatus.SUCCEEDED,
       ContextDetails: {
         Result: '"cached-result"',
@@ -1067,6 +1078,8 @@ describe("runWithContext Integration", () => {
     mockExecutionContext._stepData[hashId("child-context-id")] = {
       Id: "child-context-id",
       Type: OperationType.CONTEXT,
+      SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+      Name: "test-child",
       Status: OperationStatus.SUCCEEDED,
       ContextDetails: {
         Result: '"original-result"',
@@ -1095,6 +1108,8 @@ describe("runWithContext Integration", () => {
     mockExecutionContext._stepData[hashId("child-context-id")] = {
       Id: "child-context-id",
       Type: OperationType.CONTEXT,
+      SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+      Name: "test-child",
       Status: OperationStatus.FAILED,
       ContextDetails: {
         Error: createErrorObjectFromError(new Error("Previous failure")),
@@ -1142,6 +1157,8 @@ describe("runWithContext Integration", () => {
     mockExecutionContext._stepData[hashId("child-context-id")] = {
       Id: "child-context-id",
       Type: OperationType.CONTEXT,
+      SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+      Name: "test-child",
       Status: OperationStatus.SUCCEEDED,
       ContextDetails: {
         ReplayChildren: true,

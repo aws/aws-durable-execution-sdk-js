@@ -2,6 +2,7 @@ import { withDurableExecution } from "./with-durable-execution";
 import { initializeExecutionContext } from "./context/execution-context/execution-context";
 import { createDurableContext } from "./context/durable-context/durable-context";
 import { CheckpointUnrecoverableInvocationError } from "./errors/checkpoint-errors/checkpoint-errors";
+import { NonDeterministicExecutionError } from "./errors/non-deterministic-error/non-deterministic-error";
 import {
   UnrecoverableInvocationError,
   UnrecoverableExecutionError,
@@ -252,11 +253,94 @@ describe("withDurableExecution", () => {
     );
   });
 
-  it("should return PENDING response for non-checkpoint termination", async () => {
+  it("should return FAILED response for CONTEXT_VALIDATION_ERROR reason", async () => {
+    // Using a parent or sibling context inside runInChildContext: deterministic and
+    // permanent, so the execution fails rather than being reported as still pending.
+    const mockHandler = jest.fn().mockReturnValue(new Promise(() => {})); // Never resolves
+    const contextError = new Error(
+      'Context usage error in "child": You are using a parent or sibling context',
+    );
+    mockTerminationManager.getTerminationPromise.mockResolvedValue({
+      reason: TerminationReason.CONTEXT_VALIDATION_ERROR,
+      message: contextError.message,
+      error: contextError,
+    });
+
+    const response = await withDurableExecution(mockHandler)(
+      mockEvent,
+      mockContext,
+    );
+
+    expect(response).toEqual({
+      Status: InvocationStatus.FAILED,
+      Error: expect.objectContaining({ ErrorMessage: contextError.message }),
+    });
+  });
+
+  it("should return FAILED response carrying the error for CUSTOM reason", async () => {
+    // CUSTOM is how replay validation reports non-deterministic workflow code. It used
+    // to fall through to the generic handling and answer PENDING, which asked the
+    // service to retry an error that reproduces on every replay and hid the diagnostic
+    // from the customer entirely -- until the execution eventually failed with
+    // "Cannot return PENDING status with no pending operations" instead.
+    const mockHandler = jest.fn().mockReturnValue(new Promise(() => {})); // Never resolves
+    const nonDeterminismError = new NonDeterministicExecutionError(
+      'Non-deterministic execution detected: Operation name mismatch for step "1". ' +
+        'Expected name "step-a", but got "step-b".',
+    );
+    mockTerminationManager.getTerminationPromise.mockResolvedValue({
+      reason: TerminationReason.CUSTOM,
+      message: `Unrecoverable error in step 1: ${nonDeterminismError.message}`,
+      error: nonDeterminismError,
+    });
+
+    const response = await withDurableExecution(mockHandler)(
+      mockEvent,
+      mockContext,
+    );
+
+    expect(response).toEqual({
+      Status: InvocationStatus.FAILED,
+      Error: expect.objectContaining({
+        ErrorType: "NonDeterministicExecutionError",
+        ErrorMessage: nonDeterminismError.message,
+      }),
+    });
+  });
+
+  it("should return FAILED for a termination reason with no explicit branch", async () => {
+    // Fail closed: a reason added later without being classified as a suspend must not
+    // inherit PENDING by default, because PENDING claims the execution is progressing.
+    const mockHandler = jest.fn().mockReturnValue(new Promise(() => {})); // Never resolves
+    mockTerminationManager.getTerminationPromise.mockResolvedValue({
+      reason: "SOME_FUTURE_REASON" as TerminationReason,
+      message: "something the SDK does not classify yet",
+    });
+
+    const response = await withDurableExecution(mockHandler)(
+      mockEvent,
+      mockContext,
+    );
+
+    expect(response).toEqual({
+      Status: InvocationStatus.FAILED,
+      Error: expect.objectContaining({
+        ErrorMessage: "something the SDK does not classify yet",
+      }),
+    });
+  });
+
+  it.each([
+    TerminationReason.OPERATION_TERMINATED,
+    TerminationReason.WAIT_SCHEDULED,
+    TerminationReason.RETRY_SCHEDULED,
+    TerminationReason.RETRY_INTERRUPTED_STEP,
+    TerminationReason.CALLBACK_PENDING,
+  ])("should return PENDING response for %s termination", async (reason) => {
     // Setup
     const mockHandler = jest.fn().mockReturnValue(new Promise(() => {})); // Never resolves
     mockTerminationManager.getTerminationPromise.mockResolvedValue({
-      reason: TerminationReason.OPERATION_TERMINATED,
+      reason,
       message: "Operation terminated",
     });
 
