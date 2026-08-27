@@ -76,6 +76,7 @@ beforeEach(() => {
     setTerminating: jest.fn(),
     dispose: jest.fn(),
     waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
+    getBatchFailure: jest.fn().mockReturnValue(undefined),
   }));
   mockTerminationManager.getTerminationPromise.mockReturnValue(
     new Promise(() => {}),
