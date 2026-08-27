@@ -8,7 +8,10 @@ import { initializeExecutionContext } from "./context/execution-context/executio
 import { SerdesFailedError } from "./errors/serdes-errors/serdes-errors";
 import { isUnrecoverableInvocationError } from "./errors/unrecoverable-error/unrecoverable-error";
 import { isNonRetryableCustomerError } from "./errors/non-retryable-errors";
-import { TerminationReason } from "./termination-manager/types";
+import {
+  TerminationReason,
+  classifyTermination,
+} from "./termination-manager/types";
 import { resolveRootPreserveChildDepth } from "./utils/child-operations-depth/child-operations-depth";
 import {
   validateDurableExecutionConfig,
@@ -244,72 +247,51 @@ async function runHandler<
           throw new SerdesFailedError(result.message);
         }
 
-        // If termination was due to context validation error, return FAILED
-        if (
-          resultType === "termination" &&
-          result.reason === TerminationReason.CONTEXT_VALIDATION_ERROR
-        ) {
-          log("🛑", "Context validation error - returning FAILED status");
-          const response = {
-            Status: InvocationStatus.FAILED,
-            Error: createErrorObjectFromError(
-              result.error || new Error(result.message),
-            ),
-          };
-          await plugin.onInvocationEnd?.({
-            ...invocationBaseInfo,
-            status: PluginInvocationStatus.FAILED,
-            executionInput: customerHandlerEvent,
-            executionError: result.error || new Error(result.message),
-            executionResult: undefined,
-            operations: toOperationInfoMap(executionContext._stepData),
-          });
-          return response;
-        }
-
-        // If termination was due to a config validation error (e.g. an
-        // invalid maxConcurrency or a mutually-exclusive completionConfig),
-        // return FAILED. This is a deterministic, non-retryable caller
-        // mistake -- same category as CONTEXT_VALIDATION_ERROR above, not a
-        // suspend/pause, so it must not fall through to the generic
-        // termination handling below (which returns PENDING).
-        if (
-          resultType === "termination" &&
-          result.reason === TerminationReason.CONFIG_VALIDATION_ERROR
-        ) {
-          log("🛑", "Config validation error - returning FAILED status");
-          const response = {
-            Status: InvocationStatus.FAILED,
-            Error: createErrorObjectFromError(
-              result.error || new Error(result.message),
-            ),
-          };
-          await plugin.onInvocationEnd?.({
-            ...invocationBaseInfo,
-            status: PluginInvocationStatus.FAILED,
-            executionInput: customerHandlerEvent,
-            executionError: result.error || new Error(result.message),
-            executionResult: undefined,
-            operations: toOperationInfoMap(executionContext._stepData),
-          });
-          return response;
-        }
-
+        // Every remaining termination reason is decided by its class: a suspend means the
+        // execution continues later and answers PENDING, a fault answers FAILED carrying
+        // the error. See TERMINATION_CLASS for what each reason is and why.
         if (resultType === "termination") {
-          log("🛑", "Returning termination response");
+          if (classifyTermination(result.reason) === "suspend") {
+            log("🛑", "Returning termination response", {
+              reason: result.reason,
+            });
 
+            await plugin.onInvocationEnd?.({
+              ...invocationBaseInfo,
+              status: PluginInvocationStatus.PENDING,
+              executionInput: customerHandlerEvent,
+              executionResult: undefined,
+              executionError: undefined,
+              operations: toOperationInfoMap(executionContext._stepData),
+            });
+
+            return {
+              Status: InvocationStatus.PENDING,
+            };
+          }
+
+          const error = result.error ?? new Error(result.message);
+          log(
+            "🛑",
+            `Terminated with ${result.reason} - returning FAILED status`,
+            {
+              message: result.message,
+            },
+          );
+
+          const response = {
+            Status: InvocationStatus.FAILED,
+            Error: createErrorObjectFromError(error),
+          };
           await plugin.onInvocationEnd?.({
             ...invocationBaseInfo,
-            status: PluginInvocationStatus.PENDING,
+            status: PluginInvocationStatus.FAILED,
             executionInput: customerHandlerEvent,
+            executionError: error,
             executionResult: undefined,
-            executionError: undefined,
             operations: toOperationInfoMap(executionContext._stepData),
           });
-
-          return {
-            Status: InvocationStatus.PENDING,
-          };
+          return response;
         }
 
         log("✅", "Returning normal completion response");
