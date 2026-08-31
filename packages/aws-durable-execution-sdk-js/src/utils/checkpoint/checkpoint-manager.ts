@@ -38,6 +38,7 @@ import {
 import { OperationLifecycleState } from "../../types/operation-lifecycle-state";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
 import { normalizeOperations } from "../operation/normalize-operation";
+import { isErrorLike } from "../error-object/is-error-like";
 
 export const STEP_DATA_UPDATED_EVENT = "stepDataUpdated";
 
@@ -280,8 +281,7 @@ export class CheckpointManager implements Checkpoint {
   ):
     | CheckpointUnrecoverableInvocationError
     | CheckpointUnrecoverableExecutionError {
-    const originalError =
-      error instanceof Error ? error : new Error(String(error));
+    const originalError = isErrorLike(error) ? error : new Error(String(error));
 
     // A transport that states its own classification is believed, so it does not have to
     // imitate the AWS SDK's error shape to be understood. Checked before the shape
