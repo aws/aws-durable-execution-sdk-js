@@ -12,5 +12,5 @@ jobs:
       contents: read
       id-token: write
       issues: write
-    uses: aws/aws-durable-execution-ci/.github/workflows/issue-triage.yml@ac55d9f4b027e193aba9fa5a69c70bfa1bdc38ed
+    uses: aws/aws-durable-execution-ci/.github/workflows/issue-triage.yml@8de63fa646c1b7b778829126cf53b7874074795e
     secrets: inherit

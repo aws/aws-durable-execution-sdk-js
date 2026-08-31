@@ -14,7 +14,7 @@ jobs:
     permissions:
       contents: read
       issues: write
-    uses: aws/aws-durable-execution-ci/.github/workflows/stale-issue-closer.yml@70105676c3ff29ae3e2c1681ac7e8cebdaca5a6e
+    uses: aws/aws-durable-execution-ci/.github/workflows/stale-issue-closer.yml@1ce65d9d6bf531169718a5e967e15d72fc958265
     with:
       days-until-close: 14
       close-reason: not_planned
