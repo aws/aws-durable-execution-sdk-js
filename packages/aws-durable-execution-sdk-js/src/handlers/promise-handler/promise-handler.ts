@@ -1,13 +1,14 @@
 import { DurableContext, DurablePromise, DurableLogger } from "../../types";
 import { Serdes, SerdesContext } from "../../utils/serdes/serdes";
 import { PromiseCombinatorError } from "../../errors/durable-error/durable-error";
+import { isErrorLike } from "../../utils/error-object/is-error-like";
 
 // Minimal error decoration for Promise.allSettled results
 function decorateErrors<T>(
   value: PromiseSettledResult<T>[],
 ): PromiseSettledResult<T>[] {
   return value.map((item) => {
-    if (item && item.status === "rejected" && item.reason instanceof Error) {
+    if (item && item.status === "rejected" && isErrorLike(item.reason)) {
       return {
         ...item,
         reason: {

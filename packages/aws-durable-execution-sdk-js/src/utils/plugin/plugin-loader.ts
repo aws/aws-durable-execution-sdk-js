@@ -7,6 +7,7 @@ import {
   DurableInstrumentationPlugin,
   DurableInstrumentationPluginProvider,
 } from "../../types/plugin";
+import { isErrorLike } from "../error-object/is-error-like";
 
 export const PLUGIN_ENVIRONMENT_VARIABLE = "DURABLE_EXECUTION_PLUGINS";
 export const PLUGIN_PROVIDER_EXPORT = "durableExecutionPluginProvider";
@@ -42,7 +43,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return isErrorLike(error) ? error.message : String(error);
 }
 
 function packageNameFromSpecifier(specifier: string): string | undefined {

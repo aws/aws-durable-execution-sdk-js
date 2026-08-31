@@ -2,6 +2,7 @@ import { ErrorObject } from "../../types/wire";
 import { STORE_STACK_TRACES } from "../../utils/constants/constants";
 // Type-only import to avoid a runtime circular dependency with types/batch.
 import type { CompletionReason } from "../../types/batch";
+import { isErrorLike } from "../../utils/error-object/is-error-like";
 
 /**
  * Base class for all durable operation errors
@@ -115,7 +116,7 @@ export abstract class DurableOperationError extends Error {
           errorData = node.errorData;
           break;
         }
-        node = node instanceof Error ? node.cause : undefined;
+        node = isErrorLike(node) ? node.cause : undefined;
       }
     }
     return {

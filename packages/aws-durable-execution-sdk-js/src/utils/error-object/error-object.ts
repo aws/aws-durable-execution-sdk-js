@@ -1,16 +1,7 @@
 import { ErrorObject } from "../../types/wire";
 import { DurableOperationError } from "../../errors/durable-error/durable-error";
 import { STORE_STACK_TRACES } from "../constants/constants";
-
-function isErrorLike(obj: unknown): obj is Error {
-  return (
-    obj instanceof Error ||
-    (obj != null &&
-      typeof obj === "object" &&
-      "message" in obj &&
-      "name" in obj)
-  );
-}
+import { isErrorLike } from "./is-error-like";
 
 export function createErrorObjectFromError(
   error: unknown,

@@ -3,6 +3,7 @@ import { TerminationManager } from "../../termination-manager/termination-manage
 import { UnrecoverableInvocationError } from "../unrecoverable-error/unrecoverable-error";
 import { log } from "../../utils/logger/logger";
 import { SerdesContext } from "../../utils/serdes/serdes";
+import { isErrorLike } from "../../utils/error-object/is-error-like";
 
 /**
  * Error thrown when serdes operation fails and terminates Lambda invocation
@@ -40,12 +41,12 @@ export async function safeSerialize<T>(
     };
     return await serdes.serialize(value, context);
   } catch (error) {
-    const message = `Serialization failed for step ${stepName ? `"${stepName}" ` : ""}(${stepId}): ${error instanceof Error ? error.message : "Unknown serialization error"}`;
+    const message = `Serialization failed for step ${stepName ? `"${stepName}" ` : ""}(${stepId}): ${isErrorLike(error) ? error.message : "Unknown serialization error"}`;
 
     log("💥", "Serialization failed - terminating execution:", {
       stepId,
       stepName,
-      error: error instanceof Error ? error.message : String(error),
+      error: isErrorLike(error) ? error.message : String(error),
     });
 
     terminationManager.terminate({
@@ -82,12 +83,12 @@ export async function safeDeserialize<T>(
     };
     return await serdes.deserialize(data, context);
   } catch (error) {
-    const message = `Deserialization failed for step ${stepName ? `"${stepName}" ` : ""}(${stepId}): ${error instanceof Error ? error.message : "Unknown deserialization error"}`;
+    const message = `Deserialization failed for step ${stepName ? `"${stepName}" ` : ""}(${stepId}): ${isErrorLike(error) ? error.message : "Unknown deserialization error"}`;
 
     log("💥", "Deserialization failed - terminating execution:", {
       stepId,
       stepName,
-      error: error instanceof Error ? error.message : String(error),
+      error: isErrorLike(error) ? error.message : String(error),
     });
 
     terminationManager.terminate({
