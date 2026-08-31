@@ -4,35 +4,6 @@ import fs from "fs";
 import path from "path";
 import yaml from "js-yaml";
 
-// ADOT Layer ARN mapping for X-Ray E2E test.
-// Format: arn:aws:lambda:${region}:615299751070:layer:AWSOpenTelemetryDistroJs:<version>
-const ADOT_LAYER_ARNS: Record<string, string> = {
-  "us-east-1":
-    "arn:aws:lambda:us-east-1:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-  "us-east-2":
-    "arn:aws:lambda:us-east-2:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-  "us-west-1":
-    "arn:aws:lambda:us-west-1:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-  "us-west-2":
-    "arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-  "eu-west-1":
-    "arn:aws:lambda:eu-west-1:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-  "eu-west-2":
-    "arn:aws:lambda:eu-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-  "eu-central-1":
-    "arn:aws:lambda:eu-central-1:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-  "ap-northeast-1":
-    "arn:aws:lambda:ap-northeast-1:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-  "ap-southeast-1":
-    "arn:aws:lambda:ap-southeast-1:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-  "ap-southeast-2":
-    "arn:aws:lambda:ap-southeast-2:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-};
-
-// OpenTelemetry community collector-only layer for ExecutionOtelPlugin functions (us-west-2 default)
-const OTEL_COLLECTOR_LAYER_ARN =
-  "arn:aws:lambda:us-west-2:184161586896:layer:opentelemetry-collector-amd64-0_22_0:1";
-
 // Configuration for different examples that need special settings
 const EXAMPLE_CONFIGS: Record<string, any> = {
   "steps-with-retry": {
@@ -47,13 +18,6 @@ const EXAMPLE_CONFIGS: Record<string, any> = {
     ],
   },
 };
-
-// Functions whose log groups already exist in AWS and should not be re-created
-// by CloudFormation (avoids "already exists" conflicts on deploy).
-const SKIP_LOG_GROUP_CREATION: Set<string> = new Set([
-  "otel-community-collector-execution-xray-e2e",
-  "otel-community-collector-invocation-xray-e2e",
-]);
 
 // Default configuration for Lambda functions
 const DEFAULT_CONFIG = {
@@ -132,17 +96,6 @@ function getDefaultFunctionName(catalog: any, runtime = "22.x") {
   return `${catalog.name.replace(/\s/g, "")}-${lambdaRuntime}-NodeJS-Local`;
 }
 
-function getAdotLayerArn(region = "us-west-2") {
-  const adotArn = ADOT_LAYER_ARNS[region];
-  if (!adotArn) {
-    throw new Error(
-      `Unsupported region "${region}" for ADOT Lambda layer. ` +
-        `Supported regions: ${Object.keys(ADOT_LAYER_ARNS).join(", ")}`,
-    );
-  }
-  return adotArn;
-}
-
 /**
  * Create a Lambda function resource configuration
  */
@@ -201,24 +154,6 @@ function createFunctionResource(
     config.policies.length > 0
   ) {
     functionResource.Properties.Policies = config.policies;
-  }
-
-  // Add ADOT layer and Active Tracing for all otel functions
-  if (catalog.handler && catalog.handler.includes("otel-")) {
-    functionResource.Properties.Tracing = "Active";
-    // Only set exec wrapper for non-community-collector otel functions
-    if (!catalog.handler.includes("otel-community-collector")) {
-      functionResource.Properties.Layers = [
-        getAdotLayerArn(options.awsRegion ?? "us-west-2"),
-      ];
-      functionResource.Properties.Environment.Variables.AWS_LAMBDA_EXEC_WRAPPER =
-        "/opt/otel-instrument";
-    } else {
-      // ExecutionOtelPlugin: use collector-only layer
-      functionResource.Properties.Layers = [OTEL_COLLECTOR_LAYER_ARN];
-      functionResource.Properties.Environment.Variables.OPENTELEMETRY_COLLECTOR_CONFIG_URI =
-        "/var/task/collector.yaml";
-    }
   }
 
   if (options.functionNameMap && catalog.handler.includes("tenant-target")) {
@@ -330,7 +265,7 @@ function generateTemplate(options: TemplateOptions | boolean = {}) {
         normalizedOptions,
       );
 
-      if (manageLogGroups && !SKIP_LOG_GROUP_CREATION.has(handlerFile)) {
+      if (manageLogGroups) {
         template.Resources[logGroupResourceName] = {
           Type: "AWS::Logs::LogGroup",
           Properties: {
