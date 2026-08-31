@@ -46,7 +46,9 @@
   "files": [
     "dist/",
     "dist-cjs/",
-    "dist-types"
+    "dist-types",
+    "LICENSE",
+    "NOTICE"
   ],
   "devDependencies": {
     "@eslint/compat": "^1.4.1",

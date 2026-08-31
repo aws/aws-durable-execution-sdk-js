@@ -1,6 +1,7 @@
 {
   "name": "@aws/durable-execution-sdk-js-insight-cdk",
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "private": true,
   "description": "CDK stack to deploy Workflow Insight destination infrastructure",
   "scripts": {

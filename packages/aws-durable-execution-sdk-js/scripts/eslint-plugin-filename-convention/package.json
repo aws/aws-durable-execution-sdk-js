@@ -2,6 +2,7 @@
   "name": "@aws/eslint-plugin-filename-convention",
   "version": "1.0.0",
   "description": "ESLint plugin to enforce kebab-case for file names",
+  "license": "Apache-2.0",
   "main": "index.js",
   "author": "",
   "peerDependencies": {

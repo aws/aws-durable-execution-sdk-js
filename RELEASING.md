@@ -19,6 +19,12 @@ The automated npm publishing workflow covers the following packages:
 
 The `packages/aws-durable-execution-sdk-js-insight-vscode` package is intentionally excluded from this table. Release it with the [Workflow Insight Explorer VS Code Extension](#workflow-insight-explorer-vs-code-extension-publishing) process instead.
 
+### Legal files
+
+Every package in the table above ships a copy of the repo root `LICENSE` and `NOTICE`, listed in its `files` array so npm packs them. Declaring `"license"` in `package.json` is not sufficient on its own: that field is only a metadata pointer, and npm does not pack `NOTICE` implicitly.
+
+`npm run check:legal-files` enforces this, and runs in CI on every PR and again before publishing. When adding a package to the release list, copy both files into the package directory and add them to `files`, or the check will fail.
+
 ## Versioning
 
 Each package maintains its own version in the `version` field of its `package.json`:

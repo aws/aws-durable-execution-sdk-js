@@ -16,7 +16,9 @@
   },
   "files": [
     "dist",
-    "src/skill/SKILL.md"
+    "src/skill/SKILL.md",
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",

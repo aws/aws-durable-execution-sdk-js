@@ -32,6 +32,11 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run test
+      # Fail before anything reaches the registry rather than after: a published
+      # version is immutable, so a tarball missing its LICENSE/NOTICE can only be
+      # corrected by releasing a new version (see d7bbfc3).
+      - name: Check legal files
+        run: node .github/workflows/scripts/legal/check-legal-files.js
       - name: Make script executable
         run: chmod +x ./.github/workflows/iterate-publish-npm.sh
       - name: iterate and publish
