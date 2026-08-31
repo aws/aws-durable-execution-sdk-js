@@ -28,7 +28,7 @@
     "postbuild": "npm run generate-sam-template",
     "package": "node scripts/package.js",
     "generate-examples": "tsx ./scripts/generate-examples.ts",
-    "build": "npm run generate-examples && rollup --config rollup.config.mjs --silent && tsc --noEmit && cp src/examples/otel/community-collector-execution-xray-e2e/collector.yaml dist/collector.yaml",
+    "build": "npm run generate-examples && rollup --config rollup.config.mjs --silent && tsc --noEmit",
     "deploy": "tsx scripts/deploy-lambda.ts",
     "prerelease": "npm run generate-sam-template",
     "copy-files": "npm run copy-lambda && npm run copy-examples && npm run copy-source && npm run copy-catalog",
@@ -52,17 +52,10 @@
     "@aws-sdk/client-dynamodb": "^3.1014.0",
     "@aws-sdk/client-lambda": "^3.1014.0",
     "@aws/durable-execution-sdk-js": "*",
-    "@aws/durable-execution-sdk-js-otel": "*",
-    "@aws/durable-execution-sdk-js-testing": "*",
-    "@opentelemetry/api": "^1.0.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.219.0",
-    "@opentelemetry/instrumentation": "^0.219.0",
-    "@opentelemetry/instrumentation-aws-sdk": "^0.74.0",
-    "@opentelemetry/sdk-trace-node": "^2.6.1"
+    "@aws/durable-execution-sdk-js-testing": "*"
   },
   "devDependencies": {
     "@aws-sdk/client-cloudwatch-logs": "^3.948.0",
-    "@aws-sdk/client-xray": "^3.948.0",
     "@aws/durable-execution-sdk-js-eslint-plugin": "*",
     "@eslint/js": "^9.23.0",
     "@rollup/plugin-commonjs": "^28.0.9",
