@@ -37,8 +37,22 @@ jobs:
           cache: "npm"
       - name: Install dependencies
         run: npm ci
+      # Gates on errors only. `biome ci` auto-detects GitHub Actions and turns
+      # every diagnostic into an inline PR annotation, and this repo carries
+      # ~1040 warnings and infos that are almost all pre-existing -- unfiltered,
+      # that buries a PR in review noise about lines it never touched.
+      #
+      # This does NOT weaken enforcement. Formatting violations and lint errors
+      # are both error-severity, so both still fail here; only warnings and infos
+      # are withheld from annotations. They are reported in the step below.
       - name: Biome (format + lint)
         run: npm run ci
+      # Informational only, never gating: renders the warning backlog as a
+      # per-rule table in the job summary so it stays visible without annotating
+      # individual lines.
+      - name: Biome warning backlog (informational)
+        if: always()
+        run: npm run lint:report --silent >> "$GITHUB_STEP_SUMMARY"
 
   # The repo's own published lint rules, run against the examples.
   #

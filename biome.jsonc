@@ -123,18 +123,32 @@
       },
 
       "style": {
-        // NOT ENABLED, deliberately. Both are recommended by Biome but were not enforced
-        // under ESLint, and turning them on would rewrite ~1750 call sites as part of a
-        // toolchain migration -- which would make this change unreviewable and bury any
-        // real behavioural difference.
+        // NOT ENABLED, deliberately. All of these are recommended by Biome but were not
+        // enforced under ESLint, and turning them on would rewrite thousands of call
+        // sites as part of a toolchain migration -- which would make this change
+        // unreviewable and bury any real behavioural difference.
         //
-        //   useImportType      (~1089 sites) has a safe autofix; worth doing as its own
-        //                      commit: `biome check --write --only=style/useImportType`
-        //   noNonNullAssertion (~666 sites)  needs judgement per site, no safe autofix
+        //   useImportType            (~1089 sites) safe autofix
+        //   noNonNullAssertion       (~666 sites)  needs judgement per site, no autofix
+        //   useNodejsImportProtocol  (~94 sites)   safe autofix, but rewrites imports in
+        //                                          published SDK code, so it deserves its
+        //                                          own change with its own bundler check
+        //   useTemplate              (~60 sites)   safe autofix
         //
-        // Both are tracked as follow-ups rather than dropped.
+        // Each is a one-line change plus `biome check --write --only=<rule>`, and none
+        // is dropped on principle -- they are follow-ups, not rejections.
         "useImportType": "off",
-        "noNonNullAssertion": "off"
+        "noNonNullAssertion": "off",
+        "useNodejsImportProtocol": "off",
+        "useTemplate": "off"
+      },
+
+      "complexity": {
+        // Same reasoning as the style rules above: never enforced, ~23 sites, pure
+        // preference. `biome check --write --only=complexity/useLiteralKeys` when wanted.
+        // The `noUseless*` rules in this group are deliberately left ON: they flag dead
+        // code rather than style, and are low volume.
+        "useLiteralKeys": "off"
       },
 
       "nursery": {

@@ -20,7 +20,8 @@
     "lint:fix": "biome check --write",
     "format": "biome format --write",
     "format:check": "biome format",
-    "ci": "biome ci"
+    "ci": "biome ci --diagnostic-level=error",
+    "lint:report": "biome lint --reporter=json --max-diagnostics=5000 | node .github/workflows/scripts/biome/biome-warning-summary.mjs"
   },
   "repository": {
     "type": "git",
