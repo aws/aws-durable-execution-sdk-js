@@ -20,6 +20,7 @@ export {
   deriveTraceIdFromArn,
   deriveSpanIdFromOperationId,
   deriveWorkflowSpanId,
+  deriveExecutionRootSpanId,
 } from "./deterministic-id-generator";
 
 // Context Extractors
