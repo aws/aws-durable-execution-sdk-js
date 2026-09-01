@@ -1,6 +1,49 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
 
+  // Biome owns formatting and linting for this monorepo. ESLint is retained in two
+  // places only:
+  //
+  //   * packages/aws-durable-execution-sdk-js-eslint-plugin -- needs it to test its
+  //     own rules via RuleTester.
+  //   * packages/aws-durable-execution-sdk-js-examples -- runs that published plugin's
+  //     `no-nested-durable-operations` against the examples. Biome cannot host ESLint
+  //     plugins, and the examples are the code customers copy. See that package's
+  //     eslint.config.mjs and the `durable-rules` job in .github/workflows/lint.yml.
+  //
+  // KNOWN COVERAGE GAPS vs the previous ESLint + Prettier setup. These are real
+  // losses, listed so they are not rediscovered later:
+  //
+  // 1. Type-aware linting is largely gone. The testing package previously used
+  //    `tseslint.configs.strictTypeChecked` + `stylisticTypeChecked`. Three
+  //    async-safety rules are recovered below via the `types` domain
+  //    (noFloatingPromises, noMisusedPromises, useAwaitThenable). Still missing, with
+  //    NO Biome equivalent at any severity:
+  //      - the `any`-propagation family: no-unsafe-assignment, no-unsafe-return,
+  //        no-unsafe-member-access, no-unsafe-call, no-unsafe-argument
+  //      - restrict-template-expressions
+  //      - no-confusing-void-expression
+  //      - prefer-promise-reject-errors
+  //      - no-unnecessary-type-parameters
+  //    Available but left off, one line away if wanted: noUnsafeTypeAssertion
+  //    (the testing package carried 23 suppressions of the ESLint equivalent) and
+  //    noUnnecessaryConditions. `tsc --noEmit` still runs and still catches type
+  //    errors, but it does not implement any of these rules.
+  //
+  // 2. TSDoc syntax is unchecked. `eslint-plugin-tsdoc`'s `tsdoc/syntax` has no Biome
+  //    equivalent. API Extractor still parses TSDoc during `npm run api:extract` and
+  //    remains the backstop -- it currently reports unresolved @link references in
+  //    src/types/batch.ts.
+  //
+  // 3. Markdown and YAML are no longer formatted at all. The old lint-staged glob
+  //    passed *.md and *.yml through Prettier; Biome has no formatter for either
+  //    language, so the new glob cannot include them. Nothing enforces formatting on
+  //    those files now. Restoring it would mean keeping Prettier for those two
+  //    extensions only.
+  //
+  // 4. no-duplicate-imports has no Biome equivalent (was "error" in the core SDK and
+  //    insight configs).
+
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -98,7 +141,24 @@
         // Replaces `@typescript-eslint/explicit-function-return-type`, which the core SDK
         // and insight configs set to "warn". Note this rule is in Biome's nursery group,
         // so it is NOT covered by semver and may change between minor releases.
-        "useExplicitReturnType": "warn"
+        "useExplicitReturnType": "warn",
+
+        // Async-safety rules recovered from the type-aware set the testing package used
+        // to get via `tseslint.configs.strictTypeChecked`. These belong to Biome's
+        // `types` domain, so enabling them turns on the scanner: lint goes from ~0.5s to
+        // ~3s for the monorepo and Biome reads .d.ts files from node_modules. For an SDK
+        // whose entire job is orchestrating asynchronous work, that is worth paying.
+        //
+        // They are "warn" rather than "error" deliberately. There are ~77 existing
+        // violations: 57 in test files, and 17 in shipped source concentrated in
+        // checkpoint-manager.ts, run-in-child-context-handler.ts and
+        // replay-validation.ts. Those deserve a human triage pass, not a mechanical fix
+        // folded into a toolchain migration, and warnings do not fail `biome ci`.
+        //
+        // Like all nursery rules these are outside Biome's semver guarantees.
+        "noFloatingPromises": "warn",
+        "noMisusedPromises": "warn",
+        "useAwaitThenable": "warn"
       }
     }
   },

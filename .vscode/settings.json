@@ -1,22 +1,43 @@
 {
-  "editor.defaultFormatter": "biomejs.biome",
-  "editor.formatOnSave": true,
+  // Formatter identity only. `editor.formatOnSave` is scoped per-language rather
+  // than set globally on purpose: Biome has no Markdown or YAML formatter, so a
+  // global default would hand those files to whatever formatter a contributor
+  // happens to have installed, producing churn the repo does not check in.
   "editor.codeActionsOnSave": {
     "source.fixAll.biome": "explicit"
   },
+  "[javascript]": {
+    "editor.defaultFormatter": "biomejs.biome",
+    "editor.formatOnSave": true
+  },
+  "[javascriptreact]": {
+    "editor.defaultFormatter": "biomejs.biome",
+    "editor.formatOnSave": true
+  },
   "[typescript]": {
-    "editor.defaultFormatter": "biomejs.biome"
+    "editor.defaultFormatter": "biomejs.biome",
+    "editor.formatOnSave": true
   },
   "[typescriptreact]": {
-    "editor.defaultFormatter": "biomejs.biome"
-  },
-  "[javascript]": {
-    "editor.defaultFormatter": "biomejs.biome"
+    "editor.defaultFormatter": "biomejs.biome",
+    "editor.formatOnSave": true
   },
   "[json]": {
-    "editor.defaultFormatter": "biomejs.biome"
+    "editor.defaultFormatter": "biomejs.biome",
+    "editor.formatOnSave": true
   },
   "[jsonc]": {
-    "editor.defaultFormatter": "biomejs.biome"
-  }
+    "editor.defaultFormatter": "biomejs.biome",
+    "editor.formatOnSave": true
+  },
+  // The examples package still runs ESLint for the repo's own
+  // `@aws/durable-execution-sdk-js-eslint-plugin` rules, which Biome cannot host.
+  // Keep the ESLint extension active but scoped to that one package so it does
+  // not shadow Biome elsewhere.
+  "eslint.enable": true,
+  "eslint.validate": ["javascript", "typescript"],
+  "eslint.workingDirectories": [
+    "packages/aws-durable-execution-sdk-js-examples"
+  ],
+  "eslint.format.enable": false
 }

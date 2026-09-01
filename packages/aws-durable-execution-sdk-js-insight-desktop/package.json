@@ -1,7 +1,7 @@
 {
   "name": "aws-durable-execution-sdk-js-insight-desktop",
   "displayName": "Workflow Insight Explorer (Desktop)",
-  "description": "Standalone desktop app for Workflow Insight Explorer \u2014 the same UI and logic as the VS Code extension, for users who don't run VS Code.",
+  "description": "Standalone desktop app for Workflow Insight Explorer — the same UI and logic as the VS Code extension, for users who don't run VS Code.",
   "version": "0.1.0-alpha.3",
   "license": "Apache-2.0",
   "private": true,

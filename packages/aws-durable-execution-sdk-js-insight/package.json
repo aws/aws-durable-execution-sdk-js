@@ -1,6 +1,6 @@
 {
   "name": "@aws/durable-execution-sdk-js-insight",
-  "description": "Workflow Insight plugin for AWS Durable Execution SDK \u2014 curated execution observability",
+  "description": "Workflow Insight plugin for AWS Durable Execution SDK — curated execution observability",
   "license": "Apache-2.0",
   "version": "0.1.0-alpha.0",
   "private": false,

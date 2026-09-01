@@ -46,7 +46,8 @@
     "test-with-sdk-coverage": "jest --config jest.config.sdk-coverage.js --collectCoverage",
     "coverage-to-csv": "node scripts/coverage-to-csv.js",
     "lint": "biome check src test",
-    "lint:fix": "biome check --write src test"
+    "lint:fix": "biome check --write src test",
+    "lint:durable-rules": "eslint src/examples"
   },
   "dependencies": {
     "@aws-lambda-powertools/logger": "^2.29.0",
@@ -57,6 +58,7 @@
   },
   "devDependencies": {
     "@aws-sdk/client-cloudwatch-logs": "^3.948.0",
+    "@aws/durable-execution-sdk-js-eslint-plugin": "*",
     "@rollup/plugin-commonjs": "^28.0.9",
     "@rollup/plugin-node-resolve": "^16.0.2",
     "@tsconfig/node22": "^22.0.1",
@@ -65,8 +67,10 @@
     "@types/jest": "^29.5.14",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.13.5",
+    "@typescript-eslint/parser": "^8.44.0",
     "argparse": "^2.0.1",
     "dotenv": "^17.2.3",
+    "eslint": "^9.29.0",
     "jest": "^30.2.0",
     "js-yaml": "^4.3.0",
     "ts-jest": "^29.2.6",

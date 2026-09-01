@@ -39,3 +39,29 @@ jobs:
         run: npm ci
       - name: Biome (format + lint)
         run: npm run ci
+
+  # The repo's own published lint rules, run against the examples.
+  #
+  # Biome cannot host ESLint plugins, so this is the one place ESLint still runs
+  # over source. `no-nested-durable-operations` catches a real bug class (a
+  # durable operation nested inside a step never checkpoints correctly), and the
+  # examples are the code customers copy, so the rule needs to run on more than
+  # the plugin's own RuleTester fixtures.
+  #
+  # The plugin must be built first: the examples' eslint config requires its
+  # compiled `dist/index.js`.
+  durable-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci
+      - name: Build the ESLint plugin
+        run: npm run build -w packages/aws-durable-execution-sdk-js-eslint-plugin
+      - name: Check examples against our own durable-function rules
+        run: npm run lint:durable-rules -w packages/aws-durable-execution-sdk-js-examples

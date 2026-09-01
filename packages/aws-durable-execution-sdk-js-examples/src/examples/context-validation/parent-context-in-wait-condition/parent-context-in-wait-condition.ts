@@ -25,6 +25,7 @@ export const handler = withDurableExecution(
           "wrong-wait-condition",
           async (currentState: number) => {
             // Using parent context inside check function - this should fail
+            // eslint-disable-next-line aws-durable-execution-eslint/no-nested-durable-operations
             await context.step("nested-wrong-step", async () => {
               return "This should fail!";
             });

@@ -60,14 +60,14 @@
             "sqs"
           ],
           "enumDescriptions": [
-            "Dedicated log group via CloudWatchLogsExporter \u2014 records are raw JSON, fields queryable directly",
-            "Function's own log group via LambdaLogExporter \u2014 records nested in Lambda JSON envelope (message field)",
-            "DynamoDB table via DynamoDBExporter \u2014 records queryable via PartiQL",
-            "Aurora PostgreSQL/MySQL via AuroraExporter \u2014 full SQL with GROUP BY, JOIN, aggregations",
-            "Amazon Redshift via RedshiftExporter \u2014 full SQL; record_json is a SUPER column navigated with PartiQL",
-            "Amazon OpenSearch via OpenSearchExporter \u2014 queried through the SQL plugin (_plugins/_sql), SigV4-signed",
-            "S3 via S3Exporter \u2014 queried through Amazon Athena (Trino/Presto SQL) over a Glue table",
-            "Amazon SQS via SQSExporter \u2014 live view that listens to the queue as records arrive (no query engine)"
+            "Dedicated log group via CloudWatchLogsExporter — records are raw JSON, fields queryable directly",
+            "Function's own log group via LambdaLogExporter — records nested in Lambda JSON envelope (message field)",
+            "DynamoDB table via DynamoDBExporter — records queryable via PartiQL",
+            "Aurora PostgreSQL/MySQL via AuroraExporter — full SQL with GROUP BY, JOIN, aggregations",
+            "Amazon Redshift via RedshiftExporter — full SQL; record_json is a SUPER column navigated with PartiQL",
+            "Amazon OpenSearch via OpenSearchExporter — queried through the SQL plugin (_plugins/_sql), SigV4-signed",
+            "S3 via S3Exporter — queried through Amazon Athena (Trino/Presto SQL) over a Glue table",
+            "Amazon SQS via SQSExporter — live view that listens to the queue as records arrive (no query engine)"
           ],
           "description": "Where and how records are stored. Determines query engine and format."
         },
@@ -79,7 +79,7 @@
         "workflowInsight.sqsDeleteAfterRead": {
           "type": "boolean",
           "default": false,
-          "description": "Delete messages from the queue after displaying them in the live view. Off by default so the Explorer only observes \u2014 other consumers still receive every message. Enable only if this Explorer should be the sole consumer of the queue."
+          "description": "Delete messages from the queue after displaying them in the live view. Off by default so the Explorer only observes — other consumers still receive every message. Enable only if this Explorer should be the sole consumer of the queue."
         },
         "workflowInsight.dynamodbTableName": {
           "type": "string",
@@ -164,7 +164,7 @@
         "workflowInsight.athenaWorkgroup": {
           "type": "string",
           "default": "",
-          "description": "Athena workgroup to run queries in. Leave empty to use the 'primary' workgroup and set athenaOutputLocation instead. Recommended: configure the workgroup's per-query data-scanned limit (bytes_scanned_cutoff_per_query) \u2014 the assistant runs multiple autonomous queries per question (up to workflowInsight.agenticMaxIterations), and this is the only per-query Athena scan-cost guard."
+          "description": "Athena workgroup to run queries in. Leave empty to use the 'primary' workgroup and set athenaOutputLocation instead. Recommended: configure the workgroup's per-query data-scanned limit (bytes_scanned_cutoff_per_query) — the assistant runs multiple autonomous queries per question (up to workflowInsight.agenticMaxIterations), and this is the only per-query Athena scan-cost guard."
         },
         "workflowInsight.athenaOutputLocation": {
           "type": "string",
@@ -191,12 +191,12 @@
             "local"
           ],
           "enumDescriptions": [
-            "Amazon Bedrock (Converse API) \u2014 requires AWS credentials and model access. When you use an AI feature (Ask/Agent/Visualize), your request text and limited data (result column names and a small sample of rows) are sent to Amazon Bedrock in the AWS account and region you configure, and processed under your AWS agreement and the Amazon Bedrock service terms.",
-            "GitHub Copilot (VS Code Language Model API) \u2014 requires a Copilot subscription. AI requests and the limited data described above are sent to GitHub Copilot via VS Code, and are processed under your GitHub Copilot subscription terms and privacy policy.",
-            "Local server \u2014 an OpenAI-compatible endpoint you run yourself (Ollama, LM Studio, llama.cpp). AI requests are sent only to the endpoint you run and control (configured via workflowInsight.localServerUrl); nothing is sent to a third-party cloud, provided that endpoint is local/self-hosted.",
-            "Local LLM (on-device) \u2014 runs entirely on your machine; your request and data do not leave your computer. Downloads the model on first use (configurable via workflowInsight.localModel). Included in the platform-specific .vsix (darwin-arm64, win32-x64, win32-arm64, linux-x64). GPU-accelerated via Metal on macOS; CPU-only on Windows and Linux (no CUDA/Vulkan in the packaged build)."
+            "Amazon Bedrock (Converse API) — requires AWS credentials and model access. When you use an AI feature (Ask/Agent/Visualize), your request text and limited data (result column names and a small sample of rows) are sent to Amazon Bedrock in the AWS account and region you configure, and processed under your AWS agreement and the Amazon Bedrock service terms.",
+            "GitHub Copilot (VS Code Language Model API) — requires a Copilot subscription. AI requests and the limited data described above are sent to GitHub Copilot via VS Code, and are processed under your GitHub Copilot subscription terms and privacy policy.",
+            "Local server — an OpenAI-compatible endpoint you run yourself (Ollama, LM Studio, llama.cpp). AI requests are sent only to the endpoint you run and control (configured via workflowInsight.localServerUrl); nothing is sent to a third-party cloud, provided that endpoint is local/self-hosted.",
+            "Local LLM (on-device) — runs entirely on your machine; your request and data do not leave your computer. Downloads the model on first use (configurable via workflowInsight.localModel). Included in the platform-specific .vsix (darwin-arm64, win32-x64, win32-arm64, linux-x64). GPU-accelerated via Metal on macOS; CPU-only on Windows and Linux (no CUDA/Vulkan in the packaged build)."
           ],
-          "description": "Which LLM provider converts your natural-language questions into queries and builds summaries/charts. Used only by the AI features \u2014 the 'ask' and 'agent' modes and the Visualize page. In those features your request text and, in some cases, limited portions of your data (result column names and a small sample of rows) are sent to the provider selected here; the 'query' mode uses no AI and sends nothing to any provider. Data you send is subject to the terms and privacy policy of the selected provider \u2014 review them before sending sensitive data. See each option below for where your data goes."
+          "description": "Which LLM provider converts your natural-language questions into queries and builds summaries/charts. Used only by the AI features — the 'ask' and 'agent' modes and the Visualize page. In those features your request text and, in some cases, limited portions of your data (result column names and a small sample of rows) are sent to the provider selected here; the 'query' mode uses no AI and sends nothing to any provider. Data you send is subject to the terms and privacy policy of the selected provider — review them before sending sensitive data. See each option below for where your data goes."
         },
         "workflowInsight.bedrockModelId": {
           "type": "string",
@@ -222,9 +222,9 @@
             "qwen2.5-coder-3b"
           ],
           "enumDescriptions": [
-            "Llama-3-Groq-8B Tool-Use \u2014 best tool-calling accuracy (~89% on the Berkeley Function-Calling Leaderboard), ~4.9 GB download, needs ~6 GB RAM. Recommended default.",
-            "Phi-3.5-mini \u2014 smaller with strong quality-per-GB, ~2.4 GB download. Good when memory is tight.",
-            "Qwen2.5-Coder-3B \u2014 smallest footprint, ~2.2 GB. Fastest/lightest, weakest at multi-step tool use."
+            "Llama-3-Groq-8B Tool-Use — best tool-calling accuracy (~89% on the Berkeley Function-Calling Leaderboard), ~4.9 GB download, needs ~6 GB RAM. Recommended default.",
+            "Phi-3.5-mini — smaller with strong quality-per-GB, ~2.4 GB download. Good when memory is tight.",
+            "Qwen2.5-Coder-3B — smallest footprint, ~2.2 GB. Fastest/lightest, weakest at multi-step tool use."
           ],
           "description": "Which local model to download and run when LLM Provider is 'local'. Runs entirely on-device: your request and data are processed locally and do not leave your machine, and no data is sent to any third party or to this extension's maintainers. Only used for the 'local' provider; ignored for Bedrock/Copilot/local-server."
         },
@@ -233,7 +233,7 @@
           "default": 8,
           "minimum": 1,
           "maximum": 20,
-          "description": "The maximum number of queries the assistant will run for one question before stopping \u2014 one per verify/refine round, or per agent-loop query with parallel tool calls counted individually. Higher values let it work harder on difficult questions but cost more model/query calls (billable). The loop also stops early if it starts repeating a query it already tried. This is the universal cost/effort guard \u2014 it applies to every data source. NOTE: it bounds the NUMBER of queries, not the data scanned per query. For the S3/Athena destination, also set a per-query scan cap on your Athena workgroup (bytes_scanned_cutoff_per_query) to bound scan cost."
+          "description": "The maximum number of queries the assistant will run for one question before stopping — one per verify/refine round, or per agent-loop query with parallel tool calls counted individually. Higher values let it work harder on difficult questions but cost more model/query calls (billable). The loop also stops early if it starts repeating a query it already tried. This is the universal cost/effort guard — it applies to every data source. NOTE: it bounds the NUMBER of queries, not the data scanned per query. For the S3/Athena destination, also set a per-query scan cap on your Athena workgroup (bytes_scanned_cutoff_per_query) to bound scan cost."
         },
         "workflowInsight.queryMode": {
           "type": "string",
