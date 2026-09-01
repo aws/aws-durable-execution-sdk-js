@@ -14,6 +14,7 @@ import type {
   Tracer,
   Span,
   SpanContext,
+  Context,
   Link,
 } from "@opentelemetry/api";
 import {
@@ -50,10 +51,13 @@ const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
  *
  * Implements the DurableInstrumentationPlugin interface. The Workflow span joins
  * the execution trace by parenting onto the resolved execution ancestor (a
- * propagated remote parent or a synthetic execution root) and roots the
- * operation spans, so the whole execution shares one trace. Operation span
- * export is deferred, and the per-invocation Invocation span is a correlation
- * sibling (linked from, not a parent of, the operation spans).
+ * propagated remote parent or a synthetic execution root), so the whole
+ * execution shares one trace. Operation spans parent onto the Workflow span and
+ * the per-invocation Invocation span is a correlation sibling (linked from, not
+ * a parent of, the operation spans). Both the Workflow span and each operation
+ * span are deferred: their identity is carried as a non-recording context and
+ * the single recording span is created and ended together at terminal /
+ * onOperationEnd, so nothing is left un-ended across invocations (issue #831).
  */
 export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   // Shared utilities (reused from existing package)
@@ -65,13 +69,30 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   private tracer: Tracer;
   private readonly instrumentationName: string;
 
-  // Per-invocation state
+  // Non-recording context carrying the deterministic Workflow identity; the real
+  // span is created+ended once, at the terminal invocation (issue #831).
   private workflowSpan: Span | undefined;
   private invocationSpan: Span | undefined;
+  // Holds only recording ATTEMPT spans; operation spans are deferred (see
+  // operationContexts), never recording between start and end.
   private spanMap: Map<string, Span>;
+  // Deterministic non-recording placeholders for in-flight operations; the real
+  // span is created+ended once in onOperationEnd. Children/attempts parent onto it.
+  private operationContexts: Map<string, SpanContext>;
+  // Naming/timing captured at start, reused when onOperationEnd omits them.
+  private operationStarts: Map<
+    string,
+    { name?: string; subType?: string; startTimestamp?: Date }
+  >;
   private executionArn: string;
   private executionTraceId: string;
+  private executionTraceFlags: number = 0;
   private executionSamplingDecision: SamplingDecision;
+  // The execution ancestor the terminal Workflow span parents onto, and the
+  // backend execution start used to backdate it — both captured at invocation
+  // start and reused when the real span is created at terminal.
+  private executionAncestor: SpanContext | undefined;
+  private executionStartTimestamp: Date | undefined;
 
   private readonly usesGlobalProvider: boolean;
   private globalIdGeneratorInstalled: boolean;
@@ -114,6 +135,8 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
     // Initialize per-invocation state
     this.spanMap = new Map();
+    this.operationContexts = new Map();
+    this.operationStarts = new Map();
     this.executionArn = "";
     this.executionTraceId = "";
     this.executionSamplingDecision = SamplingDecision.NOT_RECORD;
@@ -153,35 +176,33 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         }),
     );
     this.executionTraceId = canonical;
+    this.executionTraceFlags = execTraceContext.traceFlags;
     this.executionSamplingDecision = execTraceContext.samplingDecision;
 
     // 4. Derive the workflow span ID from execution ARN
     const workflowSpanId = deriveWorkflowSpanId(info.executionArn);
 
-    // 5. Create the Workflow_Span parented onto the execution ancestor so it
-    // joins the execution trace. Force the span ID only; the trace ID comes
-    // from the parent. The override is scoped to this single startSpan call.
-    const executionAncestorContext = trace.setSpanContext(
-      ROOT_CONTEXT,
-      execTraceContext.executionAncestor,
-    );
-    this.workflowSpan = this.idGenerator.withIds(
-      {
-        spanId: workflowSpanId,
-      },
-      () =>
-        this.startSpan(
-          this.workflowSpanName,
-          {
-            kind: SpanKind.INTERNAL,
-            attributes: {
-              "durable.execution.arn": info.executionArn,
-            },
-            startTime: info.executionStartTimestamp ?? new Date(),
-          },
-          executionAncestorContext,
-        ),
-    );
+    // 5. Resolve the Workflow_Span identity as a NON-RECORDING context. A whole
+    // execution spans many invocations, so only the terminal one can complete
+    // the real span; carrying a real recording span across invocations would
+    // leak it un-ended (issue #831), and ending one per invocation would export
+    // duplicate (traceId, spanId). Operations parent onto this non-recording
+    // context (a valid parent that stamps the right traceId/parentSpanId on its
+    // children); the single real span is created and ended once, at the terminal
+    // invocation (see onInvocationEnd), parented onto the execution ancestor. It
+    // carries the execution sampled bit so a parent-based sampler stays
+    // consistent with the eventual root.
+    this.executionAncestor = execTraceContext.executionAncestor;
+    this.executionStartTimestamp =
+      info.executionStartTimestamp ??
+      this.executionStartTimestamp ??
+      new Date();
+    this.workflowSpan = trace.wrapSpanContext({
+      traceId: this.executionTraceId,
+      spanId: workflowSpanId,
+      traceFlags: execTraceContext.traceFlags,
+      isRemote: false,
+    });
 
     // 6. Create Invocation_Span parented onto the same-trace ambient span when
     // available, otherwise onto the execution ancestor so it stays within the
@@ -276,30 +297,61 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       this.invocationSpan.end();
     }
 
-    // 2. Handle Workflow_Span based on terminal status
-    if (info.status === "SUCCEEDED" || info.status === "FAILED") {
-      // Terminal: set status attribute, map to span status, end (causes export).
-      // PluginInvocationStatus only distinguishes SUCCEEDED/FAILED/PENDING/RETRYING,
-      // so the plugin cannot tell whether a failed workflow was TIMED_OUT or STOPPED
-      // — those are collapsed into FAILED -> ERROR here.
-      if (this.workflowSpan) {
-        this.workflowSpan.setAttribute("durable.execution.status", info.status);
-        if (info.status === "FAILED") {
-          this.workflowSpan.setStatus({
-            code: SpanStatusCode.ERROR,
-            message: info.executionError?.message ?? "Execution failed",
-          });
-        } else {
-          this.workflowSpan.setStatus({ code: SpanStatusCode.OK });
-        }
-        this.workflowSpan.end();
+    // 2. Terminal invocation ONLY: create and end the one real Workflow_Span,
+    // so a single span ever claims the deterministic (traceId, spanId) and no
+    // span is left un-ended on a non-terminal invocation (issue #831). It is
+    // parented onto the execution ancestor (the join-trace model) and backdated
+    // to the execution start captured at invocation start. Skipped when the
+    // execution decision was not sampled, so a dropped execution does not export
+    // a lone root. PluginInvocationStatus collapses TIMED_OUT/STOPPED into
+    // FAILED -> ERROR.
+    if (
+      this.executionSamplingDecision === SamplingDecision.RECORD_AND_SAMPLED &&
+      this.executionAncestor &&
+      (info.status === "SUCCEEDED" || info.status === "FAILED")
+    ) {
+      const workflowSpanId = deriveWorkflowSpanId(this.executionArn);
+      const executionAncestorContext = trace.setSpanContext(
+        ROOT_CONTEXT,
+        this.executionAncestor,
+      );
+      const workflowSpan = this.idGenerator.withIds(
+        { spanId: workflowSpanId },
+        () =>
+          this.startSpan(
+            this.workflowSpanName,
+            {
+              kind: SpanKind.INTERNAL,
+              attributes: {
+                "durable.execution.arn": this.executionArn,
+              },
+              startTime: this.executionStartTimestamp ?? new Date(),
+            },
+            executionAncestorContext,
+          ),
+      );
+      workflowSpan.setAttribute("durable.execution.status", info.status);
+      if (info.status === "FAILED") {
+        workflowSpan.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: info.executionError?.message ?? "Execution failed",
+        });
+      } else {
+        workflowSpan.setStatus({ code: SpanStatusCode.OK });
+      }
+      workflowSpan.end();
+    }
+    // Non-terminal (PENDING/RETRYING): no real Workflow_Span is created, so
+    // nothing to end — the identity was only ever a non-recording context.
+
+    // 3. End any attempt span still open (safeguard against a leak on a
+    // non-terminal invocation, issue #831). Operation placeholders have no
+    // recording span and are dropped in resetInvocationState.
+    for (const span of this.spanMap.values()) {
+      if (span.isRecording()) {
+        span.end();
       }
     }
-    // Non-terminal (PENDING/RETRYING): do NOT end workflowSpan — just drop the reference.
-    // Its status stays UNSET and the span is never exported (spans that are never
-    // .end()'d are never exported by the OTel SDK).
-
-    // 3. Discard open Operation_Spans without ending (they won't be exported)
 
     // 4. Always flush TracerProvider at invocation boundaries
     if ("forceFlush" in this.tracerProvider) {
@@ -346,10 +398,15 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
   private resetInvocationState(): void {
     this.spanMap.clear();
+    this.operationContexts.clear();
+    this.operationStarts.clear();
     this.workflowSpan = undefined;
     this.invocationSpan = undefined;
+    this.executionAncestor = undefined;
+    this.executionStartTimestamp = undefined;
     this.executionArn = "";
     this.executionTraceId = "";
+    this.executionTraceFlags = 0;
     this.executionSamplingDecision = SamplingDecision.NOT_RECORD;
     this.tracingEnabled = false;
   }
@@ -413,55 +470,25 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       return;
     }
 
+    // Defer the span: store only a deterministic non-recording placeholder that
+    // children/attempts parent onto; the real span is created in onOperationEnd.
     const deterministicSpanId = deriveSpanIdFromOperationId(
       info.id,
       this.executionArn,
     );
-    const spanName = info.name ?? info.type;
+    this.operationContexts.set(info.id, {
+      traceId: this.executionTraceId,
+      spanId: deterministicSpanId,
+      traceFlags: this.executionTraceFlags,
+      isRemote: false,
+    });
 
-    // Resolve parent span: use parentId from map, or fall back to Workflow_Span
-    let parentSpan: Span | undefined;
-    if (info.parentId && this.spanMap.has(info.parentId)) {
-      parentSpan = this.spanMap.get(info.parentId);
-    } else {
-      parentSpan = this.workflowSpan;
-    }
-
-    const parentContext = parentSpan
-      ? trace.setSpan(context.active(), parentSpan)
-      : context.active();
-
-    const attributes: Record<string, string> = {
-      "durable.execution.arn": this.executionArn,
-      "durable.operation.id": info.id,
-      "durable.operation.type": info.type,
-    };
-    if (info.name) {
-      attributes["durable.operation.name"] = info.name;
-    }
-    if (info.subType) {
-      attributes["durable.operation.subtype"] = info.subType;
-    }
-
-    const links = this.buildInvocationLinks();
-
-    // Always use a deterministic span ID regardless of replay status.
-    const span = this.idGenerator.withIds(
-      {
-        traceId: this.executionTraceId,
-        spanId: deterministicSpanId,
-      },
-      () =>
-        this.startSpan(
-          spanName,
-          { attributes, startTime: info.startTimestamp, links },
-          parentContext,
-        ),
-    );
-
-    if (span) {
-      this.spanMap.set(info.id, span);
-    }
+    // Retain naming/timing for onOperationEnd, which may omit them.
+    this.operationStarts.set(info.id, {
+      name: info.name,
+      subType: info.subType,
+      startTimestamp: info.startTimestamp,
+    });
   }
 
   wrapChildContextFn(info: OperationInfo, fn: () => unknown): unknown {
@@ -469,12 +496,15 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       return fn();
     }
 
-    const operationSpan = this.spanMap.get(info.id);
-
-    if (!operationSpan) {
+    // Make the operation's placeholder current so nested calls become its children.
+    const operationContext = this.operationContexts.get(info.id);
+    if (!operationContext) {
       return fn();
     }
-    return context.with(trace.setSpan(context.active(), operationSpan), fn);
+    return context.with(
+      trace.setSpanContext(context.active(), operationContext),
+      fn,
+    );
   }
 
   async onOperationEnd(info: OperationEndInfo): Promise<void> {
@@ -482,113 +512,115 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       return;
     }
 
-    const deterministicSpanId = deriveSpanIdFromOperationId(
+    // The only place an operation span is created: start+end it here under its
+    // deterministic ID, so it is exported exactly once even across suspend/resume.
+    const started = this.operationStarts.get(info.id);
+    this.operationContexts.delete(info.id);
+    this.operationStarts.delete(info.id);
+
+    // The end event may omit name/subType; fall back to what start captured.
+    const name = info.name ?? started?.name;
+    const subType = info.subType ?? started?.subType;
+
+    const spanName = name ?? info.type;
+    const parentContext = this.resolveOperationParentContext(info.parentId);
+
+    const attributes: Record<string, string | number> = {
+      "durable.execution.arn": this.executionArn,
+      "durable.operation.id": info.id,
+      "durable.operation.type": info.type,
+    };
+    if (name) {
+      attributes["durable.operation.name"] = name;
+    }
+    if (subType) {
+      attributes["durable.operation.subtype"] = subType;
+    }
+    if (info.status) {
+      attributes["durable.operation.status"] = info.status;
+    }
+    // durable.attempt.number for retriable operations (STEP, WAIT_FOR_CONDITION).
+    if (
+      (info.type === "STEP" || subType === "WAIT_FOR_CONDITION") &&
+      info.attempt != null
+    ) {
+      attributes["durable.attempt.number"] = info.attempt;
+    }
+
+    const links = this.buildInvocationLinks();
+
+    // Earliest known start, so the span never begins after its own attempt/child
+    // spans (created earlier at start).
+    const startTime = this.earliestStart(
+      started?.startTimestamp,
+      info.startTimestamp,
+    );
+
+    const operationSpanId = deriveSpanIdFromOperationId(
       info.id,
       this.executionArn,
     );
+    const span = this.idGenerator.withIds(
+      {
+        traceId: this.executionTraceId,
+        spanId: operationSpanId,
+      },
+      () =>
+        this.startSpan(
+          spanName,
+          { attributes, startTime, links },
+          parentContext,
+        ),
+    );
 
-    if (this.spanMap.has(info.id)) {
-      // Operation was started in this invocation
-      const span = this.spanMap.get(info.id)!;
-
-      // Set operation status attribute
-      if (info.status) {
-        span.setAttribute("durable.operation.status", info.status);
-      }
-
-      // Set durable.attempt.number for STEP and WAIT_FOR_CONDITION operations
-      if (
-        (info.type === "STEP" || info.subType === "WAIT_FOR_CONDITION") &&
-        info.attempt != null
-      ) {
-        span.setAttribute("durable.attempt.number", info.attempt);
-      }
-
-      if (info.error) {
-        span.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: info.error.message,
-        });
-        span.recordException(info.error);
-      } else if (info.status === "SUCCEEDED") {
-        // Stamp explicit OK ONLY on a SUCCEEDED terminal status. Terminal
-        // FAILURE statuses (TIMED_OUT/STOPPED/FAILED/CANCELLED) can arrive with
-        // NO error object (callback-timeout, chained-invoke fast paths); those
-        // must NOT be labelled OK, so they are left UNSET.
-        span.setStatus({ code: SpanStatusCode.OK });
-      }
-
-      span.end(info.endTimestamp);
-      this.spanMap.delete(info.id);
-    } else {
-      // Cross-invocation: create span with deterministic ID, export immediately
-      const spanName = info.name ?? info.type;
-
-      // Resolve parent: use parentId from map, or fall back to Workflow_Span
-      let parentSpan: Span | undefined;
-      if (info.parentId && this.spanMap.has(info.parentId)) {
-        parentSpan = this.spanMap.get(info.parentId);
-      } else {
-        parentSpan = this.workflowSpan;
-      }
-
-      const parentContext = parentSpan
-        ? trace.setSpan(context.active(), parentSpan)
-        : context.active();
-
-      const attributes: Record<string, string | number> = {
-        "durable.execution.arn": this.executionArn,
-        "durable.operation.id": info.id,
-        "durable.operation.type": info.type,
-      };
-      if (info.name) {
-        attributes["durable.operation.name"] = info.name;
-      }
-      if (info.subType) {
-        attributes["durable.operation.subtype"] = info.subType;
-      }
-      if (info.status) {
-        attributes["durable.operation.status"] = info.status;
-      }
-      // Set durable.attempt.number for STEP and WAIT_FOR_CONDITION operations
-      if (
-        (info.type === "STEP" || info.subType === "WAIT_FOR_CONDITION") &&
-        info.attempt != null
-      ) {
-        attributes["durable.attempt.number"] = info.attempt;
-      }
-
-      const links = this.buildInvocationLinks();
-
-      const span = this.idGenerator.withIds(
-        {
-          traceId: this.executionTraceId,
-          spanId: deterministicSpanId,
-        },
-        () =>
-          this.startSpan(
-            spanName,
-            { attributes, startTime: info.startTimestamp, links },
-            parentContext,
-          ),
-      );
-
-      if (info.error) {
-        span.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: info.error.message,
-        });
-        span.recordException(info.error);
-      } else if (info.status === "SUCCEEDED") {
-        // Stamp explicit OK ONLY on a SUCCEEDED terminal status. Terminal
-        // FAILURE statuses (TIMED_OUT/STOPPED/FAILED/CANCELLED) can arrive with
-        // NO error object on the cross-invocation fast paths; those must NOT be
-        // labelled OK, so they are left UNSET.
-        span.setStatus({ code: SpanStatusCode.OK });
-      }
-
-      span.end(info.endTimestamp);
+    if (info.error) {
+      span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: info.error.message,
+      });
+      span.recordException(info.error);
+    } else if (info.status === "SUCCEEDED") {
+      // Stamp explicit OK ONLY on a SUCCEEDED terminal status. Terminal
+      // FAILURE statuses (TIMED_OUT/STOPPED/FAILED/CANCELLED) can arrive with
+      // NO error object (callback-timeout, chained-invoke fast paths); those
+      // must NOT be labelled OK, so they are left UNSET.
+      span.setStatus({ code: SpanStatusCode.OK });
     }
+
+    span.end(info.endTimestamp);
+  }
+
+  /**
+   * The parent context for an operation or attempt span: the parent operation's
+   * deterministic placeholder context when known, otherwise the deferred
+   * Workflow span's context so the span still hangs off the execution trace.
+   */
+  private resolveOperationParentContext(parentId: string | undefined): Context {
+    if (parentId) {
+      const parentContext = this.operationContexts.get(parentId);
+      if (parentContext) {
+        return trace.setSpanContext(context.active(), parentContext);
+      }
+    }
+    const workflowContext = this.workflowSpan?.spanContext();
+    if (workflowContext) {
+      return trace.setSpanContext(context.active(), workflowContext);
+    }
+    return context.active();
+  }
+
+  /** The earlier of two timestamps, ignoring undefined; undefined only when both are. */
+  private earliestStart(
+    a: Date | undefined,
+    b: Date | undefined,
+  ): Date | undefined {
+    if (!a) {
+      return b;
+    }
+    if (!b) {
+      return a;
+    }
+    return a.getTime() <= b.getTime() ? a : b;
   }
 
   private getAttemptKey(id: string, attempt: number): string {
@@ -603,11 +635,8 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     const baseName = info.name ?? info.type;
     const spanName = `${baseName} attempt ${info.attempt}`;
 
-    // Find the parent Operation_Span
-    const parentSpan = this.spanMap.get(info.id);
-    const parentContext = parentSpan
-      ? trace.setSpan(context.active(), parentSpan)
-      : context.active();
+    // Parent onto the operation's placeholder (the operation span is deferred).
+    const parentContext = this.resolveOperationParentContext(info.id);
 
     const attributes: Record<string, string | number> = {
       "durable.execution.arn": this.executionArn,

@@ -205,12 +205,13 @@ Attempt   -> Invocation
 
 The plugin makes Workflow the active span while durable handler code runs.
 Completed operation spans use durable operation start/end timestamps and
-deterministic span IDs. An operation that remains open when an invocation
-suspends is not ended or exported; a later invocation recreates and exports it
-with the **same deterministic span ID on the same execution trace** when the
-operation completes. That reproducible ID is how the segments of one logical
-operation stay stitched together across invocations — no cross-invocation link
-is needed, unlike `InvocationOtelPlugin` below.
+deterministic span IDs. While an operation spans multiple invocations its
+identity is carried as a non-recording context; nothing is exported until it
+completes. The single recording operation span is then created and ended once,
+in the invocation where the operation terminates, under a **deterministic span
+ID on the execution trace**. Because there is one span per logical operation,
+no cross-invocation link is needed to stitch it together — unlike
+`InvocationOtelPlugin` below.
 
 ### `InvocationOtelPlugin`
 
@@ -312,11 +313,19 @@ is the first 32 hexadecimal characters of SHA-256 over
 `<execution ARN>:<execution start timestamp in ISO 8601 format>` (falling back
 to the ARN alone when the timestamp is unavailable).
 
-The plugins create the same `Workflow` span identity on each invocation, but end
-and export it only when the execution reaches `SUCCEEDED` or `FAILED`. Workflow
-spans created for `PENDING` or `RETRYING` invocations are left unended and are
-therefore not exported. This produces one exported `Workflow` span for the
-durable execution while intermediate invocation spans export normally.
+The plugins carry the same `Workflow` span identity on each invocation as a
+non-recording span context, and create the single recording `Workflow` span only
+when the execution reaches `SUCCEEDED` or `FAILED`, backdated to the execution
+start. `PENDING` and `RETRYING` invocations create no recording `Workflow` span,
+so none is ever left unended, and exactly one `Workflow` root is exported for the
+durable execution while intermediate invocation spans export normally. The
+non-recording context carries the execution's sampling decision, so operations
+under it are sampled consistently with the eventual root. In-flight attempt spans
+are ended at invocation cleanup, so a non-terminal invocation leaves no recording
+span unended. Suspended operations differ by plugin: `InvocationOtelPlugin` ends
+the open operation span at the boundary and continues it later, while
+`ExecutionOtelPlugin` holds the operation identity as a non-recording context and
+exports one recording span only when the operation completes.
 
 When a chained parent and target execution share a propagated remote parent,
 both join that one trace, each keeping its own deterministic `Workflow` span ID.

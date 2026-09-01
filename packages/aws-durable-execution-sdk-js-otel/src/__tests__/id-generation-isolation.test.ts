@@ -4,6 +4,7 @@ import {
   ROOT_CONTEXT,
   trace,
   type Span,
+  type SpanContext,
 } from "@opentelemetry/api";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import type { IdGenerator } from "@opentelemetry/sdk-trace-node";
@@ -364,17 +365,28 @@ describe.each([
       isReplay: false,
     });
 
-    const firstOperation = (
-      firstPlugin as unknown as { spanMap: Map<string, Span> }
-    ).spanMap.get("operation");
-    const secondOperation = (
-      secondPlugin as unknown as { spanMap: Map<string, Span> }
-    ).spanMap.get("operation");
+    // The deterministic operation span ID is scoped per execution ARN. Where it
+    // lives after onOperationStart differs by plugin: InvocationOtelPlugin
+    // creates the recording operation span immediately (held in spanMap), while
+    // ExecutionOtelPlugin defers the span to onOperationEnd and holds a
+    // non-recording placeholder context (operationContexts) in the meantime.
+    const operationSpanId = (
+      plugin: DurableInstrumentationPlugin,
+    ): string | undefined => {
+      if (pluginName === "ExecutionOtelPlugin") {
+        return (
+          plugin as unknown as { operationContexts: Map<string, SpanContext> }
+        ).operationContexts.get("operation")?.spanId;
+      }
+      return (plugin as unknown as { spanMap: Map<string, Span> }).spanMap
+        .get("operation")
+        ?.spanContext().spanId;
+    };
 
-    expect(firstOperation?.spanContext().spanId).toBe(
+    expect(operationSpanId(firstPlugin)).toBe(
       deriveSpanIdFromOperationId("operation", EXECUTION_ARN_A),
     );
-    expect(secondOperation?.spanContext().spanId).toBe(
+    expect(operationSpanId(secondPlugin)).toBe(
       deriveSpanIdFromOperationId("operation", EXECUTION_ARN_B),
     );
 
