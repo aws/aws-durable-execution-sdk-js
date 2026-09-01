@@ -21,7 +21,8 @@
     "format": "biome format --write",
     "format:check": "biome format",
     "ci": "biome ci --diagnostic-level=error",
-    "lint:report": "biome lint --reporter=json --max-diagnostics=5000 | node .github/workflows/scripts/biome/biome-warning-summary.mjs"
+    "lint:report": "biome lint --reporter=json | node .github/workflows/scripts/biome/biome-warning-summary.mjs",
+    "lint:async-safety": "biome lint --changed --only=nursery/noFloatingPromises --only=nursery/noMisusedPromises --only=nursery/useAwaitThenable --diagnostic-level=warn --no-errors-on-unmatched"
   },
   "repository": {
     "type": "git",

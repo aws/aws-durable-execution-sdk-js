@@ -54,6 +54,71 @@ jobs:
         if: always()
         run: npm run lint:report --silent >> "$GITHUB_STEP_SUMMARY"
 
+  # Async-safety rules, annotated on the diff only.
+  #
+  # noFloatingPromises / noMisusedPromises / useAwaitThenable recover the async
+  # coverage the testing package lost with `strictTypeChecked`. They are "warn",
+  # so the gating job above (--diagnostic-level=error) neither annotates nor fails
+  # on them -- which would leave them with no CI signal at all.
+  #
+  # This job restores that signal without reviving the noise problem: `--changed`
+  # limits it to files the PR actually touched, so a NEW floating promise is
+  # annotated inline while the 77-violation backlog is not. On the migration
+  # branch that is 2 annotations instead of 77.
+  #
+  # Once the backlog listed in biome.jsonc is triaged, noFloatingPromises should
+  # move to "error" and this job becomes redundant with the main gate.
+  async-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # --changed diffs against the base branch, so it needs real history;
+          # the default shallow clone has none. This already fetches every branch,
+          # so no extra `git fetch` is needed -- and adding one with --depth=1
+          # would convert the full clone into a shallow one (verified: it writes
+          # .git/shallow), risking merge-base resolution for no benefit.
+          fetch-depth: 0
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci
+      # LOAD-BEARING, not cosmetic. The lint step below passes
+      # --no-errors-on-unmatched, which also masks a missing base ref (Biome would
+      # otherwise exit 1). This check is therefore the only thing standing between
+      # a bad base ref and a job that reports nothing while passing.
+      - name: Verify base ref is available
+        run: |
+          BASE="origin/${GITHUB_BASE_REF:-main}"
+          if ! git rev-parse --verify -q "$BASE" >/dev/null; then
+            echo "::error::Base ref $BASE not found. '--changed' cannot compute a diff."
+            exit 1
+          fi
+          echo "Diffing against $BASE ($(git rev-parse --short "$BASE"))"
+      # --no-errors-on-unmatched (set in the npm script) is required: when a PR
+      # touches nothing Biome lints -- a docs-only change, or only package-lock.json
+      # or workflow YAML, all excluded by files.includes -- `--changed` finds no
+      # files and exits 1 with "No files were processed in the specified paths".
+      # Without the flag that would red a docs-only PR for a reason unrelated to
+      # async safety. The repo's lint-staged config uses the same flag for the same
+      # reason.
+      #
+      # Otherwise Biome's exit codes are left alone: no `|| true`, no
+      # continue-on-error. Verified against 2.5.11 that warnings alone exit 0, so
+      # annotations post without failing the build, while a bad rule name still
+      # exits 1. Swallowing the exit code would turn a broken run into a silent pass.
+      #
+      # --since is passed explicitly here so PRs targeting v1.x compare against
+      # v1.x rather than the configured default of origin/main.
+      - name: Annotate async-safety warnings on changed files
+        run: |
+          npm run lint:async-safety --silent -- \
+            --since="origin/${GITHUB_BASE_REF:-main}" \
+            --reporter=github
+
   # The repo's own published lint rules, run against the examples.
   #
   # Biome cannot host ESLint plugins, so this is the one place ESLint still runs

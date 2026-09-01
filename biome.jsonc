@@ -47,7 +47,14 @@
   "vcs": {
     "enabled": true,
     "clientKind": "git",
-    "useIgnoreFile": true
+    "useIgnoreFile": true,
+    // Lets `biome lint --changed` work without an explicit --since, which keeps the
+    // lint:async-safety script free of shell parameter expansion and therefore
+    // portable to non-POSIX shells. The remote-tracking ref is used rather than
+    // plain "main" so the comparison does not silently depend on how stale a
+    // contributor's local main happens to be. CI overrides it with --since anyway,
+    // so PRs targeting v1.x compare against the right base; see lint.yml.
+    "defaultBranch": "origin/main"
   },
 
   "files": {
@@ -163,11 +170,35 @@
         // ~3s for the monorepo and Biome reads .d.ts files from node_modules. For an SDK
         // whose entire job is orchestrating asynchronous work, that is worth paying.
         //
-        // They are "warn" rather than "error" deliberately. There are ~77 existing
-        // violations: 57 in test files, and 17 in shipped source concentrated in
-        // checkpoint-manager.ts, run-in-child-context-handler.ts and
-        // replay-validation.ts. Those deserve a human triage pass, not a mechanical fix
-        // folded into a toolchain migration, and warnings do not fail `biome ci`.
+        // WHERE THE SIGNAL GOES. These are "warn", and CI gates on
+        // `--diagnostic-level=error`, so they do not fail a build. They are not silent
+        // either: the `async-safety` job in .github/workflows/lint.yml annotates them
+        // inline on the files a PR actually changes (`biome lint --changed`), so a NEW
+        // floating promise surfaces in review even though the pre-existing backlog does
+        // not. On this branch that scoping is the difference between 2 annotations and
+        // 77.
+        //
+        // Counts below were measured with dependencies installed and types built.
+        // These rules need type resolution, so a tree without node_modules under-reports
+        // them (~73 instead of 77); CI runs `npm ci` first, so the figures here are the
+        // ones CI will produce.
+        //
+        // TRIAGE BACKLOG -> then raise noFloatingPromises to "error".
+        // 77 total = noFloatingPromises 74, noMisusedPromises 2, useAwaitThenable 1,
+        // split 57 in test files, 18 in shipped package src (below), and 2 in a script
+        // and a packaging smoke test. The 18 that ship:
+        //   5  utils/checkpoint/checkpoint-manager.ts                      noFloatingPromises
+        //   3  handlers/run-in-child-context-handler/...-handler.ts         noFloatingPromises
+        //   3  utils/replay-validation/replay-validation.ts                noFloatingPromises
+        //   2  context/durable-context/mode-management/mode-management.ts   noMisusedPromises
+        //   1  handlers/step-handler/step-handler.ts                       noFloatingPromises
+        //   1  handlers/wait-for-callback-handler/...-handler.ts            useAwaitThenable
+        //   1  handlers/wait-for-condition-handler/...-handler.ts          noFloatingPromises
+        //   1  run-durable.ts                                             noFloatingPromises
+        //   1  termination-manager/termination-manager.ts                  noFloatingPromises
+        // A deliberately un-awaited promise should get an explicit `void` or a
+        // suppression comment carrying a reason; the rest are likely real. Until that
+        // pass happens, these stay at "warn".
         //
         // Like all nursery rules these are outside Biome's semver guarantees.
         "noFloatingPromises": "warn",
