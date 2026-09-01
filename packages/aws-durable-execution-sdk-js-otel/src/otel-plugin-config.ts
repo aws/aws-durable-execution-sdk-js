@@ -39,6 +39,10 @@ export interface OtelPluginConfig {
   /**
    * Context extractor function used to extract upstream trace context
    * from the invocation environment. Defaults to `xRayContextExtractor`.
+   * A custom extractor must return the durable execution's own trace context:
+   * a valid trace ID (and, for a remote parent, a valid parent span ID) anchors
+   * the execution trace across replays, so returning stale or per-invocation
+   * context would displace the correct execution trace.
    */
   contextExtractor?: ContextExtractor;
 
