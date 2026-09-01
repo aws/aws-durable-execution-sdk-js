@@ -285,7 +285,7 @@ export interface DurableInstrumentationPluginProvider<
   /**
    * Provider contract version expected by the SDK.
    */
-  readonly pluginApiVersion: number;
+  readonly pluginApiVersion: typeof DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION;
 
   /**
    * Concrete class returned by `createPlugin`.
