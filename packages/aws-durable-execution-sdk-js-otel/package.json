@@ -66,5 +66,10 @@
     "@opentelemetry/core": "^2.0.0",
     "@opentelemetry/sdk-trace-node": "^2.6.1"
   },
+  "peerDependenciesMeta": {
+    "@aws/durable-execution-sdk-js": {
+      "optional": true
+    }
+  },
   "private": false
 }
