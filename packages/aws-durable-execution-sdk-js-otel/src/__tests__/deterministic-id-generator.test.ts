@@ -4,6 +4,7 @@ import {
   deriveTraceIdFromArn,
   deriveSpanIdFromOperationId,
   deriveWorkflowSpanId,
+  deriveExecutionRootSpanId,
 } from "../deterministic-id-generator";
 import * as fc from "fast-check";
 
@@ -375,5 +376,44 @@ describe("deriveWorkflowSpanId", () => {
     const workflowSpanId = deriveWorkflowSpanId(TEST_ARN);
     const opSpanId = deriveSpanIdFromOperationId(TEST_ARN, TEST_ARN);
     expect(workflowSpanId).not.toBe(opSpanId);
+  });
+});
+
+describe("deriveExecutionRootSpanId", () => {
+  const TEST_ARN =
+    "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-123";
+
+  it("produces a 16-char lowercase hex string", () => {
+    expect(deriveExecutionRootSpanId(TEST_ARN)).toMatch(/^[0-9a-f]{16}$/);
+  });
+
+  it("is deterministic (same input always produces same output)", () => {
+    expect(deriveExecutionRootSpanId(TEST_ARN)).toBe(
+      deriveExecutionRootSpanId(TEST_ARN),
+    );
+  });
+
+  it("produces different results for different ARNs", () => {
+    expect(deriveExecutionRootSpanId(`${TEST_ARN}-a`)).not.toBe(
+      deriveExecutionRootSpanId(`${TEST_ARN}-b`),
+    );
+  });
+
+  it("throws an Error for an empty string", () => {
+    expect(() => deriveExecutionRootSpanId("")).toThrow(
+      "Execution ARN must be non-empty",
+    );
+  });
+
+  it("never returns all-zeros", () => {
+    expect(deriveExecutionRootSpanId(TEST_ARN)).not.toBe("0000000000000000");
+  });
+
+  it("uses a distinct namespace from the Workflow and operation span IDs", () => {
+    // The "execution-root:" salt must not collide with "workflow:" or the
+    // operation span ID for the same ARN, since all three share the trace.
+    const rootId = deriveExecutionRootSpanId(TEST_ARN);
+    expect(rootId).not.toBe(deriveWorkflowSpanId(TEST_ARN));
+    expect(rootId).not.toBe(deriveSpanIdFromOperationId(TEST_ARN, TEST_ARN));
   });
 });
