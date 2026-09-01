@@ -161,7 +161,7 @@ the provider exposes it. They never call `shutdown()`.
 ## Dynamic Loading from a Lambda Layer
 
 The SDK can load either plugin without importing it in function code. Package
-this module and its peer dependencies in a Lambda layer under
+this module and its OpenTelemetry peer dependencies in a Lambda layer under
 `nodejs/node_modules`, then configure one entry point:
 
 ```text
@@ -173,6 +173,11 @@ or:
 ```text
 DURABLE_EXECUTION_PLUGINS=@aws/durable-execution-sdk-js-otel/otel-invocation
 ```
+
+Do not package `@aws/durable-execution-sdk-js` in the layer. The provider entry
+points use SDK types only, and the SDK peer dependency is optional so package
+installation does not add a second copy. At runtime, the plugin is loaded and
+driven by the SDK instance bundled with the function.
 
 Dynamic providers construct plugins with default configuration, so they
 require a compatible globally registered SDK provider. Use code-based
