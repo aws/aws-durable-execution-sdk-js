@@ -1,6 +1,6 @@
 {
   "name": "@aws/durable-execution-sdk-js-insight",
-  "description": "Workflow Insight plugin for AWS Durable Execution SDK — curated execution observability",
+  "description": "Workflow Insight plugin for AWS Durable Execution SDK \u2014 curated execution observability",
   "license": "Apache-2.0",
   "version": "0.1.0-alpha.0",
   "private": false,
@@ -33,9 +33,10 @@
     "build:esm": "rollup --config rollup.config.mjs --environment MODE:esm",
     "build:cjs": "rollup --config rollup.config.mjs --environment MODE:cjs",
     "build:types": "tsc --emitDeclarationOnly --declaration --declarationMap --outDir dist-types",
-    "lint": "eslint src --ext .ts",
+    "lint": "biome check src",
     "test": "jest",
-    "clean": "rm -rf dist dist-cjs dist-types"
+    "clean": "rm -rf dist dist-cjs dist-types",
+    "lint:fix": "biome check --write src"
   },
   "peerDependencies": {
     "@aws/durable-execution-sdk-js": ">=2.1.0",
@@ -92,10 +93,6 @@
   },
   "devDependencies": {
     "@aws/durable-execution-sdk-js": "*",
-    "@typescript-eslint/eslint-plugin": "^8.25.0",
-    "@typescript-eslint/parser": "^8.25.0",
-    "eslint": "^9.21.0",
-    "eslint-plugin-tsdoc": "^0.5.2",
     "jest": "^29.7.0",
     "ts-jest": "^29.2.6",
     "@aws-sdk/client-s3": "^3.658.0",

@@ -48,7 +48,6 @@ export interface Serdes<T> {
  * Serdes typed for arbitrary values. Used internally where the concrete type is unknown.
  * @internal
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnySerdes = Serdes<any>;
 
 /**
@@ -90,10 +89,8 @@ export interface SerdesConfig {
  *
  * @public
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const defaultSerdes: Serdes<any> = {
   serialize: async (
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     value: any,
     _context: SerdesContext,
   ): Promise<string | undefined> =>
@@ -101,7 +98,6 @@ export const defaultSerdes: Serdes<any> = {
   deserialize: async (
     data: string | undefined,
     _context: SerdesContext,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<any> => (data !== undefined ? JSON.parse(data) : undefined),
 };
 

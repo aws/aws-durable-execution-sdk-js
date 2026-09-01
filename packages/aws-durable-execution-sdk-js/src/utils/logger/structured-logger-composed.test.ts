@@ -40,7 +40,6 @@ describe("Structured Logger Integration", () => {
             stepId: hashId("test-step"),
             attempt: 0,
           };
-          // eslint-disable-next-line no-console
           console.log(JSON.stringify(logEntry));
         },
       },

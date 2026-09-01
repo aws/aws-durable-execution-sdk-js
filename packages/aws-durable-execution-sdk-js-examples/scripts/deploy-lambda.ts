@@ -149,6 +149,7 @@ function loadExampleConfiguration(exampleName: string): ExamplesWithConfig {
       `Error: Example with handler '${targetHandler}' not found in catalog`,
     );
     console.error("Available handlers:");
+    // biome-ignore lint/suspicious/useIterableCallbackReturn: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
     catalog.forEach((example) => console.error(`  ${example.handler}`));
     process.exit(1);
   }
@@ -417,7 +418,7 @@ async function createFunction(
   await ensureLogGroupRetention(functionName);
 
   // Determine environment variables
-  let envVars: Record<string, string> | undefined = env.LAMBDA_ENDPOINT
+  const envVars: Record<string, string> | undefined = env.LAMBDA_ENDPOINT
     ? { AWS_ENDPOINT_URL_LAMBDA: env.LAMBDA_ENDPOINT }
     : undefined;
 

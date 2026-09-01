@@ -14,7 +14,6 @@ import {
   SETTING_KEYS,
   isSettingKey,
 } from "@aws/durable-execution-sdk-js-insight-core";
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const manifest = require("../package.json") as {
   contributes: {
     configuration: {

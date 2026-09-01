@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import { safeStringify } from "../safe-stringify/safe-stringify";
 
 // Cached at module load: reading process.env is a native call, and log() is

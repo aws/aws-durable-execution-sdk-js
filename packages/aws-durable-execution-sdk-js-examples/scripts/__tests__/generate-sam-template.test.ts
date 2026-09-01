@@ -193,9 +193,7 @@ describe("generate-sam-template", () => {
           RetentionInDays: 7,
         },
       });
-      expect(template.Resources.StepsWithRetry.Properties.MemorySize).toBe(
-        256,
-      );
+      expect(template.Resources.StepsWithRetry.Properties.MemorySize).toBe(256);
       expect(template.Resources.StepsWithRetry.Properties.Timeout).toBe(300);
       expect(template.Resources.StepsWithRetryLogGroup.Properties).toEqual({
         LogGroupName: "/aws/lambda/StepswithRetry-24x-NodeJS",

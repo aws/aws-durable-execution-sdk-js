@@ -74,9 +74,7 @@ import { DurableInstrumentationPlugin } from "./plugin";
  * @public
  */
 export type DurableExecutionHandler<
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   TEvent = any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   TResult = any,
   TLogger extends DurableLogger = DurableLogger,
 > = (event: TEvent, context: DurableContext<TLogger>) => Promise<TResult>;

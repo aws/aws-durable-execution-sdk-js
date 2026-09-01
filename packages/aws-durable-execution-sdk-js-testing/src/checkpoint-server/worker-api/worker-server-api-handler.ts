@@ -76,7 +76,6 @@ export class WorkerServerApiHandler {
                   ),
                 );
               } catch (err: unknown) {
-                // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
                 reject(err);
               }
             }, this.checkpointDelaySettings);
@@ -86,7 +85,6 @@ export class WorkerServerApiHandler {
       case ApiType.SendDurableExecutionCallbackSuccess:
         return processCallbackSuccess(
           // todo: handle undefined instead of disabling eslint rule
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           data.params.CallbackId!,
           data.params.Result === undefined
             ? Buffer.of()
@@ -95,14 +93,12 @@ export class WorkerServerApiHandler {
         );
       case ApiType.SendDurableExecutionCallbackFailure:
         return processCallbackFailure(
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           data.params.CallbackId!,
           data.params.Error,
           this.executionManager,
         );
       case ApiType.SendDurableExecutionCallbackHeartbeat:
         return processCallbackHeartbeat(
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           data.params.CallbackId!,
           this.executionManager,
         );

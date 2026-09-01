@@ -23,7 +23,6 @@ export const handler = withDurableExecution(
 
         // ❌ WRONG: Using parent context instead of childContext
         // This should throw: "Context usage error in 'step': You are using a parent or sibling context..."
-        // eslint-disable-next-line aws-durable-execution-eslint/no-nested-durable-operations
         const wrongStep = await context.step("wrong-step", async () => {
           return "This should fail!";
         });

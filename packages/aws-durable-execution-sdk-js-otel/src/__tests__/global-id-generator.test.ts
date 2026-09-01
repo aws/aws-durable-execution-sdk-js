@@ -20,9 +20,7 @@ describe("tryInstallGlobalIdGenerator", () => {
     const installed = tryInstallGlobalIdGenerator(tracer);
 
     expect(installed).toBeInstanceOf(DeterministicIdGenerator);
-    expect(
-      Reflect.get(tracer, "_idGenerator"),
-    ).toBe(installed);
+    expect(Reflect.get(tracer, "_idGenerator")).toBe(installed);
     expect(installed?.generateTraceId()).toBe("f".repeat(32));
     expect(installed?.generateSpanId()).toBe("e".repeat(16));
 

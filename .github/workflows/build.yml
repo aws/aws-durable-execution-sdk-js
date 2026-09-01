@@ -110,6 +110,12 @@ jobs:
       - name: Bundle the MCP server
         run: npm run build -w packages/aws-durable-execution-sdk-js-insight-mcp
 
+  # Runs off lint-commits rather than build: Biome needs only the sources, so
+  # linting does not have to wait for compilation and reports failures earlier.
+  lint:
+    needs: lint-commits
+    uses: "./.github/workflows/lint.yml"
+
   unit-tests:
     needs: build
     strategy:

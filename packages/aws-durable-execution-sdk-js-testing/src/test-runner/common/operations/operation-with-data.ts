@@ -43,9 +43,9 @@ export interface OperationEvents {
  * the current state of the execution.
  * @internal
  */
-export class OperationWithData<
-  OperationResultValue = unknown,
-> implements DurableOperation<OperationResultValue> {
+export class OperationWithData<OperationResultValue = unknown>
+  implements DurableOperation<OperationResultValue>
+{
   /**
    * Creates a new OperationWithData instance.
    * @param waitManager - Manager for waiting on operation status changes
@@ -166,8 +166,7 @@ export class OperationWithData<
     let result: OperationResultValue | undefined;
     try {
       result = invokeDetails?.Result
-        ? // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-          (JSON.parse(invokeDetails.Result) as unknown as OperationResultValue)
+        ? (JSON.parse(invokeDetails.Result) as unknown as OperationResultValue)
         : undefined;
     } catch (err) {
       throw new Error("Could not parse result for invoke details", {
@@ -276,7 +275,6 @@ export class OperationWithData<
   }
 
   getSubType(): OperationSubType | undefined {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
     return this.checkpointOperationData?.operation.SubType as OperationSubType;
   }
 

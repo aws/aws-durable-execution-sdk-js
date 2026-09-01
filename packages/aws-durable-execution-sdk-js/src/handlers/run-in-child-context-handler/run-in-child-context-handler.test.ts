@@ -1014,6 +1014,7 @@ describe("runWithContext Integration", () => {
     );
 
     // Setup runWithContext mock to return the function result
+    // biome-ignore lint/suspicious/noImportAssign: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
     (runWithContext as jest.Mock) = jest
       .fn()
       .mockImplementation(async (stepId, parentId, fn, _attempt, _mode) => {

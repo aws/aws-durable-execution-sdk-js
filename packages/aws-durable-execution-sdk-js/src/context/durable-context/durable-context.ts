@@ -232,7 +232,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
     if ("log" in logger) {
       durableContextLogger.log = (level, ...args): void => {
         if (this.shouldLog()) {
-          return logger.log?.(level, ...args);
+          logger.log?.(level, ...args);
         }
       };
     }

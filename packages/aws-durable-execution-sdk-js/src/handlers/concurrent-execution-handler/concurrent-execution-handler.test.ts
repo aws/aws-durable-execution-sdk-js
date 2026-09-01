@@ -289,6 +289,7 @@ describe("Concurrent Execution Handler", () => {
       let actualExecuteOperation: any;
       mockRunInChildContext.mockImplementation(
         (nameOrFn: any, fnOrConfig?: any, _maybeConfig?: any) => {
+          // biome-ignore lint/suspicious/noImplicitAnyLet: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
           let actualFn;
           if (typeof nameOrFn === "string" || nameOrFn === undefined) {
             actualFn = fnOrConfig;
@@ -507,6 +508,7 @@ describe("Concurrent Execution Handler", () => {
       mockRunInChildContext.mockImplementation(
         (nameOrFn: any, fnOrConfig?: any, _maybeConfig?: any) => {
           // Handle the overloaded signature
+          // biome-ignore lint/suspicious/noImplicitAnyLet: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
           let actualFn;
           if (typeof nameOrFn === "string" || nameOrFn === undefined) {
             actualFn = fnOrConfig;
@@ -543,6 +545,7 @@ describe("Concurrent Execution Handler", () => {
       mockRunInChildContext.mockImplementation(
         (nameOrFn: any, fnOrConfig?: any, _maybeConfig?: any) => {
           // Handle the overloaded signature
+          // biome-ignore lint/suspicious/noImplicitAnyLet: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
           let actualFn;
           if (typeof nameOrFn === "string" || nameOrFn === undefined) {
             actualFn = fnOrConfig;
@@ -1146,7 +1149,7 @@ describe("ConcurrencyController", () => {
       const executor = jest.fn();
 
       // Resolve in reverse order
-      let resolvers: Array<(value: any) => void> = [];
+      const resolvers: Array<(value: any) => void> = [];
       mockParentContext.runInChildContext.mockImplementation(() => {
         return new DurablePromise(
           () =>

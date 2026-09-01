@@ -110,7 +110,7 @@ function loadSettings(): StoredSettings {
 export function readDesktopConfig(): InsightConfig {
   const stored = loadSettings();
   const get = (k: string): unknown =>
-    Object.prototype.hasOwnProperty.call(stored, k) ? stored[k] : undefined;
+    Object.hasOwn(stored, k) ? stored[k] : undefined;
   return normalizeConfig({
     getString: (k) => {
       const v = get(k);

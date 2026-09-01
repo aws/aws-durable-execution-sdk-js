@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 import { Context } from "aws-lambda";
 import { withDurableExecution } from "./with-durable-execution";
 import { refreshLogConfig } from "./utils/logger/logger";

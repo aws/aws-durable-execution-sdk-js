@@ -1,0 +1,41 @@
+name: Lint
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read # Required for actions/checkout
+
+concurrency:
+  group: ${{ github.head_ref }}-${{ github.run_id }}-lint
+  cancel-in-progress: true
+
+env:
+  # See the note in build.yml: the desktop app's `electron` devDependency
+  # downloads a ~100 MB binary that no lint job needs.
+  ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+
+jobs:
+  # Formatting and linting are enforced here, not only on pre-commit.
+  #
+  # The previous ESLint setup ran exclusively through lint-staged, which
+  # `--no-verify` bypasses, so a push could land unformatted code or violate the
+  # Workflow Insight host-boundary rules with nothing to catch it. `biome ci`
+  # checks formatting and lint in one pass over the whole monorepo and does not
+  # write to the working tree.
+  #
+  # Warnings do not fail this job; only errors do. That matches how the old
+  # configs were tuned, where most TypeScript rules were set to "warn".
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci
+      - name: Biome (format + lint)
+        run: npm run ci

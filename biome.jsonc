@@ -1,0 +1,359 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+
+  "files": {
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/dist-cjs",
+      "!**/dist-types",
+      "!**/build",
+      "!**/coverage",
+      "!**/.rollup.cache",
+      "!**/*.tsbuildinfo",
+      "!package-lock.json",
+
+      // API Extractor owns the formatting of the reports it generates. Reformatting them
+      // makes every regeneration produce a diff, which defeats the point of committing
+      // them: the report is meant to show real API changes in review, not whitespace
+      // churn. It would also mean the committed files never match what
+      // `npm run api:extract` produces.
+      "!api-extractor/*.api.json",
+      "!api-extractor/*.api.md",
+
+      // Recorded execution histories are generated fixtures, not sources. The largest is
+      // ~10 MiB, well past Biome's per-file ceiling, and formatting them would produce an
+      // unreviewable diff.
+      "!**/*.history.json"
+    ]
+  },
+
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 80
+  },
+
+  // These mirror Prettier's defaults, which is what the repo used: `.prettierrc` was an
+  // empty file, so every Prettier setting was at its default. Stating them explicitly
+  // keeps the formatter's behaviour from drifting with Biome's own defaults.
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "all",
+      "arrowParentheses": "always"
+    }
+  },
+
+  "linter": {
+    "enabled": true,
+
+    // Auto-enabled by the `jest` dependency anyway; stated so it survives dependency
+    // changes. Covers what eslint-plugin-jest's recommended set gave us
+    // (noFocusedTests, noSkippedTests, noDuplicateTestHooks, ...).
+    "domains": {
+      "test": "recommended"
+    },
+
+    "rules": {
+      "preset": "recommended",
+
+      "correctness": {
+        "noUnusedVariables": "warn",
+        "noUnusedFunctionParameters": "warn",
+        "noUnusedImports": "warn"
+      },
+
+      "suspicious": {
+        "noExplicitAny": "warn",
+        "noConsole": "warn",
+        "noDebugger": "warn"
+      },
+
+      "style": {
+        // NOT ENABLED, deliberately. Both are recommended by Biome but were not enforced
+        // under ESLint, and turning them on would rewrite ~1750 call sites as part of a
+        // toolchain migration -- which would make this change unreviewable and bury any
+        // real behavioural difference.
+        //
+        //   useImportType      (~1089 sites) has a safe autofix; worth doing as its own
+        //                      commit: `biome check --write --only=style/useImportType`
+        //   noNonNullAssertion (~666 sites)  needs judgement per site, no safe autofix
+        //
+        // Both are tracked as follow-ups rather than dropped.
+        "useImportType": "off",
+        "noNonNullAssertion": "off"
+      },
+
+      "nursery": {
+        // Replaces `@typescript-eslint/explicit-function-return-type`, which the core SDK
+        // and insight configs set to "warn". Note this rule is in Biome's nursery group,
+        // so it is NOT covered by semver and may change between minor releases.
+        "useExplicitReturnType": "warn"
+      }
+    }
+  },
+
+  // Import sorting was never enforced by the old setup. Left off so this migration does
+  // not reorder imports across the entire repository.
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "off"
+      }
+    }
+  },
+
+  "overrides": [
+    {
+      // Parity with the old per-package configs, which turned `no-explicit-any` off in
+      // test files. Return types on test callbacks are noise for the same reason.
+      "includes": ["**/*.test.ts", "**/*.test.tsx", "**/*.test.mts"],
+      "linter": {
+        "rules": {
+          "suspicious": { "noExplicitAny": "off" },
+          "nursery": { "useExplicitReturnType": "off" }
+        }
+      }
+    },
+
+    {
+      // Kebab-case filenames were only ever enforced in the core SDK's `src`, via the
+      // local `eslint-plugin-filename-convention` package (now deleted). Keeping the same
+      // scope matters: the conformance handlers use snake_case names that are part of the
+      // cross-SDK contract with aws-durable-execution-conformance-tests, and the insight
+      // packages use camelCase throughout. Neither should be renamed by a lint rule.
+      "includes": [
+        "packages/aws-durable-execution-sdk-js/src/**/*.ts",
+        "!packages/aws-durable-execution-sdk-js/src/**/__mocks__/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "useFilenamingConvention": {
+              "level": "error",
+              "options": {
+                "filenameCases": ["kebab-case"],
+                "strictCase": true,
+                "requireAscii": true
+              }
+            }
+          }
+        }
+      }
+    },
+
+    {
+      // Examples, conformance handlers and the packaging smoke tests print to stdout on
+      // purpose, and are not part of the published API surface.
+      "includes": [
+        "packages/aws-durable-execution-sdk-js-examples/**",
+        "packages/aws-durable-execution-sdk-js-conformance-tests/**",
+        "packages/aws-durable-execution-sdk-js-conformance-tests-otel/**",
+        "packages/cjs-integration-test/**",
+        "packages/esm-integration-test/**",
+        "packages/cdk-bundling-integration-test/**",
+        "packages/lambda-runtime-detection-integration-test/**",
+        ".github/**"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": { "noConsole": "off" },
+          "nursery": { "useExplicitReturnType": "off" }
+        }
+      }
+    },
+
+    {
+      // The wire model is the SDK's own declaration of the durable execution protocol, and
+      // nothing portable can depend on the AWS SDK. Keeping it AWS-free is what lets a
+      // transport for another compute type be written against these types, so it is
+      // enforced rather than left to review. The parity test is exempt (next override):
+      // comparing our declarations to the service model is precisely its job, and it
+      // imports the AWS types for that.
+      "includes": [
+        "packages/aws-durable-execution-sdk-js/src/types/wire/**/*.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@aws-sdk/**", "aws-lambda"],
+                    "message": "The wire model must stay free of AWS types so it can describe the protocol for any compute type. If the service model changed, update the declarations here and let wire-model.aws-sdk-parity.test.ts verify them."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/aws-durable-execution-sdk-js/src/types/wire/**/*.aws-sdk-parity.test.ts"
+      ],
+      "linter": {
+        "rules": { "style": { "noRestrictedImports": "off" } }
+      }
+    },
+
+    /**
+     * Structural rules for the Workflow Insight packages.
+     *
+     * These exist because the alternative is a convention nobody can enforce. The
+     * refactor that created `@aws/durable-execution-sdk-js-insight-core` was motivated by
+     * a cross-package relative import that had grown up unnoticed, and review then showed
+     * that a host-specific import in shared code was equally invisible: an `electron`
+     * import in a core module that no test happened to cover passed every check and every
+     * build.
+     *
+     * Modules that belong to exactly one host: `vscode`, `electron`,
+     * `@modelcontextprotocol/sdk`. Shared code (insight-core) may import none of them;
+     * each host may import only its own. This list mirrors `HOST_MODULES` in
+     * packages/aws-durable-execution-sdk-js-insight-core/src/hostModuleScan.ts, which is
+     * where the tested, authoritative version lives.
+     *
+     * NOTE ON ENFORCEMENT: unlike the old ESLint setup, these now run in CI via
+     * `biome ci` (see .github/workflows/lint.yml), not only on pre-commit where
+     * `--no-verify` bypassed them. The `hostAgnostic.test.ts` guards must still stay --
+     * they assert the same invariant from inside the test suite.
+     */
+    {
+      "includes": [
+        "packages/aws-durable-execution-sdk-js-insight-core/**/*.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "vscode": "\"vscode\" belongs to a different host process and is not available here. Shared, host-free code belongs in @aws/durable-execution-sdk-js-insight-core; express what you need through the HostPort interface and let each host implement it.",
+                  "electron": "\"electron\" belongs to a different host process and is not available here. Shared, host-free code belongs in @aws/durable-execution-sdk-js-insight-core; express what you need through the HostPort interface and let each host implement it.",
+                  "@modelcontextprotocol/sdk": "\"@modelcontextprotocol/sdk\" belongs to a different host process and is not available here. Shared, host-free code belongs in @aws/durable-execution-sdk-js-insight-core; express what you need through the HostPort interface and let each host implement it."
+                },
+                "patterns": [
+                  {
+                    "group": [
+                      "vscode/**",
+                      "electron/**",
+                      "@modelcontextprotocol/sdk/**"
+                    ],
+                    "message": "This module belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-insight-core."
+                  },
+                  {
+                    "group": ["../../**"],
+                    "message": "Do not reach into a sibling package by relative path. Depend on it (e.g. `@aws/durable-execution-sdk-js-insight-core`) and import by name, so the dependency is declared and the boundary is real."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/aws-durable-execution-sdk-js-insight-mcp/**/*.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "vscode": "\"vscode\" belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-insight-core.",
+                  "electron": "\"electron\" belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-insight-core."
+                },
+                "patterns": [
+                  {
+                    "group": ["vscode/**", "electron/**"],
+                    "message": "This module belongs to a different host process and is not available here."
+                  },
+                  {
+                    "group": ["../../**"],
+                    "message": "Do not reach into a sibling package by relative path. Depend on it and import by name, so the dependency is declared and the boundary is real."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/aws-durable-execution-sdk-js-insight-vscode/**/*.ts",
+        "packages/aws-durable-execution-sdk-js-insight-vscode/**/*.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "electron": "\"electron\" belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-insight-core.",
+                  "@modelcontextprotocol/sdk": "\"@modelcontextprotocol/sdk\" belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-insight-core."
+                },
+                "patterns": [
+                  {
+                    "group": ["electron/**", "@modelcontextprotocol/sdk/**"],
+                    "message": "This module belongs to a different host process and is not available here."
+                  },
+                  {
+                    "group": ["../../**"],
+                    "message": "Do not reach into a sibling package by relative path. Depend on it and import by name, so the dependency is declared and the boundary is real."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/aws-durable-execution-sdk-js-insight-desktop/**/*.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "vscode": "\"vscode\" belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-insight-core.",
+                  "@modelcontextprotocol/sdk": "\"@modelcontextprotocol/sdk\" belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-insight-core."
+                },
+                "patterns": [
+                  {
+                    "group": ["vscode/**", "@modelcontextprotocol/sdk/**"],
+                    "message": "This module belongs to a different host process and is not available here."
+                  },
+                  {
+                    "group": ["../../**"],
+                    "message": "Do not reach into a sibling package by relative path. Depend on it and import by name, so the dependency is declared and the boundary is real."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

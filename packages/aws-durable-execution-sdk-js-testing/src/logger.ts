@@ -182,7 +182,6 @@ export function getLogLevel(logLevelString: keyof typeof LogLevel): LogLevel {
     case "NONE":
       return LogLevel.NONE;
     default:
-      // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
       throw new Error(`Invalid log level: ${logLevelString}`);
   }
 }
@@ -192,7 +191,6 @@ export function getLogLevel(logLevelString: keyof typeof LogLevel): LogLevel {
  */
 export const defaultLogger = new Logger({
   level: getLogLevel(
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
     (process.env.LOG_LEVEL as keyof typeof LogLevel | undefined) ?? "ERROR",
   ),
 });

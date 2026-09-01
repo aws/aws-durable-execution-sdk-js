@@ -64,6 +64,7 @@ async function main() {
     console.log(
       `Found ${filteredExamples.length} example(s) matching pattern "${pattern}":`,
     );
+    // biome-ignore lint/suspicious/useIterableCallbackReturn: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
     filteredExamples.forEach((example) => console.log(`  - ${example.name}`));
   } else {
     console.log(

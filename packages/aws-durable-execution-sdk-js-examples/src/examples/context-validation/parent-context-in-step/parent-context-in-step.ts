@@ -32,7 +32,6 @@ export const handler = withDurableExecution(
           "step-with-invalid-nested",
           async () => {
             // Using parent context inside step function - this should fail
-            // eslint-disable-next-line aws-durable-execution-eslint/no-nested-durable-operations
             await context.step("invalid-nested-step", async () => {
               return "This should fail!";
             });

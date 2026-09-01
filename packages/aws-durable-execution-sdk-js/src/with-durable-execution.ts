@@ -361,11 +361,7 @@ async function runHandler<
         try {
           await durableExecution.checkpointManager.waitForQueueCompletion();
         } catch (waitError) {
-          log(
-            "⚠️",
-            "Error waiting for checkpoint queue completion:",
-            waitError,
-          );
+          log("⚠️", "Error waiting for checkpoint queue completion:", waitError);
           // Continue anyway - the checkpoint will be retried on next invocation
         }
 
@@ -406,11 +402,7 @@ async function runHandler<
         try {
           await durableExecution.checkpointManager.waitForQueueCompletion();
         } catch (waitError) {
-          log(
-            "⚠️",
-            "Error waiting for checkpoint queue completion:",
-            waitError,
-          );
+          log("⚠️", "Error waiting for checkpoint queue completion:", waitError);
           // Continue anyway - the checkpoint will be retried on next invocation
         }
 
@@ -527,9 +519,7 @@ function validateDurableExecutionEvent(event: unknown): void {
  * @public
  */
 export const withDurableExecution = <
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   TEvent = any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   TResult = any,
   TLogger extends DurableLogger = DurableLogger,
 >(

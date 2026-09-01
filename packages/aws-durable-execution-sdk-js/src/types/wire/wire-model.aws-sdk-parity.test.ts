@@ -213,7 +213,6 @@ assert<
 
 describe("wire enums match the AWS SDK service model", () => {
   // Imported for values rather than types, and only inside the test file.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const sdk = require("@aws-sdk/client-lambda");
 
   it.each([

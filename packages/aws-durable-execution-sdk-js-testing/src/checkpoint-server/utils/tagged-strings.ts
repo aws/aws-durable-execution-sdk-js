@@ -8,10 +8,8 @@ export type ExecutionId = Tagged<string, "ExecutionId">;
  */
 export function createExecutionId(param?: string): ExecutionId {
   return typeof param === "string"
-    ? // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-      (param as ExecutionId)
-    : // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-      (randomUUID() as ExecutionId);
+    ? (param as ExecutionId)
+    : (randomUUID() as ExecutionId);
 }
 
 export type InvocationId = Tagged<string, "InvocationId">;
@@ -21,10 +19,8 @@ export type InvocationId = Tagged<string, "InvocationId">;
  */
 export function createInvocationId(param?: string): InvocationId {
   return typeof param === "string"
-    ? // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-      (param as InvocationId)
-    : // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-      (randomUUID() as InvocationId);
+    ? (param as InvocationId)
+    : (randomUUID() as InvocationId);
 }
 
 export type CheckpointToken = Tagged<string, "CheckpointToken">;
@@ -33,12 +29,10 @@ export type CheckpointToken = Tagged<string, "CheckpointToken">;
  * @returns a tagged string used for identifying a CheckpointToken
  */
 export function createCheckpointToken(param: string): CheckpointToken {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
   return param as CheckpointToken;
 } // CheckpointTokenData encoded as a base64 string
 
 export type CallbackId = Tagged<string, "CallbackId">;
 export function createCallbackId(param: string): CallbackId {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
   return param as CallbackId;
 }

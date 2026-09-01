@@ -796,6 +796,7 @@ describe("checkpoint-manager updateOperation", () => {
     );
     expect(storedOperation?.operation.Status).toBe(OperationStatus.FAILED);
     expect(
+      // biome-ignore lint/correctness/noUnsafeOptionalChaining: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
       (storedOperation?.operation as unknown as Record<string, unknown>)
         .SomeNewField,
     ).toBe("new-value");
@@ -921,10 +922,12 @@ describe("checkpoint-manager updateOperation", () => {
     );
     expect(storedOperation?.operation.Status).toBe(OperationStatus.SUCCEEDED);
     expect(
+      // biome-ignore lint/correctness/noUnsafeOptionalChaining: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
       (storedOperation?.operation as unknown as Record<string, unknown>)
         .SomeField,
     ).toBeUndefined();
     expect(
+      // biome-ignore lint/correctness/noUnsafeOptionalChaining: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
       (storedOperation?.operation as unknown as Record<string, unknown>)
         .AnotherField,
     ).toBeNull();

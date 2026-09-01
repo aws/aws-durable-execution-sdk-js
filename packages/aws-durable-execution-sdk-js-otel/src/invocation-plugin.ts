@@ -409,7 +409,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     }
 
     // Push to map and stack
-    if (span != undefined) {
+    if (span != null) {
       this.spanMap.set(info.id, span);
       this.spanStack.push(span);
     }

@@ -47,8 +47,14 @@ interface Props {
 }
 
 const DEST_OPTIONS: SelectProps.Option[] = [
-  { value: "cloudwatch-logs-exporter", label: "CloudWatch Logs (dedicated log group)" },
-  { value: "lambda-log-exporter", label: "CloudWatch Logs (Lambda function log group)" },
+  {
+    value: "cloudwatch-logs-exporter",
+    label: "CloudWatch Logs (dedicated log group)",
+  },
+  {
+    value: "lambda-log-exporter",
+    label: "CloudWatch Logs (Lambda function log group)",
+  },
   { value: "dynamodb", label: "DynamoDB" },
   { value: "aurora", label: "Aurora PostgreSQL" },
   { value: "redshift", label: "Amazon Redshift" },
@@ -77,7 +83,23 @@ const LOCAL_MODEL_OPTIONS: SelectProps.Option[] = [
   },
 ];
 
-export function SettingsModal({ visible, settings, capabilities, modelDownloaded, downloadPercent, onDismiss, onSave, testing, testResult, onTest, onClearTest, bedrockModels, bedrockModelsLoading, bedrockModelsError, onListModels }: Props) {
+export function SettingsModal({
+  visible,
+  settings,
+  capabilities,
+  modelDownloaded,
+  downloadPercent,
+  onDismiss,
+  onSave,
+  testing,
+  testResult,
+  onTest,
+  onClearTest,
+  bedrockModels,
+  bedrockModelsLoading,
+  bedrockModelsError,
+  onListModels,
+}: Props) {
   const [form, setForm] = useState<Settings>(settings);
   const [downloading, setDownloading] = useState(false);
 
@@ -104,6 +126,7 @@ export function SettingsModal({ visible, settings, capabilities, modelDownloaded
       : []),
   ];
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
   useEffect(() => {
     // Defence in depth, and generic rather than per-provider: the host already
     // narrows llmProvider to something it can honor before sending config (see
@@ -122,6 +145,7 @@ export function SettingsModal({ visible, settings, capabilities, modelDownloaded
 
   // Drop any prior test result when the modal (re)opens so a stale pass/fail
   // from a previous session isn't shown against freshly-loaded settings.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
   useEffect(() => {
     onClearTest();
   }, [visible, onClearTest]);
@@ -140,7 +164,8 @@ export function SettingsModal({ visible, settings, capabilities, modelDownloaded
   };
 
   const dest = form.destinationType;
-  const showLogGroup = dest === "cloudwatch-logs-exporter" || dest === "lambda-log-exporter";
+  const showLogGroup =
+    dest === "cloudwatch-logs-exporter" || dest === "lambda-log-exporter";
   const showDdb = dest === "dynamodb";
   const showAurora = dest === "aurora";
   const showRedshift = dest === "redshift";
@@ -157,8 +182,16 @@ export function SettingsModal({ visible, settings, capabilities, modelDownloaded
       footer={
         <Box float="right">
           <SpaceBetween direction="horizontal" size="xs">
-            <Button variant="link" onClick={onDismiss}>Cancel</Button>
-            <Button variant="primary" onClick={() => onSave(form)} disabled={!canSave}>Save</Button>
+            <Button variant="link" onClick={onDismiss}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => onSave(form)}
+              disabled={!canSave}
+            >
+              Save
+            </Button>
           </SpaceBetween>
         </Box>
       }
@@ -170,110 +203,264 @@ export function SettingsModal({ visible, settings, capabilities, modelDownloaded
             label: "Data Source",
             content: (
               <SpaceBetween size="m">
-                <FormField label="Destination Type" description="Where your Workflow Insight records are stored">
+                <FormField
+                  label="Destination Type"
+                  description="Where your Workflow Insight records are stored"
+                >
                   <Select
-                    selectedOption={DEST_OPTIONS.find((o) => o.value === form.destinationType) ?? DEST_OPTIONS[0]}
+                    selectedOption={
+                      DEST_OPTIONS.find(
+                        (o) => o.value === form.destinationType,
+                      ) ?? DEST_OPTIONS[0]
+                    }
                     options={DEST_OPTIONS}
-                    onChange={({ detail }) => update("destinationType", detail.selectedOption.value ?? "")}
+                    onChange={({ detail }) =>
+                      update(
+                        "destinationType",
+                        detail.selectedOption.value ?? "",
+                      )
+                    }
                   />
                 </FormField>
 
                 {showLogGroup && (
-                  <FormField label="Log Group Name" description="Comma-separate multiple groups">
-                    <Input value={form.logGroupName} onChange={({ detail }) => update("logGroupName", detail.value)} placeholder="/workflow-insight/demo" />
+                  <FormField
+                    label="Log Group Name"
+                    description="Comma-separate multiple groups"
+                  >
+                    <Input
+                      value={form.logGroupName}
+                      onChange={({ detail }) =>
+                        update("logGroupName", detail.value)
+                      }
+                      placeholder="/workflow-insight/demo"
+                    />
                   </FormField>
                 )}
 
                 {showDdb && (
                   <FormField label="DynamoDB Table Name">
-                    <Input value={form.dynamodbTableName} onChange={({ detail }) => update("dynamodbTableName", detail.value)} placeholder="workflow-insight" />
+                    <Input
+                      value={form.dynamodbTableName}
+                      onChange={({ detail }) =>
+                        update("dynamodbTableName", detail.value)
+                      }
+                      placeholder="workflow-insight"
+                    />
                   </FormField>
                 )}
 
                 {showAurora && (
                   <SpaceBetween size="s">
                     <FormField label="Aurora Cluster ARN">
-                      <Input value={form.auroraResourceArn} onChange={({ detail }) => update("auroraResourceArn", detail.value)} placeholder="arn:aws:rds:..." />
+                      <Input
+                        value={form.auroraResourceArn}
+                        onChange={({ detail }) =>
+                          update("auroraResourceArn", detail.value)
+                        }
+                        placeholder="arn:aws:rds:..."
+                      />
                     </FormField>
                     <FormField label="Aurora Secret ARN">
-                      <Input value={form.auroraSecretArn} onChange={({ detail }) => update("auroraSecretArn", detail.value)} placeholder="arn:aws:secretsmanager:..." />
+                      <Input
+                        value={form.auroraSecretArn}
+                        onChange={({ detail }) =>
+                          update("auroraSecretArn", detail.value)
+                        }
+                        placeholder="arn:aws:secretsmanager:..."
+                      />
                     </FormField>
                     <FormField label="Database">
-                      <Input value={form.auroraDatabase} onChange={({ detail }) => update("auroraDatabase", detail.value)} placeholder="postgres" />
+                      <Input
+                        value={form.auroraDatabase}
+                        onChange={({ detail }) =>
+                          update("auroraDatabase", detail.value)
+                        }
+                        placeholder="postgres"
+                      />
                     </FormField>
                     <FormField label="Table">
-                      <Input value={form.auroraTable} onChange={({ detail }) => update("auroraTable", detail.value)} placeholder="workflow_insight" />
+                      <Input
+                        value={form.auroraTable}
+                        onChange={({ detail }) =>
+                          update("auroraTable", detail.value)
+                        }
+                        placeholder="workflow_insight"
+                      />
                     </FormField>
                   </SpaceBetween>
                 )}
 
                 {showRedshift && (
                   <SpaceBetween size="s">
-                    <FormField label="Workgroup Name" description="Redshift Serverless workgroup. Leave empty if using a provisioned cluster.">
-                      <Input value={form.redshiftWorkgroupName} onChange={({ detail }) => update("redshiftWorkgroupName", detail.value)} placeholder="insight-workgroup" />
+                    <FormField
+                      label="Workgroup Name"
+                      description="Redshift Serverless workgroup. Leave empty if using a provisioned cluster."
+                    >
+                      <Input
+                        value={form.redshiftWorkgroupName}
+                        onChange={({ detail }) =>
+                          update("redshiftWorkgroupName", detail.value)
+                        }
+                        placeholder="insight-workgroup"
+                      />
                     </FormField>
-                    <FormField label="Cluster Identifier" description="Provisioned Redshift cluster (alternative to a Serverless workgroup).">
-                      <Input value={form.redshiftClusterIdentifier} onChange={({ detail }) => update("redshiftClusterIdentifier", detail.value)} placeholder="my-redshift-cluster" />
+                    <FormField
+                      label="Cluster Identifier"
+                      description="Provisioned Redshift cluster (alternative to a Serverless workgroup)."
+                    >
+                      <Input
+                        value={form.redshiftClusterIdentifier}
+                        onChange={({ detail }) =>
+                          update("redshiftClusterIdentifier", detail.value)
+                        }
+                        placeholder="my-redshift-cluster"
+                      />
                     </FormField>
                     <FormField label="Database">
-                      <Input value={form.redshiftDatabase} onChange={({ detail }) => update("redshiftDatabase", detail.value)} placeholder="dev" />
+                      <Input
+                        value={form.redshiftDatabase}
+                        onChange={({ detail }) =>
+                          update("redshiftDatabase", detail.value)
+                        }
+                        placeholder="dev"
+                      />
                     </FormField>
                     <FormField label="Schema">
-                      <Input value={form.redshiftSchema} onChange={({ detail }) => update("redshiftSchema", detail.value)} placeholder="public" />
+                      <Input
+                        value={form.redshiftSchema}
+                        onChange={({ detail }) =>
+                          update("redshiftSchema", detail.value)
+                        }
+                        placeholder="public"
+                      />
                     </FormField>
                     <FormField label="Table">
-                      <Input value={form.redshiftTable} onChange={({ detail }) => update("redshiftTable", detail.value)} placeholder="workflow_insight" />
+                      <Input
+                        value={form.redshiftTable}
+                        onChange={({ detail }) =>
+                          update("redshiftTable", detail.value)
+                        }
+                        placeholder="workflow_insight"
+                      />
                     </FormField>
-                    <FormField label="DB User" description="Provisioned clusters only (temporary credentials). Leave empty for Serverless or when using a Secret ARN.">
-                      <Input value={form.redshiftDbUser} onChange={({ detail }) => update("redshiftDbUser", detail.value)} placeholder="admin" />
+                    <FormField
+                      label="DB User"
+                      description="Provisioned clusters only (temporary credentials). Leave empty for Serverless or when using a Secret ARN."
+                    >
+                      <Input
+                        value={form.redshiftDbUser}
+                        onChange={({ detail }) =>
+                          update("redshiftDbUser", detail.value)
+                        }
+                        placeholder="admin"
+                      />
                     </FormField>
-                    <FormField label="Secret ARN" description="Optional: Secrets Manager ARN for Data API auth (alternative to IAM/DB user).">
-                      <Input value={form.redshiftSecretArn} onChange={({ detail }) => update("redshiftSecretArn", detail.value)} placeholder="arn:aws:secretsmanager:..." />
+                    <FormField
+                      label="Secret ARN"
+                      description="Optional: Secrets Manager ARN for Data API auth (alternative to IAM/DB user)."
+                    >
+                      <Input
+                        value={form.redshiftSecretArn}
+                        onChange={({ detail }) =>
+                          update("redshiftSecretArn", detail.value)
+                        }
+                        placeholder="arn:aws:secretsmanager:..."
+                      />
                     </FormField>
                   </SpaceBetween>
                 )}
 
                 {showOpenSearch && (
                   <SpaceBetween size="s">
-                    <FormField label="Domain Endpoint" description="Amazon OpenSearch Service HTTPS endpoint. Authenticated with SigV4 (your AWS identity must be in the domain access policy).">
-                      <Input value={form.opensearchEndpoint} onChange={({ detail }) => update("opensearchEndpoint", detail.value)} placeholder="https://my-domain.us-east-1.es.amazonaws.com" />
+                    <FormField
+                      label="Domain Endpoint"
+                      description="Amazon OpenSearch Service HTTPS endpoint. Authenticated with SigV4 (your AWS identity must be in the domain access policy)."
+                    >
+                      <Input
+                        value={form.opensearchEndpoint}
+                        onChange={({ detail }) =>
+                          update("opensearchEndpoint", detail.value)
+                        }
+                        placeholder="https://my-domain.us-east-1.es.amazonaws.com"
+                      />
                     </FormField>
                     <FormField label="Index">
-                      <Input value={form.opensearchIndex} onChange={({ detail }) => update("opensearchIndex", detail.value)} placeholder="workflow-insight" />
+                      <Input
+                        value={form.opensearchIndex}
+                        onChange={({ detail }) =>
+                          update("opensearchIndex", detail.value)
+                        }
+                        placeholder="workflow-insight"
+                      />
                     </FormField>
                   </SpaceBetween>
                 )}
 
                 {showAthena && (
                   <SpaceBetween size="s">
-                    <FormField label="Glue Database" description="Athena/Glue database that will contain the workflow insight table">
-                      <Input value={form.athenaDatabase} onChange={({ detail }) => update("athenaDatabase", detail.value)} placeholder="default" />
+                    <FormField
+                      label="Glue Database"
+                      description="Athena/Glue database that will contain the workflow insight table"
+                    >
+                      <Input
+                        value={form.athenaDatabase}
+                        onChange={({ detail }) =>
+                          update("athenaDatabase", detail.value)
+                        }
+                        placeholder="default"
+                      />
                     </FormField>
                     <FormField label="Glue Table">
-                      <Input value={form.athenaTable} onChange={({ detail }) => update("athenaTable", detail.value)} placeholder="workflow_insight" />
+                      <Input
+                        value={form.athenaTable}
+                        onChange={({ detail }) =>
+                          update("athenaTable", detail.value)
+                        }
+                        placeholder="workflow_insight"
+                      />
                     </FormField>
                     <FormField
                       label="S3 Location"
                       description="The S3Exporter's bucket + prefix, e.g. s3://my-insight-bucket/workflow-insight/. Used to auto-create the Glue table on Save."
                     >
-                      <Input value={form.athenaS3Location} onChange={({ detail }) => update("athenaS3Location", detail.value)} placeholder="s3://my-insight-bucket/workflow-insight/" />
+                      <Input
+                        value={form.athenaS3Location}
+                        onChange={({ detail }) =>
+                          update("athenaS3Location", detail.value)
+                        }
+                        placeholder="s3://my-insight-bucket/workflow-insight/"
+                      />
                     </FormField>
                     <FormField
                       label="Athena Workgroup"
                       description="Leave empty to use the 'primary' workgroup and specify a result output location below instead"
                     >
-                      <Input value={form.athenaWorkgroup} onChange={({ detail }) => update("athenaWorkgroup", detail.value)} placeholder="my-workgroup" />
+                      <Input
+                        value={form.athenaWorkgroup}
+                        onChange={({ detail }) =>
+                          update("athenaWorkgroup", detail.value)
+                        }
+                        placeholder="my-workgroup"
+                      />
                     </FormField>
                     <FormField
                       label="Query Result Location"
                       description="Required unless the chosen workgroup has its own output location configured"
                     >
-                      <Input value={form.athenaOutputLocation} onChange={({ detail }) => update("athenaOutputLocation", detail.value)} placeholder="s3://my-insight-bucket/athena-results/" />
+                      <Input
+                        value={form.athenaOutputLocation}
+                        onChange={({ detail }) =>
+                          update("athenaOutputLocation", detail.value)
+                        }
+                        placeholder="s3://my-insight-bucket/athena-results/"
+                      />
                     </FormField>
                     <Box color="text-body-secondary" fontSize="body-s">
-                      On Save, the Explorer checks whether the Glue table exists and, if not,
-                      creates it (matching the S3Exporter's JSON + Hive date partitioning) and
-                      runs MSCK REPAIR TABLE to discover existing partitions.
+                      On Save, the Explorer checks whether the Glue table exists
+                      and, if not, creates it (matching the S3Exporter's JSON +
+                      Hive date partitioning) and runs MSCK REPAIR TABLE to
+                      discover existing partitions.
                     </Box>
                   </SpaceBetween>
                 )}
@@ -283,20 +470,24 @@ export function SettingsModal({ visible, settings, capabilities, modelDownloaded
                     <FormField label="SQS Queue URL">
                       <Input
                         value={form.sqsQueueUrl}
-                        onChange={({ detail }) => update("sqsQueueUrl", detail.value)}
+                        onChange={({ detail }) =>
+                          update("sqsQueueUrl", detail.value)
+                        }
                         placeholder="https://sqs.us-east-1.amazonaws.com/123456789012/workflow-insight"
                       />
                     </FormField>
                     <Checkbox
                       checked={form.sqsDeleteAfterRead}
-                      onChange={({ detail }) => update("sqsDeleteAfterRead", detail.checked)}
+                      onChange={({ detail }) =>
+                        update("sqsDeleteAfterRead", detail.checked)
+                      }
                     >
                       Delete messages after displaying them
                     </Checkbox>
                     <Box color="text-body-secondary" fontSize="body-s">
-                      Off by default — the Explorer only observes the queue, so other
-                      consumers still receive every message. Enable only if this
-                      Explorer should be the sole consumer.
+                      Off by default — the Explorer only observes the queue, so
+                      other consumers still receive every message. Enable only
+                      if this Explorer should be the sole consumer.
                     </Box>
                   </SpaceBetween>
                 )}
@@ -317,21 +508,30 @@ export function SettingsModal({ visible, settings, capabilities, modelDownloaded
                     also verifies the Glue table and runs a test query.
                   </Box>
                   {testResult && (
-                    <Alert type={testResult.ok ? "success" : "error"} header={testResult.summary}>
+                    <Alert
+                      type={testResult.ok ? "success" : "error"}
+                      header={testResult.summary}
+                    >
                       {testResult.checks.length > 0 && (
                         <SpaceBetween size="xxs">
                           {testResult.checks.map((c, i) => (
+                            // biome-ignore lint/suspicious/noArrayIndexKey: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
                             <Box key={i}>
                               <Box
                                 variant="span"
                                 fontWeight="bold"
-                                color={c.ok ? "text-status-success" : "text-status-error"}
+                                color={
+                                  c.ok
+                                    ? "text-status-success"
+                                    : "text-status-error"
+                                }
                               >
                                 {c.ok ? "✓" : "✗"} {c.label}
                               </Box>
                               {c.detail && (
                                 <Box variant="span" color="text-body-secondary">
-                                  {" "}— {c.detail}
+                                  {" "}
+                                  — {c.detail}
                                 </Box>
                               )}
                             </Box>
@@ -350,10 +550,23 @@ export function SettingsModal({ visible, settings, capabilities, modelDownloaded
             content: (
               <SpaceBetween size="m">
                 <FormField label="AWS Region">
-                  <Input value={form.region} onChange={({ detail }) => update("region", detail.value)} placeholder="us-east-1" />
+                  <Input
+                    value={form.region}
+                    onChange={({ detail }) => update("region", detail.value)}
+                    placeholder="us-east-1"
+                  />
                 </FormField>
-                <FormField label="AWS Profile" description="Leave empty to use the default credential chain (env, SSO, shared config)">
-                  <Input value={form.awsProfile} onChange={({ detail }) => update("awsProfile", detail.value)} placeholder="default" />
+                <FormField
+                  label="AWS Profile"
+                  description="Leave empty to use the default credential chain (env, SSO, shared config)"
+                >
+                  <Input
+                    value={form.awsProfile}
+                    onChange={({ detail }) =>
+                      update("awsProfile", detail.value)
+                    }
+                    placeholder="default"
+                  />
                 </FormField>
               </SpaceBetween>
             ),
@@ -370,7 +583,9 @@ export function SettingsModal({ visible, settings, capabilities, modelDownloaded
                   <Input
                     type="number"
                     value={form.agenticMaxIterations}
-                    onChange={({ detail }) => update("agenticMaxIterations", detail.value)}
+                    onChange={({ detail }) =>
+                      update("agenticMaxIterations", detail.value)
+                    }
                     placeholder="8"
                   />
                 </FormField>
@@ -386,15 +601,20 @@ export function SettingsModal({ visible, settings, capabilities, modelDownloaded
                       ) ?? llmProviderOptions[0]
                     }
                     options={llmProviderOptions}
-                    onChange={({ detail }) => update("llmProvider", detail.selectedOption.value ?? "bedrock")}
+                    onChange={({ detail }) =>
+                      update(
+                        "llmProvider",
+                        detail.selectedOption.value ?? "bedrock",
+                      )
+                    }
                   />
                 </FormField>
 
                 <Alert type="info" header="How your data is used">
-                  When you use <b>Ask</b>, <b>Agent</b>, or <b>Visualize</b>, your
-                  request and limited data (result <b>column names</b> and a{" "}
-                  <b>small sample of rows</b>) are sent to the selected provider;{" "}
-                  <b>Query</b> mode sends nothing.{" "}
+                  When you use <b>Ask</b>, <b>Agent</b>, or <b>Visualize</b>,
+                  your request and limited data (result <b>column names</b> and
+                  a <b>small sample of rows</b>) are sent to the selected
+                  provider; <b>Query</b> mode sends nothing.{" "}
                   {form.llmProvider === "bedrock" &&
                     "With Amazon Bedrock, that data goes to Amazon Bedrock in your configured AWS account/region, under your AWS agreement and Bedrock terms."}
                   {form.llmProvider === "copilot" &&
@@ -417,7 +637,9 @@ export function SettingsModal({ visible, settings, capabilities, modelDownloaded
                     <SpaceBetween size="xs">
                       <Autosuggest
                         value={form.bedrockModelId}
-                        onChange={({ detail }) => update("bedrockModelId", detail.value)}
+                        onChange={({ detail }) =>
+                          update("bedrockModelId", detail.value)
+                        }
                         options={[
                           {
                             label: "Recommended",
@@ -446,7 +668,9 @@ export function SettingsModal({ visible, settings, capabilities, modelDownloaded
                             ? "Loading models…"
                             : "No models loaded yet — click List available models, or type an ID."
                         }
-                        statusType={bedrockModelsLoading ? "loading" : "finished"}
+                        statusType={
+                          bedrockModelsLoading ? "loading" : "finished"
+                        }
                         loadingText="Loading models…"
                         filteringType="auto"
                         virtualScroll
@@ -480,18 +704,20 @@ export function SettingsModal({ visible, settings, capabilities, modelDownloaded
 
                 {form.llmProvider === "copilot" && (
                   <Box color="text-body-secondary">
-                    Uses GitHub Copilot via the VS Code Language Model API. Requires an active Copilot subscription. No additional configuration needed.
+                    Uses GitHub Copilot via the VS Code Language Model API.
+                    Requires an active Copilot subscription. No additional
+                    configuration needed.
                   </Box>
                 )}
 
                 {form.llmProvider === "local-server" && (
                   <SpaceBetween size="s">
                     <Box color="text-body-secondary">
-                      Runs against a local OpenAI-compatible server you host — e.g.{" "}
-                      <b>Ollama</b> (<code>ollama serve</code>), LM Studio, or a
-                      llama.cpp server. Start it and pull a model first (e.g.{" "}
-                      <code>ollama pull llama3.1</code>). Nothing is downloaded by
-                      the extension.
+                      Runs against a local OpenAI-compatible server you host —
+                      e.g. <b>Ollama</b> (<code>ollama serve</code>), LM Studio,
+                      or a llama.cpp server. Start it and pull a model first
+                      (e.g. <code>ollama pull llama3.1</code>). Nothing is
+                      downloaded by the extension.
                     </Box>
                     <FormField
                       label="Server URL"
@@ -499,14 +725,21 @@ export function SettingsModal({ visible, settings, capabilities, modelDownloaded
                     >
                       <Input
                         value={form.localServerUrl}
-                        onChange={({ detail }) => update("localServerUrl", detail.value)}
+                        onChange={({ detail }) =>
+                          update("localServerUrl", detail.value)
+                        }
                         placeholder="http://localhost:11434/v1"
                       />
                     </FormField>
-                    <FormField label="Model" description="Model name the server should use.">
+                    <FormField
+                      label="Model"
+                      description="Model name the server should use."
+                    >
                       <Input
                         value={form.localServerModel}
-                        onChange={({ detail }) => update("localServerModel", detail.value)}
+                        onChange={({ detail }) =>
+                          update("localServerModel", detail.value)
+                        }
                         placeholder="llama3.1"
                       />
                     </FormField>
@@ -530,14 +763,17 @@ export function SettingsModal({ visible, settings, capabilities, modelDownloaded
                           setDownloading(false);
                           update(
                             "localModel",
-                            detail.selectedOption.value ?? "llama-3-groq-8b-tool-use",
+                            detail.selectedOption.value ??
+                              "llama-3-groq-8b-tool-use",
                           );
                         }}
                       />
                     </FormField>
 
                     {modelDownloaded ? (
-                      <Box color="text-status-success">✓ Model downloaded and ready.</Box>
+                      <Box color="text-status-success">
+                        ✓ Model downloaded and ready.
+                      </Box>
                     ) : downloading ? (
                       <ProgressBar
                         value={downloadPercent}
@@ -547,7 +783,8 @@ export function SettingsModal({ visible, settings, capabilities, modelDownloaded
                     ) : (
                       <SpaceBetween size="xs">
                         <Box color="text-body-secondary">
-                          Runs fully offline after a one-time download. No API keys needed.
+                          Runs fully offline after a one-time download. No API
+                          keys needed.
                         </Box>
                         <Button onClick={handleDownload}>Download Model</Button>
                       </SpaceBetween>

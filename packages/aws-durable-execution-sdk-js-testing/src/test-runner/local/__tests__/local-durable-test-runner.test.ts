@@ -103,6 +103,7 @@ describe("LocalDurableTestRunner", () => {
     );
   });
 
+  // biome-ignore lint/suspicious/noDuplicateTestHooks: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
   beforeEach(() => {
     delete process.env.DURABLE_LOCAL_RUNNER_REGION;
     delete process.env.DURABLE_LOCAL_RUNNER_ENDPOINT;

@@ -10,7 +10,6 @@ describe("convertDatesToTimestamps", () => {
   });
 
   it("should return undefined when input is undefined", () => {
-    // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression
     expect(convertDatesToTimestamps(undefined)).toBeUndefined();
   });
 

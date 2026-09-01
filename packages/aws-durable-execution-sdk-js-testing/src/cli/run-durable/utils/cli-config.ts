@@ -21,7 +21,6 @@ export function createCliProgram(): Command {
   program
     .name("run-durable")
     .description("Run a durable function locally for testing")
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     .version(process.env.NPM_PACKAGE_VERSION!)
     .argument("<file>", "Path to the handler file")
     .option("--skip-time", "Enable skip time in test environment", false)
