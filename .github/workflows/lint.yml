@@ -46,6 +46,9 @@ jobs:
           node-version: 22.x
           cache: "npm"
       - name: Install dependencies
+        # id so the steps below can require THIS step specifically, rather than
+        # "nothing failed" -- see the note on the first conditional step.
+        id: install
         run: npm ci
 
       # @biomejs/biome is pinned exact in seven package.json files. A skew between
@@ -95,10 +98,22 @@ jobs:
         # Runs even when the gating steps above fail. As a separate job this executed
         # unconditionally; folding it into this job made it skip on any earlier
         # failure, so a PR with both a formatting error and a new floating promise
-        # would only learn about the promise on the next push. success() || failure()
-        # restores that without reviving the extra `npm ci`. always() would be wrong:
-        # it would also run after a failed `npm ci`, with no dependencies installed.
-        if: success() || failure()
+        # would only learn about the promise on the next push.
+        #
+        # The condition is in two parts because they answer two different questions.
+        # `!cancelled()` means "an earlier LINT failure must not skip this" -- it is
+        # equivalent to success() || failure(), and an earlier revision of this file
+        # used that spelling while claiming always() was wrong because it "would also
+        # run after a failed npm ci". That reasoning was wrong: success() || failure()
+        # runs then too. The only thing always() adds is running on cancellation.
+        #
+        # `steps.install.outcome == 'success'` is the part that actually prevents the
+        # npm ci problem. Without it a failed install cascades into five steps that
+        # run with no node_modules and fail on a missing binary, burying the one real
+        # error. Note the implicit success() that GitHub adds to a bare `if` is
+        # suppressed once a status function appears, which is why both halves are
+        # needed. ${{ }} is required because a leading `!` is YAML tag syntax.
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: |
           BASE="origin/${GITHUB_BASE_REF:-main}"
           if ! git rev-parse --verify -q "$BASE" >/dev/null; then
@@ -118,7 +133,7 @@ jobs:
       # unused suppression means either the rationale suppresses nothing or a finding
       # left the backlog silently, so it gets its own gate.
       - name: Biome (no dead suppressions)
-        if: success() || failure()
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run lint:suppressions --silent
 
       # The repo's own published lint rules, run against the examples.
@@ -130,26 +145,26 @@ jobs:
       # checkpoints correctly), and the examples are the code customers copy, so the
       # rule needs to run on more than the plugin's own RuleTester fixtures.
       #
-      # success() || failure() for the same reason as the steps above: a formatting
-      # error earlier in the job must not hide a nested-operation bug until the next
-      # push.
+      # Conditioned like the steps above: a formatting error earlier in the job must
+      # not hide a nested-operation bug until the next push, but a failed install
+      # must not produce a spurious failure here either.
       - name: Build the ESLint plugin
-        if: success() || failure()
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run build -w packages/aws-durable-execution-sdk-js-eslint-plugin
 
       - name: Check examples against our own durable-function rules
-        if: success() || failure()
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run lint:durable-rules -w packages/aws-durable-execution-sdk-js-examples
 
       # Informational only, never gating: renders the warning backlog as a
       # per-rule table in the job summary so it stays visible without annotating
       # individual lines.
       #
-      # success() || failure(), not always(), for the reason given above: always()
-      # would also run after a failed `npm ci`, with no biome to invoke. The script
-      # degrades gracefully there rather than failing, but the file argues against
-      # always() two steps up, and code disagreeing with its own stated reasoning is
-      # worse than either choice.
+      # Conditioned like the steps above. This one would degrade gracefully without
+      # dependencies -- no biome to invoke, so the script prints its "backlog
+      # unknown" warning and exits 0 -- but there is no reason to run it at all when
+      # the install failed, and a uniform condition is easier to reason about than a
+      # per-step judgement about which scripts fail softly.
       - name: Biome warning backlog (informational)
-        if: success() || failure()
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run lint:report --silent >> "$GITHUB_STEP_SUMMARY"
