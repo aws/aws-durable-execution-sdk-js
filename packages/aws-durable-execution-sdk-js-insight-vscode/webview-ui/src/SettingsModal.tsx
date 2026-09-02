@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Modal from "@cloudscape-design/components/modal";
 import Box from "@cloudscape-design/components/box";
 import SpaceBetween from "@cloudscape-design/components/space-between";
@@ -107,26 +107,41 @@ export function SettingsModal({
   // dropdown cannot show a label for a choice it doesn't offer. Copilot is
   // omitted entirely where the host can't reach it rather than shown disabled:
   // there is no action the user could take to enable it.
-  const llmProviderOptions = [
-    { value: "bedrock", label: "Amazon Bedrock" },
-    ...(capabilities.copilot
-      ? [
-          {
-            value: "copilot",
-            label: "GitHub Copilot (VS Code built-in)",
-          },
-        ]
-      : []),
-    {
-      value: "local-server",
-      label: "Local server (Ollama / OpenAI-compatible)",
-    },
-    ...(capabilities.localLlm
-      ? [{ value: "local", label: "Local LLM (offline, on-device)" }]
-      : []),
-  ];
+  //
+  // Memoised so the effect below depends on this list by identity instead of on the
+  // flags behind it. That is what makes the dependency checkable: a third input
+  // cannot be added here without declaring it or failing lint.
+  //
+  // The identity is stable in practice, not by contract. React documents useMemo as
+  // a performance optimisation and reserves the right to drop the cache; a dropped
+  // cache would give a fresh identity, re-run the effect and reset the form, losing
+  // unsaved edits. That could not happen before, when the rebuilt-every-render array
+  // was not a dependency. Eviction is tied to Activity/Offscreen unmounting, which
+  // this tree does not use, so the exposure is theoretical -- but it is a practical
+  // guarantee rather than a semantic one.
+  const llmProviderOptions = useMemo(
+    () => [
+      { value: "bedrock", label: "Amazon Bedrock" },
+      ...(capabilities.copilot
+        ? [
+            {
+              value: "copilot",
+              label: "GitHub Copilot (VS Code built-in)",
+            },
+          ]
+        : []),
+      {
+        value: "local-server",
+        label: "Local server (Ollama / OpenAI-compatible)",
+      },
+      ...(capabilities.localLlm
+        ? [{ value: "local", label: "Local LLM (offline, on-device)" }]
+        : []),
+    ],
+    [capabilities.copilot, capabilities.localLlm],
+  );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: GENUINE DEFECT CLASS, not style -- the effect reads llmProviderOptions (both .some and [0].value) but does not list it, so it can act on a stale option list. Ships in the VS Code extension and no linter has ever seen this file. Adding the dep as-is would re-run the effect every render because the array is rebuilt each time; the real fix is to memoise it, which is a behaviour change and so a tracked follow-up rather than part of a toolchain migration.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `visible` is listed but not read. It is there to re-run this effect when the modal reopens, resetting the form from `settings` so stale edits are discarded; removing it would silently start preserving them across opens. The rule cannot express "re-run on this signal". Same idiom as the suppression below.
   useEffect(() => {
     // Defence in depth, and generic rather than per-provider: the host already
     // narrows llmProvider to something it can honor before sending config (see
@@ -141,11 +156,11 @@ export function SettingsModal({
         ? settings
         : { ...settings, llmProvider: llmProviderOptions[0].value },
     );
-  }, [settings, visible, capabilities.copilot, capabilities.localLlm]);
+  }, [settings, visible, llmProviderOptions]);
 
   // Drop any prior test result when the modal (re)opens so a stale pass/fail
   // from a previous session isn't shown against freshly-loaded settings.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: same rule, lower severity in practice -- `visible` is listed but not read in the body. That is deliberate (the effect exists to clear stale results when the modal reopens), so this one is an idiom the rule cannot express, unlike the finding above.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `visible` is listed but not read. The effect exists to clear stale results when the modal reopens. Same idiom as the suppression above.
   useEffect(() => {
     onClearTest();
   }, [visible, onClearTest]);
