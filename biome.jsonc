@@ -335,8 +335,8 @@
       },
 
       "complexity": {
-        // Same reasoning as the style rules above: never enforced, ~23 sites, pure
-        // preference. `biome check --write --only=complexity/useLiteralKeys` when wanted.
+        // Same reasoning as the style rules above: never enforced repo-wide, ~23 sites,
+        // pure preference. `biome check --write --only=complexity/useLiteralKeys` when wanted.
         // The `noUseless*` rules in this group are deliberately left ON: they flag dead
         // code rather than style, and are low volume.
         "useLiteralKeys": "off"
@@ -614,7 +614,8 @@
      * `insight-hosts` job ran `npm run lint` for exactly this purpose (added by #809).
      * That step is removed and the dedicated `lint` job (`biome ci`, see
      * .github/workflows/lint.yml) carries them now, so the gate moved rather than
-     * appeared. The `hostAgnostic.test.ts` guards must still stay -- they assert the
+     * appeared (though the `lint` job cannot block a merge until `lint / lint` is in
+     * branch protection). The `hostAgnostic.test.ts` guards must still stay -- they assert the
      * same invariant from inside the test suite, independent of lint configuration.
      */
     {
