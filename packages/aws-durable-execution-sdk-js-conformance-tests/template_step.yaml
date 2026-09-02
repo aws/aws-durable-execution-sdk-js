@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: "2010-09-09"
+AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Globals:
   Function:
@@ -10,24 +10,24 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: DurableExecutionPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - lambda:CheckpointDurableExecution
-                  - lambda:GetDurableExecutionState
-                Resource: "*"
+      - PolicyName: DurableExecutionPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - lambda:CheckpointDurableExecution
+            - lambda:GetDurableExecutionState
+            Resource: '*'
   StepBasic:
     Type: AWS::Serverless::Function
     Metadata:
@@ -40,8 +40,8 @@ Resources:
       Description: Step basic (succeeds on first attempt)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -57,8 +57,8 @@ Resources:
       Description: Step with explicit name parameter
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -74,8 +74,8 @@ Resources:
       Description: Sequential steps where second depends on first
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -91,8 +91,8 @@ Resources:
       Description: Returning complex object with nested structure
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -108,8 +108,8 @@ Resources:
       Description: Undefined/null result
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -125,8 +125,8 @@ Resources:
       Description: Custom serdes (per-step) transforms to uppercase
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -142,8 +142,8 @@ Resources:
       Description: Step with context logger
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -159,8 +159,8 @@ Resources:
       Description: Step and wait with replay
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -176,8 +176,8 @@ Resources:
       Description: Replay skips succeeded step
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -193,8 +193,8 @@ Resources:
       Description: Replay re-throws failed step
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -210,8 +210,8 @@ Resources:
       Description: Step with retry (fails then succeeds)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -227,8 +227,8 @@ Resources:
       Description: Retry exhaustion (max attempts)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -244,8 +244,8 @@ Resources:
       Description: Default retry strategy
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -261,8 +261,8 @@ Resources:
       Description: Retry with custom config (fixed interval and backoff)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -278,8 +278,8 @@ Resources:
       Description: Retry specific exception
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -295,8 +295,8 @@ Resources:
       Description: Retry specific exception (non-retryable fails)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -312,8 +312,8 @@ Resources:
       Description: Step with AtMostOncePerRetry semantics (interrupted, no retry)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -329,8 +329,8 @@ Resources:
       Description: AtMostOnce interrupted (with retry, succeeds on second attempt)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -346,8 +346,8 @@ Resources:
       Description: Step with error (fails permanently)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -363,8 +363,8 @@ Resources:
       Description: Error caught and handled (try/catch)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300

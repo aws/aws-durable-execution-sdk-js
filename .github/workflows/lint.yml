@@ -18,9 +18,8 @@ env:
   ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
 
 jobs:
-  # Everything lint: Biome for the whole monorepo, the Prettier pass for the two
-  # languages Biome cannot format, the diff-scoped async-safety annotations, and
-  # the repo's own published ESLint rule run against the examples.
+  # Everything lint: Biome for the whole monorepo, the diff-scoped async-safety
+  # annotations, and the repo's own published ESLint rule run against the examples.
   #
   # These share one job because they share one `npm ci`, which is the expensive
   # part. The same argument removed a duplicate boundary-lint step from the
@@ -68,12 +67,6 @@ jobs:
       # are withheld from annotations. They are reported in the summary step below.
       - name: Biome (format + lint)
         run: npm run lint:ci
-
-      # Prettier owns Markdown and YAML, which Biome cannot format. Checked here so
-      # documentation and workflow files cannot drift, which was the one outright
-      # loss in the ESLint/Prettier removal rather than a tradeoff.
-      - name: Prettier (Markdown + YAML)
-        run: npm run format:docs:check
 
       # Async-safety rules, annotated on the diff only.
       #

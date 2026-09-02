@@ -119,14 +119,13 @@ This confirms:
 - **Predicate pushdown**: Filters are pushed down to the scan level (`S::Filter::new(range, predicate)`) for efficiency
 
 **Comparison with other platforms:**
-
-| Platform                    | Query isolation from execution                            |
-| --------------------------- | --------------------------------------------------------- |
-| **Restate**                 | Shared RocksDB — queries read from same store engine uses |
-| **Temporal (self-hosted)**  | Fully isolated — separate Visibility Store database       |
-| **Temporal Cloud**          | Fully isolated — managed separately                       |
-| **AWS Lambda Durable**      | Fully isolated — AWS-managed API                          |
-| **Azure Durable Functions** | Fully isolated — Azure-managed API                        |
+| Platform | Query isolation from execution |
+|---|---|
+| **Restate** | Shared RocksDB — queries read from same store engine uses |
+| **Temporal (self-hosted)** | Fully isolated — separate Visibility Store database |
+| **Temporal Cloud** | Fully isolated — managed separately |
+| **AWS Lambda Durable** | Fully isolated — AWS-managed API |
+| **Azure Durable Functions** | Fully isolated — Azure-managed API |
 
 ### Self-Hosted Access
 

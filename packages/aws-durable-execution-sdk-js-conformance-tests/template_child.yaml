@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: "2010-09-09"
+AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 # NOTE: The AttemptsTable (DynamoDB) is required only by ChildRetryExhaustion
 # (3-12, child_interrupted): its step crashes via process.exit with no retry
@@ -15,46 +15,46 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: DurableExecutionPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - lambda:CheckpointDurableExecution
-                  - lambda:GetDurableExecutionState
-                Resource: "*"
-        - PolicyName: DynamoDBPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - dynamodb:GetItem
-                  - dynamodb:PutItem
-                  - dynamodb:UpdateItem
-                Resource:
-                  Fn::GetAtt:
-                    - AttemptsTable
-                    - Arn
+      - PolicyName: DurableExecutionPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - lambda:CheckpointDurableExecution
+            - lambda:GetDurableExecutionState
+            Resource: '*'
+      - PolicyName: DynamoDBPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            Resource:
+              Fn::GetAtt:
+              - AttemptsTable
+              - Arn
   AttemptsTable:
     Type: AWS::DynamoDB::Table
     Properties:
       AttributeDefinitions:
-        - AttributeName: executionId
-          AttributeType: S
+      - AttributeName: executionId
+        AttributeType: S
       KeySchema:
-        - AttributeName: executionId
-          KeyType: HASH
+      - AttributeName: executionId
+        KeyType: HASH
       BillingMode: PAY_PER_REQUEST
   ChildBasic:
     Type: AWS::Serverless::Function
@@ -68,8 +68,8 @@ Resources:
       Description: Child context basic with single step inside
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -85,8 +85,8 @@ Resources:
       Description: Child context with explicit name parameter
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -102,8 +102,8 @@ Resources:
       Description: Child context with multiple sequential steps
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -119,8 +119,8 @@ Resources:
       Description: Child context where step fails and execution fails
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -136,8 +136,8 @@ Resources:
       Description: Child context error caught with try/catch, execution succeeds
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -153,8 +153,8 @@ Resources:
       Description: Nested child contexts with inner and outer steps
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -170,8 +170,8 @@ Resources:
       Description: Child context with step retry that fails then succeeds
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -187,8 +187,8 @@ Resources:
       Description: Child context with step retry exhaustion, child fails
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -204,8 +204,8 @@ Resources:
       Description: Child context replay returns cached result
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -221,8 +221,8 @@ Resources:
       Description: Child context with step and wait inside
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -238,8 +238,8 @@ Resources:
       Description: Child context large payload triggers ReplayChildren mode
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -255,8 +255,8 @@ Resources:
       Description: Child context interrupted and re-executed
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -276,8 +276,8 @@ Resources:
       Description: Child context with wait inside - verify replay
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -293,8 +293,8 @@ Resources:
       Description: Child context with custom serdes (succeed)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -310,8 +310,8 @@ Resources:
       Description: Child context error without step (error thrown directly in child body)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -327,8 +327,8 @@ Resources:
       Description: Child context returning null
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -344,8 +344,8 @@ Resources:
       Description: Child context with print only (verify no re-execution on replay)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -361,8 +361,8 @@ Resources:
       Description: Child context with step and wait inside, step and wait after
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300

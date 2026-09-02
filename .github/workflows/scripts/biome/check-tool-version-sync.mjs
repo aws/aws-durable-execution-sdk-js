@@ -16,7 +16,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-const TOOLS = ["@biomejs/biome", "prettier"];
+const TOOLS = ["@biomejs/biome"];
 const SKIP_DIRS = new Set([
   "node_modules",
   ".git",

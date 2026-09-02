@@ -32,9 +32,9 @@ body:
       label: Steps to Reproduce
       description: Provide steps to reproduce the issue
       placeholder: |
-        1.
-        2.
-        3.
+        1. 
+        2. 
+        3. 
     validations:
       required: true
 

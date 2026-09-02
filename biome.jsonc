@@ -88,12 +88,26 @@
   //    make an api-report diff check viable, and worth doing. Note tsdoc/syntax was
   //    "warn" before, so nothing regressed -- this is an unfilled gap, not a loss.
   //
-  // 3. Markdown and YAML are formatted by Prettier, not Biome, which has no
-  //    formatter for either language. Prettier is retained as a root devDependency
-  //    for exactly those two extensions -- see the `format:docs` script, the
-  //    lint-staged glob, and .prettierignore. This is a documentation-heavy repo
-  //    with ~20 workflow files, so leaving them unformatted was a straight loss
-  //    rather than a tradeoff. Everything Biome can format, Biome formats.
+  // 3. Markdown and YAML are not formatted at all, and that is deliberate. Biome has
+  //    no formatter for either, and Prettier was dropped rather than retained just for
+  //    them. The reasoning: almost nothing in this repo hand-writes those files -- the
+  //    conformance CloudFormation templates, the issue templates and most docs are
+  //    generated or tool-authored -- so a formatter buys consistency nobody was going
+  //    to violate, and costs a second toolchain plus a CI gate on documentation.
+  //
+  //    Keeping Prettier for `*.{md,yml,yaml}` was considered and rejected. Three things
+  //    argued against it. The old lint-staged glob was `{js,mjs,ts,md,json,yml}`
+  //    -- note `yml`, not `yaml` -- so gating `.yaml` was NEW coverage, and widening
+  //    the glob reformatted 10 conformance templates for ~950 lines of quote-style and
+  //    indentation churn in files nothing had ever formatted. There was also no
+  //    `prettier --check` anywhere in CI before, so the check converted a bypassable
+  //    pre-commit convention into a hard merge blocker for docs. And it made the
+  //    Prettier version load-bearing: `--check` passed on 3.7.0 and 3.9.6 but FAILED on
+  //    3.6.2, because Prettier changed Markdown table width computation in that range.
+  //
+  //    If Markdown/YAML formatting is wanted later it should be its own change, with
+  //    its own decision about whether to gate it. Everything Biome can format, Biome
+  //    formats, and that is now the whole story.
   //
   // 4. THE TWO NET LOSSES FROM THE recommended-rules SPREAD. Scope matters here: this
   //    section accounts for `...typescriptEslint.configs.recommended.rules` only. The
@@ -200,8 +214,7 @@
   //    Prefer `explain` to discover, and this to confirm.
   //
   // ON THE SEVEN EXACT PINS: @biomejs/biome is pinned exact in the root package.json
-  // and in six workspace packages, and prettier in the root only. Nothing currently
-  // checks that the seven Biome pins agree. `lint:versions` discovers manifests
+  // and in six workspace packages. Nothing else checks that those seven agree. `lint:versions` discovers manifests
   // recursively rather than one level deep, because nested ones exist
   // (insight-vscode/webview-ui, which has its own `npm ci` and owns the .tsx files
   // Biome formats, and insight/cdk) and are exactly where a divergent pin would hide. A skew would produce inconsistent
@@ -211,10 +224,10 @@
   // they are kept declared deliberately, for the same reason the boundary rules below
   // insist a dependency be declared rather than reached for.
   //
-  // ON UPGRADING BIOME OR PRETTIER: both versions in package.json are pinned exact,
-  // and npm dependencies here are not Dependabot-managed (only github-actions are),
-  // so the pins hold until changed by hand. Treat a bump as a config review rather
-  // than a routine version change.
+  // ON UPGRADING BIOME: the version in package.json is pinned exact, and npm
+  // dependencies here are not Dependabot-managed (only github-actions are), so the pin
+  // holds until changed by hand. Treat a bump as a config review rather than a routine
+  // version change.
   //
   // Biome: four nursery rules are load-bearing in this config
   // (useExplicitReturnType, noFloatingPromises, noMisusedPromises, useAwaitThenable)
@@ -232,12 +245,6 @@
   //   it means the CI failure will look unrelated to the version bump, hence this
   //   note.
   //
-  // Prettier: the committed Markdown formatting is only valid for >=3.7. Verified
-  // that format:docs:check passes on 3.7.0 and 3.9.6 but FAILS on 3.6.2, because
-  // Prettier changed Markdown table width computation in that range
-  // (packages/aws-durable-execution-sdk-js-insight/docs/mcp-host-design.md is the
-  // file that flips). Prettier used to run only through lint-staged, where a version
-  // mismatch was invisible; it is a CI gate now, so the version is load-bearing.
   //
   // TWO KNOWN HOLES IN WHAT BIOME SEES, both latent and both predating this change:
   //

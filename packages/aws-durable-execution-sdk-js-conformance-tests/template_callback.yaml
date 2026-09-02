@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: "2010-09-09"
+AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Globals:
   Function:
@@ -10,7 +10,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
@@ -21,7 +21,7 @@ Resources:
       Policies:
         - PolicyName: DurableExecutionPolicy
           PolicyDocument:
-            Version: "2012-10-17"
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
@@ -30,7 +30,7 @@ Resources:
                   - lambda:SendDurableExecutionCallbackSuccess
                   - lambda:SendDurableExecutionCallbackFailure
                   - lambda:SendDurableExecutionCallbackHeartbeat
-                Resource: "*"
+                Resource: '*'
 
   CallbackBasic:
     Type: AWS::Serverless::Function
@@ -193,6 +193,7 @@ Resources:
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
+
 
   CallbackStepFailure:
     Type: AWS::Serverless::Function

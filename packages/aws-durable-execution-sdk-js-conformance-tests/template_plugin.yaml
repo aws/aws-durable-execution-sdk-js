@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: "2010-09-09"
+AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Globals:
   Function:
@@ -10,24 +10,24 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: DurableExecutionPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - lambda:CheckpointDurableExecution
-                  - lambda:GetDurableExecutionState
-                Resource: "*"
+      - PolicyName: DurableExecutionPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - lambda:CheckpointDurableExecution
+            - lambda:GetDurableExecutionState
+            Resource: '*'
   PluginInvocationLifecycle:
     Type: AWS::Serverless::Function
     Metadata:
@@ -40,8 +40,8 @@ Resources:
       Description: Plugin invocation lifecycle hooks (start and end on a single invocation)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -57,8 +57,8 @@ Resources:
       Description: Plugin operation lifecycle hooks (step start and terminal end)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -74,8 +74,8 @@ Resources:
       Description: Plugin attempt hooks fire per step attempt with attempt number and outcome
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -91,8 +91,8 @@ Resources:
       Description: Plugin exceptions are swallowed and never affect the execution outcome
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -108,8 +108,8 @@ Resources:
       Description: Multiple registered plugins all receive lifecycle hooks
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -125,8 +125,8 @@ Resources:
       Description: Plugin sees is-first-invocation true once, then false on replay
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -142,8 +142,8 @@ Resources:
       Description: Plugin invocation-end hook receives FAILED status when execution fails
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -159,8 +159,8 @@ Resources:
       Description: Plugin operation-change hook reports updated operations and the full map
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -176,8 +176,8 @@ Resources:
       Description: Plugin sees a wait completed externally between invocations as an updated operation
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -193,8 +193,8 @@ Resources:
       Description: Plugin operation-start and operation-end hooks fire for wait-type operations
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -210,8 +210,8 @@ Resources:
       Description: Plugin operation hooks report parent id for a step nested in a child context
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -227,8 +227,8 @@ Resources:
       Description: Plugin user-function hooks fire per parallel branch with parent linkage
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -244,8 +244,8 @@ Resources:
       Description: Non-terminal operations replay with replay=true; terminal operations are not re-emitted
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -261,8 +261,8 @@ Resources:
       Description: Operation-end info carries the checkpointed result on success and the error on failure
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -278,8 +278,8 @@ Resources:
       Description: Attempt hooks fire for every attempt until exhaustion, then operation-end reports FAILED
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -295,8 +295,8 @@ Resources:
       Description: Invocation-end fires for every invocation, non-terminal on suspension and terminal at completion
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -312,8 +312,8 @@ Resources:
       Description: A plugin that throws in every hook never blocks another plugin's hooks or the execution
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -329,8 +329,8 @@ Resources:
       Description: A wait still pending during a replay re-fires operation-start with replay=true
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300

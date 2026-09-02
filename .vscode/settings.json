@@ -30,16 +30,6 @@
     "editor.defaultFormatter": "biomejs.biome",
     "editor.formatOnSave": true
   },
-  // Prettier owns Markdown and YAML: Biome has no formatter for either. Same
-  // split as the lint-staged config and the format:docs script.
-  "[markdown]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode",
-    "editor.formatOnSave": true
-  },
-  "[yaml]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode",
-    "editor.formatOnSave": true
-  },
   // The examples package still runs ESLint for the repo's own
   // `@aws/durable-execution-sdk-js-eslint-plugin` rules, which Biome cannot host.
   // Keep the ESLint extension active but scoped to that one package so it does

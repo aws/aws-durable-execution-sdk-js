@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: "2010-09-09"
+AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
 Globals:
@@ -11,24 +11,24 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: DurableExecutionPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - lambda:CheckpointDurableExecution
-                  - lambda:GetDurableExecutionState
-                Resource: "*"
+      - PolicyName: DurableExecutionPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - lambda:CheckpointDurableExecution
+            - lambda:GetDurableExecutionState
+            Resource: '*'
   ParallelBasic:
     Type: AWS::Serverless::Function
     Metadata:
@@ -41,8 +41,8 @@ Resources:
       Description: Parallel basic (two branches, each a single step, all succeed)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -58,8 +58,8 @@ Resources:
       Description: Parallel branches-only form (no operation name)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -75,8 +75,8 @@ Resources:
       Description: Parallel with named branch objects
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -92,8 +92,8 @@ Resources:
       Description: Parallel with heterogeneous branch return types
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -109,8 +109,8 @@ Resources:
       Description: Parallel with an empty branches list
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -126,8 +126,8 @@ Resources:
       Description: Parallel fail-fast (tolerated-failure-count=0) stops after first failure
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -143,8 +143,8 @@ Resources:
       Description: Parallel throw-if-error propagates a branch failure to the execution
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -160,8 +160,8 @@ Resources:
       Description: Parallel min-successful early completion
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -177,8 +177,8 @@ Resources:
       Description: Parallel tolerated-failure-count within tolerance (all branches complete)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -194,8 +194,8 @@ Resources:
       Description: Parallel tolerated-failure-count exceeded (stops early)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -211,8 +211,8 @@ Resources:
       Description: Parallel real concurrency preserves index-ordered results
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -228,8 +228,8 @@ Resources:
       Description: Parallel with FLAT nesting (virtual branch contexts)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -245,8 +245,8 @@ Resources:
       Description: Parallel tolerated-failure-percentage exceeded (stops early)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -262,8 +262,8 @@ Resources:
       Description: Parallel replay skips succeeded branches across a wait suspension
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -279,8 +279,8 @@ Resources:
       Description: Parallel with a custom per-branch serde (itemSerdes)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -296,8 +296,8 @@ Resources:
       Description: Parallel where all branches fail (within tolerance)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -313,8 +313,8 @@ Resources:
       Description: Parallel min-successful not reached (all branches run)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -330,8 +330,8 @@ Resources:
       Description: Parallel combined completion config (min-successful + tolerated-failure-count)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -347,8 +347,8 @@ Resources:
       Description: Parallel with invalid max-concurrency raises a validation error
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -364,8 +364,8 @@ Resources:
       Description: Parallel BatchResult accessors (succeeded/failed/getErrors/hasFailure)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -381,8 +381,8 @@ Resources:
       Description: Nested parallel (parallel inside a parallel branch)
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -398,8 +398,8 @@ Resources:
       Description: Parallel tolerated-failure-percentage at the boundary
       Role:
         Fn::GetAtt:
-          - DurableFunctionRole
-          - Arn
+        - DurableFunctionRole
+        - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300

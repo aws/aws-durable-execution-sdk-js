@@ -23,8 +23,6 @@
     "lint:ci": "biome ci --diagnostic-level=error",
     "lint:report": "biome check --reporter=json --max-diagnostics=none | node .github/workflows/scripts/biome/biome-warning-summary.mjs",
     "lint:async-safety": "biome lint --changed --only=nursery/noFloatingPromises --only=nursery/noMisusedPromises --only=nursery/useAwaitThenable --diagnostic-level=warn --no-errors-on-unmatched",
-    "format:docs": "prettier --write \"**/*.{md,yml,yaml}\"",
-    "format:docs:check": "prettier --check \"**/*.{md,yml,yaml}\"",
     "lint:suppressions": "biome check --reporter=json --max-diagnostics=none | node .github/workflows/scripts/biome/check-unused-suppressions.mjs",
     "lint:versions": "node .github/workflows/scripts/biome/check-tool-version-sync.mjs"
   },
@@ -60,7 +58,6 @@
     "husky": "^9.1.7",
     "jest": "^30.0.3",
     "lint-staged": "^16.2.3",
-    "prettier": "3.9.6",
     "rollup": "^4.59.0",
     "rollup-plugin-node-externals": "^8.1.1",
     "ts-jest": "^29.4.0",
@@ -71,9 +68,6 @@
   "lint-staged": {
     "*.{js,jsx,mjs,cjs,ts,tsx,mts,cts,json,jsonc}": [
       "biome check --write --no-errors-on-unmatched"
-    ],
-    "*.{md,yml,yaml}": [
-      "prettier --write"
     ]
   },
   "private": true

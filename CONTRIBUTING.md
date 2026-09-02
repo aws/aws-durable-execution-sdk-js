@@ -39,16 +39,19 @@ To send us a pull request, please:
 
 ### Formatting and linting
 
-Formatting and linting are enforced in CI, so run them before pushing:
+[Biome](https://biomejs.dev) handles both, for JavaScript, TypeScript and JSON:
 
 ```bash
-npm run lint:fix      # Biome: formats and lints JS/TS/JSON, applying safe fixes
-npm run format:docs   # Prettier: formats Markdown and YAML, which Biome does not handle
+npm run lint:fix   # format and lint, applying safe fixes
+npm run lint       # check only, no writes
 ```
 
-`npm run lint` checks without writing. A pre-commit hook runs both over staged
-files, so in normal use this happens automatically — but `--no-verify` skips it,
-and CI does not.
+Formatting and lint errors both fail CI. A pre-commit hook runs `lint:fix` over
+staged files, so in normal use this happens automatically — but `--no-verify`
+skips it and CI does not.
+
+Markdown and YAML are not formatted; Biome has no formatter for them and we do
+not run a second tool just for that.
 
 If you have a branch that predates the move to Biome, expect formatting
 differences on first push: Biome's output is not byte-identical to Prettier's.
