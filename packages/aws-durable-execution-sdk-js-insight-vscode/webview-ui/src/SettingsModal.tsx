@@ -107,13 +107,18 @@ export function SettingsModal({
   // dropdown cannot show a label for a choice it doesn't offer. Copilot is
   // omitted entirely where the host can't reach it rather than shown disabled:
   // there is no action the user could take to enable it.
-  // Memoised so the effect below can depend on it directly. The list is derived
-  // purely from these two capability flags, so the identity changes exactly when
-  // they do -- which is exactly when the effect used to re-run via its old
-  // `capabilities.copilot, capabilities.localLlm` dependencies. Behaviour is
-  // unchanged; what changes is that the dependency is now machine-checkable, so a
-  // future input to this list cannot be added without either declaring it here or
-  // failing lint.
+  //
+  // Memoised so the effect below depends on this list by identity instead of on the
+  // flags behind it. That is what makes the dependency checkable: a third input
+  // cannot be added here without declaring it or failing lint.
+  //
+  // The identity is stable in practice, not by contract. React documents useMemo as
+  // a performance optimisation and reserves the right to drop the cache; a dropped
+  // cache would give a fresh identity, re-run the effect and reset the form, losing
+  // unsaved edits. That could not happen before, when the rebuilt-every-render array
+  // was not a dependency. Eviction is tied to Activity/Offscreen unmounting, which
+  // this tree does not use, so the exposure is theoretical -- but it is a practical
+  // guarantee rather than a semantic one.
   const llmProviderOptions = useMemo(
     () => [
       { value: "bedrock", label: "Amazon Bedrock" },
@@ -136,7 +141,7 @@ export function SettingsModal({
     [capabilities.copilot, capabilities.localLlm],
   );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `visible` is an intentional extra dependency, not a missing one -- it is never read in the body, and its only job is to re-run this effect when the modal reopens so unsaved edits are discarded and the form is reset from `settings`. Removing it would silently start preserving stale edits across opens. The rule cannot express "re-run on this signal", so it stays suppressed; the missing-dependency findings it used to carry are gone now that llmProviderOptions is memoised.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `visible` is listed but not read. It is there to re-run this effect when the modal reopens, resetting the form from `settings` so stale edits are discarded; removing it would silently start preserving them across opens. The rule cannot express "re-run on this signal". Same idiom as the suppression below.
   useEffect(() => {
     // Defence in depth, and generic rather than per-provider: the host already
     // narrows llmProvider to something it can honor before sending config (see
@@ -155,7 +160,7 @@ export function SettingsModal({
 
   // Drop any prior test result when the modal (re)opens so a stale pass/fail
   // from a previous session isn't shown against freshly-loaded settings.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: same rule, lower severity in practice -- `visible` is listed but not read in the body. That is deliberate (the effect exists to clear stale results when the modal reopens), so this one is an idiom the rule cannot express, unlike the finding above.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `visible` is listed but not read. The effect exists to clear stale results when the modal reopens. Same idiom as the suppression above.
   useEffect(() => {
     onClearTest();
   }, [visible, onClearTest]);
