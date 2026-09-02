@@ -76,6 +76,13 @@ export class WorkerServerApiHandler {
                   ),
                 );
               } catch (err: unknown) {
+                // `err` is `unknown`, so this rejects with a possibly-non-Error value
+                // deliberately: the caller re-throws it as-is and wrapping it here
+                // would lose the original. Carried an explicit
+                // `@typescript-eslint/prefer-promise-reject-errors` disable before the
+                // Biome migration -- that rule has no Biome equivalent at any severity
+                // (see biome.jsonc gap 1), so this is a note, not a suppression, and it
+                // is the only reviewed instance of the pattern in the tree.
                 reject(err);
               }
             }, this.checkpointDelaySettings);

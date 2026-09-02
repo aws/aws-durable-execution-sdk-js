@@ -25,7 +25,7 @@
     "lint:async-safety": "biome lint --changed --only=nursery/noFloatingPromises --only=nursery/noMisusedPromises --only=nursery/useAwaitThenable --diagnostic-level=warn --no-errors-on-unmatched",
     "format:docs": "prettier --write \"**/*.{md,yml,yaml}\"",
     "format:docs:check": "prettier --check \"**/*.{md,yml,yaml}\"",
-    "lint:suppressions": "biome lint --reporter=json --max-diagnostics=none | node .github/workflows/scripts/biome/check-unused-suppressions.mjs",
+    "lint:suppressions": "biome check --reporter=json --max-diagnostics=none | node .github/workflows/scripts/biome/check-unused-suppressions.mjs",
     "lint:versions": "node .github/workflows/scripts/biome/check-tool-version-sync.mjs"
   },
   "repository": {

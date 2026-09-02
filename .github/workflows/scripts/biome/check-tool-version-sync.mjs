@@ -70,8 +70,7 @@ function findManifests(dir = ".", found = []) {
 /** @returns {{file: string, version: string}[]} */
 function declarationsOf(tool, manifests) {
   const found = [];
-  for (const file of manifests) {
-    const pkg = JSON.parse(readFileSync(file, "utf8"));
+  for (const { file, pkg } of manifests) {
     for (const field of ["dependencies", "devDependencies"]) {
       const version = pkg[field]?.[tool];
       if (version) found.push({ file, version });
@@ -80,7 +79,12 @@ function declarationsOf(tool, manifests) {
   return found;
 }
 
-const manifests = findManifests();
+// Parse each manifest once. An earlier version called declarationsOf() per tool,
+// re-reading and re-parsing all 22 files each time.
+const manifests = findManifests().map((file) => ({
+  file,
+  pkg: JSON.parse(readFileSync(file, "utf8")),
+}));
 const problems = [];
 
 for (const tool of TOOLS) {
@@ -98,14 +102,17 @@ for (const tool of TOOLS) {
     );
   }
 
-  // An exact pin is the point: a range reintroduces the skew this guards against.
-  const ranged = declarations.filter((d) =>
-    /^[\^~><=*]|\s-\s|\|\|/.test(d.version),
+  // An exact pin is the point: anything that can resolve to more than one version
+  // reintroduces the skew this guards against. Testing FOR an exact version rather
+  // than against range syntax, so `1.x`, `latest` and `*` are caught too -- a hand
+  // edit is the expected failure mode, and those are plausible hand edits.
+  const notExact = declarations.filter(
+    (d) => !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(d.version),
   );
-  if (ranged.length > 0) {
+  if (notExact.length > 0) {
     problems.push(
-      `${tool} must be pinned exact, but is a range in:\n` +
-        ranged.map((d) => `    ${d.version.padEnd(12)} ${d.file}`).join("\n"),
+      `${tool} must be pinned to an exact version, but is not in:\n` +
+        notExact.map((d) => `    ${d.version.padEnd(12)} ${d.file}`).join("\n"),
     );
   }
 }

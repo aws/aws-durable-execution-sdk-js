@@ -109,12 +109,36 @@
   // (useExplicitReturnType, noFloatingPromises, noMisusedPromises, useAwaitThenable)
   // and nursery rules are explicitly outside Biome's semver guarantees.
   //
+  //   CONCRETELY, when any of the three async rules GRADUATES out of nursery, two
+  //   things break and both fail closed rather than silently:
+  //     1. the `lint:async-safety` script, which hardcodes
+  //        --only=nursery/noFloatingPromises and friends -- a graduated rule makes
+  //        that an unknown-rule error and the step fails;
+  //     2. the "nursery" block in the testing-package override further down, which
+  //        restores those three to "error".
+  //   The fix in both places is to move the rule to its new group name. Failing
+  //   closed is the desired behaviour -- it is how the upgrade gets noticed -- but
+  //   it means the CI failure will look unrelated to the version bump, hence this
+  //   note.
+  //
   // Prettier: the committed Markdown formatting is only valid for >=3.7. Verified
   // that format:docs:check passes on 3.7.0 and 3.9.6 but FAILS on 3.6.2, because
   // Prettier changed Markdown table width computation in that range
   // (packages/aws-durable-execution-sdk-js-insight/docs/mcp-host-design.md is the
   // file that flips). Prettier used to run only through lint-staged, where a version
   // mismatch was invisible; it is a CI gate now, so the version is load-bearing.
+  //
+  // TWO KNOWN HOLES IN WHAT BIOME SEES, both latent and both predating this change:
+  //
+  //   * `vcs.useIgnoreFile` is true and .gitignore carries `*.d.ts`, so a
+  //     hand-written .d.ts would escape Biome entirely rather than merely go
+  //     unformatted. No tracked .d.ts exists today (verified: `git ls-files '*.d.ts'`
+  //     is empty), so this only bites if someone adds one -- but it would be silent.
+  //   * Unused `biome-ignore format:` suppressions are not reported by anything.
+  //     `lint:suppressions` runs `biome check`, which covers lint and assist
+  //     categories, but Biome reports no unused-suppression diagnostic for the
+  //     format category in either `lint` or `check` (verified both ways on 2.5.11),
+  //     so a dead format suppression cannot currently be gated.
 
   "vcs": {
     "enabled": true,
