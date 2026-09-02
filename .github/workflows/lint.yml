@@ -18,13 +18,16 @@ env:
   ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
 
 jobs:
-  # Everything Biome: formatting and linting for the whole monorepo, the Prettier
-  # pass for the two languages Biome cannot format, and the diff-scoped
-  # async-safety annotations.
+  # Everything lint: Biome for the whole monorepo, the Prettier pass for the two
+  # languages Biome cannot format, the diff-scoped async-safety annotations, and
+  # the repo's own published ESLint rule run against the examples.
   #
   # These share one job because they share one `npm ci`, which is the expensive
   # part. The same argument removed a duplicate boundary-lint step from the
-  # insight-hosts job in build.yml, so it applies here too.
+  # insight-hosts job in build.yml, and then merged the async-safety job into this
+  # one; folding in the durable-rules job takes the install count for lint work
+  # from three to one. A different toolchain does not require a different job -- it
+  # requires one extra build step, below.
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -45,6 +48,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # @biomejs/biome is pinned exact in seven package.json files. A skew between
+      # the root pin and a package's would format the same file two ways with no
+      # failure to reveal it, since formatter output is not stable across minors.
+      # Cheap, and placed before the checks a skew would invalidate.
+      - name: Biome version pins in sync
+        run: npm run lint:versions --silent
+
       # Gates on errors only. `biome ci` auto-detects GitHub Actions and turns
       # every diagnostic into an inline PR annotation, and this repo carries ~1030
       # warnings and infos that are almost all pre-existing -- unfiltered, that
@@ -54,7 +64,7 @@ jobs:
       # are both error-severity, so both still fail here; only warnings and infos
       # are withheld from annotations. They are reported in the summary step below.
       - name: Biome (format + lint)
-        run: npm run ci
+        run: npm run lint:ci
 
       # Prettier owns Markdown and YAML, which Biome cannot format. Checked here so
       # documentation and workflow files cannot drift, which was the one outright
@@ -111,33 +121,29 @@ jobs:
         if: success() || failure()
         run: npm run lint:suppressions --silent
 
+      # The repo's own published lint rules, run against the examples.
+      #
+      # A different toolchain, not a different job: Biome cannot host ESLint
+      # plugins, so this needs the plugin compiled and ESLint invoked separately --
+      # but it does not need a second `npm ci`. `no-nested-durable-operations`
+      # catches a real bug class (a durable operation nested inside a step never
+      # checkpoints correctly), and the examples are the code customers copy, so the
+      # rule needs to run on more than the plugin's own RuleTester fixtures.
+      #
+      # success() || failure() for the same reason as the steps above: a formatting
+      # error earlier in the job must not hide a nested-operation bug until the next
+      # push.
+      - name: Build the ESLint plugin
+        if: success() || failure()
+        run: npm run build -w packages/aws-durable-execution-sdk-js-eslint-plugin
+
+      - name: Check examples against our own durable-function rules
+        if: success() || failure()
+        run: npm run lint:durable-rules -w packages/aws-durable-execution-sdk-js-examples
+
       # Informational only, never gating: renders the warning backlog as a
       # per-rule table in the job summary so it stays visible without annotating
       # individual lines.
       - name: Biome warning backlog (informational)
         if: always()
         run: npm run lint:report --silent >> "$GITHUB_STEP_SUMMARY"
-
-  # The repo's own published lint rules, run against the examples.
-  #
-  # Separate from the job above because it is a different toolchain: Biome cannot
-  # host ESLint plugins, and this needs the plugin compiled first.
-  # `no-nested-durable-operations` catches a real bug class (a durable operation
-  # nested inside a step never checkpoints correctly), and the examples are the code
-  # customers copy, so the rule needs to run on more than the plugin's own
-  # RuleTester fixtures.
-  durable-rules:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Use Node.js 22.x
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22.x
-          cache: "npm"
-      - name: Install dependencies
-        run: npm ci
-      - name: Build the ESLint plugin
-        run: npm run build -w packages/aws-durable-execution-sdk-js-eslint-plugin
-      - name: Check examples against our own durable-function rules
-        run: npm run lint:durable-rules -w packages/aws-durable-execution-sdk-js-examples

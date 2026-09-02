@@ -14,21 +14,39 @@
   // KNOWN COVERAGE GAPS vs the previous ESLint + Prettier setup. These are real
   // losses, listed so they are not rediscovered later:
   //
-  // 1. Type-aware linting is largely gone. The testing package previously used
-  //    `tseslint.configs.strictTypeChecked` + `stylisticTypeChecked`. Three
-  //    async-safety rules are recovered below via the `types` domain
-  //    (noFloatingPromises, noMisusedPromises, useAwaitThenable). Still missing, with
-  //    NO Biome equivalent at any severity:
+  // 1. Type-aware linting is largely gone, AND IT WAS GATED. The testing package
+  //    previously used `tseslint.configs.strictTypeChecked` + `stylisticTypeChecked`
+  //    at error severity, and that package's `prebuild` ran `npm run lint` while CI
+  //    runs `npm run build` -- so this whole set failed the build job on every pull
+  //    request, exactly as the core SDK's three rules did (see gap 4). Treating it as
+  //    a pre-commit-only concern would understate what was lost.
+  //
+  //    Three async-safety rules are recovered via the `types` domain below
+  //    (noFloatingPromises, noMisusedPromises, useAwaitThenable), and because the
+  //    testing package has ZERO violations of all three -- precisely because ESLint
+  //    gated them at error there -- the override further down restores them to
+  //    "error" for that package at no migration cost. Repo-wide they stay "warn",
+  //    since the rest of the tree was never held to them.
+  //
+  //    Still missing, with NO Biome equivalent at any severity:
   //      - the `any`-propagation family: no-unsafe-assignment, no-unsafe-return,
   //        no-unsafe-member-access, no-unsafe-call, no-unsafe-argument
   //      - restrict-template-expressions
   //      - no-confusing-void-expression
   //      - prefer-promise-reject-errors
   //      - no-unnecessary-type-parameters
-  //    Available but left off, one line away if wanted: noUnsafeTypeAssertion
-  //    (the testing package carried 23 suppressions of the ESLint equivalent) and
-  //    noUnnecessaryConditions. `tsc --noEmit` still runs and still catches type
-  //    errors, but it does not implement any of these rules.
+  //    These are a genuine loss of a gate, not merely an unfilled gap.
+  //
+  //    Two rules DO exist and are left off, but "one line away" would be misleading,
+  //    so here are the measured counts in the testing package on 2.5.11:
+  //      - noUnsafeTypeAssertion:  265 diagnostics, all in source (not tests).
+  //        ESLint had the equivalent at error with only 23 suppressions, so Biome's
+  //        implementation is far broader -- this is nowhere near parity and turning
+  //        it on is a triage project, not a config edit.
+  //      - noUnnecessaryConditions (in the `suspicious` group, not `nursery`):
+  //        not measured here; measure before describing the cost.
+  //    `tsc --noEmit` still runs and still catches type errors, but it does not
+  //    implement any of these rules.
   //
   // 2. TSDoc syntax is unchecked. `eslint-plugin-tsdoc`'s `tsdoc/syntax` has no Biome
   //    equivalent, and nothing automated replaces it. API Extractor does parse TSDoc,
@@ -53,8 +71,18 @@
   //    because that package's `prebuild` ran `eslint src --ext .ts --fix` and CI runs
   //    `npm run build`. So a duplicate import used to fail the build job and now
   //    fails nothing. The other two error-level rules from that config survive as
-  //    Biome rules (useFilenamingConvention and the wire-model noRestrictedImports),
-  //    so this is the single regression in enforcement.
+  //    Biome rules (useFilenamingConvention and the wire-model noRestrictedImports).
+  //    It is not, however, the only gated rule that was lost -- see gap 1 for the
+  //    testing package's type-aware set, which was gated by the same mechanism.
+  //
+  // ON THE SEVEN EXACT PINS: @biomejs/biome is pinned exact in the root package.json
+  // and in six workspace packages, and prettier in the root only. Nothing currently
+  // checks that the seven Biome pins agree. A skew would produce inconsistent
+  // formatting between `npm run lint` at the root and in a package, with no failure
+  // to reveal it, so `lint:versions` asserts they match and runs in CI alongside the
+  // other gates. Bump all seven together, or delete the six and rely on hoisting --
+  // they are kept declared deliberately, for the same reason the boundary rules below
+  // insist a dependency be declared rather than reached for.
   //
   // ON UPGRADING BIOME OR PRETTIER: both versions in package.json are pinned exact,
   // and npm dependencies here are not Dependabot-managed (only github-actions are),
@@ -263,6 +291,35 @@
   },
 
   "overrides": [
+    {
+      /**
+       * Restores a gate rather than adding one. The testing package ran
+       * `tseslint.configs.strictTypeChecked` at error severity through its `prebuild`,
+       * so a floating promise there failed the build on every pull request. These
+       * three are the rules from that set with Biome equivalents, and the package has
+       * zero violations of all three -- a direct consequence of having been gated --
+       * so raising them from the repo-wide "warn" costs nothing and closes the hole.
+       *
+       * Without this, a new floating promise in the testing package would produce an
+       * annotation and pass CI, where before it failed the build. It also means the
+       * async-safety job's `--changed` scoping is a strict improvement over the old
+       * setup for this package rather than a partial substitute for it.
+       *
+       * Repo-wide these stay "warn": the other packages were never held to them and
+       * carry a backlog (see the triage list above), so erroring here would be a new
+       * requirement rather than a restored one.
+       */
+      "includes": ["packages/aws-durable-execution-sdk-js-testing/**"],
+      "linter": {
+        "rules": {
+          "nursery": {
+            "noFloatingPromises": "error",
+            "noMisusedPromises": "error",
+            "useAwaitThenable": "error"
+          }
+        }
+      }
+    },
     {
       // Parity with the old per-package configs, which turned `no-explicit-any` off in
       // test files. Return types on test callbacks are noise for the same reason.

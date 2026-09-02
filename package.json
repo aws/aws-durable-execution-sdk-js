@@ -20,12 +20,13 @@
     "lint:fix": "biome check --write",
     "format": "biome format --write",
     "format:check": "biome format",
-    "ci": "biome ci --diagnostic-level=error",
+    "lint:ci": "biome ci --diagnostic-level=error",
     "lint:report": "biome lint --reporter=json --max-diagnostics=none | node .github/workflows/scripts/biome/biome-warning-summary.mjs",
     "lint:async-safety": "biome lint --changed --only=nursery/noFloatingPromises --only=nursery/noMisusedPromises --only=nursery/useAwaitThenable --diagnostic-level=warn --no-errors-on-unmatched",
     "format:docs": "prettier --write \"**/*.{md,yml,yaml}\"",
     "format:docs:check": "prettier --check \"**/*.{md,yml,yaml}\"",
-    "lint:suppressions": "biome lint --reporter=json --max-diagnostics=none | node .github/workflows/scripts/biome/check-unused-suppressions.mjs"
+    "lint:suppressions": "biome lint --reporter=json --max-diagnostics=none | node .github/workflows/scripts/biome/check-unused-suppressions.mjs",
+    "lint:versions": "node .github/workflows/scripts/biome/check-tool-version-sync.mjs"
   },
   "repository": {
     "type": "git",

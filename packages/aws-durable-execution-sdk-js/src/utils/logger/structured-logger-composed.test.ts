@@ -1,3 +1,4 @@
+// biome-ignore-all lint/suspicious/noConsole: spies on console to assert what the logger emits; these are assertions about console, not logging from the test.
 import { Context } from "aws-lambda";
 import { hashId } from "../step-id-utils/step-id-utils";
 
