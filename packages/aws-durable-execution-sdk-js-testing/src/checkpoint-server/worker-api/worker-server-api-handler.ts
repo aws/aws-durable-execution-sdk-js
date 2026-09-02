@@ -84,7 +84,7 @@ export class WorkerServerApiHandler {
       }
       case ApiType.SendDurableExecutionCallbackSuccess:
         return processCallbackSuccess(
-          // todo: handle undefined instead of disabling eslint rule
+          // todo: handle undefined rather than asserting non-null here
           data.params.CallbackId!,
           data.params.Result === undefined
             ? Buffer.of()

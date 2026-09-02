@@ -46,10 +46,11 @@ export function AgentTranscript({ steps, running }: Props) {
       <SpaceBetween size="m">
         {steps.map((step, i) => {
           const status = OUTCOME_STATUS[step.outcome];
-          // biome-ignore lint/suspicious/noArrayIndexKey: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
-          const key = `${step.iteration}-${i}`;
           return (
-            <Box key={key}>
+            <Box
+              // biome-ignore lint/suspicious/noArrayIndexKey: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
+              key={`${step.iteration}-${i}`}
+            >
               <SpaceBetween size="xxs">
                 <StatusIndicator type={status.type}>
                   Step {step.iteration}: {status.label}

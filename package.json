@@ -24,7 +24,8 @@
     "lint:report": "biome lint --reporter=json | node .github/workflows/scripts/biome/biome-warning-summary.mjs",
     "lint:async-safety": "biome lint --changed --only=nursery/noFloatingPromises --only=nursery/noMisusedPromises --only=nursery/useAwaitThenable --diagnostic-level=warn --no-errors-on-unmatched",
     "format:docs": "prettier --write \"**/*.{md,yml,yaml}\"",
-    "format:docs:check": "prettier --check \"**/*.{md,yml,yaml}\""
+    "format:docs:check": "prettier --check \"**/*.{md,yml,yaml}\"",
+    "lint:suppressions": "biome lint --reporter=json | node .github/workflows/scripts/biome/check-unused-suppressions.mjs"
   },
   "repository": {
     "type": "git",

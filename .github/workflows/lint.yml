@@ -82,6 +82,13 @@ jobs:
       # --since is passed explicitly so PRs targeting v1.x compare against v1.x
       # rather than the configured default of origin/main.
       - name: Annotate async-safety warnings on changed files
+        # Runs even when the gating steps above fail. As a separate job this executed
+        # unconditionally; folding it into this job made it skip on any earlier
+        # failure, so a PR with both a formatting error and a new floating promise
+        # would only learn about the promise on the next push. success() || failure()
+        # restores that without reviving the extra `npm ci`. always() would be wrong:
+        # it would also run after a failed `npm ci`, with no dependencies installed.
+        if: success() || failure()
         run: |
           BASE="origin/${GITHUB_BASE_REF:-main}"
           if ! git rev-parse --verify -q "$BASE" >/dev/null; then
@@ -90,6 +97,19 @@ jobs:
           fi
           echo "Diffing against $BASE ($(git rev-parse --short "$BASE"))"
           npm run lint:async-safety --silent -- --since="$BASE" --reporter=github
+
+      # Fails on any suppression that suppresses nothing.
+      #
+      # `suppressions/unused` is warning-severity and is not a configurable lint
+      # rule, so the `biome ci --diagnostic-level=error` gate above filters it out.
+      # Two suppressions in this migration were dead for exactly that reason -- one
+      # with its reason wrapped onto a second line, one where a refactor moved the
+      # violation out of the rule's view entirely -- and nothing caught either. An
+      # unused suppression means either the rationale suppresses nothing or a finding
+      # left the backlog silently, so it gets its own gate.
+      - name: Biome (no dead suppressions)
+        if: success() || failure()
+        run: npm run lint:suppressions --silent
 
       # Informational only, never gating: renders the warning backlog as a
       # per-rule table in the job summary so it stays visible without annotating
