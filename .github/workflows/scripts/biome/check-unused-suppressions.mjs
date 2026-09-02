@@ -59,6 +59,22 @@ async function main() {
     process.exit(1);
   }
 
+  // Truncation guard, matching the one in biome-warning-summary.mjs. Biome 2.5.11's
+  // json reporter emits every diagnostic regardless of --max-diagnostics (verified:
+  // 1032 emitted, diagnosticsNotPrinted 0), so this cannot fire today. It exists
+  // because the reporter is documented as experimental: if a future version starts
+  // honouring a cap, this gate would pass while never seeing the suppressions it is
+  // meant to catch. A gate that silently stops checking is the precise failure mode
+  // this script was added to close, so it fails loudly rather than trusting a
+  // partial report.
+  const notPrinted = Number(doc.summary?.diagnosticsNotPrinted || 0);
+  if (notPrinted > 0) {
+    console.error(
+      `::error::Biome capped its diagnostics (${notPrinted} not printed); the unused-suppression check cannot be trusted. Raise the cap or pass --max-diagnostics explicitly.`,
+    );
+    process.exit(1);
+  }
+
   const unused = (doc.diagnostics || []).filter(
     (d) => String(d.category) === "suppressions/unused",
   );
