@@ -225,6 +225,14 @@
         // suppression comment carrying a reason; the rest are likely real. Until that
         // pass happens, these stay at "warn".
         //
+        // FOOTGUN when writing those suppressions: Biome requires the reason to sit on
+        // the SAME line as the directive. If it wraps onto a following `//` line, the
+        // directive binds to the comment instead of the code, suppresses nothing, and
+        // Biome reports it as `suppressions/unused`. Two suppressions in this change
+        // shipped that way before review caught them. Keep reasons on one line, however
+        // long, and check with `biome lint <file>` -- an unused suppression is reported,
+        // not silent.
+        //
         // Like all nursery rules these are outside Biome's semver guarantees.
         "noFloatingPromises": "warn",
         "noMisusedPromises": "warn",

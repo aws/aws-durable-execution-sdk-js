@@ -73,7 +73,6 @@ export class DurablePromise<T> implements Promise<T> {
    * Attaches callbacks for the resolution and/or rejection of the Promise
    * Triggers execution if not already started
    */
-
   // biome-ignore lint/suspicious/noThenProperty: DurablePromise is deliberately a thenable. The "then" member is part of its public contract, so callers can await a durable operation directly.
   then<TResult1 = T, TResult2 = never>(
     onfulfilled?:

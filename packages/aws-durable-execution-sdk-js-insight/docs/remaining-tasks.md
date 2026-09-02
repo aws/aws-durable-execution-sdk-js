@@ -142,6 +142,8 @@
 - [x] `npm run build` passes locally (esm, cjs, types)
 - [x] Add the insight package to root `package.json` build/test scripts
 - [x] Wire the package into ESLint — added a package-local `eslint.config.js`
+      (historical: the repo later moved to Biome, so this config no longer exists;
+      the equivalent rules live in the root `biome.jsonc`)
       (core SDK's TypeScript rules, using only published deps — no local
       filename-convention plugin) and a `lint` script, consistent with the other
       packages. Lints clean (0 errors); pre-commit lint-staged now applies the

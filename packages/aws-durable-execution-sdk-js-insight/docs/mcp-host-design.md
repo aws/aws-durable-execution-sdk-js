@@ -770,7 +770,8 @@ unmerged:
 
 - **A gate that only runs pre-commit is not a gate.** The boundary rules existed as
   eslint config but eslint ran only through lint-staged, which `--no-verify` bypasses,
-  and there was no lint job. `npm run lint` is now a step in the `insight-hosts` job.
+  and there was no lint job. They are now Biome rules in `biome.jsonc`, enforced by the
+  dedicated `lint` job (`biome ci`) that runs on every pull request.
   When adding a rule, ask which CI job executes it.
 - **`workflow_dispatch`-only workflows are invisible to PR checks.** The extraction broke
   the VSIX release workflow — it copies one package out of the workspace and runs

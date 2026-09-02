@@ -6,9 +6,11 @@ on:
 permissions:
   contents: read # Required for actions/checkout
 
-concurrency:
-  group: ${{ github.head_ref }}-${{ github.run_id }}-lint
-  cancel-in-progress: true
+# No concurrency block here on purpose. build.yml, the only caller, already sets
+# workflow-level concurrency with cancel-in-progress, which governs the jobs of a
+# called workflow. A group of its own would be redundant -- and including
+# github.run_id in one, as the other reusable workflows do, makes the group unique
+# per run so cancel-in-progress can never match anything.
 
 env:
   # See the note in build.yml: the desktop app's `electron` devDependency
@@ -16,73 +18,24 @@ env:
   ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
 
 jobs:
-  # Formatting and linting are enforced here, not only on pre-commit.
+  # Everything Biome: formatting and linting for the whole monorepo, the Prettier
+  # pass for the two languages Biome cannot format, and the diff-scoped
+  # async-safety annotations.
   #
-  # The previous ESLint setup ran exclusively through lint-staged, which
-  # `--no-verify` bypasses, so a push could land unformatted code or violate the
-  # Workflow Insight host-boundary rules with nothing to catch it. `biome ci`
-  # checks formatting and lint in one pass over the whole monorepo and does not
-  # write to the working tree.
-  #
-  # Warnings do not fail this job; only errors do. That matches how the old
-  # configs were tuned, where most TypeScript rules were set to "warn".
+  # These share one job because they share one `npm ci`, which is the expensive
+  # part. The same argument removed a duplicate boundary-lint step from the
+  # insight-hosts job in build.yml, so it applies here too.
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Use Node.js 22.x
-        uses: actions/setup-node@v7
         with:
-          node-version: 22.x
-          cache: "npm"
-      - name: Install dependencies
-        run: npm ci
-      # Gates on errors only. `biome ci` auto-detects GitHub Actions and turns
-      # every diagnostic into an inline PR annotation, and this repo carries
-      # ~1040 warnings and infos that are almost all pre-existing -- unfiltered,
-      # that buries a PR in review noise about lines it never touched.
-      #
-      # This does NOT weaken enforcement. Formatting violations and lint errors
-      # are both error-severity, so both still fail here; only warnings and infos
-      # are withheld from annotations. They are reported in the step below.
-      - name: Biome (format + lint)
-        run: npm run ci
-      # Prettier owns Markdown and YAML, which Biome cannot format. Checked here so
-      # documentation and workflow files cannot drift, which was the one outright
-      # loss in the ESLint/Prettier removal rather than a tradeoff.
-      - name: Prettier (Markdown + YAML)
-        run: npm run format:docs:check
-      # Informational only, never gating: renders the warning backlog as a
-      # per-rule table in the job summary so it stays visible without annotating
-      # individual lines.
-      - name: Biome warning backlog (informational)
-        if: always()
-        run: npm run lint:report --silent >> "$GITHUB_STEP_SUMMARY"
-
-  # Async-safety rules, annotated on the diff only.
-  #
-  # noFloatingPromises / noMisusedPromises / useAwaitThenable recover the async
-  # coverage the testing package lost with `strictTypeChecked`. They are "warn",
-  # so the gating job above (--diagnostic-level=error) neither annotates nor fails
-  # on them -- which would leave them with no CI signal at all.
-  #
-  # This job restores that signal without reviving the noise problem: `--changed`
-  # limits it to files the PR actually touched, so a NEW floating promise is
-  # annotated inline while the 77-violation backlog is not. On the migration
-  # branch that is 2 annotations instead of 77.
-  #
-  # Once the backlog listed in biome.jsonc is triaged, noFloatingPromises should
-  # move to "error" and this job becomes redundant with the main gate.
-  async-safety:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          # --changed diffs against the base branch, so it needs real history;
-          # the default shallow clone has none. This already fetches every branch,
-          # so no extra `git fetch` is needed -- and adding one with --depth=1
-          # would convert the full clone into a shallow one (verified: it writes
-          # .git/shallow), risking merge-base resolution for no benefit.
+          # The async-safety step below uses `biome lint --changed`, which diffs
+          # against the base branch and therefore needs real history. This also
+          # fetches every branch, so no extra `git fetch` is required -- and adding
+          # one with --depth=1 would convert the full clone into a shallow one
+          # (verified: it writes .git/shallow), risking merge-base resolution for no
+          # benefit.
           fetch-depth: 0
       - name: Use Node.js 22.x
         uses: actions/setup-node@v7
@@ -91,11 +44,44 @@ jobs:
           cache: "npm"
       - name: Install dependencies
         run: npm ci
-      # LOAD-BEARING, not cosmetic. The lint step below passes
-      # --no-errors-on-unmatched, which also masks a missing base ref (Biome would
-      # otherwise exit 1). This check is therefore the only thing standing between
-      # a bad base ref and a job that reports nothing while passing.
-      - name: Verify base ref is available
+
+      # Gates on errors only. `biome ci` auto-detects GitHub Actions and turns
+      # every diagnostic into an inline PR annotation, and this repo carries ~1030
+      # warnings and infos that are almost all pre-existing -- unfiltered, that
+      # buries a PR in review noise about lines it never touched.
+      #
+      # This does NOT weaken enforcement. Formatting violations and lint errors
+      # are both error-severity, so both still fail here; only warnings and infos
+      # are withheld from annotations. They are reported in the summary step below.
+      - name: Biome (format + lint)
+        run: npm run ci
+
+      # Prettier owns Markdown and YAML, which Biome cannot format. Checked here so
+      # documentation and workflow files cannot drift, which was the one outright
+      # loss in the ESLint/Prettier removal rather than a tradeoff.
+      - name: Prettier (Markdown + YAML)
+        run: npm run format:docs:check
+
+      # Async-safety rules, annotated on the diff only.
+      #
+      # noFloatingPromises / noMisusedPromises / useAwaitThenable recover the async
+      # coverage the testing package lost with `strictTypeChecked`. They are "warn",
+      # so the gating step above (--diagnostic-level=error) neither annotates nor
+      # fails on them -- which would leave them with no CI signal at all.
+      #
+      # `--changed` limits this to files the PR actually touched, so a NEW floating
+      # promise is annotated inline while the 77-violation backlog is not. On the
+      # migration branch that is 2 annotations instead of 77.
+      #
+      # Fails loudly if the base ref is missing: the script passes
+      # --no-errors-on-unmatched (required so a docs-only PR, which changes nothing
+      # Biome lints, does not exit 1), and that flag also masks a bad base ref. This
+      # check is therefore the only thing standing between a missing base ref and a
+      # step that reports nothing while passing.
+      #
+      # --since is passed explicitly so PRs targeting v1.x compare against v1.x
+      # rather than the configured default of origin/main.
+      - name: Annotate async-safety warnings on changed files
         run: |
           BASE="origin/${GITHUB_BASE_REF:-main}"
           if ! git rev-parse --verify -q "$BASE" >/dev/null; then
@@ -103,37 +89,23 @@ jobs:
             exit 1
           fi
           echo "Diffing against $BASE ($(git rev-parse --short "$BASE"))"
-      # --no-errors-on-unmatched (set in the npm script) is required: when a PR
-      # touches nothing Biome lints -- a docs-only change, or only package-lock.json
-      # or workflow YAML, all excluded by files.includes -- `--changed` finds no
-      # files and exits 1 with "No files were processed in the specified paths".
-      # Without the flag that would red a docs-only PR for a reason unrelated to
-      # async safety. The repo's lint-staged config uses the same flag for the same
-      # reason.
-      #
-      # Otherwise Biome's exit codes are left alone: no `|| true`, no
-      # continue-on-error. Verified against 2.5.11 that warnings alone exit 0, so
-      # annotations post without failing the build, while a bad rule name still
-      # exits 1. Swallowing the exit code would turn a broken run into a silent pass.
-      #
-      # --since is passed explicitly here so PRs targeting v1.x compare against
-      # v1.x rather than the configured default of origin/main.
-      - name: Annotate async-safety warnings on changed files
-        run: |
-          npm run lint:async-safety --silent -- \
-            --since="origin/${GITHUB_BASE_REF:-main}" \
-            --reporter=github
+          npm run lint:async-safety --silent -- --since="$BASE" --reporter=github
+
+      # Informational only, never gating: renders the warning backlog as a
+      # per-rule table in the job summary so it stays visible without annotating
+      # individual lines.
+      - name: Biome warning backlog (informational)
+        if: always()
+        run: npm run lint:report --silent >> "$GITHUB_STEP_SUMMARY"
 
   # The repo's own published lint rules, run against the examples.
   #
-  # Biome cannot host ESLint plugins, so this is the one place ESLint still runs
-  # over source. `no-nested-durable-operations` catches a real bug class (a
-  # durable operation nested inside a step never checkpoints correctly), and the
-  # examples are the code customers copy, so the rule needs to run on more than
-  # the plugin's own RuleTester fixtures.
-  #
-  # The plugin must be built first: the examples' eslint config requires its
-  # compiled `dist/index.js`.
+  # Separate from the job above because it is a different toolchain: Biome cannot
+  # host ESLint plugins, and this needs the plugin compiled first.
+  # `no-nested-durable-operations` catches a real bug class (a durable operation
+  # nested inside a step never checkpoints correctly), and the examples are the code
+  # customers copy, so the rule needs to run on more than the plugin's own
+  # RuleTester fixtures.
   durable-rules:
     runs-on: ubuntu-latest
     steps:
