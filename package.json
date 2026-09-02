@@ -17,7 +17,7 @@
     "run-durable": "NODE_OPTIONS=\"--import tsx\" npx run-durable --",
     "lint": "biome check --diagnostic-level=error",
     "typecheck:hosts": "npm run typecheck -w packages/aws-durable-execution-sdk-js-insight-core && npm run typecheck -w packages/aws-durable-execution-sdk-js-insight-vscode && npm run typecheck -w packages/aws-durable-execution-sdk-js-insight-desktop && npm run typecheck -w packages/aws-durable-execution-sdk-js-insight-mcp",
-    "lint:fix": "biome check --write --diagnostic-level=error",
+    "lint:fix": "biome check --write",
     "format": "biome format --write",
     "format:check": "biome format",
     "ci": "biome ci --diagnostic-level=error",

@@ -25,7 +25,7 @@
     "lint": "biome check src --diagnostic-level=error",
     "prebuild": "rm -rf dist dist-cjs dist-types",
     "test": "tsc --noEmit && jest --config jest.config.mjs --collectCoverage --collectCoverageFrom=src/**/*.{ts,js}",
-    "lint:fix": "biome check --write src --diagnostic-level=error"
+    "lint:fix": "biome check --write src"
   },
   "exports": {
     ".": {

@@ -29,7 +29,7 @@
     "test": "tsc --noEmit && jest --config jest.config.mjs --collectCoverage --collectCoverageFrom=src/**/*.{ts,js}",
     "run-durable": "NODE_OPTIONS=\"--import tsx\" npx run-durable --",
     "api:extract": "npm run build:types && api-extractor run --local",
-    "lint:fix": "biome check --write src --diagnostic-level=error"
+    "lint:fix": "biome check --write src"
   },
   "exports": {
     ".": {

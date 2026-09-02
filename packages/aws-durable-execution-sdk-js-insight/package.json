@@ -36,7 +36,7 @@
     "lint": "biome check src --diagnostic-level=error",
     "test": "jest",
     "clean": "rm -rf dist dist-cjs dist-types",
-    "lint:fix": "biome check --write src --diagnostic-level=error"
+    "lint:fix": "biome check --write src"
   },
   "peerDependencies": {
     "@aws/durable-execution-sdk-js": ">=2.1.0",

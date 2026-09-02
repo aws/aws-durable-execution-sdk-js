@@ -46,7 +46,7 @@
     "test-with-sdk-coverage": "jest --config jest.config.sdk-coverage.js --collectCoverage",
     "coverage-to-csv": "node scripts/coverage-to-csv.js",
     "lint": "biome check src --diagnostic-level=error",
-    "lint:fix": "biome check --write src test --diagnostic-level=error",
+    "lint:fix": "biome check --write src",
     "lint:durable-rules": "eslint src/examples"
   },
   "dependencies": {
