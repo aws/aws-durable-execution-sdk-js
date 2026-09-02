@@ -15,6 +15,7 @@ export function decodeCheckpointToken(
   checkpointToken: CheckpointToken,
 ): CheckpointTokenData {
   try {
+    // Reviewed `@typescript-eslint/no-unsafe-assignment` disable before the migration -- no Biome equivalent (see biome.jsonc gap 1). JSON.parse returns `any`; the decoded token shape is validated immediately below.
     const decodedJson = JSON.parse(
       Buffer.from(checkpointToken, "base64").toString("utf-8"),
     );

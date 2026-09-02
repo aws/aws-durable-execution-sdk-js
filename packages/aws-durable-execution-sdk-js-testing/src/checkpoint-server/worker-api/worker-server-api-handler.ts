@@ -81,8 +81,9 @@ export class WorkerServerApiHandler {
                 // would lose the original. Carried an explicit
                 // `@typescript-eslint/prefer-promise-reject-errors` disable before the
                 // Biome migration -- that rule has no Biome equivalent at any severity
-                // (see biome.jsonc gap 1), so this is a note, not a suppression, and it
-                // is the only reviewed instance of the pattern in the tree.
+                // (see biome.jsonc gap 1), so this is a note, not a suppression. It is
+                // the only reviewed `prefer-promise-reject-errors` site in the tree; the
+                // other no-equivalent rules from that set carry their own inline notes.
                 reject(err);
               }
             }, this.checkpointDelaySettings);
@@ -92,6 +93,7 @@ export class WorkerServerApiHandler {
       case ApiType.SendDurableExecutionCallbackSuccess:
         return processCallbackSuccess(
           // todo: handle undefined rather than asserting non-null here
+          // biome-ignore lint/style/noNonNullAssertion: CallbackId is required on every callback API request by the wire contract, so this assertion holds; it was a reviewed `@typescript-eslint/no-non-null-assertion` disable before the migration and keeps that record until the todo above replaces it with explicit undefined handling.
           data.params.CallbackId!,
           data.params.Result === undefined
             ? Buffer.of()
@@ -100,12 +102,14 @@ export class WorkerServerApiHandler {
         );
       case ApiType.SendDurableExecutionCallbackFailure:
         return processCallbackFailure(
+          // biome-ignore lint/style/noNonNullAssertion: CallbackId is required on every callback API request by the wire contract; reviewed `@typescript-eslint/no-non-null-assertion` disable before the migration.
           data.params.CallbackId!,
           data.params.Error,
           this.executionManager,
         );
       case ApiType.SendDurableExecutionCallbackHeartbeat:
         return processCallbackHeartbeat(
+          // biome-ignore lint/style/noNonNullAssertion: CallbackId is required on every callback API request by the wire contract; reviewed `@typescript-eslint/no-non-null-assertion` disable before the migration.
           data.params.CallbackId!,
           this.executionManager,
         );

@@ -10,6 +10,7 @@ describe("convertDatesToTimestamps", () => {
   });
 
   it("should return undefined when input is undefined", () => {
+    // Reviewed `@typescript-eslint/no-confusing-void-expression` disable before the migration -- no Biome equivalent (see biome.jsonc gap 1). Asserting on the return of a possibly-void-typed helper is the point of this test.
     expect(convertDatesToTimestamps(undefined)).toBeUndefined();
   });
 

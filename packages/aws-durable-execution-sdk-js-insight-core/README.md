@@ -114,6 +114,6 @@ this package has no build step; running `tsc` here should not leave a `dist/`.
 
 `biome.jsonc` additionally restricts these packages from importing `vscode` (in core)
 or reaching a sibling package by relative path (in all three). Those rules now run on
-every pull request through the `lint` job (`biome ci`), so they are a real gate rather
-than only an editor signal. The tests above remain the backstop: they assert the same
+every pull request through the `lint` job (`biome ci`) — though that job can only block a
+merge once `lint / lint` is added to branch protection. The tests above remain the backstop: they assert the same
 invariant without depending on lint configuration.

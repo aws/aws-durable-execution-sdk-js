@@ -182,6 +182,7 @@ export function getLogLevel(logLevelString: keyof typeof LogLevel): LogLevel {
     case "NONE":
       return LogLevel.NONE;
     default:
+      // Reviewed `@typescript-eslint/restrict-template-expressions` disable before the migration -- that rule has no Biome equivalent (see biome.jsonc gap 1). Interpolating the unmatched log-level value into the error message is deliberate.
       throw new Error(`Invalid log level: ${logLevelString}`);
   }
 }

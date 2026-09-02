@@ -28,6 +28,14 @@
   //    "error" for that package at no migration cost. Repo-wide they stay "warn",
   //    since the rest of the tree was never held to them.
   //
+  //    Two more strictTypeChecked rules have Biome equivalents, both accounted for:
+  //      - useThrowOnlyError <- only-throw-error. Zero violations in the testing package,
+  //        so the override restores it to "error" there at no cost, like the async rules.
+  //      - useAwait <- require-await. NOT enabled: Biome's rule is broader than ESLint's
+  //        (19 violations in the testing package, 11 of them in shipped src, versus the 7
+  //        require-await disables this migration removed), so it is a triage project like
+  //        noUnsafeTypeAssertion below, not a free restore. Left off and recorded here.
+  //
   //    Still missing, with NO Biome equivalent at any severity:
   //      - the `any`-propagation family: no-unsafe-assignment, no-unsafe-return,
   //        no-unsafe-member-access, no-unsafe-call, no-unsafe-argument
@@ -35,7 +43,14 @@
   //      - no-confusing-void-expression
   //      - prefer-promise-reject-errors
   //      - no-unnecessary-type-parameters
-  //    These are a genuine loss of a gate, not merely an unfilled gap.
+  //    These are a genuine loss of a gate, not merely an unfilled gap. Each reviewed site
+  //    whose disable this migration removed now carries an inline plain-comment note -- a
+  //    `biome-ignore` for a rule Biome does not implement is dead and lint:suppressions
+  //    rejects it, so these are notes, not suppressions. The sites: worker-server-api-handler.ts
+  //    (prefer-promise-reject-errors), and one each for restrict-template-expressions,
+  //    no-confusing-void-expression, no-unsafe-return, no-unsafe-assignment,
+  //    no-unsafe-member-access and no-unnecessary-type-parameters. The full reviewed set
+  //    is recoverable by grepping eslint-disable in the commit before this migration.
   //
   //    Two rules DO exist and are left off, but "one line away" would be misleading,
   //    so here are the measured counts in the testing package on 2.5.11:
@@ -78,7 +93,12 @@
   //    with ~20 workflow files, so leaving them unformatted was a straight loss
   //    rather than a tradeoff. Everything Biome can format, Biome formats.
   //
-  // 4. THE ONLY TWO NET LOSSES, after a full accounting of what was gated.
+  // 4. THE TWO NET LOSSES FROM THE recommended-rules SPREAD. Scope matters here: this
+  //    section accounts for `...typescriptEslint.configs.recommended.rules` only. The
+  //    other two gated error-level sets -- strictTypeChecked and eslint-plugin-jest's
+  //    recommended -- are accounted for separately, in gap 1 and the `test` domain note
+  //    respectively (that is where require-await/useAwait, only-throw-error/useThrowOnlyError
+  //    and jest/no-disabled-tests/noSkippedTests are handled).
   //
   //    The core SDK config did more than the three rules it names explicitly: it
   //    spread `...typescriptEslint.configs.recommended.rules` over src/**/*.ts, which
@@ -228,8 +248,14 @@
     "enabled": true,
 
     // Auto-enabled by the `jest` dependency anyway; stated so it survives dependency
-    // changes. Covers what eslint-plugin-jest's recommended set gave us
-    // (noFocusedTests, noSkippedTests, noDuplicateTestHooks, ...).
+    // changes. This is Biome's `test` domain recommended set (noFocusedTests,
+    // noDuplicateTestHooks, and a handful more) -- NOT a replacement for
+    // eslint-plugin-jest's recommended set, which was ~25 rules at error against this much
+    // smaller domain. In particular noSkippedTests is NOT in the recommended domain
+    // (verify: `--only=suspicious/noSkippedTests` reports it, the live config reports 0,
+    // and flipping to `"test": "all"` reports the 3 in the testing package); the
+    // jest/no-disabled-tests gate it corresponds to is restored explicitly in the
+    // testing-package override below, not here.
     "domains": {
       "test": "recommended"
     },
@@ -268,13 +294,12 @@
       },
 
       "style": {
-        // NOT ENABLED, deliberately. All of these are recommended by Biome but were not
+        // NOT ENABLED, deliberately. These three are recommended by Biome but were not
         // enforced under ESLint, and turning them on would rewrite thousands of call
         // sites as part of a toolchain migration -- which would make this change
         // unreviewable and bury any real behavioural difference.
         //
         //   useImportType            (~1089 sites) safe autofix
-        //   noNonNullAssertion       (~666 sites)  needs judgement per site, no autofix
         //   useNodejsImportProtocol  (~94 sites)   safe autofix, but rewrites imports in
         //                                          published SDK code, so it deserves its
         //                                          own change with its own bundler check
@@ -282,6 +307,13 @@
         //
         // Each is a one-line change plus `biome check --write --only=<rule>`, and none
         // is dropped on principle -- they are follow-ups, not rejections.
+        //
+        // noNonNullAssertion is DIFFERENT and stays "off" only repo-wide. Unlike the three
+        // above, it WAS enforced: it is in strictTypeChecked, which the testing package
+        // gated at error over its NON-TEST source (the old per-package config disabled it
+        // only for test files). It is therefore restored to "error" for exactly that
+        // scope in the testing-package non-test override below. Repo-wide it stays off
+        // (~666 sites elsewhere were never held to it), which is a genuine follow-up.
         "useImportType": "off",
         "noNonNullAssertion": "off",
         "useNodejsImportProtocol": "off",
@@ -392,29 +424,76 @@
     },
     {
       /**
-       * Restores a gate rather than adding one. The testing package ran
-       * `tseslint.configs.strictTypeChecked` at error severity through its `prebuild`,
-       * so a floating promise there failed the build on every pull request. These
-       * three are the rules from that set with Biome equivalents, and the package has
-       * zero violations of all three -- a direct consequence of having been gated --
-       * so raising them from the repo-wide "warn" costs nothing and closes the hole.
+       * Restores gates rather than adding them. The testing package ran
+       * `tseslint.configs.strictTypeChecked` AND `pluginJest.configs["flat/recommended"]`
+       * at error severity through its `prebuild`, and CI runs `npm run build`, so a
+       * floating promise, a thrown non-Error or a skipped test there failed the build on
+       * every pull request. Each rule below is one of those gates with a Biome equivalent.
        *
-       * Without this, a new floating promise in the testing package would produce an
-       * annotation and pass CI, where before it failed the build. It also means the
-       * async-safety job's `--changed` scoping is a strict improvement over the old
-       * setup for this package rather than a partial substitute for it.
+       * Async safety (noFloatingPromises, noMisusedPromises, useAwaitThenable) from
+       * strictTypeChecked: the package has zero violations of all three -- a direct
+       * consequence of having been gated -- so raising them from the repo-wide "warn"
+       * costs nothing and closes the hole. Without this, a new floating promise in the
+       * testing package would produce an annotation and pass CI, where before it failed
+       * the build; it also makes the async-safety job's `--changed` scoping a strict
+       * improvement over the old setup for this package rather than a partial substitute.
        *
-       * Repo-wide these stay "warn": the other packages were never held to them and
-       * carry a backlog (see the triage list above), so erroring here would be a new
-       * requirement rather than a restored one.
+       * useThrowOnlyError <- @typescript-eslint/only-throw-error (strictTypeChecked): zero
+       * violations here too, so it is free, exactly like the async rules above.
+       *
+       * noSkippedTests <- jest/no-disabled-tests (eslint-plugin-jest recommended). Biome's
+       * `test` domain does NOT include this rule (see the domain note above), so it is
+       * enabled explicitly here rather than coming from the domain. The package has three
+       * skipped tests, each of which previously carried a `jest/no-disabled-tests` disable
+       * naming why; those three now carry `noSkippedTests` suppressions instead, so the
+       * skips stay acknowledged and `lint:suppressions` tracks them.
+       *
+       * Repo-wide the async rules stay "warn": the other packages were never held to them
+       * and carry a backlog (see the triage list above), so erroring there would be a new
+       * requirement rather than a restored one. noSkippedTests is likewise scoped here
+       * rather than repo-wide -- `--only` finds 5 skips across the tree but only these 3
+       * were ever gated, and gating the other 2 would be a new requirement.
        */
       "includes": ["packages/aws-durable-execution-sdk-js-testing/**"],
       "linter": {
         "rules": {
+          "suspicious": {
+            "noSkippedTests": "error"
+          },
+          "style": {
+            "useThrowOnlyError": "error"
+          },
           "nursery": {
             "noFloatingPromises": "error",
             "noMisusedPromises": "error",
             "useAwaitThenable": "error"
+          }
+        }
+      }
+    },
+    {
+      // Finding: noNonNullAssertion WAS gated, contrary to the repo-wide style-rule note.
+      // It is in strictTypeChecked, which the testing package ran at error through its
+      // `prebuild`; the old per-package config turned it off only for test files
+      // (`*.test.ts`), so it was error-level over this package's NON-TEST source. Biome
+      // reports exactly four non-test violations (three in worker-server-api-handler.ts,
+      // one in cli-config.ts) -- precisely the four sites whose
+      // `@typescript-eslint/no-non-null-assertion` disables were removed in this
+      // migration. Restoring the rule at that same scope gives those reviewed sites their
+      // record back; each now carries a `noNonNullAssertion` suppression. Off repo-wide
+      // (~666 sites elsewhere never held to it) and off for this package's tests (~116
+      // there), matching the old scope exactly. The includes below exclude test files so
+      // the scope is the non-test source only.
+      "includes": [
+        "packages/aws-durable-execution-sdk-js-testing/**/*.ts",
+        "!packages/aws-durable-execution-sdk-js-testing/**/*.test.ts",
+        "!packages/aws-durable-execution-sdk-js-testing/**/*.test.mts",
+        "!packages/aws-durable-execution-sdk-js-testing/**/*.test.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noNonNullAssertion": "error"
           }
         }
       }

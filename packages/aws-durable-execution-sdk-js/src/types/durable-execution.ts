@@ -74,7 +74,9 @@ import { DurableInstrumentationPlugin } from "./plugin";
  * @public
  */
 export type DurableExecutionHandler<
+  // biome-ignore lint/suspicious/noExplicitAny: deliberate -- public generic default, so `DurableExecutionHandler` needs no type arguments; `unknown` would force every caller to annotate. Same construct annotated in with-durable-execution.ts.
   TEvent = any,
+  // biome-ignore lint/suspicious/noExplicitAny: deliberate -- public generic default, as with TEvent above.
   TResult = any,
   TLogger extends DurableLogger = DurableLogger,
 > = (event: TEvent, context: DurableContext<TLogger>) => Promise<TResult>;
