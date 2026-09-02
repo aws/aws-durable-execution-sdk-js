@@ -812,17 +812,16 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
       let releaseCompleteInvocation:
         | ((response: CompleteInvocationResponse) => void)
         | undefined;
-      const completeInvocationResult =
-        new Promise<CompleteInvocationResponse>((resolve) => {
+      const completeInvocationResult = new Promise<CompleteInvocationResponse>(
+        (resolve) => {
           releaseCompleteInvocation = resolve;
-        });
+        },
+      );
 
-      jest
-        .spyOn(checkpointApi, "completeInvocation")
-        .mockImplementation(() => {
-          signalCompleteInvocationCalled?.();
-          return completeInvocationResult;
-        });
+      jest.spyOn(checkpointApi, "completeInvocation").mockImplementation(() => {
+        signalCompleteInvocationCalled?.();
+        return completeInvocationResult;
+      });
 
       let signalInvocationRecorded: (() => void) | undefined;
       const invocationRecorded = new Promise<void>((resolve) => {

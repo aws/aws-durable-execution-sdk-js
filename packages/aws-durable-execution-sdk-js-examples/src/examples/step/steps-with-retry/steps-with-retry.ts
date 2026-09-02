@@ -31,6 +31,7 @@ interface HandlerInput {
 
 export const handler = withDurableExecution(
   async (event: HandlerInput, context: DurableContext) => {
+    // biome-ignore lint/suspicious/noImplicitAnyLet: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
     let item;
     try {
       let pollCount = 0;

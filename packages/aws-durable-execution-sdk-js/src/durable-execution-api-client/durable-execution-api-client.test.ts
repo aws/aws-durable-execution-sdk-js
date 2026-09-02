@@ -92,7 +92,6 @@ describe("ApiStorage", () => {
   const clientConfigurations = [
     {
       name: "default LambdaClient",
-      // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
       setup: async () => {
         // Create a fresh mock client for this test
         const mockLambdaClient = { send: jest.fn() };
@@ -121,7 +120,6 @@ describe("ApiStorage", () => {
     },
     {
       name: "custom LambdaClient",
-      // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
       setup: async () => {
         const customMockClient = { send: jest.fn() };
         return {

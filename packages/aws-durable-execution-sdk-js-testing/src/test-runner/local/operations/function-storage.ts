@@ -99,7 +99,6 @@ export class FunctionStorage {
     error?: ErrorObject;
   }> {
     const functionData = this.functionNameMap[functionName];
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (!functionData) {
       throw new Error(
         `No function found for function name ${functionName}.\n` +

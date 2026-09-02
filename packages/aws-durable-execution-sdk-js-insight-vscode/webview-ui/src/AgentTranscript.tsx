@@ -47,7 +47,10 @@ export function AgentTranscript({ steps, running }: Props) {
         {steps.map((step, i) => {
           const status = OUTCOME_STATUS[step.outcome];
           return (
-            <Box key={`${step.iteration}-${i}`}>
+            <Box
+              // biome-ignore lint/suspicious/noArrayIndexKey: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
+              key={`${step.iteration}-${i}`}
+            >
               <SpaceBetween size="xxs">
                 <StatusIndicator type={status.type}>
                   Step {step.iteration}: {status.label}
@@ -55,7 +58,11 @@ export function AgentTranscript({ steps, running }: Props) {
                     ? ` · ${step.rowCount} row${step.rowCount === 1 ? "" : "s"}`
                     : ""}
                 </StatusIndicator>
-                <Box variant="code" fontSize="body-s" color="text-body-secondary">
+                <Box
+                  variant="code"
+                  fontSize="body-s"
+                  color="text-body-secondary"
+                >
                   {step.query}
                 </Box>
                 {step.detail && (

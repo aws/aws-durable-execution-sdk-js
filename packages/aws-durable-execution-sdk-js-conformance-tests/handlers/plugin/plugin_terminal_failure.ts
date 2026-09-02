@@ -18,7 +18,8 @@ function emit(
   record: Record<string, unknown>,
   arn: string | undefined = capturedArn,
 ): void {
-  const line = arn === undefined ? record : { ...record, durableExecutionArn: arn };
+  const line =
+    arn === undefined ? record : { ...record, durableExecutionArn: arn };
   process.stdout.write(JSON.stringify(line) + "\n");
 }
 

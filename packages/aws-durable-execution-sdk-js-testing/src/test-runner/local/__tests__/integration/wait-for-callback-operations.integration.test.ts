@@ -21,7 +21,7 @@ describe("WaitForCallback Operations Integration", () => {
   // Concurrent and Complex Workflow Tests Category
   describe("Concurrent and Complex Workflow Tests", () => {
     // todo: add test when language SDK adds concurrency support
-    // eslint-disable-next-line jest/no-disabled-tests
+    // biome-ignore lint/suspicious/noSkippedTests: pending language SDK concurrency support; deliberately skipped and acknowledged -- was a reviewed `jest/no-disabled-tests` disable before the Biome migration.
     it.skip("should handle multiple concurrent waitForCallback operations with different submitters", async () => {
       let callback1Id: string | undefined;
       let callback2Id: string | undefined;

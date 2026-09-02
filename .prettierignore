@@ -1,6 +1,0 @@
-# API Extractor owns the formatting of the reports it generates. Reformatting them makes
-# every regeneration produce a diff, which defeats the point of committing them: the report
-# is meant to show real API changes in review, not whitespace churn. It would also mean the
-# committed files never match what `npm run api:extract` produces.
-api-extractor/*.api.json
-api-extractor/*.api.md

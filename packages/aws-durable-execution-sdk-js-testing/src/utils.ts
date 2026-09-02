@@ -49,7 +49,6 @@ function mapValuesDeep(
  */
 export function convertDatesToTimestamps<T>(obj: T): ConvertDatesToNumbers<T> {
   if (obj === null || obj === undefined) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
     return obj as ConvertDatesToNumbers<T>;
   }
 
@@ -63,7 +62,6 @@ export function convertDatesToTimestamps<T>(obj: T): ConvertDatesToNumbers<T> {
     return value;
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
   return result as ConvertDatesToNumbers<T>;
 }
 
@@ -74,13 +72,11 @@ export function reparseDates<T>(obj: T, dateConstructor: DateConstructor): T {
 
   const result = mapValuesDeep(obj, (value) => {
     if (Object.prototype.toString.call(value) === "[object Date]") {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
       return new dateConstructor((value as Date).getTime());
     }
     return value;
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
   return result as T;
 }
 

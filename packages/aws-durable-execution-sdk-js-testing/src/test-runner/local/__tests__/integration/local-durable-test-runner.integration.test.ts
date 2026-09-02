@@ -253,7 +253,7 @@ describe("LocalDurableTestRunner Integration", () => {
       async (_event: unknown, context: DurableContext) => {
         expect(context.lambdaContext.getRemainingTimeInMillis()).toBe(900_000);
 
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+        // Reviewed `@typescript-eslint/no-unsafe-return` disable before the migration -- no Biome equivalent (see biome.jsonc gap 1). The mocked function is untyped (`any`); returning its result from the step callback is intentional here.
         const mock1: string = await context.step(() => mockedFunction());
 
         return mock1 + " and " + otherCode.property();
@@ -277,7 +277,7 @@ describe("LocalDurableTestRunner Integration", () => {
     jest.useRealTimers();
 
     const handler = withDurableExecution(() => {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+      // Reviewed `@typescript-eslint/no-unsafe-member-access` (with `no-explicit-any`) disable before the migration -- no Biome equivalent (see biome.jsonc gap 1). This probes the fake-timer flag on Date, which is untyped by design.
       return Promise.resolve((Date as unknown as any).isFake);
     });
 
@@ -311,7 +311,7 @@ describe("LocalDurableTestRunner Integration", () => {
   });
 
   // enable when language SDK supports concurrent waits
-  // eslint-disable-next-line jest/no-disabled-tests
+  // biome-ignore lint/suspicious/noSkippedTests: pending language SDK concurrent-wait support; deliberately skipped and acknowledged -- was a reviewed `jest/no-disabled-tests` disable before the Biome migration.
   it.skip("should prevent scheduled function interference in parallel wait scenario", async () => {
     // This test creates a scenario where multiple wait operations could create
     // scheduled functions that fire while invocations are still active.

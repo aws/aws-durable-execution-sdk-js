@@ -19,7 +19,9 @@ function isStep(type?: string): boolean {
 function makeFaultyPlugin(): DurableInstrumentationPlugin {
   let executionArn = "";
   const emit = (rec: Record<string, unknown>): void =>
-    process.stdout.write(JSON.stringify({ ...rec, durableExecutionArn: executionArn }) + "\n");
+    process.stdout.write(
+      JSON.stringify({ ...rec, durableExecutionArn: executionArn }) + "\n",
+    );
 
   return {
     async onInvocationStart(info): Promise<void> {
@@ -59,7 +61,9 @@ function makeFaultyPlugin(): DurableInstrumentationPlugin {
 function makeHealthyPlugin(): DurableInstrumentationPlugin {
   let executionArn = "";
   const emit = (rec: Record<string, unknown>): void =>
-    process.stdout.write(JSON.stringify({ ...rec, durableExecutionArn: executionArn }) + "\n");
+    process.stdout.write(
+      JSON.stringify({ ...rec, durableExecutionArn: executionArn }) + "\n",
+    );
 
   return {
     async onInvocationStart(info): Promise<void> {

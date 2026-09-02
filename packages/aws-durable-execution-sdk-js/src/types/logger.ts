@@ -58,9 +58,8 @@ export interface OperationContext<Logger extends DurableLogger> {
  * Context for step operations.
  * @public
  */
-export interface StepContext<
-  Logger extends DurableLogger,
-> extends OperationContext<DurableContextLogger<Logger>> {
+export interface StepContext<Logger extends DurableLogger>
+  extends OperationContext<DurableContextLogger<Logger>> {
   /**
    * The current attempt number for this step, starting at `1` for the first
    * execution and incrementing by `1` on each subsequent retry.
@@ -75,9 +74,8 @@ export interface StepContext<
  * Context for waitForCondition operations.
  * @public
  */
-export interface WaitForConditionContext<
-  Logger extends DurableLogger,
-> extends OperationContext<DurableContextLogger<Logger>> {
+export interface WaitForConditionContext<Logger extends DurableLogger>
+  extends OperationContext<DurableContextLogger<Logger>> {
   /**
    * The current attempt number for this waitForCondition check, starting at
    * `1` for the first execution and incrementing by `1` on each subsequent

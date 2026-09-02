@@ -149,7 +149,9 @@ function loadExampleConfiguration(exampleName: string): ExamplesWithConfig {
       `Error: Example with handler '${targetHandler}' not found in catalog`,
     );
     console.error("Available handlers:");
-    catalog.forEach((example) => console.error(`  ${example.handler}`));
+    catalog.forEach((example) => {
+      console.error(`  ${example.handler}`);
+    });
     process.exit(1);
   }
 
@@ -417,7 +419,7 @@ async function createFunction(
   await ensureLogGroupRetention(functionName);
 
   // Determine environment variables
-  let envVars: Record<string, string> | undefined = env.LAMBDA_ENDPOINT
+  const envVars: Record<string, string> | undefined = env.LAMBDA_ENDPOINT
     ? { AWS_ENDPOINT_URL_LAMBDA: env.LAMBDA_ENDPOINT }
     : undefined;
 
