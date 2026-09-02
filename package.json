@@ -24,7 +24,8 @@
     "lint:report": "biome check --reporter=json --max-diagnostics=none | node .github/workflows/scripts/biome/biome-warning-summary.mjs",
     "lint:async-safety": "biome lint --changed --only=nursery/noFloatingPromises --only=nursery/noMisusedPromises --only=nursery/useAwaitThenable --diagnostic-level=warn --no-errors-on-unmatched",
     "lint:suppressions": "biome check --reporter=json --max-diagnostics=none | node .github/workflows/scripts/biome/check-unused-suppressions.mjs",
-    "lint:versions": "node .github/workflows/scripts/biome/check-tool-version-sync.mjs"
+    "lint:versions": "node .github/workflows/scripts/biome/check-tool-version-sync.mjs",
+    "lint:filenames": "git ls-files \"packages/aws-durable-execution-sdk-js/src/**/*.ts\" | sed \"s|^packages/aws-durable-execution-sdk-js/||\" | node packages/aws-durable-execution-sdk-js/scripts/check-filenames.js"
   },
   "repository": {
     "type": "git",

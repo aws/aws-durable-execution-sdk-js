@@ -668,6 +668,18 @@
       "linter": {
         "rules": {
           "style": {
+            /**
+             * Half of the old `filename-convention/kebab-case` rule. That rule was
+             * error-level and gated, and it validated the filename AND every directory
+             * segment; this Biome rule only looks at the filename -- verified, a
+             * kebab-case file inside `BadDirName/nested_dir/` produces no diagnostic.
+             *
+             * The directory half is covered by `lint:filenames`, which runs the repo's
+             * own scripts/check-filenames.js in the lint job. That script already
+             * checked directory segments but was wired to nothing, so without it half
+             * the rule was silently lost. Note it needs the same `__mocks__` exemption
+             * this override has, for the same reason: Jest fixes that directory name.
+             */
             "useFilenamingConvention": {
               "level": "error",
               "options": {

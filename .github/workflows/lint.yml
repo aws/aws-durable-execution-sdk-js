@@ -57,6 +57,17 @@ jobs:
       - name: Biome version pins in sync
         run: npm run lint:versions --silent
 
+      # Directory names, which Biome cannot check. The deleted
+      # `filename-convention/kebab-case` rule was error-level and gated, and it
+      # validated BOTH the filename and every directory segment;
+      # useFilenamingConvention only does the filename (verified: a kebab-case file
+      # inside `BadDirName/nested_dir/` produces no diagnostic). This runs the repo's
+      # own check-filenames.js, which already covered directories but was wired to
+      # nothing, so half that rule was silently lost.
+      - name: Kebab-case directory names
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run lint:filenames --silent
+
       # Gates on errors only. `biome ci` auto-detects GitHub Actions and turns
       # every diagnostic into an inline PR annotation, and this repo carries ~1030
       # warnings and infos that are almost all pre-existing -- unfiltered, that
@@ -106,9 +117,14 @@ jobs:
         # error. Note the implicit success() that GitHub adds to a bare `if` is
         # suppressed once a status function appears, which is why both halves are
         # needed. ${{ }} is required because a leading `!` is YAML tag syntax.
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        # Pull requests only. On a push event GITHUB_BASE_REF is empty, and the old
+        # `:-main` fallback then diffed against origin/main -- wrong for the pushes to
+        # v1.x that build.yml also triggers on, reporting unrelated differences as if
+        # the push had introduced them. There is no meaningful `--changed` base for a
+        # push anyway, so the step is scoped to the event where the diff is defined.
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && github.event_name == 'pull_request' }}
         run: |
-          BASE="origin/${GITHUB_BASE_REF:-main}"
+          BASE="origin/${GITHUB_BASE_REF}"
           if ! git rev-parse --verify -q "$BASE" >/dev/null; then
             echo "::error::Base ref $BASE not found. '--changed' cannot compute a diff."
             exit 1

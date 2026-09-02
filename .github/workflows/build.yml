@@ -42,7 +42,14 @@ jobs:
           node "$GITHUB_WORKSPACE/.github/workflows/lintcommit.js"
 
   build:
-    needs: lint-commits
+    # `needs: lint` restores the gating topology this branch would otherwise lose.
+    # Before, lint ran inside `prebuild` for three packages, so a lint error failed
+    # the build job and everything downstream of it. Removing those hooks made `lint`
+    # a sibling job instead, which means a PR could merge on a green required build
+    # while `lint / lint` was red -- until someone adds the new check to the ruleset.
+    # Depending on it here makes that admin step an improvement in visibility rather
+    # than the only thing standing between a Biome failure and a merge.
+    needs: [lint-commits, lint]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
