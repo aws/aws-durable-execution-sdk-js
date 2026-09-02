@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Modal from "@cloudscape-design/components/modal";
 import Box from "@cloudscape-design/components/box";
 import SpaceBetween from "@cloudscape-design/components/space-between";
@@ -107,26 +107,36 @@ export function SettingsModal({
   // dropdown cannot show a label for a choice it doesn't offer. Copilot is
   // omitted entirely where the host can't reach it rather than shown disabled:
   // there is no action the user could take to enable it.
-  const llmProviderOptions = [
-    { value: "bedrock", label: "Amazon Bedrock" },
-    ...(capabilities.copilot
-      ? [
-          {
-            value: "copilot",
-            label: "GitHub Copilot (VS Code built-in)",
-          },
-        ]
-      : []),
-    {
-      value: "local-server",
-      label: "Local server (Ollama / OpenAI-compatible)",
-    },
-    ...(capabilities.localLlm
-      ? [{ value: "local", label: "Local LLM (offline, on-device)" }]
-      : []),
-  ];
+  // Memoised so the effect below can depend on it directly. The list is derived
+  // purely from these two capability flags, so the identity changes exactly when
+  // they do -- which is exactly when the effect used to re-run via its old
+  // `capabilities.copilot, capabilities.localLlm` dependencies. Behaviour is
+  // unchanged; what changes is that the dependency is now machine-checkable, so a
+  // future input to this list cannot be added without either declaring it here or
+  // failing lint.
+  const llmProviderOptions = useMemo(
+    () => [
+      { value: "bedrock", label: "Amazon Bedrock" },
+      ...(capabilities.copilot
+        ? [
+            {
+              value: "copilot",
+              label: "GitHub Copilot (VS Code built-in)",
+            },
+          ]
+        : []),
+      {
+        value: "local-server",
+        label: "Local server (Ollama / OpenAI-compatible)",
+      },
+      ...(capabilities.localLlm
+        ? [{ value: "local", label: "Local LLM (offline, on-device)" }]
+        : []),
+    ],
+    [capabilities.copilot, capabilities.localLlm],
+  );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: GENUINE DEFECT CLASS, not style -- the effect reads llmProviderOptions (both .some and [0].value) but does not list it, so it can act on a stale option list. Ships in the VS Code extension and no linter has ever seen this file. Adding the dep as-is would re-run the effect every render because the array is rebuilt each time; the real fix is to memoise it, which is a behaviour change and so a tracked follow-up rather than part of a toolchain migration.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `visible` is an intentional extra dependency, not a missing one -- it is never read in the body, and its only job is to re-run this effect when the modal reopens so unsaved edits are discarded and the form is reset from `settings`. Removing it would silently start preserving stale edits across opens. The rule cannot express "re-run on this signal", so it stays suppressed; the missing-dependency findings it used to carry are gone now that llmProviderOptions is memoised.
   useEffect(() => {
     // Defence in depth, and generic rather than per-provider: the host already
     // narrows llmProvider to something it can honor before sending config (see
@@ -141,7 +151,7 @@ export function SettingsModal({
         ? settings
         : { ...settings, llmProvider: llmProviderOptions[0].value },
     );
-  }, [settings, visible, capabilities.copilot, capabilities.localLlm]);
+  }, [settings, visible, llmProviderOptions]);
 
   // Drop any prior test result when the modal (re)opens so a stale pass/fail
   // from a previous session isn't shown against freshly-loaded settings.
