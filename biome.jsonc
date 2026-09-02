@@ -253,7 +253,9 @@
     // eslint-plugin-jest's recommended set, which was ~25 rules at error against this much
     // smaller domain. In particular noSkippedTests is NOT in the recommended domain
     // (verify: `--only=suspicious/noSkippedTests` reports it, the live config reports 0,
-    // and flipping to `"test": "all"` reports the 3 in the testing package); the
+    // and flipping to `"test": "all"` surfaces it repo-wide -- the 2 unsuppressed skips in
+    // the examples package; the testing package's 3 are gated by the override below and
+    // stay suppressed); the
     // jest/no-disabled-tests gate it corresponds to is restored explicitly in the
     // testing-package override below, not here.
     "domains": {
