@@ -54,10 +54,12 @@
   //
   //    Two rules DO exist and are left off, but "one line away" would be misleading,
   //    so here are the measured counts in the testing package on 2.5.11:
-  //      - noUnsafeTypeAssertion:  265 diagnostics, all in source (not tests).
-  //        ESLint had the equivalent at error with only 23 suppressions, so Biome's
-  //        implementation is far broader -- this is nowhere near parity and turning
-  //        it on is a triage project, not a config edit.
+  //      - noUnsafeTypeAssertion:  265 diagnostics, but only 27 in non-test source;
+  //        the other 238 are in `*.test.ts` files, which the old ESLint config exempted
+  //        (`no-unsafe-type-assertion: "off"` for `**/*.test.ts`). In the scope ESLint
+  //        actually enforced (non-test source) it is 27 vs 23 reviewed suppressions --
+  //        near parity, so restoring it to that non-test scope is small. Enabling it
+  //        repo-wide including tests is the triage project, not a config edit.
   //
   //        THE REVIEWED SET IS RECOVERABLE. Those 23 sites were explicit
   //        `eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion`
