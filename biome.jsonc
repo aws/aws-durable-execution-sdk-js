@@ -78,15 +78,39 @@
   //    with ~20 workflow files, so leaving them unformatted was a straight loss
   //    rather than a tradeoff. Everything Biome can format, Biome formats.
   //
-  // 4. no-duplicate-imports is a NET LOSS, not merely an unfilled gap. It has no
-  //    Biome equivalent at any severity (confirmed: no such rule exists on 2.5.11),
-  //    and it was "error" in the core SDK config -- which gated every pull request,
-  //    because that package's `prebuild` ran `eslint src --ext .ts --fix` and CI runs
-  //    `npm run build`. So a duplicate import used to fail the build job and now
-  //    fails nothing. The other two error-level rules from that config survive as
-  //    Biome rules (useFilenamingConvention and the wire-model noRestrictedImports).
-  //    It is not, however, the only gated rule that was lost -- see gap 1 for the
-  //    testing package's type-aware set, which was gated by the same mechanism.
+  // 4. THE ONLY TWO NET LOSSES, after a full accounting of what was gated.
+  //
+  //    The core SDK config did more than the three rules it names explicitly: it
+  //    spread `...typescriptEslint.configs.recommended.rules` over src/**/*.ts, which
+  //    is 20 rules at error on the version this repo resolved (8.57.0), and the
+  //    testing package pulled the same set in through strictTypeChecked. All of it was
+  //    gated, because those packages' `prebuild` ran lint and CI runs `npm run build`.
+  //    Two of the 20 were then explicitly downgraded to "warn" in the same config
+  //    (no-explicit-any, no-unused-vars), leaving 18 at error.
+  //
+  //    Of those 18, twelve map onto Biome rules that are enabled here: noTsIgnore,
+  //    noBannedTypes, noMisleadingInstantiator, useNamespaceKeyword,
+  //    noUnsafeDeclarationMerging, noDuplicateEnumValues, noUselessThisAlias,
+  //    noUselessTypeConstraint, noExtraNonNullAssertion, useArrayLiterals,
+  //    noNonNullAssertedOptionalChain, and noExplicitAny (as "warn", matching what the
+  //    config actually set rather than what recommended defaulted to).
+  //
+  //    Four more had Biome equivalents that were simply not turned on. They are now
+  //    enabled at error, above, after measuring each: noNamespace (0 violations),
+  //    useAsConstAssertion (0), noCommonJs (2 in TypeScript, both suppressed with
+  //    reasons, .js/.cjs exempted) and noUnusedExpressions (1 suppressed, a genuine
+  //    ESLint/Biome difference over `satisfies`). All four are enforced repo-wide,
+  //    which is BROADER than the old scope of one package's src/.
+  //
+  //    That leaves exactly two rules that were error-level, CI-gated, and have no
+  //    Biome equivalent at any severity:
+  //
+  //      - no-duplicate-imports  (confirmed: no such rule exists on 2.5.11)
+  //      - triple-slash-reference
+  //
+  //    Both are genuine regressions rather than unfilled gaps: a violation used to
+  //    fail the build job and now fails nothing. Everything else from that config
+  //    either survives as a Biome rule or is listed under gap 1.
   //
   // ON THE SEVEN EXACT PINS: @biomejs/biome is pinned exact in the root package.json
   // and in six workspace packages, and prettier in the root only. Nothing currently
@@ -230,7 +254,17 @@
       "suspicious": {
         "noExplicitAny": "warn",
         "noConsole": "warn",
-        "noDebugger": "warn"
+        "noDebugger": "warn",
+
+        // RESTORING A GATE, not adding one. `@typescript-eslint/no-unused-expressions`
+        // came in at error via `...typescriptEslint.configs.recommended.rules` in the
+        // core SDK config and via strictTypeChecked in the testing package, both gated
+        // by prebuild. Error repo-wide here, which is broader than the old scope.
+        //
+        // One site needed a suppression: Biome flags `data satisfies never;` where
+        // ESLint did not. That is an exhaustiveness assertion, so the suppression is
+        // marked as such rather than as untriaged noise.
+        "noUnusedExpressions": "error"
       },
 
       "style": {
@@ -251,7 +285,21 @@
         "useImportType": "off",
         "noNonNullAssertion": "off",
         "useNodejsImportProtocol": "off",
-        "useTemplate": "off"
+        "useTemplate": "off",
+
+        // RESTORING GATES from `...typescriptEslint.configs.recommended.rules`, which
+        // was spread into the core SDK config at error over src/**/*.ts and gated by
+        // prebuild. Measured before enabling; the tree is clean of the first two, which
+        // is what an error-level rule should produce.
+        //
+        //   noNamespace          <- no-namespace          0 violations repo-wide
+        //   useAsConstAssertion  <- prefer-as-const       0 violations repo-wide
+        //   noCommonJs           <- no-require-imports    2 in .ts, both suppressed with
+        //                                                reasons; see the override that
+        //                                                exempts .js/.cjs below
+        "noNamespace": "error",
+        "useAsConstAssertion": "error",
+        "noCommonJs": "error"
       },
 
       "complexity": {
@@ -331,6 +379,17 @@
   },
 
   "overrides": [
+    {
+      /**
+       * These files ARE CommonJS: jest configs, build scripts and the CJS integration
+       * test, which use require/module.exports because that is what they are loaded as.
+       * `no-require-imports` never applied to them either -- the old rule was scoped to
+       * the core SDK's `src/**​/*.ts`. noCommonJs is error for TypeScript, where ESM is
+       * the rule, and off here.
+       */
+      "includes": ["**/*.js", "**/*.cjs"],
+      "linter": { "rules": { "style": { "noCommonJs": "off" } } }
+    },
     {
       /**
        * Restores a gate rather than adding one. The testing package ran

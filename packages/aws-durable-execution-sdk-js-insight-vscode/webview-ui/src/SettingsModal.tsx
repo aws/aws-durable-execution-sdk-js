@@ -126,7 +126,7 @@ export function SettingsModal({
       : []),
   ];
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
+  // biome-ignore lint/correctness/useExhaustiveDependencies: GENUINE DEFECT CLASS, not style -- the effect reads llmProviderOptions (both .some and [0].value) but does not list it, so it can act on a stale option list. Ships in the VS Code extension and no linter has ever seen this file. Adding the dep as-is would re-run the effect every render because the array is rebuilt each time; the real fix is to memoise it, which is a behaviour change and so a tracked follow-up rather than part of a toolchain migration.
   useEffect(() => {
     // Defence in depth, and generic rather than per-provider: the host already
     // narrows llmProvider to something it can honor before sending config (see
@@ -145,7 +145,7 @@ export function SettingsModal({
 
   // Drop any prior test result when the modal (re)opens so a stale pass/fail
   // from a previous session isn't shown against freshly-loaded settings.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
+  // biome-ignore lint/correctness/useExhaustiveDependencies: same rule, lower severity in practice -- `visible` is listed but not read in the body. That is deliberate (the effect exists to clear stale results when the modal reopens), so this one is an idiom the rule cannot express, unlike the finding above.
   useEffect(() => {
     onClearTest();
   }, [visible, onClearTest]);

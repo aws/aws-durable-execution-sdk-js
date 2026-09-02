@@ -110,6 +110,7 @@ export class WorkerServerApiHandler {
           this.executionManager,
         );
       default:
+        // biome-ignore lint/suspicious/noUnusedExpressions: GENUINE DIFFERENCE from ESLint, not untriaged noise -- this is a compile-time exhaustiveness assertion, and it has no runtime effect by design. ESLint's no-unused-expressions did not flag `satisfies` expressions; Biome's does.
         data satisfies never;
         throw new Error("Unexpected data ApiType");
     }

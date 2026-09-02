@@ -796,7 +796,7 @@ describe("checkpoint-manager updateOperation", () => {
     );
     expect(storedOperation?.operation.Status).toBe(OperationStatus.FAILED);
     expect(
-      // biome-ignore lint/correctness/noUnsafeOptionalChaining: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
+      // biome-ignore lint/correctness/noUnsafeOptionalChaining: GENUINE DEFECT, not style -- if the optional chain short-circuits to undefined this throws TypeError instead of failing the assertion, so the test would error rather than report. Test-only, and the preceding assertion makes the undefined case unreachable in practice; the fix is to assert non-null first, tracked as a follow-up.
       (storedOperation?.operation as unknown as Record<string, unknown>)
         .SomeNewField,
     ).toBe("new-value");
@@ -922,12 +922,12 @@ describe("checkpoint-manager updateOperation", () => {
     );
     expect(storedOperation?.operation.Status).toBe(OperationStatus.SUCCEEDED);
     expect(
-      // biome-ignore lint/correctness/noUnsafeOptionalChaining: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
+      // biome-ignore lint/correctness/noUnsafeOptionalChaining: GENUINE DEFECT, not style -- if the optional chain short-circuits to undefined this throws TypeError instead of failing the assertion, so the test would error rather than report. Test-only, and the preceding assertion makes the undefined case unreachable in practice; the fix is to assert non-null first, tracked as a follow-up.
       (storedOperation?.operation as unknown as Record<string, unknown>)
         .SomeField,
     ).toBeUndefined();
     expect(
-      // biome-ignore lint/correctness/noUnsafeOptionalChaining: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
+      // biome-ignore lint/correctness/noUnsafeOptionalChaining: GENUINE DEFECT, not style -- if the optional chain short-circuits to undefined this throws TypeError instead of failing the assertion, so the test would error rather than report. Test-only, and the preceding assertion makes the undefined case unreachable in practice; the fix is to assert non-null first, tracked as a follow-up.
       (storedOperation?.operation as unknown as Record<string, unknown>)
         .AnotherField,
     ).toBeNull();

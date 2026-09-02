@@ -21,7 +21,7 @@
     "format": "biome format --write",
     "format:check": "biome format",
     "lint:ci": "biome ci --diagnostic-level=error",
-    "lint:report": "biome lint --reporter=json --max-diagnostics=none | node .github/workflows/scripts/biome/biome-warning-summary.mjs",
+    "lint:report": "biome check --reporter=json --max-diagnostics=none | node .github/workflows/scripts/biome/biome-warning-summary.mjs",
     "lint:async-safety": "biome lint --changed --only=nursery/noFloatingPromises --only=nursery/noMisusedPromises --only=nursery/useAwaitThenable --diagnostic-level=warn --no-errors-on-unmatched",
     "format:docs": "prettier --write \"**/*.{md,yml,yaml}\"",
     "format:docs:check": "prettier --check \"**/*.{md,yml,yaml}\"",

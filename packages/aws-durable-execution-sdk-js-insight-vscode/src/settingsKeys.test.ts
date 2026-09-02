@@ -14,6 +14,7 @@ import {
   SETTING_KEYS,
   isSettingKey,
 } from "@aws/durable-execution-sdk-js-insight-core";
+// biome-ignore lint/style/noCommonJs: reads the extension manifest at runtime to assert the declared settings keys match the code. `resolveJsonModule` is not enabled for this package, so a static import would not type-check.
 const manifest = require("../package.json") as {
   contributes: {
     configuration: {

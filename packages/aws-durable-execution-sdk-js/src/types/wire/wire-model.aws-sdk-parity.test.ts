@@ -213,6 +213,7 @@ assert<
 
 describe("wire enums match the AWS SDK service model", () => {
   // Imported for values rather than types, and only inside the test file.
+  // biome-ignore lint/style/noCommonJs: deliberate -- this test compares our wire enums to the AWS SDK's at runtime, so it needs the module's VALUES, and a static import would pull AWS types into the wire model the parity test exists to keep AWS-free. Carried an explicit @typescript-eslint/no-require-imports disable before the Biome migration.
   const sdk = require("@aws-sdk/client-lambda");
 
   it.each([
