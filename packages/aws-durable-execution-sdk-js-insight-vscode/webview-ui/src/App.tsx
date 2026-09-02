@@ -494,6 +494,7 @@ export function App() {
                     <SpaceBetween size="l">
                       {chat.map((turn, i) =>
                         turn.role === "user" ? (
+                          // biome-ignore lint/suspicious/noArrayIndexKey: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
                           <Box key={i}>
                             <Box
                               fontWeight="bold"
@@ -507,6 +508,7 @@ export function App() {
                             </div>
                           </Box>
                         ) : (
+                          // biome-ignore lint/suspicious/noArrayIndexKey: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
                           <Box key={i}>
                             <Box
                               fontWeight="bold"

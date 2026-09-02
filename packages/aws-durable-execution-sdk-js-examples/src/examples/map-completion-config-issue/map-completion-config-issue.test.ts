@@ -1,7 +1,3 @@
-import {
-  OperationType,
-  OperationStatus,
-} from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./map-completion-config-issue";
 import { createTests } from "../../utils/test-helper";
 

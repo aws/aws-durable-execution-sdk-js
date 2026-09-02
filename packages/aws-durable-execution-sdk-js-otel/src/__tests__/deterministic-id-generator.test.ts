@@ -325,8 +325,14 @@ describe("Bug Condition Exploration - Property-Based Tests", () => {
         (arn1, arn2, opId) => {
           fc.pre(arn1 !== arn2);
 
-          const result1 = (deriveSpanIdFromOperationId as Function)(opId, arn1);
-          const result2 = (deriveSpanIdFromOperationId as Function)(opId, arn2);
+          // Cast once, and to a concrete signature rather than `Function`: this
+          // property test deliberately calls through an untyped boundary, and
+          // `noBannedTypes` is error-level (it replaces no-unsafe-function-type).
+          const derive = deriveSpanIdFromOperationId as (
+            ...args: unknown[]
+          ) => unknown;
+          const result1 = derive(opId, arn1);
+          const result2 = derive(opId, arn2);
 
           expect(result1).not.toBe(result2);
         },

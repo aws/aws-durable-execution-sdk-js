@@ -86,10 +86,8 @@ export interface StepDetails {
  *
  * @public
  */
-export interface WireStepDetails extends Omit<
-  StepDetails,
-  "NextAttemptTimestamp"
-> {
+export interface WireStepDetails
+  extends Omit<StepDetails, "NextAttemptTimestamp"> {
   /** When the next retry attempt becomes eligible to run. */
   NextAttemptTimestamp?: WireTimestamp | undefined;
 }
@@ -192,10 +190,11 @@ export interface Operation {
  *
  * @public
  */
-export interface WireOperation extends Omit<
-  Operation,
-  "StartTimestamp" | "EndTimestamp" | "StepDetails" | "WaitDetails"
-> {
+export interface WireOperation
+  extends Omit<
+    Operation,
+    "StartTimestamp" | "EndTimestamp" | "StepDetails" | "WaitDetails"
+  > {
   /** When the operation started. */
   StartTimestamp: WireTimestamp | undefined;
   /** When the operation reached a terminal status, if it has. */

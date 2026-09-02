@@ -306,7 +306,7 @@ export class ConcurrencyController<Logger extends DurableLogger> {
         // "toString" from a crafted summary are not treated as valid.
         if (
           typeof reason === "string" &&
-          Object.prototype.hasOwnProperty.call(VALID_COMPLETION_REASONS, reason)
+          Object.hasOwn(VALID_COMPLETION_REASONS, reason)
         ) {
           return reason as CompletionReason;
         }

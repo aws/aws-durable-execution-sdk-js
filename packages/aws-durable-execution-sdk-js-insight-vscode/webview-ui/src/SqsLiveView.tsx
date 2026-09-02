@@ -52,7 +52,14 @@ const PRIMARY_COLUMNS = [
  * messageId (the same message can be re-delivered by SQS if it isn't deleted
  * after being read — see workflowInsight.sqsDeleteAfterRead).
  */
-export function SqsLiveView({ listening, messages, error, queueConfigured, onClear, onVisualize }: Props) {
+export function SqsLiveView({
+  listening,
+  messages,
+  error,
+  queueConfigured,
+  onClear,
+  onVisualize,
+}: Props) {
   const handleToggle = () => {
     postMessage({ type: listening ? "stopListening" : "startListening" });
   };
@@ -70,7 +77,11 @@ export function SqsLiveView({ listening, messages, error, queueConfigured, onCle
               <Button onClick={onClear} disabled={messages.length === 0}>
                 Clear
               </Button>
-              <Button variant="primary" onClick={handleToggle} disabled={!queueConfigured}>
+              <Button
+                variant="primary"
+                onClick={handleToggle}
+                disabled={!queueConfigured}
+              >
                 {listening ? "Stop Listening" : "Start Listening"}
               </Button>
             </SpaceBetween>
@@ -83,21 +94,28 @@ export function SqsLiveView({ listening, messages, error, queueConfigured, onCle
       <SpaceBetween size="m">
         {!queueConfigured && (
           <Alert type="warning">
-            No SQS queue configured. Click ⚙ and set the Queue URL under Data Source.
+            No SQS queue configured. Click ⚙ and set the Queue URL under Data
+            Source.
           </Alert>
         )}
         {error && <Alert type="error">{error}</Alert>}
         {listening && (
           <StatusIndicator type="in-progress">
-            Listening — {messages.length} message{messages.length === 1 ? "" : "s"} received
+            Listening — {messages.length} message
+            {messages.length === 1 ? "" : "s"} received
           </StatusIndicator>
         )}
         {!listening && messages.length > 0 && (
           <StatusIndicator type="stopped">
-            Stopped — {messages.length} message{messages.length === 1 ? "" : "s"} received
+            Stopped — {messages.length} message
+            {messages.length === 1 ? "" : "s"} received
           </StatusIndicator>
         )}
-        <ResultsTable columns={columns} rows={rows} primaryColumns={PRIMARY_COLUMNS} />
+        <ResultsTable
+          columns={columns}
+          rows={rows}
+          primaryColumns={PRIMARY_COLUMNS}
+        />
         {rows.length > 0 && (
           <Button variant="primary" onClick={onVisualize}>
             Visualize →
@@ -116,24 +134,29 @@ export function SqsLiveView({ listening, messages, error, queueConfigured, onCle
  * consistent regardless of destination. Falls back to raw columns
  * (messageId/receivedAt/body) for any message whose body isn't valid JSON.
  */
-export function toTable(messages: SqsMessageRow[]): { columns: string[]; rows: string[][] } {
+export function toTable(messages: SqsMessageRow[]): {
+  columns: string[];
+  rows: string[][];
+} {
   if (messages.length === 0) return { columns: [], rows: [] };
 
   // Most recently received first.
   const ordered = [...messages].reverse();
 
-  const parsed: Array<{ receivedAt: string; fields: Record<string, unknown> | undefined }> =
-    ordered.map((m) => {
-      try {
-        const body = JSON.parse(m.body);
-        return {
-          receivedAt: m.receivedAt,
-          fields: typeof body === "object" && body !== null ? body : undefined,
-        };
-      } catch {
-        return { receivedAt: m.receivedAt, fields: undefined };
-      }
-    });
+  const parsed: Array<{
+    receivedAt: string;
+    fields: Record<string, unknown> | undefined;
+  }> = ordered.map((m) => {
+    try {
+      const body = JSON.parse(m.body);
+      return {
+        receivedAt: m.receivedAt,
+        fields: typeof body === "object" && body !== null ? body : undefined,
+      };
+    } catch {
+      return { receivedAt: m.receivedAt, fields: undefined };
+    }
+  });
 
   if (parsed.every((p) => !p.fields)) {
     // Nothing parsed as a record — fall back to raw display.

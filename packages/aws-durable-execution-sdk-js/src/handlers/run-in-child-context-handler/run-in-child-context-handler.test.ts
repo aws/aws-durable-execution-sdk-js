@@ -1014,6 +1014,7 @@ describe("runWithContext Integration", () => {
     );
 
     // Setup runWithContext mock to return the function result
+    // biome-ignore lint/suspicious/noImportAssign: GENUINE DEFECT, not stylistic -- assigning to an imported binding is invalid ESM and only works because ts-jest transpiles to CJS. Needs a real fix (jest.mock or a mutable indirection), tracked as follow-up; suppressed here so the toolchain migration does not also rewrite test mocking.
     (runWithContext as jest.Mock) = jest
       .fn()
       .mockImplementation(async (stepId, parentId, fn, _attempt, _mode) => {

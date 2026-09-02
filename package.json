@@ -15,8 +15,17 @@
     "clean": "rm -rf node_modules && npm run clean --workspaces --if-present",
     "prepare": "husky install",
     "run-durable": "NODE_OPTIONS=\"--import tsx\" npx run-durable --",
-    "lint": "eslint .",
-    "typecheck:hosts": "npm run typecheck -w packages/aws-durable-execution-sdk-js-insight-core && npm run typecheck -w packages/aws-durable-execution-sdk-js-insight-vscode && npm run typecheck -w packages/aws-durable-execution-sdk-js-insight-desktop && npm run typecheck -w packages/aws-durable-execution-sdk-js-insight-mcp"
+    "lint": "biome check --diagnostic-level=error",
+    "typecheck:hosts": "npm run typecheck -w packages/aws-durable-execution-sdk-js-insight-core && npm run typecheck -w packages/aws-durable-execution-sdk-js-insight-vscode && npm run typecheck -w packages/aws-durable-execution-sdk-js-insight-desktop && npm run typecheck -w packages/aws-durable-execution-sdk-js-insight-mcp",
+    "lint:fix": "biome check --write",
+    "format": "biome format --write",
+    "format:check": "biome format",
+    "lint:ci": "biome ci --diagnostic-level=error",
+    "lint:report": "biome check --reporter=json --max-diagnostics=none | node .github/workflows/scripts/biome/biome-warning-summary.mjs",
+    "lint:async-safety": "biome lint --changed --only=nursery/noFloatingPromises --only=nursery/noMisusedPromises --only=nursery/useAwaitThenable --diagnostic-level=warn --no-errors-on-unmatched",
+    "lint:suppressions": "biome check --reporter=json --max-diagnostics=none | node .github/workflows/scripts/biome/check-unused-suppressions.mjs",
+    "lint:versions": "node .github/workflows/scripts/biome/check-tool-version-sync.mjs",
+    "lint:filenames": "git ls-files \"packages/aws-durable-execution-sdk-js/src/**/*.ts\" | sed \"s|^packages/aws-durable-execution-sdk-js/||\" | node packages/aws-durable-execution-sdk-js/scripts/check-filenames.js"
   },
   "repository": {
     "type": "git",
@@ -35,8 +44,7 @@
   "devDependencies": {
     "@aws-sdk/client-cloudwatch-logs": "^3.1009.0",
     "@aws-sdk/client-lambda": "^3.1014.0",
-    "@eslint/compat": "^1.4.1",
-    "@eslint/js": "^9.29.0",
+    "@biomejs/biome": "2.5.11",
     "@rollup/plugin-esm-shim": "^0.1.8",
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-typescript": "^12.1.4",
@@ -44,31 +52,24 @@
     "@types/argparse": "^2.0.17",
     "@types/aws-lambda": "^8.10.150",
     "@types/jest": "^30.0.0",
-    "@typescript-eslint/parser": "^8.44.0",
     "argparse": "^2.0.1",
     "concurrently": "^9.2.4",
     "dotenv": "^17.2.3",
     "esbuild": "^0.27.4",
-    "eslint": "^9.29.0",
-    "eslint-config-prettier": "^10.1.5",
-    "eslint-plugin-jest": "^29.0.1",
-    "eslint-plugin-tsdoc": "^0.5.2",
-    "globals": "^16.5.0",
     "husky": "^9.1.7",
     "jest": "^30.0.3",
     "lint-staged": "^16.2.3",
-    "prettier": "^3.6.2",
     "rollup": "^4.59.0",
     "rollup-plugin-node-externals": "^8.1.1",
     "ts-jest": "^29.4.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.20.3",
-    "typescript": "^5.8.3",
-    "typescript-eslint": "^8.34.1"
+    "typescript": "^5.8.3"
   },
   "lint-staged": {
-    "*.{js,ts}": "eslint --cache --fix",
-    "*.{js,mjs,ts,md,json,yml}": "prettier --write"
+    "*.{js,jsx,mjs,cjs,ts,tsx,mts,cts,json,jsonc}": [
+      "biome check --write --no-errors-on-unmatched"
+    ]
   },
   "private": true
 }

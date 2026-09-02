@@ -42,7 +42,14 @@ jobs:
           node "$GITHUB_WORKSPACE/.github/workflows/lintcommit.js"
 
   build:
-    needs: lint-commits
+    # `needs: lint` restores the gating topology this branch would otherwise lose.
+    # Before, lint ran inside `prebuild` for three packages, so a lint error failed
+    # the build job and everything downstream of it. Removing those hooks made `lint`
+    # a sibling job instead, which means a PR could merge on a green required build
+    # while `lint / lint` was red -- until someone adds the new check to the ruleset.
+    # Depending on it here makes that admin step an improvement in visibility rather
+    # than the only thing standing between a Biome failure and a merge.
+    needs: [lint-commits, lint]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -90,14 +97,12 @@ jobs:
       - name: Install webview-ui dependencies
         working-directory: packages/aws-durable-execution-sdk-js-insight-vscode/webview-ui
         run: npm ci
-      - name: Lint (boundary rules)
-        # The no-restricted-imports rules that forbid reaching into a sibling package
-        # by relative path, and forbid a host's API leaking into shared code. Review
-        # of #809 noted these had no CI gate at all -- eslint previously ran only via
-        # lint-staged on pre-commit, which `--no-verify` bypasses. The hostAgnostic
-        # tests cover the same ground, deliberately: the rules give the earliest
-        # signal, the tests are the backstop, and neither is the only gate.
-        run: npm run lint
+      # The boundary rules that used to run here are now enforced by the `lint` job
+      # (biome ci over the whole monorepo), which did not exist when this step was
+      # added -- at that point root `lint` was `eslint .` and this was the only CI
+      # gate for them. Keeping it would mean a second `npm ci` plus a duplicate
+      # whole-repo lint on every PR. The hostAgnostic tests below remain the
+      # backstop, as they always were.
       - name: Typecheck core and both hosts
         run: npm run typecheck:hosts
       - name: Typecheck the renderer
@@ -109,6 +114,12 @@ jobs:
         run: npm run build -w packages/aws-durable-execution-sdk-js-insight-desktop
       - name: Bundle the MCP server
         run: npm run build -w packages/aws-durable-execution-sdk-js-insight-mcp
+
+  # Runs off lint-commits rather than build: Biome needs only the sources, so
+  # linting does not have to wait for compilation and reports failures earlier.
+  lint:
+    needs: lint-commits
+    uses: "./.github/workflows/lint.yml"
 
   unit-tests:
     needs: build

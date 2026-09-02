@@ -13,7 +13,6 @@
 .aws-sam/*
 *.zip
 .DS_Store
-.eslintcache
 *.tsbuildinfo
 .rollup.cache
 **/.rollup.cache
@@ -21,7 +20,14 @@
 *.d.ts
 *.tgz
 
+# Nothing passes --cache today, but ESLint still runs here (the plugin package's
+# own rules, and the examples package that exercises them), so keep ignoring its
+# cache. Dropping this line un-ignored a stray cache file and got it committed.
+.eslintcache
+
 # VS Code
+# settings.json and extensions.json are tracked deliberately (force-added): they
+# pin the formatter identity and recommend the extensions that provide it.
 .vscode/
 
 # Environment files

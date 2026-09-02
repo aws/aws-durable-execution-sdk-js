@@ -59,24 +59,36 @@ function OperationsTable({ operations }: { operations: OperationRecord[] }) {
   // Operation `id` is unique per the SDK's OperationRecord contract, so it's a
   // safe trackBy key (unlike name, which can repeat across loop iterations).
   const columnDefs = [
-    { id: "name", header: "Name", cell: (o: OperationRecord) => o.name ?? o.id },
-    { id: "type", header: "Type", cell: (o: OperationRecord) => o.subType ?? o.type },
+    {
+      id: "name",
+      header: "Name",
+      cell: (o: OperationRecord) => o.name ?? o.id,
+    },
+    {
+      id: "type",
+      header: "Type",
+      cell: (o: OperationRecord) => o.subType ?? o.type,
+    },
     { id: "status", header: "Status", cell: (o: OperationRecord) => o.status },
     {
       id: "durationMs",
       header: "Duration (ms)",
-      cell: (o: OperationRecord) => (o.durationMs != null ? String(o.durationMs) : ""),
+      cell: (o: OperationRecord) =>
+        o.durationMs != null ? String(o.durationMs) : "",
     },
     {
       id: "attempt",
       header: "Attempt",
-      cell: (o: OperationRecord) => (o.attempt != null ? String(o.attempt) : ""),
+      cell: (o: OperationRecord) =>
+        o.attempt != null ? String(o.attempt) : "",
     },
   ];
 
-  const hasDetail = (o: OperationRecord) => o.result !== undefined || o.error !== undefined;
+  const hasDetail = (o: OperationRecord) =>
+    o.result !== undefined || o.error !== undefined;
 
-  const selectOperation = (o: OperationRecord | null) => setSelected(o && hasDetail(o) ? o : null);
+  const selectOperation = (o: OperationRecord | null) =>
+    setSelected(o && hasDetail(o) ? o : null);
 
   return (
     <>
@@ -86,7 +98,9 @@ function OperationsTable({ operations }: { operations: OperationRecord[] }) {
         trackBy="id"
         selectionType="single"
         selectedItems={selected ? [selected] : []}
-        onSelectionChange={({ detail }) => selectOperation(detail.selectedItems[0] ?? null)}
+        onSelectionChange={({ detail }) =>
+          selectOperation(detail.selectedItems[0] ?? null)
+        }
         variant="embedded"
         wrapLines
         onRowClick={({ detail }) => selectOperation(detail.item)}
@@ -100,7 +114,9 @@ function OperationsTable({ operations }: { operations: OperationRecord[] }) {
       <Modal
         visible={selected != null}
         onDismiss={() => setSelected(null)}
-        header={selected ? `Operation: ${selected.name ?? selected.id}` : "Operation"}
+        header={
+          selected ? `Operation: ${selected.name ?? selected.id}` : "Operation"
+        }
         size="large"
       >
         {selected && (
@@ -140,28 +156,40 @@ function OperationsTable({ operations }: { operations: OperationRecord[] }) {
  * syntax-highlighted JSON instead of an inline stringified blob.
  */
 export function RecordDetail({ visible, onDismiss, fields, columns }: Props) {
-  const operations = tryParseJson(fields.operations ?? fields.operationsByName ?? "");
-  const operationsList: OperationRecord[] | undefined = Array.isArray(operations)
-    // Raw operations array (Aurora, and the "array"/"both" operationsFormat):
-    // `id` is already unique per the SDK contract.
-    ? operations
+  const operations = tryParseJson(
+    fields.operations ?? fields.operationsByName ?? "",
+  );
+  const operationsList: OperationRecord[] | undefined = Array.isArray(
+    operations,
+  )
+    ? // Raw operations array (Aurora, and the "array"/"both" operationsFormat):
+      // `id` is already unique per the SDK contract.
+      operations
     : operations && typeof operations === "object"
-      // operationsByName map (DynamoDB, CloudWatch direct): OperationSummary
-      // has no `id` field, but the map key (name) is unique by construction —
-      // use it as a synthetic id so the table can select rows reliably.
-      ? Object.entries(operations as Record<string, unknown>).map(([name, v]) => ({
-          id: name,
-          name,
-          ...(v as Omit<OperationRecord, "id" | "name">),
-        }))
+      ? // operationsByName map (DynamoDB, CloudWatch direct): OperationSummary
+        // has no `id` field, but the map key (name) is unique by construction —
+        // use it as a synthetic id so the table can select rows reliably.
+        Object.entries(operations as Record<string, unknown>).map(
+          ([name, v]) => ({
+            id: name,
+            name,
+            ...(v as Omit<OperationRecord, "id" | "name">),
+          }),
+        )
       : undefined;
 
   const otherColumns = columns.filter(
-    (c) => c !== "operations" && c !== "operationsByName" && !JSON_FIELDS.has(c),
+    (c) =>
+      c !== "operations" && c !== "operationsByName" && !JSON_FIELDS.has(c),
   );
 
   return (
-    <Modal visible={visible} onDismiss={onDismiss} header="Record Details" size="max">
+    <Modal
+      visible={visible}
+      onDismiss={onDismiss}
+      header="Record Details"
+      size="max"
+    >
       <Tabs
         tabs={[
           {
@@ -172,7 +200,9 @@ export function RecordDetail({ visible, onDismiss, fields, columns }: Props) {
                 columns={1}
                 items={otherColumns.map((col) => ({
                   label: col,
-                  value: fields[col] || <Box color="text-body-secondary">—</Box>,
+                  value: fields[col] || (
+                    <Box color="text-body-secondary">—</Box>
+                  ),
                 }))}
               />
             ),
@@ -191,7 +221,11 @@ export function RecordDetail({ visible, onDismiss, fields, columns }: Props) {
                 {
                   id: "input",
                   label: "Input",
-                  content: <JsonView value={tryParseJson(fields.input) ?? fields.input} />,
+                  content: (
+                    <JsonView
+                      value={tryParseJson(fields.input) ?? fields.input}
+                    />
+                  ),
                 },
               ]
             : []),
@@ -200,7 +234,11 @@ export function RecordDetail({ visible, onDismiss, fields, columns }: Props) {
                 {
                   id: "output",
                   label: "Output",
-                  content: <JsonView value={tryParseJson(fields.output) ?? fields.output} />,
+                  content: (
+                    <JsonView
+                      value={tryParseJson(fields.output) ?? fields.output}
+                    />
+                  ),
                 },
               ]
             : []),
@@ -209,7 +247,11 @@ export function RecordDetail({ visible, onDismiss, fields, columns }: Props) {
                 {
                   id: "error",
                   label: "Error",
-                  content: <JsonView value={tryParseJson(fields.error) ?? fields.error} />,
+                  content: (
+                    <JsonView
+                      value={tryParseJson(fields.error) ?? fields.error}
+                    />
+                  ),
                 },
               ]
             : []),
