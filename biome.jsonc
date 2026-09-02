@@ -145,15 +145,59 @@
   //    ESLint/Biome difference over `satisfies`). All four are enforced repo-wide,
   //    which is BROADER than the old scope of one package's src/.
   //
-  //    That leaves exactly two rules that were error-level, CI-gated, and have no
-  //    Biome equivalent at any severity:
+  //    Two rules from that config were error-level, CI-gated, and have no Biome
+  //    equivalent at any severity:
   //
   //      - no-duplicate-imports  (confirmed: no such rule exists on 2.5.11)
   //      - triple-slash-reference
   //
   //    Both are genuine regressions rather than unfilled gaps: a violation used to
-  //    fail the build job and now fails nothing. Everything else from that config
-  //    either survives as a Biome rule or is listed under gap 1.
+  //    fail the build job and now fails nothing.
+  //
+  // 5. THIS LIST IS NOT A PROOF OF COMPLETENESS, and earlier revisions of this file
+  //    wrongly implied it was -- the claim "the only two net losses" was corrected four
+  //    times, each time because someone enumerated from a direction this file had not.
+  //    Read it as "what has been measured so far", and re-derive rather than trust it.
+  //
+  //    THE ENUMERATION THAT ACTUALLY FINDS THESE. The failure mode is a rule Biome
+  //    enables by default BELOW error, which therefore does not fail
+  //    `biome ci --diagnostic-level=error` even though ESLint had it at error. Reading
+  //    the ESLint configs forward only finds the ones you already suspect. Enumerate
+  //    from Biome instead -- `biome explain <rule>` prints "Default severity" and
+  //    whether the rule is recommended, so scripting it over the rule names in
+  //    node_modules/@biomejs/biome/configuration_schema.json settles every rule in one
+  //    pass. On 2.5.11 that yields 87 recommended rules whose default is below error.
+  //
+  //    Counts measured that way on this branch, over those 87:
+  //      - 67 have ZERO violations repo-wide. The 15 of those with an ESLint ancestor
+  //        that this repo gated are now "error" above. The other 52 have no gated
+  //        ancestor, so enabling them would be new policy rather than restoration --
+  //        left off deliberately, and cheap to revisit since they are all at zero.
+  //      - 12 are clean in the testing package but not elsewhere. The 5 with a gated
+  //        ancestor are "error" in that package's override; repo-wide they would need
+  //        real triage (useLiteralKeys 23, noUselessStringRaw 7, and so on).
+  //      - 8 have violations in the testing package too, so they are backlog, not
+  //        oversight: noThisInStatic 13, useDateNow 1, noUnusedFunctionParameters 198,
+  //        noNonNullAssertion 662, useImportType 1090, useNodejsImportProtocol 94,
+  //        useTemplate 61, noExplicitAny 1057. These are the documented warn-level
+  //        backlog above, not new findings.
+  //
+  //    A THIRD FAILURE MODE, which the enumeration above does NOT find: an ESLint rule
+  //    that was gated can map onto a Biome rule that is not recommended at all, and so
+  //    is OFF rather than merely below error. eslint:recommended's `no-empty` is the
+  //    worked example -- it maps to noEmptyBlockStatements (off by default, 100
+  //    violations repo-wide, 0 in the testing package, now "error" there), and NOT to
+  //    noEmptyBlock, which is a CSS rule. Both this file and a reviewer initially
+  //    mismapped it. Rules in this category have to be found by walking the ESLint rule
+  //    lists and resolving each name, which has not been done exhaustively; treat the
+  //    counts above as a floor.
+  //
+  //    VERIFYING A SINGLE RULE'S GATE. Use
+  //    `biome lint --diagnostic-level=error <file with one violation>` and check whether
+  //    a diagnostic is printed. `biome lint` does not check formatting, so this is
+  //    immune to the trap of using `lint:ci` (or `biome ci`) exit codes: an unformatted
+  //    probe file fails those on FORMATTING, which looks exactly like the rule gating.
+  //    Prefer `explain` to discover, and this to confirm.
   //
   // ON THE SEVEN EXACT PINS: @biomejs/biome is pinned exact in the root package.json
   // and in six workspace packages, and prettier in the root only. Nothing currently
@@ -299,7 +343,11 @@
         // all unused `catch (error)` bindings in the conformance handlers, and Biome's
         // fix is an UNSAFE rename to `_error` rather than a deletion -- 21 renames
         // would be churn, not cleanup. Worth a deliberate pass, then promotion.
-        "noUnusedImports": "error"
+        "noUnusedImports": "error",
+
+        // eslint:recommended, which the testing package pulled in via `js/recommended`
+        // at error. 0 violations repo-wide, so error costs nothing.
+        "noUnusedLabels": "error"
       },
 
       "suspicious": {
@@ -318,6 +366,17 @@
         "noTsIgnore": "error",
         "noDuplicateEnumValues": "error",
         "noExtraNonNullAssertion": "error",
+
+        // Also default-below-error, also gated before, also 0 violations repo-wide.
+        // From eslint:recommended, via the testing package's `js/recommended`:
+        "noCatchAssign": "error",
+        "noIrregularWhitespace": "error",
+        "noPrototypeBuiltins": "error",
+        "noUselessEscapeInString": "error",
+        "noUselessRegexBackrefs": "error",
+        // From tseslint strict / stylistic, which that package also pulled in:
+        "noConfusingVoidType": "error",
+        "useAdjacentOverloadSignatures": "error",
 
         // RESTORING A GATE, not adding one. `@typescript-eslint/no-unused-expressions`
         // came in at error via `...typescriptEslint.configs.recommended.rules` in the
@@ -369,7 +428,9 @@
         "noNamespace": "error",
         "useAsConstAssertion": "error",
         "noCommonJs": "error",
-        "useArrayLiterals": "error"
+        "useArrayLiterals": "error",
+        // tseslint stylistic (prefer-function-type), 0 violations repo-wide.
+        "useShorthandFunctionType": "error"
       },
 
       "complexity": {
@@ -385,7 +446,14 @@
         // this one rule), so warn would be a silent downgrade.
         "noBannedTypes": "error",
         "noUselessThisAlias": "error",
-        "noUselessTypeConstraint": "error"
+        "noUselessTypeConstraint": "error",
+
+        // Same story: default below error, gated before, 0 violations repo-wide.
+        "noAdjacentSpacesInRegex": "error",
+        "noArguments": "error",
+        "noExtraBooleanCast": "error",
+        "noStaticOnlyClass": "error",
+        "noUselessEmptyExport": "error"
       },
 
       "nursery": {
@@ -504,10 +572,34 @@
       "linter": {
         "rules": {
           "suspicious": {
-            "noSkippedTests": "error"
+            "noSkippedTests": "error",
+            // The real equivalent of eslint:recommended's `no-empty`, which this package
+            // gated. It is NOT in Biome's recommended set, so it is OFF by default -- a
+            // THIRD failure mode beyond "recommended but below error", which the
+            // enumeration in gap 5 does not find. 100 violations repo-wide, 0 here.
+            // (Biome's `noEmptyBlock` is a CSS rule and is NOT this one.)
+            "noEmptyBlockStatements": "error"
           },
           "style": {
             "useThrowOnlyError": "error"
+          },
+          // Five more rules this package gated at error and has ZERO violations of, while
+          // the rest of the repo does not -- so the override closes them here at no cost,
+          // exactly as it does for the async trio. Repo-wide counts, for the record:
+          // noUselessCatch 2, noUselessConstructor 8, useOptionalChain 10,
+          // noUnusedPrivateClassMembers 4, noUnusedVariables 22.
+          //
+          // noUnusedVariables is the notable one: the repo-wide "warn" is justified by the
+          // 21 unused catch bindings in the conformance handlers, and that argument does
+          // not apply to this package at all.
+          "complexity": {
+            "noUselessCatch": "error",
+            "noUselessConstructor": "error",
+            "useOptionalChain": "error"
+          },
+          "correctness": {
+            "noUnusedPrivateClassMembers": "error",
+            "noUnusedVariables": "error"
           },
           "nursery": {
             "noFloatingPromises": "error",
