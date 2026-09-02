@@ -42,14 +42,19 @@ jobs:
           node "$GITHUB_WORKSPACE/.github/workflows/lintcommit.js"
 
   build:
-    # `needs: lint` restores the gating topology this branch would otherwise lose.
-    # Before, lint ran inside `prebuild` for three packages, so a lint error failed
-    # the build job and everything downstream of it. Removing those hooks made `lint`
-    # a sibling job instead, which means a PR could merge on a green required build
-    # while `lint / lint` was red -- until someone adds the new check to the ruleset.
-    # Depending on it here makes that admin step an improvement in visibility rather
-    # than the only thing standing between a Biome failure and a merge.
-    needs: [lint-commits, lint]
+    # Deliberately NOT `needs: lint`. That was tried, on the theory that depending on
+    # lint would make a lint failure block the merge the way it did when lint ran inside
+    # `prebuild`. It does not: GitHub reports a job skipped by a failed `needs` with a
+    # conclusion of `skipped`, and skipped counts as SUCCESS for required status checks
+    # (see "Troubleshooting required status checks" in the GitHub docs -- successful
+    # statuses are success, skipped and neutral).
+    #
+    # So `needs: lint` was strictly worse: a lint failure skipped `build` AND the
+    # `unit-tests` jobs that depend on it, all three reported success, the PR stayed
+    # mergeable, and the tests never ran. Blocking is the ruleset's job -- `lint / lint`
+    # is a required check -- and keeping these parallel means a PR with a lint error
+    # still gets real test results in the same run.
+    needs: lint-commits
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
