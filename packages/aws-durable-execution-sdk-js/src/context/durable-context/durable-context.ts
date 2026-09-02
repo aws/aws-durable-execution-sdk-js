@@ -206,25 +206,29 @@ export class DurableContextImpl<Logger extends DurableLogger>
   }
 
   private createModeAwareLogger(logger: Logger): DurableContextLogger<Logger> {
+    // These wrappers exist to gate logging on shouldLog(), not to forward a value:
+    // the underlying logger methods return void. `noVoidTypeReturn` fired on `log`
+    // alone because it is the one with an explicit `: void` annotation, so all five
+    // drop the `return` rather than leaving the file inconsistent about it.
     const durableContextLogger: DurableContextLogger<Logger> = {
       warn: (...args) => {
         if (this.shouldLog()) {
-          return logger.warn(...args);
+          logger.warn(...args);
         }
       },
       debug: (...args) => {
         if (this.shouldLog()) {
-          return logger.debug(...args);
+          logger.debug(...args);
         }
       },
       info: (...args) => {
         if (this.shouldLog()) {
-          return logger.info(...args);
+          logger.info(...args);
         }
       },
       error: (...args) => {
         if (this.shouldLog()) {
-          return logger.error(...args);
+          logger.error(...args);
         }
       },
     };

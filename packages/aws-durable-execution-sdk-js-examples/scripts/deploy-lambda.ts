@@ -149,8 +149,9 @@ function loadExampleConfiguration(exampleName: string): ExamplesWithConfig {
       `Error: Example with handler '${targetHandler}' not found in catalog`,
     );
     console.error("Available handlers:");
-    // biome-ignore lint/suspicious/useIterableCallbackReturn: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
-    catalog.forEach((example) => console.error(`  ${example.handler}`));
+    catalog.forEach((example) => {
+      console.error(`  ${example.handler}`);
+    });
     process.exit(1);
   }
 

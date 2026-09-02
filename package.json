@@ -15,17 +15,17 @@
     "clean": "rm -rf node_modules && npm run clean --workspaces --if-present",
     "prepare": "husky install",
     "run-durable": "NODE_OPTIONS=\"--import tsx\" npx run-durable --",
-    "lint": "biome check",
+    "lint": "biome check --diagnostic-level=error",
     "typecheck:hosts": "npm run typecheck -w packages/aws-durable-execution-sdk-js-insight-core && npm run typecheck -w packages/aws-durable-execution-sdk-js-insight-vscode && npm run typecheck -w packages/aws-durable-execution-sdk-js-insight-desktop && npm run typecheck -w packages/aws-durable-execution-sdk-js-insight-mcp",
-    "lint:fix": "biome check --write",
+    "lint:fix": "biome check --write --diagnostic-level=error",
     "format": "biome format --write",
     "format:check": "biome format",
     "ci": "biome ci --diagnostic-level=error",
-    "lint:report": "biome lint --reporter=json | node .github/workflows/scripts/biome/biome-warning-summary.mjs",
+    "lint:report": "biome lint --reporter=json --max-diagnostics=none | node .github/workflows/scripts/biome/biome-warning-summary.mjs",
     "lint:async-safety": "biome lint --changed --only=nursery/noFloatingPromises --only=nursery/noMisusedPromises --only=nursery/useAwaitThenable --diagnostic-level=warn --no-errors-on-unmatched",
     "format:docs": "prettier --write \"**/*.{md,yml,yaml}\"",
     "format:docs:check": "prettier --check \"**/*.{md,yml,yaml}\"",
-    "lint:suppressions": "biome lint --reporter=json | node .github/workflows/scripts/biome/check-unused-suppressions.mjs"
+    "lint:suppressions": "biome lint --reporter=json --max-diagnostics=none | node .github/workflows/scripts/biome/check-unused-suppressions.mjs"
   },
   "repository": {
     "type": "git",

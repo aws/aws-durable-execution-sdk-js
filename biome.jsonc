@@ -31,9 +31,14 @@
   //    errors, but it does not implement any of these rules.
   //
   // 2. TSDoc syntax is unchecked. `eslint-plugin-tsdoc`'s `tsdoc/syntax` has no Biome
-  //    equivalent. API Extractor still parses TSDoc during `npm run api:extract` and
-  //    remains the backstop -- it currently reports unresolved @link references in
-  //    src/types/batch.ts.
+  //    equivalent, and nothing automated replaces it. API Extractor does parse TSDoc,
+  //    but `api:extract` is a manual command in no workflow, so calling it a
+  //    "backstop" would overstate it. It also cannot become a CI gate as-is: verify
+  //    mode (`api-extractor run` without `--local`) exits 1 today on pre-existing
+  //    ae-unresolved-link warnings, including ambiguous @link references in
+  //    src/utils/with-retry/index.ts and src/types/batch.ts. Fixing those first would
+  //    make an api-report diff check viable, and worth doing. Note tsdoc/syntax was
+  //    "warn" before, so nothing regressed -- this is an unfilled gap, not a loss.
   //
   // 3. Markdown and YAML are formatted by Prettier, not Biome, which has no
   //    formatter for either language. Prettier is retained as a root devDependency
@@ -42,8 +47,14 @@
   //    with ~20 workflow files, so leaving them unformatted was a straight loss
   //    rather than a tradeoff. Everything Biome can format, Biome formats.
   //
-  // 4. no-duplicate-imports has no Biome equivalent (was "error" in the core SDK and
-  //    insight configs).
+  // 4. no-duplicate-imports is a NET LOSS, not merely an unfilled gap. It has no
+  //    Biome equivalent at any severity (confirmed: no such rule exists on 2.5.11),
+  //    and it was "error" in the core SDK config -- which gated every pull request,
+  //    because that package's `prebuild` ran `eslint src --ext .ts --fix` and CI runs
+  //    `npm run build`. So a duplicate import used to fail the build job and now
+  //    fails nothing. The other two error-level rules from that config survive as
+  //    Biome rules (useFilenamingConvention and the wire-model noRestrictedImports),
+  //    so this is the single regression in enforcement.
   //
   // ON UPGRADING BIOME OR PRETTIER: both versions in package.json are pinned exact,
   // and npm dependencies here are not Dependabot-managed (only github-actions are),
@@ -364,10 +375,12 @@
      * packages/aws-durable-execution-sdk-js-insight-core/src/hostModuleScan.ts, which is
      * where the tested, authoritative version lives.
      *
-     * NOTE ON ENFORCEMENT: unlike the old ESLint setup, these now run in CI via
-     * `biome ci` (see .github/workflows/lint.yml), not only on pre-commit where
-     * `--no-verify` bypassed them. The `hostAgnostic.test.ts` guards must still stay --
-     * they assert the same invariant from inside the test suite.
+     * NOTE ON ENFORCEMENT: these were already gated before this migration -- the
+     * `insight-hosts` job ran `npm run lint` for exactly this purpose (added by #809).
+     * That step is removed and the dedicated `lint` job (`biome ci`, see
+     * .github/workflows/lint.yml) carries them now, so the gate moved rather than
+     * appeared. The `hostAgnostic.test.ts` guards must still stay -- they assert the
+     * same invariant from inside the test suite, independent of lint configuration.
      */
     {
       "includes": [

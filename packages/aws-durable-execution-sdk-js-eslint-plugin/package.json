@@ -18,8 +18,8 @@
     "build": "tsc",
     "test": "jest",
     "clean": "rm -rf dist node_modules .tsbuildinfo",
-    "lint": "biome check src",
-    "lint:fix": "biome check --write src"
+    "lint": "biome check src --diagnostic-level=error",
+    "lint:fix": "biome check --write src --diagnostic-level=error"
   },
   "keywords": [
     "eslint",

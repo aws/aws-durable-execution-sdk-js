@@ -22,10 +22,10 @@
     "build:cjs": "rollup --config rollup.config.mjs --environment MODE:cjs",
     "build:types": "tsc --project tsconfig.build.json --outDir dist-types",
     "prepublishOnly": "npm run build && npm run test",
-    "lint": "biome check src",
+    "lint": "biome check src --diagnostic-level=error",
     "prebuild": "rm -rf dist dist-cjs dist-types",
     "test": "tsc --noEmit && jest --config jest.config.mjs --collectCoverage --collectCoverageFrom=src/**/*.{ts,js}",
-    "lint:fix": "biome check --write src"
+    "lint:fix": "biome check --write src --diagnostic-level=error"
   },
   "exports": {
     ".": {
