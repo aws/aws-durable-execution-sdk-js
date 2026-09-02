@@ -110,19 +110,29 @@
   //    Two of the 20 were then explicitly downgraded to "warn" in the same config
   //    (no-explicit-any, no-unused-vars), leaving 18 at error.
   //
-  //    Of those 18, eleven map onto Biome rules that were already ENABLED AT ERROR and
-  //    therefore still gate: noMisleadingInstantiator, useNamespaceKeyword,
-  //    noUnsafeDeclarationMerging, noDuplicateEnumValues, noUselessThisAlias,
-  //    noUselessTypeConstraint, noExtraNonNullAssertion,
-  //    noNonNullAssertedOptionalChain, and the three restored below.
+  //    BEING IN BIOME'S "RECOMMENDED" SET IS NOT THE SAME AS GATING. Biome enables many
+  //    recommended rules at warn or info, and `biome ci --diagnostic-level=error` -- the
+  //    CI gate -- does not fail on those. Verify severity per rule; do not infer it from
+  //    "recommended". The check that matters is
+  //    `biome lint --diagnostic-level=error <file containing a violation>`, on a file
+  //    that is already FORMATTED (an unformatted probe fails `biome ci` on formatting
+  //    and looks like a gate that is not there).
   //
-  //    THREE MORE mapped onto Biome rules that are enabled but only at warn or info,
-  //    which does NOT gate under `--diagnostic-level=error`. Being in a "recommended"
-  //    set is not the same as gating, and an earlier revision of this config listed
-  //    them as preserved on exactly that mistaken equivalence. They are now "error":
-  //    noTsIgnore (<- ban-ts-comment), useArrayLiterals (<- no-array-constructor) and
-  //    noBannedTypes (<- no-empty-object-type + no-unsafe-function-type +
-  //    no-wrapper-object-types, which Biome merges).
+  //    Of those 18, four map onto Biome rules that were already error and gate:
+  //    noMisleadingInstantiator, useNamespaceKeyword, noUnsafeDeclarationMerging and
+  //    noNonNullAssertedOptionalChain.
+  //
+  //    SEVEN more mapped onto rules enabled only at warn or info, so a violation passed
+  //    CI while this config claimed the gate survived. All seven are now "error", each
+  //    measured first and each verified to fail `lint:ci` on a formatted probe:
+  //      noTsIgnore               <- ban-ts-comment            0 violations
+  //      useArrayLiterals         <- no-array-constructor      0
+  //      noBannedTypes            <- no-empty-object-type + no-unsafe-function-type
+  //                                  + no-wrapper-object-types (Biome merges them)  2
+  //      noDuplicateEnumValues    <- no-duplicate-enum-values  0
+  //      noExtraNonNullAssertion  <- no-extra-non-null-assertion  0
+  //      noUselessThisAlias       <- no-this-alias             0
+  //      noUselessTypeConstraint  <- no-unnecessary-type-constraint  0
   //
   //    noExplicitAny is the remaining one, deliberately "warn": the SDK config
   //    downgraded it to warn immediately after the spread, so warn is what it actually
@@ -306,6 +316,8 @@
         // noBannedTypes 2 (both `as Function` in an otel test, now typed concretely
         // rather than suppressed -- 287 otel tests still pass).
         "noTsIgnore": "error",
+        "noDuplicateEnumValues": "error",
+        "noExtraNonNullAssertion": "error",
 
         // RESTORING A GATE, not adding one. `@typescript-eslint/no-unused-expressions`
         // came in at error via `...typescriptEslint.configs.recommended.rules` in the
@@ -371,7 +383,9 @@
         // from typescript-eslint recommended at error (as no-empty-object-type,
         // no-unsafe-function-type and no-wrapper-object-types, which Biome merges into
         // this one rule), so warn would be a silent downgrade.
-        "noBannedTypes": "error"
+        "noBannedTypes": "error",
+        "noUselessThisAlias": "error",
+        "noUselessTypeConstraint": "error"
       },
 
       "nursery": {
