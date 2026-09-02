@@ -165,6 +165,9 @@ export class OperationWithData<OperationResultValue = unknown>
 
     let result: OperationResultValue | undefined;
     try {
+      // Wire boundary: JSON.parse returns `any`, and the service contract is the
+      // only thing that says this is an OperationResultValue. Reviewed and accepted
+      // under ESLint's no-unsafe-type-assertion before the Biome migration.
       result = invokeDetails?.Result
         ? (JSON.parse(invokeDetails.Result) as unknown as OperationResultValue)
         : undefined;
@@ -275,6 +278,9 @@ export class OperationWithData<OperationResultValue = unknown>
   }
 
   getSubType(): OperationSubType | undefined {
+    // Wire boundary: SubType arrives as a plain string and is narrowed to the enum.
+    // Reviewed and accepted under ESLint's no-unsafe-type-assertion before the
+    // Biome migration.
     return this.checkpointOperationData?.operation.SubType as OperationSubType;
   }
 

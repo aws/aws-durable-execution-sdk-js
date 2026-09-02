@@ -144,6 +144,12 @@ jobs:
       # Informational only, never gating: renders the warning backlog as a
       # per-rule table in the job summary so it stays visible without annotating
       # individual lines.
+      #
+      # success() || failure(), not always(), for the reason given above: always()
+      # would also run after a failed `npm ci`, with no biome to invoke. The script
+      # degrades gracefully there rather than failing, but the file argues against
+      # always() two steps up, and code disagreeing with its own stated reasoning is
+      # worse than either choice.
       - name: Biome warning backlog (informational)
-        if: always()
+        if: success() || failure()
         run: npm run lint:report --silent >> "$GITHUB_STEP_SUMMARY"

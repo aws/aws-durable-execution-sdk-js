@@ -43,6 +43,19 @@
   //        ESLint had the equivalent at error with only 23 suppressions, so Biome's
   //        implementation is far broader -- this is nowhere near parity and turning
   //        it on is a triage project, not a config edit.
+  //
+  //        THE REVIEWED SET IS RECOVERABLE. Those 23 sites were explicit
+  //        `eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion`
+  //        directives, i.e. assertions someone had already judged intentional. They
+  //        are worth separating from the other ~242 when this is triaged, and the
+  //        full list is one command away:
+  //          git grep -n no-unsafe-type-assertion <the commit before this migration>
+  //        The two clearest cases carry inline notes instead:
+  //        checkpoint-server/utils/tagged-strings.ts (branded-string factories, where
+  //        the assertion IS the function) and test-runner/common/operations/
+  //        operation-with-data.ts (wire boundary). Notes, not `biome-ignore`
+  //        comments, because a suppression for a disabled rule is dead and
+  //        `lint:suppressions` correctly rejects it -- verified.
   //      - noUnnecessaryConditions (in the `suspicious` group, not `nursery`):
   //        not measured here; measure before describing the cost.
   //    `tsc --noEmit` still runs and still catches type errors, but it does not
@@ -77,7 +90,10 @@
   //
   // ON THE SEVEN EXACT PINS: @biomejs/biome is pinned exact in the root package.json
   // and in six workspace packages, and prettier in the root only. Nothing currently
-  // checks that the seven Biome pins agree. A skew would produce inconsistent
+  // checks that the seven Biome pins agree. `lint:versions` discovers manifests
+  // recursively rather than one level deep, because nested ones exist
+  // (insight-vscode/webview-ui, which has its own `npm ci` and owns the .tsx files
+  // Biome formats, and insight/cdk) and are exactly where a divergent pin would hide. A skew would produce inconsistent
   // formatting between `npm run lint` at the root and in a package, with no failure
   // to reveal it, so `lint:versions` asserts they match and runs in CI alongside the
   // other gates. Bump all seven together, or delete the six and rely on hoisting --

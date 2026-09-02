@@ -13,24 +13,63 @@
  * `^2.5.11` would let two installs of the same commit disagree.
  */
 
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const TOOLS = ["@biomejs/biome", "prettier"];
-const PACKAGES_DIR = "packages";
+const SKIP_DIRS = new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "dist-cjs",
+  "dist-types",
+  "build",
+  "out",
+  "coverage",
+]);
+
+/**
+ * Every package.json in the repo, found recursively.
+ *
+ * Recursive rather than `packages/*​/package.json` on purpose: nested manifests
+ * exist and are exactly where a divergent pin would hide. `insight-vscode/webview-ui`
+ * has its own `npm ci` in CI and owns the .tsx files Biome formats, so a Biome pin
+ * appearing there later is the most likely source of the silent two-way formatting
+ * this script exists to prevent -- and a glob one level deep would not see it.
+ * `insight/cdk` is the same shape. Neither declares these tools today; the point is
+ * that the check keeps working when one of them does.
+ *
+ * @returns {string[]}
+ */
+function findManifests(dir = ".", found = []) {
+  for (const entry of readdirSync(dir)) {
+    if (SKIP_DIRS.has(entry) || entry.startsWith(".")) continue;
+    const path = join(dir, entry);
+    let stats;
+    try {
+      stats = statSync(path);
+    } catch {
+      continue; // broken symlink
+    }
+    if (stats.isDirectory()) findManifests(path, found);
+    else if (entry === "package.json") found.push(path);
+  }
+  // The walk already yields "./package.json"; normalise it and put the root
+  // manifest first so its pin is the one reported as canonical. Deduplicated
+  // deliberately -- an earlier version unshifted the root unconditionally and
+  // double-counted it, which inflated every "N declaration(s)" message by one.
+  if (dir !== ".") return found;
+  const normalised = [
+    ...new Set(found.map((f) => (f === "./package.json" ? "package.json" : f))),
+  ];
+  return normalised.sort((a, b) =>
+    a === "package.json" ? -1 : b === "package.json" ? 1 : a.localeCompare(b),
+  );
+}
 
 /** @returns {{file: string, version: string}[]} */
-function declarationsOf(tool) {
+function declarationsOf(tool, manifests) {
   const found = [];
-  const manifests = ["package.json"];
-
-  if (existsSync(PACKAGES_DIR)) {
-    for (const entry of readdirSync(PACKAGES_DIR)) {
-      const candidate = join(PACKAGES_DIR, entry, "package.json");
-      if (existsSync(candidate)) manifests.push(candidate);
-    }
-  }
-
   for (const file of manifests) {
     const pkg = JSON.parse(readFileSync(file, "utf8"));
     for (const field of ["dependencies", "devDependencies"]) {
@@ -41,10 +80,11 @@ function declarationsOf(tool) {
   return found;
 }
 
+const manifests = findManifests();
 const problems = [];
 
 for (const tool of TOOLS) {
-  const declarations = declarationsOf(tool);
+  const declarations = declarationsOf(tool, manifests);
   if (declarations.length === 0) continue;
 
   const versions = new Set(declarations.map((d) => d.version));
@@ -77,10 +117,11 @@ if (problems.length > 0) {
 }
 
 for (const tool of TOOLS) {
-  const declarations = declarationsOf(tool);
+  const declarations = declarationsOf(tool, manifests);
   if (declarations.length === 0) continue;
   const [{ version }] = declarations;
   console.log(
     `${tool}: ${version} across ${declarations.length} declaration(s) — in sync.`,
   );
 }
+console.log(`Scanned ${manifests.length} package.json files.`);
