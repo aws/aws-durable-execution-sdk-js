@@ -14,7 +14,7 @@ import { createDefaultPreset } from "ts-jest";
 const preset = createDefaultPreset({
   tsconfig: {
     module: "commonjs",
-    moduleResolution: "node",
+    moduleResolution: "bundler",
   },
 });
 

@@ -54,7 +54,7 @@
     "@opentelemetry/core": "^2.0.0",
     "fast-check": "^3.23.2",
     "jest": "^30.0.3",
-    "typescript": "^5.8.3"
+    "typescript": "^6.0.3"
   },
   "peerDependencies": {
     "@aws/durable-execution-sdk-js": ">=2.1.0",
