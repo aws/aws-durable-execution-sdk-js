@@ -123,16 +123,27 @@ describe("InvocationOtelPlugin - Global provider mode", () => {
     // (matching ExecutionOtelPlugin and the Python/Java reference plugins).
     const workflowSpan = spans.find((s) => s.name === "Workflow");
     expect(workflowSpan).toBeDefined();
-    expect(workflowSpan!.parentSpanContext).toBeUndefined();
     expect(workflowSpan!.attributes["durable.execution.arn"]).toBe(
       "arn:aws:lambda:us-east-1:123456789012:function:my-func:$LATEST:exec-123",
     );
     expect(workflowSpan!.attributes["durable.execution.status"]).toBe(
       "SUCCEEDED",
     );
+    // With no propagated context and no ambient span, a synthetic execution
+    // root anchors the trace. Both the Workflow and Invocation spans parent
+    // onto it and share one execution trace.
+    expect(workflowSpan!.spanContext().traceId).toBe(
+      invocationSpan!.spanContext().traceId,
+    );
+    expect(workflowSpan!.parentSpanContext?.spanId).toBeDefined();
+    expect(invocationSpan!.parentSpanContext?.spanId).toBe(
+      workflowSpan!.parentSpanContext?.spanId,
+    );
     // The Invocation span stays invocation-rooted: it is NOT a child of the
-    // Workflow span. With no active parent span in this test it is a root.
-    expect(invocationSpan!.parentSpanContext).toBeUndefined();
+    // Workflow span (both are siblings under the synthetic execution root).
+    expect(invocationSpan!.parentSpanContext?.spanId).not.toBe(
+      workflowSpan!.spanContext().spanId,
+    );
     // Operation spans link to the Workflow span for execution correlation.
     expect(
       opSpan!.links.some(
