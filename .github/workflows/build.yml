@@ -90,14 +90,12 @@ jobs:
       - name: Install webview-ui dependencies
         working-directory: packages/aws-durable-execution-sdk-js-insight-vscode/webview-ui
         run: npm ci
-      - name: Lint (boundary rules)
-        # The no-restricted-imports rules that forbid reaching into a sibling package
-        # by relative path, and forbid a host's API leaking into shared code. Review
-        # of #809 noted these had no CI gate at all -- eslint previously ran only via
-        # lint-staged on pre-commit, which `--no-verify` bypasses. The hostAgnostic
-        # tests cover the same ground, deliberately: the rules give the earliest
-        # signal, the tests are the backstop, and neither is the only gate.
-        run: npm run lint
+      # The boundary rules that used to run here are now enforced by the `lint` job
+      # (biome ci over the whole monorepo), which did not exist when this step was
+      # added -- at that point root `lint` was `eslint .` and this was the only CI
+      # gate for them. Keeping it would mean a second `npm ci` plus a duplicate
+      # whole-repo lint on every PR. The hostAgnostic tests below remain the
+      # backstop, as they always were.
       - name: Typecheck core and both hosts
         run: npm run typecheck:hosts
       - name: Typecheck the renderer

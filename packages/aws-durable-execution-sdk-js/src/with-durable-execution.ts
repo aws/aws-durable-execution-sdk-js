@@ -519,7 +519,13 @@ function validateDurableExecutionEvent(event: unknown): void {
  * @public
  */
 export const withDurableExecution = <
+  // biome-ignore lint/suspicious/noExplicitAny: deliberate. These are the public
+  // generic defaults, so `any` is what lets `withDurableExecution(handler)` be
+  // called without type arguments while still inferring from the handler when they
+  // are supplied. `unknown` would force every caller to annotate.
   TEvent = any,
+  // biome-ignore lint/suspicious/noExplicitAny: deliberate, as above -- public
+  // generic default so the common call site needs no type arguments.
   TResult = any,
   TLogger extends DurableLogger = DurableLogger,
 >(

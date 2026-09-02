@@ -21,7 +21,7 @@ const require = createRequire(import.meta.url);
  * NOTE: this requires the plugin to be built first (`dist/index.js`). CI does
  * that in .github/workflows/lint.yml before invoking ESLint.
  */
-const durableFunctionsPlugin = require("../aws-durable-execution-sdk-js-eslint-plugin/dist/index.js");
+const durableFunctionsPlugin = require("@aws/durable-execution-sdk-js-eslint-plugin");
 const typescriptParser = require("@typescript-eslint/parser");
 
 export default [

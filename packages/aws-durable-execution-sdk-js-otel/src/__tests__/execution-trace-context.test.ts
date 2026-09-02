@@ -197,13 +197,7 @@ describe("resolveExecutionTraceContext", () => {
     ],
   ])(
     "ignores %s from an invalid Root and lets the fallback trace sampling supplier decide",
-    (
-      _label,
-      sampling,
-      supplierDecision,
-      expectedTraceFlags,
-      expectedSamplingDecision,
-    ) => {
+    (_label, sampling, supplierDecision, expectedTraceFlags, expectedSamplingDecision) => {
       const extracted = {
         traceId: ALL_ZERO_TRACE_ID,
         parentSpanId: REMOTE_PARENT_ID,

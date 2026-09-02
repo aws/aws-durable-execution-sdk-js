@@ -50,6 +50,7 @@
     "dist-types"
   ],
   "devDependencies": {
+    "@biomejs/biome": "2.5.11",
     "@opentelemetry/core": "^2.0.0",
     "fast-check": "^3.23.2",
     "jest": "^30.0.3",

@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Globals:
   Function:
@@ -10,24 +10,24 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
-        - Effect: Allow
-          Principal:
-            Service: lambda.amazonaws.com
-          Action: sts:AssumeRole
-      ManagedPolicyArns:
-      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Policies:
-      - PolicyName: DurableExecutionPolicy
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
           - Effect: Allow
-            Action:
-            - lambda:CheckpointDurableExecution
-            - lambda:GetDurableExecutionState
-            Resource: '*'
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DurableExecutionPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:CheckpointDurableExecution
+                  - lambda:GetDurableExecutionState
+                Resource: "*"
   WaitForConditionBasicPoll:
     Type: AWS::Serverless::Function
     Metadata:
@@ -40,8 +40,8 @@ Resources:
       Description: Wait-for-condition basic poll
       Role:
         Fn::GetAtt:
-        - DurableFunctionRole
-        - Arn
+          - DurableFunctionRole
+          - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -57,8 +57,8 @@ Resources:
       Description: Wait-for-condition immediate stop
       Role:
         Fn::GetAtt:
-        - DurableFunctionRole
-        - Arn
+          - DurableFunctionRole
+          - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -74,8 +74,8 @@ Resources:
       Description: Wait-for-condition with explicit name
       Role:
         Fn::GetAtt:
-        - DurableFunctionRole
-        - Arn
+          - DurableFunctionRole
+          - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -91,8 +91,8 @@ Resources:
       Description: Wait-for-condition custom initial state
       Role:
         Fn::GetAtt:
-        - DurableFunctionRole
-        - Arn
+          - DurableFunctionRole
+          - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -108,8 +108,8 @@ Resources:
       Description: Wait-for-condition fixed-delay strategy
       Role:
         Fn::GetAtt:
-        - DurableFunctionRole
-        - Arn
+          - DurableFunctionRole
+          - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -125,8 +125,8 @@ Resources:
       Description: Wait-for-condition max attempts exceeded
       Role:
         Fn::GetAtt:
-        - DurableFunctionRole
-        - Arn
+          - DurableFunctionRole
+          - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -142,8 +142,8 @@ Resources:
       Description: Wait-for-condition check throws uncaught
       Role:
         Fn::GetAtt:
-        - DurableFunctionRole
-        - Arn
+          - DurableFunctionRole
+          - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -159,8 +159,8 @@ Resources:
       Description: Wait-for-condition check throws caught
       Role:
         Fn::GetAtt:
-        - DurableFunctionRole
-        - Arn
+          - DurableFunctionRole
+          - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -176,8 +176,8 @@ Resources:
       Description: Wait-for-condition complex object state
       Role:
         Fn::GetAtt:
-        - DurableFunctionRole
-        - Arn
+          - DurableFunctionRole
+          - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -193,8 +193,8 @@ Resources:
       Description: Wait-for-condition null result
       Role:
         Fn::GetAtt:
-        - DurableFunctionRole
-        - Arn
+          - DurableFunctionRole
+          - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -210,8 +210,8 @@ Resources:
       Description: Wait-for-condition custom serdes
       Role:
         Fn::GetAtt:
-        - DurableFunctionRole
-        - Arn
+          - DurableFunctionRole
+          - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -227,8 +227,8 @@ Resources:
       Description: Wait-for-condition followed by step
       Role:
         Fn::GetAtt:
-        - DurableFunctionRole
-        - Arn
+          - DurableFunctionRole
+          - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
@@ -244,8 +244,8 @@ Resources:
       Description: Multiple sequential wait_for_condition operations
       Role:
         Fn::GetAtt:
-        - DurableFunctionRole
-        - Arn
+          - DurableFunctionRole
+          - Arn
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300

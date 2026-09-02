@@ -14,13 +14,7 @@ import {
   SimpleSpanProcessor,
   NodeTracerProvider,
 } from "@opentelemetry/sdk-trace-node";
-import {
-  context,
-  trace,
-  propagation,
-  SpanStatusCode,
-} from "@opentelemetry/api";
-import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
+import { context, trace, propagation } from "@opentelemetry/api";
 import { InvocationOtelPlugin } from "../invocation-plugin";
 import type { TracerProviderFactory } from "../otel-plugin-config";
 import type {

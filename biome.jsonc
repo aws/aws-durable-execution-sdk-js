@@ -35,14 +35,31 @@
   //    remains the backstop -- it currently reports unresolved @link references in
   //    src/types/batch.ts.
   //
-  // 3. Markdown and YAML are no longer formatted at all. The old lint-staged glob
-  //    passed *.md and *.yml through Prettier; Biome has no formatter for either
-  //    language, so the new glob cannot include them. Nothing enforces formatting on
-  //    those files now. Restoring it would mean keeping Prettier for those two
-  //    extensions only.
+  // 3. Markdown and YAML are formatted by Prettier, not Biome, which has no
+  //    formatter for either language. Prettier is retained as a root devDependency
+  //    for exactly those two extensions -- see the `format:docs` script, the
+  //    lint-staged glob, and .prettierignore. This is a documentation-heavy repo
+  //    with ~20 workflow files, so leaving them unformatted was a straight loss
+  //    rather than a tradeoff. Everything Biome can format, Biome formats.
   //
   // 4. no-duplicate-imports has no Biome equivalent (was "error" in the core SDK and
   //    insight configs).
+  //
+  // ON UPGRADING BIOME OR PRETTIER: both versions in package.json are pinned exact,
+  // and npm dependencies here are not Dependabot-managed (only github-actions are),
+  // so the pins hold until changed by hand. Treat a bump as a config review rather
+  // than a routine version change.
+  //
+  // Biome: four nursery rules are load-bearing in this config
+  // (useExplicitReturnType, noFloatingPromises, noMisusedPromises, useAwaitThenable)
+  // and nursery rules are explicitly outside Biome's semver guarantees.
+  //
+  // Prettier: the committed Markdown formatting is only valid for >=3.7. Verified
+  // that format:docs:check passes on 3.7.0 and 3.9.6 but FAILS on 3.6.2, because
+  // Prettier changed Markdown table width computation in that range
+  // (packages/aws-durable-execution-sdk-js-insight/docs/mcp-host-design.md is the
+  // file that flips). Prettier used to run only through lint-staged, where a version
+  // mismatch was invisible; it is a CI gate now, so the version is load-bearing.
 
   "vcs": {
     "enabled": true,
@@ -120,7 +137,15 @@
       "correctness": {
         "noUnusedVariables": "warn",
         "noUnusedFunctionParameters": "warn",
-        "noUnusedImports": "warn"
+        // Promoted to error because the backlog is cleared: all 10 pre-existing
+        // violations were genuinely unused imports and are deleted in this change, so
+        // this rule now gates rather than merely reports.
+        //
+        // noUnusedVariables stays at "warn" on purpose. Its 21 violations are almost
+        // all unused `catch (error)` bindings in the conformance handlers, and Biome's
+        // fix is an UNSAFE rename to `_error` rather than a deletion -- 21 renames
+        // would be churn, not cleanup. Worth a deliberate pass, then promotion.
+        "noUnusedImports": "error"
       },
 
       "suspicious": {

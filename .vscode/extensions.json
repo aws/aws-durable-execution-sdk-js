@@ -1,0 +1,9 @@
+{
+  "recommendations": [
+    // settings.json sets Biome as the formatter for JS/TS/JSON, so without this
+    // contributors get "no formatter installed" prompts.
+    "biomejs.biome",
+    // Prettier still owns Markdown and YAML, which Biome cannot format.
+    "esbenp.prettier-vscode"
+  ]
+}

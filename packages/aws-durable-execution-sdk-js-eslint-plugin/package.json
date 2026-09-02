@@ -31,6 +31,7 @@
     "eslint": ">=8.0.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.11",
     "@types/eslint": "^8.56.0",
     "@types/jest": "^29.5.14",
     "@types/node": "^20.0.0",
