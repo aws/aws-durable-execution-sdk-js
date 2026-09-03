@@ -1,6 +1,8 @@
 import { createDefaultPreset } from "ts-jest";
 
-const defaultPreset = createDefaultPreset();
+const defaultPreset = createDefaultPreset({
+  tsconfig: { diagnostics: false, isolatedModules: true },
+});
 
 /** @type {import('ts-jest').JestConfigWithTsJest} */
 export default {
