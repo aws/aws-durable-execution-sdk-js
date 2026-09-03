@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.1]
+
 ### Fixed
 
 - A `context.map` or `context.parallel` using `nesting: FLAT` whose aggregate result exceeded the
@@ -33,18 +35,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   does. Such a body is against best practice in any case — a context is a container for durable
   operations — and the TSDoc for `runInChildContext` and `MapFunc` now says so.
 
-### Added
+- Replay validation now reports a failure instead of asking the service to keep the execution
+  alive. `NonDeterministicExecutionError` is the only production error carrying
+  `TerminationReason.CUSTOM`, and the termination branch had no case for it, so it fell through to
+  the catch-all and answered `{Status: "PENDING"}` with no error and no log line. The fault is
+  deterministic, so every replay reproduced it, the diagnostic the SDK had already built never
+  reached the caller, and once nothing was actually pending the service rejected the response with
+  "Cannot return PENDING status with no pending operations".
 
-- Support for JavaScript runtimes that do not provide `async_hooks.AsyncLocalStorage` or
-  `util.formatWithOptions`, so durable functions can be deployed on a container image carrying
-  a runtime Lambda does not manage (for example [LLRT](https://github.com/awslabs/llrt)).
-  Previously, importing `withDurableExecution` on such a runtime threw at module load.
+  Suspend reasons are now an allowlist and every other reason answers `FAILED` carrying the error,
+  so a reason added later without a branch fails closed rather than silently claiming progress.
 
-  Both capabilities are feature-detected, so this changes nothing on a managed Node.js runtime.
-  Checkpointing and replay are unaffected and checkpoint data is unchanged; what degrades is
-  observability, and the SDK now emits one warning per execution environment describing exactly
-  what. See "Runtime requirements" in the SDK README for the details, including the replayed-log
-  behaviour that carries a CloudWatch cost on long executions.
+- `waitForCondition` no longer discards checkpointed state when a custom serdes fails to
+  deserialize it on a resumed invocation. Previously the restore path caught the
+  deserialization error and silently fell back to `initialState`, so the condition loop
+  restarted from scratch and the operation could succeed carrying a result computed from
+  the wrong state. That path now goes through the same `safeDeserialize` helper the rest
+  of the SDK already used, which terminates the invocation with `SERDES_FAILED` instead.
+
+  This is a behaviour change for anyone whose custom serdes can fail while restoring
+  state: such an execution now terminates rather than continuing from `initialState`.
+  Termination is retryable at the service level, so a transient serdes failure is not
+  permanently fatal.
+
+## [eslint-plugin 1.1.0]
 
 ### Changed
 
@@ -70,18 +84,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- `waitForCondition` no longer discards checkpointed state when a custom serdes fails to
-  deserialize it on a resumed invocation. Previously the restore path caught the
-  deserialization error and silently fell back to `initialState`, so the condition loop
-  restarted from scratch and the operation could succeed carrying a result computed from
-  the wrong state. That path now goes through the same `safeDeserialize` helper the rest
-  of the SDK already used, which terminates the invocation with `SERDES_FAILED` instead.
-
-  This is a behaviour change for anyone whose custom serdes can fail while restoring
-  state: such an execution now terminates rather than continuing from `initialState`.
-  Termination is retryable at the service level, so a transient serdes failure is not
-  permanently fatal.
-
 - **eslint-plugin** (`1.1.0`): false positives in `no-closure-in-durable-operations` and
   `no-non-deterministic-outside-step`.
   - A non-deterministic function no longer taints unrelated same-named functions in other
@@ -91,6 +93,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A named function expression assigning to **its own name** is no longer reported.
   - Mutating a variable from a **destructured declaration** (`let { total } = event`) or one
     declared in an **outer nested block** is now correctly reported rather than missed.
+
+## [2.3.0]
+
+### Added
+
+- Support for JavaScript runtimes that do not provide `async_hooks.AsyncLocalStorage` or
+  `util.formatWithOptions`, so durable functions can be deployed on a container image carrying
+  a runtime Lambda does not manage (for example [LLRT](https://github.com/awslabs/llrt)).
+  Previously, importing `withDurableExecution` on such a runtime threw at module load.
+
+  Both capabilities are feature-detected, so this changes nothing on a managed Node.js runtime.
+  Checkpointing and replay are unaffected and checkpoint data is unchanged; what degrades is
+  observability, and the SDK now emits one warning per execution environment describing exactly
+  what. See "Runtime requirements" in the SDK README for the details, including the replayed-log
+  behaviour that carries a CloudWatch cost on long executions.
 
 ## [2.0.0]
 
