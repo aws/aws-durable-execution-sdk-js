@@ -354,7 +354,7 @@ describe("Execution trace joining", () => {
       await opaqueProvider?.shutdown();
     });
 
-    it("uses w3cClientContextExtractor as an execution-stable remote parent", async () => {
+    it("uses w3cClientContextExtractor as a valid remote parent", async () => {
       const traceId = "4bf92f3577b34da6a3ce929d0e0e4736";
       const parentSpanId = "00f067aa0ba902b7";
       const plugin = makePlugin({
