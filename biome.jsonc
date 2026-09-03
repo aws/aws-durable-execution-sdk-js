@@ -248,10 +248,14 @@
   //
   // TWO KNOWN HOLES IN WHAT BIOME SEES, both latent and both predating this change:
   //
-  //   * `vcs.useIgnoreFile` is true and .gitignore carries `*.d.ts`, so a
-  //     hand-written .d.ts would escape Biome entirely rather than merely go
-  //     unformatted. No tracked .d.ts exists today (verified: `git ls-files '*.d.ts'`
-  //     is empty), so this only bites if someone adds one -- but it would be silent.
+  //   * `vcs.useIgnoreFile` is true and .gitignore carries `*.d.ts`, which meant a
+  //     hand-written declaration escaped Biome entirely rather than merely going
+  //     unformatted. This stopped being hypothetical during the TypeScript 6 upgrade:
+  //     a new ambient declaration for CSS side-effect imports was silently untracked
+  //     AND unlinted. .gitignore now negates `**/src/**/*.d.ts`, so authored
+  //     declarations under a src/ tree are tracked and linted while emitted output
+  //     (dist-types/, dist/) stays ignored. A .d.ts authored OUTSIDE a src/ tree
+  //     would still slip through.
   //   * Unused `biome-ignore format:` suppressions are not reported by anything.
   //     `lint:suppressions` runs `biome check`, which covers lint and assist
   //     categories, but Biome reports no unused-suppression diagnostic for the

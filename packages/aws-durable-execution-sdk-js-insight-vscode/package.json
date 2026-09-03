@@ -278,8 +278,8 @@
     "@types/vscode": "^1.90.0",
     "esbuild": "^0.24.0",
     "jest": "^29.7.0",
-    "ts-jest": "^29.2.0",
-    "typescript": "~5.8.0"
+    "ts-jest": "^29.4.12",
+    "typescript": "^6.0.3"
   },
   "jest": {
     "preset": "ts-jest",
