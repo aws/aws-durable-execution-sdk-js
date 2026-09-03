@@ -82,6 +82,20 @@ function named(exporter: InMemorySpanExporter, name: string): ReadableSpan[] {
   return exporter.getFinishedSpans().filter((s) => s.name === name);
 }
 
+function compareHrTime(
+  left: ReadableSpan["startTime"],
+  right: ReadableSpan["startTime"],
+): number {
+  return left[0] - right[0] || left[1] - right[1];
+}
+
+function expectSpanInside(child: ReadableSpan, parent: ReadableSpan): void {
+  expect(
+    compareHrTime(child.startTime, parent.startTime),
+  ).toBeGreaterThanOrEqual(0);
+  expect(compareHrTime(child.endTime, parent.endTime)).toBeLessThanOrEqual(0);
+}
+
 const PLUGINS = [
   ["ExecutionOtelPlugin", () => new ExecutionOtelPlugin({})],
   ["InvocationOtelPlugin", () => new InvocationOtelPlugin({})],
@@ -283,12 +297,12 @@ describe.each(PLUGINS)("%s span lifecycle", (_name, makePlugin) => {
     expect(invocation).toBeDefined();
     // The Workflow span must contain the invocation it covers; a late fallback
     // would start it after the invocation span began.
-    const cmp = (a: ReadableSpan["startTime"], b: ReadableSpan["startTime"]) =>
-      a[0] - b[0] || a[1] - b[1];
-    expect(cmp(workflow.startTime, invocation.startTime)).toBeLessThanOrEqual(
-      0,
-    );
-    expect(cmp(workflow.endTime, workflow.startTime)).toBeGreaterThanOrEqual(0);
+    expect(
+      compareHrTime(workflow.startTime, invocation.startTime),
+    ).toBeLessThanOrEqual(0);
+    expect(
+      compareHrTime(workflow.endTime, workflow.startTime),
+    ).toBeGreaterThanOrEqual(0);
   });
 
   describe("sampling", () => {
@@ -449,6 +463,55 @@ describe("ExecutionOtelPlugin deferred operation spans", () => {
     trace.disable();
     context.disable();
     propagation.disable();
+  });
+
+  it("contains attempts when the backend operation start timestamp is absent", async () => {
+    register();
+    const plugin = new ExecutionOtelPlugin({});
+
+    await plugin.onInvocationStart(makeInvocationInfo());
+    const beforeStart = Date.now();
+    await plugin.onOperationStart(
+      makeOperationInfo({ name: "missing-start-time" }),
+    );
+    const afterStart = Date.now();
+
+    const operationStarts = (
+      plugin as unknown as {
+        operationStarts: Map<string, { startTimestamp?: Date }>;
+      }
+    ).operationStarts;
+    const capturedStart = operationStarts.get("op-1")?.startTimestamp;
+    expect(capturedStart).toBeInstanceOf(Date);
+    expect(capturedStart!.getTime()).toBeGreaterThanOrEqual(beforeStart);
+    expect(capturedStart!.getTime()).toBeLessThanOrEqual(afterStart);
+
+    const attemptStart = new Date(capturedStart!.getTime() + 1_000);
+    const attemptEnd = new Date(capturedStart!.getTime() + 2_000);
+    const attemptInfo = makeAttemptInfo({
+      name: "missing-start-time",
+      startTimestamp: attemptStart,
+    });
+    await plugin.onOperationAttemptStart(attemptInfo);
+    await plugin.onOperationAttemptEnd({
+      ...attemptInfo,
+      outcome: "SUCCEEDED" as any,
+      endTimestamp: attemptEnd,
+    });
+    await plugin.onOperationEnd(
+      makeOperationEndInfo({
+        name: "missing-start-time",
+        status: "SUCCEEDED" as any,
+        endTimestamp: attemptEnd,
+      }),
+    );
+    await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+    const operation = named(exporter, "missing-start-time")[0];
+    const attempt = named(exporter, "missing-start-time attempt 1")[0];
+    expect(operation).toBeDefined();
+    expect(attempt).toBeDefined();
+    expectSpanInside(attempt, operation);
   });
 
   it("exports exactly one operation span for a WAIT that suspends then resumes", async () => {

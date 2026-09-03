@@ -483,11 +483,19 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       isRemote: false,
     });
 
-    // Retain naming/timing for onOperationEnd, which may omit them.
+    // Retain naming/timing for onOperationEnd, which may omit them. New
+    // operations can reach this hook before the checkpoint response supplies a
+    // backend start timestamp, so capture the hook time as the fallback. Keep
+    // the earliest observation if the same operation starts again on replay.
+    const existingStart = this.operationStarts.get(info.id);
+    const observedStart = info.startTimestamp ?? new Date();
     this.operationStarts.set(info.id, {
-      name: info.name,
-      subType: info.subType,
-      startTimestamp: info.startTimestamp,
+      name: info.name ?? existingStart?.name,
+      subType: info.subType ?? existingStart?.subType,
+      startTimestamp: this.earliestStart(
+        existingStart?.startTimestamp,
+        observedStart,
+      ),
     });
   }
 
