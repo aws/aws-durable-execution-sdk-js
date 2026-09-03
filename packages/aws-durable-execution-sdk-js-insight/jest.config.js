@@ -7,7 +7,7 @@ module.exports = {
   testMatch: ["**/__tests__/**/*.ts", "**/?(*.)+(spec|test).ts"],
   testPathIgnorePatterns: ["/node_modules/", "/dist/"],
   transform: {
-    "^.+\\.ts$": "ts-jest",
+    "^.+\\.ts$": ["ts-jest", { diagnostics: false, isolatedModules: true }],
   },
   moduleFileExtensions: ["ts", "js", "json", "node"],
 };

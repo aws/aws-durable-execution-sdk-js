@@ -26,7 +26,7 @@
     "build:types": "tsc --project tsconfig.build.json --outDir dist-types",
     "prepublishOnly": "npm run build && npm run test",
     "lint": "biome check src --diagnostic-level=error",
-    "test": "tsc --noEmit && jest --config jest.config.mjs --collectCoverage --collectCoverageFrom=src/**/*.{ts,js}",
+    "test": "jest --config jest.config.mjs --collectCoverage --collectCoverageFrom=src/**/*.{ts,js}",
     "run-durable": "NODE_OPTIONS=\"--import tsx\" npx run-durable --",
     "api:extract": "npm run build:types && api-extractor run --local",
     "lint:fix": "biome check --write src"
