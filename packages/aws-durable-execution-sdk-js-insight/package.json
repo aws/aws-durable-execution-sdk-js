@@ -93,7 +93,7 @@
   },
   "devDependencies": {
     "@aws/durable-execution-sdk-js": "*",
-    "jest": "^29.7.0",
+    "jest": "^30.5.1",
     "ts-jest": "^29.4.12",
     "@aws-sdk/client-s3": "^3.658.0",
     "@aws-sdk/client-dynamodb": "^3.658.0",

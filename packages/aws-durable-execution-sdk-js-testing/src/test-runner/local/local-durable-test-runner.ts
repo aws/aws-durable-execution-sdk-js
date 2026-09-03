@@ -19,7 +19,7 @@ import {
   LocalDurableTestRunnerParameters,
 } from "./interfaces/durable-test-runner-factory";
 import { DurableApiClient } from "../common/create-durable-api-client";
-import { install, InstalledClock } from "@sinonjs/fake-timers";
+import { install, Clock } from "@sinonjs/fake-timers";
 import { Handler } from "aws-lambda";
 import { ApiType } from "../../checkpoint-server/worker-api/worker-api-types";
 import {
@@ -134,7 +134,7 @@ export class LocalDurableTestRunner<TResult = any>
   private readonly resultFormatter: ResultFormatter<TResult>;
   private operationIndex: IndexedOperations;
   private static skipTime = false;
-  private static fakeClock: InstalledClock | undefined;
+  private static fakeClock: Clock | undefined;
   private readonly handlerFunction: DurableLambdaHandler;
   private readonly functionStorage: FunctionStorage;
   private readonly durableApi: DurableApiClient;
