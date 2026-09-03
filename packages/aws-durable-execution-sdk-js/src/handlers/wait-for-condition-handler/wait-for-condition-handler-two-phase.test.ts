@@ -122,7 +122,7 @@ describe("WaitForCondition Handler Two-Phase Execution", () => {
       undefined,
     );
 
-    let executionOrder: string[] = [];
+    const executionOrder: string[] = [];
     const checkFn: WaitForConditionCheckFunc<number, DurableLogger> = jest.fn(
       async () => {
         executionOrder.push("check-executed");

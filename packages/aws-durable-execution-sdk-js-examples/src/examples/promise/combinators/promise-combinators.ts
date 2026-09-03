@@ -122,6 +122,7 @@ export const handler = withDurableExecution(
       return "First success!";
     });
 
+    // biome-ignore lint/suspicious/noImplicitAnyLet: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
     let anyResult;
     try {
       anyResult = await context.promise.any([

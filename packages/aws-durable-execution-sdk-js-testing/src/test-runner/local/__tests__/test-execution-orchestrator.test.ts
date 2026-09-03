@@ -219,7 +219,11 @@ describe("TestExecutionOrchestrator", () => {
     status = OperationStatus.SUCCEEDED,
     result = "",
     error,
-  }: { status?: OperationStatus; result?: string; error?: ErrorObject } = {}): {
+  }: {
+    status?: OperationStatus;
+    result?: string;
+    error?: ErrorObject;
+  } = {}): {
     operations: CheckpointOperation[];
   } {
     return {
@@ -739,7 +743,6 @@ describe("TestExecutionOrchestrator", () => {
       abortError.name = "AbortError";
 
       (checkpointApi.pollCheckpointData as jest.Mock).mockImplementation(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async () => {
           throw abortError;
         },
@@ -754,7 +757,6 @@ describe("TestExecutionOrchestrator", () => {
     it("should propagate non-AbortError polling errors", async () => {
       const pollingError = new Error("Polling failed");
       (checkpointApi.pollCheckpointData as jest.Mock).mockImplementation(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async () => {
           throw pollingError;
         },
@@ -769,7 +771,6 @@ describe("TestExecutionOrchestrator", () => {
       let abortSignal: AbortSignal | undefined;
 
       (checkpointApi.pollCheckpointData as jest.Mock).mockImplementation(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async (executionId: string, signal: AbortSignal) => {
           abortSignal = signal;
           return { operations: [] };
@@ -786,7 +787,6 @@ describe("TestExecutionOrchestrator", () => {
 
       // Mock polling to capture the abort signal
       (checkpointApi.pollCheckpointData as jest.Mock).mockImplementation(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async (executionId: string, signal: AbortSignal) => {
           abortSignal = signal;
           return { operations: [] };
@@ -819,7 +819,6 @@ describe("TestExecutionOrchestrator", () => {
       });
 
       (checkpointApi.pollCheckpointData as jest.Mock).mockImplementation(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async () => {
           throw errorWithoutName;
         },
@@ -841,7 +840,6 @@ describe("TestExecutionOrchestrator", () => {
       });
 
       (checkpointApi.pollCheckpointData as jest.Mock).mockImplementation(
-        // eslint-disable-next-line @typescript-eslint/require-await
         async () => {
           throw errorWithNumberName;
         },

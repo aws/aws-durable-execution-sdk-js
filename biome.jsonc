@@ -1,0 +1,903 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+
+  // Biome owns formatting and linting for this monorepo. ESLint is retained in two
+  // places only:
+  //
+  //   * packages/aws-durable-execution-sdk-js-eslint-plugin -- needs it to test its
+  //     own rules via RuleTester.
+  //   * packages/aws-durable-execution-sdk-js-examples -- runs that published plugin's
+  //     `no-nested-durable-operations` against the examples. Biome cannot host ESLint
+  //     plugins, and the examples are the code customers copy. See that package's
+  //     eslint.config.mjs and the `durable-rules` job in .github/workflows/lint.yml.
+  //
+  // KNOWN COVERAGE GAPS vs the previous ESLint + Prettier setup. These are real
+  // losses, listed so they are not rediscovered later:
+  //
+  // 1. Type-aware linting is largely gone, AND IT WAS GATED. The testing package
+  //    previously used `tseslint.configs.strictTypeChecked` + `stylisticTypeChecked`
+  //    at error severity, and that package's `prebuild` ran `npm run lint` while CI
+  //    runs `npm run build` -- so this whole set failed the build job on every pull
+  //    request, exactly as the core SDK's three rules did (see gap 4). Treating it as
+  //    a pre-commit-only concern would understate what was lost.
+  //
+  //    Three async-safety rules are recovered via the `types` domain below
+  //    (noFloatingPromises, noMisusedPromises, useAwaitThenable), and because the
+  //    testing package has ZERO violations of all three -- precisely because ESLint
+  //    gated them at error there -- the override further down restores them to
+  //    "error" for that package at no migration cost. Repo-wide they stay "warn",
+  //    since the rest of the tree was never held to them.
+  //
+  //    Two more strictTypeChecked rules have Biome equivalents, both accounted for:
+  //      - useThrowOnlyError <- only-throw-error. Zero violations in the testing package,
+  //        so the override restores it to "error" there at no cost, like the async rules.
+  //      - useAwait <- require-await. NOT enabled: Biome's rule is broader than ESLint's
+  //        (19 violations in the testing package, 11 of them in shipped src, versus the 7
+  //        require-await disables this migration removed), so it is a triage project like
+  //        noUnsafeTypeAssertion below, not a free restore. Left off and recorded here.
+  //
+  //    Still missing, with NO Biome equivalent at any severity:
+  //      - the `any`-propagation family: no-unsafe-assignment, no-unsafe-return,
+  //        no-unsafe-member-access, no-unsafe-call, no-unsafe-argument
+  //      - restrict-template-expressions
+  //      - no-confusing-void-expression
+  //      - prefer-promise-reject-errors
+  //      - no-unnecessary-type-parameters
+  //    These are a genuine loss of a gate, not merely an unfilled gap. Each reviewed site
+  //    whose disable this migration removed now carries an inline plain-comment note -- a
+  //    `biome-ignore` for a rule Biome does not implement is dead and lint:suppressions
+  //    rejects it, so these are notes, not suppressions. The sites: worker-server-api-handler.ts
+  //    (prefer-promise-reject-errors), and one each for restrict-template-expressions,
+  //    no-confusing-void-expression, no-unsafe-return, no-unsafe-assignment,
+  //    no-unsafe-member-access and no-unnecessary-type-parameters. The full reviewed set
+  //    is recoverable by grepping eslint-disable in the commit before this migration.
+  //
+  //    Two rules DO exist and are left off, but "one line away" would be misleading,
+  //    so here are the measured counts in the testing package on 2.5.11:
+  //      - noUnsafeTypeAssertion:  265 diagnostics, but only 27 in non-test source;
+  //        the other 238 are in `*.test.ts` files, which the old ESLint config exempted
+  //        (`no-unsafe-type-assertion: "off"` for `**/*.test.ts`). In the scope ESLint
+  //        actually enforced (non-test source) it is 27 vs 23 reviewed suppressions --
+  //        near parity, so restoring it to that non-test scope is small. Enabling it
+  //        repo-wide including tests is the triage project, not a config edit.
+  //
+  //        THE REVIEWED SET IS RECOVERABLE. Those 23 sites were explicit
+  //        `eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion`
+  //        directives, i.e. assertions someone had already judged intentional. They
+  //        are worth separating from the other ~242 when this is triaged, and the
+  //        full list is one command away:
+  //          git grep -n no-unsafe-type-assertion <the commit before this migration>
+  //        The two clearest cases carry inline notes instead:
+  //        checkpoint-server/utils/tagged-strings.ts (branded-string factories, where
+  //        the assertion IS the function) and test-runner/common/operations/
+  //        operation-with-data.ts (wire boundary). Notes, not `biome-ignore`
+  //        comments, because a suppression for a disabled rule is dead and
+  //        `lint:suppressions` correctly rejects it -- verified.
+  //      - noUnnecessaryConditions (in the `suspicious` group, not `nursery`):
+  //        not measured here; measure before describing the cost.
+  //    `tsc --noEmit` still runs and still catches type errors, but it does not
+  //    implement any of these rules.
+  //
+  // 2. TSDoc syntax is unchecked. `eslint-plugin-tsdoc`'s `tsdoc/syntax` has no Biome
+  //    equivalent, and nothing automated replaces it. API Extractor does parse TSDoc,
+  //    but `api:extract` is a manual command in no workflow, so calling it a
+  //    "backstop" would overstate it. It also cannot become a CI gate as-is: verify
+  //    mode (`api-extractor run` without `--local`) exits 1 today on pre-existing
+  //    ae-unresolved-link warnings, including ambiguous @link references in
+  //    src/utils/with-retry/index.ts and src/types/batch.ts. Fixing those first would
+  //    make an api-report diff check viable, and worth doing. Note tsdoc/syntax was
+  //    "warn" before, so nothing regressed -- this is an unfilled gap, not a loss.
+  //
+  // 3. Markdown and YAML are not formatted at all, and that is deliberate. Biome has
+  //    no formatter for either, and Prettier was dropped rather than retained just for
+  //    them. The reasoning: almost nothing in this repo hand-writes those files -- the
+  //    conformance CloudFormation templates, the issue templates and most docs are
+  //    generated or tool-authored -- so a formatter buys consistency nobody was going
+  //    to violate, and costs a second toolchain plus a CI gate on documentation.
+  //
+  //    Keeping Prettier for `*.{md,yml,yaml}` was considered and rejected. Three things
+  //    argued against it. The old lint-staged glob was `{js,mjs,ts,md,json,yml}`
+  //    -- note `yml`, not `yaml` -- so gating `.yaml` was NEW coverage, and widening
+  //    the glob reformatted 10 conformance templates for ~950 lines of quote-style and
+  //    indentation churn in files nothing had ever formatted. There was also no
+  //    `prettier --check` anywhere in CI before, so the check converted a bypassable
+  //    pre-commit convention into a hard merge blocker for docs. And it made the
+  //    Prettier version load-bearing: `--check` passed on 3.7.0 and 3.9.6 but FAILED on
+  //    3.6.2, because Prettier changed Markdown table width computation in that range.
+  //
+  //    If Markdown/YAML formatting is wanted later it should be its own change, with
+  //    its own decision about whether to gate it. Everything Biome can format, Biome
+  //    formats, and that is now the whole story.
+  //
+  // 4. THE TWO NET LOSSES FROM THE recommended-rules SPREAD. Scope matters here: this
+  //    section accounts for `...typescriptEslint.configs.recommended.rules` only. The
+  //    other two gated error-level sets -- strictTypeChecked and eslint-plugin-jest's
+  //    recommended -- are accounted for separately, in gap 1 and the `test` domain note
+  //    respectively (that is where require-await/useAwait, only-throw-error/useThrowOnlyError
+  //    and jest/no-disabled-tests/noSkippedTests are handled).
+  //
+  //    The core SDK config did more than the three rules it names explicitly: it
+  //    spread `...typescriptEslint.configs.recommended.rules` over src/**/*.ts, which
+  //    is 20 rules at error on the version this repo resolved (8.57.0), and the
+  //    testing package pulled the same set in through strictTypeChecked. All of it was
+  //    gated, because those packages' `prebuild` ran lint and CI runs `npm run build`.
+  //    Two of the 20 were then explicitly downgraded to "warn" in the same config
+  //    (no-explicit-any, no-unused-vars), leaving 18 at error.
+  //
+  //    BEING IN BIOME'S "RECOMMENDED" SET IS NOT THE SAME AS GATING. Biome enables many
+  //    recommended rules at warn or info, and `biome ci --diagnostic-level=error` -- the
+  //    CI gate -- does not fail on those. Verify severity per rule; do not infer it from
+  //    "recommended". The check that matters is
+  //    `biome lint --diagnostic-level=error <file containing a violation>`, on a file
+  //    that is already FORMATTED (an unformatted probe fails `biome ci` on formatting
+  //    and looks like a gate that is not there).
+  //
+  //    Of those 18, four map onto Biome rules that were already error and gate:
+  //    noMisleadingInstantiator, useNamespaceKeyword, noUnsafeDeclarationMerging and
+  //    noNonNullAssertedOptionalChain.
+  //
+  //    SEVEN more mapped onto rules enabled only at warn or info, so a violation passed
+  //    CI while this config claimed the gate survived. All seven are now "error", each
+  //    measured first and each verified to fail `lint:ci` on a formatted probe:
+  //      noTsIgnore               <- ban-ts-comment            0 violations
+  //      useArrayLiterals         <- no-array-constructor      0
+  //      noBannedTypes            <- no-empty-object-type + no-unsafe-function-type
+  //                                  + no-wrapper-object-types (Biome merges them)  2
+  //      noDuplicateEnumValues    <- no-duplicate-enum-values  0
+  //      noExtraNonNullAssertion  <- no-extra-non-null-assertion  0
+  //      noUselessThisAlias       <- no-this-alias             0
+  //      noUselessTypeConstraint  <- no-unnecessary-type-constraint  0
+  //
+  //    noExplicitAny is the remaining one, deliberately "warn": the SDK config
+  //    downgraded it to warn immediately after the spread, so warn is what it actually
+  //    enforced.
+  //
+  //    Four more had Biome equivalents that were simply not turned on. They are now
+  //    enabled at error, above, after measuring each: noNamespace (0 violations),
+  //    useAsConstAssertion (0), noCommonJs (2 in TypeScript, both suppressed with
+  //    reasons, .js/.cjs exempted) and noUnusedExpressions (1 suppressed, a genuine
+  //    ESLint/Biome difference over `satisfies`). All four are enforced repo-wide,
+  //    which is BROADER than the old scope of one package's src/.
+  //
+  //    Two rules from that config were error-level, CI-gated, and have no Biome
+  //    equivalent at any severity:
+  //
+  //      - no-duplicate-imports  (confirmed: no such rule exists on 2.5.11)
+  //      - triple-slash-reference
+  //
+  //    Both are genuine regressions rather than unfilled gaps: a violation used to
+  //    fail the build job and now fails nothing.
+  //
+  // 5. THIS LIST IS NOT A PROOF OF COMPLETENESS, and earlier revisions of this file
+  //    wrongly implied it was -- the claim "the only two net losses" was corrected four
+  //    times, each time because someone enumerated from a direction this file had not.
+  //    Read it as "what has been measured so far", and re-derive rather than trust it.
+  //
+  //    THE ENUMERATION THAT ACTUALLY FINDS THESE. The failure mode is a rule Biome
+  //    enables by default BELOW error, which therefore does not fail
+  //    `biome ci --diagnostic-level=error` even though ESLint had it at error. Reading
+  //    the ESLint configs forward only finds the ones you already suspect. Enumerate
+  //    from Biome instead -- `biome explain <rule>` prints "Default severity" and
+  //    whether the rule is recommended, so scripting it over the rule names in
+  //    node_modules/@biomejs/biome/configuration_schema.json settles every rule in one
+  //    pass. On 2.5.11 that yields 87 recommended rules whose default is below error.
+  //
+  //    Counts measured that way on this branch, over those 87:
+  //      - 67 have ZERO violations repo-wide. The 15 of those with an ESLint ancestor
+  //        that this repo gated are now "error" above. The other 52 have no gated
+  //        ancestor, so enabling them would be new policy rather than restoration --
+  //        left off deliberately, and cheap to revisit since they are all at zero.
+  //      - 12 are clean in the testing package but not elsewhere. The 5 with a gated
+  //        ancestor are "error" in that package's override; repo-wide they would need
+  //        real triage (useLiteralKeys 23, noUselessStringRaw 7, and so on).
+  //      - 8 have violations in the testing package too, so they are backlog, not
+  //        oversight: noThisInStatic 13, useDateNow 1, noUnusedFunctionParameters 198,
+  //        noNonNullAssertion 662, useImportType 1090, useNodejsImportProtocol 94,
+  //        useTemplate 61, noExplicitAny 1057. These are the documented warn-level
+  //        backlog above, not new findings.
+  //
+  //    A THIRD FAILURE MODE, which the enumeration above does NOT find: an ESLint rule
+  //    that was gated can map onto a Biome rule that is not recommended at all, and so
+  //    is OFF rather than merely below error. eslint:recommended's `no-empty` is the
+  //    worked example -- it maps to noEmptyBlockStatements (off by default, 100
+  //    violations repo-wide, 0 in the testing package, now "error" there), and NOT to
+  //    noEmptyBlock, which is a CSS rule. Both this file and a reviewer initially
+  //    mismapped it. Rules in this category have to be found by walking the ESLint rule
+  //    lists and resolving each name, which has not been done exhaustively; treat the
+  //    counts above as a floor.
+  //
+  //    VERIFYING A SINGLE RULE'S GATE. Use
+  //    `biome lint --diagnostic-level=error <file with one violation>` and check whether
+  //    a diagnostic is printed. `biome lint` does not check formatting, so this is
+  //    immune to the trap of using `lint:ci` (or `biome ci`) exit codes: an unformatted
+  //    probe file fails those on FORMATTING, which looks exactly like the rule gating.
+  //    Prefer `explain` to discover, and this to confirm.
+  //
+  // ON THE SEVEN EXACT PINS: @biomejs/biome is pinned exact in the root package.json
+  // and in six workspace packages. Nothing else checks that those seven agree. `lint:versions` discovers manifests
+  // recursively rather than one level deep, because nested ones exist
+  // (insight-vscode/webview-ui, which has its own `npm ci` and owns the .tsx files
+  // Biome formats, and insight/cdk) and are exactly where a divergent pin would hide. A skew would produce inconsistent
+  // formatting between `npm run lint` at the root and in a package, with no failure
+  // to reveal it, so `lint:versions` asserts they match and runs in CI alongside the
+  // other gates. Bump all seven together, or delete the six and rely on hoisting --
+  // they are kept declared deliberately, for the same reason the boundary rules below
+  // insist a dependency be declared rather than reached for.
+  //
+  // ON UPGRADING BIOME: the version in package.json is pinned exact, and npm
+  // dependencies here are not Dependabot-managed (only github-actions are), so the pin
+  // holds until changed by hand. Treat a bump as a config review rather than a routine
+  // version change.
+  //
+  // Biome: four nursery rules are load-bearing in this config
+  // (useExplicitReturnType, noFloatingPromises, noMisusedPromises, useAwaitThenable)
+  // and nursery rules are explicitly outside Biome's semver guarantees.
+  //
+  //   CONCRETELY, when any of the three async rules GRADUATES out of nursery, two
+  //   things break and both fail closed rather than silently:
+  //     1. the `lint:async-safety` script, which hardcodes
+  //        --only=nursery/noFloatingPromises and friends -- a graduated rule makes
+  //        that an unknown-rule error and the step fails;
+  //     2. the "nursery" block in the testing-package override further down, which
+  //        restores those three to "error".
+  //   The fix in both places is to move the rule to its new group name. Failing
+  //   closed is the desired behaviour -- it is how the upgrade gets noticed -- but
+  //   it means the CI failure will look unrelated to the version bump, hence this
+  //   note.
+  //
+  //
+  // TWO KNOWN HOLES IN WHAT BIOME SEES, both latent and both predating this change:
+  //
+  //   * `vcs.useIgnoreFile` is true and .gitignore carries `*.d.ts`, so a
+  //     hand-written .d.ts would escape Biome entirely rather than merely go
+  //     unformatted. No tracked .d.ts exists today (verified: `git ls-files '*.d.ts'`
+  //     is empty), so this only bites if someone adds one -- but it would be silent.
+  //   * Unused `biome-ignore format:` suppressions are not reported by anything.
+  //     `lint:suppressions` runs `biome check`, which covers lint and assist
+  //     categories, but Biome reports no unused-suppression diagnostic for the
+  //     format category in either `lint` or `check` (verified both ways on 2.5.11),
+  //     so a dead format suppression cannot currently be gated.
+
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true,
+    // Lets `biome lint --changed` work without an explicit --since, which keeps the
+    // lint:async-safety script free of shell parameter expansion and therefore
+    // portable to non-POSIX shells. The remote-tracking ref is used rather than
+    // plain "main" so the comparison does not silently depend on how stale a
+    // contributor's local main happens to be. CI overrides it with --since anyway,
+    // so PRs targeting v1.x compare against the right base; see lint.yml.
+    "defaultBranch": "origin/main"
+  },
+
+  "files": {
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/dist-cjs",
+      "!**/dist-types",
+      "!**/build",
+      "!**/coverage",
+      "!**/.rollup.cache",
+      "!**/*.tsbuildinfo",
+      "!package-lock.json",
+
+      // API Extractor owns the formatting of the reports it generates. Reformatting them
+      // makes every regeneration produce a diff, which defeats the point of committing
+      // them: the report is meant to show real API changes in review, not whitespace
+      // churn. It would also mean the committed files never match what
+      // `npm run api:extract` produces.
+      "!api-extractor/*.api.json",
+      "!api-extractor/*.api.md",
+
+      // Recorded execution histories are generated fixtures, not sources. The largest is
+      // ~10 MiB, well past Biome's per-file ceiling, and formatting them would produce an
+      // unreviewable diff.
+      "!**/*.history.json"
+    ]
+  },
+
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 80
+  },
+
+  // These mirror Prettier's defaults, which is what the repo used: `.prettierrc` was an
+  // empty file, so every Prettier setting was at its default. Stating them explicitly
+  // keeps the formatter's behaviour from drifting with Biome's own defaults.
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "all",
+      "arrowParentheses": "always"
+    }
+  },
+
+  "linter": {
+    "enabled": true,
+
+    // Auto-enabled by the `jest` dependency anyway; stated so it survives dependency
+    // changes. This is Biome's `test` domain recommended set (noFocusedTests,
+    // noDuplicateTestHooks, and a handful more) -- NOT a replacement for
+    // eslint-plugin-jest's recommended set, which was ~25 rules at error against this much
+    // smaller domain. In particular noSkippedTests is NOT in the recommended domain
+    // (verify: `--only=suspicious/noSkippedTests` reports it, the live config reports 0,
+    // and flipping to `"test": "all"` surfaces it repo-wide -- the 2 unsuppressed skips in
+    // the examples package; the testing package's 3 are gated by the override below and
+    // stay suppressed); the
+    // jest/no-disabled-tests gate it corresponds to is restored explicitly in the
+    // testing-package override below, not here.
+    "domains": {
+      "test": "recommended"
+    },
+
+    "rules": {
+      "preset": "recommended",
+
+      "correctness": {
+        "noUnusedVariables": "warn",
+        "noUnusedFunctionParameters": "warn",
+        // Promoted to error because the backlog is cleared: all 10 pre-existing
+        // violations were genuinely unused imports and are deleted in this change, so
+        // this rule now gates rather than merely reports.
+        //
+        // noUnusedVariables stays at "warn" on purpose. Its 21 violations are almost
+        // all unused `catch (error)` bindings in the conformance handlers, and Biome's
+        // fix is an UNSAFE rename to `_error` rather than a deletion -- 21 renames
+        // would be churn, not cleanup. Worth a deliberate pass, then promotion.
+        "noUnusedImports": "error",
+
+        // eslint:recommended, which the testing package pulled in via `js/recommended`
+        // at error. 0 violations repo-wide, so error costs nothing.
+        "noUnusedLabels": "error"
+      },
+
+      "suspicious": {
+        "noExplicitAny": "warn",
+        "noConsole": "warn",
+        "noDebugger": "warn",
+
+        // RESTORING GATES that Biome enables only at warn/info, which does NOT gate
+        // under `biome ci --diagnostic-level=error`. Being in Biome's recommended set is
+        // not the same as gating: these three came from
+        // `...typescriptEslint.configs.recommended.rules` at ERROR, so leaving them at
+        // Biome's default severity would have quietly downgraded a build failure to an
+        // annotation. Measured first: noTsIgnore 0 violations, useArrayLiterals 0,
+        // noBannedTypes 2 (both `as Function` in an otel test, now typed concretely
+        // rather than suppressed -- 287 otel tests still pass).
+        "noTsIgnore": "error",
+        "noDuplicateEnumValues": "error",
+        "noExtraNonNullAssertion": "error",
+
+        // Also default-below-error, also gated before, also 0 violations repo-wide.
+        // From eslint:recommended, via the testing package's `js/recommended`:
+        "noCatchAssign": "error",
+        "noIrregularWhitespace": "error",
+        "noPrototypeBuiltins": "error",
+        "noUselessEscapeInString": "error",
+        "noUselessRegexBackrefs": "error",
+        // From tseslint strict / stylistic, which that package also pulled in:
+        "noConfusingVoidType": "error",
+        "useAdjacentOverloadSignatures": "error",
+
+        // RESTORING A GATE, not adding one. `@typescript-eslint/no-unused-expressions`
+        // came in at error via `...typescriptEslint.configs.recommended.rules` in the
+        // core SDK config and via strictTypeChecked in the testing package, both gated
+        // by prebuild. Error repo-wide here, which is broader than the old scope.
+        //
+        // One site needed a suppression: Biome flags `data satisfies never;` where
+        // ESLint did not. That is an exhaustiveness assertion, so the suppression is
+        // marked as such rather than as untriaged noise.
+        "noUnusedExpressions": "error"
+      },
+
+      "style": {
+        // NOT ENABLED, deliberately. These three are recommended by Biome but were not
+        // enforced under ESLint, and turning them on would rewrite thousands of call
+        // sites as part of a toolchain migration -- which would make this change
+        // unreviewable and bury any real behavioural difference.
+        //
+        //   useImportType            (~1089 sites) safe autofix
+        //   useNodejsImportProtocol  (~94 sites)   safe autofix, but rewrites imports in
+        //                                          published SDK code, so it deserves its
+        //                                          own change with its own bundler check
+        //   useTemplate              (~60 sites)   safe autofix
+        //
+        // Each is a one-line change plus `biome check --write --only=<rule>`, and none
+        // is dropped on principle -- they are follow-ups, not rejections.
+        //
+        // noNonNullAssertion is DIFFERENT and stays "off" only repo-wide. Unlike the three
+        // above, it WAS enforced: it is in strictTypeChecked, which the testing package
+        // gated at error over its NON-TEST source (the old per-package config disabled it
+        // only for test files). It is therefore restored to "error" for exactly that
+        // scope in the testing-package non-test override below. Repo-wide it stays off
+        // (~666 sites elsewhere were never held to it), which is a genuine follow-up.
+        "useImportType": "off",
+        "noNonNullAssertion": "off",
+        "useNodejsImportProtocol": "off",
+        "useTemplate": "off",
+
+        // RESTORING GATES from `...typescriptEslint.configs.recommended.rules`, which
+        // was spread into the core SDK config at error over src/**/*.ts and gated by
+        // prebuild. Measured before enabling; the tree is clean of the first two, which
+        // is what an error-level rule should produce.
+        //
+        //   noNamespace          <- no-namespace          0 violations repo-wide
+        //   useAsConstAssertion  <- prefer-as-const       0 violations repo-wide
+        //   noCommonJs           <- no-require-imports    2 in .ts, both suppressed with
+        //                                                reasons; see the override that
+        //                                                exempts .js/.cjs below
+        "noNamespace": "error",
+        "useAsConstAssertion": "error",
+        "noCommonJs": "error",
+        "useArrayLiterals": "error",
+        // tseslint stylistic (prefer-function-type), 0 violations repo-wide.
+        "useShorthandFunctionType": "error"
+      },
+
+      "complexity": {
+        // Same reasoning as the style rules above: never enforced repo-wide, ~23 sites,
+        // pure preference. `biome check --write --only=complexity/useLiteralKeys` when wanted.
+        // The `noUseless*` rules in this group are deliberately left ON: they flag dead
+        // code rather than style, and are low volume.
+        "useLiteralKeys": "off",
+
+        // Also error rather than Biome's default warn, for the reason above: it came in
+        // from typescript-eslint recommended at error (as no-empty-object-type,
+        // no-unsafe-function-type and no-wrapper-object-types, which Biome merges into
+        // this one rule), so warn would be a silent downgrade.
+        "noBannedTypes": "error",
+        "noUselessThisAlias": "error",
+        "noUselessTypeConstraint": "error",
+
+        // Same story: default below error, gated before, 0 violations repo-wide.
+        "noAdjacentSpacesInRegex": "error",
+        "noArguments": "error",
+        "noExtraBooleanCast": "error",
+        "noStaticOnlyClass": "error",
+        "noUselessEmptyExport": "error"
+      },
+
+      "nursery": {
+        // Replaces `@typescript-eslint/explicit-function-return-type`, which the core SDK
+        // and insight configs set to "warn". Note this rule is in Biome's nursery group,
+        // so it is NOT covered by semver and may change between minor releases.
+        "useExplicitReturnType": "warn",
+
+        // Async-safety rules recovered from the type-aware set the testing package used
+        // to get via `tseslint.configs.strictTypeChecked`. These belong to Biome's
+        // `types` domain, so enabling them turns on the scanner: lint goes from ~0.5s to
+        // ~3s for the monorepo and Biome reads .d.ts files from node_modules. For an SDK
+        // whose entire job is orchestrating asynchronous work, that is worth paying.
+        //
+        // WHERE THE SIGNAL GOES. These are "warn", and CI gates on
+        // `--diagnostic-level=error`, so they do not fail a build. They are not silent
+        // either: the `async-safety` job in .github/workflows/lint.yml annotates them
+        // inline on the files a PR actually changes (`biome lint --changed`), so a NEW
+        // floating promise surfaces in review even though the pre-existing backlog does
+        // not. On this branch that scoping is the difference between 2 annotations and
+        // 77.
+        //
+        // Counts below were measured with dependencies installed and types built.
+        // These rules need type resolution, so a tree without node_modules under-reports
+        // them (~73 instead of 77); CI runs `npm ci` first, so the figures here are the
+        // ones CI will produce.
+        //
+        // TRIAGE BACKLOG -> then raise noFloatingPromises to "error".
+        // 77 total = noFloatingPromises 74, noMisusedPromises 2, useAwaitThenable 1,
+        // split 57 in test files, 18 in shipped package src (below), and 2 in a script
+        // and a packaging smoke test. The 18 that ship:
+        //   5  utils/checkpoint/checkpoint-manager.ts                      noFloatingPromises
+        //   3  handlers/run-in-child-context-handler/...-handler.ts         noFloatingPromises
+        //   3  utils/replay-validation/replay-validation.ts                noFloatingPromises
+        //   2  context/durable-context/mode-management/mode-management.ts   noMisusedPromises
+        //   1  handlers/step-handler/step-handler.ts                       noFloatingPromises
+        //   1  handlers/wait-for-callback-handler/...-handler.ts            useAwaitThenable
+        //   1  handlers/wait-for-condition-handler/...-handler.ts          noFloatingPromises
+        //   1  run-durable.ts                                             noFloatingPromises
+        //   1  termination-manager/termination-manager.ts                  noFloatingPromises
+        // A deliberately un-awaited promise should get an explicit `void` or a
+        // suppression comment carrying a reason; the rest are likely real. Until that
+        // pass happens, these stay at "warn".
+        //
+        // FOOTGUN when writing those suppressions: Biome requires the reason to sit on
+        // the SAME line as the directive. If it wraps onto a following `//` line, the
+        // directive binds to the comment instead of the code, suppresses nothing, and
+        // Biome reports it as `suppressions/unused`. Two suppressions in this change
+        // shipped that way before review caught them. Keep reasons on one line, however
+        // long, and check with `biome lint <file>` -- an unused suppression is reported,
+        // not silent.
+        //
+        // Like all nursery rules these are outside Biome's semver guarantees.
+        "noFloatingPromises": "warn",
+        "noMisusedPromises": "warn",
+        "useAwaitThenable": "warn"
+      }
+    }
+  },
+
+  // Import sorting was never enforced by the old setup. Left off so this migration does
+  // not reorder imports across the entire repository.
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "off"
+      }
+    }
+  },
+
+  "overrides": [
+    {
+      /**
+       * These files ARE CommonJS: jest configs, build scripts and the CJS integration
+       * test, which use require/module.exports because that is what they are loaded as.
+       * `no-require-imports` never applied to them either -- the old rule was scoped to
+       * the core SDK's `src/**​/*.ts`. noCommonJs is error for TypeScript, where ESM is
+       * the rule, and off here.
+       */
+      "includes": ["**/*.js", "**/*.cjs"],
+      "linter": { "rules": { "style": { "noCommonJs": "off" } } }
+    },
+    {
+      /**
+       * Restores gates rather than adding them. The testing package ran
+       * `tseslint.configs.strictTypeChecked` AND `pluginJest.configs["flat/recommended"]`
+       * at error severity through its `prebuild`, and CI runs `npm run build`, so a
+       * floating promise, a thrown non-Error or a skipped test there failed the build on
+       * every pull request. Each rule below is one of those gates with a Biome equivalent.
+       *
+       * Async safety (noFloatingPromises, noMisusedPromises, useAwaitThenable) from
+       * strictTypeChecked: the package has zero violations of all three -- a direct
+       * consequence of having been gated -- so raising them from the repo-wide "warn"
+       * costs nothing and closes the hole. Without this, a new floating promise in the
+       * testing package would produce an annotation and pass CI, where before it failed
+       * the build; it also makes the async-safety job's `--changed` scoping a strict
+       * improvement over the old setup for this package rather than a partial substitute.
+       *
+       * useThrowOnlyError <- @typescript-eslint/only-throw-error (strictTypeChecked): zero
+       * violations here too, so it is free, exactly like the async rules above.
+       *
+       * noSkippedTests <- jest/no-disabled-tests (eslint-plugin-jest recommended). Biome's
+       * `test` domain does NOT include this rule (see the domain note above), so it is
+       * enabled explicitly here rather than coming from the domain. The package has three
+       * skipped tests, each of which previously carried a `jest/no-disabled-tests` disable
+       * naming why; those three now carry `noSkippedTests` suppressions instead, so the
+       * skips stay acknowledged and `lint:suppressions` tracks them.
+       *
+       * Repo-wide the async rules stay "warn": the other packages were never held to them
+       * and carry a backlog (see the triage list above), so erroring there would be a new
+       * requirement rather than a restored one. noSkippedTests is likewise scoped here
+       * rather than repo-wide -- `--only` finds 5 skips across the tree but only these 3
+       * were ever gated, and gating the other 2 would be a new requirement.
+       */
+      "includes": ["packages/aws-durable-execution-sdk-js-testing/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noSkippedTests": "error",
+            // The real equivalent of eslint:recommended's `no-empty`, which this package
+            // gated. It is NOT in Biome's recommended set, so it is OFF by default -- a
+            // THIRD failure mode beyond "recommended but below error", which the
+            // enumeration in gap 5 does not find. 100 violations repo-wide, 0 here.
+            // (Biome's `noEmptyBlock` is a CSS rule and is NOT this one.)
+            "noEmptyBlockStatements": "error"
+          },
+          "style": {
+            "useThrowOnlyError": "error"
+          },
+          // Five more rules this package gated at error and has ZERO violations of, while
+          // the rest of the repo does not -- so the override closes them here at no cost,
+          // exactly as it does for the async trio. Repo-wide counts, for the record:
+          // noUselessCatch 2, noUselessConstructor 8, useOptionalChain 10,
+          // noUnusedPrivateClassMembers 4, noUnusedVariables 22.
+          //
+          // noUnusedVariables is the notable one: the repo-wide "warn" is justified by the
+          // 21 unused catch bindings in the conformance handlers, and that argument does
+          // not apply to this package at all.
+          "complexity": {
+            "noUselessCatch": "error",
+            "noUselessConstructor": "error",
+            "useOptionalChain": "error"
+          },
+          "correctness": {
+            "noUnusedPrivateClassMembers": "error",
+            "noUnusedVariables": "error"
+          },
+          "nursery": {
+            "noFloatingPromises": "error",
+            "noMisusedPromises": "error",
+            "useAwaitThenable": "error"
+          }
+        }
+      }
+    },
+    {
+      // Finding: noNonNullAssertion WAS gated, contrary to the repo-wide style-rule note.
+      // It is in strictTypeChecked, which the testing package ran at error through its
+      // `prebuild`; the old per-package config turned it off only for test files
+      // (`*.test.ts`), so it was error-level over this package's NON-TEST source. Biome
+      // reports exactly four non-test violations (three in worker-server-api-handler.ts,
+      // one in cli-config.ts) -- precisely the four sites whose
+      // `@typescript-eslint/no-non-null-assertion` disables were removed in this
+      // migration. Restoring the rule at that same scope gives those reviewed sites their
+      // record back; each now carries a `noNonNullAssertion` suppression. Off repo-wide
+      // (~666 sites elsewhere never held to it) and off for this package's tests (~116
+      // there), matching the old scope exactly. The includes below exclude test files so
+      // the scope is the non-test source only.
+      "includes": [
+        "packages/aws-durable-execution-sdk-js-testing/**/*.ts",
+        "!packages/aws-durable-execution-sdk-js-testing/**/*.test.ts",
+        "!packages/aws-durable-execution-sdk-js-testing/**/*.test.mts",
+        "!packages/aws-durable-execution-sdk-js-testing/**/*.test.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noNonNullAssertion": "error"
+          }
+        }
+      }
+    },
+    {
+      // Parity with the old per-package configs, which turned `no-explicit-any` off in
+      // test files. Return types on test callbacks are noise for the same reason.
+      "includes": ["**/*.test.ts", "**/*.test.tsx", "**/*.test.mts"],
+      "linter": {
+        "rules": {
+          "suspicious": { "noExplicitAny": "off" },
+          "nursery": { "useExplicitReturnType": "off" }
+        }
+      }
+    },
+
+    {
+      // Kebab-case filenames were only ever enforced in the core SDK's `src`, via the
+      // local `eslint-plugin-filename-convention` package (now deleted). Keeping the same
+      // scope matters: the conformance handlers use snake_case names that are part of the
+      // cross-SDK contract with aws-durable-execution-conformance-tests, and the insight
+      // packages use camelCase throughout. Neither should be renamed by a lint rule.
+      "includes": [
+        "packages/aws-durable-execution-sdk-js/src/**/*.ts",
+        "!packages/aws-durable-execution-sdk-js/src/**/__mocks__/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            /**
+             * Half of the old `filename-convention/kebab-case` rule. That rule was
+             * error-level and gated, and it validated the filename AND every directory
+             * segment; this Biome rule only looks at the filename -- verified, a
+             * kebab-case file inside `BadDirName/nested_dir/` produces no diagnostic.
+             *
+             * The directory half is covered by `lint:filenames`, which runs the repo's
+             * own scripts/check-filenames.js in the lint job. That script already
+             * checked directory segments but was wired to nothing, so without it half
+             * the rule was silently lost. Note it needs the same `__mocks__` exemption
+             * this override has, for the same reason: Jest fixes that directory name.
+             */
+            "useFilenamingConvention": {
+              "level": "error",
+              "options": {
+                "filenameCases": ["kebab-case"],
+                "strictCase": true,
+                "requireAscii": true
+              }
+            }
+          }
+        }
+      }
+    },
+
+    {
+      // Examples, conformance handlers and the packaging smoke tests print to stdout on
+      // purpose, and are not part of the published API surface.
+      "includes": [
+        "packages/aws-durable-execution-sdk-js-examples/**",
+        "packages/aws-durable-execution-sdk-js-conformance-tests/**",
+        "packages/aws-durable-execution-sdk-js-conformance-tests-otel/**",
+        "packages/cjs-integration-test/**",
+        "packages/esm-integration-test/**",
+        "packages/cdk-bundling-integration-test/**",
+        "packages/lambda-runtime-detection-integration-test/**",
+        ".github/**"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": { "noConsole": "off" },
+          "nursery": { "useExplicitReturnType": "off" }
+        }
+      }
+    },
+
+    {
+      // The wire model is the SDK's own declaration of the durable execution protocol, and
+      // nothing portable can depend on the AWS SDK. Keeping it AWS-free is what lets a
+      // transport for another compute type be written against these types, so it is
+      // enforced rather than left to review. The parity test is exempt (next override):
+      // comparing our declarations to the service model is precisely its job, and it
+      // imports the AWS types for that.
+      "includes": [
+        "packages/aws-durable-execution-sdk-js/src/types/wire/**/*.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@aws-sdk/**", "aws-lambda"],
+                    "message": "The wire model must stay free of AWS types so it can describe the protocol for any compute type. If the service model changed, update the declarations here and let wire-model.aws-sdk-parity.test.ts verify them."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/aws-durable-execution-sdk-js/src/types/wire/**/*.aws-sdk-parity.test.ts"
+      ],
+      "linter": {
+        "rules": { "style": { "noRestrictedImports": "off" } }
+      }
+    },
+
+    /**
+     * Structural rules for the Workflow Insight packages.
+     *
+     * These exist because the alternative is a convention nobody can enforce. The
+     * refactor that created `@aws/durable-execution-sdk-js-insight-core` was motivated by
+     * a cross-package relative import that had grown up unnoticed, and review then showed
+     * that a host-specific import in shared code was equally invisible: an `electron`
+     * import in a core module that no test happened to cover passed every check and every
+     * build.
+     *
+     * Modules that belong to exactly one host: `vscode`, `electron`,
+     * `@modelcontextprotocol/sdk`. Shared code (insight-core) may import none of them;
+     * each host may import only its own. This list mirrors `HOST_MODULES` in
+     * packages/aws-durable-execution-sdk-js-insight-core/src/hostModuleScan.ts, which is
+     * where the tested, authoritative version lives.
+     *
+     * NOTE ON ENFORCEMENT: these were already gated before this migration -- the
+     * `insight-hosts` job ran `npm run lint` for exactly this purpose (added by #809).
+     * That step is removed and the dedicated `lint` job (`biome ci`, see
+     * .github/workflows/lint.yml) carries them now, so the gate moved rather than
+     * appeared (though the `lint` job cannot block a merge until `lint / lint` is in
+     * branch protection). The `hostAgnostic.test.ts` guards must still stay -- they assert the
+     * same invariant from inside the test suite, independent of lint configuration.
+     */
+    {
+      "includes": [
+        "packages/aws-durable-execution-sdk-js-insight-core/**/*.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "vscode": "\"vscode\" belongs to a different host process and is not available here. Shared, host-free code belongs in @aws/durable-execution-sdk-js-insight-core; express what you need through the HostPort interface and let each host implement it.",
+                  "electron": "\"electron\" belongs to a different host process and is not available here. Shared, host-free code belongs in @aws/durable-execution-sdk-js-insight-core; express what you need through the HostPort interface and let each host implement it.",
+                  "@modelcontextprotocol/sdk": "\"@modelcontextprotocol/sdk\" belongs to a different host process and is not available here. Shared, host-free code belongs in @aws/durable-execution-sdk-js-insight-core; express what you need through the HostPort interface and let each host implement it."
+                },
+                "patterns": [
+                  {
+                    "group": [
+                      "vscode/**",
+                      "electron/**",
+                      "@modelcontextprotocol/sdk/**"
+                    ],
+                    "message": "This module belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-insight-core."
+                  },
+                  {
+                    "group": ["../../**"],
+                    "message": "Do not reach into a sibling package by relative path. Depend on it (e.g. `@aws/durable-execution-sdk-js-insight-core`) and import by name, so the dependency is declared and the boundary is real."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/aws-durable-execution-sdk-js-insight-mcp/**/*.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "vscode": "\"vscode\" belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-insight-core.",
+                  "electron": "\"electron\" belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-insight-core."
+                },
+                "patterns": [
+                  {
+                    "group": ["vscode/**", "electron/**"],
+                    "message": "This module belongs to a different host process and is not available here."
+                  },
+                  {
+                    "group": ["../../**"],
+                    "message": "Do not reach into a sibling package by relative path. Depend on it and import by name, so the dependency is declared and the boundary is real."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/aws-durable-execution-sdk-js-insight-vscode/**/*.ts",
+        "packages/aws-durable-execution-sdk-js-insight-vscode/**/*.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "electron": "\"electron\" belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-insight-core.",
+                  "@modelcontextprotocol/sdk": "\"@modelcontextprotocol/sdk\" belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-insight-core."
+                },
+                "patterns": [
+                  {
+                    "group": ["electron/**", "@modelcontextprotocol/sdk/**"],
+                    "message": "This module belongs to a different host process and is not available here."
+                  },
+                  {
+                    "group": ["../../**"],
+                    "message": "Do not reach into a sibling package by relative path. Depend on it and import by name, so the dependency is declared and the boundary is real."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/aws-durable-execution-sdk-js-insight-desktop/**/*.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "vscode": "\"vscode\" belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-insight-core.",
+                  "@modelcontextprotocol/sdk": "\"@modelcontextprotocol/sdk\" belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-insight-core."
+                },
+                "patterns": [
+                  {
+                    "group": ["vscode/**", "@modelcontextprotocol/sdk/**"],
+                    "message": "This module belongs to a different host process and is not available here."
+                  },
+                  {
+                    "group": ["../../**"],
+                    "message": "Do not reach into a sibling package by relative path. Depend on it and import by name, so the dependency is declared and the boundary is real."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

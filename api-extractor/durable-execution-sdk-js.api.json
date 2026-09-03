@@ -9001,7 +9001,12 @@
                 },
                 {
                   "kind": "Content",
-                  "text": "number"
+                  "text": "typeof "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION",
+                  "canonicalReference": "@aws/durable-execution-sdk-js!DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION:var"
                 },
                 {
                   "kind": "Content",
@@ -9014,7 +9019,7 @@
               "name": "pluginApiVersion",
               "propertyTypeTokenRange": {
                 "startIndex": 1,
-                "endIndex": 2
+                "endIndex": 3
               }
             },
             {

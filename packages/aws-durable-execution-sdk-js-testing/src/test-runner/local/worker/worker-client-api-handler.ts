@@ -55,7 +55,6 @@ export class WorkerClientApiHandler {
       return;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
     (handler as ApiCallHandler<WorkerApiResponseMapping[ApiType]>).resolve(
       apiResponse.response,
     );

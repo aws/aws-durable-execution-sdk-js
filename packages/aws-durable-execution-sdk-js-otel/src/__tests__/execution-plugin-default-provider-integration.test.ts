@@ -187,7 +187,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     expect(attemptSpan).toBeDefined();
   });
 
-  it("Workflow_Span is a root span with no parent", async () => {
+  it("Workflow_Span parents onto the synthetic execution root when no context is propagated", async () => {
     const plugin = new ExecutionOtelPlugin({});
 
     await plugin.onInvocationStart(makeInvocationInfo());
@@ -202,10 +202,21 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     );
 
     const workflowSpan = findSpan(exporter, "Workflow");
+    const invocationSpan = findSpan(exporter, "Invocation");
     expect(workflowSpan).toBeDefined();
+    expect(invocationSpan).toBeDefined();
 
-    // Workflow_Span MUST be a root span — no parent span context
-    expect(workflowSpan!.parentSpanContext).toBeUndefined();
+    // With no ambient span and no propagated backend context, a synthetic
+    // execution root anchors the execution trace. The Workflow span parents
+    // onto that root (it is no longer a parentless root) and shares the
+    // execution trace with the Invocation span.
+    expect(workflowSpan!.parentSpanContext?.spanId).toBeDefined();
+    expect(workflowSpan!.spanContext().traceId).toBe(
+      invocationSpan!.spanContext().traceId,
+    );
+    expect(workflowSpan!.parentSpanContext?.spanId).toBe(
+      invocationSpan!.parentSpanContext?.spanId,
+    );
   });
 
   it("Invocation_Span is created as child of ambient context", async () => {
@@ -403,8 +414,12 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     expect(invocationSpan).toBeDefined();
     expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(TEST_ARN);
 
-    // Workflow is root
-    expect(workflowSpan!.parentSpanContext).toBeUndefined();
+    // Workflow parents onto the synthetic execution root and shares the
+    // execution trace with the Invocation span (no propagated context here).
+    expect(workflowSpan!.parentSpanContext?.spanId).toBeDefined();
+    expect(workflowSpan!.spanContext().traceId).toBe(
+      invocationSpan!.spanContext().traceId,
+    );
 
     // Both operations are children of Workflow_Span
     expect(validateSpan!.parentSpanContext?.spanId).toBe(
@@ -446,8 +461,8 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
       }
     }
 
-    // Workflow operations form one trace. The parentless Invocation span forms
-    // a separate trace instead of becoming a second root in the Workflow trace.
+    // The whole execution shares one trace: operations, attempts, the Workflow
+    // span, and the Invocation span all share the execution trace ID.
     expect(validateSpan!.spanContext().traceId).toBe(
       workflowSpan!.spanContext().traceId,
     );
@@ -460,7 +475,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     expect(processAttempt!.spanContext().traceId).toBe(
       workflowSpan!.spanContext().traceId,
     );
-    expect(invocationSpan!.spanContext().traceId).not.toBe(
+    expect(invocationSpan!.spanContext().traceId).toBe(
       workflowSpan!.spanContext().traceId,
     );
   });

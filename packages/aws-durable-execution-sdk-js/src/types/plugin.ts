@@ -268,7 +268,9 @@ export interface DurableInstrumentationPlugin {
  */
 export type DurableInstrumentationPluginType<
   Plugin extends DurableInstrumentationPlugin = DurableInstrumentationPlugin,
-> = abstract new (...args: never[]) => Plugin;
+> = abstract new (
+  ...args: never[]
+) => Plugin;
 
 /**
  * Versioned factory exported by packages that support environment-based plugin loading.
@@ -285,7 +287,7 @@ export interface DurableInstrumentationPluginProvider<
   /**
    * Provider contract version expected by the SDK.
    */
-  readonly pluginApiVersion: number;
+  readonly pluginApiVersion: typeof DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION;
 
   /**
    * Concrete class returned by `createPlugin`.

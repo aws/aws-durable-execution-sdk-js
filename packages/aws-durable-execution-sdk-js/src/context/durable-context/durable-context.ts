@@ -206,6 +206,16 @@ export class DurableContextImpl<Logger extends DurableLogger>
   }
 
   private createModeAwareLogger(logger: Logger): DurableContextLogger<Logger> {
+    // The `return`s here are load-bearing and must stay. DurableContextLogger is
+    // `Pick<Logger, "log" | "warn" | ...>`, so the CONCRETE type parameter's declared
+    // return types survive -- it is only the DurableLogger constraint that declares
+    // void. A caller whose logger returns something (a promise, a chainable) had that
+    // value forwarded, so dropping the returns would be an observable public-API
+    // change. An earlier revision of this migration did exactly that, on the mistaken
+    // premise that "the underlying logger methods return void".
+    //
+    // Every mainstream logger (console, pino, Powertools) returns void, so the impact
+    // is likely nil -- but a lint migration is the wrong place to find out.
     const durableContextLogger: DurableContextLogger<Logger> = {
       warn: (...args) => {
         if (this.shouldLog()) {
@@ -232,6 +242,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
     if ("log" in logger) {
       durableContextLogger.log = (level, ...args): void => {
         if (this.shouldLog()) {
+          // biome-ignore lint/correctness/noVoidTypeReturn: forwarding is deliberate, see the note above -- the `: void` annotation describes the DurableLogger contract, while the value returned is the concrete logger's. Removing the `return` would silently change public behaviour for a logger whose log() returns a value.
           return logger.log?.(level, ...args);
         }
       };

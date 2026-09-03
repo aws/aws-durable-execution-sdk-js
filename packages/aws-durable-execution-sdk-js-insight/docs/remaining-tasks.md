@@ -145,7 +145,9 @@
       (core SDK's TypeScript rules, using only published deps — no local
       filename-convention plugin) and a `lint` script, consistent with the other
       packages. Lints clean (0 errors); pre-commit lint-staged now applies the
-      TS rules to insight sources.
+      TS rules to insight sources. (Historical: the repo later moved to Biome, so
+      this config no longer exists; the equivalent rules live in the root
+      `biome.jsonc`.)
 - [x] Package `README.md` — comprehensive docs with all exporters, config, examples
 - [ ] Add a runnable example under `aws-durable-execution-sdk-js-examples`
 

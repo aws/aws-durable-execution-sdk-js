@@ -361,11 +361,7 @@ async function runHandler<
         try {
           await durableExecution.checkpointManager.waitForQueueCompletion();
         } catch (waitError) {
-          log(
-            "⚠️",
-            "Error waiting for checkpoint queue completion:",
-            waitError,
-          );
+          log("⚠️", "Error waiting for checkpoint queue completion:", waitError);
           // Continue anyway - the checkpoint will be retried on next invocation
         }
 
@@ -406,11 +402,7 @@ async function runHandler<
         try {
           await durableExecution.checkpointManager.waitForQueueCompletion();
         } catch (waitError) {
-          log(
-            "⚠️",
-            "Error waiting for checkpoint queue completion:",
-            waitError,
-          );
+          log("⚠️", "Error waiting for checkpoint queue completion:", waitError);
           // Continue anyway - the checkpoint will be retried on next invocation
         }
 
@@ -527,9 +519,9 @@ function validateDurableExecutionEvent(event: unknown): void {
  * @public
  */
 export const withDurableExecution = <
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: deliberate -- public generic default, so `withDurableExecution(handler)` needs no type arguments; `unknown` would force every caller to annotate.
   TEvent = any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: deliberate -- public generic default, as with TEvent above.
   TResult = any,
   TLogger extends DurableLogger = DurableLogger,
 >(

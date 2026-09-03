@@ -17,7 +17,6 @@ import type {
   InvocationEndInfo,
 } from "@aws/durable-execution-sdk-js";
 import { ExecutionOtelPlugin } from "../execution-plugin";
-import { deriveTraceIdFromArn } from "../deterministic-id-generator";
 import type { TracerProviderFactory } from "../otel-plugin-config";
 
 const TEST_ARN =
@@ -125,7 +124,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       expect(workflowSpan).toBeDefined();
     });
 
-    it("creates a root Invocation span with an application-owned provider when no ambient span exists", async () => {
+    it("shares one execution trace with an application-owned provider when no ambient span exists", async () => {
       const plugin = new ExecutionOtelPlugin({
         tracerProviderFactory,
       });
@@ -139,20 +138,32 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       const workflowSpan = findSpan(exporter, "Workflow");
       expect(invocationSpan).toBeDefined();
       expect(workflowSpan).toBeDefined();
-      expect(invocationSpan!.parentSpanContext).toBeUndefined();
-      expect(invocationSpan!.spanContext().traceId).not.toBe(
+      // With no propagated context and no ambient span, a synthetic execution
+      // root anchors the trace and both spans parent onto it, sharing one trace.
+      expect(invocationSpan!.spanContext().traceId).toBe(
         workflowSpan!.spanContext().traceId,
+      );
+      expect(invocationSpan!.parentSpanContext?.spanId).toBeDefined();
+      expect(invocationSpan!.parentSpanContext?.spanId).toBe(
+        workflowSpan!.parentSpanContext?.spanId,
       );
     });
 
     it("parents an application-owned provider's Invocation span to the ambient span", async () => {
-      const plugin = new ExecutionOtelPlugin({
-        tracerProviderFactory,
-      });
       const ambientSpan = provider
         .getTracer("test-ambient-provider")
         .startSpan("ambient-invocation");
       const ambientContext = trace.setSpan(ROOT_CONTEXT, ambientSpan);
+      // The extractor reports the ambient span's trace as the propagated Root
+      // (no Parent), so the ambient span is on the canonical execution trace.
+      // The Invocation span therefore parents onto the ambient span, staying
+      // nested under the layer's handler span on the same trace.
+      const plugin = new ExecutionOtelPlugin({
+        tracerProviderFactory,
+        contextExtractor: () => ({
+          traceId: ambientSpan.spanContext().traceId,
+        }),
+      });
 
       await context.with(ambientContext, async () => {
         await plugin.onInvocationStart(makeInvocationInfo());
@@ -199,7 +210,11 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       expect(invocationSpan!.spanContext().traceId).toBe(traceId);
     });
 
-    it("gives chained executions distinct Workflow traces when they share an upstream trace", async () => {
+    it("joins chained executions onto the shared propagated trace with distinct Workflow spans", async () => {
+      // When a complete remote parent (Root + Parent) is propagated to both a
+      // parent and a target execution in a chained invoke, both join that one
+      // execution trace. Each keeps its own deterministic Workflow span ID
+      // (derived from its ARN), so the two executions stay distinguishable.
       const upstreamTraceId = "1".repeat(32);
       const upstreamParentSpanId = "2".repeat(16);
       const targetArn = `${TEST_ARN}-target`;
@@ -208,7 +223,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
         contextExtractor: () => ({
           traceId: upstreamTraceId,
           parentSpanId: upstreamParentSpanId,
-          traceFlags: 1,
+          sampling: "SAMPLED" as const,
         }),
       };
       const parentPlugin = new ExecutionOtelPlugin(config);
@@ -236,30 +251,22 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       );
       expect(parentWorkflow).toBeDefined();
       expect(targetWorkflow).toBeDefined();
-      expect(parentWorkflow!.parentSpanContext).toBeUndefined();
-      expect(targetWorkflow!.parentSpanContext).toBeUndefined();
-      expect(parentWorkflow!.spanContext().traceId).toBe(
-        deriveTraceIdFromArn(TEST_ARN, TEST_EXECUTION_START),
+
+      // Both Workflow spans join the one propagated execution trace and parent
+      // onto the propagated remote parent.
+      expect(parentWorkflow!.spanContext().traceId).toBe(upstreamTraceId);
+      expect(targetWorkflow!.spanContext().traceId).toBe(upstreamTraceId);
+      expect(parentWorkflow!.parentSpanContext?.spanId).toBe(
+        upstreamParentSpanId,
       );
-      expect(targetWorkflow!.spanContext().traceId).toBe(
-        deriveTraceIdFromArn(targetArn, TEST_EXECUTION_START),
-      );
-      expect(parentWorkflow!.spanContext().traceId).not.toBe(
-        targetWorkflow!.spanContext().traceId,
+      expect(targetWorkflow!.parentSpanContext?.spanId).toBe(
+        upstreamParentSpanId,
       );
 
-      const rootsByTrace = workflowSpans.reduce<Map<string, ReadableSpan[]>>(
-        (roots, span) => {
-          const traceId = span.spanContext().traceId;
-          roots.set(traceId, [...(roots.get(traceId) ?? []), span]);
-          return roots;
-        },
-        new Map(),
+      // The two executions keep distinct deterministic Workflow span IDs.
+      expect(parentWorkflow!.spanContext().spanId).not.toBe(
+        targetWorkflow!.spanContext().spanId,
       );
-      expect(rootsByTrace.size).toBe(2);
-      expect(
-        [...rootsByTrace.values()].every((roots) => roots.length === 1),
-      ).toBe(true);
 
       const invocationSpans = getExportedSpans(exporter).filter(
         (span) => span.name === "Invocation",
@@ -299,12 +306,18 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
 
   describe("Ambient context is captured BEFORE Workflow_Span creation", () => {
     it("captures the ambient context with the active invocation span before Workflow_Span is created", async () => {
-      const plugin = new ExecutionOtelPlugin({});
-
       // Create an ambient span to simulate invocation span from the environment
       const tracer = provider.getTracer("test");
       const ambientSpan = tracer.startSpan("ambient-invocation");
       const ambientContext = trace.setSpan(ROOT_CONTEXT, ambientSpan);
+      // The extractor reports the ambient span's trace as the propagated Root,
+      // so the ambient span is on the canonical execution trace and the
+      // Invocation span parents onto it.
+      const plugin = new ExecutionOtelPlugin({
+        contextExtractor: () => ({
+          traceId: ambientSpan.spanContext().traceId,
+        }),
+      });
 
       await context.with(ambientContext, async () => {
         await plugin.onInvocationStart(makeInvocationInfo());

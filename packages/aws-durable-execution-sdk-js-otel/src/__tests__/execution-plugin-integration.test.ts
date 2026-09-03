@@ -137,13 +137,21 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
      * onOperationStart → onOperationAttemptStart → onOperationAttemptEnd →
      * onOperationEnd → wrapChildContextFn (CONTEXT type) → onInvocationEnd
      */
-    const plugin = new ExecutionOtelPlugin({});
-
     // Create an ambient invocation span (simulating the one from the Lambda layer/environment)
     const ambientTracer = provider.getTracer("test-ambient-layer");
     const ambientSpan = ambientTracer.startSpan("lambda-invocation");
     const ambientContext = trace.setSpan(ROOT_CONTEXT, ambientSpan);
     const ambientSpanContext = ambientSpan.spanContext();
+
+    // The extractor reports the ambient span's trace (propagated Root, no
+    // Parent). With no complete remote parent, the execution joins that Root
+    // trace but anchors on the deterministic synthetic root rather than the
+    // ambient span.
+    const plugin = new ExecutionOtelPlugin({
+      contextExtractor: () => ({
+        traceId: ambientSpanContext.traceId,
+      }),
+    });
 
     // --- Phase 1: onInvocationStart with ambient context ---
     await context.with(ambientContext, async () => {
@@ -213,16 +221,29 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     // child-context execution, lambda-invocation (ambient)
     expect(spans.length).toBeGreaterThanOrEqual(5);
 
-    // Assertion 2: Workflow_Span has no parent (it's a root span — created with ROOT_CONTEXT)
+    // Assertion 2: The extractor reports only a Root (no usable Parent), so
+    // there is no complete remote parent. The execution joins the propagated
+    // Root trace but anchors on a synthetic execution root, NOT the ambient
+    // span (an ambient span's trace is not stable across reinvocations).
     const workflowSpan = findSpan(exporter, "Workflow");
     expect(workflowSpan).toBeDefined();
-    // A root span created with ROOT_CONTEXT has no valid parent
-    expect(workflowSpan!.parentSpanContext).toBeUndefined();
+    expect(workflowSpan!.spanContext().traceId).toBe(
+      ambientSpanContext.traceId,
+    );
+    expect(workflowSpan!.parentSpanContext?.spanId).not.toBe(
+      ambientSpanContext.spanId,
+    );
 
-    // Assertion 3: Invocation_Span is created as child of the ambient Lambda span
+    // Assertion 3: Invocation_Span shares the execution trace with the Workflow
+    // span. It parents onto the active ambient span (which is on the canonical
+    // execution trace), keeping the per-invocation span nested under the layer's
+    // handler span without changing the execution ancestor.
     const invocationSpan = findSpan(exporter, "Invocation");
     expect(invocationSpan).toBeDefined();
     expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(TEST_ARN);
+    expect(invocationSpan!.spanContext().traceId).toBe(
+      workflowSpan!.spanContext().traceId,
+    );
     expect(invocationSpan!.parentSpanContext?.spanId).toBe(
       ambientSpanContext.spanId,
     );
@@ -299,7 +320,13 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
      * Verifies that per-invocation state is properly cleared between invocations
      * and the global provider remains functional across multiple lifecycles.
      */
-    const plugin = new ExecutionOtelPlugin({});
+    // No backend execution context is extracted, so each invocation anchors on
+    // the deterministic ARN-derived execution trace rather than on whichever
+    // per-invocation ambient span happens to be active. A live ambient span is
+    // never adopted as the execution trace.
+    const plugin = new ExecutionOtelPlugin({
+      contextExtractor: () => undefined,
+    });
 
     const ambientTracer = provider.getTracer("test-ambient-layer");
 
@@ -352,13 +379,18 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     expect(secondInvocationSpan).toBeDefined();
 
     // The link on second-op should point to the second invocation's plugin-created
-    // Invocation span (which is itself a child of ambientSpan2, not ambientSpan1)
+    // Invocation span. The Invocation span should not parent onto either
+    // per-invocation ambient span because no backend execution context was
+    // extracted, so the execution anchors on the ARN-derived trace.
     expect(secondOpSpan!.links.length).toBeGreaterThan(0);
     expect(secondOpSpan!.links[0].context.spanId).toBe(
       secondInvocationSpan!.spanContext().spanId,
     );
-    expect(secondInvocationSpan!.parentSpanContext?.spanId).toBe(
+    expect(secondInvocationSpan!.parentSpanContext?.spanId).not.toBe(
       ambientSpan2.spanContext().spanId,
+    );
+    expect(secondInvocationSpan!.spanContext().traceId).not.toBe(
+      ambientSpan2.spanContext().traceId,
     );
 
     // No leaked link to the first ambient span
