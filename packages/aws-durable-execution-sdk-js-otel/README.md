@@ -1,8 +1,5 @@
 # AWS Durable Execution SDK - OpenTelemetry Plugin
 
-> **Experimental beta:** This plugin is not recommended for production
-> workloads. Its API may change between releases.
-
 OpenTelemetry instrumentation for the AWS Durable Execution SDK. The package
 provides two plugins that emit Workflow, Invocation, durable operation, and
 operation-attempt spans.
