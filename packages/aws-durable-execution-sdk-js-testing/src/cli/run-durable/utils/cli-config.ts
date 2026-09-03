@@ -21,7 +21,7 @@ export function createCliProgram(): Command {
   program
     .name("run-durable")
     .description("Run a durable function locally for testing")
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    // biome-ignore lint/style/noNonNullAssertion: NPM_PACKAGE_VERSION is injected into the environment by the run-durable CLI wrapper, so it is present here; reviewed `@typescript-eslint/no-non-null-assertion` disable before the migration.
     .version(process.env.NPM_PACKAGE_VERSION!)
     .argument("<file>", "Path to the handler file")
     .option("--skip-time", "Enable skip time in test environment", false)

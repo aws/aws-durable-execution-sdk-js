@@ -24,7 +24,6 @@ export function addOperationDetails<DetailsField extends OperationDetailFields>(
     return;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
   const entries = Object.entries(propertyValueMap) as Entries<
     typeof propertyValueMap
   >;

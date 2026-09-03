@@ -8,15 +8,11 @@ import {
   trace,
   SpanStatusCode,
   SpanKind,
-  TraceFlags,
   propagation,
 } from "@opentelemetry/api";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
 import { InvocationOtelPlugin } from "../invocation-plugin";
-import {
-  deriveSpanIdFromOperationId,
-  deriveTraceIdFromArn,
-} from "../deterministic-id-generator";
+import { deriveSpanIdFromOperationId } from "../deterministic-id-generator";
 import type { TracerProviderFactory } from "../otel-plugin-config";
 import type {
   InvocationInfo,
@@ -199,16 +195,21 @@ describe("InvocationOtelPlugin", () => {
       expect(findSpan("Invocation")).toBeDefined();
     });
 
-    it("keeps Workflow in a separate trace from the ambient Lambda root", async () => {
+    it("joins Workflow, Invocation, and operations onto the propagated execution trace", async () => {
+      // A complete remote parent (Root + Parent) is propagated alongside the
+      // ambient Lambda span on the same trace. The Workflow span parents onto
+      // the remote parent; the Invocation span parents onto the same-trace
+      // ambient span; everything shares the one execution trace.
       const ambientTracer = provider!.getTracer("adot-lambda");
       const lambdaRoot = ambientTracer.startSpan("Lambda");
       const lambdaSpanContext = lambdaRoot.spanContext();
+      const remoteParentSpanId = "c".repeat(16);
       const topologyPlugin = new InvocationOtelPlugin({
         tracerProviderFactory,
         contextExtractor: () => ({
           traceId: lambdaSpanContext.traceId,
-          parentSpanId: "c".repeat(16),
-          traceFlags: lambdaSpanContext.traceFlags,
+          parentSpanId: remoteParentSpanId,
+          sampling: "SAMPLED",
         }),
       });
 
@@ -238,47 +239,35 @@ describe("InvocationOtelPlugin", () => {
       expect(invocationSpan).toBeDefined();
       expect(operationSpan).toBeDefined();
 
-      expect(workflowSpan!.parentSpanContext).toBeUndefined();
+      // The whole execution shares the propagated trace.
       expect(workflowSpan!.spanContext().traceId).toBe(
-        deriveTraceIdFromArn(TEST_ARN, TEST_EXECUTION_START),
-      );
-      expect(workflowSpan!.spanContext().traceId).not.toBe(
         lambdaSpanContext.traceId,
       );
-
       expect(invocationSpan!.spanContext().traceId).toBe(
         lambdaSpanContext.traceId,
-      );
-      expect(invocationSpan!.parentSpanContext?.spanId).toBe(
-        lambdaSpanContext.spanId,
       );
       expect(operationSpan!.spanContext().traceId).toBe(
         lambdaSpanContext.traceId,
       );
-      expect(operationSpan!.links).toHaveLength(1);
-      expect(operationSpan!.links[0].context).toEqual(
-        workflowSpan!.spanContext(),
-      );
 
-      const rootsByTrace = getExportedSpans()
-        .filter((span) => span.parentSpanContext === undefined)
-        .reduce<Map<string, ReadableSpan[]>>((roots, span) => {
-          const traceId = span.spanContext().traceId;
-          roots.set(traceId, [...(roots.get(traceId) ?? []), span]);
-          return roots;
-        }, new Map());
+      // Workflow parents onto the propagated remote parent.
+      expect(workflowSpan!.parentSpanContext?.spanId).toBe(remoteParentSpanId);
+      // Invocation parents onto the same-trace ambient Lambda span.
+      expect(invocationSpan!.parentSpanContext?.spanId).toBe(
+        lambdaSpanContext.spanId,
+      );
+      // Operations remain parented to the invocation and link to Workflow.
+      expect(operationSpan!.parentSpanContext?.spanId).toBe(
+        invocationSpan!.spanContext().spanId,
+      );
       expect(
-        rootsByTrace.get(lambdaSpanContext.traceId)?.map((span) => span.name),
-      ).toEqual(["Lambda"]);
-      expect(
-        rootsByTrace
-          .get(workflowSpan!.spanContext().traceId)
-          ?.map((span) => span.name),
-      ).toEqual(["Workflow"]);
-      expect(rootsByTrace.size).toBe(2);
+        operationSpan!.links.some(
+          (l) => l.context.spanId === workflowSpan!.spanContext().spanId,
+        ),
+      ).toBe(true);
     });
 
-    it("uses the extracted upstream parent when no span is active", async () => {
+    it("uses the extracted upstream parent as the execution ancestor when no span is active", async () => {
       const upstreamTraceId = "a".repeat(32);
       const upstreamSpanId = "b".repeat(16);
       const topologyPlugin = new InvocationOtelPlugin({
@@ -286,7 +275,7 @@ describe("InvocationOtelPlugin", () => {
         contextExtractor: () => ({
           traceId: upstreamTraceId,
           parentSpanId: upstreamSpanId,
-          traceFlags: TraceFlags.SAMPLED,
+          sampling: "SAMPLED",
         }),
       });
 
@@ -297,14 +286,14 @@ describe("InvocationOtelPlugin", () => {
       const invocationSpan = findSpan("Invocation");
       expect(workflowSpan).toBeDefined();
       expect(invocationSpan).toBeDefined();
-      expect(workflowSpan!.spanContext().traceId).toBe(
-        deriveTraceIdFromArn(TEST_ARN, TEST_EXECUTION_START),
-      );
+      // The complete remote parent is the execution ancestor: both spans join
+      // its trace and parent onto it directly.
+      expect(workflowSpan!.spanContext().traceId).toBe(upstreamTraceId);
       expect(invocationSpan!.spanContext().traceId).toBe(upstreamTraceId);
+      expect(workflowSpan!.parentSpanContext?.spanId).toBe(upstreamSpanId);
       expect(invocationSpan!.parentSpanContext).toMatchObject({
         traceId: upstreamTraceId,
         spanId: upstreamSpanId,
-        traceFlags: TraceFlags.SAMPLED,
         isRemote: true,
       });
     });
@@ -480,7 +469,7 @@ describe("InvocationOtelPlugin", () => {
       );
     });
 
-    it("replay operation uses a new span ID and links only to Workflow", async () => {
+    it("replay operation uses a new span ID and links to Workflow and the initial operation span", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       const opInfo = makeOperationInfo({
         id: "op-replay",
@@ -505,10 +494,19 @@ describe("InvocationOtelPlugin", () => {
       const workflowSpan = findSpan("Workflow");
       expect(opSpan).toBeDefined();
       expect(workflowSpan).toBeDefined();
+      // The replay segment gets its own new span ID, not the deterministic one.
       expect(opSpan!.spanContext().spanId).not.toBe(derivedOperationSpanId);
-      expect(opSpan!.links).toHaveLength(1);
-      expect(opSpan!.links[0].context).toEqual(workflowSpan!.spanContext());
-      expect(opSpan!.links[0].context.spanId).not.toBe(derivedOperationSpanId);
+      // Links are ordered [initial operation span, Workflow span] — the
+      // conformance contract resolves links[0] to the operation (carrying
+      // durable.operation.id) and links[1] to the Workflow span.
+      expect(opSpan!.links).toHaveLength(2);
+      expect(opSpan!.links[0].context.spanId).toBe(derivedOperationSpanId);
+      expect(opSpan!.links[0].context.traceId).toBe(
+        workflowSpan!.spanContext().traceId,
+      );
+      expect(opSpan!.links[1].context.spanId).toBe(
+        workflowSpan!.spanContext().spanId,
+      );
     });
 
     it("uses operation name as span name when provided", async () => {
@@ -839,7 +837,7 @@ describe("InvocationOtelPlugin", () => {
   });
 
   describe("Continuation span for cross-invocation operations", () => {
-    it("creates continuation span linked only to Workflow when operation was started in prior invocation", async () => {
+    it("links continuation span to Workflow and the initial operation span when operation was started in prior invocation", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       // onOperationEnd for an operation NOT in the map (started elsewhere)
       await plugin.onOperationEnd(
@@ -859,12 +857,21 @@ describe("InvocationOtelPlugin", () => {
       const workflowSpan = findSpan("Workflow");
       expect(continuationSpan).toBeDefined();
       expect(workflowSpan).toBeDefined();
-      expect(continuationSpan!.links).toHaveLength(1);
-      expect(continuationSpan!.links[0].context).toEqual(
-        workflowSpan!.spanContext(),
-      );
-      expect(continuationSpan!.links[0].context.spanId).not.toBe(
+      // The continuation gets its own span ID. Links are ordered
+      // [initial operation span, Workflow span] to match the conformance
+      // contract (links[0] carries durable.operation.id, links[1] the Workflow).
+      expect(continuationSpan!.spanContext().spanId).not.toBe(
         derivedOperationSpanId,
+      );
+      expect(continuationSpan!.links).toHaveLength(2);
+      expect(continuationSpan!.links[0].context.spanId).toBe(
+        derivedOperationSpanId,
+      );
+      expect(continuationSpan!.links[0].context.traceId).toBe(
+        workflowSpan!.spanContext().traceId,
+      );
+      expect(continuationSpan!.links[1].context.spanId).toBe(
+        workflowSpan!.spanContext().spanId,
       );
     });
 
@@ -2506,6 +2513,121 @@ describe("InvocationOtelPlugin", () => {
       );
       expect(attemptSpan!.status.code).toBe(SpanStatusCode.OK);
       expect(attemptSpan!.events).toHaveLength(0);
+    });
+
+    it("waitForCondition links the first polling attempt, not the resumed operation", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onOperationStart(
+        makeOperationInfo({
+          id: "cond-1",
+          type: "STEP",
+          subType: "WaitForCondition",
+          name: "otel-condition",
+        }),
+      );
+      await plugin.onOperationAttemptStart(
+        makeAttemptInfo({
+          id: "cond-1",
+          type: "STEP",
+          subType: "WaitForCondition",
+          name: "otel-condition",
+          attempt: 1,
+        }),
+      );
+      await plugin.onOperationAttemptEnd(
+        makeAttemptEndInfo({
+          id: "cond-1",
+          type: "STEP",
+          subType: "WaitForCondition",
+          name: "otel-condition",
+          attempt: 1,
+          outcome: "SUCCEEDED" as any,
+        }),
+      );
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: "PENDING" as any }),
+      );
+
+      await plugin.onInvocationStart(
+        makeInvocationInfo({ isFirstInvocation: false }),
+      );
+      await plugin.onOperationStart(
+        makeOperationInfo({
+          id: "cond-1",
+          type: "STEP",
+          subType: "WaitForCondition",
+          name: "otel-condition",
+          isReplay: true,
+        }),
+      );
+      await plugin.onOperationAttemptStart(
+        makeAttemptInfo({
+          id: "cond-1",
+          type: "STEP",
+          subType: "WaitForCondition",
+          name: "otel-condition",
+          attempt: 2,
+        }),
+      );
+      await plugin.onOperationAttemptEnd(
+        makeAttemptEndInfo({
+          id: "cond-1",
+          type: "STEP",
+          subType: "WaitForCondition",
+          name: "otel-condition",
+          attempt: 2,
+          outcome: "SUCCEEDED" as any,
+        }),
+      );
+      await plugin.onOperationEnd(
+        makeOperationEndInfo({
+          id: "cond-1",
+          type: "STEP",
+          subType: "WaitForCondition",
+          name: "otel-condition",
+          isReplay: false,
+          status: "SUCCEEDED" as any,
+          attempt: 2,
+        }),
+      );
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      const workflowSpan = findSpan("Workflow");
+      const firstOperationSpan = getExportedSpans().find(
+        (s) =>
+          s.name === "otel-condition" &&
+          s.attributes["durable.operation.status"] === "STARTED",
+      );
+      const firstAttemptSpan = findSpan("otel-condition attempt 1");
+      const resumedOperationSpan = getExportedSpans().find(
+        (s) =>
+          s.name === "otel-condition" &&
+          s.attributes["durable.operation.status"] === "SUCCEEDED",
+      );
+      const secondAttemptSpan = findSpan("otel-condition attempt 2");
+
+      expect(workflowSpan).toBeDefined();
+      expect(firstOperationSpan).toBeDefined();
+      expect(firstAttemptSpan).toBeDefined();
+      expect(resumedOperationSpan).toBeDefined();
+      expect(secondAttemptSpan).toBeDefined();
+
+      expect(firstAttemptSpan!.links).toHaveLength(2);
+      expect(firstAttemptSpan!.links[0].context.spanId).toBe(
+        firstOperationSpan!.spanContext().spanId,
+      );
+      expect(firstAttemptSpan!.links[1].context.spanId).toBe(
+        workflowSpan!.spanContext().spanId,
+      );
+
+      expect(resumedOperationSpan!.links).toHaveLength(1);
+      expect(resumedOperationSpan!.links[0].context.spanId).toBe(
+        workflowSpan!.spanContext().spanId,
+      );
+      expect(secondAttemptSpan!.links).toHaveLength(1);
+      expect(secondAttemptSpan!.links[0].context.spanId).toBe(
+        workflowSpan!.spanContext().spanId,
+      );
     });
   });
 });

@@ -61,7 +61,11 @@ export function VegaChart({ spec, data }: Props) {
     if (!viewRef.current) return;
     const canvas = await viewRef.current.view.toCanvas();
     const dataUrl = canvas.toDataURL("image/png");
-    postMessage({ type: "exportChart", format: "png", content: dataUrl } as any);
+    postMessage({
+      type: "exportChart",
+      format: "png",
+      content: dataUrl,
+    } as any);
   };
 
   return (
@@ -71,8 +75,12 @@ export function VegaChart({ spec, data }: Props) {
           variant="h2"
           actions={
             <SpaceBetween direction="horizontal" size="xs">
-              <Button onClick={exportSVG} iconName="download">SVG</Button>
-              <Button onClick={exportPNG} iconName="download">PNG</Button>
+              <Button onClick={exportSVG} iconName="download">
+                SVG
+              </Button>
+              <Button onClick={exportPNG} iconName="download">
+                PNG
+              </Button>
             </SpaceBetween>
           }
         >

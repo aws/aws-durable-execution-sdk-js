@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "types": ["node", "jest"],
     "paths": {
       "@aws/durable-execution-sdk-js": [
         "./packages/aws-durable-execution-sdk-js"

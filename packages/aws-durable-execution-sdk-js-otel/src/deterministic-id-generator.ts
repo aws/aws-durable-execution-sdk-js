@@ -169,3 +169,35 @@ export function deriveWorkflowSpanId(executionArn: string): string {
 
   return spanId;
 }
+
+/**
+ * Derive a deterministic span ID for the synthetic execution root from an
+ * execution ARN. Hashes `"execution-root:" + executionArn` with SHA-256 and
+ * truncates to the first 16 lowercase hex characters.
+ *
+ * The `"execution-root:"` prefix is a distinct namespace from
+ * `deriveWorkflowSpanId` (`"workflow:"`) and `deriveSpanIdFromOperationId`
+ * (`"<arn>:<opId>"`), so the synthetic root never collides with the Workflow or
+ * operation spans that share the execution trace. Stable across reinvocations
+ * so the same synthetic root is the common ancestor every invocation.
+ *
+ * @param executionArn - The execution ARN string (must be non-empty)
+ * @returns A 16-char lowercase hex string, never equal to "0000000000000000"
+ * @throws Error if the execution ARN is an empty string
+ */
+export function deriveExecutionRootSpanId(executionArn: string): string {
+  if (executionArn === "") {
+    throw new Error("Execution ARN must be non-empty");
+  }
+
+  const spanId = createHash("sha256")
+    .update("execution-root:" + executionArn)
+    .digest("hex")
+    .slice(0, 16);
+
+  if (spanId === "0000000000000000") {
+    return "0000000000000001";
+  }
+
+  return spanId;
+}

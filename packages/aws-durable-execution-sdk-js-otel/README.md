@@ -1,20 +1,17 @@
 # AWS Durable Execution SDK - OpenTelemetry Plugin
 
-> **Experimental beta:** This plugin is not recommended for production
-> workloads. Its API may change between releases.
-
 OpenTelemetry instrumentation for the AWS Durable Execution SDK. The package
 provides two plugins that emit Workflow, Invocation, durable operation, and
 operation-attempt spans.
 
-Both plugins keep two trace domains:
-
-- a deterministic execution trace rooted at `Workflow`;
-- an invocation trace rooted in the active or extracted Lambda context.
+The whole durable execution shares **one trace**, anchored at the execution
+ancestor resolved at invocation start. The `Workflow` span and every per-invocation
+`Invocation` span join that trace, so a single trace ID spans all invocations of
+the execution.
 
 They differ in where durable operation spans are parented:
 
-| Plugin                 | Operation hierarchy                  | Cross-trace link                        |
+| Plugin                 | Operation hierarchy                  | Cross-link                              |
 | ---------------------- | ------------------------------------ | --------------------------------------- |
 | `ExecutionOtelPlugin`  | `Workflow -> operation -> attempt`   | Operations and attempts link Invocation |
 | `InvocationOtelPlugin` | `Invocation -> operation -> attempt` | Operations and attempts link Workflow   |
@@ -161,7 +158,7 @@ the provider exposes it. They never call `shutdown()`.
 ## Dynamic Loading from a Lambda Layer
 
 The SDK can load either plugin without importing it in function code. Package
-this module and its peer dependencies in a Lambda layer under
+this module and its OpenTelemetry peer dependencies in a Lambda layer under
 `nodejs/node_modules`, then configure one entry point:
 
 ```text
@@ -174,6 +171,11 @@ or:
 DURABLE_EXECUTION_PLUGINS=@aws/durable-execution-sdk-js-otel/otel-invocation
 ```
 
+Do not package `@aws/durable-execution-sdk-js` in the layer. The provider entry
+points use SDK types only, and the SDK peer dependency is optional so package
+installation does not add a second copy. At runtime, the plugin is loaded and
+driven by the SDK instance bundled with the function.
+
 Dynamic providers construct plugins with default configuration, so they
 require a compatible globally registered SDK provider. Use code-based
 registration when `tracerProviderFactory` or other custom configuration is
@@ -184,15 +186,17 @@ needed.
 ### `ExecutionOtelPlugin`
 
 Use this plugin for a workflow-centered view. Operations and attempts are
-children of the deterministic Workflow trace. Each also links to the
-Invocation span that observed it.
+children of the `Workflow` span. Each also links to the `Invocation` span that
+observed it. The whole execution shares one trace.
 
 ```text
-Lambda trace             Execution trace
+Execution trace
 
-Lambda                   Workflow
-`-- Invocation           `-- Operation: fetch-data
-                             `-- Attempt 1
+Execution ancestor
+├── Workflow
+│   └── Operation: fetch-data
+│       └── Attempt 1
+└── Invocation
 
 Links:
 Operation -> Invocation
@@ -203,21 +207,25 @@ The plugin makes Workflow the active span while durable handler code runs.
 Completed operation spans use durable operation start/end timestamps and
 deterministic span IDs. An operation that remains open when an invocation
 suspends is not ended or exported; a later invocation recreates and exports it
-with the same deterministic ID when the operation completes.
+with the **same deterministic span ID on the same execution trace** when the
+operation completes. That reproducible ID is how the segments of one logical
+operation stay stitched together across invocations — no cross-invocation link
+is needed, unlike `InvocationOtelPlugin` below.
 
 ### `InvocationOtelPlugin`
 
 Use this plugin for an invocation-centered view. Operations and attempts are
-children of the current Invocation span. Each links to the deterministic
-Workflow span in the separate execution trace.
+children of the current `Invocation` span. Each links to the `Workflow` span.
+The whole execution shares one trace.
 
 ```text
-Lambda trace             Execution trace
+Execution trace
 
-Lambda                   Workflow
-`-- Invocation
-    `-- Operation: fetch-data
-        `-- Attempt 1
+Execution ancestor
+├── Workflow
+└── Invocation
+    └── Operation: fetch-data
+        └── Attempt 1
 
 Links:
 Operation -> Workflow
@@ -231,67 +239,150 @@ invocation, the plugin emits a continuation span in that invocation.
 
 Because the original span context is not checkpointed, replayed `STEP` and
 `CONTEXT` spans and cross-invocation continuation spans use new provider IDs.
-They correlate through the real exported Workflow span rather than a
-fabricated link to a derived prior-operation span. Replay-only `WAIT`, `INVOKE`,
-`CHAINED_INVOKE`, and `CALLBACK` operations are not emitted again.
+They correlate through two links: the real exported `Workflow` span, and the
+**initial logical operation span** — whose ID is deterministic on
+`(operationId, execution ARN)` and lives on the execution trace, so the segments
+of one logical operation stay stitched together across invocations. Replay-only
+`WAIT`, `INVOKE`, `CHAINED_INVOKE`, and `CALLBACK` operations are not emitted
+again.
 
-## Workflow Trace Identity and Lifecycle
+## Execution Trace and the Execution Ancestor
 
-For both plugins, Workflow is a parentless `INTERNAL` span in a separate
-execution trace. Its IDs are reproducible across replays:
+Both plugins resolve one **execution ancestor** at invocation start — the common
+parent the `Workflow` and `Invocation` spans join — so the whole execution
+shares a single trace. The ancestor is chosen by precedence:
 
-- trace ID: the first 32 hexadecimal characters of SHA-256 over
-  `<execution ARN>:<execution start timestamp in ISO 8601 format>`;
+1. a **complete propagated remote parent** (a valid `Root` trace ID and a valid
+   `Parent` span ID): used directly, whether or not `Sampled` is present;
+2. otherwise a **synthetic execution root** with a deterministic span ID derived
+   from the execution ARN.
+
+The canonical trace ID follows the same precedence: the propagated remote trace
+ID when valid, else one derived from the ARN and start time.
+
+A live ambient span (a `context.active()` span created by an auto-instrumentation
+layer) is deliberately **never** used as the execution ancestor. Its trace ID is
+not guaranteed stable across Lambda reinvocations, so anchoring the
+multi-invocation execution on it could change the execution trace ID on replay
+and break the cross-invocation continuation and replay links (which target a
+deterministic operation span ID on the canonical trace). Both anchors used above
+are stable: the durable backend keeps the propagated `Root` identical for every
+invocation, and the ARN-derived synthetic root is a pure hash of the ARN.
+
+### Valid Workflow parent shapes
+
+`ADOT` and community Node.js auto-instrumentation layers can create the ambient
+handler span before the durable plugin runs, on the trace the durable backend
+propagated. OpenTelemetry `SpanContext` has no ancestor pointer, so the plugin
+cannot walk from that local span to the durable backend span. The `Workflow`
+span therefore joins the canonical trace and parents onto whichever ancestor the
+precedence above resolves. When a complete remote parent is propagated, that is
+the ancestor:
+
+```text
+Propagated remote parent
+├── Workflow
+└── Invocation
+```
+
+When no complete remote parent can be constructed, the synthetic execution root
+anchors the trace and the `Workflow` span parents onto it:
+
+```text
+Synthetic execution root
+└── Workflow
+```
+
+The `Invocation` span may still nest under a same-trace ambient handler span —
+see [Invocation parent](#invocation-parent) — without changing the execution
+ancestor the `Workflow` span joins.
+
+### Workflow identity and lifecycle
+
+`Workflow` is an `INTERNAL` span that **joins the execution trace** by parenting
+onto the execution ancestor (its span ID is forced; the trace ID comes from the
+parent). Its span ID is reproducible across replays:
+
 - span ID: the first 16 hexadecimal characters of SHA-256 over
   `workflow:<execution ARN>`.
 
-When `executionStartTimestamp` is unavailable, trace ID derivation falls back
-to the execution ARN alone. It never substitutes the current time in the hash.
-The Workflow span itself uses the durable execution start timestamp when
-available and the current time otherwise.
+The synthetic execution root, when used, gets a distinct deterministic span ID
+from SHA-256 over `execution-root:<execution ARN>`, and the ARN-derived trace ID
+is the first 32 hexadecimal characters of SHA-256 over
+`<execution ARN>:<execution start timestamp in ISO 8601 format>` (falling back
+to the ARN alone when the timestamp is unavailable).
 
-The plugins create the same Workflow span identity on each invocation, but end
-and export it only when the execution reaches `SUCCEEDED` or `FAILED`.
-Workflow spans created for `PENDING` or `RETRYING` invocations are left unended
-and are therefore not exported. This produces one exported Workflow root for
-the durable execution while allowing intermediate invocation spans to export
-normally.
+The plugins create the same `Workflow` span identity on each invocation, but end
+and export it only when the execution reaches `SUCCEEDED` or `FAILED`. Workflow
+spans created for `PENDING` or `RETRYING` invocations are left unended and are
+therefore not exported. This produces one exported `Workflow` span for the
+durable execution while intermediate invocation spans export normally.
 
-Each durable execution has its own Workflow trace. Parent and target executions
-in a chained invoke therefore remain separate roots even when their Invocation
-spans share a propagated Lambda/X-Ray trace.
+When a chained parent and target execution share a propagated remote parent,
+both join that one trace, each keeping its own deterministic `Workflow` span ID.
 
-## Invocation Parent Context
+### Invocation parent
 
-Provider ownership does not change Invocation topology. Both plugins select the
-Invocation parent in this order:
+The `Invocation` span parents onto the **same-trace ambient span** when one is
+active on the canonical trace (preserving the Lambda/X-Ray linkage), otherwise
+onto the execution ancestor so it stays on the execution trace. Provider
+ownership does not change this topology.
 
-1. the active valid OpenTelemetry span;
-2. a valid parent returned by `contextExtractor`;
-3. no parent, making Invocation a root.
+### Sampling
 
-Workflow never adopts the active or extracted trace ID.
+Sampling follows this precedence, highest first:
 
-The default `xRayContextExtractor` reads `Root` and `Parent` from
-`_X_AMZN_TRACE_ID`. The package also exports `w3cClientContextExtractor`, which
-reads W3C `traceparent` data from
+1. **Explicit upstream decision** — an explicit `Sampled=1` / `Sampled=0` in a
+   valid propagated header is authoritative and preserved. It is applied only
+   when the extracted trace ID is itself valid, so an unusable trace never
+   carries its sampling bit into the derived execution trace.
+2. **Configured sampler** — when the header carries no usable decision, the
+   provider sampler decides. It is evaluated at its **root policy**
+   (`ROOT_CONTEXT`, no parent) with the real trace ID, span name, and attributes,
+   so a `ParentBasedSampler` applies its `root` sampler rather than inheriting an
+   unrelated ambient span's decision.
+3. **Default to sampled** — used only when no sampler decision can be obtained.
+
+The resolved execution decision is enforced for all SDK-created spans through a
+durable sampler wrapper around the provider sampler. This makes explicit backend
+sampling authoritative even for direct/custom samplers that ignore parent
+`traceFlags`. Unrelated application spans still use the original configured
+sampler. If the resolved tracer does not expose a compatible writable sampler,
+the plugin preserves normal tracing through the configured provider; in that
+case direct samplers may make their normal span-level decisions.
+
+### Context extractors
+
+The default `xRayContextExtractor` parses `Root`, `Parent`, and `Sampled`
+independently from `_X_AMZN_TRACE_ID`, rejecting an all-zero (invalid) `Root` or
+`Parent`. The durable backend keeps the X-Ray `Root` stable for every invocation
+of one execution, so its trace ID anchors the whole execution. The package also
+exports `w3cClientContextExtractor`, which reads W3C `traceparent` data from
 `context.clientContext.custom.traceparent`.
 
 A custom extractor can return:
 
 ```typescript
+type Sampling = "SAMPLED" | "NOT_SAMPLED" | "UNDECIDED";
+
 type ContextExtractor = (info: InvocationInfo) =>
   | {
       traceId: string;
       parentSpanId?: string;
       traceFlags?: number;
+      sampling?: Sampling;
     }
   | undefined;
 ```
 
-An extracted `parentSpanId` is required to form an upstream parent. A trace ID
-by itself does not change Invocation's trace. When an extractor omits
-`traceFlags`, the remote parent defaults to sampled.
+A complete remote parent needs a valid `traceId` and a valid `parentSpanId`.
+`sampling` is the tri-state upstream decision; when omitted it is derived from
+`traceFlags` (sampled bit), and when neither is present the decision is
+`UNDECIDED` and the sampling rules above decide. A custom extractor must return
+the durable execution's own trace context: a valid trace ID anchors the
+execution across replays, so returning stale or per-invocation context (for
+example an ambient span that changes each invocation) would split one durable
+execution across traces.
 
 ## Shared Configuration
 
@@ -433,6 +524,8 @@ deriveTraceIdFromXRayRoot(xRayRoot: string): string | undefined;
 
 deriveWorkflowSpanId(executionArn: string): string;
 
+deriveExecutionRootSpanId(executionArn: string): string;
+
 deriveSpanIdFromOperationId(
   operationId: string,
   executionArn: string,
@@ -442,9 +535,11 @@ deriveSpanIdFromOperationId(
 `deriveTraceIdFromArn` returns a 32-character hexadecimal trace ID.
 `deriveTraceIdFromXRayRoot` converts a valid X-Ray `Root` value to an
 OpenTelemetry trace ID and returns `undefined` for invalid input.
-`deriveWorkflowSpanId` hashes `workflow:<execution ARN>`, while
-`deriveSpanIdFromOperationId` hashes
-`<execution ARN>:<operation ID>`. Both span helpers return 16-character
+`deriveWorkflowSpanId` hashes `workflow:<execution ARN>`,
+`deriveExecutionRootSpanId` hashes `execution-root:<execution ARN>` (a distinct
+namespace so the synthetic root never collides with the Workflow or operation
+spans on the shared trace), and `deriveSpanIdFromOperationId` hashes
+`<execution ARN>:<operation ID>`. All three span helpers return 16-character
 hexadecimal IDs.
 
 ### Context Extractors
@@ -465,8 +560,9 @@ After deployment:
 2. Verify Invocation spans and completed operation spans appear after enabled
    invocations.
 3. Verify one Workflow span appears after the execution becomes terminal.
-4. Expect Workflow and Invocation to have different trace IDs.
-5. Confirm the documented cross-trace links connect the two views.
+4. Expect the Workflow span, every Invocation span, and the operation/attempt
+   spans to share one execution trace ID.
+5. Confirm the documented cross-links connect the workflow and invocation views.
 6. Confirm unrelated root spans retain provider-generated trace IDs.
 7. Verify durable log records contain correlation fields when
    `enrichLogger` is enabled.
@@ -481,9 +577,9 @@ If no plugin spans appear:
 - remember that dynamic loading supports only the global-provider path;
 - remember that Workflow is not exported until `SUCCEEDED` or `FAILED`.
 
-Two distinct traces are expected. The Lambda/Invocation trace represents the
-physical invocation, while the Workflow trace represents the durable
-execution.
+One execution trace is expected. The Workflow span and every per-invocation
+Invocation span share it, anchored at the execution ancestor (the propagated
+remote parent, or a synthetic execution root).
 
 ## License
 
