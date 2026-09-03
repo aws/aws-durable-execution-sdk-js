@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A `context.map` or `context.parallel` using `nesting: FLAT` whose aggregate result exceeded the
+  256KB checkpoint limit rebuilt an **empty** result on replay, even though every item had
+  succeeded. Such a batch is checkpointed as a summary and reconstructed from its per-item
+  checkpoints on each later resumption, but the reconstruction decided whether an item had finished
+  by probing the item's context checkpoint — and with `FLAT` nesting those per-item contexts are
+  virtual and never checkpointed, so every item read as unfinished and was skipped.
+
+  Code deriving control flow from the batch result (for example a fan-out sized from the results)
+  therefore created a different set of operations on replay than it had live. The replay-consistency
+  check detected the divergence and raised `NonDeterministicExecutionError`, which SDKs at or below
+  2.3.0 reported as a `PENDING` response rather than a failure; once nothing was left pending the
+  service rejected the response with "Cannot return PENDING status with no pending operations" and,
+  after deterministic retries, failed the execution.
+
+  The batch payload now records which items reached a terminal state, and replay reads that record
+  instead of inferring it. Only large batches were affected: a result that fits in a single
+  checkpoint is replayed by deserialization and never enters the reconstruction path.
+
+  One behaviour change on this path: a virtual item that performs no durable operation of its own is
+  now re-driven during replay, so any part of its mapper body not wrapped in a durable operation
+  runs again. This matches the documented contract for virtual contexts and what `NESTED` already
+  does. Such a body is against best practice in any case — a context is a container for durable
+  operations — and the TSDoc for `runInChildContext` and `MapFunc` now says so.
+
 ### Added
 
 - Support for JavaScript runtimes that do not provide `async_hooks.AsyncLocalStorage` or
