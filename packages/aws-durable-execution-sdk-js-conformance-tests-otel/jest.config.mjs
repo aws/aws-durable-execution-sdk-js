@@ -15,6 +15,10 @@ const preset = createDefaultPreset({
   tsconfig: {
     module: "commonjs",
     moduleResolution: "bundler",
+    // tsconfig.json sets rootDir to ./handlers for rollup. These tests live in
+    // __tests__/, outside that root, so widen it here -- otherwise ts-jest cannot
+    // place its output and refuses to transform them.
+    rootDir: ".",
   },
 });
 
