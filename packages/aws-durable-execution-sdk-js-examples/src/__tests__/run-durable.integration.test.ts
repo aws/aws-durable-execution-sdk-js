@@ -8,6 +8,15 @@ const TESTING_SDK_PATH = join(
 );
 const RUN_DURABLE_PATH = join(TESTING_SDK_PATH, "dist/cli/run-durable.mjs");
 
+// The built CLI entry point, invoked directly with Node rather than through
+// `npx run-durable`. `npx` resolves the binary via `npm exec`, which re-verifies
+// the ideal dependency tree and makes a registry audit request on every
+// invocation -- in this workspace that round-trip alone runs to minutes, well
+// past any reasonable per-test timeout, and it is unrelated to what this test
+// is checking. Calling the entry point directly is also closer to how the CLI
+// actually runs once installed: `npx` is a development convenience, not part
+// of the shipped interface.
+
 /**
  * Helper function to execute CLI commands and capture output
  */

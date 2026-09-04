@@ -49,15 +49,14 @@
     "@rollup/plugin-replace": "^6.0.3",
     "@types/aws-lambda": "^8.10.150",
     "@types/semver": "^7.5.8",
-    "@types/sinonjs__fake-timers": "^15.0.1",
-    "jest": "^30.0.3",
+    "jest": "^30.5.1",
     "semver": "^7.5.4",
     "tsx": "^4.20.5",
     "typescript": "^6.0.3"
   },
   "dependencies": {
     "@aws-sdk/client-lambda": "^3.1014.0",
-    "@sinonjs/fake-timers": "^13.0.5",
+    "@sinonjs/fake-timers": "^15.4.0",
     "commander": "^14.0.2"
   },
   "peerDependencies": {

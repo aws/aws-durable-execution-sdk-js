@@ -22,7 +22,7 @@ import { CheckpointOperation } from "../../../checkpoint-server/storage/checkpoi
 import { FunctionStorage } from "../operations/function-storage";
 import { ILocalDurableTestRunnerFactory } from "../interfaces/durable-test-runner-factory";
 import { DurableApiClient } from "../../common/create-durable-api-client";
-import { InstalledClock } from "@sinonjs/fake-timers";
+import { Clock } from "@sinonjs/fake-timers";
 import { CheckpointApiClient } from "../api-client/checkpoint-api-client";
 
 // Mock dependencies
@@ -958,7 +958,7 @@ describe("TestExecutionOrchestrator", () => {
         mockFunctionStorage,
         {
           enabled: true,
-          fakeClock: fakeClock as unknown as InstalledClock,
+          fakeClock: fakeClock as unknown as Clock,
         },
       );
 
