@@ -11254,7 +11254,7 @@
         {
           "kind": "Interface",
           "canonicalReference": "@aws/durable-execution-sdk-js!FetchOptions:interface",
-          "docComment": "/**\n * Checkpoint options specific to a fetch operation.\n *\n * Carries everything the service needs to issue the request on the execution's behalf. The request body travels in {@link OperationUpdate.Payload} rather than here, mirroring how a chained invoke carries its input.\n *\n * @public\n */\n",
+          "docComment": "/**\n * Checkpoint options specific to a fetch operation.\n *\n * Carries everything the service needs to issue the request on the execution's behalf. The request body travels in {@link OperationUpdate.Payload} rather than here, mirroring how a chained invoke carries its input.\n *\n * These fields are **sent, not recorded**. The service issues the request from them, but the `FetchStarted` history event records only the url, method and timeout — headers and body are deliberately left out, because execution history is readable by anyone with Lambda read access to the function and request headers routinely carry credentials. Nothing here is returned by {@link Operation}, whose {@link FetchDetails} describes the response.\n *\n * @public\n */\n",
           "excerptTokens": [
             {
               "kind": "Content",
@@ -11269,7 +11269,7 @@
             {
               "kind": "PropertySignature",
               "canonicalReference": "@aws/durable-execution-sdk-js!FetchOptions#Headers:member",
-              "docComment": "/**\n * Request headers.\n */\n",
+              "docComment": "/**\n * Request headers. Sent with the request but not recorded in the execution history.\n */\n",
               "excerptTokens": [
                 {
                   "kind": "Content",
@@ -11301,7 +11301,7 @@
             {
               "kind": "PropertySignature",
               "canonicalReference": "@aws/durable-execution-sdk-js!FetchOptions#Method:member",
-              "docComment": "/**\n * HTTP method. Defaults to `GET` when omitted.\n */\n",
+              "docComment": "/**\n * HTTP method. Defaults to `GET` when omitted. Recorded in the execution history.\n */\n",
               "excerptTokens": [
                 {
                   "kind": "Content",
@@ -11328,7 +11328,7 @@
             {
               "kind": "PropertySignature",
               "canonicalReference": "@aws/durable-execution-sdk-js!FetchOptions#TimeoutSeconds:member",
-              "docComment": "/**\n * How long the service waits for the request before recording a timeout.\n */\n",
+              "docComment": "/**\n * How long the service waits for the request before recording a timeout. Recorded in the execution history.\n */\n",
               "excerptTokens": [
                 {
                   "kind": "Content",
@@ -11355,7 +11355,7 @@
             {
               "kind": "PropertySignature",
               "canonicalReference": "@aws/durable-execution-sdk-js!FetchOptions#Url:member",
-              "docComment": "/**\n * Absolute URL to request.\n */\n",
+              "docComment": "/**\n * Absolute URL to request. Recorded in the execution history.\n */\n",
               "excerptTokens": [
                 {
                   "kind": "Content",

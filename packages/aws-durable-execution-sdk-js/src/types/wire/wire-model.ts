@@ -286,20 +286,29 @@ export interface ChainedInvokeOptions {
 /**
  * Checkpoint options specific to a fetch operation.
  *
- * Carries everything the service needs to issue the request on the execution's behalf.
- * The request body travels in {@link OperationUpdate.Payload} rather than here, mirroring
- * how a chained invoke carries its input.
+ * Carries everything the service needs to issue the request on the execution's behalf. The
+ * request body travels in {@link OperationUpdate.Payload} rather than here, mirroring how a
+ * chained invoke carries its input.
+ *
+ * These fields are **sent, not recorded**. The service issues the request from them, but the
+ * `FetchStarted` history event records only the url, method and timeout — headers and body
+ * are deliberately left out, because execution history is readable by anyone with Lambda
+ * read access to the function and request headers routinely carry credentials. Nothing here
+ * is returned by {@link Operation}, whose {@link FetchDetails} describes the response.
  *
  * @public
  */
 export interface FetchOptions {
-  /** Absolute URL to request. */
+  /** Absolute URL to request. Recorded in the execution history. */
   Url: string | undefined;
-  /** HTTP method. Defaults to `GET` when omitted. */
+  /** HTTP method. Defaults to `GET` when omitted. Recorded in the execution history. */
   Method?: string | undefined;
-  /** Request headers. */
+  /** Request headers. Sent with the request but not recorded in the execution history. */
   Headers?: Record<string, string> | undefined;
-  /** How long the service waits for the request before recording a timeout. */
+  /**
+   * How long the service waits for the request before recording a timeout. Recorded in the
+   * execution history.
+   */
   TimeoutSeconds?: number | undefined;
 }
 

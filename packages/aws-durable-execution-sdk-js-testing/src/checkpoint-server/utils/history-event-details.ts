@@ -171,17 +171,17 @@ const historyEventDetailMap = {
     ),
 
   // Fetch events
+  //
+  // Records what the operation targeted, but not its headers or body -- see
+  // `FetchStartedDetails`, which explains why the history is deliberately narrower than the
+  // request for this operation type.
   [`${OperationAction.START}-${OperationType.FETCH}`]: createEventDetails(
     pendingFetchEventType(FetchEventType.FetchStarted),
     "FetchStartedDetails",
     (update) => ({
       Url: update.FetchOptions?.Url,
       Method: update.FetchOptions?.Method,
-      Headers: update.FetchOptions?.Headers,
       Timeout: update.FetchOptions?.TimeoutSeconds,
-      Input: {
-        Payload: update.Payload,
-      },
     }),
   ),
 

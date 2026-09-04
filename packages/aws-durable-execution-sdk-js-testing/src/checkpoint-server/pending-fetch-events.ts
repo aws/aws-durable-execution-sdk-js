@@ -23,12 +23,7 @@
  * from `@aws-sdk/client-lambda`.
  */
 
-import {
-  EventError,
-  EventInput,
-  EventResult,
-  EventType,
-} from "@aws-sdk/client-lambda";
+import { EventError, EventResult, EventType } from "@aws-sdk/client-lambda";
 
 /**
  * Event type names for the fetch operation, mirroring the `ChainedInvoke*` family.
@@ -65,19 +60,30 @@ export const pendingFetchEventType = (name: FetchEventTypeName): EventType =>
 /**
  * Details about a fetch request that the service has started issuing.
  *
- * The request body travels in `Input`, mirroring `ChainedInvokeStartedDetails`.
+ * Deliberately narrower than the request the operation carries: request **headers and body
+ * are not recorded**, unlike `ChainedInvokeStartedDetails`, which records its `Input`.
+ *
+ * The reason is that `GetDurableExecutionHistory` needs only a `DurableExecutionArn` — no
+ * checkpoint token — and defaults `IncludeExecutionData` to `true`, so anything recorded
+ * here is readable by every principal with Lambda read access to the function. Request
+ * headers are the one part of an HTTP call that carries credentials as a matter of course:
+ * a SigV4-signed request has the caller's STS session token in `x-amz-security-token`, so
+ * recording headers would turn read-only Lambda access into a way to obtain the execution
+ * role's credentials. Bodies carry secrets often enough to deserve the same treatment.
+ *
+ * `Url` and `Method` are kept: they identify what the operation did, without which a
+ * recorded 503 says nothing about where it came from, and every other operation type
+ * records its target the same way. A URL that embeds a secret in its query string is
+ * therefore still recorded — that is the caller's decision to make, unlike the headers,
+ * which a signer populates on its own.
  */
 export interface FetchStartedDetails {
   /** The URL being requested. */
   Url: string | undefined;
   /** The HTTP method used for the request. */
   Method?: string | undefined;
-  /** The request headers. */
-  Headers?: Record<string, string> | undefined;
   /** How long the service waits for a response before recording a timeout. */
   Timeout?: number | undefined;
-  /** The request body. */
-  Input?: EventInput | undefined;
 }
 
 /**

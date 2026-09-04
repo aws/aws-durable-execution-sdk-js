@@ -269,9 +269,7 @@ describe("LocalDurableTestRunner Fetch operations integration", () => {
         FetchStartedDetails: {
           Url: "https://api.example.com/call",
           Method: "PUT",
-          Headers: undefined,
           Timeout: undefined,
-          Input: { Payload: "hello" },
         },
       },
       {
@@ -289,6 +287,84 @@ describe("LocalDurableTestRunner Fetch operations integration", () => {
         },
       },
     ]);
+  });
+
+  it("keeps request headers and body out of the execution history", async () => {
+    // `GetDurableExecutionHistory` needs only an execution ARN -- no checkpoint token -- and
+    // includes execution data by default, so anything recorded here is readable by every
+    // principal with Lambda read access to the function. Request headers are where
+    // credentials live: a SigV4 signer puts an STS session token in `x-amz-security-token`,
+    // so recording them would turn read-only Lambda access into a credential.
+    const handler = withDurableExecution(async (_, ctx) => {
+      await ctx.fetch("signed", "https://api.example.com/signed", {
+        method: "POST",
+        headers: {
+          authorization: "AWS4-HMAC-SHA256 Credential=AKIAEXAMPLE/...",
+          "x-amz-security-token": "SESSION-TOKEN-SHOULD-NOT-BE-RECORDED",
+        },
+        body: "SECRET-BODY-SHOULD-NOT-BE-RECORDED",
+      });
+      return null;
+    });
+
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+
+    const seen: TestFetchRequest[] = [];
+    runner.registerFetchTransport(async (request) => {
+      seen.push(request);
+      return { status: 200 };
+    });
+
+    const execution = await runner.run();
+
+    // The backend still receives them -- the request could not be issued otherwise.
+    expect(seen[0]?.headers["x-amz-security-token"]).toBe(
+      "SESSION-TOKEN-SHOULD-NOT-BE-RECORDED",
+    );
+    expect(seen[0]?.body).toBe("SECRET-BODY-SHOULD-NOT-BE-RECORDED");
+
+    // Nothing sensitive reaches the history, whichever event or field it might hide in.
+    const serializedHistory = JSON.stringify(execution.getHistoryEvents());
+    expect(serializedHistory).not.toContain(
+      "SESSION-TOKEN-SHOULD-NOT-BE-RECORDED",
+    );
+    expect(serializedHistory).not.toContain(
+      "SECRET-BODY-SHOULD-NOT-BE-RECORDED",
+    );
+    expect(serializedHistory).not.toContain("AWS4-HMAC-SHA256");
+    // The url is recorded, so the operation is still identifiable.
+    expect(serializedHistory).toContain("https://api.example.com/signed");
+  });
+
+  it("keeps request headers and body out of the readable operation state", async () => {
+    // `Operation.FetchDetails` describes the response only; the request travels on the
+    // `OperationUpdate`, which is a send-shape that no read API returns. Asserted so a later
+    // change cannot quietly start echoing the request back through operation state.
+    const handler = withDurableExecution(async (_, ctx) => {
+      await ctx.fetch("signed", "https://api.example.com/signed", {
+        headers: {
+          "x-amz-security-token": "SESSION-TOKEN-SHOULD-NOT-BE-RECORDED",
+        },
+        body: "SECRET-BODY-SHOULD-NOT-BE-RECORDED",
+      });
+      return null;
+    });
+
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+    const fetchOperation = runner.getOperation("signed");
+    runner.registerFetchTransport(async () => ({ status: 200 }));
+
+    await runner.run();
+
+    const serializedOperation = JSON.stringify(
+      fetchOperation.getOperationData(),
+    );
+    expect(serializedOperation).not.toContain(
+      "SESSION-TOKEN-SHOULD-NOT-BE-RECORDED",
+    );
+    expect(serializedOperation).not.toContain(
+      "SECRET-BODY-SHOULD-NOT-BE-RECORDED",
+    );
   });
 
   it("fails the fetch with a pointer to registerFetchTransport when none is registered", async () => {
