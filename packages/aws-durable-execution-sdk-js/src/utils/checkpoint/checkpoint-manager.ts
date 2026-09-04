@@ -72,6 +72,16 @@ export class CheckpointManager implements Checkpoint {
     reject: (error: Error) => void;
   }> = [];
   private queueCompletionResolver: (() => void) | null = null;
+  /**
+   * The classified error from a checkpoint batch that failed, if one did.
+   *
+   * Neither {@link waitForQueueCompletion}, which only ever resolves, nor the
+   * TerminationManager, whose `isTerminated` guard keeps only the first
+   * termination raised, reports this reliably.
+   */
+  private batchFailure?:
+    | CheckpointUnrecoverableInvocationError
+    | CheckpointUnrecoverableExecutionError;
   private readonly MAX_PAYLOAD_SIZE = 750 * 1024; // 750KB in bytes
   private readonly MAX_ITEMS_IN_BATCH = 250;
   private isTerminating = false;
@@ -442,6 +452,14 @@ export class CheckpointManager implements Checkpoint {
 
       const checkpointError = this.classifyCheckpointError(error);
 
+      // Assigned synchronously within this block, before clearQueue() resolves
+      // anyone inside waitForQueueCompletion(). Awaiting anything ahead of this
+      // point would let such a caller resume while the failure is still
+      // unreadable, and report success. The relative order of these two
+      // statements does not matter -- the waiter resumes in a microtask, after
+      // this block finishes -- but an await between them would.
+      this.batchFailure = checkpointError;
+
       // Clear remaining queue silently - we're terminating
       this.clearQueue();
 
@@ -467,6 +485,19 @@ export class CheckpointManager implements Checkpoint {
         }
       }
     }
+  }
+
+  /**
+   * The classified error from a checkpoint batch that failed during this
+   * invocation, or `undefined` if none did. A caller that awaited
+   * {@link waitForQueueCompletion} needs this to tell a completed drain from a
+   * failed one, since that await resolves either way.
+   */
+  getBatchFailure():
+    | CheckpointUnrecoverableInvocationError
+    | CheckpointUnrecoverableExecutionError
+    | undefined {
+    return this.batchFailure;
   }
 
   private notifyQueueCompletion(): void {
