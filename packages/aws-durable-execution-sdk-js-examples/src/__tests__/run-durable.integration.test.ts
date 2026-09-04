@@ -1,7 +1,12 @@
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import { join } from "path";
 
 const TEST_HANDLER_PATH = join(__dirname, "fixtures/test-handler");
+const TESTING_SDK_PATH = join(
+  __dirname,
+  "../../../aws-durable-execution-sdk-js-testing",
+);
+const RUN_DURABLE_PATH = join(TESTING_SDK_PATH, "dist/cli/run-durable.mjs");
 
 /**
  * Helper function to execute CLI commands and capture output
@@ -12,9 +17,9 @@ function runDurableCli(args: string[]): {
   exitCode: number;
 } {
   try {
-    const stdout = execSync(`npx run-durable ${args.join(" ")}`, {
+    const stdout = execFileSync(process.execPath, [RUN_DURABLE_PATH, ...args], {
       encoding: "utf8",
-      cwd: join(__dirname, "../../../aws-durable-execution-sdk-js-testing"),
+      cwd: TESTING_SDK_PATH,
       timeout: 30000,
     });
     return { stdout, stderr: "", exitCode: 0 };
