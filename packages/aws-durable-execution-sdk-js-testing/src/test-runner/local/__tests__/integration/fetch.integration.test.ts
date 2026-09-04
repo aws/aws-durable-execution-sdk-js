@@ -3,6 +3,7 @@ import {
   FetchError,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
+import { OperationStatus } from "@aws/durable-execution-sdk-js";
 import { LocalDurableTestRunner } from "../../local-durable-test-runner";
 import { TestFetchRequest } from "../../operations/fetch-storage";
 
@@ -442,6 +443,33 @@ describe("LocalDurableTestRunner Fetch operations integration", () => {
     expect(fetchSucceeded?.FetchSucceededDetails?.BodyEncoding).toBe(
       FetchBodyEncoding.BASE64,
     );
+  });
+
+  it("records an in-flight fetch as PENDING, matching the service", async () => {
+    // The real decider transitions a scheduled backend operation to PENDING rather than
+    // STARTED -- it has been handed over but nothing has begun issuing it. Asserted here so
+    // the simulator does not drift from the service on a status a workflow can observe.
+    let statusWhileInFlight: string | undefined;
+
+    const handler = withDurableExecution(async (_, ctx) => {
+      await ctx.fetch("pending-check", "https://api.example.com/x");
+      return null;
+    });
+
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+    const fetchOperation = runner.getOperation("pending-check");
+
+    runner.registerFetchTransport(async () => {
+      // Observed from inside the transport, which runs while the operation is in flight.
+      statusWhileInFlight = fetchOperation.getOperationData()?.Status;
+      return { status: 200, body: "ok" };
+    });
+
+    await runner.run();
+
+    expect(statusWhileInFlight).toBe(OperationStatus.PENDING);
+    // And terminal once the backend records the outcome.
+    expect(fetchOperation.getStatus()).toBe(OperationStatus.SUCCEEDED);
   });
 
   it("fails the fetch with a pointer to registerFetchTransport when none is registered", async () => {

@@ -688,6 +688,16 @@ export class CheckpointManager {
         };
         break;
       }
+      case OperationType.FETCH: {
+        // PENDING rather than the STARTED default, matching the real decider: a fetch has been
+        // handed to the backend but nothing has begun issuing it yet, and the service records
+        // that distinction (`ChainedInvokeCheckpointRequestProcessor` transitions a scheduled
+        // chained invoke to PENDING for the same reason). The SDK treats any non-terminal
+        // status as in-flight, so this changes what the history reports rather than how a
+        // workflow behaves.
+        operation.Status = OperationStatus.PENDING;
+        break;
+      }
     }
 
     const result: OperationEvents = {

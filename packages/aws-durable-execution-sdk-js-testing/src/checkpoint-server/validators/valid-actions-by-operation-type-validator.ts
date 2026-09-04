@@ -29,10 +29,7 @@ const VALID_ACTIONS_FOR_CHAINED_INVOKE = new Set([
   OperationAction.CANCEL,
 ]);
 
-const VALID_ACTIONS_FOR_FETCH = new Set([
-  OperationAction.START,
-  OperationAction.CANCEL,
-]);
+const VALID_ACTIONS_FOR_FETCH = new Set([OperationAction.START]);
 
 const VALID_ACTIONS_FOR_EXECUTION = new Set([
   OperationAction.SUCCEED,

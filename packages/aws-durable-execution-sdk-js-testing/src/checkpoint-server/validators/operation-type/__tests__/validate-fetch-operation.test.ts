@@ -69,51 +69,30 @@ describe("validateFetchOperation", () => {
     });
   });
 
-  describe("CANCEL", () => {
-    it("accepts cancelling a started fetch", () => {
-      expect(() => {
-        validateFetchOperation(
-          createOperationUpdate(OperationAction.CANCEL),
-          createOperation(OperationStatus.STARTED),
-        );
-      }).not.toThrow();
-    });
-
-    it("rejects cancelling a fetch that does not exist", () => {
-      expect(() => {
-        validateFetchOperation(
-          createOperationUpdate(OperationAction.CANCEL),
-          undefined,
-        );
-      }).toThrow(
-        "Cannot cancel a FETCH that does not exist or has already completed.",
-      );
-    });
-
-    it("rejects cancelling a fetch that already completed", () => {
-      expect(() => {
-        validateFetchOperation(
-          createOperationUpdate(OperationAction.CANCEL),
-          createOperation(OperationStatus.SUCCEEDED),
-        );
-      }).toThrow(
-        "Cannot cancel a FETCH that does not exist or has already completed.",
-      );
-    });
-  });
-
-  describe("outcomes the SDK may not request", () => {
+  describe("actions the service does not offer", () => {
     // A fetch is one-sided: the service performs the request, so it is the only party that
-    // can say what came back. Accepting these would let an execution fabricate a response.
+    // can say what came back. Accepting SUCCEED or FAIL would let an execution fabricate a
+    // response. CANCEL is rejected because the real backend does not offer it either --
+    // `VALID_ACTIONS_FOR_CHAINED_INVOKE` in DurableExecutionsWorkerService is START alone.
     it.each([
       OperationAction.SUCCEED,
       OperationAction.FAIL,
       OperationAction.RETRY,
+      OperationAction.CANCEL,
     ])("rejects %s", (action) => {
       expect(() => {
         validateFetchOperation(
           createOperationUpdate(action),
           createOperation(OperationStatus.STARTED),
+        );
+      }).toThrow("Invalid FETCH action.");
+    });
+
+    it("rejects CANCEL even for an in-flight fetch", () => {
+      expect(() => {
+        validateFetchOperation(
+          createOperationUpdate(OperationAction.CANCEL),
+          createOperation(OperationStatus.PENDING),
         );
       }).toThrow("Invalid FETCH action.");
     });

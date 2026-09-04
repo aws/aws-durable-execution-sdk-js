@@ -2,21 +2,18 @@ import { InvalidParameterValueException } from "@aws-sdk/client-lambda";
 import {
   Operation,
   OperationAction,
-  OperationStatus,
   OperationUpdate,
 } from "@aws/durable-execution-sdk-js";
-
-const allowedStatusToCancel: (OperationStatus | undefined)[] = [
-  OperationStatus.STARTED,
-];
 
 /**
  * Validates a FETCH operation update against the current operation state.
  *
  * A fetch is one-sided, like a chained invoke: the SDK only ever asks the service to START
- * it, and the service is the one that records the outcome. `SUCCEED` and `FAIL` from the SDK
- * are therefore rejected — accepting them would let an execution fabricate a response it
- * never received.
+ * it, and the service is the one that records the outcome. Every other action is rejected —
+ * `SUCCEED` and `FAIL` because accepting them would let an execution fabricate a response it
+ * never received, and `CANCEL` because the service does not offer it. This matches
+ * `ValidActionsByOperationTypeValidator` in `DurableExecutionsWorkerService`, where
+ * `VALID_ACTIONS_FOR_CHAINED_INVOKE` is `START` alone.
  *
  * @param update - The operation update to validate
  * @param operation - The current operation state (if it exists)
@@ -37,15 +34,6 @@ export function validateFetchOperation(
       if (!update.FetchOptions?.Url) {
         throw new InvalidParameterValueException({
           message: "Cannot start a FETCH without a Url.",
-          $metadata: {},
-        });
-      }
-      break;
-    case OperationAction.CANCEL:
-      if (!operation || !allowedStatusToCancel.includes(operation.Status)) {
-        throw new InvalidParameterValueException({
-          message:
-            "Cannot cancel a FETCH that does not exist or has already completed.",
           $metadata: {},
         });
       }
