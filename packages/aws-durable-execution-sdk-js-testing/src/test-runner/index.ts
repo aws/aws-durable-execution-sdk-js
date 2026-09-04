@@ -25,6 +25,14 @@ export type {
   CallbackDetails,
   ChainedInvokeDetails,
   WaitResultDetails,
+  FetchResultDetails,
 } from "./types/durable-operation";
+
+export { globalFetchTransport } from "./local/operations/fetch-storage";
+export type {
+  TestFetchTransport,
+  TestFetchRequest,
+  TestFetchResponse,
+} from "./local/operations/fetch-storage";
 
 export { WaitingOperationStatus } from "./types/durable-operation";

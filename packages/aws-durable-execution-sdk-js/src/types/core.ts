@@ -232,6 +232,15 @@ export enum OperationSubType {
    * and waiting for its completion. Used for function composition and workflows.
    */
   CHAINED_INVOKE = "ChainedInvoke",
+
+  /**
+   * A fetch operation (`context.fetch`).
+   *
+   * Represents an HTTP request issued by the service on the execution's behalf. The
+   * execution suspends while the request is in flight, so no compute is charged for the
+   * round trip.
+   */
+  FETCH = "Fetch",
 }
 
 /**

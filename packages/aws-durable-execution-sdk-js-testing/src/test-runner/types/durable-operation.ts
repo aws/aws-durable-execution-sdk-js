@@ -64,6 +64,26 @@ export interface ChainedInvokeDetails<TResult = unknown> {
 }
 
 /**
+ * Details for a fetch operation result.
+ *
+ * A recorded `status` and a recorded `error` are mutually exclusive: the operation either
+ * completed an exchange or it did not. Note that `status` being present says nothing about
+ * whether the endpoint was happy — check its value.
+ *
+ * @public
+ */
+export interface FetchResultDetails {
+  /** The HTTP status code returned by the endpoint, if a response was recorded */
+  readonly status?: number;
+  /** The response headers, with header names lowercased */
+  readonly headers?: Record<string, string>;
+  /** The response body, as returned by the endpoint */
+  readonly body?: string;
+  /** The error that occurred if the request could not be completed at all */
+  readonly error?: TestResultError;
+}
+
+/**
  * Details for a wait operation, including duration and scheduling information.
  * @public
  */
@@ -161,6 +181,17 @@ export interface DurableOperation<TResult = any> {
    * @throws Will throw an error if the operation type is not CHAINED_INVOKE
    */
   getChainedInvokeDetails(): ChainedInvokeDetails<TResult> | undefined;
+
+  /**
+   * Gets the details for a fetch operation.
+   *
+   * The body is returned as recorded rather than parsed, since a fetch response is not
+   * necessarily JSON.
+   *
+   * @returns The fetch operation details, or undefined if no operation data is available
+   * @throws Will throw an error if the operation type is not FETCH
+   */
+  getFetchDetails(): FetchResultDetails | undefined;
 
   /**
    * Gets the details for a callback operation.

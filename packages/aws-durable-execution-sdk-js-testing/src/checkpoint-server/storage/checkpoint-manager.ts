@@ -15,6 +15,7 @@ import { EventProcessor } from "./event-processor";
 import { OperationEvents } from "../../test-runner/common/operations/operation-with-data";
 import { waitHistoryDetails } from "./wait-details";
 import { chainedInvokeHistoryDetails } from "./chained-invoke-details";
+import { fetchHistoryDetails } from "./fetch-details";
 import { executionDetails } from "./execution-details";
 
 export interface CheckpointOperation extends OperationEvents {
@@ -509,6 +510,45 @@ export class CheckpointManager {
                     Payload:
                       newOperationData.operation.ChainedInvokeDetails.Error,
                   }
+                : undefined,
+          },
+        );
+        newOperationData.events.push(historyEvent);
+        break;
+      }
+      case OperationType.FETCH: {
+        const historyEventType = fetchHistoryDetails[newOperation.Status];
+        if (!historyEventType) {
+          throw new Error(
+            `Invalid status update for ${OperationType.FETCH}: ${newOperation.Status}`,
+          );
+        }
+
+        const fetchDetails = newOperationData.operation.FetchDetails;
+
+        // A fetch either recorded a response or recorded why none arrived. Carrying both
+        // would leave the operation ambiguous, since the status alone no longer says which
+        // happened once 4xx and 5xx count as responses.
+        if (fetchDetails?.StatusCode !== undefined && fetchDetails.Error) {
+          throw new Error(
+            `Could not update operation with both StatusCode and Error in details.`,
+          );
+        }
+
+        const historyEvent = this.eventProcessor.createHistoryEvent(
+          historyEventType.eventType,
+          newOperationData.operation,
+          historyEventType.detailPlace,
+          {
+            StatusCode: fetchDetails?.StatusCode,
+            Headers: fetchDetails?.Headers,
+            Result:
+              fetchDetails?.Result !== undefined
+                ? { Payload: fetchDetails.Result }
+                : undefined,
+            Error:
+              fetchDetails?.Error !== undefined
+                ? { Payload: fetchDetails.Error }
                 : undefined,
           },
         );

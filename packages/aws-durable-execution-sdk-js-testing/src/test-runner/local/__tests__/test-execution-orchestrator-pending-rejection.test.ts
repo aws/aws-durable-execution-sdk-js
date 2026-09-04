@@ -15,6 +15,7 @@ import { OperationWaitManager } from "../operations/operation-wait-manager";
 import { IndexedOperations } from "../../common/indexed-operations";
 import { OperationEvents } from "../../common/operations/operation-with-data";
 import { FunctionStorage } from "../operations/function-storage";
+import { FetchStorage } from "../operations/fetch-storage";
 import { ILocalDurableTestRunnerFactory } from "../interfaces/durable-test-runner-factory";
 import { DurableApiClient } from "../../common/create-durable-api-client";
 import { CheckpointApiClient } from "../api-client/checkpoint-api-client";
@@ -65,6 +66,7 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
   let mockOperationStorage: jest.Mocked<LocalOperationStorage>;
   let checkpointApi: CheckpointApiClient;
   let mockFunctionStorage: FunctionStorage;
+  let mockFetchStorage: FetchStorage;
   let mockDurableApiClient: DurableApiClient;
 
   const mockInvocationCompletedEvent: Event = {
@@ -133,12 +135,14 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
     };
 
     mockFunctionStorage = new FunctionStorage(mockFactory);
+    mockFetchStorage = new FetchStorage();
 
     orchestrator = new TestExecutionOrchestrator(
       mockHandlerFunction,
       mockOperationStorage,
       checkpointApi,
       mockFunctionStorage,
+      mockFetchStorage,
       {
         enabled: false,
       },

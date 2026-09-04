@@ -19,6 +19,7 @@ import {
   ContextDetails,
   StepDetails,
   WaitResultDetails,
+  FetchResultDetails,
 } from "../../types/durable-operation";
 import { OperationWaitManager } from "../../local/operations/operation-wait-manager";
 import { doesStatusMatch } from "../../local/operations/status-matcher";
@@ -180,6 +181,29 @@ export class OperationWithData<OperationResultValue = unknown>
     return {
       error: transformErrorObjectToErrorResult(invokeDetails?.Error),
       result,
+    };
+  }
+
+  getFetchDetails(): FetchResultDetails | undefined {
+    const operationData = this.getOperationData();
+
+    if (!operationData) {
+      return undefined;
+    }
+
+    if (operationData.Type !== OperationType.FETCH) {
+      throw new Error(`Operation type ${operationData.Type} is not FETCH`);
+    }
+
+    const fetchDetails = operationData.FetchDetails;
+
+    // Unlike the other operation types, the body is handed back verbatim. A fetch response
+    // is whatever the endpoint sent, so parsing it here would fail on any non-JSON body.
+    return {
+      status: fetchDetails?.StatusCode,
+      headers: fetchDetails?.Headers,
+      body: fetchDetails?.Result,
+      error: transformErrorObjectToErrorResult(fetchDetails?.Error),
     };
   }
 

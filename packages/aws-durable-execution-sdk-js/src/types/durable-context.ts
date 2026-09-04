@@ -4,6 +4,7 @@ import { SerdesConfig } from "../utils/serdes/serdes";
 import { StepFunc, StepConfig } from "./step";
 import { ChildFunc, ChildConfig } from "./child-context";
 import { InvokeConfig } from "./invoke";
+import { FetchConfig, FetchResponse } from "./fetch";
 import { Duration } from "./core";
 import {
   CreateCallbackConfig,
@@ -193,6 +194,62 @@ export interface DurableContext<TLogger extends DurableLogger = DurableLogger> {
     input?: TInput,
     config?: InvokeConfig<TInput, TOutput>,
   ): DurablePromise<TOutput>;
+
+  /**
+   * Issues an HTTP request through the durable execution service.
+   *
+   * The service performs the request on the execution's behalf while the execution is
+   * suspended, so no compute is charged for the round trip and the response is checkpointed
+   * before the workflow observes it. Because the outcome is durable, `fetch` may be called
+   * directly from workflow code without wrapping it in a step.
+   *
+   * Any completed exchange resolves, whatever the status code — a 404 and a 500 are
+   * responses the endpoint chose to send, so they are recorded and returned like a 200.
+   * Inspect {@link FetchResponse.status} or {@link FetchResponse.ok} to decide what the
+   * result means. Only a request that never completed rejects.
+   *
+   * @param name - Operation name for tracking and debugging
+   * @param url - Absolute URL to request
+   * @param config - Optional method, headers, body and timeout
+   * @throws \{FetchError\} When the request could not be completed at all — DNS failure,
+   * connection reset or timeout
+   * @example
+   * ```typescript
+   * const response = await context.fetch(
+   *   "charge-card",
+   *   "https://api.example.com/charges",
+   *   {
+   *     method: "POST",
+   *     headers: { "content-type": "application/json" },
+   *     body: JSON.stringify({ amount: 100 }),
+   *   },
+   * );
+   *
+   * if (!response.ok) {
+   *   throw new Error(`Charge rejected with ${response.status}`);
+   * }
+   * const charge = JSON.parse(response.body);
+   * ```
+   */
+  fetch(
+    name: string,
+    url: string,
+    config?: FetchConfig,
+  ): DurablePromise<FetchResponse>;
+
+  /**
+   * Issues an HTTP request through the durable execution service.
+   *
+   * @param url - Absolute URL to request
+   * @param config - Optional method, headers, body and timeout
+   * @throws \{FetchError\} When the request could not be completed at all — DNS failure,
+   * connection reset or timeout
+   * @example
+   * ```typescript
+   * const response = await context.fetch("https://api.example.com/status");
+   * ```
+   */
+  fetch(url: string, config?: FetchConfig): DurablePromise<FetchResponse>;
 
   /**
    * Runs a function in a child context with isolated state and execution tracking

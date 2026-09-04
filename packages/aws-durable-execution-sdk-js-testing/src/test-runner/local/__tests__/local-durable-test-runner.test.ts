@@ -7,6 +7,7 @@ import { OperationWaitManager } from "../operations/operation-wait-manager";
 import { InvocationStatus } from "@aws/durable-execution-sdk-js";
 import { CheckpointWorkerManager } from "../worker/checkpoint-worker-manager";
 import { FunctionStorage } from "../operations/function-storage";
+import { FetchStorage } from "../operations/fetch-storage";
 import { IndexedOperations } from "../../common/indexed-operations";
 import { CheckpointWorkerApiClient } from "../api-client/checkpoint-worker-api-client";
 import { install } from "@sinonjs/fake-timers";
@@ -186,6 +187,7 @@ describe("LocalDurableTestRunner", () => {
         mockOperationStorage,
         expect.any(CheckpointWorkerApiClient),
         mockFunctionStorage,
+        expect.any(FetchStorage),
         {
           enabled: false,
         }, // skipTime default
@@ -208,6 +210,7 @@ describe("LocalDurableTestRunner", () => {
         mockOperationStorage,
         expect.any(CheckpointWorkerApiClient), // CheckpointWorkerApiClient created with server URL
         mockFunctionStorage,
+        expect.any(FetchStorage),
         {
           enabled: true,
         }, // skipTime
@@ -550,6 +553,7 @@ describe("LocalDurableTestRunner", () => {
           mockOperationStorage,
           expect.any(CheckpointWorkerApiClient),
           mockFunctionStorage,
+          expect.any(FetchStorage),
           {
             enabled: true,
             fakeClock: mockFakeClock,

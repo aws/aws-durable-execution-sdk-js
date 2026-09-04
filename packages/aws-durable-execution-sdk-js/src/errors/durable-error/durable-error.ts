@@ -71,6 +71,12 @@ export abstract class DurableOperationError extends Error {
           cause,
           errorObject.ErrorData,
         );
+      case "FetchError":
+        return new FetchError(
+          errorObject.ErrorMessage || "Fetch failed",
+          cause,
+          errorObject.ErrorData,
+        );
       case "ChildContextError":
         return new ChildContextError(
           errorObject.ErrorMessage || "Child context failed",
@@ -214,6 +220,23 @@ export class InvokeError extends DurableOperationError {
 
   constructor(message?: string, cause?: Error, errorData?: string) {
     super(message || "Invoke failed", cause, errorData);
+  }
+}
+
+/**
+ * Error thrown when a fetch operation could not be completed.
+ *
+ * Reserved for the case where no HTTP exchange took place — DNS failure, connection reset,
+ * timeout. A response with a 4xx or 5xx status is not an error: it resolves with the
+ * recorded response.
+ *
+ * @public
+ */
+export class FetchError extends DurableOperationError {
+  readonly errorType = "FetchError";
+
+  constructor(message?: string, cause?: Error, errorData?: string) {
+    super(message || "Fetch failed", cause, errorData);
   }
 }
 

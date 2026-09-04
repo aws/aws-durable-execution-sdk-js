@@ -18,6 +18,7 @@ import { OperationWaitManager } from "../operations/operation-wait-manager";
 import { IndexedOperations } from "../../common/indexed-operations";
 import { OperationEvents } from "../../common/operations/operation-with-data";
 import { FunctionStorage } from "../operations/function-storage";
+import { FetchStorage } from "../operations/fetch-storage";
 import { ILocalDurableTestRunnerFactory } from "../interfaces/durable-test-runner-factory";
 import { DurableApiClient } from "../../common/create-durable-api-client";
 import { CheckpointApiClient } from "../api-client/checkpoint-api-client";
@@ -68,6 +69,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
   let mockOperationStorage: jest.Mocked<LocalOperationStorage>;
   let checkpointApi: CheckpointApiClient;
   let mockFunctionStorage: FunctionStorage;
+  let mockFetchStorage: FetchStorage;
   let mockDurableApiClient: DurableApiClient;
 
   // Tracking arrays for call order verification
@@ -156,6 +158,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
     };
 
     mockFunctionStorage = new FunctionStorage(mockFactory);
+    mockFetchStorage = new FetchStorage();
 
     completeInvocationSpy = jest.spyOn(checkpointApi, "completeInvocation");
 
@@ -164,6 +167,7 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
       mockOperationStorage,
       checkpointApi,
       mockFunctionStorage,
+      mockFetchStorage,
       {
         enabled: false,
       },

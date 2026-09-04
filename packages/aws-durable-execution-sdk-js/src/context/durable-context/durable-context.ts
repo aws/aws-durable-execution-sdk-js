@@ -22,6 +22,8 @@ import {
   ConcurrencyConfig,
   LoggerConfig,
   InvokeConfig,
+  FetchConfig,
+  FetchResponse,
   DurableExecutionMode,
   BatchResult,
   DurablePromise,
@@ -33,6 +35,7 @@ import { CheckpointManager } from "../../utils/checkpoint/checkpoint-manager";
 import { EventEmitter } from "events";
 import { createStepHandler } from "../../handlers/step-handler/step-handler";
 import { createInvokeHandler } from "../../handlers/invoke-handler/invoke-handler";
+import { createFetchHandler } from "../../handlers/fetch-handler/fetch-handler";
 import { createRunInChildContextHandler } from "../../handlers/run-in-child-context-handler/run-in-child-context-handler";
 import { resolveChildArgs } from "../../handlers/run-in-child-context-handler/resolve-child-args";
 import { createWaitHandler } from "../../handlers/wait-handler/wait-handler";
@@ -431,6 +434,33 @@ export class DurableContextImpl<Logger extends DurableLogger>
           inputOrConfig,
           maybeConfig,
         ] as Parameters<typeof invokeHandler<I, O>>),
+      );
+    });
+  }
+
+  fetch(
+    nameOrUrl: string,
+    urlOrConfig?: string | FetchConfig,
+    maybeConfig?: FetchConfig,
+  ): DurablePromise<FetchResponse> {
+    validateContextUsage(
+      this._stepPrefix,
+      "fetch",
+      this._executionContext.terminationManager,
+    );
+    return this.withDurableModeManagement(() => {
+      const fetchHandler = createFetchHandler(
+        this._executionContext,
+        this.checkpoint,
+        this.createStepId.bind(this),
+        this._parentId,
+        this.checkAndUpdateReplayMode.bind(this),
+        this.durableExecution.plugin,
+      );
+      return fetchHandler(
+        ...([nameOrUrl, urlOrConfig, maybeConfig] as Parameters<
+          typeof fetchHandler
+        >),
       );
     });
   }

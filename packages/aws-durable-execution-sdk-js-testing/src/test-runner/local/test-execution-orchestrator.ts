@@ -21,6 +21,7 @@ import { InvokeRequest } from "../types/durable-test-runner";
 import { CheckpointOperation } from "../../checkpoint-server/storage/checkpoint-manager";
 import { Scheduler } from "./orchestration/scheduler";
 import { FunctionStorage } from "./operations/function-storage";
+import { FetchStorage } from "./operations/fetch-storage";
 import { defaultLogger } from "../../logger";
 import { InstalledClock } from "@sinonjs/fake-timers";
 import { QueueScheduler } from "./orchestration/queue-scheduler";
@@ -58,6 +59,7 @@ export class TestExecutionOrchestrator {
     private operationStorage: LocalOperationStorage,
     private readonly checkpointApi: CheckpointApiClient,
     private readonly functionStorage: FunctionStorage,
+    private readonly fetchStorage: FetchStorage,
     private skipTimeProps: SkipTimeProps,
   ) {
     this.executionState = new TestExecutionState();
@@ -280,7 +282,74 @@ export class TestExecutionOrchestrator {
           this.executionState.rejectWith(err);
         });
         break;
+      case OperationType.FETCH:
+        this.handleFetchUpdate(update, executionId).catch((err: unknown) => {
+          this.executionState.rejectWith(err);
+        });
+        break;
     }
+  }
+
+  /**
+   * Satisfies a FETCH operation, standing in for the service issuing the request.
+   *
+   * Follows `handleInvokeUpdate`: the operation is registered as pending so the orchestrator
+   * does not decide the execution has stalled, the work happens off to the side while the
+   * execution stays suspended, and the outcome is written back as a terminal status before an
+   * invocation is scheduled to resume the execution.
+   *
+   * The status the transport reports never makes the operation fail. Any completed exchange
+   * is `SUCCEEDED` with the response recorded, so a 404 or a 500 reaches the workflow as a
+   * response to inspect; only a request that did not complete is `FAILED`.
+   */
+  private async handleFetchUpdate(
+    update: OperationUpdate | undefined,
+    executionId: ExecutionId,
+  ) {
+    if (update?.Action !== OperationAction.START) {
+      return;
+    }
+
+    const url = update.FetchOptions?.Url;
+    if (!url) {
+      throw new Error(`Url is required for ${OperationType.FETCH} updates`);
+    }
+
+    const operationId = update.Id;
+    if (operationId === undefined) {
+      throw new Error("Missing operation id");
+    }
+
+    this.pendingOperations.add(operationId);
+
+    const { details, completed } = await this.fetchStorage.runFetch({
+      url,
+      method: update.FetchOptions?.Method ?? "GET",
+      headers: update.FetchOptions?.Headers ?? {},
+      body: update.Payload,
+      timeoutSeconds: update.FetchOptions?.TimeoutSeconds,
+    });
+
+    await this.checkpointApi.updateCheckpointData({
+      executionId,
+      operationId,
+      operationData: {
+        Status: completed ? OperationStatus.SUCCEEDED : OperationStatus.FAILED,
+        FetchDetails: details,
+      },
+    });
+
+    this.scheduler.scheduleFunction(
+      () => this.invokeHandler(executionId),
+      (err) => {
+        this.executionState.rejectWith(err);
+      },
+      undefined,
+      () => {
+        this.pendingOperations.delete(operationId);
+        return Promise.resolve();
+      },
+    );
   }
 
   private async handleInvokeUpdate(

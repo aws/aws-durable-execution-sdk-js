@@ -1,11 +1,14 @@
 import {
-  CheckpointDurableExecutionCommandInput,
-  GetDurableExecutionCommandInput,
   SendDurableExecutionCallbackFailureRequest,
   SendDurableExecutionCallbackHeartbeatRequest,
   SendDurableExecutionCallbackSuccessRequest,
 } from "@aws-sdk/client-lambda";
-import { ErrorObject, Operation } from "@aws/durable-execution-sdk-js";
+import {
+  CheckpointDurableExecutionRequest,
+  ErrorObject,
+  GetDurableExecutionStateRequest,
+  Operation,
+} from "@aws/durable-execution-sdk-js";
 import { ExecutionId, InvocationId } from "../utils/tagged-strings";
 import { ApiType } from "./worker-api-types";
 
@@ -43,8 +46,13 @@ export interface WorkerApiRequestMapping {
   [ApiType.CompleteInvocation]: CompleteInvocationRequest;
   [ApiType.UpdateCheckpointData]: UpdateCheckpointDataRequest;
   [ApiType.PollCheckpointData]: PollCheckpointDataRequest;
-  [ApiType.GetDurableExecutionState]: GetDurableExecutionCommandInput;
-  [ApiType.CheckpointDurableExecutionState]: CheckpointDurableExecutionCommandInput;
+  // Typed against the SDK's own protocol shapes rather than the AWS client's command
+  // inputs. Nothing here calls Lambda -- this is the message channel into the simulated
+  // backend, and what arrives on it is whatever the SDK chose to send. Using the command
+  // inputs would tie the simulator to the *published* service model, which lags the SDK
+  // whenever a new operation type is rolling out; see `pending-fetch-events.ts`.
+  [ApiType.GetDurableExecutionState]: GetDurableExecutionStateRequest;
+  [ApiType.CheckpointDurableExecutionState]: CheckpointDurableExecutionRequest;
   [ApiType.SendDurableExecutionCallbackSuccess]: SendDurableExecutionCallbackSuccessRequest;
   [ApiType.SendDurableExecutionCallbackFailure]: SendDurableExecutionCallbackFailureRequest;
   [ApiType.SendDurableExecutionCallbackHeartbeat]: SendDurableExecutionCallbackHeartbeatRequest;

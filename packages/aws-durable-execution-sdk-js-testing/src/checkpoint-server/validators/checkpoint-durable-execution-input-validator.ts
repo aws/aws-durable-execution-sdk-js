@@ -9,6 +9,7 @@ import { validateCallbackOperation } from "./operation-type/validate-callback-op
 import { validateContextOperation } from "./operation-type/validate-context-operation";
 import { validateExecutionOperation } from "./operation-type/validate-execution-operation";
 import { validateChainedInvokeOperation } from "./operation-type/validate-chained-invoke-operation";
+import { validateFetchOperation } from "./operation-type/validate-fetch-operation";
 import { validateStepOperation } from "./operation-type/validate-step-operation";
 import { validateWaitOperation } from "./operation-type/validate-wait-operation";
 import { validateValidActionsByOperationType } from "./valid-actions-by-operation-type-validator";
@@ -258,6 +259,9 @@ function validateOperationStatusTransition(
       break;
     case OperationType.CHAINED_INVOKE:
       validateChainedInvokeOperation(update, operation);
+      break;
+    case OperationType.FETCH:
+      validateFetchOperation(update, operation);
       break;
     case OperationType.STEP:
       validateStepOperation(update, operation);

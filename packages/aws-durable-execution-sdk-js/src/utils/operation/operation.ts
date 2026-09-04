@@ -18,7 +18,8 @@ export function toOperationInfo(operation?: Operation): OperationInfo {
     operation?.StepDetails?.Error ??
     operation?.CallbackDetails?.Error ??
     operation?.ContextDetails?.Error ??
-    operation?.ChainedInvokeDetails?.Error;
+    operation?.ChainedInvokeDetails?.Error ??
+    operation?.FetchDetails?.Error;
 
   return {
     id: operation?.Id ?? "",
@@ -33,7 +34,8 @@ export function toOperationInfo(operation?: Operation): OperationInfo {
       operation?.StepDetails?.Result ??
       operation?.CallbackDetails?.Result ??
       operation?.ContextDetails?.Result ??
-      operation?.ChainedInvokeDetails?.Result,
+      operation?.ChainedInvokeDetails?.Result ??
+      operation?.FetchDetails?.Result,
     error: errorObject
       ? DurableOperationError.fromErrorObject(errorObject)
       : undefined,

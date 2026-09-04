@@ -29,6 +29,11 @@ const VALID_ACTIONS_FOR_CHAINED_INVOKE = new Set([
   OperationAction.CANCEL,
 ]);
 
+const VALID_ACTIONS_FOR_FETCH = new Set([
+  OperationAction.START,
+  OperationAction.CANCEL,
+]);
+
 const VALID_ACTIONS_FOR_EXECUTION = new Set([
   OperationAction.SUCCEED,
   OperationAction.FAIL,
@@ -66,6 +71,9 @@ export function validateValidActionsByOperationType(
       break;
     case OperationType.CHAINED_INVOKE:
       validActions = VALID_ACTIONS_FOR_CHAINED_INVOKE;
+      break;
+    case OperationType.FETCH:
+      validActions = VALID_ACTIONS_FOR_FETCH;
       break;
     case OperationType.EXECUTION:
       validActions = VALID_ACTIONS_FOR_EXECUTION;

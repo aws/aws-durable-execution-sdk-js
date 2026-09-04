@@ -22,6 +22,7 @@ export const OperationType = {
   CHAINED_INVOKE: "CHAINED_INVOKE",
   CONTEXT: "CONTEXT",
   EXECUTION: "EXECUTION",
+  FETCH: "FETCH",
   STEP: "STEP",
   WAIT: "WAIT",
 } as const;

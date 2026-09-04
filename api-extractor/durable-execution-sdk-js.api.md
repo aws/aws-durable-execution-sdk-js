@@ -328,6 +328,8 @@ export interface DurableContext<TLogger extends DurableLogger = DurableLogger> {
     executionContext: {
         readonly durableExecutionArn: string;
     };
+    fetch(name: string, url: string, config?: FetchConfig): DurablePromise<FetchResponse>;
+    fetch(url: string, config?: FetchConfig): DurablePromise<FetchResponse>;
     invoke<TInput, TOutput>(name: string, funcId: string, input?: TInput, config?: InvokeConfig<TInput, TOutput>): DurablePromise<TOutput>;
     invoke<TInput, TOutput>(funcId: string, input?: TInput, config?: InvokeConfig<TInput, TOutput>): DurablePromise<TOutput>;
     lambdaContext: Context;
@@ -619,6 +621,45 @@ export interface ExecutionDetails {
 }
 
 // @public
+export interface FetchConfig {
+    body?: string;
+    headers?: Record<string, string>;
+    method?: string;
+    timeout?: Duration;
+}
+
+// @public
+export interface FetchDetails {
+    Error?: ErrorObject | undefined;
+    Headers?: Record<string, string> | undefined;
+    Result?: string | undefined;
+    StatusCode?: number | undefined;
+}
+
+// @public
+export class FetchError extends DurableOperationError {
+    constructor(message?: string, cause?: Error, errorData?: string);
+    // (undocumented)
+    readonly errorType = "FetchError";
+}
+
+// @public
+export interface FetchOptions {
+    Headers?: Record<string, string> | undefined;
+    Method?: string | undefined;
+    TimeoutSeconds?: number | undefined;
+    Url: string | undefined;
+}
+
+// @public
+export interface FetchResponse {
+    body: string;
+    headers: Record<string, string>;
+    ok: boolean;
+    status: number;
+}
+
+// @public
 export enum FieldMatchMode {
     ANYWHERE = "ANYWHERE",
     PATH = "PATH"
@@ -776,6 +817,7 @@ export interface Operation {
     ContextDetails?: ContextDetails | undefined;
     EndTimestamp?: Date | undefined;
     ExecutionDetails?: ExecutionDetails | undefined;
+    FetchDetails?: FetchDetails | undefined;
     Id: string | undefined;
     Name?: string | undefined;
     ParentId?: string | undefined;
@@ -866,6 +908,7 @@ export type OperationStatus = (typeof OperationStatus)[keyof typeof OperationSta
 export enum OperationSubType {
     CALLBACK = "Callback",
     CHAINED_INVOKE = "ChainedInvoke",
+    FETCH = "Fetch",
     MAP = "Map",
     MAP_ITERATION = "MapIteration",
     PARALLEL = "Parallel",
@@ -883,6 +926,7 @@ export const OperationType: {
     readonly CHAINED_INVOKE: "CHAINED_INVOKE";
     readonly CONTEXT: "CONTEXT";
     readonly EXECUTION: "EXECUTION";
+    readonly FETCH: "FETCH";
     readonly STEP: "STEP";
     readonly WAIT: "WAIT";
 };
@@ -897,6 +941,7 @@ export interface OperationUpdate {
     ChainedInvokeOptions?: ChainedInvokeOptions | undefined;
     ContextOptions?: ContextOptions | undefined;
     Error?: ErrorObject | undefined;
+    FetchOptions?: FetchOptions | undefined;
     Id: string | undefined;
     Name?: string | undefined;
     ParentId?: string | undefined;

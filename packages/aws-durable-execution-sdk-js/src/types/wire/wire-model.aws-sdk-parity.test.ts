@@ -36,6 +36,25 @@
  * Lambda transport's own shapes — a strict match against one backend's API is the wrong
  * constraint to place on a model shared by several. Treat the assertions here as a check on
  * today's single transport, not as policy for the model.
+ *
+ * ## Pending service members
+ *
+ * The SDK's wire model can legitimately run *ahead* of the published service model while a
+ * new operation type is being rolled out. `FETCH` is in that state: the SDK declares the
+ * operation type along with {@link Wire.FetchOptions} and {@link Wire.FetchDetails}, and
+ * `@aws-sdk/client-lambda` does not know about them yet.
+ *
+ * Assertions covering shapes that carry a `Fetch*` member are therefore relaxed from
+ * `Mutual`/`SameKeys` to the service-model-to-ours direction only, and the members the SDK
+ * adds on top are listed explicitly in {@link PendingOperationTypes} and
+ * {@link pendingKeys}. This keeps the guard doing the job that matters — the service
+ * removing or renaming something the SDK depends on still fails the build — while allowing
+ * the SDK to carry a member the service has not published.
+ *
+ * When `@aws-sdk/client-lambda` ships `FETCH`, revert each assertion marked
+ * `PENDING FETCH` back to `Mutual`/`SameKeys`, delete `PendingOperationTypes` and
+ * `pendingKeys`, and add the ordinary exact-match pair for `FetchOptions` and
+ * `FetchDetails`.
  */
 
 import type * as Sdk from "@aws-sdk/client-lambda";
@@ -59,11 +78,32 @@ type Mutual<A, B> =
 
 type SameKeys<A, B> = Mutual<keyof A, keyof B>;
 
+/**
+ * Operation types the SDK declares that the published service model does not yet carry.
+ *
+ * Removing a member from this union is the whole point of it: once the service publishes
+ * `FETCH`, the `Exclude` below becomes a no-op and the relaxed assertions can go back to
+ * `Mutual`.
+ */
+type PendingOperationTypes = typeof OperationType.FETCH;
+
+/**
+ * Keys the SDK declares on shared shapes that the published service model does not yet
+ * carry. Same lifecycle as {@link PendingOperationTypes}.
+ */
+type PendingKeys = "FetchDetails" | "FetchOptions";
+
 // ---------------------------------------------------------------------------
 // Enumerations — string literal unions must match exactly in both directions.
 // ---------------------------------------------------------------------------
 
-assert<Mutual<Wire.OperationType, Sdk.OperationType>>();
+// PENDING FETCH: exact match once the service model publishes FETCH. Until then, assert
+// that the service model is a subset of ours and that the only surplus member is FETCH.
+assert<Extends<Sdk.OperationType, Wire.OperationType>>();
+assert<
+  Mutual<Exclude<Wire.OperationType, PendingOperationTypes>, Sdk.OperationType>
+>();
+
 assert<Mutual<Wire.OperationStatus, Sdk.OperationStatus>>();
 assert<Mutual<Wire.OperationAction, Sdk.OperationAction>>();
 
@@ -89,8 +129,16 @@ assert<Mutual<Wire.CallbackOptions, Sdk.CallbackOptions>>();
 assert<SameKeys<Wire.ChainedInvokeOptions, Sdk.ChainedInvokeOptions>>();
 assert<Mutual<Wire.ChainedInvokeOptions, Sdk.ChainedInvokeOptions>>();
 
-assert<SameKeys<Wire.OperationUpdate, Sdk.OperationUpdate>>();
-assert<Mutual<Wire.OperationUpdate, Sdk.OperationUpdate>>();
+// PENDING FETCH: `OperationUpdate` carries `FetchOptions`, which the service model does not
+// declare yet. Assert exact agreement on every other key, and that the service's own shape
+// is still assignable to ours.
+assert<
+  Mutual<
+    Exclude<keyof Wire.OperationUpdate, PendingKeys>,
+    keyof Sdk.OperationUpdate
+  >
+>();
+assert<Extends<Sdk.OperationUpdate, Wire.OperationUpdate>>();
 
 assert<
   SameKeys<
@@ -98,10 +146,14 @@ assert<
     Sdk.CheckpointDurableExecutionRequest
   >
 >();
+// PENDING FETCH: `Updates` carries `OperationUpdate`, whose `Type` now admits `FETCH`, so
+// our request is no longer assignable to the service model's — which is exactly the
+// intended state while the SDK runs ahead of the published model. The reverse direction
+// still holds and is what guards against the service adding or renaming a field.
 assert<
-  Mutual<
-    Wire.CheckpointDurableExecutionRequest,
-    Sdk.CheckpointDurableExecutionRequest
+  Extends<
+    Sdk.CheckpointDurableExecutionRequest,
+    Wire.CheckpointDurableExecutionRequest
   >
 >();
 
@@ -123,8 +175,12 @@ assert<
 // exactly, so these must agree in both directions.
 // ---------------------------------------------------------------------------
 
-assert<SameKeys<Wire.Operation, Sdk.Operation>>();
-assert<Mutual<Wire.Operation, Sdk.Operation>>();
+// PENDING FETCH: `Operation` carries `FetchDetails`, which the service model does not
+// declare yet. Same treatment as `OperationUpdate` above.
+assert<
+  Mutual<Exclude<keyof Wire.Operation, PendingKeys>, keyof Sdk.Operation>
+>();
+assert<Extends<Sdk.Operation, Wire.Operation>>();
 
 assert<SameKeys<Wire.StepDetails, Sdk.StepDetails>>();
 assert<Mutual<Wire.StepDetails, Sdk.StepDetails>>();
@@ -138,7 +194,10 @@ assert<Mutual<Wire.WaitDetails, Sdk.WaitDetails>>();
 // holds. The key-set assertions still catch fields being added or removed.
 // ---------------------------------------------------------------------------
 
-assert<SameKeys<Wire.WireOperation, Sdk.Operation>>();
+// PENDING FETCH: `WireOperation` inherits `FetchDetails` from `Operation`.
+assert<
+  Mutual<Exclude<keyof Wire.WireOperation, PendingKeys>, keyof Sdk.Operation>
+>();
 assert<Extends<Sdk.Operation, Wire.WireOperation>>();
 
 assert<SameKeys<Wire.WireStepDetails, Sdk.StepDetails>>();
@@ -216,6 +275,15 @@ describe("wire enums match the AWS SDK service model", () => {
   // biome-ignore lint/style/noCommonJs: deliberate -- this test compares our wire enums to the AWS SDK's at runtime, so it needs the module's VALUES, and a static import would pull AWS types into the wire model the parity test exists to keep AWS-free. Carried an explicit @typescript-eslint/no-require-imports disable before the Biome migration.
   const sdk = require("@aws-sdk/client-lambda");
 
+  /**
+   * Enum members the SDK declares ahead of the published service model. Keep in step with
+   * {@link PendingOperationTypes} — see the "Pending service members" note at the top of
+   * this file.
+   */
+  const pendingMembers: Record<string, string[]> = {
+    OperationType: [OperationType.FETCH],
+  };
+
   it.each([
     ["OperationType", OperationType],
     ["OperationStatus", OperationStatus],
@@ -223,7 +291,33 @@ describe("wire enums match the AWS SDK service model", () => {
   ])(
     "%s has the same members and values as the service model",
     (name, ours) => {
-      expect(ours).toEqual(sdk[name as string]);
+      const pending = pendingMembers[name as string] ?? [];
+      const published = Object.fromEntries(
+        Object.entries(ours).filter(([, value]) => !pending.includes(value)),
+      );
+
+      expect(published).toEqual(sdk[name as string]);
     },
   );
+
+  it.each([["OperationType", OperationType]])(
+    "%s declares every pending member as a self-named string value",
+    (name, ours) => {
+      // A pending member is not checked against the service model, so nothing else would
+      // catch a typo in its value. The wire contract requires key and value to agree.
+      for (const member of pendingMembers[name as string] ?? []) {
+        expect((ours as Record<string, string>)[member]).toBe(member);
+      }
+    },
+  );
+
+  it("stops treating a member as pending once the service model publishes it", () => {
+    // Fails when the AWS SDK catches up, which is the signal to tighten the relaxed type
+    // assertions above back to Mutual/SameKeys and delete the pending lists.
+    for (const [name, members] of Object.entries(pendingMembers)) {
+      for (const member of members) {
+        expect(sdk[name]).not.toHaveProperty(member);
+      }
+    }
+  });
 });

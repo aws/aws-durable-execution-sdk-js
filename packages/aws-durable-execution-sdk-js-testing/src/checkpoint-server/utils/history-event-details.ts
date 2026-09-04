@@ -5,6 +5,7 @@ import {
   OperationType,
   Operation,
 } from "@aws/durable-execution-sdk-js";
+import { FetchEventType, pendingFetchEventType } from "../pending-fetch-events";
 
 export type OperationActionWithoutRetry = Exclude<
   OperationAction,
@@ -80,6 +81,7 @@ export type HistoryEventDetail<
  * - Callback: START
  * - Context: START, FAIL, SUCCEED
  * - Invoke: START
+ * - Fetch: START
  * - Step: START, FAIL, SUCCEED
  * - Wait: START
  */
@@ -167,6 +169,21 @@ const historyEventDetailMap = {
         DurableExecutionArn: "",
       }),
     ),
+
+  // Fetch events
+  [`${OperationAction.START}-${OperationType.FETCH}`]: createEventDetails(
+    pendingFetchEventType(FetchEventType.FetchStarted),
+    "FetchStartedDetails",
+    (update) => ({
+      Url: update.FetchOptions?.Url,
+      Method: update.FetchOptions?.Method,
+      Headers: update.FetchOptions?.Headers,
+      Timeout: update.FetchOptions?.TimeoutSeconds,
+      Input: {
+        Payload: update.Payload,
+      },
+    }),
+  ),
 
   // Step events
   [`${OperationAction.START}-${OperationType.STEP}`]: createEventDetails(

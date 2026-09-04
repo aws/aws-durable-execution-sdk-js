@@ -254,6 +254,7 @@ describe("WorkerServerApiHandler", () => {
         params: {
           DurableExecutionArn:
             "arn:aws:lambda:us-east-1:123456789012:function:test",
+          CheckpointToken: undefined,
         },
       };
 

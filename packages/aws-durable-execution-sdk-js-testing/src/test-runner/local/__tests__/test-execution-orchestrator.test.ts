@@ -20,6 +20,7 @@ import { IndexedOperations } from "../../common/indexed-operations";
 import { OperationEvents } from "../../common/operations/operation-with-data";
 import { CheckpointOperation } from "../../../checkpoint-server/storage/checkpoint-manager";
 import { FunctionStorage } from "../operations/function-storage";
+import { FetchStorage } from "../operations/fetch-storage";
 import { ILocalDurableTestRunnerFactory } from "../interfaces/durable-test-runner-factory";
 import { DurableApiClient } from "../../common/create-durable-api-client";
 import { InstalledClock } from "@sinonjs/fake-timers";
@@ -63,6 +64,7 @@ describe("TestExecutionOrchestrator", () => {
   let mockOperationStorage: jest.Mocked<LocalOperationStorage>;
   let checkpointApi: CheckpointApiClient;
   let mockFunctionStorage: FunctionStorage;
+  let mockFetchStorage: FetchStorage;
   let mockDurableApiClient: DurableApiClient;
 
   const mockOperation: Operation = {
@@ -192,6 +194,7 @@ describe("TestExecutionOrchestrator", () => {
     };
 
     mockFunctionStorage = new FunctionStorage(mockFactory);
+    mockFetchStorage = new FetchStorage();
 
     const mockInvocationResult = {
       Status: InvocationStatus.SUCCEEDED,
@@ -205,6 +208,7 @@ describe("TestExecutionOrchestrator", () => {
       mockOperationStorage,
       checkpointApi,
       mockFunctionStorage,
+      mockFetchStorage,
       {
         enabled: false,
       }, // skipTime
@@ -858,6 +862,7 @@ describe("TestExecutionOrchestrator", () => {
         mockOperationStorage,
         checkpointApi,
         mockFunctionStorage,
+        mockFetchStorage,
         {
           enabled: false,
         },
@@ -872,6 +877,7 @@ describe("TestExecutionOrchestrator", () => {
         mockOperationStorage,
         checkpointApi,
         mockFunctionStorage,
+        mockFetchStorage,
         {
           enabled: false,
         },
@@ -956,6 +962,7 @@ describe("TestExecutionOrchestrator", () => {
         mockOperationStorage,
         checkpointApi,
         mockFunctionStorage,
+        mockFetchStorage,
         {
           enabled: true,
           fakeClock: fakeClock as unknown as InstalledClock,
@@ -1018,6 +1025,7 @@ describe("TestExecutionOrchestrator", () => {
         mockOperationStorage,
         checkpointApi,
         mockFunctionStorage,
+        mockFetchStorage,
         {
           enabled: false,
         },
@@ -1813,6 +1821,7 @@ describe("TestExecutionOrchestrator", () => {
         mockOperationStorage,
         checkpointApi,
         mockFunctionStorage,
+        mockFetchStorage,
         {
           enabled: true,
         },

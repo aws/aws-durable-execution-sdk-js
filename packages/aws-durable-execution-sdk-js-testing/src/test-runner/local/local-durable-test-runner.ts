@@ -13,6 +13,7 @@ import { ResultFormatter } from "./result-formatter";
 import { CheckpointWorkerManager } from "./worker/checkpoint-worker-manager";
 import { IndexedOperations } from "../common/indexed-operations";
 import { FunctionStorage } from "./operations/function-storage";
+import { FetchStorage, TestFetchTransport } from "./operations/fetch-storage";
 import {
   ILocalDurableTestRunnerExecutor,
   ILocalDurableTestRunnerFactory,
@@ -137,6 +138,7 @@ export class LocalDurableTestRunner<TResult = any>
   private static fakeClock: InstalledClock | undefined;
   private readonly handlerFunction: DurableLambdaHandler;
   private readonly functionStorage: FunctionStorage;
+  private readonly fetchStorage: FetchStorage;
   private readonly durableApi: DurableApiClient;
 
   /**
@@ -154,6 +156,8 @@ export class LocalDurableTestRunner<TResult = any>
     this.functionStorage = new FunctionStorage(
       new LocalDurableTestRunnerFactory(),
     );
+
+    this.fetchStorage = new FetchStorage();
 
     this.durableApi = LocalDurableTestRunner.createDurableApi();
 
@@ -209,6 +213,7 @@ export class LocalDurableTestRunner<TResult = any>
         this.operationStorage,
         LocalDurableTestRunner.createCheckpointApiClient(),
         this.functionStorage,
+        this.fetchStorage,
         {
           enabled: LocalDurableTestRunner.skipTime,
           fakeClock: LocalDurableTestRunner.fakeClock,
@@ -305,6 +310,44 @@ export class LocalDurableTestRunner<TResult = any>
    */
   registerFunction(functionName: string, handler: Handler): this {
     this.functionStorage.registerFunction(functionName, handler);
+    return this;
+  }
+
+  /**
+   * Registers the transport that satisfies `context.fetch()` calls during testing.
+   *
+   * Stands in for the service issuing the request. There is no default: a test runner that
+   * reached the network on its own would make unit tests depend on endpoints outside their
+   * control, so an unregistered transport fails the fetch with a message pointing here. Pass
+   * `globalFetchTransport` to make real requests — against a server the test itself starts,
+   * for instance.
+   *
+   * Return a response for any completed exchange, whatever its status code; a 4xx or 5xx is
+   * recorded and handed to the workflow like any other response. Throw to model a request
+   * that never completed, which is what surfaces as a `FetchError`.
+   *
+   * @param transport - Performs the request
+   * @returns This LocalDurableTestRunner instance for method chaining
+   *
+   * @example
+   * ```typescript
+   * testRunner.registerFetchTransport(async (request) => {
+   *   expect(request.url).toBe("https://api.example.com/charges");
+   *   return { status: 201, body: JSON.stringify({ id: "ch_1" }) };
+   * });
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Model an endpoint that rejects the request. The workflow still sees a response.
+   * testRunner.registerFetchTransport(async () => ({
+   *   status: 503,
+   *   body: "service unavailable",
+   * }));
+   * ```
+   */
+  registerFetchTransport(transport: TestFetchTransport): this {
+    this.fetchStorage.registerTransport(transport);
     return this;
   }
 

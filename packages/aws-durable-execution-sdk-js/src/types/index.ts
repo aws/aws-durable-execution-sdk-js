@@ -6,6 +6,7 @@ export * from "./step";
 export * from "./child-context";
 export * from "./callback";
 export * from "./invoke";
+export * from "./fetch";
 export * from "./wait-condition";
 export * from "./batch";
 export * from "./durable-context";

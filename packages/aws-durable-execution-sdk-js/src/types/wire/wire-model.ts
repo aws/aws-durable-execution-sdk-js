@@ -139,6 +139,28 @@ export interface ChainedInvokeDetails {
 }
 
 /**
+ * Details specific to a fetch operation.
+ *
+ * A fetch records whatever the endpoint returned. Any completed HTTP exchange is a
+ * success, so `StatusCode`, `Headers` and `Result` are populated for a 500 exactly as
+ * they are for a 200, and the workflow decides what the status means. `Error` is
+ * reserved for the case where no exchange took place at all — DNS failure, connection
+ * reset, timeout — and is therefore mutually exclusive with the response fields.
+ *
+ * @public
+ */
+export interface FetchDetails {
+  /** HTTP status code returned by the endpoint. */
+  StatusCode?: number | undefined;
+  /** Response headers, with header names lowercased. */
+  Headers?: Record<string, string> | undefined;
+  /** Response body, as returned by the endpoint. */
+  Result?: string | undefined;
+  /** Recorded error, when the request could not be completed at all. */
+  Error?: ErrorObject | undefined;
+}
+
+/**
  * A single entry in a durable execution's operation history, with timestamps normalized
  * to `Date`.
  *
@@ -180,6 +202,8 @@ export interface Operation {
   CallbackDetails?: CallbackDetails | undefined;
   /** Populated when `Type` is `CHAINED_INVOKE`. */
   ChainedInvokeDetails?: ChainedInvokeDetails | undefined;
+  /** Populated when `Type` is `FETCH`. */
+  FetchDetails?: FetchDetails | undefined;
 }
 
 /**
@@ -260,6 +284,26 @@ export interface ChainedInvokeOptions {
 }
 
 /**
+ * Checkpoint options specific to a fetch operation.
+ *
+ * Carries everything the service needs to issue the request on the execution's behalf.
+ * The request body travels in {@link OperationUpdate.Payload} rather than here, mirroring
+ * how a chained invoke carries its input.
+ *
+ * @public
+ */
+export interface FetchOptions {
+  /** Absolute URL to request. */
+  Url: string | undefined;
+  /** HTTP method. Defaults to `GET` when omitted. */
+  Method?: string | undefined;
+  /** Request headers. */
+  Headers?: Record<string, string> | undefined;
+  /** How long the service waits for the request before recording a timeout. */
+  TimeoutSeconds?: number | undefined;
+}
+
+/**
  * A requested state transition for a single operation within a checkpoint.
  *
  * Exactly one of the `*Options` members is populated, selected by
@@ -294,6 +338,8 @@ export interface OperationUpdate {
   CallbackOptions?: CallbackOptions | undefined;
   /** Populated when `Type` is `CHAINED_INVOKE`. */
   ChainedInvokeOptions?: ChainedInvokeOptions | undefined;
+  /** Populated when `Type` is `FETCH`. */
+  FetchOptions?: FetchOptions | undefined;
 }
 
 /**

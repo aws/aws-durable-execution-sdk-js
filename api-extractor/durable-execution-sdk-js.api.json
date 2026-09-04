@@ -4931,6 +4931,174 @@
             },
             {
               "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!DurableContext#fetch:member(1)",
+              "docComment": "/**\n * Issues an HTTP request through the durable execution service.\n *\n * The service performs the request on the execution's behalf while the execution is suspended, so no compute is charged for the round trip and the response is checkpointed before the workflow observes it. Because the outcome is durable, `fetch` may be called directly from workflow code without wrapping it in a step.\n *\n * Any completed exchange resolves, whatever the status code — a 404 and a 500 are responses the endpoint chose to send, so they are recorded and returned like a 200. Inspect {@link FetchResponse.status} or {@link FetchResponse.ok} to decide what the result means. Only a request that never completed rejects.\n *\n * @param name - Operation name for tracking and debugging\n *\n * @param url - Absolute URL to request\n *\n * @param config - Optional method, headers, body and timeout\n *\n * @throws\n *\n * \\{FetchError\\} When the request could not be completed at all — DNS failure, connection reset or timeout\n *\n * @example\n * ```typescript\n * const response = await context.fetch(\n *   \"charge-card\",\n *   \"https://api.example.com/charges\",\n *   {\n *     method: \"POST\",\n *     headers: { \"content-type\": \"application/json\" },\n *     body: JSON.stringify({ amount: 100 }),\n *   },\n * );\n *\n * if (!response.ok) {\n *   throw new Error(`Charge rejected with ${response.status}`);\n * }\n * const charge = JSON.parse(response.body);\n * ```\n *\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "fetch(name: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ", url: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ", config?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "FetchConfig",
+                  "canonicalReference": "@aws/durable-execution-sdk-js!FetchConfig:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "DurablePromise",
+                  "canonicalReference": "@aws/durable-execution-sdk-js!DurablePromise:class"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<"
+                },
+                {
+                  "kind": "Reference",
+                  "text": "FetchResponse",
+                  "canonicalReference": "@aws/durable-execution-sdk-js!FetchResponse:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ">"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 7,
+                "endIndex": 11
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "name",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": false
+                },
+                {
+                  "parameterName": "url",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 4
+                  },
+                  "isOptional": false
+                },
+                {
+                  "parameterName": "config",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 5,
+                    "endIndex": 6
+                  },
+                  "isOptional": true
+                }
+              ],
+              "name": "fetch"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!DurableContext#fetch:member(2)",
+              "docComment": "/**\n * Issues an HTTP request through the durable execution service.\n *\n * @param url - Absolute URL to request\n *\n * @param config - Optional method, headers, body and timeout\n *\n * @throws\n *\n * \\{FetchError\\} When the request could not be completed at all — DNS failure, connection reset or timeout\n *\n * @example\n * ```typescript\n * const response = await context.fetch(\"https://api.example.com/status\");\n * ```\n *\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "fetch(url: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ", config?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "FetchConfig",
+                  "canonicalReference": "@aws/durable-execution-sdk-js!FetchConfig:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "DurablePromise",
+                  "canonicalReference": "@aws/durable-execution-sdk-js!DurablePromise:class"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<"
+                },
+                {
+                  "kind": "Reference",
+                  "text": "FetchResponse",
+                  "canonicalReference": "@aws/durable-execution-sdk-js!FetchResponse:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ">"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 5,
+                "endIndex": 9
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 2,
+              "parameters": [
+                {
+                  "parameterName": "url",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": false
+                },
+                {
+                  "parameterName": "config",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 4
+                  },
+                  "isOptional": true
+                }
+              ],
+              "name": "fetch"
+            },
+            {
+              "kind": "MethodSignature",
               "canonicalReference": "@aws/durable-execution-sdk-js!DurableContext#invoke:member(1)",
               "docComment": "/**\n * Invokes another durable or non-durable function with the specified input\n *\n * @param name - Step name for tracking and debugging\n *\n * @param funcId - Function ID or ARN. Alias/version qualifier required for durable functions only.\n *\n * @param input - Input data to pass to the invoked function\n *\n * @param config - Optional configuration for serialization\n *\n * @throws\n *\n * \\{InvokeError\\} When the invoked function fails or times out\n *\n * @example\n * ```typescript\n * // Invoking a durable function by arn using version qualifier\n * const result = await context.invoke(\n *   \"process-payment\",\n *   \"arn:aws:lambda:us-east-1:123456789012:function:payment-processor:1\",\n *   { amount: 100, currency: \"USD\" }\n * );\n * ```\n *\n */\n",
               "excerptTokens": [
@@ -6213,7 +6381,7 @@
             {
               "kind": "MethodSignature",
               "canonicalReference": "@aws/durable-execution-sdk-js!DurableContext#runInChildContext:member(1)",
-              "docComment": "/**\n * Runs a function in a child context with isolated state and execution tracking\n *\n * @param name - Step name for tracking and debugging\n *\n * @param fn - Function to execute in the child context\n *\n * @param config - Optional configuration for serialization and sub-typing\n *\n * @throws\n *\n * \\{ChildContextError\\} When the child context function fails\n *\n * @example\n * ```typescript\n * const result = await context.runInChildContext(\n *   \"process-batch\",\n *   async (childCtx) => {\n *     // Child context has its own step counter and state\n *     const step1 = await childCtx.step(\"validate\", async () => validate(data));\n *     const step2 = await childCtx.step(\"transform\", async () => transform(step1));\n *     return step2;\n *   },\n *   { subType: \"batch-processor\" }\n * );\n * ```\n *\n */\n",
+              "docComment": "/**\n * Runs a function in a child context with isolated state and execution tracking\n *\n * @param name - Step name for tracking and debugging\n *\n * @param fn - Function to execute in the child context\n *\n * @param config - Optional configuration for serialization and sub-typing\n *\n * @throws\n *\n * \\{ChildContextError\\} When the child context function fails\n *\n * A child context is a container for durable operations: its body should perform at least one (`step`, `invoke`, `wait`, a nested context, ...). Wrapping plain computation in a context with nothing durable inside it buys nothing — the work is not checkpointed, so it re-runs on every replay — and leaves the context with no record of its own. Put the computation in a `step` instead.\n *\n * @example\n * ```typescript\n * const result = await context.runInChildContext(\n *   \"process-batch\",\n *   async (childCtx) => {\n *     // Child context has its own step counter and state\n *     const step1 = await childCtx.step(\"validate\", async () => validate(data));\n *     const step2 = await childCtx.step(\"transform\", async () => transform(step1));\n *     return step2;\n *   },\n *   { subType: \"batch-processor\" }\n * );\n * ```\n *\n */\n",
               "excerptTokens": [
                 {
                   "kind": "Content",
@@ -6318,7 +6486,7 @@
             {
               "kind": "MethodSignature",
               "canonicalReference": "@aws/durable-execution-sdk-js!DurableContext#runInChildContext:member(2)",
-              "docComment": "/**\n * Runs a function in a child context with isolated state and execution tracking\n *\n * @param fn - Function to execute in the child context\n *\n * @param config - Optional configuration for serialization and sub-typing\n *\n * @throws\n *\n * \\{ChildContextError\\} When the child context function fails\n *\n * @example\n * ```typescript\n * const result = await context.runInChildContext(\n *   async (childCtx) => {\n *     return await childCtx.step(async () => processData(input));\n *   }\n * );\n * ```\n *\n */\n",
+              "docComment": "/**\n * Runs a function in a child context with isolated state and execution tracking\n *\n * @param fn - Function to execute in the child context\n *\n * @param config - Optional configuration for serialization and sub-typing\n *\n * @throws\n *\n * \\{ChildContextError\\} When the child context function fails\n *\n * A child context is a container for durable operations: its body should perform at least one (`step`, `invoke`, `wait`, a nested context, ...). Wrapping plain computation in a context with nothing durable inside it buys nothing — the work is not checkpointed, so it re-runs on every replay — and leaves the context with no record of its own. Put the computation in a `step` instead.\n *\n * @example\n * ```typescript\n * const result = await context.runInChildContext(\n *   async (childCtx) => {\n *     return await childCtx.step(async () => processData(input));\n *   }\n * );\n * ```\n *\n */\n",
               "excerptTokens": [
                 {
                   "kind": "Content",
@@ -10685,6 +10853,667 @@
           "extendsTokenRanges": []
         },
         {
+          "kind": "Interface",
+          "canonicalReference": "@aws/durable-execution-sdk-js!FetchConfig:interface",
+          "docComment": "/**\n * Configuration options for a fetch operation.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface FetchConfig "
+            }
+          ],
+          "fileUrlPath": "src/types/fetch.ts",
+          "releaseTag": "Public",
+          "name": "FetchConfig",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!FetchConfig#body:member",
+              "docComment": "/**\n * Request body, sent verbatim.\n *\n * Deliberately a string rather than an arbitrary value passed through serdes: a fetch body is whatever the endpoint expects, so encoding it is the caller's decision. `JSON.stringify` on a plain object is deterministic, so building the body outside a step is replay-safe.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "body?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "body",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!FetchConfig#headers:member",
+              "docComment": "/**\n * Request headers.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "headers?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Record",
+                  "canonicalReference": "!Record:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<string, string>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "headers",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!FetchConfig#method:member",
+              "docComment": "/**\n * HTTP method. Defaults to `GET`.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "method?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "method",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!FetchConfig#timeout:member",
+              "docComment": "/**\n * How long the service waits for the request before recording a timeout.\n *\n * A timeout is a transport failure — no response was received — so it rejects rather than resolving with a response.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "timeout?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Duration",
+                  "canonicalReference": "@aws/durable-execution-sdk-js!Duration:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "timeout",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@aws/durable-execution-sdk-js!FetchDetails:interface",
+          "docComment": "/**\n * Details specific to a fetch operation.\n *\n * A fetch records whatever the endpoint returned. Any completed HTTP exchange is a success, so `StatusCode`, `Headers` and `Result` are populated for a 500 exactly as they are for a 200, and the workflow decides what the status means. `Error` is reserved for the case where no exchange took place at all — DNS failure, connection reset, timeout — and is therefore mutually exclusive with the response fields.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface FetchDetails "
+            }
+          ],
+          "fileUrlPath": "src/types/wire/wire-model.ts",
+          "releaseTag": "Public",
+          "name": "FetchDetails",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!FetchDetails#Error:member",
+              "docComment": "/**\n * Recorded error, when the request could not be completed at all.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "Error?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "ErrorObject",
+                  "canonicalReference": "@aws/durable-execution-sdk-js!ErrorObject:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "Error",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!FetchDetails#Headers:member",
+              "docComment": "/**\n * Response headers, with header names lowercased.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "Headers?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Record",
+                  "canonicalReference": "!Record:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<string, string> | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "Headers",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!FetchDetails#Result:member",
+              "docComment": "/**\n * Response body, as returned by the endpoint.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "Result?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "Result",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!FetchDetails#StatusCode:member",
+              "docComment": "/**\n * HTTP status code returned by the endpoint.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "StatusCode?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "StatusCode",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Class",
+          "canonicalReference": "@aws/durable-execution-sdk-js!FetchError:class",
+          "docComment": "/**\n * Error thrown when a fetch operation could not be completed.\n *\n * Reserved for the case where no HTTP exchange took place — DNS failure, connection reset, timeout. A response with a 4xx or 5xx status is not an error: it resolves with the recorded response.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export declare class FetchError extends "
+            },
+            {
+              "kind": "Reference",
+              "text": "DurableOperationError",
+              "canonicalReference": "@aws/durable-execution-sdk-js!DurableOperationError:class"
+            },
+            {
+              "kind": "Content",
+              "text": " "
+            }
+          ],
+          "fileUrlPath": "src/errors/durable-error/durable-error.ts",
+          "releaseTag": "Public",
+          "isAbstract": false,
+          "name": "FetchError",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "Constructor",
+              "canonicalReference": "@aws/durable-execution-sdk-js!FetchError:constructor(1)",
+              "docComment": "/**\n * Constructs a new instance of the `FetchError` class\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "constructor(message?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ", cause?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Error",
+                  "canonicalReference": "!Error:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ", errorData?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ");"
+                }
+              ],
+              "releaseTag": "Public",
+              "isProtected": false,
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "message",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": true
+                },
+                {
+                  "parameterName": "cause",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 4
+                  },
+                  "isOptional": true
+                },
+                {
+                  "parameterName": "errorData",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 5,
+                    "endIndex": 6
+                  },
+                  "isOptional": true
+                }
+              ]
+            },
+            {
+              "kind": "Property",
+              "canonicalReference": "@aws/durable-execution-sdk-js!FetchError#errorType:member",
+              "docComment": "",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly errorType = "
+                },
+                {
+                  "kind": "Content",
+                  "text": "\"FetchError\""
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "errorType",
+              "propertyTypeTokenRange": {
+                "startIndex": 0,
+                "endIndex": 0
+              },
+              "initializerTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "isStatic": false,
+              "isProtected": false,
+              "isAbstract": false
+            }
+          ],
+          "extendsTokenRange": {
+            "startIndex": 1,
+            "endIndex": 2
+          },
+          "implementsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@aws/durable-execution-sdk-js!FetchOptions:interface",
+          "docComment": "/**\n * Checkpoint options specific to a fetch operation.\n *\n * Carries everything the service needs to issue the request on the execution's behalf. The request body travels in {@link OperationUpdate.Payload} rather than here, mirroring how a chained invoke carries its input.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface FetchOptions "
+            }
+          ],
+          "fileUrlPath": "src/types/wire/wire-model.ts",
+          "releaseTag": "Public",
+          "name": "FetchOptions",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!FetchOptions#Headers:member",
+              "docComment": "/**\n * Request headers.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "Headers?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Record",
+                  "canonicalReference": "!Record:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<string, string> | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "Headers",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!FetchOptions#Method:member",
+              "docComment": "/**\n * HTTP method. Defaults to `GET` when omitted.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "Method?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "Method",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!FetchOptions#TimeoutSeconds:member",
+              "docComment": "/**\n * How long the service waits for the request before recording a timeout.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "TimeoutSeconds?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "TimeoutSeconds",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!FetchOptions#Url:member",
+              "docComment": "/**\n * Absolute URL to request.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "Url: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "Url",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "@aws/durable-execution-sdk-js!FetchResponse:interface",
+          "docComment": "/**\n * The response recorded for a completed fetch operation.\n *\n * Any completed HTTP exchange resolves, whatever the status code. A 404 or a 500 is a response the endpoint chose to send, so it is checkpointed and returned like any other; inspect {@link FetchResponse.status} or {@link FetchResponse.ok} to decide what it means. Only a request that never completed — DNS failure, connection reset, timeout — rejects, with a `FetchError`.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface FetchResponse "
+            }
+          ],
+          "fileUrlPath": "src/types/fetch.ts",
+          "releaseTag": "Public",
+          "name": "FetchResponse",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!FetchResponse#body:member",
+              "docComment": "/**\n * Response body, as returned by the endpoint.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "body: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "body",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!FetchResponse#headers:member",
+              "docComment": "/**\n * Response headers, with header names lowercased.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "headers: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Record",
+                  "canonicalReference": "!Record:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<string, string>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "headers",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!FetchResponse#ok:member",
+              "docComment": "/**\n * Whether {@link FetchResponse.status} is in the 2xx range.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "ok: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "boolean"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "ok",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!FetchResponse#status:member",
+              "docComment": "/**\n * HTTP status code returned by the endpoint.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "status: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "status",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
           "kind": "Enum",
           "canonicalReference": "@aws/durable-execution-sdk-js!FieldMatchMode:enum",
           "docComment": "/**\n * Controls whether a preview field is matched by name anywhere in the object tree, or by exact dot-notation path from the root.\n *\n * @public\n */\n",
@@ -12361,7 +13190,7 @@
         {
           "kind": "TypeAlias",
           "canonicalReference": "@aws/durable-execution-sdk-js!MapFunc:type",
-          "docComment": "/**\n * Function to be executed for each item in a map operation\n *\n * @param context - DurableContext for executing durable operations within the map\n *\n * @param item - Current item being processed\n *\n * @param index - Index of the current item in the array\n *\n * @param array - The original array being mapped over\n *\n * @returns Promise resolving to the transformed value\n *\n * @public\n */\n",
+          "docComment": "/**\n * Applied to each item of a batch, in that item's own child context.\n *\n * The body should perform at least one durable operation (`step`, `invoke`, `wait`, a nested context, ...). A mapper that only computes buys nothing from the surrounding context — the work is not checkpointed, so it re-runs on every replay — and leaves the item with no record of its own. Put the computation in a `step` instead. See `DurableContext.runInChildContext`.\n */\n",
           "excerptTokens": [
             {
               "kind": "Content",
@@ -12675,6 +13504,38 @@
               "isOptional": true,
               "releaseTag": "Public",
               "name": "ExecutionDetails",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!Operation#FetchDetails:member",
+              "docComment": "/**\n * Populated when `Type` is `FETCH`.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "FetchDetails?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "FetchDetails",
+                  "canonicalReference": "@aws/durable-execution-sdk-js!FetchDetails:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "FetchDetails",
               "propertyTypeTokenRange": {
                 "startIndex": 1,
                 "endIndex": 3
@@ -13677,6 +14538,27 @@
             },
             {
               "kind": "EnumMember",
+              "canonicalReference": "@aws/durable-execution-sdk-js!OperationSubType.FETCH:member",
+              "docComment": "/**\n * A fetch operation (`context.fetch`).\n *\n * Represents an HTTP request issued by the service on the execution's behalf. The execution suspends while the request is in flight, so no compute is charged for the round trip.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "FETCH = "
+                },
+                {
+                  "kind": "Content",
+                  "text": "\"Fetch\""
+                }
+              ],
+              "initializerTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "releaseTag": "Public",
+              "name": "FETCH"
+            },
+            {
+              "kind": "EnumMember",
               "canonicalReference": "@aws/durable-execution-sdk-js!OperationSubType.MAP:member",
               "docComment": "/**\n * A map operation (`context.map`).\n *\n * Represents parallel processing of an array of items with concurrency control and completion policies. Each map operation coordinates multiple iterations.\n */\n",
               "excerptTokens": [
@@ -13921,7 +14803,7 @@
             },
             {
               "kind": "Content",
-              "text": "{\n    readonly CALLBACK: \"CALLBACK\";\n    readonly CHAINED_INVOKE: \"CHAINED_INVOKE\";\n    readonly CONTEXT: \"CONTEXT\";\n    readonly EXECUTION: \"EXECUTION\";\n    readonly STEP: \"STEP\";\n    readonly WAIT: \"WAIT\";\n}"
+              "text": "{\n    readonly CALLBACK: \"CALLBACK\";\n    readonly CHAINED_INVOKE: \"CHAINED_INVOKE\";\n    readonly CONTEXT: \"CONTEXT\";\n    readonly EXECUTION: \"EXECUTION\";\n    readonly FETCH: \"FETCH\";\n    readonly STEP: \"STEP\";\n    readonly WAIT: \"WAIT\";\n}"
             }
           ],
           "fileUrlPath": "src/types/wire/wire-enums.ts",
@@ -14103,6 +14985,38 @@
               "isOptional": true,
               "releaseTag": "Public",
               "name": "Error",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!OperationUpdate#FetchOptions:member",
+              "docComment": "/**\n * Populated when `Type` is `FETCH`.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "FetchOptions?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "FetchOptions",
+                  "canonicalReference": "@aws/durable-execution-sdk-js!FetchOptions:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "FetchOptions",
               "propertyTypeTokenRange": {
                 "startIndex": 1,
                 "endIndex": 3
