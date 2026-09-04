@@ -56,6 +56,7 @@ export {
   OperationType,
   OperationStatus,
   OperationAction,
+  FetchBodyEncoding,
   WireTimestamp,
   Operation,
   WireOperation,

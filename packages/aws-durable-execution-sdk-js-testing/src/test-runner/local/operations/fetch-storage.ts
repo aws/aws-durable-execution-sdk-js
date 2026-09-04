@@ -1,4 +1,8 @@
-import { ErrorObject, FetchDetails } from "@aws/durable-execution-sdk-js";
+import {
+  ErrorObject,
+  FetchBodyEncoding,
+  FetchDetails,
+} from "@aws/durable-execution-sdk-js";
 
 /**
  * The request the simulated backend was asked to issue.
@@ -36,6 +40,15 @@ export interface TestFetchResponse {
   readonly headers?: Record<string, string>;
   /** Response body to record. */
   readonly body?: string;
+  /**
+   * How {@link TestFetchResponse.body} is encoded, when modelling a backend that records
+   * something other than UTF-8 text. Absent means {@link FetchBodyEncoding.UTF8}.
+   *
+   * The SDK only reads `UTF8` bodies, so setting this to `BASE64` models a backend newer than
+   * the SDK reading it — useful for asserting that the mismatch surfaces as a clear error
+   * rather than a corrupted body.
+   */
+  readonly bodyEncoding?: FetchBodyEncoding;
 }
 
 /**
@@ -143,6 +156,13 @@ export class FetchStorage {
           StatusCode: response.status,
           Headers: headers,
           Result: response.body,
+          // Left absent for UTF-8, which is what the compatibility rule relies on: a reader
+          // that predates the field treats an absent encoding as UTF-8 and is therefore
+          // correct, and only a body that is genuinely something else carries the marker.
+          ...(response.bodyEncoding !== undefined &&
+            response.bodyEncoding !== FetchBodyEncoding.UTF8 && {
+              BodyEncoding: response.bodyEncoding,
+            }),
         },
       };
     } catch (err: unknown) {

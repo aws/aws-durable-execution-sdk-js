@@ -1,4 +1,5 @@
 import {
+  FetchBodyEncoding,
   FetchError,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
@@ -364,6 +365,82 @@ describe("LocalDurableTestRunner Fetch operations integration", () => {
     );
     expect(serializedOperation).not.toContain(
       "SECRET-BODY-SHOULD-NOT-BE-RECORDED",
+    );
+  });
+
+  it("omits BodyEncoding for a UTF-8 response, so absent means UTF8 end to end", async () => {
+    // The whole compatibility argument rests on this: a plain text response records no
+    // encoding at all, so a reader that predates the field is still correct.
+    const handler = withDurableExecution(async (_, ctx) => {
+      const response = await ctx.fetch("plain", "https://api.example.com/x");
+      return response.body;
+    });
+
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+    const fetchOperation = runner.getOperation("plain");
+    runner.registerFetchTransport(async () => ({
+      status: 200,
+      body: "plain text",
+    }));
+
+    const execution = await runner.run();
+
+    expect(execution.getResult()).toBe("plain text");
+    expect(fetchOperation.getFetchDetails()?.bodyEncoding).toBeUndefined();
+    expect(fetchOperation.getOperationData()?.FetchDetails).not.toHaveProperty(
+      "BodyEncoding",
+    );
+  });
+
+  it("carries a BASE64 encoding through the backend and refuses to read it", async () => {
+    // Models a backend newer than the SDK. Proves the discriminator survives the round trip
+    // -- checkpoint, operation state and history -- and that the SDK refuses rather than
+    // handing the workflow a corrupted body.
+    const handler = withDurableExecution(async (_, ctx) => {
+      try {
+        await ctx.fetch("binary", "https://api.example.com/image");
+        return { threw: false };
+      } catch (err) {
+        return {
+          threw: true,
+          isFetchError: err instanceof FetchError,
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    });
+
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+    const fetchOperation = runner.getOperation("binary");
+    runner.registerFetchTransport(async () => ({
+      status: 200,
+      body: "AAECAw==",
+      bodyEncoding: FetchBodyEncoding.BASE64,
+    }));
+
+    const execution = await runner.run();
+
+    const result = execution.getResult() as {
+      threw: boolean;
+      isFetchError: boolean;
+      message: string;
+    };
+    expect(result.threw).toBe(true);
+    expect(result.isFetchError).toBe(true);
+    expect(result.message).toContain("BASE64-encoded response body");
+
+    // The operation itself succeeded -- the exchange completed. Only reading it failed.
+    expect(fetchOperation.getStatus()).toBe("SUCCEEDED");
+    expect(fetchOperation.getFetchDetails()?.bodyEncoding).toBe(
+      FetchBodyEncoding.BASE64,
+    );
+
+    // And the encoding is in the history, so a recorded body is interpretable from the
+    // record alone rather than from whichever SDK version produced it.
+    const fetchSucceeded = execution
+      .getHistoryEvents()
+      ?.find((event) => event.EventType === "FetchSucceeded");
+    expect(fetchSucceeded?.FetchSucceededDetails?.BodyEncoding).toBe(
+      FetchBodyEncoding.BASE64,
     );
   });
 

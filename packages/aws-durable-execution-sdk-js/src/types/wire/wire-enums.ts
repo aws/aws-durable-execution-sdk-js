@@ -78,3 +78,37 @@ export const OperationAction = {
  */
 export type OperationAction =
   (typeof OperationAction)[keyof typeof OperationAction];
+
+/**
+ * How the body of a fetch operation is encoded on the wire.
+ *
+ * A fetch body travels as a string, so a body that is not valid UTF-8 text needs an encoding
+ * that survives that. This discriminator exists so the encoding is never implied: a reader
+ * knows how to interpret a recorded body from the record itself rather than from the version
+ * of the SDK that produced it.
+ *
+ * `UTF8` is the default and the only encoding the SDK currently produces or accepts — a
+ * `BASE64` body is rejected rather than guessed at. The member is declared now because the
+ * field is far cheaper to introduce before the operation is published than after, when the
+ * shape would have to carry both an encoding-less and an encoded form of a body forever.
+ *
+ * An absent `BodyEncoding` means `UTF8`, which is what makes adding `BASE64` support later a
+ * compatible change: an older reader never requests a binary body, so it never receives one
+ * it would misread as text.
+ *
+ * @public
+ */
+export const FetchBodyEncoding = {
+  /** The body is UTF-8 text, carried verbatim. The default when unspecified. */
+  UTF8: "UTF8",
+  /** The body is arbitrary bytes, base64-encoded. Not yet supported by this SDK. */
+  BASE64: "BASE64",
+} as const;
+
+/**
+ * How the body of a fetch operation is encoded on the wire.
+ *
+ * @public
+ */
+export type FetchBodyEncoding =
+  (typeof FetchBodyEncoding)[keyof typeof FetchBodyEncoding];

@@ -9,7 +9,11 @@ export * from "./test-runner";
 // `Operation` and `WireOperation` are named because this package's own surface refers to
 // them: `DurableLambdaHandler` carries a `DurableExecutionInvocationInput`, whose
 // `InitialExecutionState.Operations` is a `WireOperation[]`.
-export { OperationStatus, OperationType } from "@aws/durable-execution-sdk-js";
+export {
+  FetchBodyEncoding,
+  OperationStatus,
+  OperationType,
+} from "@aws/durable-execution-sdk-js";
 export type { Operation, WireOperation } from "@aws/durable-execution-sdk-js";
 
 // Still AWS SDK concerns: these describe the Lambda invoke and execution-history APIs the

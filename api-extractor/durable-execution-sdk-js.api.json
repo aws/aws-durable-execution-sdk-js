@@ -10853,6 +10853,73 @@
           "extendsTokenRanges": []
         },
         {
+          "kind": "TypeAlias",
+          "canonicalReference": "@aws/durable-execution-sdk-js!FetchBodyEncoding:type",
+          "docComment": "/**\n * How the body of a fetch operation is encoded on the wire.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type FetchBodyEncoding = "
+            },
+            {
+              "kind": "Content",
+              "text": "(typeof "
+            },
+            {
+              "kind": "Reference",
+              "text": "FetchBodyEncoding",
+              "canonicalReference": "@aws/durable-execution-sdk-js!FetchBodyEncoding:var"
+            },
+            {
+              "kind": "Content",
+              "text": ")[keyof typeof "
+            },
+            {
+              "kind": "Reference",
+              "text": "FetchBodyEncoding",
+              "canonicalReference": "@aws/durable-execution-sdk-js!FetchBodyEncoding:var"
+            },
+            {
+              "kind": "Content",
+              "text": "]"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/types/wire/wire-enums.ts",
+          "releaseTag": "Public",
+          "name": "FetchBodyEncoding",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 6
+          }
+        },
+        {
+          "kind": "Variable",
+          "canonicalReference": "@aws/durable-execution-sdk-js!FetchBodyEncoding:var",
+          "docComment": "/**\n * How the body of a fetch operation is encoded on the wire.\n *\n * A fetch body travels as a string, so a body that is not valid UTF-8 text needs an encoding that survives that. This discriminator exists so the encoding is never implied: a reader knows how to interpret a recorded body from the record itself rather than from the version of the SDK that produced it.\n *\n * `UTF8` is the default and the only encoding the SDK currently produces or accepts — a `BASE64` body is rejected rather than guessed at. The member is declared now because the field is far cheaper to introduce before the operation is published than after, when the shape would have to carry both an encoding-less and an encoded form of a body forever.\n *\n * An absent `BodyEncoding` means `UTF8`, which is what makes adding `BASE64` support later a compatible change: an older reader never requests a binary body, so it never receives one it would misread as text.\n *\n * @public\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "FetchBodyEncoding: "
+            },
+            {
+              "kind": "Content",
+              "text": "{\n    readonly UTF8: \"UTF8\";\n    readonly BASE64: \"BASE64\";\n}"
+            }
+          ],
+          "fileUrlPath": "src/types/wire/wire-enums.ts",
+          "isReadonly": true,
+          "releaseTag": "Public",
+          "name": "FetchBodyEncoding",
+          "variableTypeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 2
+          }
+        },
+        {
           "kind": "Interface",
           "canonicalReference": "@aws/durable-execution-sdk-js!FetchConfig:interface",
           "docComment": "/**\n * Configuration options for a fetch operation.\n *\n * @public\n */\n",
@@ -10999,6 +11066,38 @@
           "name": "FetchDetails",
           "preserveMemberOrder": false,
           "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!FetchDetails#BodyEncoding:member",
+              "docComment": "/**\n * How {@link FetchDetails.Result} is encoded. Absent means {@link FetchBodyEncoding.UTF8}.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "BodyEncoding?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "FetchBodyEncoding",
+                  "canonicalReference": "@aws/durable-execution-sdk-js!FetchBodyEncoding:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "BodyEncoding",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
             {
               "kind": "PropertySignature",
               "canonicalReference": "@aws/durable-execution-sdk-js!FetchDetails#Error:member",
@@ -11266,6 +11365,38 @@
           "name": "FetchOptions",
           "preserveMemberOrder": false,
           "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "@aws/durable-execution-sdk-js!FetchOptions#BodyEncoding:member",
+              "docComment": "/**\n * How the request body in {@link OperationUpdate.Payload} is encoded. Absent means {@link FetchBodyEncoding.UTF8}, which is the only encoding this SDK currently sends.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "BodyEncoding?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "FetchBodyEncoding",
+                  "canonicalReference": "@aws/durable-execution-sdk-js!FetchBodyEncoding:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "BodyEncoding",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
             {
               "kind": "PropertySignature",
               "canonicalReference": "@aws/durable-execution-sdk-js!FetchOptions#Headers:member",

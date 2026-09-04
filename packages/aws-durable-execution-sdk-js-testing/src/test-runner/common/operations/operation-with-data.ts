@@ -203,6 +203,7 @@ export class OperationWithData<OperationResultValue = unknown>
       status: fetchDetails?.StatusCode,
       headers: fetchDetails?.Headers,
       body: fetchDetails?.Result,
+      bodyEncoding: fetchDetails?.BodyEncoding,
       error: transformErrorObjectToErrorResult(fetchDetails?.Error),
     };
   }

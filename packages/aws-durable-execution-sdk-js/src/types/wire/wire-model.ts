@@ -1,4 +1,9 @@
-import { OperationAction, OperationStatus, OperationType } from "./wire-enums";
+import {
+  FetchBodyEncoding,
+  OperationAction,
+  OperationStatus,
+  OperationType,
+} from "./wire-enums";
 
 /**
  * A timestamp as it appears on the durable execution wire protocol, before normalization.
@@ -156,6 +161,11 @@ export interface FetchDetails {
   Headers?: Record<string, string> | undefined;
   /** Response body, as returned by the endpoint. */
   Result?: string | undefined;
+  /**
+   * How {@link FetchDetails.Result} is encoded. Absent means
+   * {@link FetchBodyEncoding.UTF8}.
+   */
+  BodyEncoding?: FetchBodyEncoding | undefined;
   /** Recorded error, when the request could not be completed at all. */
   Error?: ErrorObject | undefined;
 }
@@ -305,6 +315,11 @@ export interface FetchOptions {
   Method?: string | undefined;
   /** Request headers. Sent with the request but not recorded in the execution history. */
   Headers?: Record<string, string> | undefined;
+  /**
+   * How the request body in {@link OperationUpdate.Payload} is encoded. Absent means
+   * {@link FetchBodyEncoding.UTF8}, which is the only encoding this SDK currently sends.
+   */
+  BodyEncoding?: FetchBodyEncoding | undefined;
   /**
    * How long the service waits for the request before recording a timeout. Recorded in the
    * execution history.

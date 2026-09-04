@@ -7,8 +7,13 @@ import {
   OperationLifecycleState,
 } from "../../types";
 import { FetchError } from "../../errors/durable-error/durable-error";
-import { Operation, OperationStatus, OperationType } from "../../types/wire";
-import { OperationAction } from "../../types/wire";
+import {
+  FetchBodyEncoding,
+  Operation,
+  OperationAction,
+  OperationStatus,
+  OperationType,
+} from "../../types/wire";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { durationToSeconds } from "../../utils/duration/duration";
@@ -45,6 +50,19 @@ const toFetchResponse = (operation: Operation | undefined): FetchResponse => {
   if (details?.StatusCode === undefined) {
     throw new FetchError(
       "Fetch succeeded without recording a response status code",
+    );
+  }
+
+  // An absent encoding means UTF8. Anything else is refused rather than decoded: handing back
+  // a `body` string built from bytes the SDK does not know how to interpret would corrupt it
+  // silently, and a workflow would have no way to tell. The SDK never asks for a non-UTF8
+  // body, so a conforming service never sends one -- reaching this means the SDK is older
+  // than the service that recorded the operation.
+  const encoding = details.BodyEncoding ?? FetchBodyEncoding.UTF8;
+  if (encoding !== FetchBodyEncoding.UTF8) {
+    throw new FetchError(
+      `Fetch recorded a ${encoding}-encoded response body, which this version of the SDK ` +
+        `cannot read. Only ${FetchBodyEncoding.UTF8} bodies are supported.`,
     );
   }
 

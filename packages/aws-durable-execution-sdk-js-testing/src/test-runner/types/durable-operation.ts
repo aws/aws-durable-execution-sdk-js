@@ -10,6 +10,7 @@ import {
   OperationStatus,
   ErrorObject,
   OperationSubType,
+  FetchBodyEncoding,
 } from "@aws/durable-execution-sdk-js";
 import { TestResultError } from "./durable-test-runner";
 
@@ -79,6 +80,8 @@ export interface FetchResultDetails {
   readonly headers?: Record<string, string>;
   /** The response body, as returned by the endpoint */
   readonly body?: string;
+  /** How `body` is encoded. Absent means UTF-8, the only encoding the SDK reads */
+  readonly bodyEncoding?: FetchBodyEncoding;
   /** The error that occurred if the request could not be completed at all */
   readonly error?: TestResultError;
 }

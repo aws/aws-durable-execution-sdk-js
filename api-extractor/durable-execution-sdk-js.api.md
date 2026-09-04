@@ -621,6 +621,15 @@ export interface ExecutionDetails {
 }
 
 // @public
+export const FetchBodyEncoding: {
+    readonly UTF8: "UTF8";
+    readonly BASE64: "BASE64";
+};
+
+// @public
+export type FetchBodyEncoding = (typeof FetchBodyEncoding)[keyof typeof FetchBodyEncoding];
+
+// @public
 export interface FetchConfig {
     body?: string;
     headers?: Record<string, string>;
@@ -630,6 +639,7 @@ export interface FetchConfig {
 
 // @public
 export interface FetchDetails {
+    BodyEncoding?: FetchBodyEncoding | undefined;
     Error?: ErrorObject | undefined;
     Headers?: Record<string, string> | undefined;
     Result?: string | undefined;
@@ -645,6 +655,7 @@ export class FetchError extends DurableOperationError {
 
 // @public
 export interface FetchOptions {
+    BodyEncoding?: FetchBodyEncoding | undefined;
     Headers?: Record<string, string> | undefined;
     Method?: string | undefined;
     TimeoutSeconds?: number | undefined;

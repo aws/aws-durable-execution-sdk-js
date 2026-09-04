@@ -54,7 +54,8 @@
  * When `@aws-sdk/client-lambda` ships `FETCH`, revert each assertion marked
  * `PENDING FETCH` back to `Mutual`/`SameKeys`, delete `PendingOperationTypes` and
  * `pendingKeys`, and add the ordinary exact-match pair for `FetchOptions` and
- * `FetchDetails`.
+ * `FetchDetails`. `FetchBodyEncoding` is also unasserted here for the same reason and should
+ * join the enumeration comparisons at that point.
  */
 
 import type * as Sdk from "@aws-sdk/client-lambda";

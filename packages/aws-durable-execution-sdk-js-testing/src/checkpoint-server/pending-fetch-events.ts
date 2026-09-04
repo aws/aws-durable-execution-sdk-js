@@ -100,6 +100,8 @@ export interface FetchSucceededDetails {
   Headers?: Record<string, string> | undefined;
   /** The response body. */
   Result?: EventResult | undefined;
+  /** How `Result` is encoded. Absent means UTF-8. */
+  BodyEncoding?: string | undefined;
 }
 
 /**

@@ -1,6 +1,7 @@
 import { createFetchHandler } from "./fetch-handler";
 import { ExecutionContext, OperationSubType } from "../../types";
 import {
+  FetchBodyEncoding,
   Operation,
   OperationAction,
   OperationStatus,
@@ -215,6 +216,76 @@ describe("FetchHandler", () => {
       await expect(
         createHandler()("https://example.com/thing"),
       ).rejects.toThrow(/without recording a response status code/);
+    });
+  });
+
+  describe("body encoding", () => {
+    it("treats an absent encoding as UTF8", async () => {
+      // The compatibility rule the field rests on: a record with no encoding is text, which
+      // is what lets BASE64 be added later without changing how existing records read.
+      (mockContext.getStepData as jest.Mock)
+        .mockReturnValueOnce(undefined)
+        .mockReturnValue(
+          succeeded({
+            FetchDetails: { StatusCode: 200, Result: "plain text" },
+          }),
+        );
+
+      const response = await createHandler()("https://example.com/thing");
+
+      expect(response.body).toBe("plain text");
+    });
+
+    it("accepts an explicit UTF8 encoding", async () => {
+      (mockContext.getStepData as jest.Mock)
+        .mockReturnValueOnce(undefined)
+        .mockReturnValue(
+          succeeded({
+            FetchDetails: {
+              StatusCode: 200,
+              Result: "plain text",
+              BodyEncoding: FetchBodyEncoding.UTF8,
+            },
+          }),
+        );
+
+      const response = await createHandler()("https://example.com/thing");
+
+      expect(response.body).toBe("plain text");
+    });
+
+    it("refuses a BASE64 body rather than handing back corrupted text", async () => {
+      // Models a service newer than the SDK. Decoding into `body` would silently produce
+      // mojibake for real binary, and the workflow would have no way to tell.
+      (mockContext.getStepData as jest.Mock)
+        .mockReturnValueOnce(undefined)
+        .mockReturnValue(
+          succeeded({
+            FetchDetails: {
+              StatusCode: 200,
+              Result: "AAECAw==",
+              BodyEncoding: FetchBodyEncoding.BASE64,
+            },
+          }),
+        );
+
+      const promise = createHandler()("https://example.com/thing");
+
+      await expect(promise).rejects.toThrow(FetchError);
+      // Names the encoding, so the failure says what happened rather than just "bad body".
+      await expect(promise).rejects.toThrow(/BASE64-encoded response body/);
+      await expect(promise).rejects.toThrow(/Only UTF8 bodies are supported/);
+    });
+
+    it("does not send a BodyEncoding, since only UTF8 is produced", async () => {
+      (mockContext.getStepData as jest.Mock)
+        .mockReturnValueOnce(undefined)
+        .mockReturnValue(succeeded());
+
+      await createHandler()("https://example.com/thing", { body: "hello" });
+
+      const [, update] = (mockCheckpoint.checkpoint as jest.Mock).mock.calls[0];
+      expect(update.FetchOptions).not.toHaveProperty("BodyEncoding");
     });
   });
 

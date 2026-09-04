@@ -542,6 +542,7 @@ export class CheckpointManager {
           {
             StatusCode: fetchDetails?.StatusCode,
             Headers: fetchDetails?.Headers,
+            BodyEncoding: fetchDetails?.BodyEncoding,
             Result:
               fetchDetails?.Result !== undefined
                 ? { Payload: fetchDetails.Result }
