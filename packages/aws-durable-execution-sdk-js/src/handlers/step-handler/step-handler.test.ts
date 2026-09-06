@@ -1,3 +1,4 @@
+import * as vm from "vm";
 import { createStepHandler } from "./step-handler";
 import {
   ExecutionContext,
@@ -472,6 +473,58 @@ describe("Step Handler", () => {
       expect(errorArg).toBeInstanceOf(Error);
       expect((errorArg as Error).name).toBe("StepInterruptedError");
       expect(typeof attempt).toBe("number");
+    });
+  });
+
+  // Regression for issue #306: errors thrown from a different realm (a `vm`
+  // context, a worker thread, etc.) are not `instanceof Error` in this realm.
+  // The step handler used to flatten them to `new Error("Unknown Error")` before
+  // handing them to the user's retryStrategy, discarding the real message. It
+  // must now forward the original error via the realm-safe `isErrorLike` check.
+  describe("cross-realm errors (issue #306)", () => {
+    const makeCrossRealmError = (message: string): unknown => {
+      const context = vm.createContext({});
+      try {
+        vm.runInContext(`throw new Error(${JSON.stringify(message)})`, context);
+      } catch (error) {
+        return error;
+      }
+      throw new Error("expected the vm context to throw");
+    };
+
+    it("forwards the original cross-realm error (with its real message) to retryStrategy", async () => {
+      const crossRealmError = makeCrossRealmError(
+        "Error from different Node.js realm",
+      );
+      // Precondition: this is exactly the case a bare `instanceof Error` misses.
+      expect(crossRealmError instanceof Error).toBe(false);
+
+      (mockContext.getStepData as jest.Mock).mockReturnValue({
+        StepDetails: { Attempt: 0 },
+      });
+
+      const stepHandler = createStepHandler(
+        mockContext,
+        mockCheckpoint,
+        mockParentContext,
+        createStepId,
+        createDefaultLogger(),
+      );
+
+      const stepFn = jest.fn().mockRejectedValue(crossRealmError);
+      const retryStrategy = jest.fn().mockReturnValue({ shouldRetry: false });
+
+      await expect(
+        stepHandler("test-step", stepFn, { retryStrategy }),
+      ).rejects.toBeDefined();
+
+      expect(retryStrategy).toHaveBeenCalledTimes(1);
+      const [errorArg] = retryStrategy.mock.calls[0];
+      // Before the fix `errorArg` was `new Error("Unknown Error")`.
+      expect(errorArg).toBe(crossRealmError);
+      expect((errorArg as Error).message).toBe(
+        "Error from different Node.js realm",
+      );
     });
   });
 });

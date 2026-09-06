@@ -1,3 +1,4 @@
+import { isErrorLike } from "../error-object/is-error-like";
 export const safeStringify = (data: unknown): string => {
   try {
     const seen = new WeakSet();
@@ -9,7 +10,7 @@ export const safeStringify = (data: unknown): string => {
           seen.add(value);
 
           // Handle Error objects by extracting their properties
-          if (value instanceof Error) {
+          if (isErrorLike(value)) {
             return {
               ...value,
               name: value.name,
