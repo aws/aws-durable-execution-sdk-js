@@ -59,6 +59,29 @@ env:
     us-west-2
 
 jobs:
+  select-publish-partitions:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.publish-matrix.outputs.matrix }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.SOURCE_REF }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Select publish partitions
+        id: publish-matrix
+        env:
+          LAYER_REGIONS: ${{ inputs.regions || vars.LAYER_PUBLISH_REGIONS }}
+        run: |
+          REGION_LIST=${LAYER_REGIONS:-$DEFAULT_LAYER_REGIONS}
+          MATRIX=$(node .github/workflows/scripts/lambda-layer/select-publish-partitions.mjs "$REGION_LIST")
+          echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
+
   build-distributions:
     if: >-
       (github.event_name == 'workflow_dispatch' &&
@@ -176,33 +199,63 @@ jobs:
           retention-days: 30
 
   publish-layer:
-    needs: [build-distributions, build-layer]
+    name: Publish layer (${{ matrix.partition }})
+    needs:
+      [select-publish-partitions, build-distributions, build-layer]
     runs-on: ubuntu-latest
     environment:
       name: lambda-layer-publish
     permissions:
       contents: read
       id-token: write
-    env:
-      LAYER_REGIONS: ${{ inputs.regions || vars.LAYER_PUBLISH_REGIONS }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.select-publish-partitions.outputs.matrix) }}
 
     steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.SOURCE_REF }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
       - name: Download layer artifact
         uses: actions/download-artifact@v8
         with:
           name: otel-plugin-layer
           path: dist/
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials for commercial regions
+        if: matrix.partition == 'aws'
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.LAYER_PUBLISH_ROLE_ARN }}
           role-session-name: otelLayerPublish
-          aws-region: us-east-1
+          aws-region: ${{ matrix.credentials_region }}
+
+      - name: Configure AWS credentials for China regions
+        if: matrix.partition == 'aws-cn'
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.LAYER_PUBLISH_ROLE_ARN_CN }}
+          role-session-name: otelLayerPublish
+          aws-region: ${{ matrix.credentials_region }}
+          audience: sts.amazonaws.com.cn
+
+      - name: Configure AWS credentials for US GovCloud regions
+        if: matrix.partition == 'aws-us-gov'
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.LAYER_PUBLISH_ROLE_ARN_GOV }}
+          role-session-name: otelLayerPublish
+          aws-region: ${{ matrix.credentials_region }}
 
       - name: Publish layer versions
         env:
           LAYER_ZIP: dist/${{ env.LAYER_NAME }}.zip
+          LAYER_REGIONS: ${{ matrix.regions }}
           SDK_VERSION: ${{ needs.build-distributions.outputs.sdk_version }}
           OTEL_VERSION: ${{ needs.build-distributions.outputs.otel_version }}
         run: |
