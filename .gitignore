@@ -18,6 +18,12 @@
 **/.rollup.cache
 *.d.ts.map
 *.d.ts
+# ...but hand-written declarations belong in source control. The blanket *.d.ts
+# rule above exists for emitted output (dist-types/, dist/), and it silently
+# swallowed a new ambient declaration -- which also means Biome never sees such a
+# file, since vcs.useIgnoreFile is on. Anything authored under a src/ tree is a
+# source file and is tracked.
+!**/src/**/*.d.ts
 *.tgz
 
 # Nothing passes --cache today, but ESLint still runs here (the plugin package's

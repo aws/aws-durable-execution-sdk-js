@@ -18,10 +18,11 @@ function isStep(type?: string): boolean {
 // still dispatch to the healthy plugin.
 function makeFaultyPlugin(): DurableInstrumentationPlugin {
   let executionArn = "";
-  const emit = (rec: Record<string, unknown>): void =>
+  const emit = (rec: Record<string, unknown>): void => {
     process.stdout.write(
       JSON.stringify({ ...rec, durableExecutionArn: executionArn }) + "\n",
     );
+  };
 
   return {
     async onInvocationStart(info): Promise<void> {
@@ -60,10 +61,11 @@ function makeFaultyPlugin(): DurableInstrumentationPlugin {
 // hook despite the faulty plugin throwing at each boundary.
 function makeHealthyPlugin(): DurableInstrumentationPlugin {
   let executionArn = "";
-  const emit = (rec: Record<string, unknown>): void =>
+  const emit = (rec: Record<string, unknown>): void => {
     process.stdout.write(
       JSON.stringify({ ...rec, durableExecutionArn: executionArn }) + "\n",
     );
+  };
 
   return {
     async onInvocationStart(info): Promise<void> {

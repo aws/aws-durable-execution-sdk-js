@@ -1,5 +1,16 @@
 {
   "compilerOptions": {
+    // `include` is handlers/ only, and rollup's TypeScript plugin needs rootDir stated
+    // explicitly since TypeScript 6 stopped inferring it (TS5011). The jest config
+    // overrides this to "." because the tests live in __tests__/, outside handlers/.
+    "rootDir": "./handlers",
+    // ts-jest derives its output path from `outDir`, and TypeScript 6 changed the
+    // `rootDir` default from "inferred common source directory" to "the tsconfig's
+    // own directory". Without an explicit outDir, ts-jest computes "." and refuses to
+    // transform. This project only ever type-checks (`tsc --noEmit`), so the value is
+    // never written to -- it exists to give ts-jest something usable.
+    "outDir": "dist",
+    "types": ["node", "jest"],
     "target": "ES2022",
     "module": "ESNext",
     "lib": ["ES2022"],

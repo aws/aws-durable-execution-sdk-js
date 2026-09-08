@@ -1,7 +1,7 @@
 {
   "name": "@aws/durable-execution-sdk-js-otel",
   "description": "OpenTelemetry instrumentation plugin for AWS Durable Execution SDK",
-  "version": "0.1.1",
+  "version": "1.0.0",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -24,7 +24,7 @@
     "prepublishOnly": "npm run build && npm run test",
     "lint": "biome check src --diagnostic-level=error",
     "prebuild": "rm -rf dist dist-cjs dist-types",
-    "test": "tsc --noEmit && jest --config jest.config.mjs --collectCoverage --collectCoverageFrom=src/**/*.{ts,js}",
+    "test": "jest --config jest.config.mjs --collectCoverage --collectCoverageFrom=src/**/*.{ts,js}",
     "lint:fix": "biome check --write src"
   },
   "exports": {
@@ -53,11 +53,11 @@
     "@biomejs/biome": "2.5.11",
     "@opentelemetry/core": "^2.0.0",
     "fast-check": "^3.23.2",
-    "jest": "^30.0.3",
-    "typescript": "^5.8.3"
+    "jest": "^30.5.1",
+    "typescript": "^6.0.3"
   },
   "peerDependencies": {
-    "@aws/durable-execution-sdk-js": ">=2.1.0",
+    "@aws/durable-execution-sdk-js": ">=2.4.0",
     "@opentelemetry/api": "^1.0.0",
     "@opentelemetry/core": "^2.0.0",
     "@opentelemetry/sdk-trace-node": "^2.6.1"

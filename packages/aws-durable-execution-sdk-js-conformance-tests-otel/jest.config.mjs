@@ -13,8 +13,14 @@ import { createDefaultPreset } from "ts-jest";
 // rollup consumes it. Jest runs CommonJS, so override just those options for the tests.
 const preset = createDefaultPreset({
   tsconfig: {
+    diagnostics: false,
+    isolatedModules: true,
     module: "commonjs",
-    moduleResolution: "node",
+    moduleResolution: "bundler",
+    // tsconfig.json sets rootDir to ./handlers for rollup. These tests live in
+    // __tests__/, outside that root, so widen it here -- otherwise ts-jest cannot
+    // place its output and refuses to transform them.
+    rootDir: ".",
   },
 });
 

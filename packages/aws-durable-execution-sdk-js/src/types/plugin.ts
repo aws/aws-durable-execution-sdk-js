@@ -217,8 +217,6 @@ export interface OperationChangeInfo {
  * complete. Instead, treat `onInvocationEnd` as the place to flush: await any
  * outstanding fire-and-forget work started by earlier hooks before resolving
  * its promise.
- *
- * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface DurableInstrumentationPlugin {
   onInvocationStart?(info: InvocationInfo): Promise<void>;
