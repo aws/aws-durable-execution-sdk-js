@@ -7,6 +7,12 @@ on:
         required: true
         type: string
 
+# Serialize deploy/test/cleanup per PR so a superseded run's cleanup cannot
+# race the next run's deploy for the same PR-scoped function. Queue, don't cancel.
+concurrency:
+  group: capacity-provider-${{ github.event.number || github.ref_name }}
+  cancel-in-progress: false
+
 env:
   # The desktop app's `electron` devDependency has an install script that
   # downloads a ~100 MB platform binary. Root `npm ci` runs it, and CI runs root
