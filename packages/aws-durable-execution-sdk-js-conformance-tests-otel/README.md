@@ -22,9 +22,11 @@ long-running launch/check cycle.
 
 What lives here is the part that is specific to this SDK: the **handlers** that exercise each
 scenario against the real SDK API, and the **SAM templates** that map them to requirement IDs.
-They live in this repo, next to the code they instrument, so a change to the SDK or the OTel
-plugin is validated by the suite in the same pull request that makes it, rather than after it
-lands.
+The workflow packages the SDK and plugin with the same Lambda-layer builder used by the release
+workflow. The SAM templates deploy that local layer alongside the selected ADOT or community
+Node.js instrumentation layer, so conformance validates the publishable artifact rather than a
+plugin bundled into each function. The code lives next to the SDK it instruments, so a change
+is validated by the suite in the same pull request that makes it, rather than after it lands.
 
 ## Coverage
 
@@ -40,7 +42,7 @@ Three suites, 44 requirements:
 
 ```
 handlers/
-  common.ts                      # shared scenario wrapper + plugin selection
+  common.ts                      # shared scenario wrapper; plugin loads from the layer
   otel_1_success.ts              # one handler per scenario (otel_1..otel_19)
   ...
   otel_20_long_wait.ts           # long-running scenarios (otel_20..otel_23)
@@ -55,11 +57,12 @@ Handlers must use the real SDK API and nothing else. A handler that fails becaus
 emits the wrong telemetry is the suite working: that failure is the signal, and working
 around it in the handler destroys the only thing being measured.
 
-`handlers/common.ts` selects the plugin from the environment: `OTEL_PLUGIN_MODE=execution`
-loads `ExecutionOtelPlugin`, anything else loads `InvocationOtelPlugin`. That is what lets one
-handler module serve both the invocation-view and execution-view requirements — the template
-deploys the same bundle twice and flips the variable, so the two views are guaranteed to be
-observing identical workflow code.
+`handlers/common.ts` wraps the scenarios with the SDK but does not import or construct the OTel
+plugin. The handler bundle externalizes `@aws/durable-execution-sdk-js`, so both the SDK and
+plugin are resolved from the attached layer at runtime. The templates select the dynamic
+provider with `DURABLE_EXECUTION_PLUGINS`: `otel-execution` for the execution view and
+`otel-invocation` for the invocation view. That lets one handler module serve both requirement
+sets while ensuring the test exercises the layer's package layout and dynamic loader.
 
 ## How a handler maps to a requirement
 
@@ -99,8 +102,10 @@ npm run test -w @aws/durable-execution-sdk-js-conformance-tests-otel     # typec
 npm run build -w @aws/durable-execution-sdk-js-conformance-tests-otel   # -> dist/*.js
 ```
 
-The package consumes the SDK and the OTel plugin as workspace siblings, so a root `npm ci`
-links them and the two builds above are what the handlers compile against.
+The package consumes the SDK as a workspace sibling for type-checking. Rollup leaves the SDK
+external in the deployed bundles. During CI preparation, the workflow packs the built SDK and
+OTel plugin, invokes `.github/workflows/scripts/lambda-layer/build-layer.sh`, and writes the
+layer content to `build/lambda-layer/` for SAM.
 
 `npm run test` runs `tsc --noEmit` over the handlers before the wiring guards. That ordering
 is deliberate: the guards read the handlers as text, so without the typecheck a handler that
@@ -123,6 +128,9 @@ conformance repo's reusable `opentelemetry-orchestrator.yml` at a pinned SHA wit
   orchestrator's workspace
 - `examples_dir` pointing at this package inside that checkout, so the orchestrator builds
   and deploys these handlers
+- a preparation command that builds the same SDK/plugin layer published by the release
+  workflow and verifies that both dynamic plugin entry points execute against the configured
+  OTel peer dependencies
 
 Pull requests and pushes run the short phase: the invocation and execution suites in full,
 plus the long-running suites with a real but brief 60-second delay. The ~23-hour

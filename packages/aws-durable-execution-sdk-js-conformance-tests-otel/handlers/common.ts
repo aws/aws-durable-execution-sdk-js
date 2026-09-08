@@ -8,10 +8,6 @@ import {
   DurableLambdaHandler,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
-import {
-  ExecutionOtelPlugin,
-  InvocationOtelPlugin,
-} from "@aws/durable-execution-sdk-js-otel";
 
 export interface ScenarioEvent {
   scenario: string;
@@ -22,11 +18,6 @@ type Workflow<TResult> = (
   event: ScenarioEvent,
   context: DurableContext,
 ) => Promise<TResult>;
-
-const plugin =
-  process.env.OTEL_PLUGIN_MODE === "execution"
-    ? new ExecutionOtelPlugin()
-    : new InvocationOtelPlugin();
 
 export function createScenarioHandler<TResult>(
   expectedScenario: string,
@@ -39,13 +30,13 @@ export function createScenarioHandler<TResult>(
     requireScenario(event, expectedScenario);
     return workflow(event, context);
   };
-  return withDurableExecution(handler, { plugins: [plugin] });
+  return withDurableExecution(handler);
 }
 
 export function createTargetHandler<TResult>(
   workflow: Workflow<TResult>,
 ): DurableLambdaHandler {
-  return withDurableExecution(workflow, { plugins: [plugin] });
+  return withDurableExecution(workflow);
 }
 
 export function longDelaySeconds(event: ScenarioEvent): number {

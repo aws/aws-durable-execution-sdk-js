@@ -10,7 +10,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "clean": "rm -rf dist node_modules .rollup.cache",
+    "clean": "rm -rf build dist node_modules .rollup.cache",
     "build": "rollup --config rollup.config.mjs --silent",
     "test": "npm run typecheck && jest --config jest.config.mjs",
     "typecheck": "tsc --noEmit"

@@ -26,6 +26,8 @@ const WORKFLOW_PATH = join(
   "workflows",
   "otel-conformance-tests.yml",
 );
+const COMMON_HANDLER_PATH = join(HANDLERS_ROOT, "common.ts");
+const ROLLUP_CONFIG_PATH = join(PACKAGE_ROOT, "rollup.config.mjs");
 
 interface HandlerReference {
   module: string;
@@ -114,6 +116,45 @@ describe("requirement coverage", () => {
   });
 });
 
+describe("Lambda layer conformance wiring", () => {
+  const commonHandler = readFileSync(COMMON_HANDLER_PATH, "utf8");
+  const rollupConfig = readFileSync(ROLLUP_CONFIG_PATH, "utf8");
+
+  it.each([
+    ["template.yaml", template],
+    ["template-long-running.yaml", longRunningTemplate],
+  ])("%s deploys the locally built SDK and plugin layer", (_name, source) => {
+    expect(source).toContain(
+      "DurableExecutionOtelLayer:\n    Type: AWS::Serverless::LayerVersion",
+    );
+    expect(source).toContain("ContentUri: build/lambda-layer/");
+    expect(source).toContain("!Ref DurableExecutionOtelLayer");
+  });
+
+  it("loads each plugin view dynamically from the layer", () => {
+    expect(template).toContain(
+      'DURABLE_EXECUTION_PLUGINS: "@aws/durable-execution-sdk-js-otel/otel-invocation"',
+    );
+    expect(template).toContain(
+      'DURABLE_EXECUTION_PLUGINS: "@aws/durable-execution-sdk-js-otel/otel-execution"',
+    );
+    expect(longRunningTemplate).toContain(
+      'DURABLE_EXECUTION_PLUGINS: !Sub "@aws/durable-execution-sdk-js-otel/otel-$' +
+        '{OtelView}"',
+    );
+    expect(template).not.toContain("OTEL_PLUGIN_MODE");
+    expect(longRunningTemplate).not.toContain("OTEL_PLUGIN_MODE");
+  });
+
+  it("does not construct or bundle the OTel plugin in handler code", () => {
+    expect(commonHandler).not.toContain(
+      'from "@aws/durable-execution-sdk-js-otel"',
+    );
+    expect(commonHandler).not.toContain("plugins:");
+    expect(rollupConfig).toContain('id === "@aws/durable-execution-sdk-js"');
+  });
+});
+
 describe("otel-conformance-tests workflow", () => {
   const workflow = readFileSync(WORKFLOW_PATH, "utf8");
 
@@ -140,5 +181,22 @@ describe("otel-conformance-tests workflow", () => {
     expect(workflow).toContain(
       `npm run build --workspace packages/${PACKAGE_DIR}`,
     );
+  });
+
+  it("builds and loads the publication layer before deployment", () => {
+    expect(workflow).toContain(
+      ".github/workflows/scripts/lambda-layer/build-layer.sh",
+    );
+    expect(workflow).toContain('LAYER_DIR="$EXAMPLES_DIR/build/lambda-layer"');
+    expect(workflow).toContain(
+      "require('@aws/durable-execution-sdk-js-otel/otel-execution')",
+    );
+    expect(workflow).toContain(
+      "require('@aws/durable-execution-sdk-js-otel/otel-invocation')",
+    );
+  });
+
+  it("runs when the shared Lambda layer builder changes", () => {
+    expect(workflow).toContain('- ".github/workflows/scripts/lambda-layer/**"');
   });
 });

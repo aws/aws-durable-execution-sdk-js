@@ -19,6 +19,7 @@ on:
       - "packages/aws-durable-execution-sdk-js/**"
       - "packages/aws-durable-execution-sdk-js-otel/**"
       - "packages/aws-durable-execution-sdk-js-conformance-tests-otel/**"
+      - ".github/workflows/scripts/lambda-layer/**"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/otel-conformance-tests.yml"
@@ -28,6 +29,7 @@ on:
       - "packages/aws-durable-execution-sdk-js/**"
       - "packages/aws-durable-execution-sdk-js-otel/**"
       - "packages/aws-durable-execution-sdk-js-conformance-tests-otel/**"
+      - ".github/workflows/scripts/lambda-layer/**"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/otel-conformance-tests.yml"
@@ -104,6 +106,49 @@ jobs:
         npm ci
         npm run build --workspace packages/aws-durable-execution-sdk-js
         npm run build --workspace packages/aws-durable-execution-sdk-js-otel
+
+        EXAMPLES_DIR="$SDK_CHECKOUT/packages/aws-durable-execution-sdk-js-conformance-tests-otel"
+        LAYER_DIST_DIR="$RUNNER_TEMP/durable-execution-layer-distributions"
+        LAYER_DIR="$EXAMPLES_DIR/build/lambda-layer"
+        LAYER_ZIP="$RUNNER_TEMP/aws-durable-execution-sdk-js-otel-plugin.zip"
+        rm -rf "$LAYER_DIST_DIR" "$LAYER_DIR" "$LAYER_ZIP"
+        mkdir -p "$LAYER_DIST_DIR"
+        npm pack \
+          --workspace packages/aws-durable-execution-sdk-js \
+          --ignore-scripts \
+          --pack-destination "$LAYER_DIST_DIR"
+        npm pack \
+          --workspace packages/aws-durable-execution-sdk-js-otel \
+          --ignore-scripts \
+          --pack-destination "$LAYER_DIST_DIR"
+        SDK_PACKAGE=$(find "$LAYER_DIST_DIR" -name 'aws-durable-execution-sdk-js-[0-9]*.tgz' -print -quit)
+        OTEL_PACKAGE=$(find "$LAYER_DIST_DIR" -name 'aws-durable-execution-sdk-js-otel-*.tgz' -print -quit)
+        bash .github/workflows/scripts/lambda-layer/build-layer.sh \
+          "$SDK_PACKAGE" \
+          "$OTEL_PACKAGE" \
+          package-lock.json \
+          "$LAYER_DIR" \
+          "$LAYER_ZIP"
+
+        LAYER_NODE_MODULES="$LAYER_DIR/nodejs/node_modules"
+        RESOLVED_PLUGIN=$(
+          cd "$RUNNER_TEMP"
+          NODE_PATH="$LAYER_NODE_MODULES:$SDK_CHECKOUT/node_modules" \
+            node -p "require.resolve('@aws/durable-execution-sdk-js-otel/otel-invocation')"
+        )
+        case "$RESOLVED_PLUGIN" in
+          "$LAYER_NODE_MODULES"/*) ;;
+          *)
+            echo "Resolved the OTel plugin outside the built layer: $RESOLVED_PLUGIN"
+            exit 1
+            ;;
+        esac
+        (
+          cd "$RUNNER_TEMP"
+          NODE_PATH="$LAYER_NODE_MODULES:$SDK_CHECKOUT/node_modules" node -e \
+            "require('@aws/durable-execution-sdk-js-otel/otel-execution'); require('@aws/durable-execution-sdk-js-otel/otel-invocation')"
+        )
+
         npm run typecheck --workspace packages/aws-durable-execution-sdk-js-conformance-tests-otel
         npm run build --workspace packages/aws-durable-execution-sdk-js-conformance-tests-otel
       adot_release_repository: aws-observability/aws-otel-js-instrumentation

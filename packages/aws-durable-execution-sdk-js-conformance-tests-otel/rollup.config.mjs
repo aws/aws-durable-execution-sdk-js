@@ -16,6 +16,9 @@ const handlerPaths = Object.values(entryPoints).map((path) => resolve(path));
 
 export default defineConfig({
   input: entryPoints,
+  external: (id) =>
+    id === "@aws/durable-execution-sdk-js" ||
+    id.startsWith("@aws/durable-execution-sdk-js/"),
   output: {
     dir: "dist",
     format: "cjs",
