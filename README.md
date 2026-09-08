@@ -1,6 +1,8 @@
 # AWS Durable Execution SDKs for JavaScript
 
 [![Build](https://github.com/aws/aws-durable-execution-sdk-js/actions/workflows/build.yml/badge.svg)](https://github.com/aws/aws-durable-execution-sdk-js/actions/workflows/build.yml)
+[![Core Conformance](https://github.com/aws/aws-durable-execution-sdk-js/actions/workflows/conformance-tests.yml/badge.svg)](https://github.com/aws/aws-durable-execution-sdk-js/actions/workflows/conformance-tests.yml)
+[![OpenTelemetry Conformance](https://github.com/aws/aws-durable-execution-sdk-js/actions/workflows/opentelemetry-conformance-tests.yml/badge.svg)](https://github.com/aws/aws-durable-execution-sdk-js/actions/workflows/opentelemetry-conformance-tests.yml)
 [![NPM Version](https://img.shields.io/npm/v/@aws/durable-execution-sdk-js)](https://www.npmjs.com/package/@aws/durable-execution-sdk-js)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/aws/aws-durable-execution-sdk-js/badge)](https://scorecard.dev/viewer/?uri=github.com/aws/aws-durable-execution-sdk-js)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)

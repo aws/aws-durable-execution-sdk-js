@@ -1,7 +1,21 @@
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import { join } from "path";
 
 const TEST_HANDLER_PATH = join(__dirname, "fixtures/test-handler");
+const TESTING_SDK_PATH = join(
+  __dirname,
+  "../../../aws-durable-execution-sdk-js-testing",
+);
+const RUN_DURABLE_PATH = join(TESTING_SDK_PATH, "dist/cli/run-durable.mjs");
+
+// The built CLI entry point, invoked directly with Node rather than through
+// `npx run-durable`. `npx` resolves the binary via `npm exec`, which re-verifies
+// the ideal dependency tree and makes a registry audit request on every
+// invocation -- in this workspace that round-trip alone runs to minutes, well
+// past any reasonable per-test timeout, and it is unrelated to what this test
+// is checking. Calling the entry point directly is also closer to how the CLI
+// actually runs once installed: `npx` is a development convenience, not part
+// of the shipped interface.
 
 /**
  * Helper function to execute CLI commands and capture output
@@ -12,9 +26,9 @@ function runDurableCli(args: string[]): {
   exitCode: number;
 } {
   try {
-    const stdout = execSync(`npx run-durable ${args.join(" ")}`, {
+    const stdout = execFileSync(process.execPath, [RUN_DURABLE_PATH, ...args], {
       encoding: "utf8",
-      cwd: join(__dirname, "../../../aws-durable-execution-sdk-js-testing"),
+      cwd: TESTING_SDK_PATH,
       timeout: 30000,
     });
     return { stdout, stderr: "", exitCode: 0 };

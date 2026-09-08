@@ -27,7 +27,7 @@ export const noNestedDurableOperations: Rule.RuleModule = {
     ]);
 
     // Track context variables by name and their declaration node
-    let contextStack: { name: string; declarationNode: any }[] = [];
+    const contextStack: { name: string; declarationNode: any }[] = [];
 
     function isDurableOperation(
       node: any,

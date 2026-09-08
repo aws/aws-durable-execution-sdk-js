@@ -13,15 +13,27 @@
 .aws-sam/*
 *.zip
 .DS_Store
-.eslintcache
 *.tsbuildinfo
 .rollup.cache
 **/.rollup.cache
 *.d.ts.map
 *.d.ts
+# ...but hand-written declarations belong in source control. The blanket *.d.ts
+# rule above exists for emitted output (dist-types/, dist/), and it silently
+# swallowed a new ambient declaration -- which also means Biome never sees such a
+# file, since vcs.useIgnoreFile is on. Anything authored under a src/ tree is a
+# source file and is tracked.
+!**/src/**/*.d.ts
 *.tgz
 
+# Nothing passes --cache today, but ESLint still runs here (the plugin package's
+# own rules, and the examples package that exercises them), so keep ignoring its
+# cache. Dropping this line un-ignored a stray cache file and got it committed.
+.eslintcache
+
 # VS Code
+# settings.json and extensions.json are tracked deliberately (force-added): they
+# pin the formatter identity and recommend the extensions that provide it.
 .vscode/
 
 # Environment files

@@ -28,7 +28,6 @@ function stripTemperature(
   cfg: InferenceConfiguration | undefined,
 ): InferenceConfiguration | undefined {
   if (!cfg) return cfg;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { temperature, ...rest } = cfg;
   return rest;
 }

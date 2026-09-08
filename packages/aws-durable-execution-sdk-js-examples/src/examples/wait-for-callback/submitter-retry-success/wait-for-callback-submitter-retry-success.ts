@@ -26,7 +26,7 @@ export const handler = withDurableExecution(
         // Delays: 1s, 2s, 4s between retries
         retryStrategy: (error, attempt) => ({
           shouldRetry: attempt < 4,
-          delay: { seconds: Math.pow(2, attempt - 1) },
+          delay: { seconds: 2 ** (attempt - 1) },
         }),
       },
     );

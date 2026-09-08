@@ -4,6 +4,65 @@ import { CheckpointFunction } from "../../testing/mock-checkpoint";
 import * as serdesErrors from "../../errors/serdes-errors/serdes-errors";
 import * as callbackHandler from "../callback-handler/callback";
 
+/**
+ * Builds a mock child context that mirrors the internal methods the
+ * waitForCallback handler actually calls: `_createCallbackWithPluginOperationName`
+ * and `_stepWithPluginOperationName` (the internal variants that carry the
+ * plugin-only operation name). Optional hooks let a test capture the
+ * plugin-operation-name / config arguments.
+ */
+function makeMockChildCtx(opts: {
+  callbackResult: unknown;
+  callbackId: string;
+  onCreateCallback?: (
+    pluginOperationName: string | undefined,
+    config: unknown,
+  ) => void;
+  onStep?: (
+    pluginOperationName: string | undefined,
+    config: unknown,
+  ) => void | Promise<void>;
+}) {
+  const mockTelemetry = {
+    logger: {
+      log: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      info: jest.fn(),
+      debug: jest.fn(),
+    },
+  };
+
+  return {
+    _createCallbackWithPluginOperationName: jest
+      .fn()
+      .mockImplementation((pluginOperationName: unknown, config: unknown) => {
+        opts.onCreateCallback?.(
+          pluginOperationName as string | undefined,
+          config,
+        );
+        return Promise.resolve([
+          Promise.resolve(opts.callbackResult),
+          opts.callbackId,
+        ]);
+      }),
+    _stepWithPluginOperationName: jest
+      .fn()
+      .mockImplementation(
+        async (pluginOperationName: unknown, fn: unknown, config?: unknown) => {
+          await opts.onStep?.(
+            pluginOperationName as string | undefined,
+            config,
+          );
+          if (typeof fn === "function") {
+            return await fn(mockTelemetry);
+          }
+          return undefined;
+        },
+      ),
+  };
+}
+
 describe("waitForCallback handler", () => {
   let mockExecutionContext: ExecutionContext;
   let mockCheckpoint: CheckpointFunction;
@@ -46,34 +105,10 @@ describe("waitForCallback handler", () => {
       expect(name).toBeUndefined(); // When no name provided, should be undefined
       expect(typeof fn).toBe("function");
 
-      // Create a mock child context
-      const mockChildCtx = {
-        createCallback: jest
-          .fn()
-          .mockResolvedValue([Promise.resolve(expectedResult), "callback-123"]),
-        step: jest
-          .fn()
-          .mockImplementation(async (stepNameOrFn: any, maybeFn?: any) => {
-            // Create mock telemetry object
-            const mockTelemetry = {
-              logger: {
-                log: jest.fn(),
-                error: jest.fn(),
-                warn: jest.fn(),
-                info: jest.fn(),
-                debug: jest.fn(),
-              },
-            };
-
-            // Handle both overloads of step function
-            if (typeof stepNameOrFn === "function") {
-              return await stepNameOrFn(mockTelemetry);
-            } else if (typeof maybeFn === "function") {
-              return await maybeFn(mockTelemetry);
-            }
-            return undefined;
-          }),
-      };
+      const mockChildCtx = makeMockChildCtx({
+        callbackResult: expectedResult,
+        callbackId: "callback-123",
+      });
 
       return await fn(mockChildCtx);
     });
@@ -106,34 +141,20 @@ describe("waitForCallback handler", () => {
     const expectedResult = "named callback result";
     const callbackName = "myCallback";
 
-    mockRunInChildContext.mockImplementation(async (name: string, fn: any) => {
-      const mockChildCtx = {
-        createCallback: jest
-          .fn()
-          .mockResolvedValue([Promise.resolve(expectedResult), "callback-456"]),
-        step: jest
-          .fn()
-          .mockImplementation(async (stepNameOrFn: any, maybeFn?: any) => {
-            // Create mock telemetry object
-            const mockTelemetry = {
-              logger: {
-                log: jest.fn(),
-                error: jest.fn(),
-                warn: jest.fn(),
-                info: jest.fn(),
-                debug: jest.fn(),
-              },
-            };
+    let callbackPluginName: string | undefined;
+    let stepPluginName: string | undefined;
 
-            // Handle both overloads of step function
-            if (typeof stepNameOrFn === "function") {
-              return await stepNameOrFn(mockTelemetry);
-            } else if (typeof maybeFn === "function") {
-              return await maybeFn(mockTelemetry);
-            }
-            return undefined;
-          }),
-      };
+    mockRunInChildContext.mockImplementation(async (name: string, fn: any) => {
+      const mockChildCtx = makeMockChildCtx({
+        callbackResult: expectedResult,
+        callbackId: "callback-456",
+        onCreateCallback: (pluginOperationName) => {
+          callbackPluginName = pluginOperationName;
+        },
+        onStep: (pluginOperationName) => {
+          stepPluginName = pluginOperationName;
+        },
+      });
 
       return await fn(mockChildCtx);
     });
@@ -152,6 +173,10 @@ describe("waitForCallback handler", () => {
       expect.any(Function),
       expect.objectContaining({ subType: "WaitForCallback" }),
     );
+    // The named waitForCallback forwards derived plugin operation names to the
+    // inner CALLBACK and submitter STEP.
+    expect(callbackPluginName).toBe("myCallback-callback");
+    expect(stepPluginName).toBe("myCallback-submitter");
     expect(submitter).toHaveBeenCalledWith(
       "callback-456",
       expect.objectContaining({
@@ -193,41 +218,24 @@ describe("waitForCallback handler", () => {
     const submitter = jest.fn().mockResolvedValue(undefined);
     const expectedResult = "no name result";
 
+    let callbackPluginName: string | undefined = "unset";
+    let stepPluginName: string | undefined = "unset";
+
     mockRunInChildContext.mockImplementation(async (name: any, fn: any) => {
       // With unified signature, name should be undefined when no name provided
       expect(name).toBeUndefined();
       expect(typeof fn).toBe("function");
 
-      const mockChildCtx = {
-        createCallback: jest
-          .fn()
-          .mockResolvedValue([
-            Promise.resolve(expectedResult),
-            "callback-no-name",
-          ]),
-        step: jest
-          .fn()
-          .mockImplementation(async (stepNameOrFn: any, maybeFn?: any) => {
-            // Create mock telemetry object
-            const mockTelemetry = {
-              logger: {
-                log: jest.fn(),
-                error: jest.fn(),
-                warn: jest.fn(),
-                info: jest.fn(),
-                debug: jest.fn(),
-              },
-            };
-
-            // Handle both overloads of step function
-            if (typeof stepNameOrFn === "function") {
-              return await stepNameOrFn(mockTelemetry);
-            } else if (typeof maybeFn === "function") {
-              return await maybeFn(mockTelemetry);
-            }
-            return undefined;
-          }),
-      };
+      const mockChildCtx = makeMockChildCtx({
+        callbackResult: expectedResult,
+        callbackId: "callback-no-name",
+        onCreateCallback: (pluginOperationName) => {
+          callbackPluginName = pluginOperationName;
+        },
+        onStep: (pluginOperationName) => {
+          stepPluginName = pluginOperationName;
+        },
+      });
 
       return await fn(mockChildCtx);
     });
@@ -246,6 +254,9 @@ describe("waitForCallback handler", () => {
       expect.any(Function),
       expect.objectContaining({ subType: "WaitForCallback" }),
     );
+    // With no name, no derived plugin operation name is forwarded.
+    expect(callbackPluginName).toBeUndefined();
+    expect(stepPluginName).toBeUndefined();
     expect(submitter).toHaveBeenCalledWith(
       "callback-no-name",
       expect.objectContaining({
@@ -262,35 +273,10 @@ describe("waitForCallback handler", () => {
       expect(name).toBeUndefined();
       expect(typeof fn).toBe("function");
 
-      const mockChildCtx = {
-        createCallback: jest
-          .fn()
-          .mockResolvedValue([
-            Promise.resolve(expectedResult),
-            "callback-undefined",
-          ]),
-        step: jest
-          .fn()
-          .mockImplementation(async (stepNameOrFn: any, maybeFn?: any) => {
-            // Create mock telemetry object
-            const mockTelemetry = {
-              logger: {
-                log: jest.fn(),
-                error: jest.fn(),
-                warn: jest.fn(),
-                info: jest.fn(),
-                debug: jest.fn(),
-              },
-            };
-
-            if (typeof stepNameOrFn === "function") {
-              return await stepNameOrFn(mockTelemetry);
-            } else if (typeof maybeFn === "function") {
-              return await maybeFn(mockTelemetry);
-            }
-            return undefined;
-          }),
-      };
+      const mockChildCtx = makeMockChildCtx({
+        callbackResult: expectedResult,
+        callbackId: "callback-undefined",
+      });
 
       return await fn(mockChildCtx);
     });
@@ -345,37 +331,13 @@ describe("waitForCallback handler", () => {
         // When no name is provided, first parameter is the function
         const fn = maybeFn || fnOrName;
 
-        const mockChildCtx = {
-          createCallback: jest.fn().mockImplementation((cfg) => {
+        const mockChildCtx = makeMockChildCtx({
+          callbackResult: expectedResult,
+          callbackId: "callback-config",
+          onCreateCallback: (_pluginOperationName, cfg) => {
             capturedConfig = cfg;
-            return Promise.resolve([
-              Promise.resolve(expectedResult),
-              "callback-config",
-            ]);
-          }),
-          step: jest
-            .fn()
-            .mockImplementation(async (stepNameOrFn: any, maybeFn?: any) => {
-              // Create mock telemetry object
-              const mockTelemetry = {
-                logger: {
-                  log: jest.fn(),
-                  error: jest.fn(),
-                  warn: jest.fn(),
-                  info: jest.fn(),
-                  debug: jest.fn(),
-                },
-              };
-
-              // Handle both overloads of step function
-              if (typeof stepNameOrFn === "function") {
-                return await stepNameOrFn(mockTelemetry);
-              } else if (typeof maybeFn === "function") {
-                return await maybeFn(mockTelemetry);
-              }
-              return undefined;
-            }),
-        };
+          },
+        });
 
         return await fn(mockChildCtx);
       },
@@ -412,38 +374,16 @@ describe("waitForCallback handler", () => {
     });
 
     mockRunInChildContext.mockImplementation(async (name: any, fn: any) => {
-      const mockChildCtx = {
-        createCallback: jest
-          .fn()
-          .mockResolvedValue([Promise.resolve("result"), "callback-retry"]),
-        step: jest
-          .fn()
-          .mockImplementation(async (fnOrConfig: any, maybeConfig?: any) => {
-            const mockTelemetry = {
-              logger: {
-                log: jest.fn(),
-                error: jest.fn(),
-                warn: jest.fn(),
-                info: jest.fn(),
-                debug: jest.fn(),
-              },
-            };
-
-            // Check if retryStrategy was passed
-            const config =
-              typeof fnOrConfig === "function" ? maybeConfig : fnOrConfig;
-            if (config?.retryStrategy) {
-              expect(config.retryStrategy).toBe(retryStrategy);
-            }
-
-            // Execute the function
-            const fn =
-              typeof fnOrConfig === "function" ? fnOrConfig : maybeConfig;
-            if (fn) {
-              await fn(mockTelemetry);
-            }
-          }),
-      };
+      const mockChildCtx = makeMockChildCtx({
+        callbackResult: "result",
+        callbackId: "callback-retry",
+        onStep: (_pluginOperationName, config) => {
+          // The submitter step receives the retryStrategy via its config.
+          if ((config as any)?.retryStrategy) {
+            expect((config as any).retryStrategy).toBe(retryStrategy);
+          }
+        },
+      });
 
       return await fn(mockChildCtx);
     });
@@ -500,37 +440,13 @@ describe("waitForCallback handler", () => {
           async (name: any, fn: any, options: any) => {
             capturedRunInChildContextOptions = options;
 
-            const mockChildCtx = {
-              createCallback: jest.fn().mockImplementation((cfg) => {
+            const mockChildCtx = makeMockChildCtx({
+              callbackResult: rawResult,
+              callbackId: "callback-id",
+              onCreateCallback: (_pluginOperationName, cfg) => {
                 capturedCreateCallbackConfig = cfg;
-                return Promise.resolve([
-                  Promise.resolve(rawResult),
-                  "callback-id",
-                ]);
-              }),
-              step: jest
-                .fn()
-                .mockImplementation(
-                  async (stepNameOrFn: any, maybeFn?: any) => {
-                    const mockTelemetry = {
-                      logger: {
-                        log: jest.fn(),
-                        error: jest.fn(),
-                        warn: jest.fn(),
-                        info: jest.fn(),
-                        debug: jest.fn(),
-                      },
-                    };
-
-                    if (typeof stepNameOrFn === "function") {
-                      return await stepNameOrFn(mockTelemetry);
-                    } else if (typeof maybeFn === "function") {
-                      return await maybeFn(mockTelemetry);
-                    }
-                    return undefined;
-                  },
-                ),
-            };
+              },
+            });
 
             return await fn(mockChildCtx);
           },

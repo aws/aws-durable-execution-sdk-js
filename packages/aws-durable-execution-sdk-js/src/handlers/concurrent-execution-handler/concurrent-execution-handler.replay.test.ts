@@ -7,6 +7,7 @@ import {
   DurablePromise,
 } from "../../types";
 import { OperationStatus, OperationType } from "../../types/wire";
+import { NestingType } from "../../types/batch";
 
 describe("ConcurrencyController - Replay Mode", () => {
   let controller: ConcurrencyController<DurableLogger>;
@@ -91,6 +92,465 @@ describe("ConcurrencyController - Replay Mode", () => {
     expect(result.successCount).toBe(2);
     expect(result.totalCount).toBe(2);
     expect(mockParentContext.runInChildContext).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not rebuild a virtual item that was mid-flight, when only its first operation succeeded", async () => {
+    // Regression cover for terminality-by-first-operation being unsound.
+    //
+    // A FLAT (virtual) item has no context checkpoint, so its own operations
+    // have to be consulted. An item still in flight at suspension can have a
+    // SUCCEEDED first operation and an unfinished second one. Treating the
+    // first operation as the signal would classify it finished and re-drive it:
+    // its unfinished operations would execute for real (duplicating side
+    // effects) and the rebuilt batch would contain an item the live run never
+    // completed -- the divergence this replay path exists to avoid.
+    //
+    // No per-item statuses are recorded here, so this exercises the probe used
+    // for summaries written before that field existed.
+    const items = [
+      { id: "item-0", data: "d0", index: 0 },
+      { id: "item-1", data: "d1", index: 1 },
+    ];
+    const executor = jest.fn();
+    const entityId = "parent-step";
+
+    const initialResultSummary = JSON.stringify({
+      type: "MapResult",
+      totalCount: 1,
+      successCount: 1,
+      failureCount: 0,
+      completionReason: "MIN_SUCCESSFUL_REACHED",
+      status: "SUCCEEDED",
+      // Deliberately no itemStatuses: legacy checkpoint.
+    });
+
+    mockExecutionContext.getStepData.mockImplementation((id: string) => {
+      if (id === entityId) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.SUCCEEDED,
+          ContextDetails: { Result: initialResultSummary },
+        };
+      }
+      // Item 0 finished: its single operation is terminal.
+      if (id === `${entityId}-1-1`) {
+        return {
+          Id: id,
+          Type: OperationType.STEP,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.SUCCEEDED,
+        };
+      }
+      // Item 1 was mid-flight: first operation done, second still STARTED.
+      if (id === `${entityId}-2-1`) {
+        return {
+          Id: id,
+          Type: OperationType.STEP,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.SUCCEEDED,
+        };
+      }
+      if (id === `${entityId}-2-2`) {
+        return {
+          Id: id,
+          Type: OperationType.STEP,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.STARTED,
+        };
+      }
+      // Virtual item contexts are never checkpointed.
+      return undefined;
+    });
+
+    mockParentContext.runInChildContext.mockImplementation(
+      (nameOrFn, fnOrConfig) => {
+        const fn = typeof nameOrFn === "function" ? nameOrFn : fnOrConfig;
+        return new DurablePromise(async () => {
+          return await (fn as any)({} as any);
+        });
+      },
+    );
+    executor.mockResolvedValue("result0");
+
+    const result = await controller.executeItems(
+      items,
+      executor,
+      mockParentContext,
+      { nesting: NestingType.FLAT },
+      DurableExecutionMode.ReplaySucceededContext,
+      entityId,
+      mockExecutionContext,
+    );
+
+    // Only item 0 is rebuilt. Item 1 is skipped, not re-driven.
+    expect(result.successCount).toBe(1);
+    expect(result.totalCount).toBe(1);
+    expect(mockParentContext.runInChildContext).toHaveBeenCalledTimes(1);
+    expect(mockSkipNextOperation).toHaveBeenCalledTimes(1);
+  });
+
+  it("rebuilds virtual items from recorded per-item statuses, including ones that checkpointed nothing", async () => {
+    // A virtual item whose body creates no durable operation leaves no trace at
+    // all, so no probe can distinguish it from an item that never started. The
+    // per-item statuses recorded in the summary are the only signal, and they
+    // also settle the ambiguity of a mid-flight multi-operation item.
+    //
+    // Item 0 succeeded with no operations of its own, item 1 failed, item 2 was
+    // never completed.
+    const items = [
+      { id: "item-0", data: "d0", index: 0 },
+      { id: "item-1", data: "d1", index: 1 },
+      { id: "item-2", data: "d2", index: 2 },
+    ];
+    const executor = jest.fn();
+    const entityId = "parent-step";
+
+    const initialResultSummary = JSON.stringify({
+      type: "MapResult",
+      totalCount: 2,
+      successCount: 1,
+      failureCount: 1,
+      completionReason: "ALL_COMPLETED",
+      status: "FAILED",
+      itemStatuses: "SF-",
+    });
+
+    mockExecutionContext.getStepData.mockImplementation((id: string) => {
+      if (id === entityId) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.SUCCEEDED,
+          ContextDetails: { Result: initialResultSummary },
+        };
+      }
+      // Nothing checkpointed beneath any item.
+      return undefined;
+    });
+
+    mockParentContext.runInChildContext.mockImplementation(
+      (nameOrFn, fnOrConfig) => {
+        const fn = typeof nameOrFn === "function" ? nameOrFn : fnOrConfig;
+        return new DurablePromise(async () => {
+          return await (fn as any)({} as any);
+        });
+      },
+    );
+    executor
+      .mockResolvedValueOnce("result0")
+      .mockRejectedValueOnce(new Error("item 1 failed"));
+
+    const result = await controller.executeItems(
+      items,
+      executor,
+      mockParentContext,
+      { nesting: NestingType.FLAT },
+      DurableExecutionMode.ReplaySucceededContext,
+      entityId,
+      mockExecutionContext,
+    );
+
+    expect(result.successCount).toBe(1);
+    expect(result.failureCount).toBe(1);
+    expect(result.totalCount).toBe(2);
+    // Items 0 and 1 re-driven; item 2 skipped.
+    expect(mockParentContext.runInChildContext).toHaveBeenCalledTimes(2);
+    expect(mockSkipNextOperation).toHaveBeenCalledTimes(1);
+  });
+
+  it("prefers recorded statuses over an item's own context checkpoint", async () => {
+    // Pins the precedence. The recorded statuses are what the live BatchResult
+    // contained, so they win over the item's context record: a child that
+    // settled after the batch completed early has a terminal context but was
+    // never part of the live result, and rebuilding it would add an item the
+    // live run never reported.
+    //
+    // Item 1 here has a SUCCEEDED context AND a SUCCEEDED first operation, yet
+    // the recorded statuses say it did not complete. It must stay non-terminal.
+    const items = [
+      { id: "item-0", data: "d0", index: 0 },
+      { id: "item-1", data: "d1", index: 1 },
+    ];
+    const executor = jest.fn();
+    const entityId = "parent-step";
+
+    const initialResultSummary = JSON.stringify({
+      type: "MapResult",
+      totalCount: 1,
+      successCount: 1,
+      failureCount: 0,
+      completionReason: "MIN_SUCCESSFUL_REACHED",
+      status: "SUCCEEDED",
+      itemStatuses: "S-",
+    });
+
+    mockExecutionContext.getStepData.mockImplementation((id: string) => {
+      if (id === entityId) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.SUCCEEDED,
+          ContextDetails: { Result: initialResultSummary },
+        };
+      }
+      // Both items have terminal records of their own; only the statuses
+      // distinguish them.
+      if (
+        id === `${entityId}-1` ||
+        id === `${entityId}-2` ||
+        id === `${entityId}-1-1` ||
+        id === `${entityId}-2-1`
+      ) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.SUCCEEDED,
+        };
+      }
+      return undefined;
+    });
+
+    mockParentContext.runInChildContext.mockImplementation(
+      (nameOrFn, fnOrConfig) => {
+        const fn = typeof nameOrFn === "function" ? nameOrFn : fnOrConfig;
+        return new DurablePromise(async () => {
+          return await (fn as any)({} as any);
+        });
+      },
+    );
+    executor.mockResolvedValue("result0");
+
+    const result = await controller.executeItems(
+      items,
+      executor,
+      mockParentContext,
+      {},
+      DurableExecutionMode.ReplaySucceededContext,
+      entityId,
+      mockExecutionContext,
+    );
+
+    expect(result.successCount).toBe(1);
+    expect(result.totalCount).toBe(1);
+    expect(mockParentContext.runInChildContext).toHaveBeenCalledTimes(1);
+    expect(mockSkipNextOperation).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads per-item statuses from a full BatchResult payload (childOperationsDepth path)", async () => {
+    // childOperationsDepth sets ReplayChildren while checkpointing the FULL
+    // serialized result, so the summary generator never runs and there is no
+    // itemStatuses field. That payload already carries `all: [{ index, status }]`,
+    // which is read as the same signal — otherwise this path would still drop
+    // FLAT items with no durable operations of their own.
+    const items = [
+      { id: "item-0", data: "d0", index: 0 },
+      { id: "item-1", data: "d1", index: 1 },
+      { id: "item-2", data: "d2", index: 2 },
+    ];
+    const executor = jest.fn();
+    const entityId = "parent-step";
+
+    const fullResultPayload = JSON.stringify({
+      all: [
+        { index: 0, result: "r0", status: "SUCCEEDED" },
+        { index: 1, error: { message: "boom" }, status: "FAILED" },
+        { index: 2, status: "STARTED" },
+      ],
+      completionReason: "ALL_COMPLETED",
+    });
+
+    mockExecutionContext.getStepData.mockImplementation((id: string) => {
+      if (id === entityId) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.SUCCEEDED,
+          ContextDetails: { Result: fullResultPayload },
+        };
+      }
+      // Virtual items: nothing checkpointed beneath them.
+      return undefined;
+    });
+
+    mockParentContext.runInChildContext.mockImplementation(
+      (nameOrFn, fnOrConfig) => {
+        const fn = typeof nameOrFn === "function" ? nameOrFn : fnOrConfig;
+        return new DurablePromise(async () => {
+          return await (fn as any)({} as any);
+        });
+      },
+    );
+    executor
+      .mockResolvedValueOnce("result0")
+      .mockRejectedValueOnce(new Error("item 1 failed"));
+
+    const result = await controller.executeItems(
+      items,
+      executor,
+      mockParentContext,
+      { nesting: NestingType.FLAT },
+      DurableExecutionMode.ReplaySucceededContext,
+      entityId,
+      mockExecutionContext,
+    );
+
+    expect(result.successCount).toBe(1);
+    expect(result.failureCount).toBe(1);
+    expect(mockParentContext.runInChildContext).toHaveBeenCalledTimes(2);
+    expect(mockSkipNextOperation).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores a crafted or malformed itemStatuses value and falls back", async () => {
+    // Legacy payloads can carry arbitrary JSON. A value outside the marker
+    // alphabet must not be read as terminality; replay falls back to the item's
+    // own records instead.
+    const items = [{ id: "item-0", data: "d0", index: 0 }];
+    const executor = jest.fn();
+    const entityId = "parent-step";
+
+    const craftedSummary = JSON.stringify({
+      type: "MapResult",
+      totalCount: 1,
+      successCount: 1,
+      failureCount: 0,
+      completionReason: "ALL_COMPLETED",
+      status: "SUCCEEDED",
+      itemStatuses: "not-markers",
+    });
+
+    mockExecutionContext.getStepData.mockImplementation((id: string) => {
+      if (id === entityId) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.SUCCEEDED,
+          ContextDetails: { Result: craftedSummary },
+        };
+      }
+      if (id === `${entityId}-1`) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.SUCCEEDED,
+        };
+      }
+      return undefined;
+    });
+
+    mockParentContext.runInChildContext.mockImplementation(
+      (nameOrFn, fnOrConfig) => {
+        const fn = typeof nameOrFn === "function" ? nameOrFn : fnOrConfig;
+        return new DurablePromise(async () => {
+          return await (fn as any)({} as any);
+        });
+      },
+    );
+    executor.mockResolvedValue("result0");
+
+    const result = await controller.executeItems(
+      items,
+      executor,
+      mockParentContext,
+      {},
+      DurableExecutionMode.ReplaySucceededContext,
+      entityId,
+      mockExecutionContext,
+    );
+
+    // Rebuilt from the context record, not from the crafted string.
+    expect(result.successCount).toBe(1);
+  });
+
+  it("skips an item whose recorded status is terminal but whose context checkpoint is not", async () => {
+    // The other direction of the disagreement, and the one that must not
+    // re-drive. Skipping an item the statuses call finished is benign; re-driving
+    // one whose context checkpoint is still non-terminal hangs: in
+    // ReplaySucceededContext, runInChildContext goes through
+    // checkForNonResolvingPromise, which returns a never-resolving promise when
+    // the pending step id has a non-terminal checkpoint. replayItems would await
+    // it forever, the invocation would time out, and the retry would land in the
+    // same state (issue #751).
+    //
+    // Item 1 is marked "S" but its context record is STARTED, so it is skipped.
+    const items = [
+      { id: "item-0", data: "d0", index: 0 },
+      { id: "item-1", data: "d1", index: 1 },
+    ];
+    const executor = jest.fn();
+    const entityId = "parent-step";
+
+    const initialResultSummary = JSON.stringify({
+      type: "MapResult",
+      totalCount: 2,
+      successCount: 2,
+      failureCount: 0,
+      completionReason: "ALL_COMPLETED",
+      status: "SUCCEEDED",
+      itemStatuses: "SS",
+    });
+
+    mockExecutionContext.getStepData.mockImplementation((id: string) => {
+      if (id === entityId) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.SUCCEEDED,
+          ContextDetails: { Result: initialResultSummary },
+        };
+      }
+      if (id === `${entityId}-1`) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.SUCCEEDED,
+        };
+      }
+      // Item 1's context never finished, despite the recorded "S".
+      if (id === `${entityId}-2`) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.STARTED,
+        };
+      }
+      return undefined;
+    });
+
+    mockParentContext.runInChildContext.mockImplementation(
+      (nameOrFn, fnOrConfig) => {
+        const fn = typeof nameOrFn === "function" ? nameOrFn : fnOrConfig;
+        return new DurablePromise(async () => {
+          return await (fn as any)({} as any);
+        });
+      },
+    );
+    executor.mockResolvedValue("result0");
+
+    const result = await controller.executeItems(
+      items,
+      executor,
+      mockParentContext,
+      {},
+      DurableExecutionMode.ReplaySucceededContext,
+      entityId,
+      mockExecutionContext,
+    );
+
+    // Only item 0 rebuilt; item 1 skipped rather than re-driven into a hang.
+    expect(result.successCount).toBe(1);
+    expect(mockParentContext.runInChildContext).toHaveBeenCalledTimes(1);
+    expect(mockSkipNextOperation).toHaveBeenCalledTimes(1);
   });
 
   it("should handle failed items during replay", async () => {

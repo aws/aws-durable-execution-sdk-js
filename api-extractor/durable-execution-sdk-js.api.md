@@ -506,7 +506,7 @@ export interface DurableInstrumentationPlugin {
 // @beta
 export interface DurableInstrumentationPluginProvider<Plugin extends DurableInstrumentationPlugin = DurableInstrumentationPlugin> {
     createPlugin(): Plugin;
-    readonly pluginApiVersion: number;
+    readonly pluginApiVersion: typeof DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION;
     readonly pluginType: DurableInstrumentationPluginType<Plugin>;
 }
 

@@ -76,7 +76,14 @@ export class WorkerServerApiHandler {
                   ),
                 );
               } catch (err: unknown) {
-                // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+                // `err` is `unknown`, so this rejects with a possibly-non-Error value
+                // deliberately: the caller re-throws it as-is and wrapping it here
+                // would lose the original. Carried an explicit
+                // `@typescript-eslint/prefer-promise-reject-errors` disable before the
+                // Biome migration -- that rule has no Biome equivalent at any severity
+                // (see biome.jsonc gap 1), so this is a note, not a suppression. It is
+                // the only reviewed `prefer-promise-reject-errors` site in the tree; the
+                // other no-equivalent rules from that set carry their own inline notes.
                 reject(err);
               }
             }, this.checkpointDelaySettings);
@@ -85,8 +92,8 @@ export class WorkerServerApiHandler {
       }
       case ApiType.SendDurableExecutionCallbackSuccess:
         return processCallbackSuccess(
-          // todo: handle undefined instead of disabling eslint rule
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          // todo: handle undefined rather than asserting non-null here
+          // biome-ignore lint/style/noNonNullAssertion: CallbackId is required on every callback API request by the wire contract, so this assertion holds; it was a reviewed `@typescript-eslint/no-non-null-assertion` disable before the migration and keeps that record until the todo above replaces it with explicit undefined handling.
           data.params.CallbackId!,
           data.params.Result === undefined
             ? Buffer.of()
@@ -95,18 +102,19 @@ export class WorkerServerApiHandler {
         );
       case ApiType.SendDurableExecutionCallbackFailure:
         return processCallbackFailure(
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          // biome-ignore lint/style/noNonNullAssertion: CallbackId is required on every callback API request by the wire contract; reviewed `@typescript-eslint/no-non-null-assertion` disable before the migration.
           data.params.CallbackId!,
           data.params.Error,
           this.executionManager,
         );
       case ApiType.SendDurableExecutionCallbackHeartbeat:
         return processCallbackHeartbeat(
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          // biome-ignore lint/style/noNonNullAssertion: CallbackId is required on every callback API request by the wire contract; reviewed `@typescript-eslint/no-non-null-assertion` disable before the migration.
           data.params.CallbackId!,
           this.executionManager,
         );
       default:
+        // biome-ignore lint/suspicious/noUnusedExpressions: GENUINE DIFFERENCE from ESLint, not untriaged noise -- this is a compile-time exhaustiveness assertion, and it has no runtime effect by design. ESLint's no-unused-expressions did not flag `satisfies` expressions; Biome's does.
         data satisfies never;
         throw new Error("Unexpected data ApiType");
     }

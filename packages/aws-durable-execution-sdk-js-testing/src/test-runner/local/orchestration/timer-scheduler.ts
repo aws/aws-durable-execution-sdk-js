@@ -37,11 +37,13 @@ export class TimerScheduler implements Scheduler {
       `Scheduling function to run in ${delayMs}ms - Scheduler ID: ${id}`,
     );
     const timer = setTimeout(() => {
-      this.runningTimers.delete(timer);
       defaultLogger.debug(
         `Running scheduled function after ${delayMs}ms - Scheduler ID: ${id}`,
       );
       (updateCheckpoint ? updateCheckpoint() : Promise.resolve())
+        .finally(() => {
+          this.runningTimers.delete(timer);
+        })
         .then(() => startInvocation())
         .catch(onError);
     }, delayMs);
@@ -65,13 +67,16 @@ export class TimerScheduler implements Scheduler {
   }
 
   /**
-   * Checks whether there are any functions scheduled for future execution.
+   * Checks whether there are any functions scheduled for future execution
+   * or whose updateCheckpoint phase is still in progress.
    *
-   * @returns true if there are pending timers, false otherwise
+   * The timer entry is retained until updateCheckpoint settles, so
+   * hasScheduledFunction() returns true while checkpoint-related cleanup
+   * (such as pendingOperations removal) is still in flight. It is removed
+   * before startInvocation runs, so the PENDING-status validation in the
+   * orchestrator remains functional.
    *
-   * @remarks
-   * TODO: use this to check if there is a pending function invocation when the invocation status is PENDING
-   * if there is no scheduled function and the invocation status is PENDING, the language SDK has a bug
+   * @returns true if there are pending or checkpoint-in-flight entries, false otherwise
    */
   hasScheduledFunction(): boolean {
     return !!this.runningTimers.size;

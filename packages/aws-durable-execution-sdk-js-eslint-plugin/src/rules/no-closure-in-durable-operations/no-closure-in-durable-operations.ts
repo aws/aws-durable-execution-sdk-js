@@ -19,6 +19,14 @@ import { Rule } from "eslint";
  *   await context.step(async () => {
  *     return counter + 1;  // ✅ Reading is safe
  *   });
+ *
+ * Implementation note:
+ * This rule relies on the scope information ESLint already computes while parsing
+ * rather than re-walking the AST. For a durable callback's function scope,
+ * `scope.through` is exactly the set of references that could not be resolved
+ * inside the callback, i.e. the closure references. Filtering those to writes
+ * yields the violations directly, in O(closure references) instead of the
+ * O(assignments x subtree size) cost of a manual traversal.
  */
 export const noClosureInDurableOperations: Rule.RuleModule = {
   meta: {
@@ -44,17 +52,23 @@ export const noClosureInDurableOperations: Rule.RuleModule = {
       "waitForCallback",
     ]);
 
+    // `context.sourceCode` is preferred and is the only form available in
+    // ESLint v10, where `context.getSourceCode()` was removed (see #472). The
+    // optional fallback is kept because the plugin supports eslint >=8.0.0 and
+    // `context.sourceCode` only landed in 8.40. Because the property is checked
+    // first and the call is optional, neither branch can throw at startup the
+    // way the unconditional call removed in #472 did.
+    const sourceCode: any =
+      (context as any).sourceCode ?? (context as any).getSourceCode?.();
+
     /**
      * Checks if a node is a durable operation call.
      *
      * Example: context.step(...) or ctx.runInChildContext(...)
-     *
-     * @param node - AST node to check
-     * @returns true if node is a durable operation call
      */
-    function isDurableOperation(node: any): boolean {
+    function isDurableOperationCall(node: any): boolean {
       return (
-        node.type === "CallExpression" &&
+        node?.type === "CallExpression" &&
         node.callee?.type === "MemberExpression" &&
         node.callee.property?.type === "Identifier" &&
         durableOperations.has(node.callee.property.name)
@@ -62,282 +76,82 @@ export const noClosureInDurableOperations: Rule.RuleModule = {
     }
 
     /**
-     * Extracts the callback function from a durable operation call.
+     * Checks whether the given function node is the callback of a durable operation.
      *
-     * Example:
-     *   context.step(async () => { ... })
-     *                ^^^^^^^^^^^^^^^^^ returns this function
-     *
-     * @param node - CallExpression node
-     * @returns The callback function node, or null if not found
+     * The callback is the first function-valued argument, which covers every
+     * overload:
+     *   context.step(fn)
+     *   context.step("name", fn)
+     *   context.step("name", fn, config)
      */
-    function getCallbackFunction(node: any): any {
-      if (!isDurableOperation(node)) return null;
+    function isDurableCallback(fn: any): boolean {
+      const call = fn.parent;
+      if (!isDurableOperationCall(call)) return false;
 
-      const args = node.arguments;
-      for (const arg of args) {
-        if (
+      const callback = call.arguments.find(
+        (arg: any) =>
           arg.type === "ArrowFunctionExpression" ||
-          arg.type === "FunctionExpression"
-        ) {
-          return arg;
-        }
-      }
-      return null;
+          arg.type === "FunctionExpression",
+      );
+      return callback === fn;
     }
 
     /**
-     * Collects all variable names declared within a scope (including nested scopes).
+     * Resolves the scope ESLint created for a function node.
      *
-     * This includes:
-     * - Function parameters: async (ctx) => { ... }
-     * - Top-level declarations: const x = 1;
-     * - Nested block declarations: if (true) { let y = 2; }
-     * - Loop variables: for (let i = 0; ...)
+     * `scopeManager.acquire` is used rather than `sourceCode.getScope(node)`
+     * because it is available across the whole supported eslint range
+     * (`getScope` only landed in 8.37) and needs no version fallback.
      *
-     * Example:
-     *   async (ctx) => {
-     *     const x = 1;
-     *     if (true) {
-     *       let y = 2;
-     *     }
-     *   }
-     *   Returns: Set(['ctx', 'x', 'y'])
-     *
-     * @param scopeNode - Function or block node to analyze
-     * @returns Set of variable names declared in this scope
+     * A named function expression has two scopes, the wrapper holding its own
+     * name and the function scope; `acquire` filters the wrapper out, so this
+     * always returns the function scope.
      */
-    function getVariablesDeclaredInScope(scopeNode: any): Set<string> {
-      const declared = new Set<string>();
-
-      // Add function parameters
-      // Example: async (ctx, resolve) => { ... }
-      //                 ^^^  ^^^^^^^
-      if (scopeNode.params) {
-        scopeNode.params.forEach((param: any) => {
-          if (param.type === "Identifier") {
-            declared.add(param.name);
-          }
-        });
-      }
-
-      // Recursively walk the entire callback body to find all variable declarations
-      // This catches variables in nested blocks, loops, try-catch, etc.
-      function walkForDeclarations(node: any) {
-        if (!node) return;
-
-        // Found a variable declaration
-        // Example: const x = 1; or let y = 2;
-        if (node.type === "VariableDeclaration") {
-          node.declarations.forEach((decl: any) => {
-            if (decl.id?.type === "Identifier") {
-              declared.add(decl.id.name);
-            }
-          });
-        }
-
-        // Walk all child nodes to find nested declarations
-        for (const key in node) {
-          if (key === "parent") continue; // Skip parent references to avoid cycles
-          const child = node[key];
-          if (Array.isArray(child)) {
-            child.forEach(walkForDeclarations);
-          } else if (child && typeof child === "object") {
-            walkForDeclarations(child);
-          }
-        }
-      }
-
-      if (scopeNode.body) {
-        walkForDeclarations(scopeNode.body);
-      }
-
-      return declared;
+    function getFunctionScope(fn: any): any {
+      return sourceCode?.scopeManager?.acquire(fn, true) ?? null;
     }
 
     /**
-     * Finds all variables declared in outer (parent) scopes.
+     * Reports every write to a variable that is declared outside the callback.
      *
-     * Walks up the AST tree to find variables declared in enclosing functions.
-     *
-     * Example:
-     *   async (event, context) => {
-     *     let counter = 0;
-     *     await context.step(async () => {
-     *       // From here, outer variables are: event, context, counter
-     *     });
-     *   }
-     *
-     * @param callbackNode - The callback function node
-     * @returns Set of variable names from outer scopes
+     * References reach `scope.through` only if they could not be resolved within
+     * the callback, so callback parameters and callback-local declarations
+     * (including ones in nested blocks) are excluded automatically, and
+     * shadowing is handled correctly. Variables with no declaration (implicit
+     * or environment globals) are skipped.
      */
-    function findOuterScopeVariables(callbackNode: any): Set<string> {
-      const outerVars = new Set<string>();
-      let current = callbackNode.parent;
+    function checkDurableCallback(fn: any) {
+      if (!isDurableCallback(fn)) return;
 
-      // Walk up the tree until we reach the root
-      while (current) {
-        // Check if this is a function scope
-        if (
-          current.type === "ArrowFunctionExpression" ||
-          current.type === "FunctionExpression" ||
-          current.type === "FunctionDeclaration"
-        ) {
-          // Add function parameters
-          // Example: async (event, context) => { ... }
-          if (current.params) {
-            current.params.forEach((param: any) => {
-              if (param.type === "Identifier") {
-                outerVars.add(param.name);
-              }
-            });
-          }
+      const scope = getFunctionScope(fn);
+      if (!scope) return;
 
-          // Add variables declared in this function's body
-          // Example: const result = await fetch();
-          if (current.body?.type === "BlockStatement") {
-            const body = current.body.body;
-            for (const stmt of body) {
-              if (stmt.type === "VariableDeclaration") {
-                stmt.declarations.forEach((decl: any) => {
-                  if (decl.id?.type === "Identifier") {
-                    outerVars.add(decl.id.name);
-                  }
-                });
-              }
-            }
-          }
-        }
-        current = current.parent;
-      }
+      for (const reference of scope.through) {
+        if (!reference.isWrite()) continue;
 
-      return outerVars;
-    }
+        const variable = reference.resolved;
+        if (!variable || variable.defs.length === 0) continue;
 
-    /**
-     * Checks if an identifier is being assigned/mutated.
-     *
-     * Detects:
-     * - Direct assignment: a = 5
-     * - Compound assignment: a += 1, a -= 1, a *= 2, etc.
-     * - Increment/decrement: a++, ++a, a--, --a
-     *
-     * Does NOT flag reads:
-     * - return a;
-     * - const b = a + 1;
-     * - console.log(a);
-     *
-     * @param node - Identifier node to check
-     * @returns true if the identifier is being mutated
-     */
-    function isAssignment(node: any): boolean {
-      const parent = node.parent;
-      if (!parent) return false;
+        // A named function expression's own name is bound in a wrapper scope
+        // outside the function scope, so writing to it escapes into
+        // `scope.through`. It is not outer state: the assignment is a no-op in
+        // sloppy mode and a TypeError in strict mode, and it cannot cause
+        // replay divergence.
+        if (variable.defs.some((def: any) => def.node === fn)) continue;
 
-      // Check for assignment expressions
-      // Examples: a = 5, a += 1, a -= 2, a *= 3
-      if (parent.type === "AssignmentExpression" && parent.left === node) {
-        return true;
-      }
-
-      // Check for update expressions
-      // Examples: a++, ++a, a--, --a
-      if (parent.type === "UpdateExpression" && parent.argument === node) {
-        return true;
-      }
-
-      return false;
-    }
-
-    /**
-     * Checks if an identifier usage is a problematic closure mutation.
-     *
-     * Reports an error if:
-     * 1. The identifier is being assigned/mutated (not just read)
-     * 2. The variable is NOT declared in the callback itself
-     * 3. The variable IS declared in an outer scope
-     *
-     * Example that triggers error:
-     *   let counter = 0;  // Outer scope
-     *   await context.step(async () => {
-     *     counter++;  // ❌ Mutating outer variable
-     *   });
-     *
-     * Example that's allowed:
-     *   let counter = 0;  // Outer scope
-     *   await context.step(async () => {
-     *     return counter + 1;  // ✅ Just reading
-     *   });
-     *
-     * @param node - Identifier node to check
-     * @param callback - The callback function containing this identifier
-     */
-    function checkIdentifierUsage(node: any, callback: any) {
-      const declaredInCallback = getVariablesDeclaredInScope(callback);
-      const outerVars = findOuterScopeVariables(callback);
-
-      if (
-        node.type === "Identifier" &&
-        !declaredInCallback.has(node.name) && // Not declared in callback
-        outerVars.has(node.name) && // Is from outer scope
-        isAssignment(node) // Is being mutated
-      ) {
         context.report({
-          node,
+          node: reference.identifier,
           messageId: "closureVariableUsage",
           data: {
-            variableName: node.name,
+            variableName: reference.identifier.name,
           },
         });
       }
     }
 
-    // Main rule logic: analyze all function calls
     return {
-      CallExpression(node: any) {
-        // Only check durable operations
-        if (!isDurableOperation(node)) return;
-
-        // Get the callback function passed to the durable operation
-        const callback = getCallbackFunction(node);
-        if (!callback) return;
-
-        /**
-         * Recursively walks the callback's AST to find all identifier usages.
-         *
-         * For each identifier found, checks if it's a problematic closure mutation.
-         */
-        function walkNode(n: any, cb: any) {
-          if (!n) return;
-
-          // Check assignments and updates directly to avoid duplicate reports
-          if (
-            n.type === "AssignmentExpression" &&
-            n.left?.type === "Identifier"
-          ) {
-            checkIdentifierUsage(n.left, cb);
-          } else if (
-            n.type === "UpdateExpression" &&
-            n.argument?.type === "Identifier"
-          ) {
-            checkIdentifierUsage(n.argument, cb);
-          }
-
-          // Recursively walk all child nodes
-          for (const key in n) {
-            if (key === "parent") continue; // Skip parent to avoid cycles
-            const child = n[key];
-            if (Array.isArray(child)) {
-              child.forEach((c) => walkNode(c, cb));
-            } else if (child && typeof child === "object") {
-              walkNode(child, cb);
-            }
-          }
-        }
-
-        // Start walking from the callback body
-        walkNode(callback.body, callback);
-      },
+      ArrowFunctionExpression: checkDurableCallback,
+      FunctionExpression: checkDurableCallback,
     };
   },
 };

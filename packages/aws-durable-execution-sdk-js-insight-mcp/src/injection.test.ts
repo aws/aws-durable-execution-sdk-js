@@ -23,7 +23,6 @@ import {
   runDynamoDBQuery,
   runOpenSearchQuery,
   runRedshiftQuery,
-  resolveCredentials,
   type InsightConfig,
 } from "@aws/durable-execution-sdk-js-insight-core";
 import { runGetExecution, runListExecutions } from "./tools";

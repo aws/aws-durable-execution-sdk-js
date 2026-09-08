@@ -286,10 +286,9 @@ Provider modules export a versioned factory named
 `durableExecutionPluginProvider`:
 
 ```typescript
-import {
-  DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION,
-  type DurableInstrumentationPlugin,
-  type DurableInstrumentationPluginProvider,
+import type {
+  DurableInstrumentationPlugin,
+  DurableInstrumentationPluginProvider,
 } from "@aws/durable-execution-sdk-js";
 
 class AuditPlugin implements DurableInstrumentationPlugin {
@@ -297,11 +296,16 @@ class AuditPlugin implements DurableInstrumentationPlugin {
 }
 
 export const durableExecutionPluginProvider = {
-  pluginApiVersion: DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION,
+  pluginApiVersion: 1,
   pluginType: AuditPlugin,
   createPlugin: () => new AuditPlugin(),
 } satisfies DurableInstrumentationPluginProvider<AuditPlugin>;
 ```
+
+Declare `pluginApiVersion` as a literal instead of importing the SDK constant
+at runtime. The provider type checks the literal against the supported version,
+while the SDK loader performs the runtime compatibility check. This allows a
+provider package to depend on the SDK only for TypeScript types.
 
 The module specifier must be resolvable through normal application module
 resolution or Node.js module paths. For a Lambda layer, package the provider and

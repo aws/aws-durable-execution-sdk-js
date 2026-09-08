@@ -11,7 +11,6 @@ import {
   runRedshiftQuery,
   runLogsInsightsQuery,
   fetchLogsInsightsRecord,
-  resolveCredentials,
   type InsightConfig,
 } from "@aws/durable-execution-sdk-js-insight-core";
 import { MAX_ROWS } from "./readOnlyQuery";

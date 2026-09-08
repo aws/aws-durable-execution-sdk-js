@@ -57,7 +57,9 @@ export function createTestDurableContext(options?: {
 
   // Add existing operations if provided
   if (options?.existingOperations) {
-    options.existingOperations.forEach((op) => storage.addOperation(op));
+    options.existingOperations.forEach((op) => {
+      storage.addOperation(op);
+    });
   }
 
   const stepData: Record<string, Operation> = {};

@@ -8,7 +8,7 @@ import { handler as namedStepHandler } from "../../step/named/step-named";
 
 createTests({
   handler,
-  tests: function (runner, { functionNameMap, assertEventSignatures }) {
+  tests: (runner, { functionNameMap, assertEventSignatures }) => {
     it("should run invoke with basic wait state", async () => {
       if (runner instanceof LocalDurableTestRunner) {
         runner.registerDurableFunction(

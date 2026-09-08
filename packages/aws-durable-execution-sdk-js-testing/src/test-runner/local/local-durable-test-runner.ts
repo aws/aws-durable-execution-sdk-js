@@ -19,7 +19,7 @@ import {
   LocalDurableTestRunnerParameters,
 } from "./interfaces/durable-test-runner-factory";
 import { DurableApiClient } from "../common/create-durable-api-client";
-import { install, InstalledClock } from "@sinonjs/fake-timers";
+import { install, Clock } from "@sinonjs/fake-timers";
 import { Handler } from "aws-lambda";
 import { ApiType } from "../../checkpoint-server/worker-api/worker-api-types";
 import {
@@ -126,17 +126,15 @@ export interface LocalDurableTestRunnerSetupParameters {
  *
  * @public
  */
-export class LocalDurableTestRunner<
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  TResult = any,
-> implements DurableTestRunner<DurableOperation, TResult>
+export class LocalDurableTestRunner<TResult = any>
+  implements DurableTestRunner<DurableOperation, TResult>
 {
   private operationStorage: LocalOperationStorage;
   private waitManager: OperationWaitManager;
   private readonly resultFormatter: ResultFormatter<TResult>;
   private operationIndex: IndexedOperations;
   private static skipTime = false;
-  private static fakeClock: InstalledClock | undefined;
+  private static fakeClock: Clock | undefined;
   private readonly handlerFunction: DurableLambdaHandler;
   private readonly functionStorage: FunctionStorage;
   private readonly durableApi: DurableApiClient;
@@ -318,10 +316,10 @@ export class LocalDurableTestRunner<
    * @param index - Optional index for operations with the same name (defaults to 0)
    * @returns An operation instance that can be used to inspect operation details
    */
-  getOperation<
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    TOperationResult = any,
-  >(name: string, index?: number): DurableOperation<TOperationResult> {
+  getOperation<TOperationResult = any>(
+    name: string,
+    index?: number,
+  ): DurableOperation<TOperationResult> {
     const operation = new OperationWithData<TOperationResult>(
       this.waitManager,
       this.operationIndex,
@@ -344,10 +342,9 @@ export class LocalDurableTestRunner<
    * @param index - The zero-based index of the operation in execution order
    * @returns An operation instance for the operation at the specified index
    */
-  getOperationByIndex<
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    TOperationResult = any,
-  >(index: number): DurableOperation<TOperationResult> {
+  getOperationByIndex<TOperationResult = any>(
+    index: number,
+  ): DurableOperation<TOperationResult> {
     const operation = new OperationWithData<TOperationResult>(
       this.waitManager,
       this.operationIndex,
@@ -370,10 +367,10 @@ export class LocalDurableTestRunner<
    * @param index - The zero-based index among operations with the same name
    * @returns An operation instance for the specified named operation occurrence
    */
-  getOperationByNameAndIndex<
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    TOperationResult = any,
-  >(name: string, index: number): DurableOperation<TOperationResult> {
+  getOperationByNameAndIndex<TOperationResult = any>(
+    name: string,
+    index: number,
+  ): DurableOperation<TOperationResult> {
     const operation = new OperationWithData<TOperationResult>(
       this.waitManager,
       this.operationIndex,
@@ -396,10 +393,9 @@ export class LocalDurableTestRunner<
    * @param id - The unique identifier of the operation
    * @returns An operation instance for the operation with the specified ID
    */
-  getOperationById<
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    TOperationResult = any,
-  >(id: string): DurableOperation<TOperationResult> {
+  getOperationById<TOperationResult = any>(
+    id: string,
+  ): DurableOperation<TOperationResult> {
     const operation = new OperationWithData<TOperationResult>(
       this.waitManager,
       this.operationIndex,

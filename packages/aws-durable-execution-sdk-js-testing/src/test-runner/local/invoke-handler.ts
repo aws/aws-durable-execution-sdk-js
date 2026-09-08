@@ -46,16 +46,14 @@ export class InvokeHandler {
       // skipTime does not manipulate the clock, so elapsed time here is real -- but it would
       // also let operations stall locally in runs that advance fake timers themselves,
       // which is a deliberate behaviour change rather than a fix. Left as is for now.
-      getRemainingTimeInMillis: function (): number {
-        return 900_000;
-      },
-      done: function (): void {
+      getRemainingTimeInMillis: (): number => 900_000,
+      done: (): void => {
         throw new Error("Function not implemented.");
       },
-      fail: function (): void {
+      fail: (): void => {
         throw new Error("Function not implemented.");
       },
-      succeed: function (): void {
+      succeed: (): void => {
         throw new Error("Function not implemented.");
       },
       ...defaultContextValues,

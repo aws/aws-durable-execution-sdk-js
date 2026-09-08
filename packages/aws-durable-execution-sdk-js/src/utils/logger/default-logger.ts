@@ -133,7 +133,7 @@ function formatDurableLogData(
   };
 
   const tenantId = logData.tenantId;
-  if (tenantId != undefined && tenantId != null) {
+  if (tenantId != null) {
     result.tenantId = tenantId;
   }
 

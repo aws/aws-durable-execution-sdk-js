@@ -22,6 +22,8 @@ import {
   State,
   LastUpdateStatusReasonCode,
   PutFunctionScalingConfigCommand,
+  PutRuntimeManagementConfigCommand,
+  UpdateRuntimeOn,
   CreateFunctionCommandInput,
 } from "@aws-sdk/client-lambda";
 import { ExamplesWithConfig } from "../src/types";
@@ -36,62 +38,26 @@ import {
 const DEBUG = false;
 const INTEGRATION_TEST_LOG_RETENTION_DAYS = 7;
 
-// ADOT Layer ARN mapping for X-Ray E2E test
-// Format: arn:aws:lambda:${region}:615299751070:layer:AWSOpenTelemetryDistroJs:<version>
-// ARNs sourced from: https://aws-otel.github.io/docs/getting-started/lambda#adot-lambda-layer-arns
-const ADOT_LAYER_ARNS: Record<string, string> = {
-  "us-east-1":
-    "arn:aws:lambda:us-east-1:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-  "us-east-2":
-    "arn:aws:lambda:us-east-2:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-  "us-west-1":
-    "arn:aws:lambda:us-west-1:615299751070:layer:AWSOpenTelemetryDistroJs:7",
+// TEMPORARY WORKAROUND — pin the Managed Instances runtime.
+//
+// The managed-instances durable runtime nodejs:24.DurableFunction.v33 has no outbound
+// network connectivity from the execution sandbox: DNS resolves, but TCP/TLS to every AWS
+// service endpoint (lambda, sqs, sts) black-holes. The durable SDK's first checkpoint
+// therefore never returns — `client.send(CheckpointDurableExecutionCommand)` neither
+// resolves nor rejects — and the execution dies at its ExecutionTimeout. This surfaces as
+// `capacity-provider-tests` failing with `getOperations()` returning [].
+//
+// Runtime v29 is unaffected. Pinning it restores connectivity (verified in us-west-2:
+// TCP to the Lambda endpoint 1ms, checkpoint round trip 102ms, execution succeeds in ~1s).
+// Only functions on a capacity provider are affected; on-demand functions are fine.
+//
+// Remove this block, and the PutRuntimeManagementConfig call below, once Lambda ships a
+// fixed managed-instances runtime. Pinning opts these functions out of automatic runtime
+// patching, so it must not outlive the underlying fix.
+const PINNED_CAPACITY_PROVIDER_RUNTIME_ARNS: Record<string, string> = {
   "us-west-2":
-    "arn:aws:lambda:us-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-  "eu-west-1":
-    "arn:aws:lambda:eu-west-1:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-  "eu-west-2":
-    "arn:aws:lambda:eu-west-2:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-  "eu-central-1":
-    "arn:aws:lambda:eu-central-1:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-  "ap-northeast-1":
-    "arn:aws:lambda:ap-northeast-1:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-  "ap-southeast-1":
-    "arn:aws:lambda:ap-southeast-1:615299751070:layer:AWSOpenTelemetryDistroJs:7",
-  "ap-southeast-2":
-    "arn:aws:lambda:ap-southeast-2:615299751070:layer:AWSOpenTelemetryDistroJs:7",
+    "arn:aws:lambda:us-west-2::runtime:33c885f25b2bbcf5fe2728c23ed25a2d438e49c5d08c29476328b3a18e0ca9d1",
 };
-
-// OpenTelemetry community collector-only layer for ExecutionOtelPlugin functions.
-// This layer only runs the OTel collector extension (OTLP receiver on localhost:4318 → X-Ray).
-// It does NOT include auto-instrumentation — the ExecutionOtelPlugin handles that.
-// Format: arn:aws:lambda:{region}:184161586896:layer:opentelemetry-collector-amd64-{version}:{layer-version}
-// Source: https://github.com/open-telemetry/opentelemetry-lambda/releases
-const OTEL_COLLECTOR_LAYER_ARN_TEMPLATE =
-  "arn:aws:lambda:${region}:184161586896:layer:opentelemetry-collector-amd64-0_22_0:1";
-
-function getOtelCollectorLayerArn(region: string): string {
-  return OTEL_COLLECTOR_LAYER_ARN_TEMPLATE.replace("${region}", region);
-}
-
-/**
- * Checks if the handler is a community collector otel function that needs the
- * collector-only layer (no ADOT auto-instrumentation).
- */
-function needsCollectorLayer(handler: string): boolean {
-  return handler.includes("otel-community-collector");
-}
-
-/**
- * Checks if the handler needs the ADOT layer (regular otel functions only).
- * These functions use ADOT auto-instrumentation (AWS_LAMBDA_EXEC_WRAPPER).
- * Community collector functions use a collector-only layer instead.
- */
-function needsAdotLayer(handler: string): boolean {
-  return (
-    handler.includes("otel-") && !handler.includes("otel-community-collector")
-  );
-}
 
 // Types
 interface EnvironmentVariables {
@@ -183,7 +149,9 @@ function loadExampleConfiguration(exampleName: string): ExamplesWithConfig {
       `Error: Example with handler '${targetHandler}' not found in catalog`,
     );
     console.error("Available handlers:");
-    catalog.forEach((example) => console.error(`  ${example.handler}`));
+    catalog.forEach((example) => {
+      console.error(`  ${example.handler}`);
+    });
     process.exit(1);
   }
 
@@ -354,6 +322,82 @@ async function ensureLogGroupRetention(functionName: string): Promise<void> {
   );
 }
 
+/**
+ * TEMPORARY WORKAROUND. Pins the runtime version for a function that
+ * runs on a Managed Instances capacity provider, so it does not pick up the broken
+ * nodejs:24.DurableFunction.v33 runtime. See PINNED_CAPACITY_PROVIDER_RUNTIME_ARNS.
+ *
+ * No-op in regions without a known-good pinned ARN — runtime ARNs are region-scoped, and
+ * only us-west-2 has been verified. Failures are logged but not fatal: an unpinned function
+ * still deploys, and failing the deploy here would be worse than letting the test report
+ * the real symptom.
+ */
+async function pinCapacityProviderRuntime(
+  lambdaClient: LambdaClient,
+  functionName: string,
+  region: string,
+): Promise<void> {
+  const runtimeVersionArn = PINNED_CAPACITY_PROVIDER_RUNTIME_ARNS[region];
+  if (!runtimeVersionArn) {
+    console.log(
+      `No pinned Managed Instances runtime configured for ${region}; using the default runtime`,
+    );
+    return;
+  }
+
+  console.log(`Pinning Managed Instances runtime to ${runtimeVersionArn}`);
+  try {
+    // PutRuntimeManagementConfig rejects a function that is still Pending/Creating with
+    // ResourceConflictException, and CreateFunction returns well before a capacity-provider
+    // function reaches Active (typically 90s+, since Lambda launches three instances for AZ
+    // resiliency first). Retry on conflict with the same budget the publish call below uses.
+    await retryOnConflict(
+      () =>
+        lambdaClient.send(
+          new PutRuntimeManagementConfigCommand({
+            FunctionName: functionName,
+            UpdateRuntimeOn: UpdateRuntimeOn.Manual,
+            RuntimeVersionArn: runtimeVersionArn,
+          }),
+        ),
+      180,
+    );
+    console.log("Runtime pinned successfully");
+
+    // PutRuntimeManagementConfig starts an update. Publishing while that update is in
+    // flight fails with "An update is in progress for resource ...", which the caller's
+    // outer retry turns into a re-run of CreateFunction and then an unrecoverable
+    // "Function already exist". Wait for the function to settle before returning.
+    await runWithRetry(
+      () => getCurrentConfiguration(lambdaClient, functionName),
+      (config) => {
+        if (
+          config.LastUpdateStatus === LastUpdateStatus.Failed ||
+          config.State === State.Failed
+        ) {
+          throw new Error(
+            `Function ${functionName} failed to settle after pinning the runtime. ` +
+              `${config.LastUpdateStatusReason ?? config.StateReason}`,
+          );
+        }
+        if (config.LastUpdateStatus === LastUpdateStatus.InProgress) {
+          return {
+            shouldRetry: true,
+            reason: `Runtime pin update is ${config.LastUpdateStatus}`,
+          };
+        }
+        return { shouldRetry: false, reason: "Runtime pin update completed" };
+      },
+      300,
+    );
+  } catch (error) {
+    console.error(
+      `Failed to pin Managed Instances runtime for ${functionName}:`,
+      error,
+    );
+  }
+}
+
 async function createFunction(
   lambdaClient: LambdaClient,
   functionName: string,
@@ -369,52 +413,15 @@ async function createFunction(
 
   const zipBuffer = readFileSync(zipFile);
 
-  // IAM Role Requirements:
-  // - The Lambda execution role must have `CloudWatchLambdaApplicationSignalsExecutionRolePolicy`
-  //   attached for ADOT otel functions (grants xray:PutTraceSegments, xray:PutTelemetryRecords,
-  //   and related CloudWatch permissions needed by the ADOT layer to export spans to X-Ray).
-  // - The test runner role must have `xray:GetTraceSummaries` and `xray:BatchGetTraces`
-  //   permissions to query X-Ray traces in the e2e assertion tests.
   const roleArn = env.LAMBDA_EXECUTION_ROLE_ARN;
 
   const logGroupName = `/aws/lambda/${functionName}`;
   await ensureLogGroupRetention(functionName);
 
   // Determine environment variables
-  let envVars: Record<string, string> | undefined = env.LAMBDA_ENDPOINT
+  const envVars: Record<string, string> | undefined = env.LAMBDA_ENDPOINT
     ? { AWS_ENDPOINT_URL_LAMBDA: env.LAMBDA_ENDPOINT }
     : undefined;
-
-  // Apply ADOT layer + Active Tracing for ADOT otel functions
-  let tracingConfig: { Mode: "Active" | "PassThrough" } | undefined;
-  let layers: string[] | undefined;
-
-  if (needsAdotLayer(exampleConfig.handler)) {
-    const adotArn = ADOT_LAYER_ARNS[env.AWS_REGION];
-    if (!adotArn) {
-      console.error(
-        `Error: Unsupported region "${env.AWS_REGION}" for ADOT Lambda layer. ` +
-          `Supported regions: ${Object.keys(ADOT_LAYER_ARNS).join(", ")}`,
-      );
-      process.exit(1);
-    }
-    tracingConfig = { Mode: "Active" };
-    layers = [adotArn];
-    if (needsAdotLayer(exampleConfig.handler)) {
-      envVars = {
-        ...envVars,
-        AWS_LAMBDA_EXEC_WRAPPER: "/opt/otel-instrument",
-      };
-    }
-  } else if (needsCollectorLayer(exampleConfig.handler)) {
-    // ExecutionOtelPlugin: use the OTel community collector-only layer
-    tracingConfig = { Mode: "Active" };
-    layers = [getOtelCollectorLayerArn(env.AWS_REGION)];
-    envVars = {
-      ...envVars,
-      OPENTELEMETRY_COLLECTOR_CONFIG_URI: "/var/task/collector.yaml",
-    };
-  }
 
   const createParams: CreateFunctionCommandInput = {
     FunctionName: functionName,
@@ -451,8 +458,6 @@ async function createFunction(
     TenancyConfig: exampleConfig.handler.includes("tenant-target")
       ? { TenantIsolationMode: "PER_TENANT" }
       : undefined,
-    TracingConfig: tracingConfig,
-    Layers: layers,
   };
 
   const command = new CreateFunctionCommand(createParams);
@@ -501,27 +506,9 @@ async function updateFunction(
     Role: env.LAMBDA_EXECUTION_ROLE_ARN,
     Timeout: exampleConfig.lambdaTimeoutSeconds ?? 60,
     Environment: {
-      Variables: (() => {
-        let vars: Record<string, string> | undefined = env.LAMBDA_ENDPOINT
-          ? { AWS_ENDPOINT_URL_LAMBDA: env.LAMBDA_ENDPOINT }
-          : undefined;
-
-        if (needsAdotLayer(exampleConfig.handler)) {
-          vars = {
-            ...vars,
-            AWS_LAMBDA_EXEC_WRAPPER: "/opt/otel-instrument",
-          };
-        }
-
-        if (needsCollectorLayer(exampleConfig.handler)) {
-          vars = {
-            ...vars,
-            OPENTELEMETRY_COLLECTOR_CONFIG_URI: "/var/task/collector.yaml",
-          };
-        }
-
-        return vars;
-      })(),
+      Variables: env.LAMBDA_ENDPOINT
+        ? { AWS_ENDPOINT_URL_LAMBDA: env.LAMBDA_ENDPOINT }
+        : undefined,
     },
     CapacityProviderConfig:
       useCapacityProvider && exampleConfig.capacityProviderConfig
@@ -535,27 +522,6 @@ async function updateFunction(
     TenancyConfig: exampleConfig.handler.includes("tenant-target")
       ? { TenantIsolationMode: "PER_TENANT" }
       : undefined,
-    ...(needsAdotLayer(exampleConfig.handler)
-      ? {
-          TracingConfig: { Mode: "Active" as const },
-          Layers: (() => {
-            const adotArn = ADOT_LAYER_ARNS[env.AWS_REGION];
-            if (!adotArn) {
-              console.error(
-                `Error: Unsupported region "${env.AWS_REGION}" for ADOT Lambda layer. ` +
-                  `Supported regions: ${Object.keys(ADOT_LAYER_ARNS).join(", ")}`,
-              );
-              process.exit(1);
-            }
-            return [adotArn];
-          })(),
-        }
-      : needsCollectorLayer(exampleConfig.handler)
-        ? {
-            TracingConfig: { Mode: "Active" as const },
-            Layers: [getOtelCollectorLayerArn(env.AWS_REGION)],
-          }
-        : {}),
   };
 
   // Check if DurableConfig needs updating
@@ -710,6 +676,15 @@ async function main(): Promise<void> {
         }
 
         if (useCapacityProvider) {
+          // Must happen before PublishVersion: the published version snapshots the
+          // function's runtime management config, so pinning afterwards has no effect on
+          // the version that actually serves invocations.
+          await pinCapacityProviderRuntime(
+            lambdaClient,
+            functionName,
+            env.AWS_REGION,
+          );
+
           for (let attempts = 1; attempts <= 2; attempts++) {
             console.log(
               "Publishing LATEST_PUBLISHED for function with capacity provider",

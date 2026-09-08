@@ -17,8 +17,11 @@ function makePlugin(): DurableInstrumentationPlugin {
   // only the start-hook InvocationInfo does — so start-capture is the only
   // real API path.
   let first = false;
-  const emit = (rec: Record<string, unknown>): void =>
-    process.stdout.write(JSON.stringify({ ...rec, durableExecutionArn: executionArn }) + "\n");
+  const emit = (rec: Record<string, unknown>): void => {
+    process.stdout.write(
+      JSON.stringify({ ...rec, durableExecutionArn: executionArn }) + "\n",
+    );
+  };
 
   return {
     async onInvocationStart(info): Promise<void> {

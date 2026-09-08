@@ -53,7 +53,6 @@ describe("QueueScheduler", () => {
       const errors: unknown[] = [];
 
       const createAsyncFunction = (id: number, shouldThrow = false) => {
-        // eslint-disable-next-line @typescript-eslint/require-await
         return async () => {
           executionOrder.push(id);
           if (shouldThrow) {

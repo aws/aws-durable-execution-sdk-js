@@ -27,6 +27,7 @@ import {
   DurablePromise,
   DurableLogData,
 } from "../../types";
+import { InternalDurableContext } from "../../types/internal-context";
 import { Context } from "aws-lambda";
 import { CheckpointManager } from "../../utils/checkpoint/checkpoint-manager";
 import { EventEmitter } from "events";
@@ -76,9 +77,9 @@ export const DURABLE_CONTEXT_BRAND = Symbol.for(
   "@aws/durable-execution-sdk-js/durable-context",
 );
 
-export class DurableContextImpl<
-  Logger extends DurableLogger,
-> implements DurableContext<Logger> {
+export class DurableContextImpl<Logger extends DurableLogger>
+  implements DurableContext<Logger>, InternalDurableContext<Logger>
+{
   readonly [DURABLE_CONTEXT_BRAND] = true;
 
   private _stepPrefix?: string;
@@ -205,6 +206,16 @@ export class DurableContextImpl<
   }
 
   private createModeAwareLogger(logger: Logger): DurableContextLogger<Logger> {
+    // The `return`s here are load-bearing and must stay. DurableContextLogger is
+    // `Pick<Logger, "log" | "warn" | ...>`, so the CONCRETE type parameter's declared
+    // return types survive -- it is only the DurableLogger constraint that declares
+    // void. A caller whose logger returns something (a promise, a chainable) had that
+    // value forwarded, so dropping the returns would be an observable public-API
+    // change. An earlier revision of this migration did exactly that, on the mistaken
+    // premise that "the underlying logger methods return void".
+    //
+    // Every mainstream logger (console, pino, Powertools) returns void, so the impact
+    // is likely nil -- but a lint migration is the wrong place to find out.
     const durableContextLogger: DurableContextLogger<Logger> = {
       warn: (...args) => {
         if (this.shouldLog()) {
@@ -231,6 +242,7 @@ export class DurableContextImpl<
     if ("log" in logger) {
       durableContextLogger.log = (level, ...args): void => {
         if (this.shouldLog()) {
+          // biome-ignore lint/correctness/noVoidTypeReturn: forwarding is deliberate, see the note above -- the `: void` annotation describes the DurableLogger contract, while the value returned is the concrete logger's. Removing the `return` would silently change public behaviour for a logger whose log() returns a value.
           return logger.log?.(level, ...args);
         }
       };
@@ -340,6 +352,34 @@ export class DurableContextImpl<
     fnOrOptions?: StepFunc<T, Logger> | StepConfig<T>,
     maybeOptions?: StepConfig<T>,
   ): DurablePromise<T> {
+    return this.stepInternal(undefined, nameOrFn, fnOrOptions, maybeOptions);
+  }
+
+  /**
+   * {@link step} variant that also labels the span with a plugin-only name.
+   * Never checkpointed. See {@link InternalDurableContext}.
+   * @internal
+   */
+  _stepWithPluginOperationName<T>(
+    pluginOperationName: string | undefined,
+    nameOrFn: string | undefined | StepFunc<T, Logger>,
+    fnOrOptions?: StepFunc<T, Logger> | StepConfig<T>,
+    maybeOptions?: StepConfig<T>,
+  ): DurablePromise<T> {
+    return this.stepInternal(
+      pluginOperationName,
+      nameOrFn,
+      fnOrOptions,
+      maybeOptions,
+    );
+  }
+
+  private stepInternal<T>(
+    pluginOperationName: string | undefined,
+    nameOrFn: string | undefined | StepFunc<T, Logger>,
+    fnOrOptions?: StepFunc<T, Logger> | StepConfig<T>,
+    maybeOptions?: StepConfig<T>,
+  ): DurablePromise<T> {
     validateContextUsage(
       this._stepPrefix,
       "step",
@@ -356,6 +396,7 @@ export class DurableContextImpl<
         this._parentId,
         () => this._defaultSerdes,
         this.durableExecution.plugin,
+        pluginOperationName,
       );
 
       return stepHandler(nameOrFn, fnOrOptions, maybeOptions);
@@ -539,6 +580,31 @@ export class DurableContextImpl<
     nameOrConfig?: string | CreateCallbackConfig<T>,
     maybeConfig?: CreateCallbackConfig<T>,
   ): DurablePromise<CreateCallbackResult<T>> {
+    return this.createCallbackInternal(undefined, nameOrConfig, maybeConfig);
+  }
+
+  /**
+   * {@link createCallback} variant that also labels the span with a
+   * plugin-only name. Never checkpointed. See {@link InternalDurableContext}.
+   * @internal
+   */
+  _createCallbackWithPluginOperationName<T>(
+    pluginOperationName: string | undefined,
+    nameOrConfig?: string | CreateCallbackConfig<T>,
+    maybeConfig?: CreateCallbackConfig<T>,
+  ): DurablePromise<CreateCallbackResult<T>> {
+    return this.createCallbackInternal(
+      pluginOperationName,
+      nameOrConfig,
+      maybeConfig,
+    );
+  }
+
+  private createCallbackInternal<T>(
+    pluginOperationName: string | undefined,
+    nameOrConfig?: string | CreateCallbackConfig<T>,
+    maybeConfig?: CreateCallbackConfig<T>,
+  ): DurablePromise<CreateCallbackResult<T>> {
     validateContextUsage(
       this._stepPrefix,
       "createCallback",
@@ -553,6 +619,7 @@ export class DurableContextImpl<
         this._parentId,
         () => this._defaultCallbackDeserializer,
         this.durableExecution.plugin,
+        pluginOperationName,
       );
       return callbackFactory(nameOrConfig, maybeConfig);
     });

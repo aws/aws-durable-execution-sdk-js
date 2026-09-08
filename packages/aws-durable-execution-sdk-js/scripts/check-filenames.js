@@ -1,6 +1,12 @@
 /**
  * Script to check if file and directory names follow kebab-case convention
- * Usage: find src -type f -name "*.ts" | node scripts/check-filenames.js
+ * Usage: pipe a newline-separated list of TypeScript paths in, e.g. via git ls-files.
+ * Wired up as `npm run lint:filenames`.
+ *
+ * Biome's useFilenamingConvention covers the FILENAME half of the old
+ * `filename-convention/kebab-case` rule. It does not inspect directory segments, so
+ * this covers those -- without it, a non-kebab-case directory added under src would
+ * pass lint.
  */
 
 const readline = require("readline");
@@ -52,8 +58,18 @@ rl.on("line", (filePath) => {
     const dirPath = parts.slice(0, i + 1).join("/");
     const dirName = parts[i];
 
-    // Skip already processed directories and src directory
-    if (processedDirs.has(dirPath) || dirName === "src") continue;
+    // Skip already processed directories, `src`, and Jest's manual-mock folders.
+    // `__mocks__` is a fixed name Jest requires, so it cannot be kebab-case. The
+    // deleted ESLint config carried the same exemption, and so does the
+    // useFilenamingConvention override in biome.jsonc -- this check exists to cover
+    // the DIRECTORY segments that Biome's rule does not look at, so the two must
+    // agree on what is exempt.
+    if (
+      processedDirs.has(dirPath) ||
+      dirName === "src" ||
+      dirName === "__mocks__"
+    )
+      continue;
     processedDirs.add(dirPath);
 
     if (!kebabCaseRegex.test(dirName) && dirName !== "src") {

@@ -15,8 +15,11 @@ function isStep(type?: string): boolean {
 
 function makePlugin(): DurableInstrumentationPlugin {
   let executionArn = "";
-  const emit = (rec: Record<string, unknown>): void =>
-    process.stdout.write(JSON.stringify({ ...rec, durableExecutionArn: executionArn }) + "\n");
+  const emit = (rec: Record<string, unknown>): void => {
+    process.stdout.write(
+      JSON.stringify({ ...rec, durableExecutionArn: executionArn }) + "\n",
+    );
+  };
 
   return {
     async onInvocationStart(info): Promise<void> {

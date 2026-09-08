@@ -94,7 +94,7 @@ export class HistoryPoller {
   private async getExecutionData() {
     const pages: Event[][] = [];
     let currentHistoryMarker: string | undefined = this.lastHistoryMarker;
-    let previousHistoryMarker: string | undefined = undefined;
+    let previousHistoryMarker: string | undefined;
     do {
       const historyResult = await this.callWithRetries(() =>
         this.apiClient.getHistory({
@@ -131,7 +131,6 @@ export class HistoryPoller {
     const lastPage = pages.at(-1);
     this.events.push(...(lastPage ?? []));
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
     const historyEventType = historyEventTypes[
       lastEvent.EventType
     ] as (typeof executionHistoryEventTypes)[keyof typeof executionHistoryEventTypes];

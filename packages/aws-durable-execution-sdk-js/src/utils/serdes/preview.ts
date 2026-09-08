@@ -122,7 +122,6 @@ export function buildPreview(
 
   const pairs: Array<[string, unknown]> = [];
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function collect(obj: any, pathPrefix: string): void {
     if (obj === null || typeof obj !== "object") return;
 

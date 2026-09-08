@@ -200,6 +200,13 @@ export interface DurableContext<TLogger extends DurableLogger = DurableLogger> {
    * @param fn - Function to execute in the child context
    * @param config - Optional configuration for serialization and sub-typing
    * @throws \{ChildContextError\} When the child context function fails
+   *
+   * A child context is a container for durable operations: its body should
+   * perform at least one (`step`, `invoke`, `wait`, a nested context, ...).
+   * Wrapping plain computation in a context with nothing durable inside it buys
+   * nothing — the work is not checkpointed, so it re-runs on every replay — and
+   * leaves the context with no record of its own. Put the computation in a
+   * `step` instead.
    * @example
    * ```typescript
    * const result = await context.runInChildContext(
@@ -225,6 +232,13 @@ export interface DurableContext<TLogger extends DurableLogger = DurableLogger> {
    * @param fn - Function to execute in the child context
    * @param config - Optional configuration for serialization and sub-typing
    * @throws \{ChildContextError\} When the child context function fails
+   *
+   * A child context is a container for durable operations: its body should
+   * perform at least one (`step`, `invoke`, `wait`, a nested context, ...).
+   * Wrapping plain computation in a context with nothing durable inside it buys
+   * nothing — the work is not checkpointed, so it re-runs on every replay — and
+   * leaves the context with no record of its own. Put the computation in a
+   * `step` instead.
    * @example
    * ```typescript
    * const result = await context.runInChildContext(

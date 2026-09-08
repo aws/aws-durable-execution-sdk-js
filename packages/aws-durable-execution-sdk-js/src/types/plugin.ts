@@ -217,8 +217,6 @@ export interface OperationChangeInfo {
  * complete. Instead, treat `onInvocationEnd` as the place to flush: await any
  * outstanding fire-and-forget work started by earlier hooks before resolving
  * its promise.
- *
- * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface DurableInstrumentationPlugin {
   onInvocationStart?(info: InvocationInfo): Promise<void>;
@@ -268,7 +266,9 @@ export interface DurableInstrumentationPlugin {
  */
 export type DurableInstrumentationPluginType<
   Plugin extends DurableInstrumentationPlugin = DurableInstrumentationPlugin,
-> = abstract new (...args: never[]) => Plugin;
+> = abstract new (
+  ...args: never[]
+) => Plugin;
 
 /**
  * Versioned factory exported by packages that support environment-based plugin loading.
@@ -285,7 +285,7 @@ export interface DurableInstrumentationPluginProvider<
   /**
    * Provider contract version expected by the SDK.
    */
-  readonly pluginApiVersion: number;
+  readonly pluginApiVersion: typeof DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION;
 
   /**
    * Concrete class returned by `createPlugin`.

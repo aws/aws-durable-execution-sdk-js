@@ -90,10 +90,7 @@ export interface TestResultError {
  * @typeParam TResult - The expected result type of the durable function
  * @public
  */
-export interface TestResult<
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  TResult = any,
-> {
+export interface TestResult<TResult = any> {
   /**
    * Gets a list of all operations from the execution.
    *

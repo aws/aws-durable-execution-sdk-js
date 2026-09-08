@@ -5,7 +5,7 @@ import { handler as tenantTargetHandler } from "../tenant-target/tenant-target";
 
 createTests({
   handler,
-  tests: function (runner, { functionNameMap, assertEventSignatures }) {
+  tests: (runner, { functionNameMap, assertEventSignatures }) => {
     it("should invoke with tenantId for tenant isolation", async () => {
       if (runner instanceof LocalDurableTestRunner) {
         runner.registerDurableFunction(

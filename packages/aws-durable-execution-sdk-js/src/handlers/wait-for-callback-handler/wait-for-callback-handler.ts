@@ -8,6 +8,7 @@ import {
   OperationSubType,
   WaitForCallbackContext,
   StepContext,
+  StepConfig,
   DurablePromise,
   DurableLogger,
 } from "../../types";
@@ -18,6 +19,17 @@ import {
   ChildContextError,
   CallbackSubmitterError,
 } from "../../errors/durable-error/durable-error";
+import type { InternalDurableContext } from "../../types/internal-context";
+
+/**
+ * The child context is always a `DurableContextImpl`, which implements
+ * {@link InternalDurableContext}. Used to label the inner CALLBACK / submitter
+ * STEP spans with a derived plugin-only name without a public API change.
+ * @internal
+ */
+type WaitForCallbackChildContext<Logger extends DurableLogger> =
+  DurableContext<Logger> & InternalDurableContext<Logger>;
+
 export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
   peekStepId: () => string,
@@ -93,9 +105,16 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
               }
             : undefined;
 
+        // Derived names ("<name>-callback" / "<name>-submitter") go straight to
+        // the plugin hooks, not checkpointed, safe under concurrency.
+        const internalCtx = childCtx as WaitForCallbackChildContext<Logger>;
+
         // Create callback and get the promise + callbackId
         const [callbackPromise, callbackId] =
-          await childCtx.createCallback(createCallbackConfig);
+          await internalCtx._createCallbackWithPluginOperationName(
+            name ? `${name}-callback` : undefined,
+            createCallbackConfig,
+          );
 
         log("🆔", "Callback created:", {
           callbackId,
@@ -103,7 +122,12 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
         });
 
         // Execute the submitter step (submitter is now mandatory)
-        await childCtx.step(
+        const submitterOptions: StepConfig<void> | undefined =
+          config?.retryStrategy
+            ? { retryStrategy: config.retryStrategy }
+            : undefined;
+        await internalCtx._stepWithPluginOperationName(
+          name ? `${name}-submitter` : undefined,
           async (stepContext: StepContext<Logger>) => {
             // Use the step's built-in logger instead of creating a new one
             const callbackContext: WaitForCallbackContext<Logger> = {
@@ -120,9 +144,7 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
               name,
             });
           },
-          config?.retryStrategy
-            ? { retryStrategy: config.retryStrategy }
-            : undefined,
+          submitterOptions,
         );
 
         log("⏳", "Waiting for callback completion:", {

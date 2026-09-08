@@ -112,8 +112,8 @@ Note that `tsconfig.json` excludes `*.test.ts`, so `typecheck` does not cover te
 files — `ts-jest` compiles those when the suite runs. It also sets `noEmit`, because
 this package has no build step; running `tsc` here should not leave a `dist/`.
 
-The root `eslint.config.js` additionally restricts these packages from importing
-`vscode` (in core) or reaching a sibling package by relative path (in all three).
-Those rules are the earliest signal, not the enforcement: eslint currently runs only
-via lint-staged on pre-commit, and there is no lint job in CI, so the tests above are
-what actually gate a pull request.
+`biome.jsonc` additionally restricts these packages from importing `vscode` (in core)
+or reaching a sibling package by relative path (in all three). Those rules now run on
+every pull request through the `lint` job (`biome ci`) — though that job can only block a
+merge once `lint / lint` is added to branch protection. The tests above remain the backstop: they assert the same
+invariant without depending on lint configuration.

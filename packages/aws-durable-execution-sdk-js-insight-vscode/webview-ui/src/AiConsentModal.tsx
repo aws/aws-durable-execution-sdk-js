@@ -31,7 +31,12 @@ interface Props {
  * types.ts so already-consented users re-accept. That constant documents the test
  * to apply to a given edit.
  */
-export function AiConsentModal({ visible, capabilities, onAccept, onDecline }: Props) {
+export function AiConsentModal({
+  visible,
+  capabilities,
+  onAccept,
+  onDecline,
+}: Props) {
   const [agreed, setAgreed] = useState(false);
 
   return (
@@ -78,8 +83,9 @@ export function AiConsentModal({ visible, capabilities, onAccept, onDecline }: P
             <li>
               <b>Amazon Bedrock</b> — your request and the data described above
               are sent to Amazon Bedrock in the AWS account and region you
-              configure, and processed under your AWS agreement and Bedrock&rsquo;s
-              service terms. It leaves your machine and goes to AWS.
+              configure, and processed under your AWS agreement and
+              Bedrock&rsquo;s service terms. It leaves your machine and goes to
+              AWS.
             </li>
             {capabilities.copilot && (
               <li>
@@ -116,8 +122,9 @@ export function AiConsentModal({ visible, capabilities, onAccept, onDecline }: P
             your requests and the data described above to your configured AI
             provider when you use these features. You can withdraw consent at
             any time by clearing{" "}
-            <code>workflowInsight.aiDisclosureAcceptedVersion</code> in settings,
-            and you can keep using the AI-free <b>Query</b> mode regardless.
+            <code>workflowInsight.aiDisclosureAcceptedVersion</code> in
+            settings, and you can keep using the AI-free <b>Query</b> mode
+            regardless.
           </p>
         </TextContent>
         <Checkbox

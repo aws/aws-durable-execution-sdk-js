@@ -37,6 +37,26 @@ To send us a pull request, please:
 7. Send us a pull request with the title matching conventional commits, answering any default questions in the pull request interface. If the PR type has a scope, it must match `sdk`, `sdk-testing`, `examples`, `eslint-plugin`, or `ci`. For example: `feat(sdk): add map handler functionality` or `fix(sdk-testing): fix race condition in checkpoint server`.
 8. Pay attention to any automated CI failures reported in the pull request, and stay involved in the conversation.
 
+### Formatting and linting
+
+[Biome](https://biomejs.dev) handles both, for JavaScript, TypeScript and JSON:
+
+```bash
+npm run lint:fix   # format and lint, applying safe fixes
+npm run lint       # check only, no writes
+```
+
+Formatting and lint errors both fail CI. A pre-commit hook runs `lint:fix` over
+staged files, so in normal use this happens automatically — but `--no-verify`
+skips it and CI does not.
+
+Markdown and YAML are not formatted; Biome has no formatter for them and we do
+not run a second tool just for that.
+
+If you have a branch that predates the move to Biome, expect formatting
+differences on first push: Biome's output is not byte-identical to Prettier's.
+`npm run lint:fix` resolves them in one pass.
+
 GitHub provides additional document on [forking a repository](https://help.github.com/articles/fork-a-repo/) and
 [creating a pull request](https://help.github.com/articles/creating-a-pull-request/).
 

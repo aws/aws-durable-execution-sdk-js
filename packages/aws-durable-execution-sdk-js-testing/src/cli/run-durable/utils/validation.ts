@@ -44,7 +44,6 @@ export async function loadAndValidateHandler(
     );
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
   const handlerCandidate = (module as Record<string, unknown>)[handlerExport];
 
   if (!handlerCandidate) {
@@ -62,7 +61,6 @@ export async function loadAndValidateHandler(
     );
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
   return handlerCandidate as DurableLambdaHandler;
 }
 

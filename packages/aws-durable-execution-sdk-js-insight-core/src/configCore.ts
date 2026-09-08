@@ -74,8 +74,7 @@ export interface ConfigSource {
 export function configFromWireSettings(
   settings: Record<string, string>,
 ): InsightConfig {
-  const has = (k: string): boolean =>
-    Object.prototype.hasOwnProperty.call(settings, k);
+  const has = (k: string): boolean => Object.hasOwn(settings, k);
   return normalizeConfig({
     getString: (k) => (has(k) ? settings[k] : undefined),
     getBool: (k) => (has(k) ? settings[k] === "true" : undefined),

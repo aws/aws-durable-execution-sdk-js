@@ -7,6 +7,8 @@ name: Conformance Tests
 # job, so adding a suite only requires shipping its template + handlers.
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
     paths:

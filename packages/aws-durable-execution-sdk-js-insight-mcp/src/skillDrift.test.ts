@@ -71,7 +71,6 @@ const PRESENT_TOKENS = CANDIDATE_TOKENS.filter(tokenAppears);
 const ABSENT_TOKENS = CANDIDATE_TOKENS.filter((t) => !tokenAppears(t));
 
 // Surface exactly which tokens are load-bearing and which were dropped.
-// eslint-disable-next-line no-console
 console.log(
   `[skillDrift] schema-owned tokens verified present: ${JSON.stringify(
     PRESENT_TOKENS,

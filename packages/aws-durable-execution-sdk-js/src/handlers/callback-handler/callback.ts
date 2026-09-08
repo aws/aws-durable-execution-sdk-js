@@ -40,6 +40,8 @@ export const createCallback = (
 
   getDefaultCallbackDeserializer?: () => AnySerdesDeserializer,
   plugin: DurableInstrumentationPlugin = {},
+  // Plugin-only operation name; never checkpointed. Labels the CALLBACK span.
+  pluginOperationName?: string,
 ) => {
   return <T>(
     nameOrConfig?: string | undefined | CreateCallbackConfig<T>,
@@ -64,7 +66,7 @@ export const createCallback = (
 
     const opInfo = {
       id: hashId(stepId),
-      name: name,
+      name: pluginOperationName ?? name,
       type: OperationType.CALLBACK,
       subType: OperationSubType.CALLBACK,
       parentId: parentId ? hashId(parentId) : undefined,

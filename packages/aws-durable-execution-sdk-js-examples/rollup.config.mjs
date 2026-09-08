@@ -1,7 +1,9 @@
 // @ts-check
 
 import { defineConfig } from "rollup";
-import examplesCatalog from "./src/utils/examples-catalog.json" with { type: "json" };
+import examplesCatalog from "./src/utils/examples-catalog.json" with {
+  type: "json",
+};
 import typescript from "@rollup/plugin-typescript";
 import nodeResolve from "@rollup/plugin-node-resolve";
 import json from "@rollup/plugin-json";

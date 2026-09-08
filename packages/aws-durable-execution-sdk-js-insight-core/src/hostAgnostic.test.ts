@@ -85,8 +85,10 @@ describe("@aws/durable-execution-sdk-js-insight-core is host-free", () => {
   // The scan above is per-file, so it cannot see a host API reached THROUGH a
   // sibling package: a file that imports "../../other-package/src/x" contains no
   // host module itself while pulling one in transitively. This is also the exact
-  // defect the extraction existed to fix, and until now nothing that runs on a pull
-  // request rejected it -- only eslint, which CI does not run.
+  // defect the extraction existed to fix. The `noRestrictedImports` rule in
+  // biome.jsonc now flags it on every pull request via the `lint` job (which can only
+  // block a merge once `lint / lint` is in branch protection); this test is the backstop
+  // that does not depend on lint configuration.
   it.each(names)("%s does not reach into a sibling package", (name) => {
     const file = join(SRC, name);
     const escaping = findEscapingImports(

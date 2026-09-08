@@ -97,8 +97,12 @@ export function ResultsTable({
   destinationType,
 }: Props) {
   const [currentPage, setCurrentPage] = useState(1);
-  const [detailItem, setDetailItem] = useState<Record<string, string> | null>(null);
-  const [selectedItems, setSelectedItems] = useState<Record<string, string>[]>([]);
+  const [detailItem, setDetailItem] = useState<Record<string, string> | null>(
+    null,
+  );
+  const [selectedItems, setSelectedItems] = useState<Record<string, string>[]>(
+    [],
+  );
 
   if (columns.length === 0) {
     return (
@@ -120,7 +124,8 @@ export function ResultsTable({
   // flow) case in practice, so hasFetchableDetail already covers it; the
   // length comparison below still holds even with hiddenColumns applied,
   // since it only ever shrinks displayColumns further.
-  const hasInMemoryDetail = primaryColumns != null && displayColumns.length < columns.length;
+  const hasInMemoryDetail =
+    primaryColumns != null && displayColumns.length < columns.length;
   const hasFetchableDetail = idColumn != null && columns.includes(idColumn);
   const hasDetail = hasInMemoryDetail || hasFetchableDetail;
 
@@ -146,7 +151,10 @@ export function ResultsTable({
   });
 
   const totalPages = Math.ceil(items.length / pageSize);
-  const pagedItems = items.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const pagedItems = items.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
 
   const selectItem = (item: Record<string, string> | null) => {
     setSelectedItems(item ? [item] : []);
@@ -159,8 +167,12 @@ export function ResultsTable({
           type: "fetchDetail",
           idColumn,
           idValue,
-          year: partitionColumns?.year ? item[partitionColumns.year] : undefined,
-          month: partitionColumns?.month ? item[partitionColumns.month] : undefined,
+          year: partitionColumns?.year
+            ? item[partitionColumns.year]
+            : undefined,
+          month: partitionColumns?.month
+            ? item[partitionColumns.month]
+            : undefined,
           day: partitionColumns?.day ? item[partitionColumns.day] : undefined,
         });
       }
@@ -174,7 +186,9 @@ export function ResultsTable({
   // only carries whatever columns the query selected, which is why a fetch
   // was needed in the first place. In in-memory mode (SQS), the row already
   // has everything.
-  const modalFields = hasFetchableDetail ? detailFields ?? {} : detailItem ?? {};
+  const modalFields = hasFetchableDetail
+    ? (detailFields ?? {})
+    : (detailItem ?? {});
   const modalColumns = hasFetchableDetail
     ? Object.keys(detailFields ?? {})
     : columns;
@@ -188,7 +202,9 @@ export function ResultsTable({
     const esc = (v: string) =>
       /[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
     const head = columns.map(esc).join(",");
-    const body = rows.map((r) => r.map((c) => esc(c ?? "")).join(",")).join("\n");
+    const body = rows
+      .map((r) => r.map((c) => esc(c ?? "")).join(","))
+      .join("\n");
     return `${head}\n${body}`;
   };
 
@@ -293,7 +309,9 @@ export function ResultsTable({
             }
             description={
               hasDetail
-                ? [explanation, "Select a row to see all fields."].filter(Boolean).join(" — ")
+                ? [explanation, "Select a row to see all fields."]
+                    .filter(Boolean)
+                    .join(" — ")
                 : explanation
             }
           >
@@ -313,7 +331,9 @@ export function ResultsTable({
         sortingDisabled
         variant="container"
         wrapLines
-        onRowClick={hasDetail ? ({ detail }) => selectItem(detail.item) : undefined}
+        onRowClick={
+          hasDetail ? ({ detail }) => selectItem(detail.item) : undefined
+        }
         pagination={
           totalPages > 1 ? (
             <Pagination
@@ -330,8 +350,16 @@ export function ResultsTable({
         }
       />
 
-      {hasFetchableDetail && detailItem != null && detailLoading && detailFields == null ? (
-        <Modal visible onDismiss={() => selectItem(null)} header="Record Details" size="large">
+      {hasFetchableDetail &&
+      detailItem != null &&
+      detailLoading &&
+      detailFields == null ? (
+        <Modal
+          visible
+          onDismiss={() => selectItem(null)}
+          header="Record Details"
+          size="large"
+        >
           <Box textAlign="center" padding="xl">
             <Spinner size="large" /> Loading record...
           </Box>

@@ -91,10 +91,8 @@ export interface CloudDurableTestRunnerParameters {
  *
  * @public
  */
-export class CloudDurableTestRunner<
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  TResult = any,
-> implements DurableTestRunner<DurableOperation, TResult>
+export class CloudDurableTestRunner<TResult = any>
+  implements DurableTestRunner<DurableOperation, TResult>
 {
   private readonly functionName: string;
   private readonly client: LambdaClient;
@@ -222,10 +220,9 @@ export class CloudDurableTestRunner<
    * const details = stepOp.getStepDetails();
    * ```
    */
-  getOperation<
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    TOperationResult = any,
-  >(name: string): DurableOperation<TOperationResult> {
+  getOperation<TOperationResult = any>(
+    name: string,
+  ): DurableOperation<TOperationResult> {
     return this.getOperationByNameAndIndex(name, 0);
   }
 
@@ -246,10 +243,9 @@ export class CloudDurableTestRunner<
    * await firstOp.waitForData();
    * ```
    */
-  getOperationByIndex<
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    TOperationResult = any,
-  >(index: number): DurableOperation<TOperationResult> {
+  getOperationByIndex<TOperationResult = any>(
+    index: number,
+  ): DurableOperation<TOperationResult> {
     const operation = new CloudOperation<TOperationResult>(
       this.waitManager,
       this.indexedOperations,
@@ -285,10 +281,10 @@ export class CloudDurableTestRunner<
    * const isValid = secondValidation.getStepDetails()?.result;
    * ```
    */
-  getOperationByNameAndIndex<
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    TOperationResult = any,
-  >(name: string, index: number): DurableOperation<TOperationResult> {
+  getOperationByNameAndIndex<TOperationResult = any>(
+    name: string,
+    index: number,
+  ): DurableOperation<TOperationResult> {
     const operation = new CloudOperation<TOperationResult>(
       this.waitManager,
       this.indexedOperations,
@@ -323,10 +319,9 @@ export class CloudDurableTestRunner<
    * const result = operation.getContextDetails()?.result;
    * ```
    */
-  getOperationById<
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    TOperationResult = any,
-  >(id: string): DurableOperation<TOperationResult> {
+  getOperationById<TOperationResult = any>(
+    id: string,
+  ): DurableOperation<TOperationResult> {
     const operation = new CloudOperation<TOperationResult>(
       this.waitManager,
       this.indexedOperations,

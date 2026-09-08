@@ -8,7 +8,9 @@ import { DurableExecutionInvocationInput } from "../../types";
  *
  * @internal
  */
-export class DurableExecutionInvocationInputWithClient implements DurableExecutionInvocationInput {
+export class DurableExecutionInvocationInputWithClient
+  implements DurableExecutionInvocationInput
+{
   public readonly InitialExecutionState: {
     Operations: WireOperation[];
     NextMarker?: string | undefined;

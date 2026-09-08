@@ -14,7 +14,6 @@ import { WorkerApiResponseMapping } from "../worker-api/worker-api-response";
 import { ApiType } from "../worker-api/worker-api-types";
 import { CheckpointWorkerManagerParams } from "../../test-runner/local/worker/checkpoint-worker-manager";
 
-// eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
 const workerParams = workerData as CheckpointWorkerManagerParams;
 
 /**

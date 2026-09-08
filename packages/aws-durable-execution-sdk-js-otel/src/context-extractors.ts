@@ -1,15 +1,115 @@
 import type { InvocationInfo } from "@aws/durable-execution-sdk-js";
 
 /**
+ * The upstream sampling decision carried by a propagated context.
+ *
+ * Tri-state so that "no usable decision" is distinct from an explicit
+ * "do not sample". Extractors use `SAMPLED` / `NOT_SAMPLED` only for explicit
+ * upstream values (for example X-Ray `Sampled=1` / `Sampled=0`, or a W3C
+ * `traceparent` sampled bit); anything absent or unusable is `UNDECIDED`, which
+ * lets the configured sampler decide.
+ */
+export type Sampling = "SAMPLED" | "NOT_SAMPLED" | "UNDECIDED";
+
+/**
  * Result type returned by context extractors.
+ *
+ * `sampling` is the tri-state upstream decision. `traceFlags` is retained for
+ * backward compatibility with custom extractors: when `sampling` is omitted it
+ * is derived from `traceFlags` (sampled bit set -> `SAMPLED`, clear ->
+ * `NOT_SAMPLED`), and when neither is provided the decision is `UNDECIDED`.
+ *
+ * The resolver adopts the trace ID and parent span ID only when they are valid
+ * (well-formed, non-zero); an extractor that cannot supply a usable value
+ * returns `undefined` for it so the resolver falls back to a deterministic
+ * ARN-derived trace and synthetic root.
  */
 export type ContextExtractorResult =
   | {
       traceId: string;
       parentSpanId?: string;
       traceFlags?: number;
+      sampling?: Sampling;
     }
   | undefined;
+
+const OTEL_TRACE_ID_PATTERN = /^[0-9a-f]{32}$/;
+const OTEL_SPAN_ID_PATTERN = /^[0-9a-f]{16}$/;
+const ALL_ZERO_TRACE_ID = "0".repeat(32);
+const ALL_ZERO_SPAN_ID = "0".repeat(16);
+
+/**
+ * True when `traceId` is a well-formed, non-zero 32-char hex OTel trace ID.
+ *
+ * Validity is stricter than a format match: an all-zero ID is well-formed hex
+ * but invalid, and anchoring an execution on it would split the trace.
+ */
+export function isValidTraceId(traceId: string | undefined): traceId is string {
+  return (
+    traceId != null &&
+    OTEL_TRACE_ID_PATTERN.test(traceId) &&
+    traceId !== ALL_ZERO_TRACE_ID
+  );
+}
+
+/**
+ * True when `spanId` is a well-formed, non-zero 16-char hex OTel span ID.
+ */
+export function isValidSpanId(spanId: string | undefined): spanId is string {
+  return (
+    spanId != null &&
+    OTEL_SPAN_ID_PATTERN.test(spanId) &&
+    spanId !== ALL_ZERO_SPAN_ID
+  );
+}
+
+/**
+ * Resolves the tri-state sampling decision for an extracted context.
+ *
+ * Prefers an explicit `sampling` value; otherwise derives from `traceFlags`
+ * when present; otherwise `UNDECIDED`.
+ */
+export function resolveSampling(extracted: {
+  traceFlags?: number;
+  sampling?: Sampling;
+}): Sampling {
+  if (extracted.sampling) {
+    return extracted.sampling;
+  }
+  if (extracted.traceFlags != null) {
+    return (extracted.traceFlags & 1) !== 0 ? "SAMPLED" : "NOT_SAMPLED";
+  }
+  return "UNDECIDED";
+}
+
+/**
+ * True when the extracted context carries a complete remote parent: a valid
+ * trace ID and a valid parent span ID, so it can serve as a remote parent.
+ */
+export function hasCompleteRemoteParent(
+  extracted: ContextExtractorResult,
+): extracted is {
+  traceId: string;
+  parentSpanId: string;
+} & NonNullable<ContextExtractorResult> {
+  return (
+    extracted != null &&
+    isValidTraceId(extracted.traceId) &&
+    isValidSpanId(extracted.parentSpanId)
+  );
+}
+
+/**
+ * True when the extracted context carries a valid (well-formed, non-zero) trace
+ * ID that the resolver can anchor the durable execution trace on.
+ */
+export function hasValidTraceId(
+  extracted: ContextExtractorResult,
+): extracted is {
+  traceId: string;
+} & NonNullable<ContextExtractorResult> {
+  return extracted != null && isValidTraceId(extracted.traceId);
+}
 
 /**
  * A function that extracts upstream trace context from the invocation environment.
@@ -27,8 +127,14 @@ export type ContextExtractor = (info: InvocationInfo) => ContextExtractorResult;
  *
  * - Extract Root value, strip "1-" prefix and all "-" to get 32-char hex traceId
  * - Extract Parent value for parentSpanId (16-char hex)
+ * - Extract Sampled: `1` -> SAMPLED, `0` -> NOT_SAMPLED, anything else undecided
  *
- * Returns undefined when _X_AMZN_TRACE_ID is missing or malformed.
+ * `Root`, `Parent`, and `Sampled` are parsed independently: only `Sampled=1`
+ * and `Sampled=0` are authoritative, and an all-zero Root or Parent is rejected
+ * as invalid (it is well-formed hex but not a usable ID). A valid Root with no
+ * usable Parent is still returned (the trace ID is usable on its own).
+ *
+ * Returns undefined when _X_AMZN_TRACE_ID is missing or has no valid Root.
  */
 export function xRayContextExtractor(
   _info: InvocationInfo,
@@ -59,18 +165,29 @@ export function xRayContextExtractor(
   const rootValue = root.startsWith("1-") ? root.slice(2) : root;
   const traceId = rootValue.replace(/-/g, "").toLowerCase();
 
-  // Validate: must be exactly 32 hex characters
-  if (!/^[0-9a-f]{32}$/.test(traceId)) {
+  // Reject a missing, malformed, or all-zero Root: it is not a usable trace ID.
+  if (!isValidTraceId(traceId)) {
     return undefined;
   }
 
+  // Parent is a 16-char hex span ID; reject an all-zero Parent the same way,
+  // and treat an unusable Parent as absent while keeping the valid Root.
   const parent = fields.get("Parent");
   let parentSpanId: string | undefined;
-  if (parent && /^[0-9a-f]{16}$/.test(parent.toLowerCase())) {
+  if (parent && isValidSpanId(parent.toLowerCase())) {
     parentSpanId = parent.toLowerCase();
   }
 
-  return { traceId, parentSpanId };
+  // Only Sampled=1 and Sampled=0 are authoritative; anything else is undecided.
+  const sampledField = fields.get("Sampled");
+  const sampling: Sampling =
+    sampledField === "1"
+      ? "SAMPLED"
+      : sampledField === "0"
+        ? "NOT_SAMPLED"
+        : "UNDECIDED";
+
+  return { traceId, parentSpanId, sampling };
 }
 
 /**
@@ -133,13 +250,12 @@ function parseW3CTraceparent(traceparent: string): ContextExtractorResult {
     return undefined;
   }
 
-  // TraceId must be 32 hex chars
-  if (!/^[0-9a-f]{32}$/.test(traceId)) {
-    return undefined;
-  }
-
-  // ParentId must be 16 hex chars
-  if (!/^[0-9a-f]{16}$/.test(parentId)) {
+  // TraceId and ParentId must be well-formed AND non-zero. An all-zero trace or
+  // parent ID is syntactically 32/16 hex chars but invalid per the W3C spec;
+  // accepting it would let a malformed traceparent's sampled bit force or
+  // suppress sampling even though the resolver rejects the trace ID and falls
+  // back to the ARN-derived trace.
+  if (!isValidTraceId(traceId) || !isValidSpanId(parentId)) {
     return undefined;
   }
 
@@ -150,9 +266,14 @@ function parseW3CTraceparent(traceparent: string): ContextExtractorResult {
 
   const traceFlags = parseInt(flags, 16);
 
+  // W3C traceparent carries an explicit sampled bit, so the decision is never
+  // UNDECIDED.
+  const sampling: Sampling = (traceFlags & 1) !== 0 ? "SAMPLED" : "NOT_SAMPLED";
+
   return {
     traceId,
     parentSpanId: parentId,
     traceFlags,
+    sampling,
   };
 }

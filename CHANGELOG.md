@@ -7,6 +7,95 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.1]
+
+### Fixed
+
+- A `context.map` or `context.parallel` using `nesting: FLAT` whose aggregate result exceeded the
+  256KB checkpoint limit rebuilt an **empty** result on replay, even though every item had
+  succeeded. Such a batch is checkpointed as a summary and reconstructed from its per-item
+  checkpoints on each later resumption, but the reconstruction decided whether an item had finished
+  by probing the item's context checkpoint — and with `FLAT` nesting those per-item contexts are
+  virtual and never checkpointed, so every item read as unfinished and was skipped.
+
+  Code deriving control flow from the batch result (for example a fan-out sized from the results)
+  therefore created a different set of operations on replay than it had live. The replay-consistency
+  check detected the divergence and raised `NonDeterministicExecutionError`, which SDKs at or below
+  2.3.0 reported as a `PENDING` response rather than a failure; once nothing was left pending the
+  service rejected the response with "Cannot return PENDING status with no pending operations" and,
+  after deterministic retries, failed the execution.
+
+  The batch payload now records which items reached a terminal state, and replay reads that record
+  instead of inferring it. Only large batches were affected: a result that fits in a single
+  checkpoint is replayed by deserialization and never enters the reconstruction path.
+
+  One behaviour change on this path: a virtual item that performs no durable operation of its own is
+  now re-driven during replay, so any part of its mapper body not wrapped in a durable operation
+  runs again. This matches the documented contract for virtual contexts and what `NESTED` already
+  does. Such a body is against best practice in any case — a context is a container for durable
+  operations — and the TSDoc for `runInChildContext` and `MapFunc` now says so.
+
+- Replay validation now reports a failure instead of asking the service to keep the execution
+  alive. `NonDeterministicExecutionError` is the only production error carrying
+  `TerminationReason.CUSTOM`, and the termination branch had no case for it, so it fell through to
+  the catch-all and answered `{Status: "PENDING"}` with no error and no log line. The fault is
+  deterministic, so every replay reproduced it, the diagnostic the SDK had already built never
+  reached the caller, and once nothing was actually pending the service rejected the response with
+  "Cannot return PENDING status with no pending operations".
+
+  Suspend reasons are now an allowlist and every other reason answers `FAILED` carrying the error,
+  so a reason added later without a branch fails closed rather than silently claiming progress.
+
+- `waitForCondition` no longer discards checkpointed state when a custom serdes fails to
+  deserialize it on a resumed invocation. Previously the restore path caught the
+  deserialization error and silently fell back to `initialState`, so the condition loop
+  restarted from scratch and the operation could succeed carrying a result computed from
+  the wrong state. That path now goes through the same `safeDeserialize` helper the rest
+  of the SDK already used, which terminates the invocation with `SERDES_FAILED` instead.
+
+  This is a behaviour change for anyone whose custom serdes can fail while restoring
+  state: such an execution now terminates rather than continuing from `initialState`.
+  Termination is retryable at the service level, so a transient serdes failure is not
+  permanently fatal.
+
+## [eslint-plugin 1.1.0]
+
+### Changed
+
+- **eslint-plugin** (`1.1.0`): `no-closure-in-durable-operations` and
+  `no-non-deterministic-outside-step` now derive their answers from the scope information ESLint
+  computes while parsing, instead of re-walking the AST. Both rules were super-linear in file
+  size; the worst case measured 263.9ms on a 400-assignment callback, now 1.8ms.
+
+  Because the rules previously missed cases their own documentation described, upgrading surfaces
+  new errors on code that already violated the replay model:
+  - Mutating a **module-scope** variable inside a durable operation is now reported. Only
+    enclosing _function_ scopes were checked before, so a top-level `let counter = 0`,
+    `export let count`, or a `catch` binding was silently allowed. Module-level mutable state
+    around a handler is a common pattern, so this is the most likely source of new errors.
+  - **Destructuring and for-of assignment targets** are now reported: `[a] = [1]`,
+    `({ a } = obj)` and `for (a of xs)`.
+  - Calls to a **non-deterministic function declared after the call site** are now reported;
+    hoisted declarations were previously skipped.
+
+  One case reports less: assigning a function to a member
+  (`obj.method = function () { Date.now(); }`) used to register it under the property name, so a
+  call to an unrelated bare `method()` was reported.
+
+### Fixed
+
+- **eslint-plugin** (`1.1.0`): false positives in `no-closure-in-durable-operations` and
+  `no-non-deterministic-outside-step`.
+  - A non-deterministic function no longer taints unrelated same-named functions in other
+    scopes. Callees are resolved through scope analysis rather than by bare identifier name.
+  - Mutating a variable that **shadows** an outer one inside a nested function is no longer
+    reported.
+  - A named function expression assigning to **its own name** is no longer reported.
+  - Mutating a variable from a **destructured declaration** (`let { total } = event`) or one
+    declared in an **outer nested block** is now correctly reported rather than missed.
+
+## [2.3.0]
+
 ### Added
 
 - Support for JavaScript runtimes that do not provide `async_hooks.AsyncLocalStorage` or

@@ -2,6 +2,9 @@ import type { InvocationInfo } from "@aws/durable-execution-sdk-js";
 import {
   xRayContextExtractor,
   w3cClientContextExtractor,
+  resolveSampling,
+  hasCompleteRemoteParent,
+  hasValidTraceId,
 } from "../context-extractors";
 
 const baseInfo: InvocationInfo = {
@@ -39,6 +42,7 @@ describe("xRayContextExtractor", () => {
     expect(result).toEqual({
       traceId: "5759e988bd862e3fe1be46a994272793",
       parentSpanId: "53995c3f42cd8ad8",
+      sampling: "SAMPLED",
     });
   });
 
@@ -50,6 +54,49 @@ describe("xRayContextExtractor", () => {
     expect(result).toEqual({
       traceId: "5759e988bd862e3fe1be46a994272793",
       parentSpanId: undefined,
+      sampling: "SAMPLED",
+    });
+  });
+
+  it("maps Sampled=0 to NOT_SAMPLED", () => {
+    process.env._X_AMZN_TRACE_ID =
+      "Root=1-5759e988-bd862e3fe1be46a994272793;Parent=53995c3f42cd8ad8;Sampled=0";
+
+    const result = xRayContextExtractor(baseInfo);
+    expect(result?.sampling).toBe("NOT_SAMPLED");
+  });
+
+  it("maps a missing Sampled field to UNDECIDED", () => {
+    process.env._X_AMZN_TRACE_ID =
+      "Root=1-5759e988-bd862e3fe1be46a994272793;Parent=53995c3f42cd8ad8";
+
+    const result = xRayContextExtractor(baseInfo);
+    expect(result?.sampling).toBe("UNDECIDED");
+  });
+
+  it("maps an unusable Sampled value to UNDECIDED", () => {
+    process.env._X_AMZN_TRACE_ID =
+      "Root=1-5759e988-bd862e3fe1be46a994272793;Sampled=?";
+
+    const result = xRayContextExtractor(baseInfo);
+    expect(result?.sampling).toBe("UNDECIDED");
+  });
+
+  it("returns undefined for an all-zero Root (well-formed but invalid)", () => {
+    process.env._X_AMZN_TRACE_ID =
+      "Root=1-00000000-000000000000000000000000;Parent=53995c3f42cd8ad8;Sampled=1";
+    expect(xRayContextExtractor(baseInfo)).toBeUndefined();
+  });
+
+  it("treats an all-zero Parent as absent, keeping the valid Root", () => {
+    process.env._X_AMZN_TRACE_ID =
+      "Root=1-5759e988-bd862e3fe1be46a994272793;Parent=0000000000000000;Sampled=1";
+
+    const result = xRayContextExtractor(baseInfo);
+    expect(result).toEqual({
+      traceId: "5759e988bd862e3fe1be46a994272793",
+      parentSpanId: undefined,
+      sampling: "SAMPLED",
     });
   });
 
@@ -82,6 +129,7 @@ describe("xRayContextExtractor", () => {
     expect(result).toEqual({
       traceId: "5759e988bd862e3fe1be46a994272793",
       parentSpanId: "53995c3f42cd8ad8",
+      sampling: "SAMPLED",
     });
   });
 
@@ -93,6 +141,7 @@ describe("xRayContextExtractor", () => {
     expect(result).toEqual({
       traceId: "5759e988bd862e3fe1be46a994272793",
       parentSpanId: undefined,
+      sampling: "SAMPLED",
     });
   });
 });
@@ -141,6 +190,7 @@ describe("w3cClientContextExtractor", () => {
       traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
       parentSpanId: "00f067aa0ba902b7",
       traceFlags: 1,
+      sampling: "SAMPLED",
     });
   });
 
@@ -159,6 +209,7 @@ describe("w3cClientContextExtractor", () => {
 
     const result = w3cClientContextExtractor(info);
     expect(result?.traceFlags).toBe(0);
+    expect(result?.sampling).toBe("NOT_SAMPLED");
   });
 
   it("returns undefined for traceparent with wrong number of parts", () => {
@@ -236,5 +287,171 @@ describe("w3cClientContextExtractor", () => {
     } as unknown as InvocationInfo;
 
     expect(w3cClientContextExtractor(info)).toBeUndefined();
+  });
+
+  it("returns undefined for traceparent with malformed flags (not 2 hex chars)", () => {
+    const info = {
+      ...baseInfo,
+      context: {
+        clientContext: {
+          custom: {
+            traceparent:
+              "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-zz",
+          },
+        },
+      },
+    } as unknown as InvocationInfo;
+
+    expect(w3cClientContextExtractor(info)).toBeUndefined();
+  });
+
+  it("returns undefined for an all-zero traceId (well-formed but invalid)", () => {
+    // An all-zero trace ID is 32 hex chars but invalid per the W3C spec. It must
+    // be rejected so its sampled bit is not treated as authoritative when the
+    // resolver falls back to the ARN-derived trace.
+    const info = {
+      ...baseInfo,
+      context: {
+        clientContext: {
+          custom: {
+            traceparent:
+              "00-00000000000000000000000000000000-00f067aa0ba902b7-01",
+          },
+        },
+      },
+    } as unknown as InvocationInfo;
+
+    expect(w3cClientContextExtractor(info)).toBeUndefined();
+  });
+
+  it("returns undefined for an all-zero parentId (well-formed but invalid)", () => {
+    const info = {
+      ...baseInfo,
+      context: {
+        clientContext: {
+          custom: {
+            traceparent:
+              "00-4bf92f3577b34da6a3ce929d0e0e4736-0000000000000000-01",
+          },
+        },
+      },
+    } as unknown as InvocationInfo;
+
+    expect(w3cClientContextExtractor(info)).toBeUndefined();
+  });
+});
+
+const VALID_TRACE_ID = "4bf92f3577b34da6a3ce929d0e0e4736";
+const VALID_SPAN_ID = "00f067aa0ba902b7";
+const ALL_ZERO_TRACE_ID = "0".repeat(32);
+const ALL_ZERO_SPAN_ID = "0".repeat(16);
+
+describe("resolveSampling", () => {
+  it("prefers an explicit SAMPLED value over traceFlags", () => {
+    expect(resolveSampling({ sampling: "SAMPLED", traceFlags: 0 })).toBe(
+      "SAMPLED",
+    );
+  });
+
+  it("prefers an explicit NOT_SAMPLED value over traceFlags", () => {
+    expect(resolveSampling({ sampling: "NOT_SAMPLED", traceFlags: 1 })).toBe(
+      "NOT_SAMPLED",
+    );
+  });
+
+  it("returns an explicit UNDECIDED value as-is", () => {
+    expect(resolveSampling({ sampling: "UNDECIDED", traceFlags: 1 })).toBe(
+      "UNDECIDED",
+    );
+  });
+
+  it("derives SAMPLED from the traceFlags sampled bit when sampling is absent", () => {
+    expect(resolveSampling({ traceFlags: 1 })).toBe("SAMPLED");
+  });
+
+  it("derives NOT_SAMPLED from a clear traceFlags sampled bit", () => {
+    expect(resolveSampling({ traceFlags: 0 })).toBe("NOT_SAMPLED");
+  });
+
+  it("reads only the low sampled bit of traceFlags", () => {
+    // 0b10 has the sampled (low) bit clear.
+    expect(resolveSampling({ traceFlags: 2 })).toBe("NOT_SAMPLED");
+    // 0b11 has the sampled (low) bit set.
+    expect(resolveSampling({ traceFlags: 3 })).toBe("SAMPLED");
+  });
+
+  it("returns UNDECIDED when neither sampling nor traceFlags is provided", () => {
+    expect(resolveSampling({})).toBe("UNDECIDED");
+  });
+});
+
+describe("hasCompleteRemoteParent", () => {
+  it("is true for a context with valid trace and parent IDs", () => {
+    expect(
+      hasCompleteRemoteParent({
+        traceId: VALID_TRACE_ID,
+        parentSpanId: VALID_SPAN_ID,
+      }),
+    ).toBe(true);
+  });
+
+  it("is false when the context is undefined", () => {
+    expect(hasCompleteRemoteParent(undefined)).toBe(false);
+  });
+
+  it("is false when the parent span ID is missing", () => {
+    expect(
+      hasCompleteRemoteParent({
+        traceId: VALID_TRACE_ID,
+      }),
+    ).toBe(false);
+  });
+
+  it("is false for an all-zero (invalid) trace ID", () => {
+    expect(
+      hasCompleteRemoteParent({
+        traceId: ALL_ZERO_TRACE_ID,
+        parentSpanId: VALID_SPAN_ID,
+      }),
+    ).toBe(false);
+  });
+
+  it("is false for an all-zero (invalid) parent span ID", () => {
+    expect(
+      hasCompleteRemoteParent({
+        traceId: VALID_TRACE_ID,
+        parentSpanId: ALL_ZERO_SPAN_ID,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("hasValidTraceId", () => {
+  it("is true for a context with a valid trace ID", () => {
+    expect(
+      hasValidTraceId({
+        traceId: VALID_TRACE_ID,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not require a parent span ID", () => {
+    expect(
+      hasValidTraceId({
+        traceId: VALID_TRACE_ID,
+      }),
+    ).toBe(true);
+  });
+
+  it("is false when the context is undefined", () => {
+    expect(hasValidTraceId(undefined)).toBe(false);
+  });
+
+  it("is false for an all-zero (invalid) trace ID", () => {
+    expect(
+      hasValidTraceId({
+        traceId: ALL_ZERO_TRACE_ID,
+      }),
+    ).toBe(false);
   });
 });

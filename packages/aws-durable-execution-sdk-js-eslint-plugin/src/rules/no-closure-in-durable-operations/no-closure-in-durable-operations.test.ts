@@ -1,3 +1,4 @@
+import { RuleTester } from "eslint";
 import { noClosureInDurableOperations } from "./no-closure-in-durable-operations";
 
 describe("no-closure-in-durable-operations", () => {
@@ -13,938 +14,519 @@ describe("no-closure-in-durable-operations", () => {
     expect(meta.docs?.description).toContain("closure variables");
     expect(meta.messages?.closureVariableUsage).toBeDefined();
   });
+});
 
-  describe("should detect mutations", () => {
-    it("should detect direct assignment (a = value)", () => {
-      const mockContext = {
-        report: jest.fn(),
-        getSourceCode: jest.fn(() => ({ ast: { tokens: [] } })),
-      };
+describe("no-closure-in-durable-operations scope resolution", () => {
+  /** A durable step callback, with the write/read references it closes over. */
+  function fixture() {
+    const write = {
+      isWrite: () => true,
+      resolved: { defs: [{ type: "Variable" }] },
+      identifier: { type: "Identifier", name: "counter" },
+    };
+    const read = {
+      isWrite: () => false,
+      resolved: { defs: [{ type: "Variable" }] },
+      identifier: { type: "Identifier", name: "other" },
+    };
+    const undeclared = {
+      isWrite: () => true,
+      resolved: { defs: [] },
+      identifier: { type: "Identifier", name: "globalThing" },
+    };
 
-      const rule = noClosureInDurableOperations.create(mockContext as any);
+    const callback: any = { type: "ArrowFunctionExpression" };
+    callback.parent = {
+      type: "CallExpression",
+      callee: {
+        type: "MemberExpression",
+        property: { type: "Identifier", name: "step" },
+      },
+      arguments: [callback],
+    };
 
-      const identifier: any = { type: "Identifier", name: "a" };
-      const assignment: any = {
-        type: "AssignmentExpression",
-        operator: "=",
-        left: identifier,
-      };
-      identifier.parent = assignment;
+    return {
+      callback,
+      scope: { type: "function", through: [write, read, undeclared] },
+      write,
+    };
+  }
 
-      const stepCallback: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: {
-          type: "BlockStatement",
-          body: [{ type: "ExpressionStatement", expression: assignment }],
-        },
-      };
-
-      const outerFunction: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: {
-          type: "BlockStatement",
-          body: [
-            {
-              type: "VariableDeclaration",
-              declarations: [
-                {
-                  type: "VariableDeclarator",
-                  id: { type: "Identifier", name: "a" },
-                },
-              ],
-            },
-          ],
-        },
-      };
-
-      const callExpression: any = {
-        type: "CallExpression",
-        callee: {
-          type: "MemberExpression",
-          property: { type: "Identifier", name: "step" },
-        },
-        arguments: [stepCallback],
-        parent: outerFunction,
-      };
-
-      stepCallback.parent = callExpression;
-      assignment.parent = stepCallback.body.body[0];
-
-      rule.CallExpression?.(callExpression);
-
-      expect(mockContext.report).toHaveBeenCalledWith({
-        node: identifier,
-        messageId: "closureVariableUsage",
-        data: { variableName: "a" },
-      });
-    });
-
-    it("should detect compound assignment (a += 1)", () => {
-      const mockContext = {
-        report: jest.fn(),
-        getSourceCode: jest.fn(() => ({ ast: { tokens: [] } })),
-      };
-
-      const rule = noClosureInDurableOperations.create(mockContext as any);
-
-      const identifier: any = { type: "Identifier", name: "a" };
-      const assignment: any = {
-        type: "AssignmentExpression",
-        operator: "+=",
-        left: identifier,
-      };
-      identifier.parent = assignment;
-
-      const stepCallback: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: {
-          type: "BlockStatement",
-          body: [{ type: "ExpressionStatement", expression: assignment }],
-        },
-      };
-
-      const outerFunction: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: {
-          type: "BlockStatement",
-          body: [
-            {
-              type: "VariableDeclaration",
-              declarations: [
-                {
-                  type: "VariableDeclarator",
-                  id: { type: "Identifier", name: "a" },
-                },
-              ],
-            },
-          ],
-        },
-      };
-
-      const callExpression: any = {
-        type: "CallExpression",
-        callee: {
-          type: "MemberExpression",
-          property: { type: "Identifier", name: "step" },
-        },
-        arguments: [stepCallback],
-        parent: outerFunction,
-      };
-
-      stepCallback.parent = callExpression;
-
-      rule.CallExpression?.(callExpression);
-
-      expect(mockContext.report).toHaveBeenCalled();
-    });
-
-    it("should detect increment (a++)", () => {
-      const mockContext = {
-        report: jest.fn(),
-        getSourceCode: jest.fn(() => ({ ast: { tokens: [] } })),
-      };
-
-      const rule = noClosureInDurableOperations.create(mockContext as any);
-
-      const identifier: any = { type: "Identifier", name: "a" };
-      const updateExpr: any = {
-        type: "UpdateExpression",
-        operator: "++",
-        argument: identifier,
-        prefix: false,
-      };
-      identifier.parent = updateExpr;
-
-      const stepCallback: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: {
-          type: "BlockStatement",
-          body: [{ type: "ExpressionStatement", expression: updateExpr }],
-        },
-      };
-
-      const outerFunction: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: {
-          type: "BlockStatement",
-          body: [
-            {
-              type: "VariableDeclaration",
-              declarations: [
-                {
-                  type: "VariableDeclarator",
-                  id: { type: "Identifier", name: "a" },
-                },
-              ],
-            },
-          ],
-        },
-      };
-
-      const callExpression: any = {
-        type: "CallExpression",
-        callee: {
-          type: "MemberExpression",
-          property: { type: "Identifier", name: "step" },
-        },
-        arguments: [stepCallback],
-        parent: outerFunction,
-      };
-
-      stepCallback.parent = callExpression;
-
-      rule.CallExpression?.(callExpression);
-
-      expect(mockContext.report).toHaveBeenCalled();
-    });
-
-    it("should detect pre-increment (++a)", () => {
-      const mockContext = {
-        report: jest.fn(),
-        getSourceCode: jest.fn(() => ({ ast: { tokens: [] } })),
-      };
-
-      const rule = noClosureInDurableOperations.create(mockContext as any);
-
-      const identifier: any = { type: "Identifier", name: "a" };
-      const updateExpr: any = {
-        type: "UpdateExpression",
-        operator: "++",
-        argument: identifier,
-        prefix: true,
-      };
-      identifier.parent = updateExpr;
-
-      const stepCallback: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: {
-          type: "BlockStatement",
-          body: [{ type: "ExpressionStatement", expression: updateExpr }],
-        },
-      };
-
-      const outerFunction: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: {
-          type: "BlockStatement",
-          body: [
-            {
-              type: "VariableDeclaration",
-              declarations: [
-                {
-                  type: "VariableDeclarator",
-                  id: { type: "Identifier", name: "a" },
-                },
-              ],
-            },
-          ],
-        },
-      };
-
-      const callExpression: any = {
-        type: "CallExpression",
-        callee: {
-          type: "MemberExpression",
-          property: { type: "Identifier", name: "step" },
-        },
-        arguments: [stepCallback],
-        parent: outerFunction,
-      };
-
-      stepCallback.parent = callExpression;
-
-      rule.CallExpression?.(callExpression);
-
-      expect(mockContext.report).toHaveBeenCalled();
-    });
-
-    it("should detect decrement (a--)", () => {
-      const mockContext = {
-        report: jest.fn(),
-        getSourceCode: jest.fn(() => ({ ast: { tokens: [] } })),
-      };
-
-      const rule = noClosureInDurableOperations.create(mockContext as any);
-
-      const identifier: any = { type: "Identifier", name: "a" };
-      const updateExpr: any = {
-        type: "UpdateExpression",
-        operator: "--",
-        argument: identifier,
-        prefix: false,
-      };
-      identifier.parent = updateExpr;
-
-      const stepCallback: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: {
-          type: "BlockStatement",
-          body: [{ type: "ExpressionStatement", expression: updateExpr }],
-        },
-      };
-
-      const outerFunction: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: {
-          type: "BlockStatement",
-          body: [
-            {
-              type: "VariableDeclaration",
-              declarations: [
-                {
-                  type: "VariableDeclarator",
-                  id: { type: "Identifier", name: "a" },
-                },
-              ],
-            },
-          ],
-        },
-      };
-
-      const callExpression: any = {
-        type: "CallExpression",
-        callee: {
-          type: "MemberExpression",
-          property: { type: "Identifier", name: "step" },
-        },
-        arguments: [stepCallback],
-        parent: outerFunction,
-      };
-
-      stepCallback.parent = callExpression;
-
-      rule.CallExpression?.(callExpression);
-
-      expect(mockContext.report).toHaveBeenCalled();
-    });
+  const expectedReport = (write: any) => ({
+    node: write.identifier,
+    messageId: "closureVariableUsage",
+    data: { variableName: "counter" },
   });
 
-  describe("should allow reads", () => {
-    it("should allow reading closure variable", () => {
-      const mockContext = {
-        report: jest.fn(),
-        getSourceCode: jest.fn(() => ({ ast: { tokens: [] } })),
-      };
+  it("resolves scope via context.sourceCode", () => {
+    const { callback, scope, write } = fixture();
+    const report = jest.fn();
 
-      const rule = noClosureInDurableOperations.create(mockContext as any);
+    const rule = noClosureInDurableOperations.create({
+      report,
+      sourceCode: { scopeManager: { acquire: () => scope } },
+    } as any);
 
-      const identifier: any = { type: "Identifier", name: "a" };
-      const returnStmt: any = {
-        type: "ReturnStatement",
-        argument: identifier,
-      };
-      identifier.parent = returnStmt;
+    rule.ArrowFunctionExpression!(callback);
 
-      const stepCallback: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: {
-          type: "BlockStatement",
-          body: [returnStmt],
-        },
-      };
-
-      const outerFunction: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: {
-          type: "BlockStatement",
-          body: [
-            {
-              type: "VariableDeclaration",
-              declarations: [
-                {
-                  type: "VariableDeclarator",
-                  id: { type: "Identifier", name: "a" },
-                },
-              ],
-            },
-          ],
-        },
-      };
-
-      const callExpression: any = {
-        type: "CallExpression",
-        callee: {
-          type: "MemberExpression",
-          property: { type: "Identifier", name: "step" },
-        },
-        arguments: [stepCallback],
-        parent: outerFunction,
-      };
-
-      stepCallback.parent = callExpression;
-
-      rule.CallExpression?.(callExpression);
-
-      expect(mockContext.report).not.toHaveBeenCalled();
-    });
+    expect(report).toHaveBeenCalledTimes(1);
+    expect(report).toHaveBeenCalledWith(expectedReport(write));
   });
 
-  describe("should handle variable scopes", () => {
-    it("should not report if variable is declared in callback params", () => {
-      const mockContext = {
-        report: jest.fn(),
-        getSourceCode: jest.fn(() => ({ ast: { tokens: [] } })),
-      };
+  it("falls back to context.getSourceCode() on eslint versions without context.sourceCode", () => {
+    const { callback, scope, write } = fixture();
+    const report = jest.fn();
 
-      const rule = noClosureInDurableOperations.create(mockContext as any);
+    const rule = noClosureInDurableOperations.create({
+      report,
+      getSourceCode: () => ({ scopeManager: { acquire: () => scope } }),
+    } as any);
 
-      const identifier: any = { type: "Identifier", name: "ctx" };
-      const assignment: any = {
-        type: "AssignmentExpression",
-        left: identifier,
-      };
-      identifier.parent = assignment;
+    rule.ArrowFunctionExpression!(callback);
 
-      const stepCallback: any = {
-        type: "ArrowFunctionExpression",
-        params: [{ type: "Identifier", name: "ctx" }],
-        body: {
-          type: "BlockStatement",
-          body: [{ type: "ExpressionStatement", expression: assignment }],
-        },
-      };
-
-      const outerFunction: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: { type: "BlockStatement", body: [] },
-      };
-
-      const callExpression: any = {
-        type: "CallExpression",
-        callee: {
-          type: "MemberExpression",
-          property: { type: "Identifier", name: "runInChildContext" },
-        },
-        arguments: [stepCallback],
-        parent: outerFunction,
-      };
-
-      stepCallback.parent = callExpression;
-
-      rule.CallExpression?.(callExpression);
-
-      expect(mockContext.report).not.toHaveBeenCalled();
-    });
-
-    it("should not report if variable is declared in callback body", () => {
-      const mockContext = {
-        report: jest.fn(),
-        getSourceCode: jest.fn(() => ({ ast: { tokens: [] } })),
-      };
-
-      const rule = noClosureInDurableOperations.create(mockContext as any);
-
-      const identifier: any = { type: "Identifier", name: "local" };
-      const assignment: any = {
-        type: "AssignmentExpression",
-        left: identifier,
-      };
-      identifier.parent = assignment;
-
-      const stepCallback: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: {
-          type: "BlockStatement",
-          body: [
-            {
-              type: "VariableDeclaration",
-              declarations: [
-                {
-                  type: "VariableDeclarator",
-                  id: { type: "Identifier", name: "local" },
-                },
-              ],
-            },
-            { type: "ExpressionStatement", expression: assignment },
-          ],
-        },
-      };
-
-      const outerFunction: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: { type: "BlockStatement", body: [] },
-      };
-
-      const callExpression: any = {
-        type: "CallExpression",
-        callee: {
-          type: "MemberExpression",
-          property: { type: "Identifier", name: "step" },
-        },
-        arguments: [stepCallback],
-        parent: outerFunction,
-      };
-
-      stepCallback.parent = callExpression;
-
-      rule.CallExpression?.(callExpression);
-
-      expect(mockContext.report).not.toHaveBeenCalled();
-    });
-
-    it("should not report if variable is declared in nested block within callback", () => {
-      const mockContext = {
-        report: jest.fn(),
-        getSourceCode: jest.fn(() => ({ ast: { tokens: [] } })),
-      };
-
-      const rule = noClosureInDurableOperations.create(mockContext as any);
-
-      const identifier: any = { type: "Identifier", name: "blockVar" };
-      const assignment: any = {
-        type: "AssignmentExpression",
-        left: identifier,
-      };
-      identifier.parent = assignment;
-
-      const ifBlock: any = {
-        type: "IfStatement",
-        consequent: {
-          type: "BlockStatement",
-          body: [
-            {
-              type: "VariableDeclaration",
-              declarations: [
-                {
-                  type: "VariableDeclarator",
-                  id: { type: "Identifier", name: "blockVar" },
-                },
-              ],
-            },
-          ],
-        },
-      };
-
-      const stepCallback: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: {
-          type: "BlockStatement",
-          body: [
-            ifBlock,
-            { type: "ExpressionStatement", expression: assignment },
-          ],
-        },
-      };
-
-      const outerFunction: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: { type: "BlockStatement", body: [] },
-      };
-
-      const callExpression: any = {
-        type: "CallExpression",
-        callee: {
-          type: "MemberExpression",
-          property: { type: "Identifier", name: "step" },
-        },
-        arguments: [stepCallback],
-        parent: outerFunction,
-      };
-
-      stepCallback.parent = callExpression;
-
-      rule.CallExpression?.(callExpression);
-
-      expect(mockContext.report).not.toHaveBeenCalled();
-    });
+    expect(report).toHaveBeenCalledTimes(1);
+    expect(report).toHaveBeenCalledWith(expectedReport(write));
   });
 
-  describe("should work with runInChildContext", () => {
-    it("should detect mutation in runInChildContext callback", () => {
-      const mockContext = {
-        report: jest.fn(),
-        getSourceCode: jest.fn(() => ({ ast: { tokens: [] } })),
-      };
+  it("unwraps nothing extra: acquire returns the function scope directly", () => {
+    const { callback, scope, write } = fixture();
+    const report = jest.fn();
+    const acquire = jest.fn(() => scope);
 
-      const rule = noClosureInDurableOperations.create(mockContext as any);
+    const rule = noClosureInDurableOperations.create({
+      report,
+      sourceCode: { scopeManager: { acquire } },
+    } as any);
 
-      const identifier: any = { type: "Identifier", name: "a" };
-      const assignment: any = {
-        type: "AssignmentExpression",
-        left: identifier,
-      };
-      identifier.parent = assignment;
+    rule.ArrowFunctionExpression!(callback);
 
-      const stepCallback: any = {
-        type: "ArrowFunctionExpression",
-        params: [{ type: "Identifier", name: "ctx" }],
-        body: {
-          type: "BlockStatement",
-          body: [{ type: "ExpressionStatement", expression: assignment }],
-        },
-      };
-
-      const outerFunction: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: {
-          type: "BlockStatement",
-          body: [
-            {
-              type: "VariableDeclaration",
-              declarations: [
-                {
-                  type: "VariableDeclarator",
-                  id: { type: "Identifier", name: "a" },
-                },
-              ],
-            },
-          ],
-        },
-      };
-
-      const callExpression: any = {
-        type: "CallExpression",
-        callee: {
-          type: "MemberExpression",
-          property: { type: "Identifier", name: "runInChildContext" },
-        },
-        arguments: [stepCallback],
-        parent: outerFunction,
-      };
-
-      stepCallback.parent = callExpression;
-
-      rule.CallExpression?.(callExpression);
-
-      expect(mockContext.report).toHaveBeenCalled();
-    });
+    // `inner: true` is what makes acquire skip the wrapper scope that a named
+    // function expression adds for its own name.
+    expect(acquire).toHaveBeenCalledWith(callback, true);
+    expect(report).toHaveBeenCalledWith(expectedReport(write));
   });
 
-  describe("should work with waitForCondition", () => {
-    it("should detect mutation in waitForCondition callback", () => {
-      const mockContext = {
-        report: jest.fn(),
-        getSourceCode: jest.fn(() => ({ ast: { tokens: [] } })),
-      };
+  it("skips variables declared by the callback itself", () => {
+    const { callback, scope } = fixture();
+    const report = jest.fn();
 
-      const rule = noClosureInDurableOperations.create(mockContext as any);
+    // A named function expression's own name resolves to a definition whose
+    // node is the callback.
+    scope.through = [
+      {
+        isWrite: () => true,
+        resolved: { defs: [{ type: "FunctionName", node: callback }] },
+        identifier: { type: "Identifier", name: "self" },
+      },
+    ] as any;
 
-      const identifier: any = { type: "Identifier", name: "counter" };
-      const updateExpr: any = {
-        type: "UpdateExpression",
-        operator: "++",
-        argument: identifier,
-      };
-      identifier.parent = updateExpr;
+    const rule = noClosureInDurableOperations.create({
+      report,
+      sourceCode: { scopeManager: { acquire: () => scope } },
+    } as any);
 
-      const conditionCallback: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: {
-          type: "BlockStatement",
-          body: [{ type: "ExpressionStatement", expression: updateExpr }],
-        },
-      };
+    rule.ArrowFunctionExpression!(callback);
 
-      const outerFunction: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: {
-          type: "BlockStatement",
-          body: [
-            {
-              type: "VariableDeclaration",
-              declarations: [
-                {
-                  type: "VariableDeclarator",
-                  id: { type: "Identifier", name: "counter" },
-                },
-              ],
-            },
-          ],
-        },
-      };
-
-      const callExpression: any = {
-        type: "CallExpression",
-        callee: {
-          type: "MemberExpression",
-          property: { type: "Identifier", name: "waitForCondition" },
-        },
-        arguments: [conditionCallback],
-        parent: outerFunction,
-      };
-
-      conditionCallback.parent = callExpression;
-
-      rule.CallExpression?.(callExpression);
-
-      expect(mockContext.report).toHaveBeenCalled();
-    });
+    expect(report).not.toHaveBeenCalled();
   });
 
-  describe("should work with waitForCallback", () => {
-    it("should detect mutation in waitForCallback callback", () => {
-      const mockContext = {
-        report: jest.fn(),
-        getSourceCode: jest.fn(() => ({ ast: { tokens: [] } })),
-      };
+  it("does not throw when no scope information is available", () => {
+    const { callback } = fixture();
+    const report = jest.fn();
 
-      const rule = noClosureInDurableOperations.create(mockContext as any);
+    const rule = noClosureInDurableOperations.create({ report } as any);
 
-      const identifier: any = { type: "Identifier", name: "result" };
-      const assignment: any = {
-        type: "AssignmentExpression",
-        left: identifier,
-      };
-      identifier.parent = assignment;
-
-      const callbackFn: any = {
-        type: "ArrowFunctionExpression",
-        params: [{ type: "Identifier", name: "resolve" }],
-        body: {
-          type: "BlockStatement",
-          body: [{ type: "ExpressionStatement", expression: assignment }],
-        },
-      };
-
-      const outerFunction: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: {
-          type: "BlockStatement",
-          body: [
-            {
-              type: "VariableDeclaration",
-              declarations: [
-                {
-                  type: "VariableDeclarator",
-                  id: { type: "Identifier", name: "result" },
-                },
-              ],
-            },
-          ],
-        },
-      };
-
-      const callExpression: any = {
-        type: "CallExpression",
-        callee: {
-          type: "MemberExpression",
-          property: { type: "Identifier", name: "waitForCallback" },
-        },
-        arguments: [callbackFn],
-        parent: outerFunction,
-      };
-
-      callbackFn.parent = callExpression;
-
-      rule.CallExpression?.(callExpression);
-
-      expect(mockContext.report).toHaveBeenCalled();
-    });
+    expect(() => rule.ArrowFunctionExpression!(callback)).not.toThrow();
+    expect(report).not.toHaveBeenCalled();
   });
 
-  describe("should handle function parameter overloads", () => {
-    it("should detect mutation when function is 1st parameter (no name)", () => {
-      const mockContext = {
-        report: jest.fn(),
-        getSourceCode: jest.fn(() => ({ ast: { tokens: [] } })),
-      };
+  it("ignores callbacks that are not durable operations", () => {
+    const { scope } = fixture();
+    const report = jest.fn();
 
-      const rule = noClosureInDurableOperations.create(mockContext as any);
+    const callback: any = { type: "ArrowFunctionExpression" };
+    callback.parent = {
+      type: "CallExpression",
+      callee: {
+        type: "MemberExpression",
+        property: { type: "Identifier", name: "forEach" },
+      },
+      arguments: [callback],
+    };
 
-      const identifier: any = { type: "Identifier", name: "counter" };
-      const updateExpr: any = {
-        type: "UpdateExpression",
-        operator: "++",
-        argument: identifier,
-      };
-      identifier.parent = updateExpr;
+    const rule = noClosureInDurableOperations.create({
+      report,
+      sourceCode: { scopeManager: { acquire: () => scope } },
+    } as any);
 
-      const stepCallback: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: {
-          type: "BlockStatement",
-          body: [{ type: "ExpressionStatement", expression: updateExpr }],
-        },
-      };
+    rule.ArrowFunctionExpression!(callback);
 
-      const outerFunction: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: {
-          type: "BlockStatement",
-          body: [
-            {
-              type: "VariableDeclaration",
-              declarations: [
-                {
-                  type: "VariableDeclarator",
-                  id: { type: "Identifier", name: "counter" },
-                },
-              ],
-            },
-          ],
-        },
-      };
-
-      // context.step(async () => { counter++; })
-      const callExpression: any = {
-        type: "CallExpression",
-        callee: {
-          type: "MemberExpression",
-          property: { type: "Identifier", name: "step" },
-        },
-        arguments: [stepCallback], // Function as 1st argument
-        parent: outerFunction,
-      };
-
-      stepCallback.parent = callExpression;
-
-      rule.CallExpression?.(callExpression);
-
-      expect(mockContext.report).toHaveBeenCalled();
-    });
-
-    it("should detect mutation when function is 2nd parameter (with name)", () => {
-      const mockContext = {
-        report: jest.fn(),
-        getSourceCode: jest.fn(() => ({ ast: { tokens: [] } })),
-      };
-
-      const rule = noClosureInDurableOperations.create(mockContext as any);
-
-      const identifier: any = { type: "Identifier", name: "counter" };
-      const updateExpr: any = {
-        type: "UpdateExpression",
-        operator: "++",
-        argument: identifier,
-      };
-      identifier.parent = updateExpr;
-
-      const stepCallback: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: {
-          type: "BlockStatement",
-          body: [{ type: "ExpressionStatement", expression: updateExpr }],
-        },
-      };
-
-      const outerFunction: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: {
-          type: "BlockStatement",
-          body: [
-            {
-              type: "VariableDeclaration",
-              declarations: [
-                {
-                  type: "VariableDeclarator",
-                  id: { type: "Identifier", name: "counter" },
-                },
-              ],
-            },
-          ],
-        },
-      };
-
-      // context.step("stepName", async () => { counter++; })
-      const callExpression: any = {
-        type: "CallExpression",
-        callee: {
-          type: "MemberExpression",
-          property: { type: "Identifier", name: "step" },
-        },
-        arguments: [
-          { type: "Literal", value: "stepName" }, // Name as 1st argument
-          stepCallback, // Function as 2nd argument
-        ],
-        parent: outerFunction,
-      };
-
-      stepCallback.parent = callExpression;
-
-      rule.CallExpression?.(callExpression);
-
-      expect(mockContext.report).toHaveBeenCalled();
-    });
-
-    it("should detect mutation when function is 2nd parameter with config as 3rd", () => {
-      const mockContext = {
-        report: jest.fn(),
-        getSourceCode: jest.fn(() => ({ ast: { tokens: [] } })),
-      };
-
-      const rule = noClosureInDurableOperations.create(mockContext as any);
-
-      const identifier: any = { type: "Identifier", name: "counter" };
-      const updateExpr: any = {
-        type: "UpdateExpression",
-        operator: "++",
-        argument: identifier,
-      };
-      identifier.parent = updateExpr;
-
-      const stepCallback: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: {
-          type: "BlockStatement",
-          body: [{ type: "ExpressionStatement", expression: updateExpr }],
-        },
-      };
-
-      const outerFunction: any = {
-        type: "ArrowFunctionExpression",
-        params: [],
-        body: {
-          type: "BlockStatement",
-          body: [
-            {
-              type: "VariableDeclaration",
-              declarations: [
-                {
-                  type: "VariableDeclarator",
-                  id: { type: "Identifier", name: "counter" },
-                },
-              ],
-            },
-          ],
-        },
-      };
-
-      // context.step("stepName", async () => { counter++; }, { retry: 3 })
-      const callExpression: any = {
-        type: "CallExpression",
-        callee: {
-          type: "MemberExpression",
-          property: { type: "Identifier", name: "step" },
-        },
-        arguments: [
-          { type: "Literal", value: "stepName" },
-          stepCallback,
-          { type: "ObjectExpression", properties: [] }, // Config object
-        ],
-        parent: outerFunction,
-      };
-
-      stepCallback.parent = callExpression;
-
-      rule.CallExpression?.(callExpression);
-
-      expect(mockContext.report).toHaveBeenCalled();
-    });
+    expect(report).not.toHaveBeenCalled();
   });
+});
+
+// The rule reads the scope information ESLint derives while parsing, so it is
+// exercised against real source rather than hand-built AST fixtures.
+const ruleTester = new RuleTester({
+  parser: require.resolve("@typescript-eslint/parser"),
+} as any);
+
+const mutationError = (variableName: string) => ({
+  messageId: "closureVariableUsage",
+  data: { variableName },
+});
+
+describe("no-closure-in-durable-operations rule behavior", () => {
+  ruleTester.run(
+    "no-closure-in-durable-operations",
+    noClosureInDurableOperations,
+    {
+      valid: [
+        {
+          name: "allows reading a closure variable",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              let a = 0;
+              await context.step(async () => {
+                return a;
+              });
+            }
+          `,
+        },
+        {
+          name: "allows mutating a callback parameter",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              await context.runInChildContext(async (ctx) => {
+                ctx = null;
+              });
+            }
+          `,
+        },
+        {
+          name: "allows mutating a variable declared in the callback body",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              await context.step(async () => {
+                let local = 0;
+                local = 1;
+                return local;
+              });
+            }
+          `,
+        },
+        {
+          name: "allows mutating a variable declared in a nested block of the callback",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              await context.step(async () => {
+                if (true) {
+                  let blockVar = 0;
+                  blockVar = 1;
+                }
+              });
+            }
+          `,
+        },
+        {
+          name: "allows mutating a shadowing variable declared in a nested function",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              let counter = 0;
+              await context.step(async () => {
+                const inner = () => {
+                  let counter = 0;
+                  counter++;
+                  return counter;
+                };
+                return inner();
+              });
+            }
+          `,
+        },
+        {
+          name: "ignores callbacks passed to non-durable operations",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              let counter = 0;
+              [1, 2].forEach(() => {
+                counter++;
+              });
+            }
+          `,
+        },
+        {
+          name: "allows a named function expression to assign to its own name",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              await context.step(function self() {
+                self = null;
+              });
+            }
+          `,
+        },
+        {
+          name: "allows recursion through a named function expression",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              await context.step(function fact(n) {
+                return n <= 1 ? 1 : n * fact(n - 1);
+              });
+            }
+          `,
+        },
+        {
+          name: "only checks the first function argument of a durable operation",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              let counter = 0;
+              await context.waitForCallback(
+                async (resolve) => resolve(),
+                async () => {
+                  counter++;
+                },
+              );
+            }
+          `,
+        },
+      ],
+      invalid: [
+        {
+          name: "reports direct assignment",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              let a = 0;
+              await context.step(async () => {
+                a = 5;
+              });
+            }
+          `,
+          errors: [mutationError("a")],
+        },
+        {
+          name: "reports compound assignment",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              let a = 0;
+              await context.step(async () => {
+                a += 1;
+              });
+            }
+          `,
+          errors: [mutationError("a")],
+        },
+        {
+          name: "reports increment",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              let a = 0;
+              await context.step(async () => {
+                a++;
+              });
+            }
+          `,
+          errors: [mutationError("a")],
+        },
+        {
+          name: "reports pre-increment",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              let a = 0;
+              await context.step(async () => {
+                ++a;
+              });
+            }
+          `,
+          errors: [mutationError("a")],
+        },
+        {
+          name: "reports decrement",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              let a = 0;
+              await context.step(async () => {
+                a--;
+              });
+            }
+          `,
+          errors: [mutationError("a")],
+        },
+        {
+          name: "reports mutation in a runInChildContext callback",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              let a = 0;
+              await context.runInChildContext(async (ctx) => {
+                a = 1;
+              });
+            }
+          `,
+          errors: [mutationError("a")],
+        },
+        {
+          name: "reports mutation in a waitForCondition callback",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              let counter = 0;
+              await context.waitForCondition(async () => {
+                counter++;
+              });
+            }
+          `,
+          errors: [mutationError("counter")],
+        },
+        {
+          name: "reports mutation in a waitForCallback callback",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              let result = null;
+              await context.waitForCallback(async (resolve) => {
+                result = "done";
+              });
+            }
+          `,
+          errors: [mutationError("result")],
+        },
+        {
+          name: "reports mutation when the callback is the 1st argument",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              let counter = 0;
+              await context.step(async () => {
+                counter++;
+              });
+            }
+          `,
+          errors: [mutationError("counter")],
+        },
+        {
+          name: "reports mutation when the callback is the 2nd argument",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              let counter = 0;
+              await context.step("stepName", async () => {
+                counter++;
+              });
+            }
+          `,
+          errors: [mutationError("counter")],
+        },
+        {
+          name: "reports mutation when the callback is the 2nd argument with a config 3rd",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              let counter = 0;
+              await context.step("stepName", async () => {
+                counter++;
+              }, { retry: 3 });
+            }
+          `,
+          errors: [mutationError("counter")],
+        },
+        {
+          name: "reports mutation of a destructured outer declaration",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              let { total } = event;
+              await context.step(async () => {
+                total += 1;
+              });
+            }
+          `,
+          errors: [mutationError("total")],
+        },
+        {
+          name: "reports mutation of a variable declared in an outer nested block",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              if (event.flag) {
+                let counter = 0;
+                await context.step(async () => {
+                  counter++;
+                });
+              }
+            }
+          `,
+          errors: [mutationError("counter")],
+        },
+        {
+          name: "reports mutation of a module-scope variable",
+          code: `
+            let counter = 0;
+            async function handler(event: any, context: DurableContext) {
+              await context.step(async () => {
+                counter++;
+              });
+            }
+          `,
+          errors: [mutationError("counter")],
+        },
+        {
+          name: "reports mutation of an exported module-scope variable",
+          code: `
+            export let count = 0;
+            async function handler(event: any, context: DurableContext) {
+              await context.step(async () => {
+                count += 1;
+              });
+            }
+          `,
+          errors: [mutationError("count")],
+        },
+        {
+          name: "reports mutation of a catch binding",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              try {
+                doThing();
+              } catch (e) {
+                await context.step(async () => {
+                  e = null;
+                });
+              }
+            }
+          `,
+          errors: [mutationError("e")],
+        },
+        {
+          name: "reports array destructuring assignment targets",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              let a = 0;
+              await context.step(async () => {
+                [a] = [1];
+              });
+            }
+          `,
+          errors: [mutationError("a")],
+        },
+        {
+          name: "reports object destructuring assignment targets",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              let a = 0;
+              await context.step(async () => {
+                ({ a } = event);
+              });
+            }
+          `,
+          errors: [mutationError("a")],
+        },
+        {
+          name: "reports for-of assignment targets",
+          code: `
+            async function handler(event: any, context: DurableContext) {
+              let a = 0;
+              await context.step(async () => {
+                for (a of event.items) {
+                  use(a);
+                }
+              });
+            }
+          `,
+          errors: [mutationError("a")],
+        },
+      ],
+    },
+  );
 });

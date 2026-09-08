@@ -363,7 +363,7 @@ class IntegrationTestRunner {
           `Deploying capacity provider function: ${capacityProviderFunctionName} (handler: ${handlerFile})`,
         );
 
-        let capacityDeployCommand = `npm run deploy -- "${handlerFile}" '${capacityProviderFunctionName}' --runtime ${this.runtime} --use-capacity-provider`;
+        const capacityDeployCommand = `npm run deploy -- "${handlerFile}" '${capacityProviderFunctionName}' --runtime ${this.runtime} --use-capacity-provider`;
         this.execCommand(capacityDeployCommand, {
           cwd: examplesDir,
           env: this.getLegacyTestSecretEnv(),

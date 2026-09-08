@@ -62,8 +62,9 @@ describe("loadLambdaModule failure handling", () => {
     process.on("unhandledRejection", unhandled);
 
     try {
-      const { DurableExecutionApiClient } =
-        await import("./durable-execution-api-client");
+      const { DurableExecutionApiClient } = await import(
+        "./durable-execution-api-client"
+      );
 
       // The constructor starts the load without awaiting it. Its rejection must be
       // absorbed rather than surfacing as an unhandled rejection.
@@ -99,8 +100,9 @@ describe("loadLambdaModule failure handling", () => {
       throw new Error("module missing");
     });
 
-    const { DurableExecutionApiClient } =
-      await import("./durable-execution-api-client");
+    const { DurableExecutionApiClient } = await import(
+      "./durable-execution-api-client"
+    );
 
     const apiClient = new DurableExecutionApiClient();
 

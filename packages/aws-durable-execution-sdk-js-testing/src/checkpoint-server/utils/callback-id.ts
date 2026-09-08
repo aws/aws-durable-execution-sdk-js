@@ -24,7 +24,6 @@ export function decodeCallbackId(callbackId: CallbackId): CallbackIdData {
       throw new Error("Invalid CallbackIdData format");
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
     return decodedJson as CallbackIdData;
   } catch (error) {
     // Re-throw with a more descriptive message

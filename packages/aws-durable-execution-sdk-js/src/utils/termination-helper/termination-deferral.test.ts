@@ -31,6 +31,7 @@ describe("terminateForUnrecoverableError", () => {
     expect(mockContext.terminationManager.terminate).toHaveBeenCalledWith({
       reason: TerminationReason.CUSTOM,
       message: "Unrecoverable error in step test-step: Test error",
+      error,
     });
   });
 

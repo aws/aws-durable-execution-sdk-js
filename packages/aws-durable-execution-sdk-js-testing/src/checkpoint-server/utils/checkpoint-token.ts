@@ -15,7 +15,7 @@ export function decodeCheckpointToken(
   checkpointToken: CheckpointToken,
 ): CheckpointTokenData {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    // Reviewed `@typescript-eslint/no-unsafe-assignment` disable before the migration -- no Biome equivalent (see biome.jsonc gap 1). JSON.parse returns `any`; the decoded token shape is validated immediately below.
     const decodedJson = JSON.parse(
       Buffer.from(checkpointToken, "base64").toString("utf-8"),
     );
@@ -30,7 +30,6 @@ export function decodeCheckpointToken(
       throw new Error("Invalid CheckpointTokenData format");
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
     return decodedJson as CheckpointTokenData;
   } catch (error) {
     // Re-throw with a more descriptive message

@@ -24,7 +24,6 @@ import {
   escapeQuotedString,
   fetchLogsInsightsRecord,
   runLogsInsightsQuery,
-  resolveCredentials,
   type InsightConfig,
   type QueryResultTable,
 } from "@aws/durable-execution-sdk-js-insight-core";

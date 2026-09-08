@@ -2,7 +2,6 @@ import {
   DurableContext,
   withDurableExecution,
   CallbackError,
-  InvokeError,
 } from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
 

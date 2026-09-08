@@ -45,6 +45,7 @@ export async function listenToQueue(opts: {
 
   try {
     while (!opts.signal.aborted) {
+      // biome-ignore lint/suspicious/noImplicitAnyLet: pre-existing finding surfaced by the ESLint-to-Biome migration; not triaged as part of the toolchain change
       let result;
       try {
         result = await client.send(

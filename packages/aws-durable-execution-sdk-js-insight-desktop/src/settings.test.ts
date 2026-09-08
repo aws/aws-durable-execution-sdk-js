@@ -175,9 +175,7 @@ describe("readDesktopConfig", () => {
     writeDesktopSettings({ athenaTable: "t" });
     const stored = storedSettings();
     expect(Object.keys(stored).sort()).toEqual(["athenaTable", "region"]);
-    expect(Object.prototype.hasOwnProperty.call(stored, "__proto__")).toBe(
-      false,
-    );
+    expect(Object.hasOwn(stored, "__proto__")).toBe(false);
   });
 
   it("ignores a non-scalar value in the settings file", () => {

@@ -22,7 +22,6 @@ const SERVER_BUILT = existsSync(SERVER_PATH);
 const TIMEOUT_MS = 30_000;
 
 if (!SERVER_BUILT) {
-  // eslint-disable-next-line no-console
   console.warn(
     `[server.test] ${SERVER_PATH} not found — skipping integration tests. ` +
       `Run \`npm run build\` first (the package's \`test\` script does this).`,

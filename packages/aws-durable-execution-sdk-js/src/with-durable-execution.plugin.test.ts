@@ -15,6 +15,8 @@ import {
 import { TEST_CONSTANTS } from "./testing/test-constants";
 import { loadConfiguredPlugins } from "./utils/plugin/plugin-loader";
 import { PluginLoadError } from "./errors/plugin-load-error/plugin-load-error";
+import { TerminationReason } from "./termination-manager/types";
+import { NonDeterministicExecutionError } from "./errors/non-deterministic-error/non-deterministic-error";
 
 jest.mock("./context/execution-context/execution-context");
 jest.mock("./context/durable-context/durable-context");
@@ -496,4 +498,56 @@ describe("onInvocationEnd receives correct InvocationEndInfo on failure", () => 
       expect(endInfo.executionResult).toBeUndefined();
     },
   );
+});
+
+describe("onInvocationEnd reflects the class of a termination", () => {
+  // PluginInvocationStatus is public surface, so which status a termination reports is
+  // part of the contract. A fault previously reached plugins as PENDING with no error,
+  // because every reason without an explicit branch fell through to the suspend handling.
+  const runWithTermination = async (
+    reason: TerminationReason,
+    details: { message: string; error?: Error },
+  ): Promise<Record<string, unknown>> => {
+    const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
+      onInvocationStart: jest.fn(),
+      onInvocationEnd: jest.fn(),
+    };
+    mockTerminationManager.getTerminationPromise.mockResolvedValue({
+      reason,
+      ...details,
+    });
+
+    const handler = withDurableExecution(
+      jest.fn().mockReturnValue(new Promise(() => {})), // never resolves
+      { plugins: [plugin] },
+    );
+    await handler(mockEvent, mockContext);
+
+    expect(plugin.onInvocationEnd).toHaveBeenCalledTimes(1);
+    return (plugin.onInvocationEnd as jest.Mock).mock.calls[0][0];
+  };
+
+  it("reports FAILED with the error for NON_DETERMINISM", async () => {
+    const error = new NonDeterministicExecutionError(
+      'Operation name mismatch for step "1"',
+    );
+    const endInfo = await runWithTermination(
+      TerminationReason.NON_DETERMINISM,
+      { message: error.message, error },
+    );
+
+    expect(endInfo.status).toBe(PluginInvocationStatus.FAILED);
+    expect(endInfo.executionError).toBe(error);
+    expect(endInfo.executionResult).toBeUndefined();
+  });
+
+  it("reports PENDING with no error for a suspend", async () => {
+    const endInfo = await runWithTermination(TerminationReason.WAIT_SCHEDULED, {
+      message: "Wait scheduled",
+    });
+
+    expect(endInfo.status).toBe(PluginInvocationStatus.PENDING);
+    expect(endInfo.executionError).toBeUndefined();
+    expect(endInfo.executionResult).toBeUndefined();
+  });
 });

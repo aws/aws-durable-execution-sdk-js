@@ -1,0 +1,179 @@
+name: Lint
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read # Required for actions/checkout
+
+# No concurrency block here on purpose. build.yml, the only caller, already sets
+# workflow-level concurrency with cancel-in-progress, which governs the jobs of a
+# called workflow. A group of its own would be redundant -- and including
+# github.run_id in one, as the other reusable workflows do, makes the group unique
+# per run so cancel-in-progress can never match anything.
+
+env:
+  # See the note in build.yml: the desktop app's `electron` devDependency
+  # downloads a ~100 MB binary that no lint job needs.
+  ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+
+jobs:
+  # Everything lint: Biome for the whole monorepo, the diff-scoped async-safety
+  # annotations, and the repo's own published ESLint rule run against the examples.
+  #
+  # These share one job because they share one `npm ci`, which is the expensive
+  # part. The same argument removed a duplicate boundary-lint step from the
+  # insight-hosts job in build.yml, and then merged the async-safety job into this
+  # one; folding in the durable-rules job takes the install count for lint work
+  # from three to one. A different toolchain does not require a different job -- it
+  # requires one extra build step, below.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The async-safety step below uses `biome lint --changed`, which diffs
+          # against the base branch and therefore needs real history. This also
+          # fetches every branch, so no extra `git fetch` is required -- and adding
+          # one with --depth=1 would convert the full clone into a shallow one
+          # (verified: it writes .git/shallow), risking merge-base resolution for no
+          # benefit.
+          fetch-depth: 0
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+          cache: "npm"
+      - name: Install dependencies
+        # id so the steps below can require THIS step specifically, rather than
+        # "nothing failed" -- see the note on the first conditional step.
+        id: install
+        run: npm ci
+
+      # @biomejs/biome is pinned exact in seven package.json files. A skew between
+      # the root pin and a package's would format the same file two ways with no
+      # failure to reveal it, since formatter output is not stable across minors.
+      # Cheap, and placed before the checks a skew would invalidate.
+      - name: Biome version pins in sync
+        run: npm run lint:versions --silent
+
+      # Directory names, which Biome cannot check. The deleted
+      # `filename-convention/kebab-case` rule was error-level and gated, and it
+      # validated BOTH the filename and every directory segment;
+      # useFilenamingConvention only does the filename (verified: a kebab-case file
+      # inside `BadDirName/nested_dir/` produces no diagnostic). This runs the repo's
+      # own check-filenames.js, which already covered directories but was wired to
+      # nothing, so half that rule was silently lost.
+      - name: Kebab-case directory names
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run lint:filenames --silent
+
+      # Gates on errors only. `biome ci` auto-detects GitHub Actions and turns
+      # every diagnostic into an inline PR annotation, and this repo carries ~1030
+      # warnings and infos that are almost all pre-existing -- unfiltered, that
+      # buries a PR in review noise about lines it never touched.
+      #
+      # This does NOT weaken enforcement. Formatting violations and lint errors
+      # are both error-severity, so both still fail here; only warnings and infos
+      # are withheld from annotations. They are reported in the summary step below.
+      - name: Biome (format + lint)
+        run: npm run lint:ci
+
+      # Async-safety rules, annotated on the diff only.
+      #
+      # noFloatingPromises / noMisusedPromises / useAwaitThenable recover the async
+      # coverage the testing package lost with `strictTypeChecked`. They are "warn",
+      # so the gating step above (--diagnostic-level=error) neither annotates nor
+      # fails on them -- which would leave them with no CI signal at all.
+      #
+      # `--changed` limits this to files the PR actually touched, so a NEW floating
+      # promise is annotated inline while the 77-violation backlog is not. On the
+      # migration branch that is 2 annotations instead of 77.
+      #
+      # Fails loudly if the base ref is missing: the script passes
+      # --no-errors-on-unmatched (required so a docs-only PR, which changes nothing
+      # Biome lints, does not exit 1), and that flag also masks a bad base ref. This
+      # check is therefore the only thing standing between a missing base ref and a
+      # step that reports nothing while passing.
+      #
+      # --since is passed explicitly so PRs targeting v1.x compare against v1.x
+      # rather than the configured default of origin/main.
+      - name: Annotate async-safety warnings on changed files
+        # Runs even when the gating steps above fail. As a separate job this executed
+        # unconditionally; folding it into this job made it skip on any earlier
+        # failure, so a PR with both a formatting error and a new floating promise
+        # would only learn about the promise on the next push.
+        #
+        # The condition is in two parts because they answer two different questions.
+        # `!cancelled()` means "an earlier LINT failure must not skip this" -- it is
+        # equivalent to success() || failure(), and an earlier revision of this file
+        # used that spelling while claiming always() was wrong because it "would also
+        # run after a failed npm ci". That reasoning was wrong: success() || failure()
+        # runs then too. The only thing always() adds is running on cancellation.
+        #
+        # `steps.install.outcome == 'success'` is the part that actually prevents the
+        # npm ci problem. Without it a failed install cascades into five steps that
+        # run with no node_modules and fail on a missing binary, burying the one real
+        # error. Note the implicit success() that GitHub adds to a bare `if` is
+        # suppressed once a status function appears, which is why both halves are
+        # needed. ${{ }} is required because a leading `!` is YAML tag syntax.
+        # Pull requests only. On a push event GITHUB_BASE_REF is empty, and the old
+        # `:-main` fallback then diffed against origin/main -- wrong for the pushes to
+        # v1.x that build.yml also triggers on, reporting unrelated differences as if
+        # the push had introduced them. There is no meaningful `--changed` base for a
+        # push anyway, so the step is scoped to the event where the diff is defined.
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && github.event_name == 'pull_request' }}
+        run: |
+          BASE="origin/${GITHUB_BASE_REF}"
+          if ! git rev-parse --verify -q "$BASE" >/dev/null; then
+            echo "::error::Base ref $BASE not found. '--changed' cannot compute a diff."
+            exit 1
+          fi
+          echo "Diffing against $BASE ($(git rev-parse --short "$BASE"))"
+          npm run lint:async-safety --silent -- --since="$BASE" --reporter=github
+
+      # Fails on any suppression that suppresses nothing.
+      #
+      # `suppressions/unused` is warning-severity and is not a configurable lint
+      # rule, so the `biome ci --diagnostic-level=error` gate above filters it out.
+      # Two suppressions in this migration were dead for exactly that reason -- one
+      # with its reason wrapped onto a second line, one where a refactor moved the
+      # violation out of the rule's view entirely -- and nothing caught either. An
+      # unused suppression means either the rationale suppresses nothing or a finding
+      # left the backlog silently, so it gets its own gate.
+      - name: Biome (no dead suppressions)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run lint:suppressions --silent
+
+      # The repo's own published lint rules, run against the examples.
+      #
+      # A different toolchain, not a different job: Biome cannot host ESLint
+      # plugins, so this needs the plugin compiled and ESLint invoked separately --
+      # but it does not need a second `npm ci`. `no-nested-durable-operations`
+      # catches a real bug class (a durable operation nested inside a step never
+      # checkpoints correctly), and the examples are the code customers copy, so the
+      # rule needs to run on more than the plugin's own RuleTester fixtures.
+      #
+      # Conditioned like the steps above: a formatting error earlier in the job must
+      # not hide a nested-operation bug until the next push, but a failed install
+      # must not produce a spurious failure here either.
+      - name: Build the ESLint plugin
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run build -w packages/aws-durable-execution-sdk-js-eslint-plugin
+
+      - name: Check examples against our own durable-function rules
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run lint:durable-rules -w packages/aws-durable-execution-sdk-js-examples
+
+      # Informational only, never gating: renders the warning backlog as a
+      # per-rule table in the job summary so it stays visible without annotating
+      # individual lines.
+      #
+      # Conditioned like the steps above. This one would degrade gracefully without
+      # dependencies -- no biome to invoke, so the script prints its "backlog
+      # unknown" warning and exits 0 -- but there is no reason to run it at all when
+      # the install failed, and a uniform condition is easier to reason about than a
+      # per-step judgement about which scripts fail softly.
+      - name: Biome warning backlog (informational)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run lint:report --silent >> "$GITHUB_STEP_SUMMARY"
