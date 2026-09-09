@@ -118,7 +118,7 @@ describe("otel-conformance-tests workflow", () => {
   const workflow = readFileSync(WORKFLOW_PATH, "utf8");
 
   it("does not run on a schedule", () => {
-    expect(workflow).not.toMatch(/^  schedule:/m);
+    expect(workflow).not.toMatch(/^ {2}schedule:/m);
   });
 
   it("points examples_dir at this package inside the SDK checkout", () => {
