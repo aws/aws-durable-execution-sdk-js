@@ -12,7 +12,8 @@ jobs:
       contents: read
       id-token: write
       pull-requests: write
-    uses: aws/aws-durable-execution-ci/.github/workflows/ai-pr-review.yml@8de63fa646c1b7b778829126cf53b7874074795e
+    uses: aws/aws-durable-execution-ci/.github/workflows/ai-pr-review.yml@d6b017da14385908951d23e26c790b28a4e5f9f0
     with:
       prompt-path: .github/prompts/ai-pr-review.md
+      run-claude: false
     secrets: inherit
