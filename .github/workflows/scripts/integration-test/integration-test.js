@@ -45,6 +45,42 @@ const log = {
     console.error(`${COLORS.RED}[ERROR]${COLORS.NC} ${msg}`),
 };
 
+// Map a run outcome to a category for the job summary.
+function classifyOutcome(/** @type {unknown} */ error) {
+  if (!error) return "success";
+  const msg = String(
+    /** @type {{message?: string}} */ (error)?.message ?? error,
+  );
+  if (/Credentials could not be loaded/i.test(msg)) return "credential";
+  if (/ResourceConflictException|Function already exist/i.test(msg))
+    return "resource-conflict";
+  if (/CapacityProviderScalingLimitExceeded/i.test(msg))
+    return "capacity-limit";
+  if (
+    /failed to enter successful state|failed to settle|State.*Failed/i.test(msg)
+  )
+    return "runtime";
+  if (/jest|test.*failed|assertion/i.test(msg)) return "assertion";
+  return "unknown";
+}
+
+// Append the outcome to $GITHUB_STEP_SUMMARY. No-op off CI.
+function writeOutcomeSummary(
+  /** @type {string} */ category,
+  /** @type {string} */ detail,
+) {
+  const file = process.env.GITHUB_STEP_SUMMARY;
+  if (!file) return;
+  const line = detail
+    ? `- **${category}**: ${detail}\n`
+    : `- **${category}**\n`;
+  try {
+    appendFileSync(file, `## Integration test outcome\n${line}`);
+  } catch {
+    // Don't fail the run if summary can't be written.
+  }
+}
+
 // Configuration
 const CONFIG = {
   AWS_REGION: process.env.AWS_REGION || "us-east-1",
@@ -722,10 +758,13 @@ async function main() {
   const runner = new IntegrationTestRunner(options);
 
   await runner.run(options);
+
+  writeOutcomeSummary("success", "");
 }
 
 // Run if this file is executed directly
 main().catch((error) => {
   console.error(error);
+  writeOutcomeSummary(classifyOutcome(error), String(error?.message ?? error));
   process.exit(1);
 });
