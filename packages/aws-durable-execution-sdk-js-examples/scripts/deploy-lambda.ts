@@ -664,15 +664,42 @@ async function main(): Promise<void> {
           );
         } else {
           console.log("Function does not exist");
-          await createFunction(
-            lambdaClient,
-            functionName,
-            exampleConfig,
-            zipFile,
-            env,
-            useCapacityProvider,
-            selectedRuntime,
-          );
+          try {
+            await createFunction(
+              lambdaClient,
+              functionName,
+              exampleConfig,
+              zipFile,
+              env,
+              useCapacityProvider,
+              selectedRuntime,
+            );
+          } catch (error: unknown) {
+            // The function can appear mid-deploy (a cancelled run's cleanup or a
+            // racing run). Switch to update instead of retrying create.
+            if (error instanceof ResourceConflictException) {
+              console.log(
+                "Function already exists (created concurrently); switching to update",
+              );
+              functionExists = true;
+              currentConfig = await getCurrentConfiguration(
+                lambdaClient,
+                functionName,
+              );
+              await updateFunction(
+                lambdaClient,
+                functionName,
+                exampleConfig,
+                zipFile,
+                env,
+                currentConfig,
+                useCapacityProvider,
+                selectedRuntime,
+              );
+            } else {
+              throw error;
+            }
+          }
         }
 
         if (useCapacityProvider) {
