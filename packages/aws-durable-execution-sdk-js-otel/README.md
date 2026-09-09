@@ -531,6 +531,12 @@ deriveTraceIdFromArn(
 
 deriveTraceIdFromXRayRoot(xRayRoot: string): string | undefined;
 
+deriveExecutionTraceId(
+  environment: ExecutionTraceEnvironment,
+  executionArn: string,
+  executionStartTimestamp?: Date,
+): string;
+
 deriveWorkflowSpanId(executionArn: string): string;
 
 deriveExecutionRootSpanId(executionArn: string): string;
@@ -544,12 +550,35 @@ deriveSpanIdFromOperationId(
 `deriveTraceIdFromArn` returns a 32-character hexadecimal trace ID.
 `deriveTraceIdFromXRayRoot` converts a valid X-Ray `Root` value to an
 OpenTelemetry trace ID and returns `undefined` for invalid input.
+`deriveExecutionTraceId` applies the default plugin precedence to an explicit
+environment: a valid `_X_AMZN_TRACE_ID` `Root` wins, otherwise it uses the same
+ARN-and-start-time fallback as the plugins. Pass `process.env` in Lambda or a
+plain object in tests. When no valid X-Ray Root is available, pass the same
+execution start timestamp supplied to the plugin; omit it only when it is
+unavailable to both callers.
 `deriveWorkflowSpanId` hashes `workflow:<execution ARN>`,
 `deriveExecutionRootSpanId` hashes `execution-root:<execution ARN>` (a distinct
 namespace so the synthetic root never collides with the Workflow or operation
 spans on the shared trace), and `deriveSpanIdFromOperationId` hashes
 `<execution ARN>:<operation ID>`. All three span helpers return 16-character
 hexadecimal IDs.
+
+Wrapper-style instrumentation can create spans on the same execution trace and
+refer to the same Workflow span without copying the plugin's derivations:
+
+```typescript
+import {
+  deriveExecutionTraceId,
+  deriveWorkflowSpanId,
+} from "@aws/durable-execution-sdk-js-otel";
+
+const executionTraceId = deriveExecutionTraceId(
+  process.env,
+  executionArn,
+  executionStartTimestamp,
+);
+const workflowSpanId = deriveWorkflowSpanId(executionArn);
+```
 
 ### Context Extractors
 
@@ -559,7 +588,8 @@ w3cClientContextExtractor(info: InvocationInfo): ContextExtractorResult;
 ```
 
 The package also exports the `ContextExtractor`, `ContextExtractorResult`,
-`IdGeneratorFactory`, `TracerProviderFactory`, and `OtelPluginConfig` types.
+`ExecutionTraceEnvironment`, `IdGeneratorFactory`, `TracerProviderFactory`, and
+`OtelPluginConfig` types.
 
 ## Verification and Troubleshooting
 

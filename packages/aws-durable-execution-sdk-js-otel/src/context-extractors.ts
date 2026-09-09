@@ -117,7 +117,8 @@ export function hasValidTraceId(
 export type ContextExtractor = (info: InvocationInfo) => ContextExtractorResult;
 
 /**
- * Reads the X-Ray trace header from the `_X_AMZN_TRACE_ID` environment variable.
+ * Parses an X-Ray trace header into the context used by the execution trace
+ * resolver.
  *
  * The durable execution backend propagates the same Root trace ID to every
  * invocation, so all invocations of the same execution share one traceId.
@@ -134,12 +135,11 @@ export type ContextExtractor = (info: InvocationInfo) => ContextExtractorResult;
  * as invalid (it is well-formed hex but not a usable ID). A valid Root with no
  * usable Parent is still returned (the trace ID is usable on its own).
  *
- * Returns undefined when _X_AMZN_TRACE_ID is missing or has no valid Root.
+ * Returns undefined when the header is missing or has no valid Root.
  */
-export function xRayContextExtractor(
-  _info: InvocationInfo,
+export function parseXRayTraceHeader(
+  header: string | undefined,
 ): ContextExtractorResult {
-  const header = process.env._X_AMZN_TRACE_ID;
   if (!header) {
     return undefined;
   }
@@ -188,6 +188,15 @@ export function xRayContextExtractor(
         : "UNDECIDED";
 
   return { traceId, parentSpanId, sampling };
+}
+
+/**
+ * Reads the X-Ray trace header from the `_X_AMZN_TRACE_ID` environment variable.
+ */
+export function xRayContextExtractor(
+  _info: InvocationInfo,
+): ContextExtractorResult {
+  return parseXRayTraceHeader(process.env._X_AMZN_TRACE_ID);
 }
 
 /**
