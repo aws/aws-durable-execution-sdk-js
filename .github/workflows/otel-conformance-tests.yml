@@ -31,8 +31,6 @@ on:
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/otel-conformance-tests.yml"
-  schedule:
-    - cron: "0 7 * * *"
   workflow_dispatch:
     inputs:
       phase:
