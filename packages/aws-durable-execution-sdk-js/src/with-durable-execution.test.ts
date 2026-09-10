@@ -83,6 +83,7 @@ describe("withDurableExecution", () => {
       setTerminating: jest.fn(),
       dispose: jest.fn(),
       waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
+      getBatchFailure: jest.fn().mockReturnValue(undefined),
     }));
 
     // Reset termination manager mock behavior
@@ -102,6 +103,7 @@ describe("withDurableExecution", () => {
       setTerminating: jest.fn(),
       dispose,
       waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
+      getBatchFailure: jest.fn().mockReturnValue(undefined),
     }));
     mockTerminationManager.getTerminationPromise.mockReturnValue(
       new Promise(() => {}),
@@ -122,6 +124,7 @@ describe("withDurableExecution", () => {
       setTerminating: jest.fn(),
       dispose,
       waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
+      getBatchFailure: jest.fn().mockReturnValue(undefined),
     }));
     mockTerminationManager.getTerminationPromise.mockReturnValue(
       new Promise(() => {}),
@@ -559,6 +562,7 @@ describe("withDurableExecution", () => {
       checkpoint: jest.fn().mockRejectedValue(checkpointError),
       setTerminating: jest.fn(),
       dispose: jest.fn(),
+      getBatchFailure: jest.fn().mockReturnValue(undefined),
     }));
 
     mockTerminationManager.getTerminationPromise.mockReturnValue(
@@ -850,5 +854,66 @@ describe("withDurableExecution", () => {
     })(mockEvent, mockContext);
 
     expect(initializeExecutionContext).toHaveBeenCalled();
+  });
+  it("throws the drain failure when the handler resolved before the batch failed", async () => {
+    // The handler resolves first, so it wins the race and `resultType` is
+    // "handler". A checkpoint batch then fails during waitForQueueCompletion():
+    // processQueue records the classified error, discards the queue and raises
+    // terminate(CHECKPOINT_FAILED). The waiter still resolves -- it is only ever
+    // resolved -- so nothing throws, and the termination promise has no observer
+    // left. Without reading getBatchFailure() this returned SUCCEEDED for an
+    // operation whose checkpoint was never persisted.
+    //
+    // checkpoint-batch-failure-end-to-end.composed.test.ts covers the same path
+    // through the public API with a real CheckpointManager; this pins the wiring.
+    const mockHandler = jest.fn().mockResolvedValue({ ok: true });
+
+    const batchFailure = new CheckpointUnrecoverableInvocationError(
+      "Checkpoint failed after handler resolved",
+    );
+
+    // Never resolves: the handler wins the race.
+    mockTerminationManager.getTerminationPromise.mockReturnValue(
+      new Promise(() => {}),
+    );
+
+    const getBatchFailure = jest.fn().mockReturnValue(undefined);
+
+    (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
+      checkpoint: jest.fn().mockResolvedValue(undefined),
+      setTerminating: jest.fn(),
+      dispose: jest.fn(),
+      waitForQueueCompletion: jest.fn().mockImplementation(async () => {
+        // The batch failed: the classified error is recorded before the waiter
+        // is notified, and the drain still resolves rather than rejecting.
+        getBatchFailure.mockReturnValue(batchFailure);
+        return undefined;
+      }),
+      getBatchFailure,
+    }));
+
+    const wrappedHandler = withDurableExecution(mockHandler);
+
+    await expect(wrappedHandler(mockEvent, mockContext)).rejects.toThrow(
+      CheckpointUnrecoverableInvocationError,
+    );
+  });
+
+  it("returns the handler result when the drain reported no failure", async () => {
+    // The negative case for the check above: getBatchFailure() answering
+    // undefined must leave a successful invocation untouched.
+    const mockHandler = jest.fn().mockResolvedValue({ ok: true });
+
+    mockTerminationManager.getTerminationPromise.mockReturnValue(
+      new Promise(() => {}),
+    );
+
+    const wrappedHandler = withDurableExecution(mockHandler);
+    const response = await wrappedHandler(mockEvent, mockContext);
+
+    expect(response).toEqual({
+      Status: InvocationStatus.SUCCEEDED,
+      Result: JSON.stringify({ ok: true }),
+    });
   });
 });
