@@ -699,11 +699,14 @@
 
     {
       // Examples, conformance handlers and the packaging smoke tests print to stdout on
-      // purpose, and are not part of the published API surface.
+      // purpose, and are not part of the published API surface. The graph package's `cloud/`
+      // deploy and validation scripts are the same case: operator scripts whose output IS the
+      // interface, not library code.
       "includes": [
         "packages/aws-durable-execution-sdk-js-examples/**",
         "packages/aws-durable-execution-sdk-js-conformance-tests/**",
         "packages/aws-durable-execution-sdk-js-conformance-tests-otel/**",
+        "packages/aws-durable-execution-sdk-js-graph/cloud/**",
         "packages/cjs-integration-test/**",
         "packages/esm-integration-test/**",
         "packages/cdk-bundling-integration-test/**",

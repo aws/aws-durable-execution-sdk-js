@@ -36,6 +36,8 @@ const scopes = new Set([
   // Workflow Insight: the VS Code extension, the desktop app, and the host-free
   // modules they share.
   "insight",
+  // Durable Graph: the LangGraph-shaped agent graph runtime built on the core SDK.
+  "graph",
 ]);
 
 /**
