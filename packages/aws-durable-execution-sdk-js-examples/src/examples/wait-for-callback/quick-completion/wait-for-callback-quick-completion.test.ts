@@ -13,11 +13,9 @@ createTests({
       const callbackOp = runner.getOperationByIndex(0);
 
       const executionPromise = runner.run({
-        payload: isCloud
-          ? {
-              submitterDelay: 5,
-            }
-          : {},
+        payload: {
+          submitterDelay: isCloud ? 5 : 1,
+        },
       });
 
       // only wait for started status

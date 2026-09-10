@@ -30,6 +30,7 @@ function runDurableCli(args: string[]): {
       encoding: "utf8",
       cwd: TESTING_SDK_PATH,
       timeout: 30000,
+      stdio: ["ignore", "pipe", "pipe"],
     });
     return { stdout, stderr: "", exitCode: 0 };
   } catch (error: any) {

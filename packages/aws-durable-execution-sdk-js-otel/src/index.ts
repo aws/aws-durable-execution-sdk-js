@@ -32,3 +32,7 @@ export type {
   ContextExtractor,
   ContextExtractorResult,
 } from "./context-extractors";
+
+// Execution Trace Identity
+export { deriveExecutionTraceId } from "./execution-trace-context";
+export type { ExecutionTraceEnvironment } from "./execution-trace-context";

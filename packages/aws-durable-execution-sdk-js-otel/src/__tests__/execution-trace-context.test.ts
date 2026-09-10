@@ -12,6 +12,7 @@ import {
   resolveExecutionTraceContext,
   rootSamplingDecision,
 } from "../execution-trace-context";
+import { deriveExecutionTraceId } from "../index";
 import {
   deriveTraceIdFromArn,
   deriveExecutionRootSpanId,
@@ -80,6 +81,57 @@ describe("canonicalTraceId", () => {
     // A live ambient span is not consulted at all: the canonical trace is the
     // reproducible ARN-derived ID when no valid remote trace was propagated.
     expect(canonical(undefined)).toBe(deriveTraceIdFromArn(ARN, START));
+  });
+});
+
+describe("deriveExecutionTraceId", () => {
+  it("uses the X-Ray Root from the supplied environment", () => {
+    expect(
+      deriveExecutionTraceId(
+        {
+          _X_AMZN_TRACE_ID:
+            "Root=1-5759e988-bd862e3fe1be46a994272793;Parent=53995c3f42cd8ad8;Sampled=1",
+        },
+        ARN,
+        START,
+      ),
+    ).toBe("5759e988bd862e3fe1be46a994272793");
+  });
+
+  it("uses a valid X-Ray Root even when Parent is missing", () => {
+    expect(
+      deriveExecutionTraceId(
+        {
+          _X_AMZN_TRACE_ID:
+            "Sampled=1; Root=1-5759e988-bd862e3fe1be46a994272793",
+        },
+        ARN,
+        START,
+      ),
+    ).toBe("5759e988bd862e3fe1be46a994272793");
+  });
+
+  it("falls back to the ARN and execution start timestamp when the header is missing", () => {
+    expect(deriveExecutionTraceId({}, ARN, START)).toBe(
+      deriveTraceIdFromArn(ARN, START),
+    );
+  });
+
+  it("falls back to the ARN and execution start timestamp when Root is malformed", () => {
+    expect(
+      deriveExecutionTraceId(
+        {
+          _X_AMZN_TRACE_ID:
+            "Root=1-5759e988-not-a-valid-root;Parent=53995c3f42cd8ad8",
+        },
+        ARN,
+        START,
+      ),
+    ).toBe(deriveTraceIdFromArn(ARN, START));
+  });
+
+  it("uses the deterministic ARN-only fallback when the start timestamp is unavailable", () => {
+    expect(deriveExecutionTraceId({}, ARN)).toBe(deriveTraceIdFromArn(ARN));
   });
 });
 

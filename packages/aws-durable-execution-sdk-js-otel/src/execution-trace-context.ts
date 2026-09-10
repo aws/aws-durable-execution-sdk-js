@@ -8,10 +8,22 @@ import {
 import {
   hasCompleteRemoteParent,
   hasValidTraceId,
+  parseXRayTraceHeader,
   resolveSampling,
 } from "./context-extractors";
 import type { ContextExtractorResult } from "./context-extractors";
 import { getConfiguredSampler } from "./global-sampler";
+
+/**
+ * Environment values used to resolve the default X-Ray execution trace ID.
+ *
+ * `process.env` and plain objects containing `_X_AMZN_TRACE_ID` both satisfy
+ * this interface, which keeps {@link deriveExecutionTraceId} pure and easy to
+ * test.
+ */
+export interface ExecutionTraceEnvironment {
+  readonly _X_AMZN_TRACE_ID?: string;
+}
 
 /**
  * The per-execution trace context resolved once at invocation start, shared by
@@ -80,6 +92,35 @@ export function canonicalTraceId(
     return extracted.traceId;
   }
   return deriveTraceIdFromArn(executionArn, executionStartTimestamp);
+}
+
+/**
+ * Derives the trace ID used by the OpenTelemetry plugins for a durable
+ * execution with the default X-Ray context extractor.
+ *
+ * A valid `Root` from `_X_AMZN_TRACE_ID` takes precedence. When the header is
+ * missing or malformed, the trace ID is derived from the execution ARN and
+ * stable execution start timestamp using the same resolver as the plugins.
+ *
+ * Pass the same execution start timestamp supplied to the plugin when no valid
+ * X-Ray Root is available. If the timestamp is unavailable to both callers,
+ * omit it to use the deterministic ARN-only fallback.
+ *
+ * @param environment - Environment containing the optional X-Ray trace header
+ * @param executionArn - The durable execution ARN
+ * @param executionStartTimestamp - Stable start time of the durable execution
+ * @returns The 32-character lowercase hexadecimal execution trace ID
+ */
+export function deriveExecutionTraceId(
+  environment: ExecutionTraceEnvironment,
+  executionArn: string,
+  executionStartTimestamp?: Date,
+): string {
+  return canonicalTraceId(
+    parseXRayTraceHeader(environment._X_AMZN_TRACE_ID),
+    executionArn,
+    executionStartTimestamp,
+  );
 }
 
 /**
