@@ -11,5 +11,5 @@
     "module": "esnext",
     "moduleResolution": "bundler"
   },
-  "include": ["src"]
+  "include": ["src", "examples"]
 }

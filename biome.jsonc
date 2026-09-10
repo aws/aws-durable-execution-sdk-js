@@ -707,6 +707,7 @@
         "packages/aws-durable-execution-sdk-js-conformance-tests/**",
         "packages/aws-durable-execution-sdk-js-conformance-tests-otel/**",
         "packages/aws-durable-execution-sdk-js-graph/cloud/**",
+        "packages/aws-durable-execution-sdk-js-graph/examples/**",
         "packages/cjs-integration-test/**",
         "packages/esm-integration-test/**",
         "packages/cdk-bundling-integration-test/**",

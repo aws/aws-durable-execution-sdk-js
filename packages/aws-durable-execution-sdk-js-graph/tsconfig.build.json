@@ -4,5 +4,6 @@
     "emitDeclarationOnly": true,
     "incremental": true
   },
+  "include": ["src"],
   "exclude": ["**/__tests__/**", "**/*.test.ts"]
 }
