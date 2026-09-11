@@ -67,6 +67,8 @@ jobs:
         run: npm ci
       - name: Build project
         run: npm run build
+      - name: Verify every package ships the files its package.json declares
+        run: node .github/workflows/scripts/test-publish/verify-declared-files-shipped.mjs
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:
