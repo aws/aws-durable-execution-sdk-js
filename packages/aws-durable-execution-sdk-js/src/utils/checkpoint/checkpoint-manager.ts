@@ -328,12 +328,12 @@ export class CheckpointManager implements Checkpoint {
       errorMessage,
     });
 
+    const is4xxStatusCode = statusCode && statusCode >= 400 && statusCode < 500;
+
     if (
-      statusCode &&
-      statusCode >= 400 &&
-      statusCode < 500 &&
+      is4xxStatusCode &&
       errorName === "InvalidParameterValueException" &&
-      errorMessage.startsWith("Invalid Checkpoint Token")
+      errorMessage.startsWith("Invalid checkpoint token")
     ) {
       return new CheckpointUnrecoverableInvocationError(
         `Checkpoint failed: ${errorMessage}`,
@@ -341,12 +341,7 @@ export class CheckpointManager implements Checkpoint {
       );
     }
 
-    if (
-      statusCode &&
-      statusCode >= 400 &&
-      statusCode < 500 &&
-      statusCode !== 429
-    ) {
+    if (is4xxStatusCode && statusCode !== 429) {
       return new CheckpointUnrecoverableExecutionError(
         `Checkpoint failed: ${errorMessage}`,
         originalError,

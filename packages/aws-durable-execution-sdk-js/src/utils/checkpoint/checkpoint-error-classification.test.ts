@@ -41,17 +41,17 @@ describe("Checkpoint Error Classification", () => {
     );
   });
 
-  it("should classify 4xx InvalidParameterValueException with Invalid Checkpoint Token as invocation error", () => {
+  it("should classify 4xx InvalidParameterValueException with Invalid checkpoint token as invocation error", () => {
     const awsError = {
       name: "InvalidParameterValueException",
-      message: "Invalid Checkpoint Token: token expired",
+      message: "Invalid checkpoint token: token expired",
       $metadata: { httpStatusCode: 400 },
     };
 
     const result = (handler as any).classifyCheckpointError(awsError);
 
     expect(result).toBeInstanceOf(CheckpointUnrecoverableInvocationError);
-    expect(result.message).toContain("Invalid Checkpoint Token");
+    expect(result.message).toContain("Invalid checkpoint token");
   });
 
   it("should classify other 4xx errors as execution error", () => {
