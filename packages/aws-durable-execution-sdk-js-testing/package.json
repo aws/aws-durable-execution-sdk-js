@@ -28,7 +28,6 @@
     "lint": "biome check src --diagnostic-level=error",
     "test": "jest --config jest.config.mjs --collectCoverage --collectCoverageFrom=src/**/*.{ts,js}",
     "run-durable": "NODE_OPTIONS=\"--import tsx\" npx run-durable --",
-    "api:extract": "npm run build:types && api-extractor run --local",
     "lint:fix": "biome check --write src"
   },
   "exports": {
@@ -45,7 +44,6 @@
   ],
   "devDependencies": {
     "@biomejs/biome": "2.5.11",
-    "@microsoft/api-extractor": "^7.55.1",
     "@rollup/plugin-replace": "^6.0.3",
     "@types/aws-lambda": "^8.10.150",
     "@types/semver": "^7.5.8",

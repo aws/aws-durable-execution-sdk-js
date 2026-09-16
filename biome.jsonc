@@ -79,14 +79,12 @@
   //    implement any of these rules.
   //
   // 2. TSDoc syntax is unchecked. `eslint-plugin-tsdoc`'s `tsdoc/syntax` has no Biome
-  //    equivalent, and nothing automated replaces it. API Extractor does parse TSDoc,
-  //    but `api:extract` is a manual command in no workflow, so calling it a
-  //    "backstop" would overstate it. It also cannot become a CI gate as-is: verify
-  //    mode (`api-extractor run` without `--local`) exits 1 today on pre-existing
-  //    ae-unresolved-link warnings, including ambiguous @link references in
-  //    src/utils/with-retry/index.ts and src/types/batch.ts. Fixing those first would
-  //    make an api-report diff check viable, and worth doing. Note tsdoc/syntax was
-  //    "warn" before, so nothing regressed -- this is an unfilled gap, not a loss.
+  //    equivalent, and nothing automated replaces it. API Extractor used to parse TSDoc
+  //    here, but it was removed once its only consumer (api-documenter, generating
+  //    docs/api-reference/) was dropped in favour of aws/aws-durable-execution-docs --
+  //    and it was never a backstop anyway, since `api:extract` ran in no workflow. Note
+  //    tsdoc/syntax was "warn" before, so nothing regressed -- this is an unfilled gap,
+  //    not a loss.
   //
   // 3. Markdown and YAML are not formatted at all, and that is deliberate. Biome has
   //    no formatter for either, and Prettier was dropped rather than retained just for
@@ -287,14 +285,6 @@
       "!**/.rollup.cache",
       "!**/*.tsbuildinfo",
       "!package-lock.json",
-
-      // API Extractor owns the formatting of the reports it generates. Reformatting them
-      // makes every regeneration produce a diff, which defeats the point of committing
-      // them: the report is meant to show real API changes in review, not whitespace
-      // churn. It would also mean the committed files never match what
-      // `npm run api:extract` produces.
-      "!api-extractor/*.api.json",
-      "!api-extractor/*.api.md",
 
       // Recorded execution histories are generated fixtures, not sources. The largest is
       // ~10 MiB, well past Biome's per-file ceiling, and formatting them would produce an
