@@ -60,6 +60,17 @@ const failingClient = (): DurableExecutionClient => ({
   },
 });
 
+/** Rejects every checkpoint with the stale-token shape emitted by the service. */
+const staleCheckpointTokenClient = (): DurableExecutionClient => ({
+  ...workingClient(),
+  checkpoint: async (): Promise<never> => {
+    throw Object.assign(new Error("Invalid checkpoint token"), {
+      name: "InvalidParameterValueException",
+      $metadata: { httpStatusCode: 400 },
+    });
+  },
+});
+
 const invoke = (
   client: DurableExecutionClient,
   handler: (event: unknown, context: DurableContext) => Promise<unknown>,
@@ -93,6 +104,21 @@ describe("CHECKPOINT_FAILED terminations", () => {
     );
 
     await expect(invocation).rejects.toThrow(/Checkpoint failed/);
+    await expect(invocation).rejects.toMatchObject({
+      isUnrecoverableInvocation: true,
+    });
+  });
+
+  it("rethrows stale checkpoint token failures as invocation errors", async () => {
+    const invocation = invoke(
+      staleCheckpointTokenClient(),
+      async (_event, context: DurableContext) => {
+        await context.step("save-the-thing", async () => "done");
+        return "finished";
+      },
+    );
+
+    await expect(invocation).rejects.toThrow(/Invalid checkpoint token/);
     await expect(invocation).rejects.toMatchObject({
       isUnrecoverableInvocation: true,
     });
