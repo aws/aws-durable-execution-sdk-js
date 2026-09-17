@@ -9,8 +9,11 @@ import type {
   DurableInstrumentationPlugin,
   InvocationEndInfo,
   InvocationInfo,
+  OperationChangeInfo,
   OperationInfo,
 } from "@aws/durable-execution-sdk-js";
+import { setFlagsFromString as setV8Flags } from "node:v8";
+import { runInNewContext } from "node:vm";
 
 const ARN =
   "arn:aws:lambda:us-east-1:123456789012:function:fn:1/durable-execution/exec-1/inv-1";
@@ -58,6 +61,125 @@ async function endAndDrain(
 ): Promise<void> {
   await plugin.onInvocationEnd?.(info);
   await drain(plugin);
+}
+
+/** A distinct, replay-stable execution ARN for `name`. */
+const arnFor = (name: string): string =>
+  `arn:aws:lambda:us-east-1:123456789012:function:fn:1/durable-execution/${name}/inv-1`;
+
+function startFor(
+  arn: string,
+  overrides: Partial<InvocationInfo> = {},
+): InvocationInfo {
+  return {
+    executionArn: arn,
+    requestId: "req-1",
+    isFirstInvocation: true,
+    executionInput: { execution: arn },
+    operations: {},
+    updatedOperations: {},
+    ...overrides,
+  } as InvocationInfo;
+}
+
+function endFor(
+  arn: string,
+  overrides: Partial<InvocationEndInfo> = {},
+): InvocationEndInfo {
+  return {
+    executionArn: arn,
+    requestId: "req-1",
+    isFirstInvocation: true,
+    status: "SUCCEEDED",
+    executionInput: { execution: arn },
+    executionResult: { ok: arn },
+    operations: {},
+    ...overrides,
+  } as InvocationEndInfo;
+}
+
+function changeFor(
+  arn: string,
+  operations: Record<string, OperationInfo> = {},
+): OperationChangeInfo {
+  return {
+    executionArn: arn,
+    operations,
+    updatedOperations: operations,
+  } as OperationChangeInfo;
+}
+
+/** Drives one full invocation of `arn` the way the SDK does. */
+async function runInvocation(
+  plugin: DurableInstrumentationPlugin,
+  arn: string,
+  opts: {
+    changes?: number;
+    start?: Partial<InvocationInfo>;
+    end?: Partial<InvocationEndInfo>;
+  } = {},
+): Promise<void> {
+  const start = startFor(arn, opts.start);
+  await plugin.onInvocationStart?.(start);
+  await plugin.wrapInvocation?.(start, async () => {
+    for (let i = 0; i < (opts.changes ?? 0); i++) {
+      await plugin.onOperationChange?.(
+        changeFor(arn, {
+          [`o${i}`]: op({
+            id: `o${i}`,
+            name: `step-${i}`,
+            status: "SUCCEEDED",
+          }),
+        }),
+      );
+    }
+    await plugin.onInvocationEnd?.(endFor(arn, opts.end));
+    return {} as unknown as DurableExecutionInvocationOutput;
+  });
+}
+
+/** An invocation the SDK does not await on any hook but wrapInvocation. */
+async function drainOnly(
+  plugin: DurableInstrumentationPlugin,
+  arn: string,
+): Promise<void> {
+  await plugin.wrapInvocation?.(
+    startFor(arn),
+    async () => ({}) as unknown as DurableExecutionInvocationOutput,
+  );
+}
+
+/** The SDK's plugin runner swallows a throwing hook; these tests do the same. */
+async function swallow(promise: unknown): Promise<void> {
+  await Promise.allSettled([promise]);
+}
+
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * "settled" when `p` settles either way within `ms`, "hung" when it does not. A
+ * hang here is an invocation that would run to the Lambda timeout.
+ */
+async function raceTimeout(
+  p: Promise<unknown>,
+  ms: number,
+): Promise<"settled" | "hung"> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<"hung">((resolve) => {
+    timer = setTimeout(() => resolve("hung"), ms);
+  });
+  try {
+    return await Promise.race([
+      p.then(
+        () => "settled" as const,
+        () => "settled" as const,
+      ),
+      timeout,
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 }
 
 describe("content filtering", () => {
@@ -381,11 +503,6 @@ describe("emit modes", () => {
 });
 
 describe("sampling", () => {
-  // Build a distinct, replay-stable execution ARN for `name`.
-  function arnFor(name: string): string {
-    return `arn:aws:lambda:us-east-1:123456789012:function:fn:1/durable-execution/${name}/inv-1`;
-  }
-
   function baseInfo(arn: string): InvocationInfo {
     return {
       executionArn: arn,
@@ -629,3 +746,1044 @@ describe("per-exporter truncation", () => {
     expect(sizeOf(exporter.render(got))).toBeLessThanOrEqual(900);
   });
 });
+
+describe("concurrent executions in one environment", () => {
+  // The SDK builds one plugin instance per handler-module initialization, so a
+  // single instance serves every execution the environment hosts — and with
+  // Lambda Managed Instances several of them run concurrently in one
+  // environment. These tests drive several executions through one plugin
+  // instance the way the SDK does (onInvocationStart, then the remaining hooks
+  // inside wrapInvocation) and assert that no execution's record is lost,
+  // displaced, or attributed to another execution.
+
+  it("delivers every concurrent execution's terminal record exactly once (on-complete)", async () => {
+    const exporter = new CapturingExporter();
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-complete",
+    });
+    const arns = Array.from({ length: 10 }, (_, i) =>
+      arnFor(`concurrent-${i}`),
+    );
+
+    await Promise.all(arns.map((arn) => runInvocation(plugin, arn)));
+
+    // Exactly one terminal record per execution: sorted equality catches both a
+    // lost record and a duplicated one.
+    expect(exporter.records.map((r) => r.executionArn).sort()).toEqual(
+      [...arns].sort(),
+    );
+    for (const record of exporter.records) {
+      expect(record.status).toBe("SUCCEEDED");
+      // No record carries another execution's payload.
+      expect(record.input).toEqual({ execution: record.executionArn });
+      expect(record.output).toEqual({ ok: record.executionArn });
+    }
+  });
+
+  it("delivers every concurrent execution's terminal record with interleaved operation changes (on-change)", async () => {
+    const exporter = new CapturingExporter();
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-change",
+    });
+    const arns = Array.from({ length: 10 }, (_, i) =>
+      arnFor(`interleaved-${i}`),
+    );
+
+    await Promise.all(
+      arns.map((arn) => runInvocation(plugin, arn, { changes: 3 })),
+    );
+
+    const terminal = exporter.records.filter((r) => r.status === "SUCCEEDED");
+    expect(terminal.map((r) => r.executionArn).sort()).toEqual(
+      [...arns].sort(),
+    );
+
+    for (const arn of arns) {
+      const forArn = exporter.records.filter((r) => r.executionArn === arn);
+      // The terminal record is the last thing said about an execution.
+      expect(forArn[forArn.length - 1].status).toBe("SUCCEEDED");
+    }
+    // Coalescing is per execution, so an intermediate record can be dropped —
+    // but never replaced by another execution's snapshot.
+    for (const record of exporter.records) {
+      expect(record.input).toEqual({ execution: record.executionArn });
+    }
+  });
+
+  it("loses no record while another execution's export is in flight, and never overlaps export calls", async () => {
+    let releaseFirstExport: () => void = () => {};
+    const firstExport = new Promise<void>((resolve) => {
+      releaseFirstExport = resolve;
+    });
+    let inExport = 0;
+    let maxInExport = 0;
+    let calls = 0;
+    const exported: WorkflowInsightRecord[] = [];
+    const exporter: InsightExporter = {
+      async export(record: WorkflowInsightRecord): Promise<void> {
+        inExport++;
+        maxInExport = Math.max(maxInExport, inExport);
+        // Park the first export so the records that follow queue up behind it.
+        if (calls++ === 0) await firstExport;
+        exported.push(record);
+        inExport--;
+      },
+    };
+
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-complete",
+    });
+    const arns = ["slow-a", "slow-b", "slow-c"].map(arnFor);
+
+    for (const arn of arns) {
+      await plugin.onInvocationStart?.(startFor(arn));
+      await plugin.onInvocationEnd?.(endFor(arn));
+    }
+
+    // Each invocation drains its own record before returning.
+    const drained = Promise.all(
+      arns.map((arn) =>
+        plugin.wrapInvocation?.(
+          startFor(arn),
+          async () => ({}) as unknown as DurableExecutionInvocationOutput,
+        ),
+      ),
+    );
+    releaseFirstExport();
+    await drained;
+
+    expect(exported.map((r) => r.executionArn).sort()).toEqual(
+      [...arns].sort(),
+    );
+    // Exporters still see one export at a time, regardless of concurrency.
+    expect(maxInExport).toBe(1);
+  });
+
+  it("emits nothing for an operation change delivered after the invocation ended", async () => {
+    const exporter = new CapturingExporter();
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-change",
+    });
+    const arn = arnFor("late-change-hook");
+    const start = startFor(arn);
+
+    await plugin.onInvocationStart?.(start);
+    await plugin.wrapInvocation?.(start, async () => {
+      await plugin.onInvocationEnd?.(endFor(arn));
+      // A checkpoint that completed just before the invocation ended still
+      // delivers its operation-change hook, and the SDK does not order it
+      // against onInvocationEnd. Emitting here would publish RUNNING after the
+      // terminal record, reverting a finished execution for every exporter that
+      // upserts by execution ARN.
+      await plugin.onOperationChange?.(changeFor(arn));
+      return {} as unknown as DurableExecutionInvocationOutput;
+    });
+
+    expect(exporter.records.map((r) => r.status)).toEqual([
+      "RUNNING",
+      "SUCCEEDED",
+    ]);
+    expect(exporter.records[1].endTime).toBeDefined();
+  });
+
+  it("rebuilds the scope after a suspend, taking the execution start time from the SDK", async () => {
+    const exporter = new CapturingExporter();
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-complete",
+    });
+    const arn = arnFor("suspended-then-resumed");
+    const executionStartTimestamp = new Date("2024-01-01T00:00:00.000Z");
+
+    // A suspend (PENDING) is an invocation end too: it emits nothing in
+    // on-complete mode and must not leave the execution's scope behind.
+    await runInvocation(plugin, arn, {
+      start: { executionStartTimestamp },
+      end: {
+        status: "PENDING",
+        executionResult: undefined,
+        executionStartTimestamp,
+      },
+    });
+    expect(exporter.records).toHaveLength(0);
+
+    // The resume rebuilds the scope from the SDK's execution start timestamp,
+    // so the record still spans the execution and not just this invocation. A
+    // scope left over from the suspend would report its own creation time here.
+    await runInvocation(plugin, arn, {
+      start: { isFirstInvocation: false, executionStartTimestamp },
+      end: { executionStartTimestamp },
+    });
+
+    expect(exporter.records).toHaveLength(1);
+    expect(exporter.records[0].startTime).toBe(
+      executionStartTimestamp.toISOString(),
+    );
+    expect(exporter.records[0].durationMs).toBeGreaterThan(0);
+  });
+
+  it("releases the cached execution input after a suspend", async () => {
+    const gc = exposeGc();
+    if (gc === undefined) {
+      // No way to force a collection here; the scope-rebuild test above still
+      // covers the removal deterministically.
+      return;
+    }
+
+    const plugin = workflowInsight({
+      exporters: [new CapturingExporter()],
+      emitMode: "on-complete",
+    });
+    const refs: WeakRef<object>[] = [];
+    for (let i = 0; i < 100; i++) {
+      const executionInput = { payload: "x".repeat(4096) };
+      refs.push(new WeakRef(executionInput));
+      await runInvocation(plugin, arnFor(`retained-${i}`), {
+        start: { executionInput },
+        end: {
+          status: "PENDING",
+          executionInput,
+          executionResult: undefined,
+        },
+      });
+    }
+
+    gc();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    gc();
+
+    const live = refs.filter((ref) => ref.deref() !== undefined).length;
+    // The most recent input can still be pinned by a local or a register, so
+    // allow one. A scope that outlives the suspend keeps all of them alive.
+    expect(live).toBeLessThanOrEqual(1);
+    // Keep the plugin (and its scope map) alive across the measurement.
+    expect(plugin.onInvocationEnd).toBeDefined();
+  });
+});
+
+describe("exporter failure containment", () => {
+  // A misbehaving exporter must cost its own record and nothing else: the
+  // invocation still returns, the rest of the queue is still delivered, and the
+  // scheduler still serves every later execution in the environment. An
+  // invocation that cannot finish here runs to the Lambda timeout, so these
+  // tests assert liveness with a bound rather than by hanging the suite.
+  const HANG_MS = 1000;
+
+  it("contains an exporter that throws synchronously instead of rejecting", async () => {
+    let throwNext = true;
+    const delivered: string[] = [];
+    const exporter: InsightExporter = {
+      // Typed to return a promise, but nothing enforces that at runtime.
+      export(record: WorkflowInsightRecord): Promise<void> {
+        if (throwNext) {
+          throwNext = false;
+          throw new Error("sync boom from exporter");
+        }
+        delivered.push(record.executionArn);
+        return Promise.resolve();
+      },
+    };
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-complete",
+    });
+    const first = arnFor("sync-throw-1");
+    const second = arnFor("sync-throw-2");
+
+    // The invocation whose export blew up still returns...
+    expect(await raceTimeout(runInvocation(plugin, first), HANG_MS)).toBe(
+      "settled",
+    );
+    // ...and an unrelated execution afterwards still reaches the exporter, so
+    // the failure did not leave an armed in-flight marker behind.
+    expect(await raceTimeout(runInvocation(plugin, second), HANG_MS)).toBe(
+      "settled",
+    );
+    expect(delivered).toEqual([second]);
+  });
+
+  it("contains an exporter whose render() throws", async () => {
+    let throwNext = true;
+    const delivered: string[] = [];
+    const exporter: InsightExporter = {
+      // Any limit makes the plugin call render() to size the record.
+      maxRecordSizeBytes: 100,
+      render(record: WorkflowInsightRecord): unknown {
+        if (throwNext) {
+          throwNext = false;
+          throw new Error("render blew up");
+        }
+        return record;
+      },
+      async export(record: WorkflowInsightRecord): Promise<void> {
+        delivered.push(record.executionArn);
+      },
+    };
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-complete",
+    });
+    const first = arnFor("render-throw-1");
+    const second = arnFor("render-throw-2");
+
+    expect(await raceTimeout(runInvocation(plugin, first), HANG_MS)).toBe(
+      "settled",
+    );
+    expect(await raceTimeout(runInvocation(plugin, second), HANG_MS)).toBe(
+      "settled",
+    );
+    expect(delivered).toEqual([second]);
+  });
+
+  it("delivers the rest of the queue when one export fails mid-queue, and leaves the failing execution drainable", async () => {
+    const [first, poisoned, last] = [
+      "queue-first",
+      "queue-poisoned",
+      "queue-last",
+    ].map(arnFor);
+    const exported: string[] = [];
+    let slowNext = true;
+    const exporter: InsightExporter = {
+      export(record: WorkflowInsightRecord): Promise<void> {
+        if (record.executionArn === poisoned) {
+          throw new Error("sync boom exporting the poisoned record");
+        }
+        // The first export is slow, so the other two queue up behind it the way
+        // concurrent executions in one environment do.
+        const slow = slowNext;
+        slowNext = false;
+        exported.push(record.executionArn);
+        return slow ? sleep(60) : Promise.resolve();
+      },
+    };
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-complete",
+    });
+
+    await Promise.all(
+      [first, poisoned, last].map(async (arn) => {
+        await plugin.onInvocationStart?.(startFor(arn));
+        await plugin.onInvocationEnd?.(endFor(arn));
+      }),
+    );
+    const outcomes = await Promise.all(
+      [first, poisoned, last].map((arn) =>
+        raceTimeout(drainOnly(plugin, arn), HANG_MS),
+      ),
+    );
+
+    expect(outcomes).toEqual(["settled", "settled", "settled"]);
+    // The record queued behind the failure is still delivered.
+    expect(exported).toEqual([first, last]);
+
+    // The failing execution suspends and resumes. In on-complete mode the
+    // suspend schedules nothing, so its drain must be a no-op — a leaked
+    // outstanding entry would park this invocation until the Lambda timeout.
+    await plugin.onInvocationStart?.(startFor(poisoned));
+    await plugin.onInvocationEnd?.(endFor(poisoned, { status: "PENDING" }));
+    expect(await raceTimeout(drainOnly(plugin, poisoned), HANG_MS)).toBe(
+      "settled",
+    );
+  });
+
+  it("still emits for the next invocation when building the end record throws", async () => {
+    const exporter = new CapturingExporter();
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-change",
+    });
+    const arn = arnFor("end-record-throws");
+
+    // An error whose `message` getter throws. onInvocationEnd reads it while
+    // assembling the terminal record, i.e. after it has already marked the
+    // scope closed: without the try/finally around that, the closed scope stays
+    // in the map and mutes this execution for the life of the environment.
+    // Driven without wrapInvocation, like the SDK's config-error path
+    // (with-durable-execution.ts calls onInvocationStart and a FAILED
+    // onInvocationEnd on its own), so nothing else clears the scope.
+    const poisoned = {
+      name: "PoisonedError",
+      get message(): string {
+        throw new Error("error message getter blew up");
+      },
+    } as unknown as Error;
+
+    await plugin.onInvocationStart?.(startFor(arn));
+    await swallow(
+      plugin.onInvocationEnd?.(
+        endFor(arn, {
+          status: "FAILED",
+          executionError: poisoned,
+          executionResult: undefined,
+        }),
+      ),
+    );
+
+    // A completely healthy second invocation of the same execution.
+    const start = startFor(arn, { isFirstInvocation: false });
+    await plugin.onInvocationStart?.(start);
+    await plugin.wrapInvocation?.(start, async () => {
+      await plugin.onOperationChange?.(
+        changeFor(arn, {
+          o0: op({ id: "o0", name: "step-0", status: "SUCCEEDED" }),
+        }),
+      );
+      // Let the scheduler hand that record out before the terminal record
+      // supersedes it, so the assertion below does not rely on coalescing.
+      await sleep(10);
+      await plugin.onInvocationEnd?.(endFor(arn));
+      return {} as unknown as DurableExecutionInvocationOutput;
+    });
+
+    const statuses = exporter.records.map((r) => r.status);
+    expect(statuses[statuses.length - 1]).toBe("SUCCEEDED");
+    // onOperationChange is gated on `scope.closed`, so a stale closed scope
+    // would silently drop this record while the rest still looked healthy.
+    expect(
+      exporter.records.some(
+        (r) =>
+          r.status === "RUNNING" &&
+          r.operations.some((o) => o.name === "step-0"),
+      ),
+    ).toBe(true);
+  });
+
+  /**
+   * A real array whose own `map` can be switched to throw, so a fan-out can be
+   * made to fail *synchronously* — before the pump's first await — from a chosen
+   * call onwards. `exporters.map` is the fan-out's only synchronous-throw site
+   * (everything inside the map callback is already converted to a rejection),
+   * and a synchronous failure is what makes the pump's re-arm observable: the
+   * pump body never suspends, so its `finally` runs while the scheduler is still
+   * on the caller's stack.
+   */
+  function poisonableExporters(inner: InsightExporter): {
+    exporters: InsightExporter[];
+    /** Stack frame count sampled at every `sampleEvery`th throwing call. */
+    depths: number[];
+    /** Number of calls that threw. */
+    throwingCalls: () => number;
+    /** `map` throws from the `n`th call onwards (1-based). */
+    throwFromCall(n: number): void;
+  } {
+    const depths: number[] = [];
+    const realMap = Array.prototype.map;
+    const sampleEvery = 1000;
+    let calls = 0;
+    let threw = 0;
+    let from = Number.POSITIVE_INFINITY;
+    const exporters = [inner];
+    Object.defineProperty(exporters, "map", {
+      configurable: true,
+      value(this: InsightExporter[], ...args: unknown[]): unknown {
+        calls++;
+        if (calls >= from) {
+          threw++;
+          // Sampled: building a stack string on every call would dominate the
+          // test's runtime.
+          if (threw % sampleEvery === 0) {
+            depths.push((new Error().stack ?? "").split("\n").length);
+          }
+          throw new TypeError("exporters.map is not a function");
+        }
+        return (realMap as unknown as (...a: unknown[]) => unknown).apply(
+          this,
+          args,
+        );
+      },
+    });
+    return {
+      exporters,
+      depths,
+      throwingCalls: () => threw,
+      throwFromCall(n) {
+        from = n;
+      },
+    };
+  }
+
+  it("serves a long queue of synchronously failing fan-outs without losing the tail", async () => {
+    // Every fan-out that fails synchronously unwinds the pump to its outer
+    // `finally`, which re-arms the pump. Re-arming with a direct ensurePump()
+    // call runs the next queue entry one frame pair deeper instead of on the
+    // loop: at this queue length that reached ~2,740 levels, hit a RangeError,
+    // and silently abandoned the remaining ~9,250 records.
+    const QUEUED = 12_000;
+    const delivered: string[] = [];
+    const poison = poisonableExporters({
+      async export(record: WorkflowInsightRecord): Promise<void> {
+        delivered.push(record.executionArn);
+        await sleep(20);
+      },
+    });
+    const plugin = workflowInsight({
+      exporters: poison.exporters,
+      emitMode: "on-complete",
+    });
+    const arns = Array.from({ length: QUEUED + 1 }, (_, i) =>
+      arnFor(`deep-queue-${i}`),
+    );
+
+    // Jest caps Error.stackTraceLimit at 100 frames, which would saturate the
+    // depth sample.
+    const limit = Error.stackTraceLimit;
+    Error.stackTraceLimit = Number.POSITIVE_INFINITY;
+    let outcomes: ("settled" | "hung")[];
+    try {
+      // The first execution starts the pump and parks it inside a 20 ms export.
+      await plugin.onInvocationStart?.(startFor(arns[0]));
+      await plugin.onInvocationEnd?.(endFor(arns[0]));
+      // The rest queue up behind it. Everything here awaits already-resolved
+      // promises — microtasks only — so the 20 ms timer cannot fire and the
+      // queue really does accumulate.
+      for (let i = 1; i <= QUEUED; i++) {
+        await plugin.onInvocationStart?.(startFor(arns[i]));
+        await plugin.onInvocationEnd?.(endFor(arns[i]));
+      }
+      // From here on every fan-out fails synchronously. Give the pump time to
+      // sweep the whole queue.
+      poison.throwFromCall(2);
+      await sleep(500);
+
+      // One fan-out attempt per queued execution: the pump reached the tail. A
+      // RangeError cuts the sweep short and abandons the rest of the queue, so
+      // a count this high is also the assertion that none was thrown.
+      expect(poison.throwingCalls()).toBeGreaterThanOrEqual(QUEUED);
+      // And every attempt ran at the same depth, rather than one frame pair
+      // deeper than the one before it.
+      expect(poison.depths.length).toBeGreaterThan(1);
+      const [baseline] = poison.depths;
+      for (const depth of poison.depths) {
+        expect(Math.abs(depth - baseline)).toBeLessThan(50);
+      }
+
+      outcomes = await Promise.all(
+        arns.map((arn) => raceTimeout(drainOnly(plugin, arn), HANG_MS)),
+      );
+    } finally {
+      Error.stackTraceLimit = limit;
+    }
+
+    // Every execution's record is either delivered or still drainable: nothing
+    // is stranded in the queue, and no invocation waits for a record the
+    // scheduler abandoned.
+    expect(outcomes.filter((o) => o === "hung")).toEqual([]);
+    expect(delivered).toEqual([arns[0]]);
+  }, 60_000);
+
+  it("falls back to the default exporter when exporters is not an array", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    const log = jest.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      // Validated only for truthiness and `.length`, an array-like reached
+      // `this.exporters.map` and made every fan-out throw a TypeError from
+      // inside the pump — dropping the record and unwinding the pump on every
+      // queue entry.
+      const inner = new CapturingExporter();
+      const arrayLike = { length: 1, 0: inner } as unknown as InsightExporter[];
+      const plugin = workflowInsight({
+        exporters: arrayLike,
+        emitMode: "on-complete",
+      });
+      const first = arnFor("non-array-exporters-1");
+      const second = arnFor("non-array-exporters-2");
+
+      expect(await raceTimeout(runInvocation(plugin, first), HANG_MS)).toBe(
+        "settled",
+      );
+      // A later execution in the same environment still exports, so the
+      // fallback left the scheduler fully usable.
+      expect(await raceTimeout(runInvocation(plugin, second), HANG_MS)).toBe(
+        "settled",
+      );
+
+      // Warned once, at construction, not once per record.
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0][0])).toContain("[workflow-insight]");
+      // Both records went to the default LambdaLogExporter...
+      expect(
+        log.mock.calls.map(
+          ([line]) =>
+            (JSON.parse(String(line)) as WorkflowInsightRecord).executionArn,
+        ),
+      ).toEqual([first, second]);
+      // ...and the array-like's own entry was never used.
+      expect(inner.records).toEqual([]);
+    } finally {
+      log.mockRestore();
+      warn.mockRestore();
+    }
+  });
+});
+
+describe("execution start time", () => {
+  it("spans the execution, not just the last invocation, when the SDK reports no execution start timestamp", async () => {
+    const exporter = new CapturingExporter();
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-complete",
+    });
+    const arn = arnFor("resume-without-start-timestamp");
+    // A step that ran five minutes ago and is replayed into this invocation:
+    // the oldest instant this invocation knows about. `executionStartTimestamp`
+    // is optional, so this is the fallback the plugin has to work with.
+    const startedAt = new Date(Date.now() - 5 * 60_000);
+    const operations = {
+      o1: op({
+        id: "o1",
+        name: "step-1",
+        status: "SUCCEEDED",
+        isReplay: true,
+        startTimestamp: startedAt,
+      }),
+    };
+
+    await runInvocation(plugin, arn, {
+      start: { operations },
+      end: { status: "PENDING", operations, executionResult: undefined },
+    });
+    expect(exporter.records).toHaveLength(0);
+
+    await runInvocation(plugin, arn, {
+      start: { isFirstInvocation: false, operations },
+      end: { operations },
+    });
+
+    expect(exporter.records).toHaveLength(1);
+    expect(exporter.records[0].startTime).toBe(startedAt.toISOString());
+    // Falling back to `now` would report only the final invocation instead.
+    expect(exporter.records[0].durationMs).toBeGreaterThan(4 * 60_000);
+  });
+
+  it("normalizes an ISO-string execution start timestamp", async () => {
+    const exporter = new CapturingExporter();
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-complete",
+    });
+    // The value crosses a transport that can represent a Date as an ISO string.
+    // Taken as-is it is not a Date, and building the record would throw.
+    const wire = "2024-01-01T00:00:00.000Z" as unknown as Date;
+
+    await runInvocation(plugin, arnFor("wire-start-timestamp"), {
+      start: { executionStartTimestamp: wire },
+      end: { executionStartTimestamp: wire },
+    });
+
+    expect(exporter.records).toHaveLength(1);
+    expect(exporter.records[0].startTime).toBe("2024-01-01T00:00:00.000Z");
+    expect(exporter.records[0].durationMs).toBeGreaterThan(0);
+  });
+
+  it("still emits the record when the execution start timestamp is an Invalid Date", async () => {
+    const exporter = new CapturingExporter();
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-complete",
+    });
+    // An Invalid Date is not absent: it passes `instanceof Date`, so taking its
+    // NaN time reaches `new Date(NaN).toISOString()`, which throws RangeError
+    // out of record building and loses the whole record over one field. Treated
+    // as absent, the oldest-operation fallback supplies the start time.
+    const invalid = new Date(Number.NaN);
+    const startedAt = new Date(Date.now() - 60_000);
+    const operations = {
+      o1: op({
+        id: "o1",
+        name: "step-1",
+        status: "SUCCEEDED",
+        startTimestamp: startedAt,
+      }),
+    };
+
+    await runInvocation(plugin, arnFor("invalid-start-timestamp"), {
+      start: { executionStartTimestamp: invalid, operations },
+      end: { executionStartTimestamp: invalid, operations },
+    });
+
+    expect(exporter.records).toHaveLength(1);
+    expect(exporter.records[0].startTime).toBe(startedAt.toISOString());
+    expect(exporter.records[0].operations).toHaveLength(1);
+  });
+});
+
+describe("flush serialization", () => {
+  /** Tracks whether any export/flush call ever overlaps another. */
+  class OverlapTrackingExporter implements InsightExporter {
+    readonly records: WorkflowInsightRecord[] = [];
+    flushes = 0;
+    flushDuringExport = 0;
+    exportDuringFlush = 0;
+    maxInExport = 0;
+    private inExport = 0;
+    private inFlush = 0;
+
+    constructor(private readonly exportDelayMs: number) {}
+
+    async export(record: WorkflowInsightRecord): Promise<void> {
+      this.inExport++;
+      this.maxInExport = Math.max(this.maxInExport, this.inExport);
+      if (this.inFlush > 0) this.exportDuringFlush++;
+      await sleep(this.exportDelayMs);
+      if (this.inFlush > 0) this.exportDuringFlush++;
+      this.records.push(record);
+      this.inExport--;
+    }
+
+    async flush(): Promise<void> {
+      this.inFlush++;
+      this.flushes++;
+      if (this.inExport > 0) this.flushDuringExport++;
+      await sleep(1);
+      if (this.inExport > 0) this.flushDuringExport++;
+      this.inFlush--;
+    }
+  }
+
+  it("never overlaps a flush() with an export(), and flushes at most once per invocation", async () => {
+    const exporter = new OverlapTrackingExporter(20);
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-complete",
+    });
+    const arns = Array.from({ length: 4 }, (_, i) => arnFor(`flush-${i}`));
+
+    // Four executions end at once: each drains its own record and then flushes,
+    // while the other three records are still queued behind it.
+    await Promise.all(arns.map((arn) => runInvocation(plugin, arn)));
+
+    expect(exporter.records).toHaveLength(4);
+    expect(exporter.flushDuringExport).toBe(0);
+    expect(exporter.exportDuringFlush).toBe(0);
+    expect(exporter.maxInExport).toBe(1);
+    // The settled cadence: at most one flush per sampled-in invocation end, and
+    // overlapping ends may share one. So every record is covered by a flush that
+    // started after it was exported, but the call count is bounded above by the
+    // number of invocations, not equal to it.
+    expect(exporter.flushes).toBeGreaterThanOrEqual(1);
+    expect(exporter.flushes).toBeLessThanOrEqual(arns.length);
+  });
+
+  it("lets invocation ends that land together share one flush, so the slowest is not N flushes deep", async () => {
+    const n = 6;
+    const flushMs = 30;
+    let flushes = 0;
+    const exporter: InsightExporter = {
+      async export(): Promise<void> {},
+      async flush(): Promise<void> {
+        flushes++;
+        await sleep(flushMs);
+      },
+    };
+    // on-failure + SUCCEEDED ends: each end is sampled in and still flushes, but
+    // none of them schedules a record, so their requests reach the pump's flush
+    // turn together and one flushAll serves them all. The case where every end
+    // *does* carry a record is the next test.
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-failure",
+    });
+
+    const started = Date.now();
+    await Promise.all(
+      Array.from({ length: n }, (_, i) =>
+        runInvocation(plugin, arnFor(`flush-shared-${i}`)),
+      ),
+    );
+    const elapsed = Date.now() - started;
+
+    expect(flushes).toBeGreaterThanOrEqual(1);
+    expect(flushes).toBeLessThan(n);
+    expect(elapsed).toBeLessThan(n * flushMs * 0.8);
+  });
+
+  it("lets ends that each carry a record share a flush too, not one flush each", async () => {
+    const n = 6;
+    const exportMs = 10;
+    const flushMs = 30;
+    let flushes = 0;
+    let exports = 0;
+    const exporter: InsightExporter = {
+      async export(): Promise<void> {
+        exports++;
+        await sleep(exportMs);
+      },
+      async flush(): Promise<void> {
+        flushes++;
+        await sleep(flushMs);
+      },
+    };
+    // The case coalescing alone cannot fix: every end schedules a record, so
+    // each request only arrives after that end's own drain resolved, and the
+    // pump's one-record/one-flush alternation means there is rarely more than
+    // one request queued when the flush turn comes round — nothing to coalesce,
+    // and N ends cost N flushes. The pump therefore exports the records a drain
+    // is waiting on before it spends a flush fan-out, which releases those ends
+    // so their requests join one batch.
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-complete",
+    });
+
+    const started = Date.now();
+    await Promise.all(
+      Array.from({ length: n }, (_, i) =>
+        runInvocation(plugin, arnFor(`flush-record-shared-${i}`)),
+      ),
+    );
+    const elapsed = Date.now() - started;
+
+    // Printed so the numbers are in the review, not just the assertion.
+    console.log(
+      `${n} ends each carrying a record, export ${exportMs}ms, flush ${flushMs}ms -> slowest end ${elapsed}ms, ${flushes} flush(es)`,
+    );
+
+    expect(exports).toBe(n);
+    // At most one flush per end is the contract; the point of the front-loading
+    // is that a burst costs a small constant instead. Measured on this machine:
+    // one flush and ~100 ms, against six flushes and ~260 ms without the
+    // front-loading. The bound allows two, because a request made after the
+    // batch was taken is served by the next turn rather than this one.
+    expect(flushes).toBeGreaterThanOrEqual(1);
+    expect(flushes).toBeLessThanOrEqual(2);
+    // n * flushMs would be the cost of one flush per end; the exports alone are
+    // n * exportMs, so this bound is comfortably above the ~2 flushes it takes
+    // and comfortably below the old cadence.
+    expect(elapsed).toBeLessThan(n * flushMs);
+  });
+
+  /**
+   * An exporter that parks its first `export()` until released, so a test can
+   * build a specific queue up behind the pump, and records the order in which
+   * exports and flushes happen.
+   */
+  function gatedExporter(): {
+    exporter: InsightExporter;
+    log: string[];
+    parked: Promise<void>;
+    release: () => void;
+  } {
+    const log: string[] = [];
+    let announceParked!: () => void;
+    const parked = new Promise<void>((resolve) => {
+      announceParked = resolve;
+    });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let firstExport = true;
+    const nameOf = (arn: string): string => arn.split("/")[2];
+    return {
+      log,
+      parked,
+      release: () => release(),
+      exporter: {
+        async export(record: WorkflowInsightRecord): Promise<void> {
+          log.push(`export:${nameOf(record.executionArn)}`);
+          if (firstExport) {
+            firstExport = false;
+            announceParked();
+            await gate;
+          }
+        },
+        async flush(): Promise<void> {
+          log.push("flush");
+        },
+      },
+    };
+  }
+
+  it("does not front-load a record nobody is draining ahead of a queued flush", async () => {
+    const { exporter, log, parked, release } = gatedExporter();
+    // on-failure: a FAILED end schedules a record, a SUCCEEDED end schedules
+    // none but is still sampled in, so it drains (a no-op) and flushes.
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-failure",
+    });
+
+    // Parks the pump inside an export so everything below queues up behind it.
+    void plugin.onInvocationEnd?.(
+      endFor(arnFor("noflushdelay-blocker"), { status: "FAILED" }),
+    );
+    await parked;
+
+    // A record nobody waits on: the SDK does not await onInvocationEnd, and no
+    // wrapInvocation drains this execution, so its record sits in the queue with
+    // no waiter — the shape an on-change stream produces.
+    await plugin.onInvocationEnd?.(
+      endFor(arnFor("noflushdelay-idle"), { status: "FAILED" }),
+    );
+
+    // An end that schedules no record and only asks for a flush. Its request is
+    // queued while the pump is still parked, so it is waiting when the flush
+    // turn comes round.
+    let askerDone = false;
+    const asker = runInvocation(plugin, arnFor("noflushdelay-asker")).then(
+      () => {
+        askerDone = true;
+      },
+    );
+    await sleep(5);
+    expect(askerDone).toBe(false);
+
+    release();
+    await asker;
+
+    // Nothing but the parked export ran before the flush: the idle record was
+    // still queued, so it cannot push a flush back.
+    expect(log.slice(0, log.indexOf("flush"))).toEqual([
+      "export:noflushdelay-blocker",
+    ]);
+
+    // It is still exported, just not first.
+    await sleep(20);
+    expect(log).toContain("export:noflushdelay-idle");
+  });
+
+  it("exports the record a drain is waiting on before another execution's flush", async () => {
+    const { exporter, log, parked, release } = gatedExporter();
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-failure",
+    });
+
+    void plugin.onInvocationEnd?.(
+      endFor(arnFor("frontload-blocker"), { status: "FAILED" }),
+    );
+    await parked;
+
+    // A FAILED end inside wrapInvocation: its record is queued *and* its own
+    // drain is waiting on it, so it cannot ask for a flush yet.
+    const waiting = runInvocation(plugin, arnFor("frontload-waiting"), {
+      end: { status: "FAILED" },
+    });
+    // A different execution's end, which schedules nothing and asks for a flush
+    // straight away, so its request reaches the flush turn first.
+    const asker = runInvocation(plugin, arnFor("frontload-asker"));
+    await sleep(5);
+
+    release();
+    await Promise.all([waiting, asker]);
+
+    expect(log[0]).toBe("export:frontload-blocker");
+    expect(log).toContain("flush");
+    // The awaited record goes out before the flush that the *other* execution
+    // asked for, which is what lets the two ends share that flush instead of the
+    // waiter paying for one of its own.
+    expect(log.indexOf("export:frontload-waiting")).toBeLessThan(
+      log.indexOf("flush"),
+    );
+  });
+
+  it("does not satisfy a flush request that arrives while a flush is running", async () => {
+    let flushes = 0;
+    let firstFlushStarted!: () => void;
+    const reachedFirstFlush = new Promise<void>((resolve) => {
+      firstFlushStarted = resolve;
+    });
+    let releaseFirstFlush!: () => void;
+    const exporter: InsightExporter = {
+      async export(): Promise<void> {},
+      async flush(): Promise<void> {
+        flushes++;
+        if (flushes === 1) {
+          firstFlushStarted();
+          await new Promise<void>((resolve) => {
+            releaseFirstFlush = resolve;
+          });
+        }
+      },
+    };
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-complete",
+    });
+
+    const first = runInvocation(plugin, arnFor("mid-flush-first"));
+    await reachedFirstFlush;
+
+    // This execution's record is scheduled *after* the in-flight flush already
+    // read the exporter's buffer, so that flush cannot stand in for its own: it
+    // must wait for the next one.
+    let secondDone = false;
+    const second = runInvocation(plugin, arnFor("mid-flush-second")).then(
+      () => {
+        secondDone = true;
+      },
+    );
+    await sleep(20);
+    expect(secondDone).toBe(false);
+    expect(flushes).toBe(1);
+
+    releaseFirstFlush();
+    await Promise.all([first, second]);
+    expect(secondDone).toBe(true);
+    expect(flushes).toBe(2);
+  });
+
+  it("releases every waiter when flush() throws, and logs each failure", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      let flushes = 0;
+      const exporter: InsightExporter = {
+        async export(): Promise<void> {},
+        // Alternates a synchronous throw and a rejection: both must be absorbed,
+        // and neither may strand the invocation waiting on that flush.
+        flush(): Promise<void> {
+          flushes++;
+          if (flushes % 2 === 0) throw new Error("sync flush boom");
+          return Promise.reject(new Error("async flush boom"));
+        },
+      };
+      const plugin = workflowInsight({
+        exporters: [exporter],
+        emitMode: "on-complete",
+      });
+      const arns = Array.from({ length: 5 }, (_, i) =>
+        arnFor(`flush-throws-${i}`),
+      );
+
+      const settled = await Promise.race([
+        Promise.all(arns.map((arn) => runInvocation(plugin, arn))).then(
+          () => "settled",
+        ),
+        sleep(2000).then(() => "stranded"),
+      ]);
+
+      expect(settled).toBe("settled");
+      expect(flushes).toBeGreaterThanOrEqual(1);
+      expect(warn).toHaveBeenCalledWith(
+        "[workflow-insight] exporter flush failed:",
+        expect.any(Error),
+      );
+      expect(warn.mock.calls).toHaveLength(flushes);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
+/**
+ * A collector the test can trigger. Jest does not run node with --expose-gc, so
+ * ask V8 for one directly; returns undefined when the runtime refuses, in which
+ * case the caller skips the retention assertion.
+ */
+function exposeGc(): (() => void) | undefined {
+  const existing = (globalThis as { gc?: () => void }).gc;
+  if (existing !== undefined) return existing;
+  try {
+    setV8Flags("--expose-gc");
+    return runInNewContext("gc") as () => void;
+  } catch {
+    return undefined;
+  } finally {
+    setV8Flags("--no-expose-gc");
+  }
+}
