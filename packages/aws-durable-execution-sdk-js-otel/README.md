@@ -42,20 +42,27 @@ required:
 
 ```typescript
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
-import { ExecutionOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
-
-const plugin = new ExecutionOtelPlugin();
+import { createExecutionOtelPluginFactory } from "@aws/durable-execution-sdk-js-otel";
 
 export const handler = withDurableExecution(
   async (event, context) => {
     return context.step("process", async () => process(event));
   },
-  { plugins: [plugin] },
+  { plugins: [createExecutionOtelPluginFactory()] },
 );
 ```
 
-Use `InvocationOtelPlugin` instead when operations should appear under each
-Lambda invocation rather than under the durable Workflow.
+`plugins` takes plugin *factories*: the SDK calls the factory once per
+invocation and dispatches only that invocation's hooks to the plugin it returns.
+Everything expensive — the tracer provider resolution, the deterministic ID
+generator installation, the sampler wrapper — is resolved once, on the first
+invocation, and shared by every plugin the factory creates. The execution
+identity, the spans and the operation maps are per-invocation, which is what
+keeps two executions running concurrently in one execution environment (routine
+under Lambda Managed Instances) from overwriting each other.
+
+Use `createInvocationOtelPluginFactory()` instead when operations should appear
+under each Lambda invocation rather than under the durable Workflow.
 
 ## Provider Setup
 
@@ -84,10 +91,10 @@ This private-field integration is isolated behind runtime shape and assignment
 checks. It does not change IDs for unrelated spans, including spans created
 concurrently or with the same instrumentation scope.
 
-If the plugin is constructed before the SDK provider is globally registered,
-its initial tracer may be a proxy without `_idGenerator`. At each invocation
-start, the plugin re-resolves the global provider until a compatible SDK tracer
-is available. When installation still fails:
+If the shared environment is built before the SDK provider is globally
+registered, its initial tracer may be a proxy without `_idGenerator`. At each
+invocation start, the plugin re-resolves the global provider until a compatible
+SDK tracer is available. When installation still fails:
 
 - plugin telemetry and log enrichment are disabled for that invocation;
 - a warning is emitted;
@@ -100,17 +107,19 @@ generator through the supported provider constructor API.
 ### Application-Owned Provider
 
 `tracerProviderFactory` receives a function that creates the plugin's
-deterministic ID wrapper. The factory is called during plugin construction.
+deterministic ID wrapper. It is called once, when the first invocation builds the
+shared environment — not when `createInvocationOtelPluginFactory` is called, so a
+factory created at module scope resolves no provider and installs nothing.
 
 ```typescript
-import { InvocationOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+import { createInvocationOtelPluginFactory } from "@aws/durable-execution-sdk-js-otel";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import {
   NodeTracerProvider,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
 
-const plugin = new InvocationOtelPlugin({
+const pluginFactory = createInvocationOtelPluginFactory({
   tracerProviderFactory: (createIdGenerator) => {
     const provider = new NodeTracerProvider({
       idGenerator: createIdGenerator(),
@@ -176,7 +185,8 @@ points use SDK types only, and the SDK peer dependency is optional so package
 installation does not add a second copy. At runtime, the plugin is loaded and
 driven by the SDK instance bundled with the function.
 
-Dynamic providers construct plugins with default configuration, so they
+Each entry point exports `durableExecutionPluginProvider`, the per-invocation
+factory the SDK calls. Dynamic providers use default configuration, so they
 require a compatible globally registered SDK provider. Use code-based
 registration when `tracerProviderFactory` or other custom configuration is
 needed.
@@ -476,7 +486,7 @@ Disable enrichment when another logging integration already injects equivalent
 fields:
 
 ```typescript
-const plugin = new ExecutionOtelPlugin({
+const pluginFactory = createExecutionOtelPluginFactory({
   enrichLogger: false,
 });
 ```
@@ -488,12 +498,21 @@ attempt span.
 
 ## Public API
 
-### Plugins
+### Plugin Factories
 
 ```typescript
-new ExecutionOtelPlugin(config?: OtelPluginConfig);
-new InvocationOtelPlugin(config?: OtelPluginConfig);
+createExecutionOtelPluginFactory(
+  config?: OtelPluginConfig,
+): DurableInstrumentationPluginFactory;
+
+createInvocationOtelPluginFactory(
+  config?: OtelPluginConfig,
+): DurableInstrumentationPluginFactory;
 ```
+
+Pass the result in `DurableExecutionConfig.plugins`. The plugin classes
+themselves are not exported: an instance belongs to one invocation and is built
+by the factory from that invocation's `InvocationInfo`.
 
 ### Provider Types
 

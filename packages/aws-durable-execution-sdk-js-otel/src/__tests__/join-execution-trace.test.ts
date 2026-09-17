@@ -11,8 +11,8 @@ import type {
   InvocationInfo,
   InvocationEndInfo,
 } from "@aws/durable-execution-sdk-js";
-import { ExecutionOtelPlugin } from "../execution-plugin";
-import { InvocationOtelPlugin } from "../invocation-plugin";
+import { createExecutionOtelPluginFactory } from "../execution-plugin";
+import { createInvocationOtelPluginFactory } from "../invocation-plugin";
 import { deriveSpanIdFromOperationId } from "../deterministic-id-generator";
 import type { OtelPluginConfig } from "../otel-plugin-config";
 import { w3cClientContextExtractor } from "../context-extractors";
@@ -76,14 +76,18 @@ describe("Execution trace joining", () => {
     return exporter.getFinishedSpans().find((s) => s.name === name);
   }
 
+  // The plugin the SDK would build for one invocation: the factory called with
+  // that invocation's own info, before any hook fires.
   describe.each([
     [
       "ExecutionOtelPlugin",
-      (c?: OtelPluginConfig) => new ExecutionOtelPlugin(c),
+      (c?: OtelPluginConfig, info: InvocationInfo = makeInvocationInfo()) =>
+        createExecutionOtelPluginFactory(c)(info),
     ],
     [
       "InvocationOtelPlugin",
-      (c?: OtelPluginConfig) => new InvocationOtelPlugin(c),
+      (c?: OtelPluginConfig, info: InvocationInfo = makeInvocationInfo()) =>
+        createInvocationOtelPluginFactory(c)(info),
     ],
   ] as const)("%s", (_name, makePlugin) => {
     it("joins the propagated Root trace but anchors on a synthetic root when only a Root (no usable Parent) is propagated", async () => {
@@ -405,14 +409,19 @@ describe("Cross-invocation operation link stitching", () => {
   });
 
   it("stitches a wait continuation back to its initial operation span across invocations (InvocationOtelPlugin)", async () => {
-    const plugin = new InvocationOtelPlugin({
+    // Two invocations of one execution, so two instances out of one factory —
+    // the stitching below has to survive the instance being dropped in between,
+    // which is what the deterministic operation span ID is for.
+    const factory = createInvocationOtelPluginFactory({
       contextExtractor: () => undefined,
     });
+    const firstInfo = makeInvocationInfo();
+    const plugin = factory(firstInfo);
 
     // Invocation 1: the wait operation starts (initial logical span) and the
     // invocation suspends (PENDING) — the initial operation span is ended so it
     // exports.
-    await plugin.onInvocationStart(makeInvocationInfo());
+    await plugin.onInvocationStart(firstInfo);
     await plugin.onOperationStart({
       id: "op-wait",
       type: "WAIT",
@@ -437,17 +446,17 @@ describe("Cross-invocation operation link stitching", () => {
 
     // Invocation 2: the wait completes; a continuation span is emitted that
     // links back to the initial operation span on the same execution trace.
-    await plugin.onInvocationStart(
-      makeInvocationInfo({ isFirstInvocation: false }),
-    );
-    await plugin.onOperationEnd({
+    const secondInfo = makeInvocationInfo({ isFirstInvocation: false });
+    const resumedPlugin = factory(secondInfo);
+    await resumedPlugin.onInvocationStart(secondInfo);
+    await resumedPlugin.onOperationEnd({
       id: "op-wait",
       type: "WAIT",
       name: "pause",
       isReplay: false,
       status: "SUCCEEDED" as any,
     });
-    await plugin.onInvocationEnd(
+    await resumedPlugin.onInvocationEnd(
       makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
     );
 
@@ -479,15 +488,18 @@ describe("Cross-invocation operation link stitching", () => {
     // invocation, so the continuation segment stays on that adopted trace and
     // its initial-operation link is anchored on it.
     const extractedTraceId = "5".repeat(32);
-    const plugin = new InvocationOtelPlugin({
+    // One factory, one instance per invocation of the same execution.
+    const factory = createInvocationOtelPluginFactory({
       contextExtractor: () => ({
         traceId: extractedTraceId,
         parentSpanId: "6".repeat(16),
         sampling: "SAMPLED" as const,
       }),
     });
+    const firstInfo = makeInvocationInfo();
+    const plugin = factory(firstInfo);
 
-    await plugin.onInvocationStart(makeInvocationInfo());
+    await plugin.onInvocationStart(firstInfo);
     await plugin.onOperationStart({
       id: "op-stable-extractor",
       type: "WAIT",
@@ -508,17 +520,17 @@ describe("Cross-invocation operation link stitching", () => {
 
     exporter.reset();
 
-    await plugin.onInvocationStart(
-      makeInvocationInfo({ isFirstInvocation: false }),
-    );
-    await plugin.onOperationEnd({
+    const secondInfo = makeInvocationInfo({ isFirstInvocation: false });
+    const resumedPlugin = factory(secondInfo);
+    await resumedPlugin.onInvocationStart(secondInfo);
+    await resumedPlugin.onOperationEnd({
       id: "op-stable-extractor",
       type: "WAIT",
       name: "pause-stable-extractor",
       isReplay: false,
       status: "SUCCEEDED" as any,
     });
-    await plugin.onInvocationEnd(
+    await resumedPlugin.onInvocationEnd(
       makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
     );
 

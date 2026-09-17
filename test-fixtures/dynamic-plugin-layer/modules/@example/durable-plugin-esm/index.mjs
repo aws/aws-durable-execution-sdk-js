@@ -5,8 +5,6 @@ class EsmLayerPlugin {
   }
 }
 
-export const durableExecutionPluginProvider = {
-  pluginApiVersion: 1,
-  pluginType: EsmLayerPlugin,
-  createPlugin: () => new EsmLayerPlugin(),
-};
+// A provider module exports the factory itself: the SDK calls it once per
+// invocation to build that invocation's plugin instance.
+export const durableExecutionPluginProvider = () => new EsmLayerPlugin();

@@ -13,7 +13,24 @@ import type {
   AttemptInfo,
   AttemptEndInfo,
 } from "@aws/durable-execution-sdk-js";
-import { ExecutionOtelPlugin } from "../execution-plugin";
+import {
+  createExecutionOtelPluginFactory,
+  ExecutionOtelPlugin,
+} from "../execution-plugin";
+import type { OtelPluginConfig } from "../otel-plugin-config";
+
+/**
+ * The plugin the SDK would build for one invocation: the factory called with
+ * that invocation's own info, before any hook fires. Tests that drive several
+ * invocations build one instance per invocation, as the SDK does, and pass the
+ * info of the invocation the instance serves.
+ */
+function newPlugin(
+  config?: OtelPluginConfig,
+  info: InvocationInfo = makeInvocationInfo(),
+): ExecutionOtelPlugin {
+  return createExecutionOtelPluginFactory(config)(info);
+}
 
 const TEST_ARN =
   "arn:aws:states:us-east-1:123456789012:execution:my-sm:exec-integration-1";
@@ -141,7 +158,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
   });
 
   it("exports spans through the globally registered provider pipeline", async () => {
-    const plugin = new ExecutionOtelPlugin({});
+    const plugin = newPlugin({});
 
     // Simulate full invocation lifecycle:
     // onInvocationStart → onOperationStart → onOperationAttemptStart →
@@ -188,7 +205,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
   });
 
   it("Workflow_Span parents onto the synthetic execution root when no context is propagated", async () => {
-    const plugin = new ExecutionOtelPlugin({});
+    const plugin = newPlugin({});
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onOperationStart(
@@ -220,7 +237,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
   });
 
   it("Invocation_Span is created as child of ambient context", async () => {
-    const plugin = new ExecutionOtelPlugin({});
+    const plugin = newPlugin({});
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onOperationStart(
@@ -250,7 +267,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
   });
 
   it("operation and attempt spans have correct parent-child hierarchy under Workflow_Span", async () => {
-    const plugin = new ExecutionOtelPlugin({});
+    const plugin = newPlugin({});
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.wrapInvocation(makeInvocationInfo(), async () => {
@@ -294,7 +311,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
   });
 
   it("span links point to the Invocation span when there is no ambient invocation span", async () => {
-    const plugin = new ExecutionOtelPlugin({});
+    const plugin = newPlugin({});
 
     // No ambient invocation span in local test environment
     await plugin.onInvocationStart(makeInvocationInfo());
@@ -338,7 +355,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
   it("no shutdown is called on the globally registered provider", async () => {
     const shutdownSpy = jest.spyOn(provider, "shutdown");
 
-    const plugin = new ExecutionOtelPlugin({});
+    const plugin = newPlugin({});
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onOperationStart(
@@ -358,7 +375,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
   });
 
   it("full lifecycle with multiple operations produces correct span hierarchy", async () => {
-    const plugin = new ExecutionOtelPlugin({});
+    const plugin = newPlugin({});
 
     // Simulate: start → op1 (with attempt) → op2 (with attempt) → end
     await plugin.onInvocationStart(makeInvocationInfo());

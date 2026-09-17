@@ -2,8 +2,18 @@
 
 ## 1. Plugin Configuration Contract
 
+`workflowInsight(config)` returns a `DurableInstrumentationPluginFactory`: the
+value goes straight into `plugins`, and the SDK calls it once per invocation to
+build that invocation's plugin instance. The exporters and the export scheduler
+below are created once, when `workflowInsight` is called, and are shared by every
+instance it hands out.
+
 ```typescript
-import { DurableInstrumentationPlugin } from "@aws/durable-execution-sdk-js";
+import type { DurableInstrumentationPluginFactory } from "@aws/durable-execution-sdk-js";
+
+declare function workflowInsight(
+  config: WorkflowInsightConfig,
+): DurableInstrumentationPluginFactory;
 
 /**
  * Exporter interface — any class that knows how to send a WorkflowInsightRecord

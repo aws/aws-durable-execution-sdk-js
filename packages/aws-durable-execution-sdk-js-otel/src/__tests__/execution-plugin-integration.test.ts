@@ -19,7 +19,24 @@ import type {
   AttemptInfo,
   AttemptEndInfo,
 } from "@aws/durable-execution-sdk-js";
-import { ExecutionOtelPlugin } from "../execution-plugin";
+import {
+  createExecutionOtelPluginFactory,
+  ExecutionOtelPlugin,
+} from "../execution-plugin";
+import type { OtelPluginConfig } from "../otel-plugin-config";
+
+/**
+ * The plugin the SDK would build for one invocation: the factory called with
+ * that invocation's own info, before any hook fires. Tests that drive several
+ * invocations build one instance per invocation, as the SDK does, and pass the
+ * info of the invocation the instance serves.
+ */
+function newPlugin(
+  config?: OtelPluginConfig,
+  info: InvocationInfo = makeInvocationInfo(),
+): ExecutionOtelPlugin {
+  return createExecutionOtelPluginFactory(config)(info);
+}
 
 const TEST_ARN =
   "arn:aws:states:us-east-1:123456789012:execution:my-sm:exec-integration";
@@ -147,7 +164,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     // Parent). With no complete remote parent, the execution joins that Root
     // trace but anchors on the deterministic synthetic root rather than the
     // ambient span.
-    const plugin = new ExecutionOtelPlugin({
+    const plugin = newPlugin({
       contextExtractor: () => ({
         traceId: ambientSpanContext.traceId,
       }),
@@ -296,7 +313,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
      */
     const shutdownSpy = jest.spyOn(provider, "shutdown");
 
-    const plugin = new ExecutionOtelPlugin({});
+    const plugin = newPlugin({});
 
     // Run a minimal lifecycle
     await plugin.onInvocationStart(makeInvocationInfo());
@@ -317,14 +334,16 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
 
   it("supports multiple invocation lifecycles without leaking state", async () => {
     /**
-     * Verifies that per-invocation state is properly cleared between invocations
-     * and the global provider remains functional across multiple lifecycles.
+     * Verifies that no per-invocation state reaches the next invocation and the
+     * global provider remains functional across multiple lifecycles. The two
+     * invocations run on the two instances one factory hands out, as the SDK
+     * would.
      */
     // No backend execution context is extracted, so each invocation anchors on
     // the deterministic ARN-derived execution trace rather than on whichever
     // per-invocation ambient span happens to be active. A live ambient span is
     // never adopted as the execution trace.
-    const plugin = new ExecutionOtelPlugin({
+    const factory = createExecutionOtelPluginFactory({
       contextExtractor: () => undefined,
     });
 
@@ -334,8 +353,10 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     const ambientSpan1 = ambientTracer.startSpan("invocation-1");
     const ambientContext1 = trace.setSpan(ROOT_CONTEXT, ambientSpan1);
 
+    const firstInfo = makeInvocationInfo();
+    const plugin = factory(firstInfo);
     await context.with(ambientContext1, async () => {
-      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationStart(firstInfo);
     });
     await plugin.onOperationStart(
       makeOperationInfo({ id: "op-first", name: "first-op" }),
@@ -352,18 +373,18 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     const ambientSpan2 = ambientTracer.startSpan("invocation-2");
     const ambientContext2 = trace.setSpan(ROOT_CONTEXT, ambientSpan2);
 
+    const secondInfo = makeInvocationInfo({ executionArn: TEST_ARN + "-2" });
+    const second = factory(secondInfo);
     await context.with(ambientContext2, async () => {
-      await plugin.onInvocationStart(
-        makeInvocationInfo({ executionArn: TEST_ARN + "-2" }),
-      );
+      await second.onInvocationStart(secondInfo);
     });
-    await plugin.onOperationStart(
+    await second.onOperationStart(
       makeOperationInfo({ id: "op-second", name: "second-op" }),
     );
-    await plugin.onOperationEnd(
+    await second.onOperationEnd(
       makeOperationEndInfo({ id: "op-second", name: "second-op" }),
     );
-    await plugin.onInvocationEnd(
+    await second.onInvocationEnd(
       makeInvocationEndInfo({ executionArn: TEST_ARN + "-2" }),
     );
     ambientSpan2.end();
@@ -397,6 +418,15 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     expect(secondOpSpan!.links[0].context.spanId).not.toBe(
       ambientSpan1.spanContext().spanId,
     );
+
+    // And no span the plugin exported in the second invocation carries the
+    // first execution's ARN.
+    const durableArns = new Set(
+      spans
+        .map((s) => s.attributes["durable.execution.arn"])
+        .filter((arn) => arn !== undefined),
+    );
+    expect(durableArns).toEqual(new Set([TEST_ARN + "-2"]));
   });
 });
 
@@ -421,20 +451,19 @@ describe("ExecutionOtelPlugin - Parent-child workflow span ID collision preventi
   });
 
   it("parent and child workflows with same operation position produce distinct span IDs", async () => {
-    const { ExecutionOtelPlugin } = await import("../execution-plugin");
-
     const PARENT_ARN =
       "arn:aws:lambda:us-east-1:123456789012:function:durable-workflow:$LATEST:parent-exec-1";
     const CHILD_ARN =
       "arn:aws:lambda:us-east-1:123456789012:function:durable-enrich:$LATEST:child-exec-1";
 
-    const parentPlugin = new ExecutionOtelPlugin({});
-    const childPlugin = new ExecutionOtelPlugin({});
+    // One instance per execution, each built from its own invocation info.
+    const parentInfo = makeInvocationInfo({ executionArn: PARENT_ARN });
+    const childInfo = makeInvocationInfo({ executionArn: CHILD_ARN });
+    const parentPlugin = newPlugin({}, parentInfo);
+    const childPlugin = newPlugin({}, childInfo);
 
     // --- Parent workflow execution ---
-    await parentPlugin.onInvocationStart(
-      makeInvocationInfo({ executionArn: PARENT_ARN }),
-    );
+    await parentPlugin.onInvocationStart(parentInfo);
     await parentPlugin.onOperationStart(
       makeOperationInfo({
         id: "1",
@@ -451,9 +480,7 @@ describe("ExecutionOtelPlugin - Parent-child workflow span ID collision preventi
     );
 
     // --- Child workflow execution ---
-    await childPlugin.onInvocationStart(
-      makeInvocationInfo({ executionArn: CHILD_ARN }),
-    );
+    await childPlugin.onInvocationStart(childInfo);
     await childPlugin.onOperationStart(
       makeOperationInfo({
         id: "1",
@@ -497,7 +524,7 @@ describe("ExecutionOtelPlugin - Parent-child workflow span ID collision preventi
   // OTel OK — the OK branch is gated on SUCCEEDED, so a no-error failure leaves
   // the span status at the default UNSET (code 0).
   it("onOperationEnd terminal path: TIMED_OUT status with NO error leaves the operation span NOT OK (UNSET)", async () => {
-    const plugin = new ExecutionOtelPlugin({});
+    const plugin = newPlugin({});
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onOperationStart(
@@ -520,7 +547,7 @@ describe("ExecutionOtelPlugin - Parent-child workflow span ID collision preventi
   });
 
   it("onOperationEnd cross-invocation path: STOPPED status with NO error leaves the span NOT OK (UNSET)", async () => {
-    const plugin = new ExecutionOtelPlugin({});
+    const plugin = newPlugin({});
 
     await plugin.onInvocationStart(makeInvocationInfo());
     // No prior onOperationStart -> spanMap miss -> cross-invocation span path.
@@ -541,7 +568,7 @@ describe("ExecutionOtelPlugin - Parent-child workflow span ID collision preventi
   });
 
   it("onOperationEnd terminal path: SUCCEEDED status with NO error stamps OK", async () => {
-    const plugin = new ExecutionOtelPlugin({});
+    const plugin = newPlugin({});
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onOperationStart(
@@ -567,7 +594,7 @@ describe("ExecutionOtelPlugin - Parent-child workflow span ID collision preventi
   // from InvocationOtelPlugin rather than assumed to be shared.
   describe("Handler-provided names on unnamed child operations", () => {
     it("child operation carries durable.operation.name provided by the handler", async () => {
-      const plugin = new ExecutionOtelPlugin();
+      const plugin = newPlugin();
 
       await plugin.onInvocationStart(makeInvocationInfo());
       // Parent CONTEXT operation (the waitForCallback child context) is named.
@@ -619,7 +646,7 @@ describe("ExecutionOtelPlugin - Parent-child workflow span ID collision preventi
     });
 
     it("child operation has no name when none is provided", async () => {
-      const plugin = new ExecutionOtelPlugin();
+      const plugin = newPlugin();
 
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onOperationStart(
@@ -653,7 +680,7 @@ describe("ExecutionOtelPlugin - Parent-child workflow span ID collision preventi
     });
 
     it("attempt span carries durable.operation.name passed by the handler", async () => {
-      const plugin = new ExecutionOtelPlugin();
+      const plugin = newPlugin();
 
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onOperationStart(
@@ -721,7 +748,7 @@ describe("ExecutionOtelPlugin - Parent-child workflow span ID collision preventi
     });
 
     it("cross-invocation child span carries the handler-provided name and parents to the parent span", async () => {
-      const plugin = new ExecutionOtelPlugin();
+      const plugin = newPlugin();
 
       await plugin.onInvocationStart(makeInvocationInfo());
       // CONTEXT is replayed in this invocation, so it populates spanMap.
@@ -778,7 +805,7 @@ describe("ExecutionOtelPlugin - Parent-child workflow span ID collision preventi
   // attempt span must carry an explicit OK status. OTel conformance test 9
   // asserts `status: OK` on the first, non-terminal polling attempt.
   it("a SUCCEEDED attempt end stamps explicit OK and records no exception", async () => {
-    const plugin = new ExecutionOtelPlugin();
+    const plugin = newPlugin();
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onOperationStart(

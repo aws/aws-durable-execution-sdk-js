@@ -2,23 +2,22 @@
 import {
   DurableContext,
   withDurableExecution,
-  DurableInstrumentationPlugin,
+  DurableInstrumentationPluginFactory,
 } from "@aws/durable-execution-sdk-js";
 
 const PLUGIN = "CONFPLUGIN";
 
-function makePlugin(): DurableInstrumentationPlugin {
-  let executionArn = "";
+const makePlugin: DurableInstrumentationPluginFactory = (invocation) => {
   const emit = (rec: Record<string, unknown>): void => {
     process.stdout.write(
-      JSON.stringify({ ...rec, durableExecutionArn: executionArn }) + "\n",
+      JSON.stringify({
+        ...rec,
+        durableExecutionArn: invocation.executionArn,
+      }) + "\n",
     );
   };
 
   return {
-    async onInvocationStart(info): Promise<void> {
-      executionArn = info.executionArn;
-    },
     // wrapChildContextFn runs on the same thread as the branch function, so
     // fn-start is guaranteed to precede fn-end for a given branch. Parallel
     // branches run inside child contexts, so this hook receives them with the
@@ -53,7 +52,7 @@ function makePlugin(): DurableInstrumentationPlugin {
         );
     },
   };
-}
+};
 
 export const handler = withDurableExecution(
   async (_event: any, context: DurableContext) => {
@@ -67,5 +66,5 @@ export const handler = withDurableExecution(
     );
     return results.getResults();
   },
-  { plugins: [makePlugin()] },
+  { plugins: [makePlugin] },
 );

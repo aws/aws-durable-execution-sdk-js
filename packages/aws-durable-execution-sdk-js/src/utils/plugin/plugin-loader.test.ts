@@ -1,8 +1,8 @@
 import { PluginLoadError } from "../../errors/plugin-load-error/plugin-load-error";
 import {
-  DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION,
   DurableInstrumentationPlugin,
-  DurableInstrumentationPluginProvider,
+  DurableInstrumentationPluginFactory,
+  InvocationInfo,
 } from "../../types/plugin";
 import {
   createDefaultModuleImporter,
@@ -16,15 +16,20 @@ class ExplicitPlugin implements DurableInstrumentationPlugin {}
 class FirstDynamicPlugin implements DurableInstrumentationPlugin {}
 class SecondDynamicPlugin implements DurableInstrumentationPlugin {}
 
-function providerFor<Plugin extends DurableInstrumentationPlugin>(
-  pluginType: abstract new (...args: never[]) => Plugin,
+const invocationInfo: InvocationInfo = {
+  requestId: "req-1",
+  executionArn: "arn:test",
+  isFirstInvocation: true,
+  executionInput: {},
+  operations: {},
+  updatedOperations: {},
+};
+
+/** A provider export: the factory the SDK calls once per invocation. */
+function factoryFor<Plugin extends DurableInstrumentationPlugin>(
   createPlugin: () => Plugin,
-): DurableInstrumentationPluginProvider<Plugin> {
-  return {
-    pluginApiVersion: DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION,
-    pluginType,
-    createPlugin,
-  };
+): DurableInstrumentationPluginFactory<Plugin> {
+  return () => createPlugin();
 }
 
 function moduleFor(provider: unknown): Record<string, unknown> {
@@ -129,49 +134,45 @@ describe("createDefaultModuleImporter", () => {
 });
 
 describe("loadConfiguredPlugins", () => {
-  it("preserves explicit plugins without importing modules when configuration is unset", async () => {
-    const explicitPlugin = new ExplicitPlugin();
+  it("preserves explicit factories without importing modules when configuration is unset", async () => {
+    const explicitFactory = factoryFor(() => new ExplicitPlugin());
     const importModule = jest.fn();
 
-    const result = await loadConfiguredPlugins([explicitPlugin], {
+    const result = await loadConfiguredPlugins([explicitFactory], {
       environment: {},
       importModule,
     });
 
-    expect(result).toEqual([explicitPlugin]);
+    expect(result).toEqual([explicitFactory]);
     expect(importModule).not.toHaveBeenCalled();
   });
 
   it("treats a blank environment variable as disabled", async () => {
-    const explicitPlugin = new ExplicitPlugin();
+    const explicitFactory = factoryFor(() => new ExplicitPlugin());
     const importModule = jest.fn();
 
-    const result = await loadConfiguredPlugins([explicitPlugin], {
+    const result = await loadConfiguredPlugins([explicitFactory], {
       environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "  " },
       importModule,
     });
 
-    expect(result).toEqual([explicitPlugin]);
+    expect(result).toEqual([explicitFactory]);
     expect(importModule).not.toHaveBeenCalled();
   });
 
-  it("loads configured providers in order after explicit plugins", async () => {
-    const explicitPlugin = new ExplicitPlugin();
-    const firstPlugin = new FirstDynamicPlugin();
-    const secondPlugin = new SecondDynamicPlugin();
+  it("loads configured providers in order after explicit factories", async () => {
+    const explicitFactory = factoryFor(() => new ExplicitPlugin());
+    const firstFactory = factoryFor(() => new FirstDynamicPlugin());
+    const secondFactory = factoryFor(() => new SecondDynamicPlugin());
     const modules: Record<string, unknown> = {
-      "@example/first": moduleFor(
-        providerFor(FirstDynamicPlugin, () => firstPlugin),
-      ),
-      "@example/second/provider": moduleFor(
-        providerFor(SecondDynamicPlugin, () => secondPlugin),
-      ),
+      "@example/first": moduleFor(firstFactory),
+      "@example/second/provider": moduleFor(secondFactory),
     };
     const importModule = jest.fn(
       async (specifier: string): Promise<unknown> => modules[specifier],
     );
 
-    const result = await loadConfiguredPlugins([explicitPlugin], {
+    const result = await loadConfiguredPlugins([explicitFactory], {
       environment: {
         [PLUGIN_ENVIRONMENT_VARIABLE]:
           " @example/first, @example/second/provider ",
@@ -183,20 +184,19 @@ describe("loadConfiguredPlugins", () => {
       ["@example/first"],
       ["@example/second/provider"],
     ]);
-    expect(result).toEqual([explicitPlugin, firstPlugin, secondPlugin]);
+    expect(result).toEqual([explicitFactory, firstFactory, secondFactory]);
   });
 
-  it("keeps explicit and dynamic instances of the same plugin type additive", async () => {
-    const explicitPlugin = new FirstDynamicPlugin();
-    const dynamicPlugin = new FirstDynamicPlugin();
+  it("keeps explicit and dynamic factories for the same plugin type additive", async () => {
+    const explicitFactory = factoryFor(() => new FirstDynamicPlugin());
+    const dynamicFactory = factoryFor(() => new FirstDynamicPlugin());
 
-    const result = await loadConfiguredPlugins([explicitPlugin], {
+    const result = await loadConfiguredPlugins([explicitFactory], {
       environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/first" },
-      importModule: async () =>
-        moduleFor(providerFor(FirstDynamicPlugin, () => dynamicPlugin)),
+      importModule: async () => moduleFor(dynamicFactory),
     });
 
-    expect(result).toEqual([explicitPlugin, dynamicPlugin]);
+    expect(result).toEqual([explicitFactory, dynamicFactory]);
   });
 
   it.each(["first,", ",first", "first,,second"])(
@@ -306,50 +306,43 @@ describe("loadConfiguredPlugins", () => {
   });
 
   it("loads the provider from a CommonJS default namespace", async () => {
-    const plugin = new FirstDynamicPlugin();
-    const provider = providerFor(FirstDynamicPlugin, () => plugin);
+    const factory = factoryFor(() => new FirstDynamicPlugin());
 
     const result = await loadConfiguredPlugins([], {
       environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
       importModule: async () => ({
-        default: { [PLUGIN_PROVIDER_EXPORT]: provider },
+        default: { [PLUGIN_PROVIDER_EXPORT]: factory },
       }),
     });
 
-    expect(result).toEqual([plugin]);
+    expect(result).toEqual([factory]);
   });
 
   it("accepts duplicate ESM and CommonJS views of the same provider export", async () => {
-    const plugin = new FirstDynamicPlugin();
-    const provider = providerFor(FirstDynamicPlugin, () => plugin);
+    const factory = factoryFor(() => new FirstDynamicPlugin());
 
     const result = await loadConfiguredPlugins([], {
       environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
       importModule: async () => ({
-        [PLUGIN_PROVIDER_EXPORT]: provider,
-        default: { [PLUGIN_PROVIDER_EXPORT]: provider },
+        [PLUGIN_PROVIDER_EXPORT]: factory,
+        default: { [PLUGIN_PROVIDER_EXPORT]: factory },
       }),
     });
 
-    expect(result).toEqual([plugin]);
+    expect(result).toEqual([factory]);
   });
 
   it("rejects conflicting ESM and CommonJS provider exports", async () => {
-    const directProvider = providerFor(
-      FirstDynamicPlugin,
-      () => new FirstDynamicPlugin(),
-    );
-    const nestedProvider = providerFor(
-      SecondDynamicPlugin,
-      () => new SecondDynamicPlugin(),
-    );
-
     await expect(
       loadConfiguredPlugins([], {
         environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
         importModule: async () => ({
-          [PLUGIN_PROVIDER_EXPORT]: directProvider,
-          default: { [PLUGIN_PROVIDER_EXPORT]: nestedProvider },
+          [PLUGIN_PROVIDER_EXPORT]: factoryFor(() => new FirstDynamicPlugin()),
+          default: {
+            [PLUGIN_PROVIDER_EXPORT]: factoryFor(
+              () => new SecondDynamicPlugin(),
+            ),
+          },
         }),
       }),
     ).rejects.toThrow(
@@ -357,103 +350,31 @@ describe("loadConfiguredPlugins", () => {
     );
   });
 
-  it("rejects a non-object provider", async () => {
+  it.each([
+    { desc: "an object", provider: { createPlugin: () => ({}) } },
+    { desc: "a string", provider: "not a provider" },
+    { desc: "null", provider: null },
+  ])("rejects a provider export that is $desc", async ({ provider }) => {
     await expect(
       loadConfiguredPlugins([], {
         environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
-        importModule: async () => moduleFor("not a provider"),
+        importModule: async () => moduleFor(provider),
       }),
     ).rejects.toThrow(
-      "Plugin module '@example/plugin' exports an invalid provider; expected an object.",
+      "Plugin provider '@example/plugin' must be a function that creates a plugin for one invocation",
     );
   });
 
-  it("rejects incompatible provider API versions", async () => {
+  it("names what the provider export was instead of a function", async () => {
     await expect(
       loadConfiguredPlugins([], {
         environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
-        importModule: async () =>
-          moduleFor({
-            ...providerFor(FirstDynamicPlugin, () => new FirstDynamicPlugin()),
-            pluginApiVersion: DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION + 1,
-          }),
-      }),
-    ).rejects.toThrow(
-      `supports version ${DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION}`,
-    );
-  });
-
-  it.each([undefined, null, "FirstDynamicPlugin", (): undefined => undefined])(
-    "rejects invalid plugin type %p",
-    async (pluginType) => {
-      await expect(
-        loadConfiguredPlugins([], {
-          environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
-          importModule: async () =>
-            moduleFor({
-              pluginApiVersion: DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION,
-              pluginType,
-              createPlugin: () => new FirstDynamicPlugin(),
-            }),
-        }),
-      ).rejects.toThrow(
-        "Plugin provider '@example/plugin' must declare a constructable 'pluginType'.",
-      );
-    },
-  );
-
-  it("rejects a provider without a factory", async () => {
-    await expect(
-      loadConfiguredPlugins([], {
-        environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
-        importModule: async () =>
-          moduleFor({
-            pluginApiVersion: DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION,
-            pluginType: FirstDynamicPlugin,
-          }),
-      }),
-    ).rejects.toThrow(
-      "Plugin provider '@example/plugin' must define a 'createPlugin' factory function.",
-    );
-  });
-
-  it("wraps provider construction failures", async () => {
-    const constructionError = new Error("missing configuration");
-
-    await expect(
-      loadConfiguredPlugins([], {
-        environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
-        importModule: async () =>
-          moduleFor(
-            providerFor(FirstDynamicPlugin, (): FirstDynamicPlugin => {
-              throw constructionError;
-            }),
-          ),
+        importModule: async () => moduleFor({}),
       }),
     ).rejects.toMatchObject({
       name: "PluginLoadError",
-      message: expect.stringContaining(
-        "Plugin provider '@example/plugin' failed to create its plugin",
-      ),
-      cause: constructionError,
+      message: expect.stringContaining("but it is an object."),
     });
-  });
-
-  it("rejects a plugin that does not match the declared type", async () => {
-    await expect(
-      loadConfiguredPlugins([], {
-        environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
-        importModule: async () =>
-          moduleFor(
-            providerFor(
-              FirstDynamicPlugin,
-              () => new SecondDynamicPlugin() as unknown as FirstDynamicPlugin,
-            ),
-          ),
-      }),
-    ).rejects.toThrow(
-      "declared plugin type 'FirstDynamicPlugin' but created 'SecondDynamicPlugin'",
-    );
   });
 
   it("uses PluginLoadError for configuration failures", async () => {
@@ -462,5 +383,58 @@ describe("loadConfiguredPlugins", () => {
         environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "," },
       }),
     ).rejects.toBeInstanceOf(PluginLoadError);
+  });
+});
+
+describe("loadConfiguredPlugins returns factories, not plugins", () => {
+  const loadProvider = async (
+    provider: unknown,
+  ): Promise<DurableInstrumentationPluginFactory[]> =>
+    loadConfiguredPlugins([], {
+      environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
+      importModule: async () => moduleFor(provider),
+    });
+
+  it("does not construct a plugin while loading a provider", async () => {
+    const factory = jest.fn(() => new FirstDynamicPlugin());
+
+    const [loaded] = await loadProvider(factory);
+
+    expect(factory).not.toHaveBeenCalled();
+    expect(loaded).toBe(factory);
+  });
+
+  it("returns the provider export itself, so each call yields a new instance", async () => {
+    const created: FirstDynamicPlugin[] = [];
+    const [factory] = await loadProvider(() => {
+      const plugin = new FirstDynamicPlugin();
+      created.push(plugin);
+      return plugin;
+    });
+
+    factory(invocationInfo);
+    factory(invocationInfo);
+
+    expect(created).toHaveLength(2);
+    expect(created[0]).not.toBe(created[1]);
+  });
+
+  it("passes the invocation info straight through to the provider factory", async () => {
+    const factory = jest.fn(() => new FirstDynamicPlugin());
+    const [loaded] = await loadProvider(factory);
+
+    loaded(invocationInfo);
+
+    expect(factory).toHaveBeenCalledWith(invocationInfo);
+  });
+
+  it("lets a failing factory throw when it runs instead of at load time", async () => {
+    const constructionError = new Error("missing configuration");
+
+    const [factory] = await loadProvider((): FirstDynamicPlugin => {
+      throw constructionError;
+    });
+
+    expect(() => factory(invocationInfo)).toThrow(constructionError);
   });
 });

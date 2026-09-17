@@ -1,6 +1,6 @@
 import type {
-  DurableExecutionInvocationOutput,
   DurableInstrumentationPlugin,
+  DurableInstrumentationPluginFactory,
   InvocationInfo,
   InvocationEndInfo,
   OperationChangeInfo,
@@ -366,49 +366,33 @@ export class LambdaLogExporter implements InsightExporter {
 // --- Per-Execution Scope ---
 
 /**
- * Everything the plugin tracks for one execution, including that execution's
- * own slot in the export queue.
+ * One invocation's slot in the export queue.
  *
- * The SDK creates a single plugin instance per handler-module initialization,
- * so one instance serves every execution the environment hosts — and with
- * Lambda Managed Instances several executions run concurrently in one
- * environment. Every piece of mutable state therefore lives here, per
- * execution, and never on the plugin or the scheduler: a hook for execution A
- * must not be able to observe, overwrite, or wait on anything that belongs to
- * execution B.
- *
- * A scope is rebuilt on each invocation (it is dropped at every invocation end,
- * suspends included), so the execution-level start time is resolved fresh each
- * time — see {@link resolveExecutionStart}.
+ * The scheduler outlives the invocations it serves (it belongs to the execution
+ * environment, because serializing exporter calls is a cross-execution
+ * concern), so it must not keep an index of its own from execution to queue
+ * state: with Lambda Managed Instances several executions run concurrently in
+ * one environment, and a scheduler-side map is exactly where one execution's
+ * hooks could observe, overwrite, or wait on another's. Instead every scalar
+ * the scheduler needs lives on the slot object it is handed, which is the
+ * plugin instance the SDK built for that one invocation — so "which execution
+ * is this?" is answered by object identity and has no second answer that could
+ * disagree.
  */
-interface ExecutionScope {
-  readonly executionArn: string;
-  readonly parsedArn: ParsedArn;
-  /** Start of the whole execution, not of the current invocation. */
-  readonly startTime: Date;
-  cachedInput: unknown;
-  /**
-   * Deterministic sampling decision for this execution. Computed from the
-   * execution's stable identity so every invocation/replay agrees, then reused
-   * by all hooks to skip work entirely when the execution is sampled out.
-   */
-  readonly sampledIn: boolean;
-  /**
-   * Set once this invocation has ended. Hooks that arrive afterwards (a
-   * checkpoint whose operation-change hook lands after `onInvocationEnd`) must
-   * emit nothing: exporters that upsert by execution ARN would otherwise revert
-   * a finished execution back to RUNNING.
-   */
-  closed: boolean;
-
-  // --- Export queue slot; owned by ExportScheduler ---
+interface ExportSlot {
   /**
    * Latest record scheduled for this execution and not yet handed to the
    * exporters. A newer snapshot of the same execution supersedes it.
    */
   pending: WorkflowInsightRecord | undefined;
-  /** True while this scope sits in the scheduler's queue. */
+  /** True while this slot sits in the scheduler's queue. */
   queued: boolean;
+  /**
+   * True while this slot has export work the scheduler has not finished:
+   * queued, or dequeued and mid fan-out. It is what {@link ExportScheduler.drain}
+   * tests to decide whether there is anything to wait for.
+   */
+  outstanding: boolean;
   /**
    * Resolvers waiting for this execution's latest record to be exported. A
    * non-empty list also tells the pump that this record gates an invocation
@@ -430,25 +414,22 @@ interface ExecutionScope {
  * is therefore scoped to a single execution ARN: records for different
  * executions queue up independently and never displace one another.
  *
- * Exporter calls stay globally serialized per plugin instance: one pump drains
- * the queue, so an exporter never sees concurrent `export()` calls from this
+ * Exporter calls stay globally serialized per scheduler: one pump drains the
+ * queue, so an exporter never sees concurrent `export()` calls from this
  * scheduler, no matter how many executions the environment hosts. {@link flush}
  * requests run on the same pump, so a flush never overlaps an export either;
  * they are served as a batch, and the records a {@link drain} is waiting for are
  * exported first, so a burst of invocation ends costs one flush rather than one
- * each. Serialization is per plugin instance, not per exporter object: two
- * `workflowInsight()` calls each build their own scheduler, so an exporter
- * instance shared between them can be called by both at once.
+ * each. The scheduler therefore belongs to the execution environment, not to an
+ * invocation: it lives in `workflowInsight`'s closure and is shared by every
+ * plugin instance the factory hands out, because serializing exporter calls is
+ * only meaningful across executions. Serialization is per scheduler, not per
+ * exporter object: two `workflowInsight()` calls each build their own, so an
+ * exporter instance shared between them can be called by both at once.
  */
 class ExportScheduler {
-  /** FIFO of scopes that have a record waiting to be exported. */
-  private readonly queue: ExecutionScope[] = [];
-  /**
-   * Scopes with export work still outstanding (queued, or mid fan-out), keyed
-   * by execution ARN. Lets {@link drain} find the work for one execution after
-   * the hooks have already dropped their reference to the scope.
-   */
-  private readonly outstanding = new Map<string, ExecutionScope>();
+  /** FIFO of slots that have a record waiting to be exported. */
+  private readonly queue: ExportSlot[] = [];
   /**
    * True while a pump is running. A boolean rather than the pump's promise:
    * keeping the promise in a field means a pump that settles before the
@@ -471,12 +452,12 @@ class ExportScheduler {
    * earlier record of the same execution) and is exported once the queue
    * reaches it.
    */
-  schedule(scope: ExecutionScope, record: WorkflowInsightRecord): void {
-    scope.pending = record;
-    this.outstanding.set(scope.executionArn, scope);
-    if (!scope.queued) {
-      scope.queued = true;
-      this.queue.push(scope);
+  schedule(slot: ExportSlot, record: WorkflowInsightRecord): void {
+    slot.pending = record;
+    slot.outstanding = true;
+    if (!slot.queued) {
+      slot.queued = true;
+      this.queue.push(slot);
     }
     this.ensurePump();
   }
@@ -517,26 +498,29 @@ class ExportScheduler {
   }
 
   /**
-   * Wait until the latest record scheduled for `executionArn` has been handed
-   * to every exporter. Safe to call when idle. Used before an invocation
-   * returns to guarantee that execution's final record is delivered (exports
-   * are otherwise fire-and-forget).
+   * Wait until the latest record scheduled for `slot` has been handed to every
+   * exporter. Safe to call when that execution has nothing outstanding. Used
+   * before an invocation returns to guarantee that execution's final record is
+   * delivered (exports are otherwise fire-and-forget).
+   *
+   * Takes the slot itself, not an execution ARN: the caller is the plugin
+   * instance that owns this invocation, so it *is* the slot its own hooks
+   * schedule their records on and there is nothing to look up.
    *
    * Resolves as soon as this execution's own record is out, and never while it
    * is still pending. With a single pump the wait still includes whatever was
    * queued ahead of it; what it never does is let records scheduled afterwards,
    * for other executions, displace it or push it further back.
    *
-   * While the wait is outstanding the scope carries a waiter, which is how the
+   * While the wait is outstanding the slot carries a waiter, which is how the
    * pump knows this record gates an invocation return and must be exported
    * before the pump spends a flush fan-out — see
    * {@link exportRecordsADrainIsWaitingFor}.
    */
-  async drain(executionArn: string): Promise<void> {
-    const scope = this.outstanding.get(executionArn);
-    if (scope === undefined) return;
+  async drain(slot: ExportSlot): Promise<void> {
+    if (!slot.outstanding) return;
     await new Promise<void>((resolve) => {
-      scope.waiters.push(resolve);
+      slot.waiters.push(resolve);
     });
   }
 
@@ -547,9 +531,9 @@ class ExportScheduler {
       // runs dry — and it still never overlaps an export, because each fan-out
       // is awaited before the flush runs and vice versa.
       while (this.queue.length > 0 || this.flushWaiters.length > 0) {
-        const scope = this.queue.shift();
-        if (scope !== undefined) {
-          await this.exportPending(scope);
+        const slot = this.queue.shift();
+        if (slot !== undefined) {
+          await this.exportPending(slot);
         }
         // Serve every request that is already waiting with one flushAll.
         // Coalescing is sound because each requester drained its own record
@@ -612,29 +596,29 @@ class ExportScheduler {
    * executions whose invocation return is already blocked on their own record.
    */
   private async exportRecordsADrainIsWaitingFor(): Promise<void> {
-    const awaited = this.queue.filter((scope) => scope.waiters.length > 0);
-    for (const scope of awaited) {
-      const index = this.queue.indexOf(scope);
-      // Defensive: nothing else dequeues a scope while this pump owns the queue,
-      // and a scope appears in it at most once (`queued` guards that), so the
+    const awaited = this.queue.filter((slot) => slot.waiters.length > 0);
+    for (const slot of awaited) {
+      const index = this.queue.indexOf(slot);
+      // Defensive: nothing else dequeues a slot while this pump owns the queue,
+      // and a slot appears in it at most once (`queued` guards that), so the
       // snapshot entries are still queued here.
       if (index < 0) continue;
       this.queue.splice(index, 1);
-      await this.exportPending(scope);
+      await this.exportPending(slot);
     }
   }
 
   /**
    * Hands one execution's queued record to every exporter and releases the
-   * drains waiting on it. The caller has already removed `scope` from the queue.
+   * drains waiting on it. The caller has already removed `slot` from the queue.
    */
-  private async exportPending(scope: ExecutionScope): Promise<void> {
-    scope.queued = false;
-    const record = scope.pending;
+  private async exportPending(slot: ExportSlot): Promise<void> {
+    slot.queued = false;
+    const record = slot.pending;
     // Claim the record synchronously: from here on, anything scheduled for
-    // this execution is a newer snapshot that re-queues the scope, so no
+    // this execution is a newer snapshot that re-queues the slot, so no
     // update is lost and no other execution can take this slot.
-    scope.pending = undefined;
+    slot.pending = undefined;
     try {
       if (record !== undefined) {
         // allSettled so one failing or slow exporter never blocks or
@@ -673,25 +657,25 @@ class ExportScheduler {
       // Release this execution's waiters even if the fan-out threw, and
       // only when nothing newer arrived for it while the fan-out ran;
       // otherwise they wait for that newer record.
-      if (scope.pending === undefined) {
-        this.settle(scope);
+      if (slot.pending === undefined) {
+        this.settle(slot);
       }
     }
   }
 
   /** This execution has no outstanding record: wake anyone waiting on it. */
-  private settle(scope: ExecutionScope): void {
-    if (this.outstanding.get(scope.executionArn) === scope) {
-      this.outstanding.delete(scope.executionArn);
-    }
-    for (const resolve of scope.waiters.splice(0)) {
+  private settle(slot: ExportSlot): void {
+    slot.outstanding = false;
+    for (const resolve of slot.waiters.splice(0)) {
       resolve();
     }
   }
 }
 
 /**
- * Start of the whole execution, for a scope that is rebuilt on every invocation.
+ * Start of the whole execution, resolved once per invocation from that
+ * invocation's own info — the plugin instance never sees an earlier invocation
+ * of the same execution, so there is nothing carried over to prefer.
  *
  * `executionStartTimestamp` is optional (the SDK fills it from
  * `initialExecutionEvent?.StartTimestamp ?? undefined`) but it always reaches the
@@ -752,32 +736,259 @@ async function flushAll(exporters: InsightExporter[]): Promise<void> {
   }
 }
 
+// --- Per-Invocation Plugin ---
+
+/**
+ * What {@link workflowInsight} resolves once for the execution environment and
+ * hands, unchanged, to every plugin instance it creates: the exporters, the
+ * scheduler that serializes them, and the immutable view of the user's config.
+ *
+ * These are the only things that legitimately outlive an invocation. Exporters
+ * hold connections and buffers, and serializing their calls is a cross-execution
+ * concern by definition, so the scheduler has to be shared; resolving the config
+ * per invocation would just repeat the same work and re-log the same warnings.
+ */
+interface InsightEnvironment {
+  readonly scheduler: ExportScheduler;
+  readonly emitMode: NonNullable<WorkflowInsightConfig["emitMode"]>;
+  readonly samplingRate: number;
+  readonly content: WorkflowInsightConfig["content"];
+  readonly opContentOptions: OperationContentOptions;
+}
+
+/**
+ * The Workflow Insight plugin for exactly one durable execution invocation.
+ *
+ * The SDK builds one of these per invocation and drops it when the invocation
+ * returns, so everything that belongs to the execution is an ordinary field:
+ * there is no map from execution ARN to state, and therefore no way for one
+ * execution's hook to read, overwrite, or wait on another's, and nothing to
+ * remember to delete. Two executions running concurrently in one environment
+ * (routine under Lambda Managed Instances) are two objects.
+ *
+ * Identity is taken from the {@link InvocationInfo} the factory receives, which
+ * is the same object `onInvocationStart` is then called with, so the instance is
+ * fully formed before the first hook fires — a hook that arrives without a
+ * preceding `onInvocationStart` (the SDK's config-error path does exactly that)
+ * still finds the ARN, sampling decision, start time and input in place.
+ *
+ * The instance is also its own {@link ExportSlot}: the scheduler is handed
+ * `this`, so the queue entry and the object whose hooks fill it cannot get out
+ * of step.
+ */
+class WorkflowInsightInvocation
+  implements DurableInstrumentationPlugin, ExportSlot
+{
+  private readonly executionArn: string;
+  private readonly parsedArn: ParsedArn;
+  /** Start of the whole execution, not of this invocation. */
+  private readonly startTime: Date;
+  /**
+   * The execution input, kept for the RUNNING records `onOperationChange`
+   * builds — that hook is told only about operations. Released with the
+   * instance when the invocation returns, so a suspended execution that never
+   * resumes pins nothing.
+   */
+  private readonly cachedInput: unknown;
+  /**
+   * Deterministic sampling decision for this execution. Computed from the
+   * execution's stable identity, so every invocation and replay of it reaches
+   * the same conclusion, and read by every hook to skip work entirely when the
+   * execution is sampled out.
+   */
+  private readonly sampledIn: boolean;
+  /**
+   * Set once this invocation has ended. A late hook still lands on this same
+   * instance — the SDK does not order `onOperationChange` against
+   * `onInvocationEnd`, so a checkpoint that completed just before the end can
+   * deliver its change afterwards — and it must emit nothing: exporters that
+   * upsert by execution ARN would otherwise revert a finished execution back to
+   * RUNNING.
+   */
+  private closed = false;
+
+  // --- ExportSlot; owned by ExportScheduler ---
+  pending: WorkflowInsightRecord | undefined = undefined;
+  queued = false;
+  outstanding = false;
+  readonly waiters: (() => void)[] = [];
+
+  constructor(
+    private readonly env: InsightEnvironment,
+    info: InvocationInfo,
+  ) {
+    this.executionArn = info.executionArn;
+    this.parsedArn = parseExecutionArn(info.executionArn);
+    this.startTime = resolveExecutionStart(info);
+    this.cachedInput = info.executionInput;
+    this.sampledIn = shouldSampleExecution(info.executionArn, env.samplingRate);
+  }
+
+  private buildRecord(args: {
+    status: WorkflowInsightRecord["status"];
+    operations: OperationRecord[];
+    endTime?: Date;
+    input?: unknown;
+    output?: unknown;
+    error?: Error;
+  }): WorkflowInsightRecord {
+    const arn = this.parsedArn;
+    const content = this.env.content;
+    const durationMs = args.endTime
+      ? args.endTime.getTime() - this.startTime.getTime()
+      : undefined;
+
+    return {
+      recordType: "WorkflowInsight" as const,
+      schemaVersion: "1.0",
+      emittedAt: new Date().toISOString(),
+      executionArn: this.executionArn,
+      executionName: arn.executionName || undefined,
+      functionName: arn.functionName,
+      functionQualifier: arn.qualifier,
+      region: arn.region,
+      accountId: arn.accountId,
+      status: args.status,
+      startTime: this.startTime.toISOString(),
+      endTime: args.endTime?.toISOString(),
+      durationMs,
+      input: applyDataContent(args.input, content?.input),
+      output: applyDataContent(args.output, content?.output),
+      error: args.error
+        ? { name: args.error.name, message: args.error.message }
+        : undefined,
+      operations: args.operations,
+    };
+  }
+
+  async onInvocationStart(info: InvocationInfo): Promise<void> {
+    if (!this.sampledIn) return;
+
+    if (this.env.emitMode === "on-change") {
+      this.env.scheduler.schedule(
+        this,
+        this.buildRecord({
+          status: "RUNNING",
+          operations: buildOperationRecords(
+            info.operations,
+            this.env.opContentOptions,
+          ),
+          input: info.executionInput,
+        }),
+      );
+    }
+  }
+
+  /**
+   * Emits this invocation's final record and does not resolve until it has
+   * reached every exporter.
+   *
+   * The SDK awaits this hook on every path out of an invocation — the six
+   * status branches in `with-durable-execution.ts` plus the config-error path
+   * that returns before `wrapInvocation` is ever called — and the runner awaits
+   * it through `Promise.allSettled`, so the wait is guaranteed to complete
+   * before the Lambda response is returned and a rejection here cannot become
+   * the invocation's error. That makes this the right place for the drain, and
+   * it is where the Python and Java ports already do it.
+   */
+  async onInvocationEnd(info: InvocationEndInfo): Promise<void> {
+    const status = mapStatus(info.status);
+    const isTerminal = status === "SUCCEEDED" || status === "FAILED";
+    const isFailure = status === "FAILED";
+
+    // Decide whether this status update should produce a record.
+    // - on-change:   emit on every update (terminal or not)
+    // - on-complete: emit only on terminal SUCCEEDED/FAILED
+    // - on-failure:  emit only on terminal FAILED
+    const shouldEmit =
+      this.env.emitMode === "on-change"
+        ? true
+        : this.env.emitMode === "on-failure"
+          ? isFailure
+          : isTerminal;
+
+    // This invocation is over: a hook that still arrives is late and must emit
+    // nothing, or an exporter that upserts by execution ARN would revert the
+    // state we are about to write.
+    this.closed = true;
+
+    // The drain is in a `finally` so it also covers the paths that never reach
+    // the schedule above: a sampled-in end that emits nothing in this mode may
+    // still have a record queued by an earlier hook, and a throw while building
+    // the record (a poisoned `error.message`, say) must not strand whatever was
+    // already queued.
+    try {
+      if (this.sampledIn && shouldEmit) {
+        this.env.scheduler.schedule(
+          this,
+          this.buildRecord({
+            status,
+            operations: buildOperationRecords(
+              info.operations,
+              this.env.opContentOptions,
+            ),
+            endTime: new Date(),
+            input: info.executionInput,
+            output: info.executionResult,
+            error: info.executionError,
+          }),
+        );
+      }
+    } finally {
+      // Sampled-out executions never schedule a record, so there is nothing to
+      // drain or flush — skip the work entirely. The flush goes through the
+      // scheduler so it is serialized against exports: an exporter never sees
+      // one execution's flush() overlap another's export().
+      if (this.sampledIn) {
+        await this.env.scheduler.drain(this);
+        await this.env.scheduler.flush();
+      }
+    }
+  }
+
+  async onOperationChange(info: OperationChangeInfo): Promise<void> {
+    if (this.env.emitMode !== "on-change") return;
+    // `closed` is the whole guard: this hook can arrive after the end hook, and
+    // emitting then would publish RUNNING after the terminal record. It no
+    // longer has to check that the change belongs to this execution — a hook
+    // reaches this instance only if it does.
+    if (this.closed || !this.sampledIn) return;
+    this.env.scheduler.schedule(
+      this,
+      this.buildRecord({
+        status: "RUNNING",
+        operations: buildOperationRecords(
+          info.operations,
+          this.env.opContentOptions,
+        ),
+        input: this.cachedInput,
+      }),
+    );
+  }
+}
+
 // --- Plugin Factory ---
 
 /**
- * Creates a Workflow Insight plugin that listens to execution lifecycle events.
+ * Creates the Workflow Insight plugin factory the SDK installs.
+ *
+ * Call it once, at module scope, and pass the result in
+ * `DurableExecutionConfig.plugins`. The SDK then calls the returned factory
+ * once per invocation and dispatches that invocation's hooks to the instance it
+ * returns, so config resolution, the exporters and the export scheduler are
+ * shared by the whole execution environment while every execution's own state
+ * is confined to an object that dies with its invocation.
+ *
  * @experimental This function is experimental and may change in future releases.
  */
 export function workflowInsight(
   config: WorkflowInsightConfig,
-): DurableInstrumentationPlugin {
-  const samplingRate = resolveSamplingRate(config.samplingRate);
-
+): DurableInstrumentationPluginFactory {
   const content = config.content;
-  const includeErrors = content?.operations?.includeErrors ?? true;
   const overridesByName = new Map<string, OperationOverride>();
   for (const override of content?.operations?.overrides ?? []) {
     overridesByName.set(override.operationName, override);
   }
-  const opContentOptions: OperationContentOptions = {
-    overridesByName,
-    includeErrors,
-    // Default to top-level: it yields a consistent snapshot regardless of
-    // suspend/resume. "full-tree" is opt-in because, without child preservation
-    // (pluginsConfig.childOperationsDepth), it can silently miss children of
-    // contexts that finished in an earlier invocation.
-    topLevelOnly: config.operationDetail !== "full-tree",
-  };
 
   // `exporters` reaches `this.exporters.map` inside the pump's guarded region,
   // which is the fan-out's last remaining synchronous-throw site: an array-like
@@ -792,219 +1003,22 @@ export function workflowInsight(
     Array.isArray(config.exporters) && config.exporters.length > 0
       ? config.exporters
       : [new LambdaLogExporter()];
-  const emitMode = config.emitMode ?? "on-complete";
-  const scheduler = new ExportScheduler(exporters);
 
-  // One scope per execution, keyed by executionArn: how hooks find the state
-  // for the execution they were called about. Prevents warm-container bleed
-  // between executions and handles resume correctly.
-  const scopes = new Map<string, ExecutionScope>();
-
-  /**
-   * Scope for an invocation-level hook, created on first use. Only hooks that
-   * carry invocation-level information build scopes — `onOperationChange` must
-   * not, or a hook arriving after the invocation ended would resurrect the
-   * execution as RUNNING.
-   */
-  function scopeFor(info: {
-    executionArn: string;
-    executionStartTimestamp?: Date;
-    operations?: Record<string, OperationInfo>;
-  }): ExecutionScope {
-    const existing = scopes.get(info.executionArn);
-    if (existing !== undefined) return existing;
-    const scope: ExecutionScope = {
-      executionArn: info.executionArn,
-      parsedArn: parseExecutionArn(info.executionArn),
-      startTime: resolveExecutionStart(info),
-      cachedInput: undefined,
-      sampledIn: shouldSampleExecution(info.executionArn, samplingRate),
-      closed: false,
-      pending: undefined,
-      queued: false,
-      waiters: [],
-    };
-    scopes.set(info.executionArn, scope);
-    return scope;
-  }
-
-  const buildRecord = (
-    scope: ExecutionScope,
-    args: {
-      status: WorkflowInsightRecord["status"];
-      operations: OperationRecord[];
-      endTime?: Date;
-      input?: unknown;
-      output?: unknown;
-      error?: Error;
-    },
-  ): WorkflowInsightRecord => {
-    const arn = scope.parsedArn;
-    const startTime = scope.startTime;
-    const durationMs = args.endTime
-      ? args.endTime.getTime() - startTime.getTime()
-      : undefined;
-
-    return {
-      recordType: "WorkflowInsight" as const,
-      schemaVersion: "1.0",
-      emittedAt: new Date().toISOString(),
-      executionArn: scope.executionArn,
-      executionName: arn.executionName || undefined,
-      functionName: arn.functionName,
-      functionQualifier: arn.qualifier,
-      region: arn.region,
-      accountId: arn.accountId,
-      status: args.status,
-      startTime: startTime.toISOString(),
-      endTime: args.endTime?.toISOString(),
-      durationMs,
-      input: applyDataContent(args.input, content?.input),
-      output: applyDataContent(args.output, content?.output),
-      error: args.error
-        ? { name: args.error.name, message: args.error.message }
-        : undefined,
-      operations: args.operations,
-    };
-  };
-
-  return {
-    async onInvocationStart(info: InvocationInfo): Promise<void> {
-      const scope = scopeFor(info);
-      if (!scope.sampledIn) return;
-      scope.cachedInput = info.executionInput;
-
-      if (emitMode === "on-change") {
-        scheduler.schedule(
-          scope,
-          buildRecord(scope, {
-            status: "RUNNING",
-            operations: buildOperationRecords(
-              info.operations,
-              opContentOptions,
-            ),
-            input: info.executionInput,
-          }),
-        );
-      }
-    },
-
-    // wrapInvocation is the only hook the SDK awaits. We use it to drain this
-    // execution's export queue before the invocation returns, guaranteeing the
-    // final record (scheduled by onInvocationEnd, which runs inside fn) is
-    // delivered. The drain runs in `finally` so it also covers the
-    // throwing/retry paths, and it waits for this execution's own record rather
-    // than for the whole queue to quiesce.
-    async wrapInvocation(
-      info: InvocationInfo,
-      fn: () => Promise<DurableExecutionInvocationOutput>,
-    ): Promise<DurableExecutionInvocationOutput> {
-      // Read the decision now, while the scope from onInvocationStart is still
-      // around; it is a pure function of the ARN, so recomputing it if the hook
-      // order ever changes yields the same answer.
-      const sampledIn =
-        scopes.get(info.executionArn)?.sampledIn ??
-        shouldSampleExecution(info.executionArn, samplingRate);
-      try {
-        return await fn();
-      } finally {
-        // Belt and braces for the scope drop in onInvocationEnd: if the SDK
-        // ever returns from an invocation without that hook firing, the scope
-        // (and the execution input it caches) must still not outlive the
-        // invocation. Any record already scheduled is held by the scheduler,
-        // not by this map, so dropping the scope cannot lose an export.
-        scopes.delete(info.executionArn);
-        // Sampled-out executions never schedule a record, so there is nothing
-        // to drain or flush — skip the work entirely. The flush goes through the
-        // scheduler so it is serialized against exports: an exporter never sees
-        // one execution's flush() overlap another's export().
-        if (sampledIn) {
-          await scheduler.drain(info.executionArn);
-          await scheduler.flush();
-        }
-      }
-    },
-
-    async onInvocationEnd(info: InvocationEndInfo): Promise<void> {
-      const scope = scopeFor(info);
-      const status = mapStatus(info.status);
-      const isTerminal = status === "SUCCEEDED" || status === "FAILED";
-      const isFailure = status === "FAILED";
-
-      // Decide whether this status update should produce a record.
-      // - on-change:   emit on every update (terminal or not)
-      // - on-complete: emit only on terminal SUCCEEDED/FAILED
-      // - on-failure:  emit only on terminal FAILED
-      const shouldEmit =
-        emitMode === "on-change"
-          ? true
-          : emitMode === "on-failure"
-            ? isFailure
-            : isTerminal;
-
-      // This invocation is over: any hook that still arrives for this execution
-      // is late and must emit nothing, or an exporter that upserts by execution
-      // ARN would revert the state we are about to write.
-      scope.closed = true;
-
-      // Sampled-out executions emit nothing, but must still fall through to the
-      // scope cleanup below so their entry doesn't leak. The try/finally
-      // matters: `closed` is already set, so a throw while building the record
-      // would otherwise leave a closed scope in the map, and `scopeFor` returns
-      // existing scopes — silently muting every later invocation of this
-      // execution for the life of the environment.
-      try {
-        if (scope.sampledIn && shouldEmit) {
-          scheduler.schedule(
-            scope,
-            buildRecord(scope, {
-              status,
-              operations: buildOperationRecords(
-                info.operations,
-                opContentOptions,
-              ),
-              endTime: new Date(),
-              input: info.executionInput,
-              output: info.executionResult,
-              error: info.executionError,
-            }),
-          );
-        }
-
-        // Drop the scope at every invocation end, including non-terminal
-        // PENDING/RETRYING suspends. A suspended execution may never resume in
-        // this environment, and keeping its scope alive would pin the whole
-        // cached execution input until the environment dies. The next invocation
-        // rebuilds the scope, taking the execution start time from the SDK when
-        // it reports one (see resolveExecutionStart) so durations stay correct
-        // across resumes. Any record already scheduled above is held by the
-        // scheduler, which still exports it and still lets wrapInvocation drain
-        // it by ARN.
-      } finally {
-        scopes.delete(info.executionArn);
-      }
-    },
-
-    async onOperationChange(info: OperationChangeInfo): Promise<void> {
-      if (emitMode !== "on-change") {
-        return;
-      }
-      // Deliberately a lookup, not a create: the SDK does not order this hook
-      // against onInvocationEnd, so a checkpoint that completed just before the
-      // invocation ended can deliver its change afterwards. Emitting then would
-      // publish RUNNING after the terminal record and, for exporters that
-      // upsert by execution ARN (DynamoDB, Aurora, Redshift, OpenSearch), turn
-      // a finished execution back into a running one.
-      const scope = scopes.get(info.executionArn);
-      if (scope === undefined || scope.closed || !scope.sampledIn) return;
-      scheduler.schedule(
-        scope,
-        buildRecord(scope, {
-          status: "RUNNING",
-          operations: buildOperationRecords(info.operations, opContentOptions),
-          input: scope.cachedInput,
-        }),
-      );
+  const env: InsightEnvironment = {
+    scheduler: new ExportScheduler(exporters),
+    emitMode: config.emitMode ?? "on-complete",
+    samplingRate: resolveSamplingRate(config.samplingRate),
+    content,
+    opContentOptions: {
+      overridesByName,
+      includeErrors: content?.operations?.includeErrors ?? true,
+      // Default to top-level: it yields a consistent snapshot regardless of
+      // suspend/resume. "full-tree" is opt-in because, without child
+      // preservation (pluginsConfig.childOperationsDepth), it can silently miss
+      // children of contexts that finished in an earlier invocation.
+      topLevelOnly: config.operationDetail !== "full-tree",
     },
   };
+
+  return (info: InvocationInfo) => new WorkflowInsightInvocation(env, info);
 }

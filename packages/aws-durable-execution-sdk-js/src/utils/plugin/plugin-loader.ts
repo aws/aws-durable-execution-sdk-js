@@ -2,11 +2,7 @@ import { createRequire } from "module";
 import { join } from "path";
 import { pathToFileURL } from "url";
 import { PluginLoadError } from "../../errors/plugin-load-error/plugin-load-error";
-import {
-  DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION,
-  DurableInstrumentationPlugin,
-  DurableInstrumentationPluginProvider,
-} from "../../types/plugin";
+import { DurableInstrumentationPluginFactory } from "../../types/plugin";
 
 export const PLUGIN_ENVIRONMENT_VARIABLE = "DURABLE_EXECUTION_PLUGINS";
 export const PLUGIN_PROVIDER_EXPORT = "durableExecutionPluginProvider";
@@ -193,86 +189,53 @@ function getProviderExport(
   return candidates[0];
 }
 
-function validateProvider(
+/**
+ * Checks the one thing about a provider module that is still worth checking: the
+ * export is callable, so the SDK can call it once per invocation.
+ *
+ * Nothing else about the value can be established here. What a factory returns
+ * is only known when it runs, and by then the invocation has started, where a
+ * plugin failure is contained rather than fatal. A non-callable export, by
+ * contrast, is a packaging mistake that would otherwise be rediscovered — and
+ * swallowed — on every invocation, so it fails the load instead.
+ */
+function validateProviderFactory(
   specifier: string,
   providerValue: unknown,
-): DurableInstrumentationPluginProvider {
-  if (!isRecord(providerValue)) {
+): DurableInstrumentationPluginFactory {
+  if (typeof providerValue !== "function") {
     throw new PluginLoadError(
-      `Plugin module '${specifier}' exports an invalid provider; expected an object.`,
+      `Plugin provider '${specifier}' must be a function that creates a plugin for one ` +
+        `invocation, but it is ${describeValue(providerValue)}.`,
     );
   }
 
-  if (
-    providerValue.pluginApiVersion !==
-    DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION
-  ) {
-    throw new PluginLoadError(
-      `Plugin provider '${specifier}' declares plugin API version '${String(providerValue.pluginApiVersion)}', ` +
-        `but @aws/durable-execution-sdk-js supports version ${DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION}. ` +
-        "Install compatible SDK and plugin package versions.",
-    );
-  }
-
-  if (
-    typeof providerValue.pluginType !== "function" ||
-    !isRecord(providerValue.pluginType.prototype)
-  ) {
-    throw new PluginLoadError(
-      `Plugin provider '${specifier}' must declare a constructable 'pluginType'.`,
-    );
-  }
-
-  if (typeof providerValue.createPlugin !== "function") {
-    throw new PluginLoadError(
-      `Plugin provider '${specifier}' must define a 'createPlugin' factory function.`,
-    );
-  }
-
-  return providerValue as unknown as DurableInstrumentationPluginProvider;
+  return providerValue as DurableInstrumentationPluginFactory;
 }
 
-function createPlugin(
-  specifier: string,
-  provider: DurableInstrumentationPluginProvider,
-): DurableInstrumentationPlugin {
-  let plugin: DurableInstrumentationPlugin;
-  try {
-    plugin = provider.createPlugin();
-  } catch (error) {
-    throw new PluginLoadError(
-      `Plugin provider '${specifier}' failed to create its plugin: ${errorMessage(error)}`,
-      { cause: error },
-    );
-  }
-
-  if (!(plugin instanceof provider.pluginType)) {
-    const actualType =
-      plugin == null
-        ? String(plugin)
-        : ((plugin as { constructor?: { name?: string } }).constructor?.name ??
-          typeof plugin);
-    throw new PluginLoadError(
-      `Plugin provider '${specifier}' declared plugin type '${provider.pluginType.name}' ` +
-        `but created '${actualType}'.`,
-    );
-  }
-
-  return plugin;
+function describeValue(value: unknown): string {
+  if (value === null) return "null";
+  const type = typeof value;
+  return type === "object" ? "an object" : `a ${type}`;
 }
 
 /**
- * Combines explicitly configured plugins with providers selected through the environment.
+ * Combines explicitly configured plugin factories with providers selected
+ * through the environment.
  *
- * Explicit plugins retain their order. Dynamically selected plugins follow in the order
- * listed in `DURABLE_EXECUTION_PLUGINS`.
+ * Explicit factories retain their order. Dynamically selected providers follow
+ * in the order listed in `DURABLE_EXECUTION_PLUGINS`.
+ *
+ * Every returned entry is a factory: no plugin is constructed here. Construction
+ * happens once per invocation, in {@link createInvocationPluginRunner}, which is
+ * what bounds a plugin instance's lifetime to a single invocation.
  *
  * @internal
  */
 export async function loadConfiguredPlugins(
-  explicitPlugins: readonly DurableInstrumentationPlugin[] | undefined,
+  explicitPlugins: readonly DurableInstrumentationPluginFactory[] | undefined,
   options: PluginLoaderOptions = {},
-): Promise<DurableInstrumentationPlugin[]> {
+): Promise<DurableInstrumentationPluginFactory[]> {
   const plugins = [...(explicitPlugins ?? [])];
   const environment = options.environment ?? process.env;
   const specifiers = parseConfiguredSpecifiers(environment);
@@ -302,11 +265,12 @@ export async function loadConfiguredPlugins(
       );
     }
 
-    const provider = validateProvider(
-      specifier,
-      getProviderExport(specifier, importedModule),
+    plugins.push(
+      validateProviderFactory(
+        specifier,
+        getProviderExport(specifier, importedModule),
+      ),
     );
-    plugins.push(createPlugin(specifier, provider));
   }
 
   return plugins;

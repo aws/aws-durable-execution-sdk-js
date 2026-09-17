@@ -5,10 +5,8 @@ class CjsLayerPlugin {
   }
 }
 
+// A provider module exports the factory itself: the SDK calls it once per
+// invocation to build that invocation's plugin instance.
 module.exports = {
-  durableExecutionPluginProvider: {
-    pluginApiVersion: 1,
-    pluginType: CjsLayerPlugin,
-    createPlugin: () => new CjsLayerPlugin(),
-  },
+  durableExecutionPluginProvider: () => new CjsLayerPlugin(),
 };

@@ -11,7 +11,24 @@ import {
   propagation,
 } from "@opentelemetry/api";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
-import { InvocationOtelPlugin } from "../invocation-plugin";
+import {
+  createInvocationOtelPluginFactory,
+  InvocationOtelPlugin,
+} from "../invocation-plugin";
+import type { OtelPluginConfig } from "../otel-plugin-config";
+
+/**
+ * The plugin the SDK would build for one invocation: the factory called with
+ * that invocation's own info, before any hook fires. Tests that drive several
+ * invocations build one instance per invocation, as the SDK does, and pass the
+ * info of the invocation the instance serves.
+ */
+function newPlugin(
+  config?: OtelPluginConfig,
+  info: InvocationInfo = makeInvocationInfo(),
+): InvocationOtelPlugin {
+  return createInvocationOtelPluginFactory(config)(info);
+}
 import { deriveSpanIdFromOperationId } from "../deterministic-id-generator";
 import type { TracerProviderFactory } from "../otel-plugin-config";
 import type {
@@ -143,7 +160,7 @@ beforeEach(() => {
     }
     return provider;
   };
-  plugin = new InvocationOtelPlugin({
+  plugin = newPlugin({
     tracerProviderFactory,
   });
 });
@@ -182,7 +199,7 @@ describe("InvocationOtelPlugin", () => {
     });
 
     it("honors custom workflowSpanName from config; invocation span name is fixed", async () => {
-      const customPlugin = new InvocationOtelPlugin({
+      const customPlugin = newPlugin({
         tracerProviderFactory,
         workflowSpanName: "my-workflow",
       });
@@ -204,7 +221,7 @@ describe("InvocationOtelPlugin", () => {
       const lambdaRoot = ambientTracer.startSpan("Lambda");
       const lambdaSpanContext = lambdaRoot.spanContext();
       const remoteParentSpanId = "c".repeat(16);
-      const topologyPlugin = new InvocationOtelPlugin({
+      const topologyPlugin = newPlugin({
         tracerProviderFactory,
         contextExtractor: () => ({
           traceId: lambdaSpanContext.traceId,
@@ -270,7 +287,7 @@ describe("InvocationOtelPlugin", () => {
     it("uses the extracted upstream parent as the execution ancestor when no span is active", async () => {
       const upstreamTraceId = "a".repeat(32);
       const upstreamSpanId = "b".repeat(16);
-      const topologyPlugin = new InvocationOtelPlugin({
+      const topologyPlugin = newPlugin({
         tracerProviderFactory,
         contextExtractor: () => ({
           traceId: upstreamTraceId,
@@ -420,19 +437,28 @@ describe("InvocationOtelPlugin", () => {
       expect(spans.length).toBeGreaterThan(0);
     });
 
-    it("clears all state for warm Lambda reuse", async () => {
-      // First invocation
-      await plugin.onInvocationStart(makeInvocationInfo());
-      await plugin.onOperationStart(makeOperationInfo({ id: "op-1" }));
-      await plugin.onInvocationEnd(makeInvocationEndInfo());
+    it("carries no state from one invocation into the next on a warm Lambda", async () => {
+      // Two invocations in one execution environment. The state that used to be
+      // cleared at the end of an invocation is now unreachable by construction:
+      // the next invocation is served by a new instance out of the same factory,
+      // so nothing the first one recorded can leak into the second's spans.
+      const factory = createInvocationOtelPluginFactory({
+        tracerProviderFactory,
+      });
+
+      const firstInfo = makeInvocationInfo();
+      const first = factory(firstInfo);
+      await first.onInvocationStart(firstInfo);
+      await first.onOperationStart(makeOperationInfo({ id: "op-1" }));
+      await first.onInvocationEnd(makeInvocationEndInfo());
 
       exporter.reset();
 
-      // Second invocation - should not have leftover state
-      await plugin.onInvocationStart(
-        makeInvocationInfo({ executionArn: "arn:second" }),
-      );
-      await plugin.onInvocationEnd(
+      const secondInfo = makeInvocationInfo({ executionArn: "arn:second" });
+      const second = factory(secondInfo);
+      expect(second).not.toBe(first);
+      await second.onInvocationStart(secondInfo);
+      await second.onInvocationEnd(
         makeInvocationEndInfo({ executionArn: "arn:second" }),
       );
 
@@ -444,6 +470,9 @@ describe("InvocationOtelPlugin", () => {
       );
       // Only invocation span + Workflow span from second invocation, no leftover op-1
       expect(spans.length).toBe(2);
+      for (const span of spans) {
+        expect(span.attributes["durable.execution.arn"]).toBe("arn:second");
+      }
     });
   });
 
@@ -1823,7 +1852,7 @@ describe("InvocationOtelPlugin", () => {
     });
 
     it("returns undefined when enrichLogger is disabled, even with an active span", async () => {
-      const noEnrichPlugin = new InvocationOtelPlugin({
+      const noEnrichPlugin = newPlugin({
         tracerProviderFactory,
         enrichLogger: false,
       });
@@ -2165,20 +2194,15 @@ describe("InvocationOtelPlugin", () => {
       const CHILD_ARN =
         "arn:aws:lambda:us-east-1:123456789012:function:durable-enrich:$LATEST:child-exec-1";
 
-      // Create parent plugin with shared provider
-      const parentPlugin = new InvocationOtelPlugin({
-        tracerProviderFactory,
-      });
-
-      // Create child plugin with shared provider
-      const childPlugin = new InvocationOtelPlugin({
-        tracerProviderFactory,
-      });
+      // One instance per execution, each built from its own invocation info, over
+      // the shared provider.
+      const parentInfo = makeInvocationInfo({ executionArn: PARENT_ARN });
+      const parentPlugin = newPlugin({ tracerProviderFactory }, parentInfo);
+      const childInfo = makeInvocationInfo({ executionArn: CHILD_ARN });
+      const childPlugin = newPlugin({ tracerProviderFactory }, childInfo);
 
       // --- Parent workflow execution ---
-      await parentPlugin.onInvocationStart(
-        makeInvocationInfo({ executionArn: PARENT_ARN }),
-      );
+      await parentPlugin.onInvocationStart(parentInfo);
       // Parent has operation at position "1" (same as child will have)
       await parentPlugin.onOperationStart(
         makeOperationInfo({
@@ -2196,9 +2220,7 @@ describe("InvocationOtelPlugin", () => {
       );
 
       // --- Child workflow execution ---
-      await childPlugin.onInvocationStart(
-        makeInvocationInfo({ executionArn: CHILD_ARN }),
-      );
+      await childPlugin.onInvocationStart(childInfo);
       // Child also has operation at position "1"
       await childPlugin.onOperationStart(
         makeOperationInfo({
@@ -2516,7 +2538,15 @@ describe("InvocationOtelPlugin", () => {
     });
 
     it("waitForCondition links the first polling attempt, not the resumed operation", async () => {
-      await plugin.onInvocationStart(makeInvocationInfo());
+      // Two invocations of one execution, so one instance each out of a shared
+      // factory: the resumed segment has to find its way back to the first
+      // operation span through the deterministic ID, not through leftover state.
+      const factory = createInvocationOtelPluginFactory({
+        tracerProviderFactory,
+      });
+      const firstInfo = makeInvocationInfo();
+      const plugin = factory(firstInfo);
+      await plugin.onInvocationStart(firstInfo);
       await plugin.onOperationStart(
         makeOperationInfo({
           id: "cond-1",
@@ -2548,10 +2578,10 @@ describe("InvocationOtelPlugin", () => {
         makeInvocationEndInfo({ status: "PENDING" as any }),
       );
 
-      await plugin.onInvocationStart(
-        makeInvocationInfo({ isFirstInvocation: false }),
-      );
-      await plugin.onOperationStart(
+      const secondInfo = makeInvocationInfo({ isFirstInvocation: false });
+      const resumed = factory(secondInfo);
+      await resumed.onInvocationStart(secondInfo);
+      await resumed.onOperationStart(
         makeOperationInfo({
           id: "cond-1",
           type: "STEP",
@@ -2560,7 +2590,7 @@ describe("InvocationOtelPlugin", () => {
           isReplay: true,
         }),
       );
-      await plugin.onOperationAttemptStart(
+      await resumed.onOperationAttemptStart(
         makeAttemptInfo({
           id: "cond-1",
           type: "STEP",
@@ -2569,7 +2599,7 @@ describe("InvocationOtelPlugin", () => {
           attempt: 2,
         }),
       );
-      await plugin.onOperationAttemptEnd(
+      await resumed.onOperationAttemptEnd(
         makeAttemptEndInfo({
           id: "cond-1",
           type: "STEP",
@@ -2579,7 +2609,7 @@ describe("InvocationOtelPlugin", () => {
           outcome: "SUCCEEDED" as any,
         }),
       );
-      await plugin.onOperationEnd(
+      await resumed.onOperationEnd(
         makeOperationEndInfo({
           id: "cond-1",
           type: "STEP",
@@ -2590,7 +2620,7 @@ describe("InvocationOtelPlugin", () => {
           attempt: 2,
         }),
       );
-      await plugin.onInvocationEnd(makeInvocationEndInfo());
+      await resumed.onInvocationEnd(makeInvocationEndInfo());
 
       const workflowSpan = findSpan("Workflow");
       const firstOperationSpan = getExportedSpans().find(

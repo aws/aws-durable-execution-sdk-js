@@ -2,7 +2,7 @@
 import {
   DurableContext,
   withDurableExecution,
-  DurableInstrumentationPlugin,
+  DurableInstrumentationPluginFactory,
 } from "@aws/durable-execution-sdk-js";
 
 const FAULTY = "CONFPLUGIN-FAULTY";
@@ -16,17 +16,18 @@ function isStep(type?: string): boolean {
 // (invocation-start, operation-start, attempt-start, attempt-end,
 // operation-end, invocation-end). The SDK must swallow each exception and
 // still dispatch to the healthy plugin.
-function makeFaultyPlugin(): DurableInstrumentationPlugin {
-  let executionArn = "";
+const makeFaultyPlugin: DurableInstrumentationPluginFactory = (invocation) => {
   const emit = (rec: Record<string, unknown>): void => {
     process.stdout.write(
-      JSON.stringify({ ...rec, durableExecutionArn: executionArn }) + "\n",
+      JSON.stringify({
+        ...rec,
+        durableExecutionArn: invocation.executionArn,
+      }) + "\n",
     );
   };
 
   return {
-    async onInvocationStart(info): Promise<void> {
-      executionArn = info.executionArn;
+    async onInvocationStart(): Promise<void> {
       emit({ plugin: FAULTY, hook: "invocation-start" });
       throw new Error("faulty onInvocationStart");
     },
@@ -55,21 +56,24 @@ function makeFaultyPlugin(): DurableInstrumentationPlugin {
       throw new Error("faulty onInvocationEnd");
     },
   };
-}
+};
 
 // Registered second: logs normally and must still receive every corresponding
-// hook despite the faulty plugin throwing at each boundary.
-function makeHealthyPlugin(): DurableInstrumentationPlugin {
-  let executionArn = "";
+// hook despite the faulty plugin throwing at each boundary. A factory that
+// throws is contained the same way, so the faulty factory above cannot keep
+// this instance from being built either.
+const makeHealthyPlugin: DurableInstrumentationPluginFactory = (invocation) => {
   const emit = (rec: Record<string, unknown>): void => {
     process.stdout.write(
-      JSON.stringify({ ...rec, durableExecutionArn: executionArn }) + "\n",
+      JSON.stringify({
+        ...rec,
+        durableExecutionArn: invocation.executionArn,
+      }) + "\n",
     );
   };
 
   return {
     async onInvocationStart(info): Promise<void> {
-      executionArn = info.executionArn;
       emit({
         plugin: HEALTHY,
         hook: "invocation-start",
@@ -106,11 +110,11 @@ function makeHealthyPlugin(): DurableInstrumentationPlugin {
       emit({ plugin: HEALTHY, hook: "invocation-end", status: info.status });
     },
   };
-}
+};
 
 export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
     return await context.step(async () => `Hello, ${event}!`);
   },
-  { plugins: [makeFaultyPlugin(), makeHealthyPlugin()] },
+  { plugins: [makeFaultyPlugin, makeHealthyPlugin] },
 );

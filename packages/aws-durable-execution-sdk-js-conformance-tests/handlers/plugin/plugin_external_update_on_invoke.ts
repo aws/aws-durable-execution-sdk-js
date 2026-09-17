@@ -2,22 +2,23 @@
 import {
   DurableContext,
   withDurableExecution,
-  DurableInstrumentationPlugin,
+  DurableInstrumentationPluginFactory,
 } from "@aws/durable-execution-sdk-js";
 
 const PLUGIN = "CONFPLUGIN";
 
-function makePlugin(): DurableInstrumentationPlugin {
-  let executionArn = "";
+const makePlugin: DurableInstrumentationPluginFactory = (invocation) => {
   const emit = (rec: Record<string, unknown>): void => {
     process.stdout.write(
-      JSON.stringify({ ...rec, durableExecutionArn: executionArn }) + "\n",
+      JSON.stringify({
+        ...rec,
+        durableExecutionArn: invocation.executionArn,
+      }) + "\n",
     );
   };
 
   return {
     async onInvocationStart(info): Promise<void> {
-      executionArn = info.executionArn;
       // JS surfaces externally-completed operations as `updatedOperations` on
       // the invocation-start info. Filter to wait-type operations and emit one
       // record each.
@@ -33,12 +34,12 @@ function makePlugin(): DurableInstrumentationPlugin {
       }
     },
   };
-}
+};
 
 export const handler = withDurableExecution(
   async (_event: any, context: DurableContext) => {
     await context.wait({ seconds: 2 });
     return "Wait completed";
   },
-  { plugins: [makePlugin()] },
+  { plugins: [makePlugin] },
 );

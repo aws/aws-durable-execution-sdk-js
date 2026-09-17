@@ -2,23 +2,22 @@
 import {
   DurableContext,
   withDurableExecution,
-  DurableInstrumentationPlugin,
+  DurableInstrumentationPluginFactory,
 } from "@aws/durable-execution-sdk-js";
 
 const PLUGIN = "CONFPLUGIN";
 
-function makePlugin(): DurableInstrumentationPlugin {
-  let executionArn = "";
+const makePlugin: DurableInstrumentationPluginFactory = (invocation) => {
   const emit = (rec: Record<string, unknown>): void => {
     process.stdout.write(
-      JSON.stringify({ ...rec, durableExecutionArn: executionArn }) + "\n",
+      JSON.stringify({
+        ...rec,
+        durableExecutionArn: invocation.executionArn,
+      }) + "\n",
     );
   };
 
   return {
-    async onInvocationStart(info): Promise<void> {
-      executionArn = info.executionArn;
-    },
     async onOperationEnd(info): Promise<void> {
       // Report parent linkage for every operation that reaches a terminal state.
       emit({
@@ -30,7 +29,7 @@ function makePlugin(): DurableInstrumentationPlugin {
       });
     },
   };
-}
+};
 
 export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
@@ -40,5 +39,5 @@ export const handler = withDurableExecution(
       },
     );
   },
-  { plugins: [makePlugin()] },
+  { plugins: [makePlugin] },
 );

@@ -9,8 +9,8 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import {
-  ExecutionOtelPlugin,
-  InvocationOtelPlugin,
+  createExecutionOtelPluginFactory,
+  createInvocationOtelPluginFactory,
 } from "@aws/durable-execution-sdk-js-otel";
 
 export interface ScenarioEvent {
@@ -23,10 +23,14 @@ type Workflow<TResult> = (
   context: DurableContext,
 ) => Promise<TResult>;
 
-const plugin =
+// One factory per module load, shared by every handler in the bundle: the
+// tracer provider and exporter it holds belong to the execution environment,
+// while the SDK calls the factory once per invocation to build that
+// invocation's plugin instance.
+const pluginFactory =
   process.env.OTEL_PLUGIN_MODE === "execution"
-    ? new ExecutionOtelPlugin()
-    : new InvocationOtelPlugin();
+    ? createExecutionOtelPluginFactory()
+    : createInvocationOtelPluginFactory();
 
 export function createScenarioHandler<TResult>(
   expectedScenario: string,
@@ -39,13 +43,13 @@ export function createScenarioHandler<TResult>(
     requireScenario(event, expectedScenario);
     return workflow(event, context);
   };
-  return withDurableExecution(handler, { plugins: [plugin] });
+  return withDurableExecution(handler, { plugins: [pluginFactory] });
 }
 
 export function createTargetHandler<TResult>(
   workflow: Workflow<TResult>,
 ): DurableLambdaHandler {
-  return withDurableExecution(workflow, { plugins: [plugin] });
+  return withDurableExecution(workflow, { plugins: [pluginFactory] });
 }
 
 export function longDelaySeconds(event: ScenarioEvent): number {

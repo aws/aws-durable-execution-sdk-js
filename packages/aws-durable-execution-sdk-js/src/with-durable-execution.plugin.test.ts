@@ -10,6 +10,7 @@ import {
 } from "./types";
 import {
   DurableInstrumentationPlugin,
+  DurableInstrumentationPluginFactory,
   PluginInvocationStatus,
 } from "./types/plugin";
 import { TEST_CONSTANTS } from "./testing/test-constants";
@@ -32,6 +33,13 @@ const mockEvent: DurableExecutionInvocationInput = {
   InitialExecutionState: { Operations: [], NextMarker: "" },
 };
 const mockContext = {} as Context;
+// Plugins are configured as factories: the SDK builds one instance per
+// invocation. These tests are about what the hooks receive, not about instance
+// lifetime, so each factory hands back the same instance every time.
+const factoryFor =
+  (plugin: DurableInstrumentationPlugin): DurableInstrumentationPluginFactory =>
+  () =>
+    plugin;
 // Flush the microtask queue without advancing fake timers, so we can observe
 // whether a promise is still pending after all currently-scheduled
 // microtasks have run.
@@ -96,7 +104,7 @@ describe("plugin hooks", () => {
 
   it("calls onInvocationStart with isFirstInvocation=true on first invocation", async () => {
     const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
-      plugins: [plugin],
+      plugins: [factoryFor(plugin)],
     });
     await handler(mockEvent, mockContext);
 
@@ -119,7 +127,7 @@ describe("plugin hooks", () => {
     });
 
     const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
-      plugins: [plugin],
+      plugins: [factoryFor(plugin)],
     });
     await handler(mockEvent, mockContext);
 
@@ -137,7 +145,7 @@ describe("plugin hooks", () => {
   it("calls onInvocationEnd with SUCCEEDED status on normal completion", async () => {
     const result = { ok: true };
     const handler = withDurableExecution(jest.fn().mockResolvedValue(result), {
-      plugins: [plugin],
+      plugins: [factoryFor(plugin)],
     });
     await handler(mockEvent, mockContext);
 
@@ -157,7 +165,7 @@ describe("plugin hooks", () => {
   it("calls onInvocationEnd with FAILED status when handler throws", async () => {
     const error = new Error("handler error");
     const handler = withDurableExecution(jest.fn().mockRejectedValue(error), {
-      plugins: [plugin],
+      plugins: [factoryFor(plugin)],
     });
     await handler(mockEvent, mockContext);
 
@@ -177,7 +185,7 @@ describe("plugin hooks", () => {
   it("calls onInvocationEnd exactly once per invocation even when handler throws", async () => {
     const handler = withDurableExecution(
       jest.fn().mockRejectedValue(new Error("boom")),
-      { plugins: [plugin] },
+      { plugins: [factoryFor(plugin)] },
     );
     await handler(mockEvent, mockContext);
 
@@ -202,7 +210,7 @@ describe("plugin hooks", () => {
 
     const handler = withDurableExecution(
       jest.fn().mockResolvedValue({ ok: true }),
-      { plugins: [asyncPlugin] },
+      { plugins: [factoryFor(asyncPlugin)] },
     );
 
     let handlerResolved = false;
@@ -239,7 +247,7 @@ describe("plugin hooks", () => {
 
     const handler = withDurableExecution(
       jest.fn().mockRejectedValue(new Error("handler error")),
-      { plugins: [asyncPlugin] },
+      { plugins: [factoryFor(asyncPlugin)] },
     );
 
     let handlerResolved = false;
@@ -268,7 +276,7 @@ describe("plugin hooks", () => {
     const handler = withDurableExecution(
       jest.fn().mockResolvedValue({ ok: true }),
       {
-        plugins: [plugin, plugin2],
+        plugins: [factoryFor(plugin), factoryFor(plugin2)],
       },
     );
     await handler(mockEvent, mockContext);
@@ -296,20 +304,23 @@ describe("plugin hooks", () => {
       onInvocationStart: jest.fn(),
       onInvocationEnd: jest.fn(),
     };
+    const explicitFactory = factoryFor(plugin);
     (
       loadConfiguredPlugins as jest.MockedFunction<typeof loadConfiguredPlugins>
-    ).mockResolvedValueOnce([plugin, dynamicPlugin]);
+    ).mockResolvedValueOnce([explicitFactory, factoryFor(dynamicPlugin)]);
 
     const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
-      plugins: [plugin],
+      plugins: [explicitFactory],
     });
 
     expect(loadConfiguredPlugins).toHaveBeenCalledTimes(1);
-    expect(loadConfiguredPlugins).toHaveBeenCalledWith([plugin]);
+    expect(loadConfiguredPlugins).toHaveBeenCalledWith([explicitFactory]);
 
     await handler(mockEvent, mockContext);
     await handler(mockEvent, mockContext);
 
+    // Loading — resolving and importing provider modules — still happens once
+    // per wrapped handler. Only the instances are per invocation.
     expect(loadConfiguredPlugins).toHaveBeenCalledTimes(1);
     expect(plugin.onInvocationStart).toHaveBeenCalledTimes(2);
     expect(dynamicPlugin.onInvocationStart).toHaveBeenCalledTimes(2);
@@ -350,7 +361,7 @@ describe("plugin hooks", () => {
 
     const handler = withDurableExecution(
       jest.fn().mockResolvedValue({ ok: true }),
-      { plugins: [throwingPlugin] },
+      { plugins: [factoryFor(throwingPlugin)] },
     );
 
     await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
@@ -403,7 +414,7 @@ describe("onInvocationEnd receives correct InvocationEndInfo on success", () => 
 
       const handler = withDurableExecution(
         jest.fn().mockResolvedValue(returnValue),
-        { plugins: [plugin] },
+        { plugins: [factoryFor(plugin)] },
       );
       await handler(mockEvent, mockContext);
 
@@ -485,7 +496,7 @@ describe("onInvocationEnd receives correct InvocationEndInfo on failure", () => 
       const thrownError = new Error(errorMessage);
       const handler = withDurableExecution(
         jest.fn().mockRejectedValue(thrownError),
-        { plugins: [plugin] },
+        { plugins: [factoryFor(plugin)] },
       );
       await handler(mockEvent, mockContext);
 
@@ -519,7 +530,7 @@ describe("onInvocationEnd reflects the class of a termination", () => {
 
     const handler = withDurableExecution(
       jest.fn().mockReturnValue(new Promise(() => {})), // never resolves
-      { plugins: [plugin] },
+      { plugins: [factoryFor(plugin)] },
     );
     await handler(mockEvent, mockContext);
 

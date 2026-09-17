@@ -2,31 +2,31 @@
 import {
   DurableContext,
   withDurableExecution,
-  DurableInstrumentationPlugin,
+  DurableInstrumentationPluginFactory,
 } from "@aws/durable-execution-sdk-js";
 
 const PLUGIN = "CONFPLUGIN";
 const TERMINAL = new Set(["SUCCEEDED", "FAILED"]);
 
-function makePlugin(): DurableInstrumentationPlugin {
-  let executionArn = "";
-  // Same-invocation flag: captured at invocation-start and stamped on the
-  // matching invocation-end record (start and end of one invocation run in the
-  // same process, so this carries no cross-invocation state). Unlike
-  // Python/Java, the JS InvocationEndInfo does not expose isFirstInvocation —
-  // only the start-hook InvocationInfo does — so start-capture is the only
-  // real API path.
-  let first = false;
+const makePlugin: DurableInstrumentationPluginFactory = (invocation) => {
+  // Same-invocation flag, read from the InvocationInfo this instance was built
+  // for and stamped on its invocation-end record. Unlike Python/Java, the JS
+  // InvocationEndInfo does not expose isFirstInvocation, so it has to be
+  // carried over from the invocation's own identity. The SDK builds one
+  // instance per invocation, so this closure cannot be reached by any other
+  // invocation — including a concurrent one in the same execution environment.
+  const first = invocation.isFirstInvocation;
   const emit = (rec: Record<string, unknown>): void => {
     process.stdout.write(
-      JSON.stringify({ ...rec, durableExecutionArn: executionArn }) + "\n",
+      JSON.stringify({
+        ...rec,
+        durableExecutionArn: invocation.executionArn,
+      }) + "\n",
     );
   };
 
   return {
     async onInvocationStart(info): Promise<void> {
-      executionArn = info.executionArn;
-      first = info.isFirstInvocation;
       emit({
         plugin: PLUGIN,
         hook: "invocation-start",
@@ -45,12 +45,12 @@ function makePlugin(): DurableInstrumentationPlugin {
       });
     },
   };
-}
+};
 
 export const handler = withDurableExecution(
   async (_event: any, context: DurableContext) => {
     await context.wait({ seconds: 2 });
     return "Wait completed";
   },
-  { plugins: [makePlugin()] },
+  { plugins: [makePlugin] },
 );
