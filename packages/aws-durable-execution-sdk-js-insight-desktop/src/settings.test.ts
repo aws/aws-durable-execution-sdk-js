@@ -44,8 +44,18 @@ function writeRaw(name: string, contents: string): void {
   writeFileSync(join(userDataDir, name), contents, "utf-8");
 }
 
+// configCore falls back to AWS_REGION / AWS_DEFAULT_REGION before "us-east-1".
+// CI runners inside AWS (CodeBuild) and developer shells often set these, so
+// the "falls back to the default" assertions must not see them.
+const savedRegionEnv = {
+  AWS_REGION: process.env.AWS_REGION,
+  AWS_DEFAULT_REGION: process.env.AWS_DEFAULT_REGION,
+};
+
 beforeEach(() => {
   userDataDir = mkdtempSync(join(tmpdir(), "insight-settings-"));
+  delete process.env.AWS_REGION;
+  delete process.env.AWS_DEFAULT_REGION;
   // The corrupt-file cases warn by design; keep the suite output readable.
   jest.spyOn(console, "warn").mockImplementation(() => {});
 });
@@ -53,6 +63,10 @@ beforeEach(() => {
 afterEach(() => {
   jest.restoreAllMocks();
   rmSync(userDataDir, { recursive: true, force: true });
+  for (const [key, value] of Object.entries(savedRegionEnv)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
 });
 
 describe("writeDesktopSettings", () => {
