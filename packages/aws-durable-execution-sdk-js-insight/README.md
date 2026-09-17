@@ -1494,9 +1494,9 @@ The plugin hooks into the durable execution lifecycle:
 1. **`onInvocationStart`** — records execution start time
 2. **`onOperationChange`** — (on-change mode) schedules export of a RUNNING snapshot
 3. **`onInvocationEnd`** — schedules export of the snapshot, gated by `emitMode`: on terminal SUCCEEDED/FAILED (`on-complete`), FAILED only (`on-failure`), or every update including in-flight RUNNING snapshots (`on-change`)
-4. **`wrapInvocation`** — drains all pending exports before the Lambda returns
+4. **`wrapInvocation`** — drains the execution's pending exports before the Lambda returns
 
-Exports are **coalesced**: if updates arrive faster than the exporter can handle, intermediate snapshots are dropped (each record is a complete snapshot, so the latest one supersedes all earlier ones). This prevents overlapping export calls and keeps overhead minimal.
+Exports are **coalesced per execution**: if updates for one execution arrive faster than the exporter can handle, its intermediate snapshots are dropped (each record is a complete snapshot of that execution, so the latest one supersedes all earlier ones). Records of different executions are never coalesced with each other — when several executions run in the same process, each one's records are queued in arrival order and every execution's final record is delivered. Exports run one at a time, so exporters never see overlapping `export()` calls.
 
 Exporter errors **never fail the execution**. If an exporter throws, the error is swallowed and other exporters still receive the record.
 
