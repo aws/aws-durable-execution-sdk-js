@@ -26,7 +26,11 @@ env:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Trial: CodeBuild-hosted runner (see build.yml). `github.run_id` and
+    # `github.run_attempt` are the caller's in a reusable workflow, so the label
+    # still matches the CodeBuild project's per-run webhook.
+    runs-on:
+      - codebuild-github-aciton-manual-test-wangyb-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v7
       - name: Use Node.js ${{ inputs.node-version }}
