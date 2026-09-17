@@ -438,3 +438,86 @@ describe("loadConfiguredPlugins returns factories, not plugins", () => {
     expect(() => factory(invocationInfo)).toThrow(constructionError);
   });
 });
+
+describe("loadConfiguredPlugins validates explicit entries", () => {
+  // Same rule as the provider path: an entry the SDK could never call is a
+  // configuration mistake, reported once at load time rather than swallowed on
+  // every invocation.
+  const loadExplicit = async (
+    ...entries: unknown[]
+  ): Promise<DurableInstrumentationPluginFactory[]> =>
+    loadConfiguredPlugins(entries as DurableInstrumentationPluginFactory[], {
+      environment: {},
+    });
+
+  it.each([
+    {
+      desc: "a plugin instance",
+      entry: new ExplicitPlugin(),
+      named: "an object",
+    },
+    { desc: "a string", entry: "not a factory", named: "a string" },
+    { desc: "null", entry: null, named: "null" },
+    { desc: "undefined", entry: undefined, named: "undefined" },
+  ])("rejects an explicit entry that is $desc", async ({ entry, named }) => {
+    await expect(loadExplicit(entry)).rejects.toMatchObject({
+      name: "PluginLoadError",
+      message: expect.stringContaining(
+        "Plugin at plugins[0] must be a function that creates a plugin for one " +
+          `invocation, but it is ${named}. ` +
+          "Pass a factory such as `(info) => new MyPlugin()`.",
+      ),
+    });
+  });
+
+  it("names the position of the offending entry", async () => {
+    const factory = factoryFor(() => new ExplicitPlugin());
+
+    await expect(
+      loadExplicit(factory, factory, new ExplicitPlugin()),
+    ).rejects.toThrow("Plugin at plugins[2] must be a function");
+  });
+
+  it("fails a non-callable explicit entry before any module is imported", async () => {
+    const importModule = jest.fn();
+
+    await expect(
+      loadConfiguredPlugins(
+        [
+          new ExplicitPlugin() as unknown as DurableInstrumentationPluginFactory,
+        ],
+        {
+          environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
+          importModule,
+        },
+      ),
+    ).rejects.toBeInstanceOf(PluginLoadError);
+    expect(importModule).not.toHaveBeenCalled();
+  });
+
+  it("accepts a callable entry and calls it no earlier than the provider path does", async () => {
+    const factory = jest.fn(() => new ExplicitPlugin());
+
+    const [loaded] = await loadExplicit(factory);
+
+    expect(loaded).toBe(factory);
+    expect(factory).not.toHaveBeenCalled();
+  });
+});
+
+describe("describeValue names what an invalid entry was", () => {
+  it("reports an array as an array, not as an object", async () => {
+    // `typeof [] === "object"`, so without a dedicated case the message would
+    // call an array an object.
+    await expect(
+      loadConfiguredPlugins([], {
+        environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
+        importModule: async () =>
+          moduleFor([factoryFor(() => new ExplicitPlugin())]),
+      }),
+    ).rejects.toMatchObject({
+      name: "PluginLoadError",
+      message: expect.stringContaining("but it is an array."),
+    });
+  });
+});

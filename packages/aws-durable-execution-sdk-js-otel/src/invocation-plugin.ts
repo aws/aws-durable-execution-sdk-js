@@ -776,13 +776,9 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
    * carries `durable.execution.arn`).
    */
   private replayLinks(operationId: string): Link[] {
-    const links: Link[] = [];
-    const initialLink = this.initialOperationLink(operationId);
-    if (initialLink) {
-      links.push(initialLink);
-    }
-    links.push(...this.workflowLinks());
-    return links;
+    // The initial operation link is always constructible — its span ID is
+    // derived from (executionArn, operationId) — so there is nothing to guard.
+    return [this.initialOperationLink(operationId), ...this.workflowLinks()];
   }
 
   private attemptLinks(info: AttemptEndInfo): Link[] {

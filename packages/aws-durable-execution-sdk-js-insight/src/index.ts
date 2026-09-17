@@ -687,7 +687,7 @@ class ExportScheduler {
  * defensive only — a hand-built info object, a local driver, a future transport
  * change — not a transport this value actually crosses.
  *
- * The load-bearing part is the fallback: when the SDK reports nothing, use the
+ * The important part is the fallback: when the SDK reports nothing, use the
  * oldest operation start this invocation knows about rather than `new Date()`.
  * For a resumed execution that is still an earlier, replay-stable instant, where
  * `now` would report a duration covering only the final invocation.

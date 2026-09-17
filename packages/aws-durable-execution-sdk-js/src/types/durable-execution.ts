@@ -183,7 +183,10 @@ export interface DurableExecutionConfig {
    * Multiple factories can be provided and their plugins will be called in
    * order. Plugin errors are swallowed to prevent instrumentation from
    * affecting execution correctness; a factory that throws or returns nothing
-   * is contained the same way.
+   * is contained the same way. An entry that is not callable at all is a
+   * different case — no instance could ever come from it — and fails the
+   * invocation with a `PluginLoadError` when the handler is initialized, exactly
+   * as a non-callable environment-selected provider does.
    *
    * @example
    * ```typescript

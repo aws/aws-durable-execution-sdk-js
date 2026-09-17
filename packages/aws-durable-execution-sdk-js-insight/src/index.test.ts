@@ -1566,6 +1566,49 @@ describe("flush serialization", () => {
     expect(elapsed).toBeLessThan(n * flushMs);
   });
 
+  it("makes every concurrent end pay for every awaited export, which is what the flush() contract documents", async () => {
+    const n = 8;
+    const exportMs = 10;
+    const flushMs = 30;
+    let flushes = 0;
+    const exporter: InsightExporter = {
+      async export(): Promise<void> {
+        await sleep(exportMs);
+      },
+      async flush(): Promise<void> {
+        flushes++;
+        await sleep(flushMs);
+      },
+    };
+    const createPlugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-complete",
+    });
+
+    const elapsed = await Promise.all(
+      Array.from({ length: n }, async (_, i) => {
+        const started = Date.now();
+        await runInvocation(createPlugin, arnFor(`export-latency-${i}`));
+        return Date.now() - started;
+      }),
+    );
+
+    // Every record is exported before the shared flush starts, so the ends do
+    // not finish one by one: they all finish at the end of the burst.
+    const slowest = Math.max(...elapsed);
+    const fastest = Math.min(...elapsed);
+    console.log(
+      `${n} concurrent ends, export ${exportMs}ms, flush ${flushMs}ms -> fastest end ${fastest}ms, slowest end ${slowest}ms, ${flushes} flush(es)`,
+    );
+    expect(slowest - fastest).toBeLessThan(flushMs);
+
+    // And each of them pays the whole serialized product, not its own share:
+    // n exports run one at a time before the flush every end is waiting on.
+    // Lower bound only — timers overshoot, never undershoot by much.
+    expect(fastest).toBeGreaterThanOrEqual(n * exportMs * 0.8);
+    expect(flushes).toBeLessThanOrEqual(2);
+  });
+
   /**
    * An exporter that parks its first `export()` until released, so a test can
    * build a specific queue up behind the pump, and records the order in which

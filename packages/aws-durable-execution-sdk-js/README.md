@@ -325,11 +325,14 @@ plugin-layer.zip
             `-- durable-audit
 ```
 
-Malformed configuration, missing modules or exports, and a
-`durableExecutionPluginProvider` that is not a function are reported as
-`PluginLoadError` failures before execution state is read. A factory that throws
-when it runs, or returns nothing, is contained like any other plugin failure:
-that plugin sits out the invocation and the execution is unaffected.
+Malformed configuration, missing modules or exports, a
+`durableExecutionPluginProvider` that is not a function, and an entry in
+`DurableExecutionConfig.plugins` that is not a function are reported as
+`PluginLoadError` failures before execution state is read — the two sources are
+checked by the same rule, because an entry the SDK cannot call could never
+produce a plugin. A factory that throws when it runs, or returns nothing, is
+contained like any other plugin failure: that plugin sits out the invocation and
+the execution is unaffected.
 
 ### Retry Strategies
 

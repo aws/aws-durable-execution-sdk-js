@@ -97,6 +97,20 @@ export interface InsightExporter {
    *   it settles, so a slow flush is billed to the customer — not only to the
    *   invocation that asked for it, but to every concurrent invocation whose end
    *   is waiting on the same flush.
+   * - Sharing the flush also shares the exports that precede it. Records are
+   *   handed to {@link InsightExporter.export | export} one at a time, and every
+   *   record a concurrent invocation end is waiting for is exported before the
+   *   shared flush starts, so all of those ends return together once the last
+   *   export and the one flush have settled. The time an
+   *   {@link InsightExporter.export | export} call takes therefore multiplies by
+   *   the number of executions ending concurrently in the environment, and each
+   *   of those executions pays the whole product, not its own share: with 20
+   *   concurrent ends, a 10 ms export and a 30 ms flush cost every one of the 20
+   *   about 250 ms — 20 exports and one flush — rather than the 40 ms a single
+   *   end would pay alone. Delivering every record is the intended trade — a
+   *   record dropped for latency is a record the customer cannot get back — but
+   *   an exporter whose `export` is slow should buffer in memory and do its
+   *   sending work in `flush`, which runs once for the whole burst.
    * - Failures are isolated: a rejection or a synchronous throw is swallowed —
    *   never retried, never propagated into the execution, and never able to
    *   stop another exporter from flushing. The plugin logs each failure as a

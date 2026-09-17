@@ -135,6 +135,17 @@ export class OtelPluginEnvironment {
  * factory hands out then shares that one environment, while the `info` it is
  * called with is what gives the instance its execution identity.
  *
+ * Creation is attempted at most once, whether it succeeds or fails. Failing it
+ * is not retried because the inputs cannot have changed — the same config runs
+ * the same `tracerProviderFactory` — and retrying would call that factory again
+ * on every invocation for the life of the execution environment, leaking
+ * whatever it built before it threw (a span processor, an exporter connection)
+ * once per invocation. The failure is logged once, at the point it happens, so
+ * an operator sees it without it repeating in every invocation's log, and each
+ * later invocation is then refused with the remembered error, which the SDK
+ * contains exactly as it contains any factory error: the invocation runs without
+ * this plugin.
+ *
  * @internal
  */
 export function createPluginFactory<
@@ -147,8 +158,29 @@ export function createPluginFactory<
   ) => Plugin,
 ): DurableInstrumentationPluginFactory<Plugin> {
   let environment: OtelPluginEnvironment | undefined;
+  let environmentError: unknown;
+  let attempted = false;
   return (info: InvocationInfo): Plugin => {
-    environment ??= new OtelPluginEnvironment(config);
+    if (!attempted) {
+      attempted = true;
+      try {
+        environment = new OtelPluginEnvironment(config);
+      } catch (error) {
+        environmentError = error;
+        console.error(
+          "[aws-durable-execution-sdk-js-otel] Failed to initialize OpenTelemetry for durable execution; " +
+            "spans are not recorded for the life of this execution environment:",
+          error instanceof Error ? error.message : error,
+        );
+      }
+    }
+
+    if (environment === undefined) {
+      throw environmentError instanceof Error
+        ? environmentError
+        : new Error(String(environmentError));
+    }
+
     return createPlugin(environment, info);
   };
 }

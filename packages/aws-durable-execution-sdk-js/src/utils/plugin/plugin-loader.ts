@@ -190,23 +190,31 @@ function getProviderExport(
 }
 
 /**
- * Checks the one thing about a provider module that is still worth checking: the
- * export is callable, so the SDK can call it once per invocation.
+ * Checks the one thing about a configured plugin entry that is still worth
+ * checking: the value is callable, so the SDK can call it once per invocation.
  *
  * Nothing else about the value can be established here. What a factory returns
  * is only known when it runs, and by then the invocation has started, where a
- * plugin failure is contained rather than fatal. A non-callable export, by
- * contrast, is a packaging mistake that would otherwise be rediscovered — and
- * swallowed — on every invocation, so it fails the load instead.
+ * plugin failure is contained rather than fatal. A non-callable entry, by
+ * contrast, is a configuration or packaging mistake that would otherwise be
+ * rediscovered — and swallowed — on every invocation, so it fails the load
+ * instead.
+ *
+ * Applied to both ways a plugin arrives, so the two paths agree: an entry in
+ * `plugins` that is not callable fails the load exactly as an environment-
+ * selected provider that is not callable does. `subject` is what the message
+ * names, since one path has a module specifier and the other has a position in
+ * the caller's array.
  */
-function validateProviderFactory(
-  specifier: string,
+function validatePluginFactory(
+  subject: string,
   providerValue: unknown,
+  guidance = "",
 ): DurableInstrumentationPluginFactory {
   if (typeof providerValue !== "function") {
     throw new PluginLoadError(
-      `Plugin provider '${specifier}' must be a function that creates a plugin for one ` +
-        `invocation, but it is ${describeValue(providerValue)}.`,
+      `${subject} must be a function that creates a plugin for one ` +
+        `invocation, but it is ${describeValue(providerValue)}.${guidance}`,
     );
   }
 
@@ -215,6 +223,10 @@ function validateProviderFactory(
 
 function describeValue(value: unknown): string {
   if (value === null) return "null";
+  if (value === undefined) return "undefined";
+  // `typeof []` is "object", so arrays need their own case to be named
+  // accurately.
+  if (Array.isArray(value)) return "an array";
   const type = typeof value;
   return type === "object" ? "an object" : `a ${type}`;
 }
@@ -226,6 +238,12 @@ function describeValue(value: unknown): string {
  * Explicit factories retain their order. Dynamically selected providers follow
  * in the order listed in `DURABLE_EXECUTION_PLUGINS`.
  *
+ * Every entry from either source is checked here for the one thing that can be
+ * checked once: that it is callable. An entry that is not — a plugin instance,
+ * or a value that is not a function at all — could never produce an instance, so
+ * it fails the load rather than being rediscovered and swallowed on every
+ * invocation.
+ *
  * Every returned entry is a factory: no plugin is constructed here. Construction
  * happens once per invocation, in {@link createInvocationPluginRunner}, which is
  * what bounds a plugin instance's lifetime to a single invocation.
@@ -236,7 +254,13 @@ export async function loadConfiguredPlugins(
   explicitPlugins: readonly DurableInstrumentationPluginFactory[] | undefined,
   options: PluginLoaderOptions = {},
 ): Promise<DurableInstrumentationPluginFactory[]> {
-  const plugins = [...(explicitPlugins ?? [])];
+  const plugins = (explicitPlugins ?? []).map((plugin, index) =>
+    validatePluginFactory(
+      `Plugin at plugins[${index}]`,
+      plugin,
+      " Pass a factory such as `(info) => new MyPlugin()`.",
+    ),
+  );
   const environment = options.environment ?? process.env;
   const specifiers = parseConfiguredSpecifiers(environment);
   if (specifiers.length === 0) {
@@ -266,8 +290,8 @@ export async function loadConfiguredPlugins(
     }
 
     plugins.push(
-      validateProviderFactory(
-        specifier,
+      validatePluginFactory(
+        `Plugin provider '${specifier}'`,
         getProviderExport(specifier, importedModule),
       ),
     );

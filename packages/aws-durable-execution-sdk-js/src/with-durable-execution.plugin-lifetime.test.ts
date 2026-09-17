@@ -385,3 +385,55 @@ describe("environment-configured providers", () => {
     expect(initializeExecutionContext).not.toHaveBeenCalled();
   });
 });
+
+describe("explicit plugins entries are validated like providers", () => {
+  // The same mistake on either path is reported the same way: the entry cannot
+  // produce an instance, so the invocation fails at load time instead of running
+  // with the plugin silently absent for the life of the environment.
+  beforeEach(() => {
+    mockedLoadConfiguredPlugins.mockImplementation((explicitPlugins) =>
+      actualLoadConfiguredPlugins(explicitPlugins, { environment: {} }),
+    );
+  });
+
+  it("fails the invocation for a plugin instance passed instead of a factory", async () => {
+    const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
+      plugins: [
+        new RecordingPlugin() as unknown as DurableInstrumentationPluginFactory,
+      ],
+    });
+
+    await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
+      Status: InvocationStatus.FAILED,
+      Error: expect.objectContaining({ ErrorType: "PluginLoadError" }),
+    });
+    expect(initializeExecutionContext).not.toHaveBeenCalled();
+  });
+
+  it("reports the same failure on every invocation, not only the first", async () => {
+    const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
+      plugins: [
+        new RecordingPlugin() as unknown as DurableInstrumentationPluginFactory,
+      ],
+    });
+
+    await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
+      Status: InvocationStatus.FAILED,
+    });
+    await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
+      Status: InvocationStatus.FAILED,
+    });
+  });
+
+  it("runs the invocation normally when every entry is a factory", async () => {
+    const factory = recordingFactory();
+    const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
+      plugins: [factory],
+    });
+
+    await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
+      Status: InvocationStatus.SUCCEEDED,
+    });
+    expect(factory.created).toHaveLength(1);
+  });
+});
