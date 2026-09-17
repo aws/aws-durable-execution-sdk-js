@@ -180,10 +180,20 @@ function mapStatus(
  * epoch milliseconds / ISO strings (real Lambda durable runtime, after
  * checkpoint serialization). Normalize defensively so record building never
  * throws on an unexpected shape.
+ *
+ * An Invalid Date is treated as absent, exactly like an unparseable string: it
+ * passes `instanceof Date`, so returning its `NaN` time would carry the failure
+ * into `new Date(NaN).toISOString()`, which throws `RangeError` and loses the
+ * whole record instead of one field. This matches the core SDK's own `toDate`
+ * (`utils/timestamp/timestamp.ts`), which maps an unparseable wire timestamp to
+ * `undefined` for the same reason.
  */
 function toEpochMs(ts: unknown): number | undefined {
   if (ts == null) return undefined;
-  if (ts instanceof Date) return ts.getTime();
+  if (ts instanceof Date) {
+    const ms = ts.getTime();
+    return Number.isNaN(ms) ? undefined : ms;
+  }
   if (typeof ts === "number") return Number.isFinite(ts) ? ts : undefined;
   if (typeof ts === "string") {
     const ms = new Date(ts).getTime();
@@ -353,81 +363,393 @@ export class LambdaLogExporter implements InsightExporter {
   }
 }
 
+// --- Per-Execution Scope ---
+
+/**
+ * Everything the plugin tracks for one execution, including that execution's
+ * own slot in the export queue.
+ *
+ * The SDK creates a single plugin instance per handler-module initialization,
+ * so one instance serves every execution the environment hosts — and with
+ * Lambda Managed Instances several executions run concurrently in one
+ * environment. Every piece of mutable state therefore lives here, per
+ * execution, and never on the plugin or the scheduler: a hook for execution A
+ * must not be able to observe, overwrite, or wait on anything that belongs to
+ * execution B.
+ *
+ * A scope is rebuilt on each invocation (it is dropped at every invocation end,
+ * suspends included), so the execution-level start time is resolved fresh each
+ * time — see {@link resolveExecutionStart}.
+ */
+interface ExecutionScope {
+  readonly executionArn: string;
+  readonly parsedArn: ParsedArn;
+  /** Start of the whole execution, not of the current invocation. */
+  readonly startTime: Date;
+  cachedInput: unknown;
+  /**
+   * Deterministic sampling decision for this execution. Computed from the
+   * execution's stable identity so every invocation/replay agrees, then reused
+   * by all hooks to skip work entirely when the execution is sampled out.
+   */
+  readonly sampledIn: boolean;
+  /**
+   * Set once this invocation has ended. Hooks that arrive afterwards (a
+   * checkpoint whose operation-change hook lands after `onInvocationEnd`) must
+   * emit nothing: exporters that upsert by execution ARN would otherwise revert
+   * a finished execution back to RUNNING.
+   */
+  closed: boolean;
+
+  // --- Export queue slot; owned by ExportScheduler ---
+  /**
+   * Latest record scheduled for this execution and not yet handed to the
+   * exporters. A newer snapshot of the same execution supersedes it.
+   */
+  pending: WorkflowInsightRecord | undefined;
+  /** True while this scope sits in the scheduler's queue. */
+  queued: boolean;
+  /**
+   * Resolvers waiting for this execution's latest record to be exported. A
+   * non-empty list also tells the pump that this record gates an invocation
+   * return, so it is exported before the pump spends a flush fan-out.
+   */
+  readonly waiters: (() => void)[];
+}
+
 // --- Export Scheduling ---
 
 /**
- * Serializes record exports so that, at most, one export runs at a time.
+ * Serializes record exports so that, at most, one export runs at a time, while
+ * coalescing updates per execution.
  *
- * Each {@link WorkflowInsightRecord} is a complete snapshot of the execution,
- * so a newer record fully supersedes any record still waiting to be exported.
- * While an export is in flight, additional updates are coalesced into a single
- * "pending" slot — intermediate records are dropped because the latest one
- * already contains all of their information. This prevents overlapping
- * `export()` calls when updates arrive faster than the exporter can keep up.
+ * Each {@link WorkflowInsightRecord} is a complete snapshot of one execution,
+ * so a newer record for that execution fully supersedes any record of the same
+ * execution still waiting to be exported — intermediate records are dropped
+ * because the latest one already contains all of their information. Coalescing
+ * is therefore scoped to a single execution ARN: records for different
+ * executions queue up independently and never displace one another.
+ *
+ * Exporter calls stay globally serialized per plugin instance: one pump drains
+ * the queue, so an exporter never sees concurrent `export()` calls from this
+ * scheduler, no matter how many executions the environment hosts. {@link flush}
+ * requests run on the same pump, so a flush never overlaps an export either;
+ * they are served as a batch, and the records a {@link drain} is waiting for are
+ * exported first, so a burst of invocation ends costs one flush rather than one
+ * each. Serialization is per plugin instance, not per exporter object: two
+ * `workflowInsight()` calls each build their own scheduler, so an exporter
+ * instance shared between them can be called by both at once.
  */
 class ExportScheduler {
-  private inFlight: Promise<void> | undefined;
-  private pending: WorkflowInsightRecord | undefined;
+  /** FIFO of scopes that have a record waiting to be exported. */
+  private readonly queue: ExecutionScope[] = [];
+  /**
+   * Scopes with export work still outstanding (queued, or mid fan-out), keyed
+   * by execution ARN. Lets {@link drain} find the work for one execution after
+   * the hooks have already dropped their reference to the scope.
+   */
+  private readonly outstanding = new Map<string, ExecutionScope>();
+  /**
+   * True while a pump is running. A boolean rather than the pump's promise:
+   * keeping the promise in a field means a pump that settles before the
+   * assignment lands — which a synchronous failure does — has its own `finally`
+   * clobbered by that assignment, leaving the marker armed forever and no later
+   * `schedule` able to start a pump again.
+   */
+  private pumping = false;
+  /**
+   * Resolvers for pending {@link flush} requests, in request order. All requests
+   * queued when the pump reaches its flush turn are served by one `flushAll`.
+   */
+  private readonly flushWaiters: (() => void)[] = [];
 
   constructor(private readonly exporters: InsightExporter[]) {}
 
   /**
-   * Queue the latest record for export. If an export is already running, the
-   * record is held in the pending slot (replacing any earlier pending record)
-   * and exported once the in-flight export completes.
+   * Queue the latest record for one execution. If an export is already running,
+   * the record waits in that execution's own pending slot (replacing only an
+   * earlier record of the same execution) and is exported once the queue
+   * reaches it.
    */
-  schedule(record: WorkflowInsightRecord): void {
-    this.pending = record;
-    if (this.inFlight === undefined) {
-      this.inFlight = this.pump();
+  schedule(scope: ExecutionScope, record: WorkflowInsightRecord): void {
+    scope.pending = record;
+    this.outstanding.set(scope.executionArn, scope);
+    if (!scope.queued) {
+      scope.queued = true;
+      this.queue.push(scope);
     }
+    this.ensurePump();
   }
 
   /**
-   * Wait for any in-flight and pending exports to complete. Safe to call when
-   * idle. Used before the invocation returns to guarantee the final record is
-   * delivered (exports are otherwise fire-and-forget).
+   * Starts the pump unless one is already running. Never throws, never rejects.
    */
-  async drain(): Promise<void> {
-    while (this.inFlight !== undefined) {
-      await this.inFlight;
-    }
+  private ensurePump(): void {
+    if (this.pumping) return;
+    this.pumping = true;
+    // The pump contains every failure it can encounter — allSettled around the
+    // fan-out and the flush, `finally` around the bookkeeping — so this catch
+    // only guards the unforeseen. Instrumentation must never hand the host
+    // process an unhandled rejection, which node terminates on by default.
+    // There is nothing to repair here: the pump's own `finally` has already
+    // cleared `pumping` and re-armed itself if work was left behind.
+    void this.pump().catch(() => undefined);
+  }
+
+  /**
+   * Flush every exporter that supports it, serialized against exports: the
+   * request is queued behind the pump's current fan-out, so an exporter never
+   * sees `flush()` overlap an `export()`. Requests that are already waiting when
+   * the pump reaches its flush turn are served by one shared `flushAll`.
+   *
+   * Before spending that fan-out the pump first exports the queued records a
+   * {@link drain} is waiting for (see
+   * {@link exportRecordsADrainIsWaitingFor}), which is what lets a burst of
+   * invocation ends that each carry a record share one flush rather than pay for
+   * one each. A request made while a flushAll is already running is never served
+   * by it — it waits for the next turn.
+   */
+  async flush(): Promise<void> {
+    await new Promise<void>((resolve) => {
+      this.flushWaiters.push(resolve);
+      this.ensurePump();
+    });
+  }
+
+  /**
+   * Wait until the latest record scheduled for `executionArn` has been handed
+   * to every exporter. Safe to call when idle. Used before an invocation
+   * returns to guarantee that execution's final record is delivered (exports
+   * are otherwise fire-and-forget).
+   *
+   * Resolves as soon as this execution's own record is out, and never while it
+   * is still pending. With a single pump the wait still includes whatever was
+   * queued ahead of it; what it never does is let records scheduled afterwards,
+   * for other executions, displace it or push it further back.
+   *
+   * While the wait is outstanding the scope carries a waiter, which is how the
+   * pump knows this record gates an invocation return and must be exported
+   * before the pump spends a flush fan-out — see
+   * {@link exportRecordsADrainIsWaitingFor}.
+   */
+  async drain(executionArn: string): Promise<void> {
+    const scope = this.outstanding.get(executionArn);
+    if (scope === undefined) return;
+    await new Promise<void>((resolve) => {
+      scope.waiters.push(resolve);
+    });
   }
 
   private async pump(): Promise<void> {
     try {
-      // Drain the pending slot until no newer record has arrived. The check and
-      // the reset below run synchronously between awaits, so no update is lost.
-      while (this.pending !== undefined) {
-        const record = this.pending;
-        this.pending = undefined;
-        // allSettled so one failing/slow exporter never blocks or fails the others,
-        // and an export error never propagates into the execution. Each exporter
-        // gets a copy truncated to its own maxRecordSizeBytes (no-op when unset),
-        // measured against the exact shape that exporter emits (its `render`).
+      // One record, then one flush turn, alternating: a flush therefore
+      // waits at most one fan-out — it cannot be starved by a queue that never
+      // runs dry — and it still never overlaps an export, because each fan-out
+      // is awaited before the flush runs and vice versa.
+      while (this.queue.length > 0 || this.flushWaiters.length > 0) {
+        const scope = this.queue.shift();
+        if (scope !== undefined) {
+          await this.exportPending(scope);
+        }
+        // Serve every request that is already waiting with one flushAll.
+        // Coalescing is sound because each requester drained its own record
+        // before asking: a flushAll that *starts* after the request was enqueued
+        // therefore sees that record in the exporter's buffer and pushes it.
+        // Requests that arrive while this flushAll runs are deliberately left
+        // for the next turn — their record may have been exported after this
+        // flush already read the buffer.
+        const flushed = this.flushWaiters.splice(0);
+        if (flushed.length > 0) {
+          // Before spending the fan-out: export the queued records that other
+          // invocations are still waiting on. Those ends cannot have asked for
+          // their flush yet — they are inside drain() — so without this the pump
+          // staggers them one record per turn with a whole flush in between, and
+          // each end pays for its own flush however well the requests coalesce.
+          await this.exportRecordsADrainIsWaitingFor();
+          // Re-take: the ends released above ask for their flush as their
+          // continuations run, and one flushAll covers all of them because it
+          // starts after every one of those records reached the exporters. Still
+          // taken strictly before the flush begins, so the rule above holds.
+          flushed.push(...this.flushWaiters.splice(0));
+          try {
+            await flushAll(this.exporters);
+          } finally {
+            for (const resolve of flushed) resolve();
+          }
+        }
+      }
+    } finally {
+      this.pumping = false;
+      // A record or flush request that arrived while the loop was unwinding
+      // must not be stranded. Re-arm on a fresh task rather than by calling
+      // ensurePump() here: this `finally` can run synchronously inside
+      // ensurePump() (a fan-out that throws before its first await never
+      // suspends), and a direct call would then re-enter pump() on the current
+      // stack, one frame pair per queued execution.
+      if (this.queue.length > 0 || this.flushWaiters.length > 0) {
+        queueMicrotask(() => this.ensurePump());
+      }
+    }
+  }
+
+  /**
+   * Exports the queued records that a {@link drain} is waiting for, one at a
+   * time, and returns once they have all reached the exporters. Called by the
+   * pump immediately before a flush.
+   *
+   * Those records are the last records of invocations that cannot return until
+   * they are exported, and their ends cannot ask for their flush until then.
+   * Exporting them first is what lets one flush serve a whole burst of
+   * invocation ends: without it the pump interleaves one record and one flush
+   * fan-out, so each end pays for a flush of its own even though every queued
+   * request is coalesced.
+   *
+   * Bounded by the snapshot taken in this synchronous turn, so a producer that
+   * keeps scheduling records for an execution someone is draining cannot hold a
+   * flush back indefinitely — and records nobody is waiting for (an on-change
+   * stream, say) are not front-loaded at all, so they still cannot starve a
+   * flush: it waits at most one ordinary fan-out plus this pass over the
+   * executions whose invocation return is already blocked on their own record.
+   */
+  private async exportRecordsADrainIsWaitingFor(): Promise<void> {
+    const awaited = this.queue.filter((scope) => scope.waiters.length > 0);
+    for (const scope of awaited) {
+      const index = this.queue.indexOf(scope);
+      // Defensive: nothing else dequeues a scope while this pump owns the queue,
+      // and a scope appears in it at most once (`queued` guards that), so the
+      // snapshot entries are still queued here.
+      if (index < 0) continue;
+      this.queue.splice(index, 1);
+      await this.exportPending(scope);
+    }
+  }
+
+  /**
+   * Hands one execution's queued record to every exporter and releases the
+   * drains waiting on it. The caller has already removed `scope` from the queue.
+   */
+  private async exportPending(scope: ExecutionScope): Promise<void> {
+    scope.queued = false;
+    const record = scope.pending;
+    // Claim the record synchronously: from here on, anything scheduled for
+    // this execution is a newer snapshot that re-queues the scope, so no
+    // update is lost and no other execution can take this slot.
+    scope.pending = undefined;
+    try {
+      if (record !== undefined) {
+        // allSettled so one failing or slow exporter never blocks or
+        // fails the others, and a `try` around the call so a *synchronous*
+        // throw — from `export` itself, or from `truncateRecord`/`render`
+        // — becomes a rejected promise that allSettled absorbs instead of
+        // escaping the pump before its waiters are released.
+        // `map(async (exporter) => ...)` would contain that throw too (an
+        // async function turns a synchronous throw into a rejection) and
+        // emits an identical record sequence under the real SDK driver —
+        // the two forms only diverge under a driver that awaits the hook
+        // directly. The explicit `catch` is kept because it keeps the
+        // guard visible at the call site, instead of depending on the
+        // reader knowing about that conversion. Nothing awaits the pump
+        // and `drain` waits only on `settle`, so a broken exporter cannot
+        // fail the invocation either. Each exporter gets a copy truncated
+        // to its own maxRecordSizeBytes (no-op when unset), measured
+        // against the exact shape that exporter emits (its `render`).
         await Promise.allSettled(
-          this.exporters.map((exporter) =>
-            exporter.export(
-              truncateRecord(
-                record,
-                exporter.maxRecordSizeBytes,
-                exporter.render?.bind(exporter),
-              ),
-            ),
-          ),
+          this.exporters.map((exporter) => {
+            try {
+              return exporter.export(
+                truncateRecord(
+                  record,
+                  exporter.maxRecordSizeBytes,
+                  exporter.render?.bind(exporter),
+                ),
+              );
+            } catch (error) {
+              return Promise.reject(error);
+            }
+          }),
         );
       }
     } finally {
-      this.inFlight = undefined;
+      // Release this execution's waiters even if the fan-out threw, and
+      // only when nothing newer arrived for it while the fan-out ran;
+      // otherwise they wait for that newer record.
+      if (scope.pending === undefined) {
+        this.settle(scope);
+      }
+    }
+  }
+
+  /** This execution has no outstanding record: wake anyone waiting on it. */
+  private settle(scope: ExecutionScope): void {
+    if (this.outstanding.get(scope.executionArn) === scope) {
+      this.outstanding.delete(scope.executionArn);
+    }
+    for (const resolve of scope.waiters.splice(0)) {
+      resolve();
     }
   }
 }
 
-/** Flush all exporters that support it, ignoring individual failures. */
+/**
+ * Start of the whole execution, for a scope that is rebuilt on every invocation.
+ *
+ * `executionStartTimestamp` is optional (the SDK fills it from
+ * `initialExecutionEvent?.StartTimestamp ?? undefined`) but it always reaches the
+ * plugin as a `Date`: the SDK normalizes every wire timestamp through
+ * `utils/timestamp/timestamp.ts` `toDate` (via `normalize-operation.ts`, whose
+ * output `with-durable-execution.ts:110` reads), and `toDate` maps an
+ * unparseable or invalid value to `undefined` rather than passing on an Invalid
+ * Date. {@link toEpochMs}'s ISO-string and epoch-millis branches are therefore
+ * defensive only — a hand-built info object, a local driver, a future transport
+ * change — not a transport this value actually crosses.
+ *
+ * The load-bearing part is the fallback: when the SDK reports nothing, use the
+ * oldest operation start this invocation knows about rather than `new Date()`.
+ * For a resumed execution that is still an earlier, replay-stable instant, where
+ * `now` would report a duration covering only the final invocation.
+ */
+function resolveExecutionStart(info: {
+  executionStartTimestamp?: Date;
+  operations?: Record<string, OperationInfo>;
+}): Date {
+  const reported = toEpochMs(info.executionStartTimestamp);
+  if (reported !== undefined) return new Date(reported);
+  let oldest: number | undefined;
+  for (const op of Object.values(info.operations ?? {})) {
+    const started = toEpochMs(op.startTimestamp);
+    if (started !== undefined && (oldest === undefined || started < oldest)) {
+      oldest = started;
+    }
+  }
+  return new Date(oldest ?? Date.now());
+}
+
+/**
+ * Flush all exporters that support it, isolating individual failures: one
+ * exporter's rejection never stops another's flush and never propagates into the
+ * execution. Each failure is logged as a warning, so a flush that silently drops
+ * buffered records is at least visible in the function's logs.
+ */
 async function flushAll(exporters: InsightExporter[]): Promise<void> {
-  await Promise.allSettled(
-    exporters.map((exporter) => exporter.flush?.() ?? Promise.resolve()),
+  // The `try` mirrors the export fan-out's: an exporter whose `flush()` throws
+  // synchronously instead of rejecting is absorbed by allSettled like any other
+  // failure, rather than rejecting flushAll and stranding whoever waits on it.
+  const results = await Promise.allSettled(
+    exporters.map((exporter) => {
+      try {
+        return exporter.flush?.();
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    }),
   );
+  for (const result of results) {
+    if (result.status === "rejected") {
+      // console.warn, not a throw: the flush contract is that failures never
+      // reach the customer's execution.
+      console.warn("[workflow-insight] exporter flush failed:", result.reason);
+    }
+  }
 }
 
 // --- Plugin Factory ---
@@ -457,54 +779,68 @@ export function workflowInsight(
     topLevelOnly: config.operationDetail !== "full-tree",
   };
 
+  // `exporters` reaches `this.exporters.map` inside the pump's guarded region,
+  // which is the fan-out's last remaining synchronous-throw site: an array-like
+  // passes a truthiness/`.length` check and then makes every fan-out throw a
+  // TypeError. Require a real array and fall back to the default exporter.
+  if (config.exporters !== undefined && !Array.isArray(config.exporters)) {
+    console.warn(
+      "[workflow-insight] exporters is not an array; defaulting to the Lambda log exporter.",
+    );
+  }
   const exporters =
-    config.exporters && config.exporters.length > 0
+    Array.isArray(config.exporters) && config.exporters.length > 0
       ? config.exporters
       : [new LambdaLogExporter()];
   const emitMode = config.emitMode ?? "on-complete";
   const scheduler = new ExportScheduler(exporters);
 
-  // Per-execution state, keyed by executionArn. Prevents warm-container bleed
+  // One scope per execution, keyed by executionArn: how hooks find the state
+  // for the execution they were called about. Prevents warm-container bleed
   // between executions and handles resume correctly.
-  interface ExecutionState {
-    startTime: Date;
-    parsedArn: ParsedArn;
-    cachedInput: unknown;
-    /**
-     * Deterministic sampling decision for this execution. Computed once from the
-     * execution's stable identity so every invocation/replay agrees, then reused
-     * by all hooks to skip work entirely when the execution is sampled out.
-     */
-    sampledIn: boolean;
-  }
-  const execState = new Map<string, ExecutionState>();
+  const scopes = new Map<string, ExecutionScope>();
 
-  function getState(executionArn: string): ExecutionState {
-    let state = execState.get(executionArn);
-    if (!state) {
-      state = {
-        startTime: new Date(),
-        parsedArn: parseExecutionArn(executionArn),
-        cachedInput: undefined,
-        sampledIn: shouldSampleExecution(executionArn, samplingRate),
-      };
-      execState.set(executionArn, state);
-    }
-    return state;
-  }
-
-  const buildRecord = (args: {
+  /**
+   * Scope for an invocation-level hook, created on first use. Only hooks that
+   * carry invocation-level information build scopes — `onOperationChange` must
+   * not, or a hook arriving after the invocation ended would resurrect the
+   * execution as RUNNING.
+   */
+  function scopeFor(info: {
     executionArn: string;
-    status: WorkflowInsightRecord["status"];
-    operations: OperationRecord[];
-    endTime?: Date;
-    input?: unknown;
-    output?: unknown;
-    error?: Error;
-  }): WorkflowInsightRecord => {
-    const state = getState(args.executionArn);
-    const arn = state.parsedArn;
-    const startTime = state.startTime;
+    executionStartTimestamp?: Date;
+    operations?: Record<string, OperationInfo>;
+  }): ExecutionScope {
+    const existing = scopes.get(info.executionArn);
+    if (existing !== undefined) return existing;
+    const scope: ExecutionScope = {
+      executionArn: info.executionArn,
+      parsedArn: parseExecutionArn(info.executionArn),
+      startTime: resolveExecutionStart(info),
+      cachedInput: undefined,
+      sampledIn: shouldSampleExecution(info.executionArn, samplingRate),
+      closed: false,
+      pending: undefined,
+      queued: false,
+      waiters: [],
+    };
+    scopes.set(info.executionArn, scope);
+    return scope;
+  }
+
+  const buildRecord = (
+    scope: ExecutionScope,
+    args: {
+      status: WorkflowInsightRecord["status"];
+      operations: OperationRecord[];
+      endTime?: Date;
+      input?: unknown;
+      output?: unknown;
+      error?: Error;
+    },
+  ): WorkflowInsightRecord => {
+    const arn = scope.parsedArn;
+    const startTime = scope.startTime;
     const durationMs = args.endTime
       ? args.endTime.getTime() - startTime.getTime()
       : undefined;
@@ -513,7 +849,7 @@ export function workflowInsight(
       recordType: "WorkflowInsight" as const,
       schemaVersion: "1.0",
       emittedAt: new Date().toISOString(),
-      executionArn: args.executionArn,
+      executionArn: scope.executionArn,
       executionName: arn.executionName || undefined,
       functionName: arn.functionName,
       functionQualifier: arn.qualifier,
@@ -534,17 +870,14 @@ export function workflowInsight(
 
   return {
     async onInvocationStart(info: InvocationInfo): Promise<void> {
-      const state = getState(info.executionArn);
-      if (!state.sampledIn) return;
-      if (info.isFirstInvocation) {
-        state.startTime = new Date();
-      }
-      state.cachedInput = info.executionInput;
+      const scope = scopeFor(info);
+      if (!scope.sampledIn) return;
+      scope.cachedInput = info.executionInput;
 
       if (emitMode === "on-change") {
         scheduler.schedule(
-          buildRecord({
-            executionArn: info.executionArn,
+          scope,
+          buildRecord(scope, {
             status: "RUNNING",
             operations: buildOperationRecords(
               info.operations,
@@ -556,29 +889,44 @@ export function workflowInsight(
       }
     },
 
-    // wrapInvocation is the only hook the SDK awaits. We use it to drain the
-    // export queue before the invocation returns, guaranteeing the final
-    // record (scheduled by onInvocationEnd, which runs inside fn) is delivered.
-    // The drain runs in `finally` so it also covers the throwing/retry paths.
+    // wrapInvocation is the only hook the SDK awaits. We use it to drain this
+    // execution's export queue before the invocation returns, guaranteeing the
+    // final record (scheduled by onInvocationEnd, which runs inside fn) is
+    // delivered. The drain runs in `finally` so it also covers the
+    // throwing/retry paths, and it waits for this execution's own record rather
+    // than for the whole queue to quiesce.
     async wrapInvocation(
       info: InvocationInfo,
       fn: () => Promise<DurableExecutionInvocationOutput>,
     ): Promise<DurableExecutionInvocationOutput> {
-      const state = getState(info.executionArn);
+      // Read the decision now, while the scope from onInvocationStart is still
+      // around; it is a pure function of the ARN, so recomputing it if the hook
+      // order ever changes yields the same answer.
+      const sampledIn =
+        scopes.get(info.executionArn)?.sampledIn ??
+        shouldSampleExecution(info.executionArn, samplingRate);
       try {
         return await fn();
       } finally {
+        // Belt and braces for the scope drop in onInvocationEnd: if the SDK
+        // ever returns from an invocation without that hook firing, the scope
+        // (and the execution input it caches) must still not outlive the
+        // invocation. Any record already scheduled is held by the scheduler,
+        // not by this map, so dropping the scope cannot lose an export.
+        scopes.delete(info.executionArn);
         // Sampled-out executions never schedule a record, so there is nothing
-        // to drain or flush — skip the work entirely.
-        if (state.sampledIn) {
-          await scheduler.drain();
-          await flushAll(exporters);
+        // to drain or flush — skip the work entirely. The flush goes through the
+        // scheduler so it is serialized against exports: an exporter never sees
+        // one execution's flush() overlap another's export().
+        if (sampledIn) {
+          await scheduler.drain(info.executionArn);
+          await scheduler.flush();
         }
       }
     },
 
     async onInvocationEnd(info: InvocationEndInfo): Promise<void> {
-      const state = getState(info.executionArn);
+      const scope = scopeFor(info);
       const status = mapStatus(info.status);
       const isTerminal = status === "SUCCEEDED" || status === "FAILED";
       const isFailure = status === "FAILED";
@@ -594,31 +942,46 @@ export function workflowInsight(
             ? isFailure
             : isTerminal;
 
-      // Sampled-out executions emit nothing, but must still fall through to the
-      // terminal state cleanup below so their state entry doesn't leak.
-      if (state.sampledIn && shouldEmit) {
-        scheduler.schedule(
-          buildRecord({
-            executionArn: info.executionArn,
-            status,
-            operations: buildOperationRecords(
-              info.operations,
-              opContentOptions,
-            ),
-            endTime: new Date(),
-            input: info.executionInput,
-            output: info.executionResult,
-            error: info.executionError,
-          }),
-        );
-      }
+      // This invocation is over: any hook that still arrives for this execution
+      // is late and must emit nothing, or an exporter that upserts by execution
+      // ARN would revert the state we are about to write.
+      scope.closed = true;
 
-      // Only clear per-execution state once the execution is truly finished.
-      // onInvocationEnd also fires on non-terminal suspends (PENDING/RETRYING);
-      // clearing state there would lose the original startTime and cachedInput
-      // across resumes and corrupt duration computation.
-      if (isTerminal) {
-        execState.delete(info.executionArn);
+      // Sampled-out executions emit nothing, but must still fall through to the
+      // scope cleanup below so their entry doesn't leak. The try/finally
+      // matters: `closed` is already set, so a throw while building the record
+      // would otherwise leave a closed scope in the map, and `scopeFor` returns
+      // existing scopes — silently muting every later invocation of this
+      // execution for the life of the environment.
+      try {
+        if (scope.sampledIn && shouldEmit) {
+          scheduler.schedule(
+            scope,
+            buildRecord(scope, {
+              status,
+              operations: buildOperationRecords(
+                info.operations,
+                opContentOptions,
+              ),
+              endTime: new Date(),
+              input: info.executionInput,
+              output: info.executionResult,
+              error: info.executionError,
+            }),
+          );
+        }
+
+        // Drop the scope at every invocation end, including non-terminal
+        // PENDING/RETRYING suspends. A suspended execution may never resume in
+        // this environment, and keeping its scope alive would pin the whole
+        // cached execution input until the environment dies. The next invocation
+        // rebuilds the scope, taking the execution start time from the SDK when
+        // it reports one (see resolveExecutionStart) so durations stay correct
+        // across resumes. Any record already scheduled above is held by the
+        // scheduler, which still exports it and still lets wrapInvocation drain
+        // it by ARN.
+      } finally {
+        scopes.delete(info.executionArn);
       }
     },
 
@@ -626,14 +989,20 @@ export function workflowInsight(
       if (emitMode !== "on-change") {
         return;
       }
-      const state = getState(info.executionArn);
-      if (!state.sampledIn) return;
+      // Deliberately a lookup, not a create: the SDK does not order this hook
+      // against onInvocationEnd, so a checkpoint that completed just before the
+      // invocation ended can deliver its change afterwards. Emitting then would
+      // publish RUNNING after the terminal record and, for exporters that
+      // upsert by execution ARN (DynamoDB, Aurora, Redshift, OpenSearch), turn
+      // a finished execution back into a running one.
+      const scope = scopes.get(info.executionArn);
+      if (scope === undefined || scope.closed || !scope.sampledIn) return;
       scheduler.schedule(
-        buildRecord({
-          executionArn: info.executionArn,
+        scope,
+        buildRecord(scope, {
           status: "RUNNING",
           operations: buildOperationRecords(info.operations, opContentOptions),
-          input: state.cachedInput,
+          input: scope.cachedInput,
         }),
       );
     },

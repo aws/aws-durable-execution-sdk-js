@@ -74,6 +74,35 @@ export interface ContentConfig {
  */
 export interface InsightExporter {
   export(record: WorkflowInsightRecord): Promise<void>;
+  /**
+   * Delivers whatever this exporter has buffered but not yet sent.
+   *
+   * Optional: implement it only if the exporter buffers records rather than
+   * sending each one from {@link InsightExporter.export | export}.
+   *
+   * - Called at most once per sampled-in invocation end, after that
+   *   invocation's own record has been handed to every exporter. A sampled-in
+   *   invocation end that emits no record (an `emitMode` that skips this status)
+   *   still flushes. An execution that is sampled out neither exports nor
+   *   flushes.
+   * - Never called concurrently with
+   *   {@link InsightExporter.export | export} on the same plugin instance.
+   * - May cover records belonging to other executions running in the same
+   *   environment, so it is not a per-execution barrier. Invocation ends that
+   *   overlap may also *share* one flush: each of them has already handed its
+   *   own record to every exporter before the shared flush starts, so one flush
+   *   satisfies them all, and the number of flush calls can therefore be lower
+   *   than the number of invocation ends.
+   * - Must return promptly. No invocation waiting on this flush can return until
+   *   it settles, so a slow flush is billed to the customer — not only to the
+   *   invocation that asked for it, but to every concurrent invocation whose end
+   *   is waiting on the same flush.
+   * - Failures are isolated: a rejection or a synchronous throw is swallowed —
+   *   never retried, never propagated into the execution, and never able to
+   *   stop another exporter from flushing. The plugin logs each failure as a
+   *   `[workflow-insight]` warning; an exporter that needs more than a log line
+   *   must handle the failure itself.
+   */
   flush?(): Promise<void>;
   /**
    * Maximum serialized record size, in bytes, this exporter will emit. When a
