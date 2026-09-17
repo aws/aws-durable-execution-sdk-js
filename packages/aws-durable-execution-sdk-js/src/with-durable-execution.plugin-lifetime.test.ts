@@ -437,3 +437,82 @@ describe("explicit plugins entries are validated like providers", () => {
     expect(factory.created).toHaveLength(1);
   });
 });
+
+describe("a plugin class passed instead of a factory fails the invocation", () => {
+  // The migration hazard: `plugins: [MyPlugin]` is callable, so it reaches the
+  // per-invocation call, throws "Class constructor cannot be invoked without
+  // 'new'", and is contained — the plugin is then absent for the life of the
+  // execution environment and nothing says why. The load-time check turns that
+  // into a reported failure.
+  beforeEach(() => {
+    mockedLoadConfiguredPlugins.mockImplementation((explicitPlugins) =>
+      actualLoadConfiguredPlugins(explicitPlugins, { environment: {} }),
+    );
+  });
+
+  it("fails with PluginLoadError rather than running with the plugin absent", async () => {
+    const handlerFn = jest.fn().mockResolvedValue({ ok: true });
+    const handler = withDurableExecution(handlerFn, {
+      plugins: [
+        RecordingPlugin as unknown as DurableInstrumentationPluginFactory,
+      ],
+    });
+
+    await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
+      Status: InvocationStatus.FAILED,
+      Error: expect.objectContaining({
+        ErrorType: "PluginLoadError",
+        ErrorMessage: expect.stringContaining(
+          "Plugin at plugins[0] is the plugin class itself",
+        ),
+      }),
+    });
+    // The failure precedes any execution work, so the handler never ran and no
+    // state was read.
+    expect(handlerFn).not.toHaveBeenCalled();
+    expect(initializeExecutionContext).not.toHaveBeenCalled();
+  });
+
+  it("fails a class exported as a provider the same way", async () => {
+    mockedLoadConfiguredPlugins.mockImplementation((explicitPlugins) =>
+      actualLoadConfiguredPlugins(explicitPlugins, {
+        environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
+        importModule: async () => ({
+          [PLUGIN_PROVIDER_EXPORT]: RecordingPlugin,
+        }),
+      }),
+    );
+
+    const handler = withDurableExecution(jest.fn().mockResolvedValue({}));
+
+    await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
+      Status: InvocationStatus.FAILED,
+      Error: expect.objectContaining({
+        ErrorType: "PluginLoadError",
+        ErrorMessage: expect.stringContaining(
+          "Plugin provider '@example/plugin' is the plugin class itself",
+        ),
+      }),
+    });
+    expect(initializeExecutionContext).not.toHaveBeenCalled();
+  });
+
+  it("still runs the invocation for the factory form of the same class", async () => {
+    const created: RecordingPlugin[] = [];
+    const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
+      plugins: [
+        () => {
+          const plugin = new RecordingPlugin();
+          created.push(plugin);
+          return plugin;
+        },
+      ],
+    });
+
+    await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
+      Status: InvocationStatus.SUCCEEDED,
+    });
+    expect(created).toHaveLength(1);
+    expect(created[0].startedArns).toEqual(["arn:exec:1"]);
+  });
+});
