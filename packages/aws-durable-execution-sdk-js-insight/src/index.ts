@@ -806,6 +806,25 @@ class WorkflowInsightInvocation
    * RUNNING.
    */
   private closed = false;
+  /**
+   * Counts the hook frames that have started building a record on this
+   * instance. Incremented immediately before a build, never decremented.
+   *
+   * Building a record runs customer code: the `content.input`,
+   * `content.output` and `content.operations.overrides[].result` transforms,
+   * plus any accessor on a value the record copies, such as `message` on a
+   * thrown error. That code runs synchronously inside the build, so it can call
+   * a hook on this instance and complete that hook before the outer build
+   * returns. The nested hook then builds from newer state and schedules it
+   * first, and the outer frame — holding a snapshot of older state — would
+   * schedule after it. An exporter that upserts by execution ARN would end up
+   * storing the older snapshot, and in the `onOperationChange` /
+   * `onInvocationEnd` pairing it would store RUNNING over a terminal status.
+   * Each frame therefore takes this counter's value before building and
+   * schedules only while its value is still the latest; see
+   * {@link buildAndSchedule}.
+   */
+  private buildRevision = 0;
 
   // --- ExportSlot; owned by ExportScheduler ---
   pending: WorkflowInsightRecord | undefined = undefined;
@@ -861,12 +880,31 @@ class WorkflowInsightInvocation
     };
   }
 
+  /**
+   * Builds a record and hands it to the scheduler, unless a nested hook frame
+   * has already published newer state.
+   *
+   * `build` runs customer code (see {@link buildRevision}), so a hook can run to
+   * completion inside it. That hook sees state this frame has not seen and
+   * schedules a strictly newer snapshot. A record is a complete snapshot of one
+   * execution, so the newer one supersedes this frame's entirely — the same
+   * property that makes the scheduler's coalescing sound — and scheduling this
+   * frame's record afterwards would leave an exporter that upserts by execution
+   * ARN holding the older state. This frame therefore drops its record when the
+   * revision it took has been superseded.
+   */
+  private buildAndSchedule(build: () => WorkflowInsightRecord): void {
+    const revision = ++this.buildRevision;
+    const record = build();
+    if (revision !== this.buildRevision) return;
+    this.env.scheduler.schedule(this, record);
+  }
+
   async onInvocationStart(info: InvocationInfo): Promise<void> {
     if (!this.sampledIn) return;
 
     if (this.env.emitMode === "on-change") {
-      this.env.scheduler.schedule(
-        this,
+      this.buildAndSchedule(() =>
         this.buildRecord({
           status: "RUNNING",
           operations: buildOperationRecords(
@@ -919,8 +957,7 @@ class WorkflowInsightInvocation
     // already queued.
     try {
       if (this.sampledIn && shouldEmit) {
-        this.env.scheduler.schedule(
-          this,
+        this.buildAndSchedule(() =>
           this.buildRecord({
             status,
             operations: buildOperationRecords(
@@ -948,13 +985,13 @@ class WorkflowInsightInvocation
 
   async onOperationChange(info: OperationChangeInfo): Promise<void> {
     if (this.env.emitMode !== "on-change") return;
-    // `closed` is the whole guard: this hook can arrive after the end hook, and
-    // emitting then would publish RUNNING after the terminal record. It no
-    // longer has to check that the change belongs to this execution — a hook
-    // reaches this instance only if it does.
+    // `closed` covers the hook arriving after the end hook has returned:
+    // emitting then would publish RUNNING after the terminal record. It does not
+    // cover the end hook running nested inside this frame's record build, which
+    // buildAndSchedule handles. This hook no longer has to check that the change
+    // belongs to this execution — a hook reaches this instance only if it does.
     if (this.closed || !this.sampledIn) return;
-    this.env.scheduler.schedule(
-      this,
+    this.buildAndSchedule(() =>
       this.buildRecord({
         status: "RUNNING",
         operations: buildOperationRecords(

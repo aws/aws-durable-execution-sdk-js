@@ -1827,6 +1827,129 @@ describe("flush serialization", () => {
 });
 
 /**
+ * Building a record runs customer code — the `content.*` transforms, an
+ * operation `result` override, or an accessor on a value the record copies — and
+ * that code runs synchronously inside the build. A hook it calls therefore
+ * completes before the outer build returns, so the outer frame holds a snapshot
+ * of state that is already superseded. Scheduling it would leave an exporter
+ * that upserts by execution ARN storing the older snapshot, and in the
+ * change/end pairing it would store RUNNING over a terminal status. These tests
+ * pin the revision check that drops the superseded record.
+ */
+describe("record building re-entered by customer code", () => {
+  const opNames = (record: WorkflowInsightRecord): string[] =>
+    record.operations.map((o) => o.name ?? "");
+
+  it("drops an older snapshot when a nested change hook already published a newer one", async () => {
+    const exporter = new CapturingExporter();
+    const arn = arnFor("reentrant-change");
+    let plugin: ReturnType<PluginFactory> | undefined;
+    let reentered = false;
+    const createPlugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-change",
+      operationDetail: "full-tree",
+      content: {
+        input: (value) => {
+          if (!reentered) {
+            reentered = true;
+            void plugin?.onOperationChange?.(
+              changeFor(arn, {
+                a: op({ id: "a", name: "step-a", status: "SUCCEEDED" }),
+                b: op({ id: "b", name: "step-b", status: "SUCCEEDED" }),
+              }),
+            );
+          }
+          return value;
+        },
+      },
+    });
+
+    plugin = createPlugin(startFor(arn));
+    await plugin.onOperationChange?.(
+      changeFor(arn, {
+        a: op({ id: "a", name: "step-a", status: "SUCCEEDED" }),
+      }),
+    );
+    await sleep(20);
+
+    expect(reentered).toBe(true);
+    expect(exporter.records.map(opNames)).toEqual([["step-a", "step-b"]]);
+  });
+
+  it("drops a RUNNING snapshot when a nested end hook already published the terminal record", async () => {
+    const exporter = new CapturingExporter();
+    const arn = arnFor("reentrant-end");
+    let plugin: ReturnType<PluginFactory> | undefined;
+    let reentered = false;
+    const createPlugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-change",
+      operationDetail: "full-tree",
+      content: {
+        input: (value) => {
+          if (!reentered) {
+            reentered = true;
+            void plugin?.onInvocationEnd?.(
+              endFor(arn, {
+                operations: {
+                  a: op({ id: "a", name: "step-a", status: "SUCCEEDED" }),
+                },
+              }),
+            );
+          }
+          return value;
+        },
+      },
+    });
+
+    plugin = createPlugin(startFor(arn));
+    await plugin.onOperationChange?.(
+      changeFor(arn, {
+        a: op({ id: "a", name: "step-a", status: "SUCCEEDED" }),
+      }),
+    );
+    await sleep(50);
+
+    expect(reentered).toBe(true);
+    expect(exporter.records.map((r) => r.status)).toEqual(["SUCCEEDED"]);
+  });
+
+  it("still emits a record for every hook when no nesting occurs", async () => {
+    const exporter = new CapturingExporter();
+    const arn = arnFor("no-reentry");
+    const createPlugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-change",
+      operationDetail: "full-tree",
+      content: { input: (value) => value },
+    });
+
+    const start = startFor(arn);
+    const plugin = createPlugin(start);
+    // Each hook is given time to reach the exporter before the next one runs,
+    // so the scheduler's per-execution coalescing cannot account for a missing
+    // record and only the revision check could.
+    await plugin.onInvocationStart?.(start);
+    await sleep(20);
+    await plugin.onOperationChange?.(
+      changeFor(arn, {
+        a: op({ id: "a", name: "step-a", status: "SUCCEEDED" }),
+      }),
+    );
+    await sleep(20);
+    await plugin.onInvocationEnd?.(endFor(arn));
+
+    expect(exporter.records.map((r) => r.status)).toEqual([
+      "RUNNING",
+      "RUNNING",
+      "SUCCEEDED",
+    ]);
+    expect(opNames(exporter.records[1])).toEqual(["step-a"]);
+  });
+});
+
+/**
  * A collector the test can trigger. Jest does not run node with --expose-gc, so
  * ask V8 for one directly; returns undefined when the runtime refuses, in which
  * case the caller skips the retention assertion.

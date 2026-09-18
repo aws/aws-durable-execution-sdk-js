@@ -31,9 +31,12 @@ npm install @aws/durable-execution-sdk-js-otel \
             @opentelemetry/sdk-trace-node
 ```
 
-The package requires Node.js 22 or later. Exporters, span processors,
-propagators, resources, and library instrumentation are application or ADOT
-responsibilities.
+The package requires Node.js 22 or later, and
+`@aws/durable-execution-sdk-js` 3.0.0 or later. The plugin is installed by
+passing a factory in `plugins`, and only core 3.0.0 and later accept a factory
+there; an earlier core expects a plugin instance and fails at handler
+initialization. Exporters, span processors, propagators, resources, and library
+instrumentation are application or ADOT responsibilities.
 
 ## Quick Start
 
