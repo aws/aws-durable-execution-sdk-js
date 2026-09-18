@@ -131,7 +131,7 @@ class InvocationDriver {
   }
 
   async onInvocationStart(info: InvocationInfo): Promise<void> {
-    this.plugin = this.factory(info);
+    this.plugin = this.factory.createPlugin(info);
     await this.plugin.onInvocationStart?.(info);
   }
 

@@ -27,7 +27,7 @@ function newPlugin(
   config?: OtelPluginConfig,
   info: InvocationInfo = makeInvocationInfo(),
 ): InvocationOtelPlugin {
-  return createInvocationOtelPluginFactory(config)(info);
+  return createInvocationOtelPluginFactory(config).createPlugin(info);
 }
 import { deriveSpanIdFromOperationId } from "../deterministic-id-generator";
 import type { TracerProviderFactory } from "../otel-plugin-config";
@@ -447,7 +447,7 @@ describe("InvocationOtelPlugin", () => {
       });
 
       const firstInfo = makeInvocationInfo();
-      const first = factory(firstInfo);
+      const first = factory.createPlugin(firstInfo);
       await first.onInvocationStart(firstInfo);
       await first.onOperationStart(makeOperationInfo({ id: "op-1" }));
       await first.onInvocationEnd(makeInvocationEndInfo());
@@ -455,7 +455,7 @@ describe("InvocationOtelPlugin", () => {
       exporter.reset();
 
       const secondInfo = makeInvocationInfo({ executionArn: "arn:second" });
-      const second = factory(secondInfo);
+      const second = factory.createPlugin(secondInfo);
       expect(second).not.toBe(first);
       await second.onInvocationStart(secondInfo);
       await second.onInvocationEnd(
@@ -2545,7 +2545,7 @@ describe("InvocationOtelPlugin", () => {
         tracerProviderFactory,
       });
       const firstInfo = makeInvocationInfo();
-      const plugin = factory(firstInfo);
+      const plugin = factory.createPlugin(firstInfo);
       await plugin.onInvocationStart(firstInfo);
       await plugin.onOperationStart(
         makeOperationInfo({
@@ -2579,7 +2579,7 @@ describe("InvocationOtelPlugin", () => {
       );
 
       const secondInfo = makeInvocationInfo({ isFirstInvocation: false });
-      const resumed = factory(secondInfo);
+      const resumed = factory.createPlugin(secondInfo);
       await resumed.onInvocationStart(secondInfo);
       await resumed.onOperationStart(
         makeOperationInfo({

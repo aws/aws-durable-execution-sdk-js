@@ -81,7 +81,7 @@ function pluginFor(
   factory: DurableInstrumentationPluginFactory,
   info: InvocationInfo,
 ): DurableInstrumentationPlugin {
-  return factory(info);
+  return factory.createPlugin(info);
 }
 
 describe.each([

@@ -254,46 +254,68 @@ export interface DurableInstrumentationPlugin {
  * Creates the plugin instance that serves a single durable execution invocation.
  *
  * @remarks
- * This is the only way to install a plugin. The SDK calls the factory once per
- * invocation, so every instance it returns is used by exactly one invocation:
- * created before that invocation's first hook fires and dropped when the
- * invocation returns. Nothing an instance holds survives into the next
- * invocation, so an instance never has to key its per-execution state by
- * execution ARN, and two executions running concurrently in one execution
- * environment (as Lambda Managed Instances makes routine) cannot observe each
- * other's state.
+ * This is the only way to install a plugin. The SDK calls
+ * {@link DurableInstrumentationPluginFactory.createPlugin} once per invocation,
+ * so every instance it returns is used by exactly one invocation: created
+ * before that invocation's first hook fires and dropped when the invocation
+ * returns. Nothing an instance holds survives into the next invocation, so an
+ * instance never has to key its per-execution state by execution ARN, and two
+ * executions running concurrently in one execution environment (as Lambda
+ * Managed Instances makes routine) cannot observe each other's state.
  *
  * State that belongs to the execution environment rather than to one
- * invocation — a shared exporter, a tracer provider, a scheduler — belongs in
- * the factory's closure, where it outlives the instances the factory hands out.
+ * invocation — a shared exporter, a tracer provider, a scheduler — belongs on
+ * the factory itself or in its closure, where it outlives the instances the
+ * factory hands out.
  *
- * The factory receives the same {@link InvocationInfo} object that is then
+ * `createPlugin` receives the same {@link InvocationInfo} object that is then
  * passed to {@link DurableInstrumentationPlugin.onInvocationStart}, so an
  * instance can take its identity at construction rather than waiting for the
  * first hook.
  *
- * Errors thrown by the factory are contained exactly like errors thrown by a
+ * Errors thrown by `createPlugin` are contained exactly like errors thrown by a
  * plugin hook: the invocation proceeds without that plugin and the execution
- * outcome is unaffected. The same holds for a factory that returns nothing.
+ * outcome is unaffected. The same holds for a `createPlugin` that returns
+ * nothing.
  *
  * A package that supports environment-based plugin loading exports one of these
  * factories as `durableExecutionPluginProvider`; the SDK loads only the modules
  * listed in `DURABLE_EXECUTION_PLUGINS`.
+ *
+ * This is an object with a method rather than a bare function so that later
+ * additions to the contract stay additive. A hook that belongs to the process
+ * rather than to one invocation — flushing on execution environment shutdown,
+ * for example — can be added here as an optional second member, which every
+ * existing factory keeps satisfying. A function type has nowhere to put such a
+ * member, so adding one would have to change the type's kind, and that is a
+ * breaking change for every caller.
  *
  * @example
  * ```typescript
  * const exporter = new Exporter(); // shared by every invocation
  *
  * export const handler = withDurableExecution(myHandler, {
- *   plugins: [(info) => new MyPlugin(exporter, info.executionArn)],
+ *   plugins: [
+ *     { createPlugin: (info) => new MyPlugin(exporter, info.executionArn) },
+ *   ],
  * });
  * ```
  *
  * @experimental This type is experimental and may be changed or removed in future releases.
  */
-export type DurableInstrumentationPluginFactory<
+export interface DurableInstrumentationPluginFactory<
   Plugin extends DurableInstrumentationPlugin = DurableInstrumentationPlugin,
-> = (info: InvocationInfo) => Plugin;
+> {
+  /**
+   * Creates the plugin instance for the described invocation.
+   *
+   * @param info - The invocation the returned instance will observe. This is
+   * the same object {@link DurableInstrumentationPlugin.onInvocationStart}
+   * receives.
+   * @returns The plugin instance serving this invocation, and no other.
+   */
+  createPlugin(info: InvocationInfo): Plugin;
+}
 
 /**
  * Internal type aliases used by the plugin.

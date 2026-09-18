@@ -13,46 +13,48 @@ function isStep(type?: string): boolean {
   return (type || "").toUpperCase() === "STEP";
 }
 
-const makePlugin: DurableInstrumentationPluginFactory = (invocation) => {
-  const emit = (rec: Record<string, unknown>): void => {
-    process.stdout.write(
-      JSON.stringify({
-        ...rec,
-        durableExecutionArn: invocation.executionArn,
-      }) + "\n",
-    );
-  };
+const makePlugin: DurableInstrumentationPluginFactory = {
+  createPlugin: (invocation) => {
+    const emit = (rec: Record<string, unknown>): void => {
+      process.stdout.write(
+        JSON.stringify({
+          ...rec,
+          durableExecutionArn: invocation.executionArn,
+        }) + "\n",
+      );
+    };
 
-  return {
-    async onOperationAttemptStart(info): Promise<void> {
-      if (!isStep(info.type)) return;
-      emit({
-        plugin: PLUGIN,
-        hook: "attempt-start",
-        n: info.attempt,
-        op: info.id,
-      });
-    },
-    async onOperationAttemptEnd(info): Promise<void> {
-      if (!isStep(info.type)) return;
-      emit({
-        plugin: PLUGIN,
-        hook: "attempt-end",
-        n: info.attempt,
-        outcome: info.outcome,
-        op: info.id,
-      });
-    },
-    async onOperationEnd(info): Promise<void> {
-      if (!isStep(info.type)) return;
-      emit({
-        plugin: PLUGIN,
-        hook: "operation-end",
-        op: info.id,
-        status: info.status,
-      });
-    },
-  };
+    return {
+      async onOperationAttemptStart(info): Promise<void> {
+        if (!isStep(info.type)) return;
+        emit({
+          plugin: PLUGIN,
+          hook: "attempt-start",
+          n: info.attempt,
+          op: info.id,
+        });
+      },
+      async onOperationAttemptEnd(info): Promise<void> {
+        if (!isStep(info.type)) return;
+        emit({
+          plugin: PLUGIN,
+          hook: "attempt-end",
+          n: info.attempt,
+          outcome: info.outcome,
+          op: info.id,
+        });
+      },
+      async onOperationEnd(info): Promise<void> {
+        if (!isStep(info.type)) return;
+        emit({
+          plugin: PLUGIN,
+          hook: "operation-end",
+          op: info.id,
+          status: info.status,
+        });
+      },
+    };
+  },
 };
 
 export const handler = withDurableExecution(

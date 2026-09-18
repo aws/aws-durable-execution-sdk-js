@@ -29,7 +29,7 @@ function newPlugin(
   config?: OtelPluginConfig,
   info: InvocationInfo = makeInvocationInfo(),
 ): ExecutionOtelPlugin {
-  return createExecutionOtelPluginFactory(config)(info);
+  return createExecutionOtelPluginFactory(config).createPlugin(info);
 }
 
 const TEST_ARN =

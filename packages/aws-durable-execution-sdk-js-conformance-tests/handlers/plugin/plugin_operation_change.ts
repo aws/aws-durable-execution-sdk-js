@@ -7,33 +7,35 @@ import {
 
 const PLUGIN = "CONFPLUGIN";
 
-const makePlugin: DurableInstrumentationPluginFactory = (invocation) => {
-  // Every record is scoped to the execution the factory was called for.
-  const emit = (rec: Record<string, unknown>): void => {
-    process.stdout.write(
-      JSON.stringify({
-        ...rec,
-        durableExecutionArn: invocation.executionArn,
-      }) + "\n",
-    );
-  };
+const makePlugin: DurableInstrumentationPluginFactory = {
+  createPlugin: (invocation) => {
+    // Every record is scoped to the execution `createPlugin` was called for.
+    const emit = (rec: Record<string, unknown>): void => {
+      process.stdout.write(
+        JSON.stringify({
+          ...rec,
+          durableExecutionArn: invocation.executionArn,
+        }) + "\n",
+      );
+    };
 
-  return {
-    async onOperationChange(info): Promise<void> {
-      const fullMap = info.operations;
-      for (const [id, op] of Object.entries(info.updatedOperations)) {
-        // Filter to step-type operations only.
-        if ((op.type || "").toUpperCase() !== "STEP") continue;
-        emit({
-          plugin: PLUGIN,
-          hook: "operation-change",
-          op: id,
-          status: op.status,
-          in_full_map: id in fullMap,
-        });
-      }
-    },
-  };
+    return {
+      async onOperationChange(info): Promise<void> {
+        const fullMap = info.operations;
+        for (const [id, op] of Object.entries(info.updatedOperations)) {
+          // Filter to step-type operations only.
+          if ((op.type || "").toUpperCase() !== "STEP") continue;
+          emit({
+            plugin: PLUGIN,
+            hook: "operation-change",
+            op: id,
+            status: op.status,
+            in_full_map: id in fullMap,
+          });
+        }
+      },
+    };
+  },
 };
 
 export const handler = withDurableExecution(

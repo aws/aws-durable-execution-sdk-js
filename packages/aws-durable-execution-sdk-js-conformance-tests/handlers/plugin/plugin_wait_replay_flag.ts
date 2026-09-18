@@ -11,43 +11,45 @@ function isWait(type?: string): boolean {
   return (type || "").toUpperCase() === "WAIT";
 }
 
-const makePlugin: DurableInstrumentationPluginFactory = (invocation) => {
-  const emit = (rec: Record<string, unknown>): void => {
-    process.stdout.write(
-      JSON.stringify({
-        ...rec,
-        durableExecutionArn: invocation.executionArn,
-      }) + "\n",
-    );
-  };
+const makePlugin: DurableInstrumentationPluginFactory = {
+  createPlugin: (invocation) => {
+    const emit = (rec: Record<string, unknown>): void => {
+      process.stdout.write(
+        JSON.stringify({
+          ...rec,
+          durableExecutionArn: invocation.executionArn,
+        }) + "\n",
+      );
+    };
 
-  return {
-    // Correlate by stable wait name because branch event ids are
-    // nondeterministic under concurrency.
-    async onOperationStart(info): Promise<void> {
-      if (!isWait(info.type)) return;
-      emit({
-        plugin: PLUGIN,
-        hook: "operation-start",
-        type: (info.type || "").toUpperCase(),
-        name: info.name,
-        replay: info.isReplay,
-        // Non-terminal at hook time, from the hook info's own operation state
-        // (no end timestamp yet) — no cross-invocation state.
-        pending: info.endTimestamp == null,
-      });
-    },
-    async onOperationEnd(info): Promise<void> {
-      if (!isWait(info.type)) return;
-      emit({
-        plugin: PLUGIN,
-        hook: "operation-end",
-        type: (info.type || "").toUpperCase(),
-        name: info.name,
-        status: info.status,
-      });
-    },
-  };
+    return {
+      // Correlate by stable wait name because branch event ids are
+      // nondeterministic under concurrency.
+      async onOperationStart(info): Promise<void> {
+        if (!isWait(info.type)) return;
+        emit({
+          plugin: PLUGIN,
+          hook: "operation-start",
+          type: (info.type || "").toUpperCase(),
+          name: info.name,
+          replay: info.isReplay,
+          // Non-terminal at hook time, from the hook info's own operation state
+          // (no end timestamp yet) — no cross-invocation state.
+          pending: info.endTimestamp == null,
+        });
+      },
+      async onOperationEnd(info): Promise<void> {
+        if (!isWait(info.type)) return;
+        emit({
+          plugin: PLUGIN,
+          hook: "operation-end",
+          type: (info.type || "").toUpperCase(),
+          name: info.name,
+          status: info.status,
+        });
+      },
+    };
+  },
 };
 
 export const handler = withDurableExecution(

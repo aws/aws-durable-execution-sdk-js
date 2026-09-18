@@ -15,41 +15,41 @@ import {
 // InvocationInfo handed to the factory and stamped on every emitted record as a
 // top-level field (the runner's CloudWatch JSON filter is $.durableExecutionArn).
 // No hook is needed just to learn the ARN.
-const attemptHooksPlugin: DurableInstrumentationPluginFactory = (
-  invocation,
-) => {
-  // Emit one record as a raw top-level JSON line (unwrapped by the Node runtime's
-  // JSON log envelope).
-  const emit = (record: Record<string, unknown>): void => {
-    process.stdout.write(
-      JSON.stringify({
-        ...record,
-        durableExecutionArn: invocation.executionArn,
-      }) + "\n",
-    );
-  };
+const attemptHooksPlugin: DurableInstrumentationPluginFactory = {
+  createPlugin: (invocation) => {
+    // Emit one record as a raw top-level JSON line (unwrapped by the Node runtime's
+    // JSON log envelope).
+    const emit = (record: Record<string, unknown>): void => {
+      process.stdout.write(
+        JSON.stringify({
+          ...record,
+          durableExecutionArn: invocation.executionArn,
+        }) + "\n",
+      );
+    };
 
-  return {
-    async onOperationAttemptStart(info) {
-      if (info.subType !== "Step") return;
-      emit({
-        plugin: "CONFPLUGIN",
-        hook: "attempt-start",
-        n: info.attempt,
-        op: info.id,
-      });
-    },
-    async onOperationAttemptEnd(info) {
-      if (info.subType !== "Step") return;
-      emit({
-        plugin: "CONFPLUGIN",
-        hook: "attempt-end",
-        n: info.attempt,
-        outcome: info.outcome,
-        op: info.id,
-      });
-    },
-  };
+    return {
+      async onOperationAttemptStart(info) {
+        if (info.subType !== "Step") return;
+        emit({
+          plugin: "CONFPLUGIN",
+          hook: "attempt-start",
+          n: info.attempt,
+          op: info.id,
+        });
+      },
+      async onOperationAttemptEnd(info) {
+        if (info.subType !== "Step") return;
+        emit({
+          plugin: "CONFPLUGIN",
+          hook: "attempt-end",
+          n: info.attempt,
+          outcome: info.outcome,
+          op: info.id,
+        });
+      },
+    };
+  },
 };
 
 export const handler = withDurableExecution(

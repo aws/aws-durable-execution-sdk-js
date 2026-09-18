@@ -69,7 +69,7 @@ describe.each([
     } as OtelPluginConfig);
 
     for (const name of ["a", "b", "c"]) {
-      expect(() => factory(invocationInfo(arnFor(name)))).toThrow(
+      expect(() => factory.createPlugin(invocationInfo(arnFor(name)))).toThrow(
         "provider boom",
       );
     }
@@ -90,7 +90,7 @@ describe.each([
     });
 
     for (const name of ["a", "b", "c", "d", "e"]) {
-      expect(() => factory(invocationInfo(arnFor(name)))).toThrow(
+      expect(() => factory.createPlugin(invocationInfo(arnFor(name)))).toThrow(
         "provider boom",
       );
     }
@@ -106,7 +106,9 @@ describe.each([
     });
 
     for (const name of ["a", "b", "c"]) {
-      expect(() => factory(invocationInfo(arnFor(name)))).toThrow();
+      expect(() =>
+        factory.createPlugin(invocationInfo(arnFor(name))),
+      ).toThrow();
     }
 
     expect(consoleError).toHaveBeenCalledTimes(1);
@@ -126,8 +128,12 @@ describe.each([
 
     // The same error object every time: the SDK contains it exactly as it
     // contains any factory error, so the invocation runs without this plugin.
-    expect(() => factory(invocationInfo(arnFor("a")))).toThrow(failure);
-    expect(() => factory(invocationInfo(arnFor("b")))).toThrow(failure);
+    expect(() => factory.createPlugin(invocationInfo(arnFor("a")))).toThrow(
+      failure,
+    );
+    expect(() => factory.createPlugin(invocationInfo(arnFor("b")))).toThrow(
+      failure,
+    );
   });
 
   it("still resolves a working tracerProviderFactory exactly once", async () => {
@@ -148,7 +154,7 @@ describe.each([
 
     for (const name of ["a", "b", "c", "d", "e"]) {
       const info = invocationInfo(arnFor(name));
-      const plugin = factory(info);
+      const plugin = factory.createPlugin(info);
       await plugin.onInvocationStart?.(info);
     }
 

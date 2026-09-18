@@ -31,7 +31,7 @@ function newPlugin(
   config?: OtelPluginConfig,
   info: InvocationInfo = makeInvocationInfo(),
 ): InvocationOtelPlugin {
-  return createInvocationOtelPluginFactory(config)(info);
+  return createInvocationOtelPluginFactory(config).createPlugin(info);
 }
 import type { TracerProviderFactory } from "../otel-plugin-config";
 import type {
@@ -193,7 +193,7 @@ describe("InvocationOtelPlugin - Global provider mode", () => {
 
     // First invocation
     const firstInfo = makeInvocationInfo();
-    const plugin = factory(firstInfo);
+    const plugin = factory.createPlugin(firstInfo);
     await plugin.onInvocationStart(firstInfo);
     await plugin.onOperationStart(
       makeOperationInfo({ id: "op-a", name: "step-a" }),
@@ -208,7 +208,7 @@ describe("InvocationOtelPlugin - Global provider mode", () => {
 
     // Second invocation
     const secondInfo = makeInvocationInfo({ executionArn: "arn:second" });
-    const second = factory(secondInfo);
+    const second = factory.createPlugin(secondInfo);
     await second.onInvocationStart(secondInfo);
     await second.onOperationStart(
       makeOperationInfo({ id: "op-b", name: "step-b" }),
@@ -234,7 +234,7 @@ describe("InvocationOtelPlugin - Global provider mode", () => {
   it("does not shutdown the global provider on invocation end", async () => {
     const factory = createInvocationOtelPluginFactory({});
     const firstInfo = makeInvocationInfo();
-    const plugin = factory(firstInfo);
+    const plugin = factory.createPlugin(firstInfo);
 
     await plugin.onInvocationStart(firstInfo);
     await plugin.onOperationStart(
@@ -249,7 +249,7 @@ describe("InvocationOtelPlugin - Global provider mode", () => {
     // Verify by running another invocation
     exporter.reset();
     const secondInfo = makeInvocationInfo({ executionArn: "arn:second" });
-    const second = factory(secondInfo);
+    const second = factory.createPlugin(secondInfo);
     await second.onInvocationStart(secondInfo);
     await second.onOperationStart(
       makeOperationInfo({ id: "op-2", name: "second-op", type: "STEP" }),

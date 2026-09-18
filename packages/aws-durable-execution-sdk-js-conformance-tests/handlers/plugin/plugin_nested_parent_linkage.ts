@@ -7,28 +7,30 @@ import {
 
 const PLUGIN = "CONFPLUGIN";
 
-const makePlugin: DurableInstrumentationPluginFactory = (invocation) => {
-  const emit = (rec: Record<string, unknown>): void => {
-    process.stdout.write(
-      JSON.stringify({
-        ...rec,
-        durableExecutionArn: invocation.executionArn,
-      }) + "\n",
-    );
-  };
+const makePlugin: DurableInstrumentationPluginFactory = {
+  createPlugin: (invocation) => {
+    const emit = (rec: Record<string, unknown>): void => {
+      process.stdout.write(
+        JSON.stringify({
+          ...rec,
+          durableExecutionArn: invocation.executionArn,
+        }) + "\n",
+      );
+    };
 
-  return {
-    async onOperationEnd(info): Promise<void> {
-      // Report parent linkage for every operation that reaches a terminal state.
-      emit({
-        plugin: PLUGIN,
-        hook: "operation-end",
-        op: info.id,
-        parent: info.parentId ? info.parentId : "NONE",
-        status: info.status,
-      });
-    },
-  };
+    return {
+      async onOperationEnd(info): Promise<void> {
+        // Report parent linkage for every operation that reaches a terminal state.
+        emit({
+          plugin: PLUGIN,
+          hook: "operation-end",
+          op: info.id,
+          parent: info.parentId ? info.parentId : "NONE",
+          status: info.status,
+        });
+      },
+    };
+  },
 };
 
 export const handler = withDurableExecution(

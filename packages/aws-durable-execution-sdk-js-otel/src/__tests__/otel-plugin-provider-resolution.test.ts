@@ -127,7 +127,7 @@ describe("ExecutionOtelPlugin provider resolution", () => {
       operations: {},
       updatedOperations: {},
     };
-    const plugin = createExecutionOtelPluginFactory()(info);
+    const plugin = createExecutionOtelPluginFactory().createPlugin(info);
 
     await plugin.onInvocationStart(info);
     await plugin.onInvocationEnd({
@@ -165,7 +165,7 @@ describe("ExecutionOtelPlugin provider resolution", () => {
       operations: {},
       updatedOperations: {},
     };
-    const plugin = createExecutionOtelPluginFactory()(info);
+    const plugin = createExecutionOtelPluginFactory().createPlugin(info);
 
     await plugin.onInvocationStart(info);
     await plugin.onInvocationEnd({

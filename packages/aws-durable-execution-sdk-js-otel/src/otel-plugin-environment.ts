@@ -152,7 +152,7 @@ export function createPluginFactory<
   Plugin extends DurableInstrumentationPlugin,
 >(
   config: OtelPluginConfig | undefined,
-  createPlugin: (
+  createInstance: (
     environment: OtelPluginEnvironment,
     info: InvocationInfo,
   ) => Plugin,
@@ -160,27 +160,29 @@ export function createPluginFactory<
   let environment: OtelPluginEnvironment | undefined;
   let environmentError: unknown;
   let attempted = false;
-  return (info: InvocationInfo): Plugin => {
-    if (!attempted) {
-      attempted = true;
-      try {
-        environment = new OtelPluginEnvironment(config);
-      } catch (error) {
-        environmentError = error;
-        console.error(
-          "[aws-durable-execution-sdk-js-otel] Failed to initialize OpenTelemetry for durable execution; " +
-            "spans are not recorded for the life of this execution environment:",
-          error instanceof Error ? error.message : error,
-        );
+  return {
+    createPlugin(info: InvocationInfo): Plugin {
+      if (!attempted) {
+        attempted = true;
+        try {
+          environment = new OtelPluginEnvironment(config);
+        } catch (error) {
+          environmentError = error;
+          console.error(
+            "[aws-durable-execution-sdk-js-otel] Failed to initialize OpenTelemetry for durable execution; " +
+              "spans are not recorded for the life of this execution environment:",
+            error instanceof Error ? error.message : error,
+          );
+        }
       }
-    }
 
-    if (environment === undefined) {
-      throw environmentError instanceof Error
-        ? environmentError
-        : new Error(String(environmentError));
-    }
+      if (environment === undefined) {
+        throw environmentError instanceof Error
+          ? environmentError
+          : new Error(String(environmentError));
+      }
 
-    return createPlugin(environment, info);
+      return createInstance(environment, info);
+    },
   };
 }

@@ -29,7 +29,7 @@ function newPlugin(
   config?: OtelPluginConfig,
   info: InvocationInfo = makeInvocationInfo(),
 ): ExecutionOtelPlugin {
-  return createExecutionOtelPluginFactory(config)(info);
+  return createExecutionOtelPluginFactory(config).createPlugin(info);
 }
 import type { TracerProviderFactory } from "../otel-plugin-config";
 

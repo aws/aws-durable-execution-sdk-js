@@ -85,12 +85,14 @@ function recordingFactory(): DurableInstrumentationPluginFactory<RecordingPlugin
   readonly created: RecordingPlugin[];
 } {
   const created: RecordingPlugin[] = [];
-  const factory = (): RecordingPlugin => {
-    const plugin = new RecordingPlugin();
-    created.push(plugin);
-    return plugin;
+  return {
+    created,
+    createPlugin: (): RecordingPlugin => {
+      const plugin = new RecordingPlugin();
+      created.push(plugin);
+      return plugin;
+    },
   };
-  return Object.assign(factory, { created });
 }
 
 beforeEach(() => {
@@ -134,16 +136,18 @@ describe("plugins get one instance per invocation", () => {
 
   it("creates the instance before the first hook of its invocation", async () => {
     const events: string[] = [];
-    const factory: DurableInstrumentationPluginFactory = () => {
-      events.push("created");
-      return {
-        onInvocationStart: async () => {
-          events.push("onInvocationStart");
-        },
-        onInvocationEnd: async () => {
-          events.push("onInvocationEnd");
-        },
-      };
+    const factory: DurableInstrumentationPluginFactory = {
+      createPlugin: () => {
+        events.push("created");
+        return {
+          onInvocationStart: async () => {
+            events.push("onInvocationStart");
+          },
+          onInvocationEnd: async () => {
+            events.push("onInvocationEnd");
+          },
+        };
+      },
     };
 
     const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
@@ -157,13 +161,15 @@ describe("plugins get one instance per invocation", () => {
   it("hands the factory the same invocation info onInvocationStart receives", async () => {
     let constructedWith: InvocationInfo | undefined;
     let startedWith: InvocationInfo | undefined;
-    const factory: DurableInstrumentationPluginFactory = (info) => {
-      constructedWith = info;
-      return {
-        onInvocationStart: async (startInfo) => {
-          startedWith = startInfo;
-        },
-      };
+    const factory: DurableInstrumentationPluginFactory = {
+      createPlugin: (info) => {
+        constructedWith = info;
+        return {
+          onInvocationStart: async (startInfo) => {
+            startedWith = startInfo;
+          },
+        };
+      },
     };
 
     const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
@@ -218,14 +224,16 @@ describe("plugins get one instance per invocation", () => {
     // client, a tracer provider, a scheduler. It outlives every instance.
     const exporter = { exported: [] as string[] };
     let instances = 0;
-    const factory: DurableInstrumentationPluginFactory = () => {
-      instances += 1;
-      const instanceNumber = instances;
-      return {
-        onInvocationEnd: async (info) => {
-          exporter.exported.push(`${info.executionArn}#${instanceNumber}`);
-        },
-      };
+    const factory: DurableInstrumentationPluginFactory = {
+      createPlugin: () => {
+        instances += 1;
+        const instanceNumber = instances;
+        return {
+          onInvocationEnd: async (info) => {
+            exporter.exported.push(`${info.executionArn}#${instanceNumber}`);
+          },
+        };
+      },
     };
 
     const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
@@ -245,21 +253,27 @@ describe("plugins get one instance per invocation", () => {
 
   it("preserves factory order and isolates a throwing hook", async () => {
     const order: string[] = [];
-    const throwingFactory: DurableInstrumentationPluginFactory = () => ({
-      onInvocationStart: () => {
-        throw new Error("plugin bug");
-      },
-    });
-    const first: DurableInstrumentationPluginFactory = () => ({
-      onInvocationStart: async () => {
-        order.push("first");
-      },
-    });
-    const second: DurableInstrumentationPluginFactory = () => ({
-      onInvocationStart: async () => {
-        order.push("second");
-      },
-    });
+    const throwingFactory: DurableInstrumentationPluginFactory = {
+      createPlugin: () => ({
+        onInvocationStart: () => {
+          throw new Error("plugin bug");
+        },
+      }),
+    };
+    const first: DurableInstrumentationPluginFactory = {
+      createPlugin: () => ({
+        onInvocationStart: async () => {
+          order.push("first");
+        },
+      }),
+    };
+    const second: DurableInstrumentationPluginFactory = {
+      createPlugin: () => ({
+        onInvocationStart: async () => {
+          order.push("second");
+        },
+      }),
+    };
 
     const handler = withDurableExecution(
       jest.fn().mockResolvedValue({ ok: true }),
@@ -274,13 +288,15 @@ describe("plugins get one instance per invocation", () => {
 
   it("contains a throwing factory without disrupting the execution", async () => {
     const other = new RecordingPlugin();
-    const throwingFactory: DurableInstrumentationPluginFactory = () => {
-      throw new Error("factory bug");
+    const throwingFactory: DurableInstrumentationPluginFactory = {
+      createPlugin: () => {
+        throw new Error("factory bug");
+      },
     };
 
     const handler = withDurableExecution(
       jest.fn().mockResolvedValue({ ok: true }),
-      { plugins: [throwingFactory, () => other] },
+      { plugins: [throwingFactory, { createPlugin: () => other }] },
     );
 
     await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
@@ -296,8 +312,10 @@ describe("plugins get one instance per invocation", () => {
       jest.fn().mockRejectedValue(handlerError),
       {
         plugins: [
-          (): DurableInstrumentationPlugin => {
-            throw new Error("factory bug");
+          {
+            createPlugin: (): DurableInstrumentationPlugin => {
+              throw new Error("factory bug");
+            },
           },
         ],
       },
@@ -321,10 +339,12 @@ describe("environment-configured providers", () => {
 
   it("creates one instance per invocation from the provider factory", async () => {
     const created: RecordingPlugin[] = [];
-    loadFromProvider(() => {
-      const plugin = new RecordingPlugin();
-      created.push(plugin);
-      return plugin;
+    loadFromProvider({
+      createPlugin: () => {
+        const plugin = new RecordingPlugin();
+        created.push(plugin);
+        return plugin;
+      },
     });
 
     const handler = withDurableExecution(jest.fn().mockResolvedValue({}));
@@ -340,10 +360,12 @@ describe("environment-configured providers", () => {
   it("mixes a provider factory with a factory from config", async () => {
     const configFactory = recordingFactory();
     const created: RecordingPlugin[] = [];
-    loadFromProvider(() => {
-      const plugin = new RecordingPlugin();
-      created.push(plugin);
-      return plugin;
+    loadFromProvider({
+      createPlugin: () => {
+        const plugin = new RecordingPlugin();
+        created.push(plugin);
+        return plugin;
+      },
     });
 
     const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
@@ -357,8 +379,10 @@ describe("environment-configured providers", () => {
   });
 
   it("contains a provider factory that throws at invocation time", async () => {
-    loadFromProvider((): DurableInstrumentationPlugin => {
-      throw new Error("factory bug");
+    loadFromProvider({
+      createPlugin: (): DurableInstrumentationPlugin => {
+        throw new Error("factory bug");
+      },
     });
 
     const handler = withDurableExecution(
@@ -371,10 +395,10 @@ describe("environment-configured providers", () => {
   });
 
   it("still fails the invocation for a provider that is invalid at load time", async () => {
-    // Not callable, so the SDK could never build an instance from it. That is a
-    // packaging mistake, not a plugin failure, and it fails the invocation
-    // before any execution state is read.
-    loadFromProvider({ createPlugin: () => new RecordingPlugin() });
+    // A bare function has no `createPlugin`, so the SDK could never build an
+    // instance from it. That is a packaging mistake, not a plugin failure, and it
+    // fails the invocation before any execution state is read.
+    loadFromProvider(() => new RecordingPlugin());
 
     const handler = withDurableExecution(jest.fn().mockResolvedValue({}));
 
@@ -439,11 +463,12 @@ describe("explicit plugins entries are validated like providers", () => {
 });
 
 describe("a plugin class passed instead of a factory fails the invocation", () => {
-  // The migration hazard: `plugins: [MyPlugin]` is callable, so it reaches the
-  // per-invocation call, throws "Class constructor cannot be invoked without
-  // 'new'", and is contained — the plugin is then absent for the life of the
-  // execution environment and nothing says why. The load-time check turns that
-  // into a reported failure.
+  // The migration hazard: `plugins: [MyPlugin]` is callable, so without a
+  // load-time check it reaches the per-invocation call, throws "Class
+  // constructor cannot be invoked without 'new'", and is contained — the plugin
+  // is then absent for the life of the execution environment and nothing says
+  // why. A class carries no `createPlugin`, so the shape check turns that into a
+  // reported failure.
   beforeEach(() => {
     mockedLoadConfiguredPlugins.mockImplementation((explicitPlugins) =>
       actualLoadConfiguredPlugins(explicitPlugins, { environment: {} }),
@@ -463,7 +488,7 @@ describe("a plugin class passed instead of a factory fails the invocation", () =
       Error: expect.objectContaining({
         ErrorType: "PluginLoadError",
         ErrorMessage: expect.stringContaining(
-          "Plugin at plugins[0] is the plugin class itself",
+          "Plugin at plugins[0] must be an object with a 'createPlugin(info)' method",
         ),
       }),
     });
@@ -490,7 +515,7 @@ describe("a plugin class passed instead of a factory fails the invocation", () =
       Error: expect.objectContaining({
         ErrorType: "PluginLoadError",
         ErrorMessage: expect.stringContaining(
-          "Plugin provider '@example/plugin' is the plugin class itself",
+          "Plugin provider '@example/plugin' must be an object with a 'createPlugin(info)' method",
         ),
       }),
     });
@@ -501,10 +526,12 @@ describe("a plugin class passed instead of a factory fails the invocation", () =
     const created: RecordingPlugin[] = [];
     const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
       plugins: [
-        () => {
-          const plugin = new RecordingPlugin();
-          created.push(plugin);
-          return plugin;
+        {
+          createPlugin: () => {
+            const plugin = new RecordingPlugin();
+            created.push(plugin);
+            return plugin;
+          },
         },
       ],
     });

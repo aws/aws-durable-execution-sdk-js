@@ -13,39 +13,39 @@ import {
 // One instance serves one invocation, so the execution ARN is taken from the
 // InvocationInfo handed to the factory and stamped on every operation record as
 // a top-level field. No hook is needed just to learn the ARN.
-const operationLifecyclePlugin: DurableInstrumentationPluginFactory = (
-  invocation,
-) => {
-  // Emit one record as a raw top-level JSON line (unwrapped by the Node runtime's
-  // JSON log envelope).
-  const emit = (record: Record<string, unknown>): void => {
-    process.stdout.write(
-      JSON.stringify({
-        ...record,
-        durableExecutionArn: invocation.executionArn,
-      }) + "\n",
-    );
-  };
+const operationLifecyclePlugin: DurableInstrumentationPluginFactory = {
+  createPlugin: (invocation) => {
+    // Emit one record as a raw top-level JSON line (unwrapped by the Node runtime's
+    // JSON log envelope).
+    const emit = (record: Record<string, unknown>): void => {
+      process.stdout.write(
+        JSON.stringify({
+          ...record,
+          durableExecutionArn: invocation.executionArn,
+        }) + "\n",
+      );
+    };
 
-  return {
-    async onOperationStart(info) {
-      if (info.subType !== "Step") return;
-      emit({
-        plugin: "CONFPLUGIN",
-        hook: "operation-start",
-        op: info.id,
-      });
-    },
-    async onOperationEnd(info) {
-      if (info.subType !== "Step") return;
-      emit({
-        plugin: "CONFPLUGIN",
-        hook: "operation-end",
-        op: info.id,
-        status: info.status,
-      });
-    },
-  };
+    return {
+      async onOperationStart(info) {
+        if (info.subType !== "Step") return;
+        emit({
+          plugin: "CONFPLUGIN",
+          hook: "operation-start",
+          op: info.id,
+        });
+      },
+      async onOperationEnd(info) {
+        if (info.subType !== "Step") return;
+        emit({
+          plugin: "CONFPLUGIN",
+          hook: "operation-end",
+          op: info.id,
+          status: info.status,
+        });
+      },
+    };
+  },
 };
 
 export const handler = withDurableExecution(

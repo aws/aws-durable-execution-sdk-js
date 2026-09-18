@@ -25,8 +25,8 @@ type Workflow<TResult> = (
 
 // One factory per module load, shared by every handler in the bundle: the
 // tracer provider and exporter it holds belong to the execution environment,
-// while the SDK calls the factory once per invocation to build that
-// invocation's plugin instance.
+// while the SDK calls the factory's `createPlugin` once per invocation to build
+// that invocation's plugin instance.
 const pluginFactory =
   process.env.OTEL_PLUGIN_MODE === "execution"
     ? createExecutionOtelPluginFactory()

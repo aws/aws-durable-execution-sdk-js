@@ -190,56 +190,57 @@ function getProviderExport(
 }
 
 /**
- * A class, as distinguished from every other callable value: the source text of
- * a class begins with the `class` keyword, and nothing else that is callable
- * does.
+ * Whether a value can serve as a plugin factory: it exposes a callable
+ * `createPlugin`.
  *
- * The keyword must be followed by whitespace, `{`, or the start of a comment.
- * Without that, a shorthand method named `class` stringifies as `class(info) {}`
- * and a method named `classify` as `classify(info) {}`, and both would be
- * mistaken for a class.
+ * Only a property lookup is performed, so an inherited method counts. A factory
+ * written as a class instance keeps `createPlugin` on its prototype, and its
+ * type says it is a factory, so the check has to agree. Functions are examined
+ * as well as objects, because a function carrying a `createPlugin` property also
+ * satisfies the interface.
  */
-const CLASS_SOURCE_TEXT = /^class[\s{/]/;
+function isPluginFactory(
+  value: unknown,
+): value is DurableInstrumentationPluginFactory {
+  if (
+    value === null ||
+    (typeof value !== "object" && typeof value !== "function")
+  ) {
+    return false;
+  }
+
+  return (
+    typeof (value as { createPlugin?: unknown }).createPlugin === "function"
+  );
+}
 
 /**
- * Checks the two things about a configured plugin entry that can be checked
- * without running it: the value is callable, so the SDK can call it once per
- * invocation, and the value is not a class, which is callable but cannot be
- * called.
+ * Checks the one thing about a configured plugin entry that can be checked
+ * without running it: the entry carries a callable `createPlugin`, which is what
+ * the SDK calls once per invocation.
  *
- * A class is what a caller migrating from the earlier contract is most likely to
- * pass, because `plugins: [MyPlugin]` was once close enough to correct to look
- * right. `typeof MyPlugin === "function"`, so the callable check alone does not
- * see it. Calling it would throw "Class constructor cannot be invoked without
- * 'new'" on every invocation, and that throw is contained the way any plugin
- * failure is contained, leaving the plugin absent for the life of the execution
- * environment with nothing said about why.
+ * The shape test also rejects the values a caller is most likely to pass by
+ * mistake. A plugin instance is an object without `createPlugin`. The plugin
+ * class itself is callable but has no `createPlugin` either, so it is rejected
+ * here rather than throwing "Class constructor cannot be invoked without 'new'"
+ * once per invocation. A bare `(info) => plugin` function, which an earlier
+ * version of this contract accepted, has no `createPlugin` either, so the
+ * message names the shape that replaces it.
  *
- * `Function.prototype.toString` is called on the value rather than through it,
- * because a function can carry its own `toString` and shadow the real one.
+ * The value is never called to find out whether it is a factory. Calling it
+ * would run arbitrary constructor or factory code at load time, for every
+ * legitimate entry.
  *
- * THE LIMITATION THIS ACCEPTS: a class transpiled or minified down to an ES5
- * `function` no longer stringifies as `class`, so this check does not see it.
- * Measured on this repo's toolchain — TypeScript 5.9 at `--target ES5` and
- * esbuild minifying to `--target=es5` both emit `function PlainPlugin() {}`.
- * Such a function called without `new` returns `undefined` rather than throwing,
- * and `createInvocationPluginRunner` skips a factory that hands back nothing, so
- * per-invocation containment remains the backstop for exactly that case. Nothing
- * further is attempted here: the heuristics that would catch it — inspecting
- * `prototype` property descriptors, or whether prototype methods are
- * non-enumerable — also reject ordinary factory functions, and a false rejection
- * at load time fails an invocation that would otherwise have worked.
- *
- * Nothing else about the value can be established here. What a factory returns
- * is only known when it runs, and by then the invocation has started, where a
- * plugin failure is contained rather than fatal. A non-callable entry, or a
- * class, by contrast, is a configuration or packaging mistake that would
- * otherwise be rediscovered — and swallowed — on every invocation, so it fails
- * the load instead.
+ * Nothing else about the value can be established here. What `createPlugin`
+ * returns is only known when it runs, and by then the invocation has started,
+ * where a plugin failure is contained rather than fatal. A value without
+ * `createPlugin`, by contrast, is a configuration or packaging mistake that
+ * would otherwise be rediscovered — and swallowed — on every invocation, so it
+ * fails the load instead.
  *
  * Applied to both ways a plugin arrives, so the two paths agree: an entry in
- * `plugins` that is not callable fails the load exactly as an environment-
- * selected provider that is not callable does. `subject` is what the message
+ * `plugins` that has no `createPlugin` fails the load exactly as an
+ * environment-selected provider without one does. `subject` is what the message
  * names, since one path has a module specifier and the other has a position in
  * the caller's array.
  */
@@ -248,22 +249,15 @@ function validatePluginFactory(
   providerValue: unknown,
   guidance = "",
 ): DurableInstrumentationPluginFactory {
-  if (typeof providerValue !== "function") {
+  if (!isPluginFactory(providerValue)) {
     throw new PluginLoadError(
-      `${subject} must be a function that creates a plugin for one ` +
-        `invocation, but it is ${describeValue(providerValue)}.${guidance}`,
+      `${subject} must be an object with a 'createPlugin(info)' method that ` +
+        `creates a plugin for one invocation, but it is ` +
+        `${describeValue(providerValue)}.${guidance}`,
     );
   }
 
-  if (CLASS_SOURCE_TEXT.test(Function.prototype.toString.call(providerValue))) {
-    throw new PluginLoadError(
-      `${subject} is the plugin class itself, not a function that creates a ` +
-        "plugin for one invocation. Pass a factory that constructs it, such " +
-        "as `(info) => new MyPlugin()`.",
-    );
-  }
-
-  return providerValue as DurableInstrumentationPluginFactory;
+  return providerValue;
 }
 
 function describeValue(value: unknown): string {
@@ -283,12 +277,11 @@ function describeValue(value: unknown): string {
  * Explicit factories retain their order. Dynamically selected providers follow
  * in the order listed in `DURABLE_EXECUTION_PLUGINS`.
  *
- * Every entry from either source is checked here for the two things that can be
- * checked once: that it is callable, and that it is not a class. An entry that
- * fails either — a plugin instance, the plugin class itself, or a value that is
- * not a function at all — could never produce an instance when called, so it
- * fails the load rather than being rediscovered and swallowed on every
- * invocation.
+ * Every entry from either source is checked here for the one thing that can be
+ * checked once: that it carries a callable `createPlugin`. An entry that fails —
+ * a plugin instance, the plugin class itself, a bare factory function, or a value
+ * that is not an object at all — could never produce an instance, so it fails the
+ * load rather than being rediscovered and swallowed on every invocation.
  *
  * Every returned entry is a factory: no plugin is constructed here. Construction
  * happens once per invocation, in {@link createInvocationPluginRunner}, which is
@@ -304,7 +297,7 @@ export async function loadConfiguredPlugins(
     validatePluginFactory(
       `Plugin at plugins[${index}]`,
       plugin,
-      " Pass a factory such as `(info) => new MyPlugin()`.",
+      " Pass a factory such as `{ createPlugin: (info) => new MyPlugin() }`.",
     ),
   );
   const environment = options.environment ?? process.env;

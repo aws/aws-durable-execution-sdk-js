@@ -15,24 +15,26 @@ import {
 function makeLifecyclePlugin(
   name: string,
 ): DurableInstrumentationPluginFactory {
-  return (invocation) => {
-    const emit = (record: Record<string, unknown>): void => {
-      process.stdout.write(
-        JSON.stringify({
-          ...record,
-          durableExecutionArn: invocation.executionArn,
-        }) + "\n",
-      );
-    };
+  return {
+    createPlugin: (invocation) => {
+      const emit = (record: Record<string, unknown>): void => {
+        process.stdout.write(
+          JSON.stringify({
+            ...record,
+            durableExecutionArn: invocation.executionArn,
+          }) + "\n",
+        );
+      };
 
-    return {
-      async onInvocationStart() {
-        emit({ plugin: name, hook: "invocation-start" });
-      },
-      async onInvocationEnd(info) {
-        emit({ plugin: name, hook: "invocation-end", status: info.status });
-      },
-    };
+      return {
+        async onInvocationStart() {
+          emit({ plugin: name, hook: "invocation-start" });
+        },
+        async onInvocationEnd(info) {
+          emit({ plugin: name, hook: "invocation-end", status: info.status });
+        },
+      };
+    },
   };
 }
 

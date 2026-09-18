@@ -28,23 +28,25 @@ describe("createInvocationPluginRunner", () => {
     expect(createInvocationPluginRunner([], invocationInfo)).toEqual({});
   });
 
-  it("calls each factory exactly once per runner", () => {
-    const factory = jest.fn(() => ({}));
+  it("calls each factory's createPlugin exactly once per runner", () => {
+    const createPlugin = jest.fn(() => ({}));
 
-    createInvocationPluginRunner([factory], invocationInfo);
+    createInvocationPluginRunner([{ createPlugin }], invocationInfo);
 
-    expect(factory).toHaveBeenCalledTimes(1);
+    expect(createPlugin).toHaveBeenCalledTimes(1);
   });
 
   it("hands the factory the invocation info the runner then dispatches", async () => {
     const seen: InvocationInfo[] = [];
-    const factory: DurableInstrumentationPluginFactory = (info) => {
-      seen.push(info);
-      return {
-        onInvocationStart: async (startInfo) => {
-          seen.push(startInfo);
-        },
-      };
+    const factory: DurableInstrumentationPluginFactory = {
+      createPlugin: (info) => {
+        seen.push(info);
+        return {
+          onInvocationStart: async (startInfo) => {
+            seen.push(startInfo);
+          },
+        };
+      },
     };
 
     const runner = createInvocationPluginRunner([factory], invocationInfo);
@@ -59,10 +61,12 @@ describe("createInvocationPluginRunner", () => {
 
   it("creates one instance per runner and dispatches to that instance", async () => {
     const created: DurableInstrumentationPlugin[] = [];
-    const factory: DurableInstrumentationPluginFactory = () => {
-      const plugin = { onInvocationStart: jest.fn() };
-      created.push(plugin);
-      return plugin;
+    const factory: DurableInstrumentationPluginFactory = {
+      createPlugin: () => {
+        const plugin = { onInvocationStart: jest.fn() };
+        created.push(plugin);
+        return plugin;
+      },
     };
 
     await createInvocationPluginRunner(
@@ -82,13 +86,13 @@ describe("createInvocationPluginRunner", () => {
 
   it("preserves factory order in the dispatched instances", async () => {
     const calls: string[] = [];
-    const factory =
-      (name: string): DurableInstrumentationPluginFactory =>
-      () => ({
+    const factory = (name: string): DurableInstrumentationPluginFactory => ({
+      createPlugin: () => ({
         onInvocationStart: async () => {
           calls.push(name);
         },
-      });
+      }),
+    });
 
     await createInvocationPluginRunner(
       [factory("first"), factory("second")],
@@ -113,8 +117,8 @@ describe("createInvocationPluginRunner", () => {
 
     const runner = createInvocationPluginRunner(
       [
-        () => ({ wrapInvocation: wrapper("outer") }),
-        () => ({ wrapInvocation: wrapper("inner") }),
+        { createPlugin: () => ({ wrapInvocation: wrapper("outer") }) },
+        { createPlugin: () => ({ wrapInvocation: wrapper("inner") }) },
       ],
       invocationInfo,
     );
@@ -138,12 +142,14 @@ describe("createInvocationPluginRunner", () => {
     const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
       onInvocationStart: jest.fn(),
     };
-    const throwingFactory: DurableInstrumentationPluginFactory = () => {
-      throw new Error("factory bug");
+    const throwingFactory: DurableInstrumentationPluginFactory = {
+      createPlugin: () => {
+        throw new Error("factory bug");
+      },
     };
 
     const runner = createInvocationPluginRunner(
-      [throwingFactory, () => plugin],
+      [throwingFactory, { createPlugin: () => plugin }],
       invocationInfo,
     );
 
@@ -156,8 +162,10 @@ describe("createInvocationPluginRunner", () => {
   it("degrades to the no-plugin runner when the only factory throws", async () => {
     const runner = createInvocationPluginRunner(
       [
-        (): DurableInstrumentationPlugin => {
-          throw new Error("factory bug");
+        {
+          createPlugin: (): DurableInstrumentationPlugin => {
+            throw new Error("factory bug");
+          },
         },
       ],
       invocationInfo,
@@ -179,10 +187,12 @@ describe("createInvocationPluginRunner", () => {
       onInvocationStart: jest.fn(),
     };
     let attempt = 0;
-    const factory: DurableInstrumentationPluginFactory = () => {
-      attempt += 1;
-      if (attempt === 1) throw new Error("cold start hiccup");
-      return plugin;
+    const factory: DurableInstrumentationPluginFactory = {
+      createPlugin: () => {
+        attempt += 1;
+        if (attempt === 1) throw new Error("cold start hiccup");
+        return plugin;
+      },
     };
 
     await createInvocationPluginRunner(
@@ -204,11 +214,12 @@ describe("createInvocationPluginRunner", () => {
       const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
         onInvocationStart: jest.fn(),
       };
-      const factory = (() =>
-        value) as unknown as DurableInstrumentationPluginFactory;
+      const factory = {
+        createPlugin: () => value,
+      } as unknown as DurableInstrumentationPluginFactory;
 
       const runner = createInvocationPluginRunner(
-        [factory, () => plugin],
+        [factory, { createPlugin: () => plugin }],
         invocationInfo,
       );
 
@@ -222,8 +233,14 @@ describe("createInvocationPluginRunner", () => {
   it("merges enrichLogContext across factory plugins", () => {
     const runner = createInvocationPluginRunner(
       [
-        () => ({ enrichLogContext: () => ({ traceId: "abc" }) }),
-        () => ({ enrichLogContext: () => ({ spanId: "xyz" }) }),
+        {
+          createPlugin: () => ({
+            enrichLogContext: () => ({ traceId: "abc" }),
+          }),
+        },
+        {
+          createPlugin: () => ({ enrichLogContext: () => ({ spanId: "xyz" }) }),
+        },
       ],
       invocationInfo,
     );

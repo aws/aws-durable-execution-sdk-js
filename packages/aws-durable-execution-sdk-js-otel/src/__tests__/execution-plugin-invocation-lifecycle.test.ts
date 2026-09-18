@@ -32,7 +32,7 @@ function newPlugin(
   config?: OtelPluginConfig,
   info: InvocationInfo = makeInvocationInfo(),
 ): ExecutionOtelPlugin {
-  return createExecutionOtelPluginFactory(config)(info);
+  return createExecutionOtelPluginFactory(config).createPlugin(info);
 }
 import type { TracerProviderFactory } from "../otel-plugin-config";
 
@@ -482,7 +482,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     it("does not leak invocation state across invocations (no ambient context on second)", async () => {
       const factory = createExecutionOtelPluginFactory({});
       const firstInfo = makeInvocationInfo();
-      const plugin = factory(firstInfo);
+      const plugin = factory.createPlugin(firstInfo);
 
       // Create ambient span
       const tracer = provider.getTracer("test");
@@ -502,7 +502,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
 
       // Second invocation WITHOUT ambient context, on its own instance
       const secondInfo = makeInvocationInfo({ executionArn: "arn:second" });
-      const second = factory(secondInfo);
+      const second = factory.createPlugin(secondInfo);
       await second.onInvocationStart(secondInfo);
 
       // Create an operation - should have no links since there's no ambient span
@@ -540,7 +540,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     it("gives the next invocation clean workflowSpan, invocationSpan, and spanMap", async () => {
       const factory = createExecutionOtelPluginFactory({});
       const firstInfo = makeInvocationInfo();
-      const plugin = factory(firstInfo);
+      const plugin = factory.createPlugin(firstInfo);
 
       // First invocation
       await plugin.onInvocationStart(firstInfo);
@@ -558,7 +558,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
 
       // Second invocation - a new instance, so it starts clean
       const secondInfo = makeInvocationInfo({ executionArn: "arn:second" });
-      const second = factory(secondInfo);
+      const second = factory.createPlugin(secondInfo);
       await second.onInvocationStart(secondInfo);
       await second.onInvocationEnd(
         makeInvocationEndInfo({
@@ -586,7 +586,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     it("does not reach a previous invocation's attempt span", async () => {
       const factory = createExecutionOtelPluginFactory({});
       const firstInfo = makeInvocationInfo();
-      const plugin = factory(firstInfo);
+      const plugin = factory.createPlugin(firstInfo);
 
       // Start invocation and create an attempt span (but don't end it)
       await plugin.onInvocationStart(firstInfo);
@@ -614,7 +614,7 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       // Second invocation - wrapOperationAttemptFn cannot see the first
       // invocation's attempt span: it lives on an instance that is gone.
       const secondInfo = makeInvocationInfo({ executionArn: "arn:second" });
-      const second = factory(secondInfo);
+      const second = factory.createPlugin(secondInfo);
       await second.onInvocationStart(secondInfo);
 
       let capturedSpan: any;

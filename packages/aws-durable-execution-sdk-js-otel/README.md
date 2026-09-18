@@ -55,7 +55,8 @@ export const handler = withDurableExecution(
 );
 ```
 
-`plugins` takes plugin *factories*: the SDK calls the factory once per
+`plugins` takes plugin *factories*. A factory is an object with a
+`createPlugin(info)` method, not a callable. The SDK calls `createPlugin` once per
 invocation and dispatches only that invocation's hooks to the plugin it returns.
 Everything expensive — the tracer provider resolution, the deterministic ID
 generator installation, the sampler wrapper — is resolved once, on the first
@@ -188,11 +189,11 @@ points use SDK types only, and the SDK peer dependency is optional so package
 installation does not add a second copy. At runtime, the plugin is loaded and
 driven by the SDK instance bundled with the function.
 
-Each entry point exports `durableExecutionPluginProvider`, the per-invocation
-factory the SDK calls. Dynamic providers use default configuration, so they
-require a compatible globally registered SDK provider. Use code-based
-registration when `tracerProviderFactory` or other custom configuration is
-needed.
+Each entry point exports `durableExecutionPluginProvider`, the factory whose
+`createPlugin` the SDK calls once per invocation. Dynamic providers use default
+configuration, so they require a compatible globally registered SDK provider. Use
+code-based registration when `tracerProviderFactory` or other custom
+configuration is needed.
 
 ## Choosing a Plugin
 

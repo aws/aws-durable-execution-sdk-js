@@ -167,14 +167,14 @@ export interface DurableExecutionConfig {
    * Optional array of instrumentation plugin factories for observability and
    * tracing.
    *
-   * Each entry is a {@link DurableInstrumentationPluginFactory}: a function the
-   * SDK calls once per invocation, with that invocation's
-   * {@link InvocationInfo}, to build the plugin instance that serves it. The
-   * instance exists for one invocation only, so a plugin holding per-execution
-   * state never has to key it by execution ARN and concurrent executions in one
-   * execution environment cannot see each other's state. Anything that belongs
-   * to the execution environment — an exporter, a tracer provider — belongs in
-   * the factory's closure.
+   * Each entry is a {@link DurableInstrumentationPluginFactory}: an object whose
+   * `createPlugin(info)` method the SDK calls once per invocation, with that
+   * invocation's {@link InvocationInfo}, to build the plugin instance that
+   * serves it. The instance exists for one invocation only, so a plugin holding
+   * per-execution state never has to key it by execution ARN and concurrent
+   * executions in one execution environment cannot see each other's state.
+   * Anything that belongs to the execution environment — an exporter, a tracer
+   * provider — belongs on the factory or in its closure.
    *
    * Plugins receive lifecycle callbacks at key points during durable execution,
    * enabling integration with tracing systems (e.g., OpenTelemetry, X-Ray),
@@ -182,11 +182,11 @@ export interface DurableExecutionConfig {
    *
    * Multiple factories can be provided and their plugins will be called in
    * order. Plugin errors are swallowed to prevent instrumentation from
-   * affecting execution correctness; a factory that throws or returns nothing
-   * is contained the same way. An entry that is not callable at all is a
-   * different case — no instance could ever come from it — and fails the
+   * affecting execution correctness; a `createPlugin` that throws or returns
+   * nothing is contained the same way. An entry with no callable `createPlugin`
+   * is a different case — no instance could ever come from it — and fails the
    * invocation with a `PluginLoadError` when the handler is initialized, exactly
-   * as a non-callable environment-selected provider does.
+   * as such an environment-selected provider does.
    *
    * @example
    * ```typescript
@@ -196,7 +196,12 @@ export interface DurableExecutionConfig {
    * const exporter = new Exporter(); // shared by every invocation
    *
    * export const handler = withDurableExecution(myHandler, {
-   *   plugins: [(info) => new MyTracingPlugin(exporter, info.executionArn)]
+   *   plugins: [
+   *     {
+   *       createPlugin: (info) =>
+   *         new MyTracingPlugin(exporter, info.executionArn),
+   *     },
+   *   ],
    * });
    * ```
    *

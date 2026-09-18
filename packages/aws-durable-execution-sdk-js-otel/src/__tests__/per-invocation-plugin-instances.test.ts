@@ -148,7 +148,7 @@ function sdkInvocation(
   executionArn: string,
 ): Invocation {
   const info = invocationInfo(executionArn);
-  return invocationOver(factory(info), info);
+  return invocationOver(factory.createPlugin(info), info);
 }
 
 const spansNamed = (spans: readonly ReadableSpan[], name: string) =>
@@ -199,9 +199,9 @@ describe.each([
       tracerProvider.register();
 
       // The provider is a valid plugin source exactly as the SDK's loader
-      // classifies it: a callable the SDK invokes once per invocation, never a
-      // shared instance.
-      expect(typeof provider).toBe("function");
+      // classifies it: an object carrying a createPlugin the SDK calls once per
+      // invocation, never a shared instance.
+      expect(typeof provider.createPlugin).toBe("function");
       const a = sdkInvocation(provider, ARN_A);
       const b = sdkInvocation(provider, ARN_B);
 
@@ -379,7 +379,7 @@ describe.each([
       const created: DurableInstrumentationPlugin[] = [];
       for (const executionArn of [ARN_A, ARN_B, arnFor("execution-c")]) {
         const info = invocationInfo(executionArn);
-        const plugin = factory(info);
+        const plugin = factory.createPlugin(info);
         created.push(plugin);
         const invocation = invocationOver(plugin, info);
         await invocation.start();
@@ -398,25 +398,26 @@ describe.each([
     });
 
     it("hands out a new instance per invocation, with no instance path to share", async () => {
-      // The provider itself is the factory: there is no createPlugin to call, so
-      // an instance cannot be obtained and then reused for a second execution.
-      // Only instance identity is asserted here — the provider's environment is
-      // resolved once, on its first use, which is what makes it a poor subject
-      // for span assertions and exactly why the spans are checked above through
-      // the provider's first use and through fresh factories.
-      expect(typeof provider).toBe("function");
+      // The provider is a factory, not a plugin: its only member is
+      // createPlugin, so an instance cannot be taken off it and then reused for a
+      // second execution. Only instance identity is asserted here — the
+      // provider's environment is resolved once, on its first use, which is what
+      // makes it a poor subject for span assertions and exactly why the spans are
+      // checked above through the provider's first use and through fresh
+      // factories.
+      expect(typeof provider.createPlugin).toBe("function");
 
       const infoA = invocationInfo(ARN_A);
       const infoB = invocationInfo(ARN_B);
-      const pluginA = provider(infoA);
-      const pluginB = provider(infoB);
+      const pluginA = provider.createPlugin(infoA);
+      const pluginB = provider.createPlugin(infoB);
       expect(pluginA).toBeInstanceOf(Plugin);
       expect(pluginB).toBeInstanceOf(Plugin);
       expect(pluginA).not.toBe(pluginB);
 
       // Calling the factory twice for the same execution is still two
       // instances: nothing is memoized, per execution ARN or otherwise.
-      expect(provider(infoA)).not.toBe(pluginA);
+      expect(provider.createPlugin(infoA)).not.toBe(pluginA);
     });
   },
 );

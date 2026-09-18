@@ -36,10 +36,9 @@ const mockContext = {} as Context;
 // Plugins are configured as factories: the SDK builds one instance per
 // invocation. These tests are about what the hooks receive, not about instance
 // lifetime, so each factory hands back the same instance every time.
-const factoryFor =
-  (plugin: DurableInstrumentationPlugin): DurableInstrumentationPluginFactory =>
-  () =>
-    plugin;
+const factoryFor = (
+  plugin: DurableInstrumentationPlugin,
+): DurableInstrumentationPluginFactory => ({ createPlugin: () => plugin });
 // Flush the microtask queue without advancing fake timers, so we can observe
 // whether a promise is still pending after all currently-scheduled
 // microtasks have run.

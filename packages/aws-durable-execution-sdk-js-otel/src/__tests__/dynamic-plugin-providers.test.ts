@@ -32,10 +32,10 @@ function expectProvider(
   provider: DurableInstrumentationPluginFactory,
   pluginType: abstract new (...args: never[]) => object,
 ): void {
-  // The whole provider contract: a function the SDK calls once per invocation,
-  // which returns the plugin for that invocation.
-  expect(typeof provider).toBe("function");
-  expect(provider(invocationInfo())).toBeInstanceOf(pluginType);
+  // The whole provider contract: an object whose createPlugin the SDK calls once
+  // per invocation, which returns the plugin for that invocation.
+  expect(typeof provider.createPlugin).toBe("function");
+  expect(provider.createPlugin(invocationInfo())).toBeInstanceOf(pluginType);
 }
 
 describe("dynamic OTel plugin providers", () => {

@@ -1010,11 +1010,11 @@ class WorkflowInsightInvocation
  * Creates the Workflow Insight plugin factory the SDK installs.
  *
  * Call it once, at module scope, and pass the result in
- * `DurableExecutionConfig.plugins`. The SDK then calls the returned factory
- * once per invocation and dispatches that invocation's hooks to the instance it
- * returns, so config resolution, the exporters and the export scheduler are
- * shared by the whole execution environment while every execution's own state
- * is confined to an object that dies with its invocation.
+ * `DurableExecutionConfig.plugins`. The SDK then calls the returned factory's
+ * `createPlugin` once per invocation and dispatches that invocation's hooks to
+ * the instance it returns, so config resolution, the exporters and the export
+ * scheduler are shared by the whole execution environment while every
+ * execution's own state is confined to an object that dies with its invocation.
  *
  * @experimental This function is experimental and may change in future releases.
  */
@@ -1057,5 +1057,8 @@ export function workflowInsight(
     },
   };
 
-  return (info: InvocationInfo) => new WorkflowInsightInvocation(env, info);
+  return {
+    createPlugin: (info: InvocationInfo) =>
+      new WorkflowInsightInvocation(env, info),
+  };
 }

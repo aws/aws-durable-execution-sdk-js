@@ -29,7 +29,7 @@ const invocationInfo: InvocationInfo = {
 function factoryFor<Plugin extends DurableInstrumentationPlugin>(
   createPlugin: () => Plugin,
 ): DurableInstrumentationPluginFactory<Plugin> {
-  return () => createPlugin();
+  return { createPlugin: () => createPlugin() };
 }
 
 function moduleFor(provider: unknown): Record<string, unknown> {
@@ -351,7 +351,8 @@ describe("loadConfiguredPlugins", () => {
   });
 
   it.each([
-    { desc: "an object", provider: { createPlugin: () => ({}) } },
+    { desc: "a plugin instance", provider: new FirstDynamicPlugin() },
+    { desc: "an object without the method", provider: { create: () => ({}) } },
     { desc: "a string", provider: "not a provider" },
     { desc: "null", provider: null },
   ])("rejects a provider export that is $desc", async ({ provider }) => {
@@ -361,11 +362,22 @@ describe("loadConfiguredPlugins", () => {
         importModule: async () => moduleFor(provider),
       }),
     ).rejects.toThrow(
-      "Plugin provider '@example/plugin' must be a function that creates a plugin for one invocation",
+      "Plugin provider '@example/plugin' must be an object with a 'createPlugin(info)' method that creates a plugin for one invocation",
     );
   });
 
-  it("names what the provider export was instead of a function", async () => {
+  it("rejects a provider export whose createPlugin is not callable", async () => {
+    await expect(
+      loadConfiguredPlugins([], {
+        environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
+        importModule: async () => moduleFor({ createPlugin: "nope" }),
+      }),
+    ).rejects.toThrow(
+      "Plugin provider '@example/plugin' must be an object with a 'createPlugin(info)' method",
+    );
+  });
+
+  it("names what the provider export was instead of a factory", async () => {
     await expect(
       loadConfiguredPlugins([], {
         environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
@@ -396,53 +408,60 @@ describe("loadConfiguredPlugins returns factories, not plugins", () => {
     });
 
   it("does not construct a plugin while loading a provider", async () => {
-    const factory = jest.fn(() => new FirstDynamicPlugin());
+    const createPlugin = jest.fn(() => new FirstDynamicPlugin());
+    const factory = { createPlugin };
 
     const [loaded] = await loadProvider(factory);
 
-    expect(factory).not.toHaveBeenCalled();
+    expect(createPlugin).not.toHaveBeenCalled();
     expect(loaded).toBe(factory);
   });
 
   it("returns the provider export itself, so each call yields a new instance", async () => {
     const created: FirstDynamicPlugin[] = [];
-    const [factory] = await loadProvider(() => {
-      const plugin = new FirstDynamicPlugin();
-      created.push(plugin);
-      return plugin;
+    const [factory] = await loadProvider({
+      createPlugin: () => {
+        const plugin = new FirstDynamicPlugin();
+        created.push(plugin);
+        return plugin;
+      },
     });
 
-    factory(invocationInfo);
-    factory(invocationInfo);
+    factory.createPlugin(invocationInfo);
+    factory.createPlugin(invocationInfo);
 
     expect(created).toHaveLength(2);
     expect(created[0]).not.toBe(created[1]);
   });
 
-  it("passes the invocation info straight through to the provider factory", async () => {
-    const factory = jest.fn(() => new FirstDynamicPlugin());
-    const [loaded] = await loadProvider(factory);
+  it("passes the invocation info straight through to createPlugin", async () => {
+    const createPlugin = jest.fn(() => new FirstDynamicPlugin());
+    const [loaded] = await loadProvider({ createPlugin });
 
-    loaded(invocationInfo);
+    loaded.createPlugin(invocationInfo);
 
-    expect(factory).toHaveBeenCalledWith(invocationInfo);
+    expect(createPlugin).toHaveBeenCalledWith(invocationInfo);
   });
 
-  it("lets a failing factory throw when it runs instead of at load time", async () => {
+  it("lets a failing createPlugin throw when it runs instead of at load time", async () => {
     const constructionError = new Error("missing configuration");
 
-    const [factory] = await loadProvider((): FirstDynamicPlugin => {
-      throw constructionError;
+    const [factory] = await loadProvider({
+      createPlugin: (): FirstDynamicPlugin => {
+        throw constructionError;
+      },
     });
 
-    expect(() => factory(invocationInfo)).toThrow(constructionError);
+    expect(() => factory.createPlugin(invocationInfo)).toThrow(
+      constructionError,
+    );
   });
 });
 
 describe("loadConfiguredPlugins validates explicit entries", () => {
-  // Same rule as the provider path: an entry the SDK could never call is a
-  // configuration mistake, reported once at load time rather than swallowed on
-  // every invocation.
+  // Same rule as the provider path: an entry the SDK could never get an instance
+  // from is a configuration mistake, reported once at load time rather than
+  // swallowed on every invocation.
   const loadExplicit = async (
     ...entries: unknown[]
   ): Promise<DurableInstrumentationPluginFactory[]> =>
@@ -463,9 +482,10 @@ describe("loadConfiguredPlugins validates explicit entries", () => {
     await expect(loadExplicit(entry)).rejects.toMatchObject({
       name: "PluginLoadError",
       message: expect.stringContaining(
-        "Plugin at plugins[0] must be a function that creates a plugin for one " +
-          `invocation, but it is ${named}. ` +
-          "Pass a factory such as `(info) => new MyPlugin()`.",
+        "Plugin at plugins[0] must be an object with a 'createPlugin(info)' " +
+          "method that creates a plugin for one invocation, but it is " +
+          `${named}. ` +
+          "Pass a factory such as `{ createPlugin: (info) => new MyPlugin() }`.",
       ),
     });
   });
@@ -475,10 +495,10 @@ describe("loadConfiguredPlugins validates explicit entries", () => {
 
     await expect(
       loadExplicit(factory, factory, new ExplicitPlugin()),
-    ).rejects.toThrow("Plugin at plugins[2] must be a function");
+    ).rejects.toThrow("Plugin at plugins[2] must be an object");
   });
 
-  it("fails a non-callable explicit entry before any module is imported", async () => {
+  it("fails an invalid explicit entry before any module is imported", async () => {
     const importModule = jest.fn();
 
     await expect(
@@ -495,24 +515,27 @@ describe("loadConfiguredPlugins validates explicit entries", () => {
     expect(importModule).not.toHaveBeenCalled();
   });
 
-  it("accepts a callable entry and calls it no earlier than the provider path does", async () => {
-    const factory = jest.fn(() => new ExplicitPlugin());
+  it("accepts a factory entry and calls it no earlier than the provider path does", async () => {
+    const createPlugin = jest.fn(() => new ExplicitPlugin());
+    const factory = { createPlugin };
 
     const [loaded] = await loadExplicit(factory);
 
     expect(loaded).toBe(factory);
-    expect(factory).not.toHaveBeenCalled();
+    expect(createPlugin).not.toHaveBeenCalled();
   });
 });
 
 describe("loadConfiguredPlugins rejects a class where a factory belongs", () => {
-  // `typeof MyPlugin === "function"`, so a class passes the callable check and
-  // would only fail when called — once per invocation, swallowed each time. Both
-  // paths reject it at load time instead.
-  const classMessage =
-    "is the plugin class itself, not a function that creates a plugin for one " +
-    "invocation. Pass a factory that constructs it, such as " +
-    "`(info) => new MyPlugin()`.";
+  // `plugins: [MyPlugin]` is close enough to correct to look right, and a class
+  // is callable, so it would reach the per-invocation call and throw "Class
+  // constructor cannot be invoked without 'new'" — once per invocation,
+  // swallowed each time, leaving the plugin absent with nothing said about why.
+  // A class carries no `createPlugin`, so the shape test rejects it at load time
+  // on both paths instead.
+  const shapeMessage =
+    "must be an object with a 'createPlugin(info)' method that creates a " +
+    "plugin for one invocation, but it is a function.";
 
   it("rejects a class passed directly in plugins, naming its position", async () => {
     await expect(
@@ -522,7 +545,7 @@ describe("loadConfiguredPlugins rejects a class where a factory belongs", () => 
       ),
     ).rejects.toMatchObject({
       name: "PluginLoadError",
-      message: expect.stringContaining(`Plugin at plugins[0] ${classMessage}`),
+      message: expect.stringContaining(`Plugin at plugins[0] ${shapeMessage}`),
     });
   });
 
@@ -538,7 +561,7 @@ describe("loadConfiguredPlugins rejects a class where a factory belongs", () => 
         ],
         { environment: {} },
       ),
-    ).rejects.toThrow("Plugin at plugins[2] is the plugin class itself");
+    ).rejects.toThrow(`Plugin at plugins[2] ${shapeMessage}`);
   });
 
   it("fails a class in plugins before any module is imported", async () => {
@@ -565,42 +588,34 @@ describe("loadConfiguredPlugins rejects a class where a factory belongs", () => 
     ).rejects.toMatchObject({
       name: "PluginLoadError",
       message: expect.stringContaining(
-        `Plugin provider '@example/plugin' ${classMessage}`,
+        `Plugin provider '@example/plugin' ${shapeMessage}`,
       ),
     });
   });
 
-  it.each([
-    { desc: "a named class expression", entry: class Named {} },
-    { desc: "an anonymous class expression", entry: class {} },
-    {
-      desc: "a class expression with no space after the keyword",
-      // Built at runtime because the formatter inserts the space that this case
-      // exists to rule out, so the source text `class{}` cannot be written here.
-      entry: new Function("return class{}")(),
-    },
-    { desc: "a subclass", entry: class Sub extends ExplicitPlugin {} },
-  ])("rejects $desc", async ({ entry }) => {
+  it("rejects a subclass of a plugin", async () => {
     await expect(
       loadConfiguredPlugins(
-        [entry as unknown as DurableInstrumentationPluginFactory],
+        [
+          class Sub extends ExplicitPlugin {} as unknown as DurableInstrumentationPluginFactory,
+        ],
         { environment: {} },
       ),
-    ).rejects.toThrow("Plugin at plugins[0] is the plugin class itself");
+    ).rejects.toThrow(`Plugin at plugins[0] ${shapeMessage}`);
   });
 
-  it("tells the caller to pass a factory that constructs the class", async () => {
+  it("tells the caller what shape to pass instead", async () => {
     await expect(
       loadConfiguredPlugins(
         [ExplicitPlugin as unknown as DurableInstrumentationPluginFactory],
         { environment: {} },
       ),
     ).rejects.toThrow(
-      "Pass a factory that constructs it, such as `(info) => new MyPlugin()`.",
+      "Pass a factory such as `{ createPlugin: (info) => new MyPlugin() }`.",
     );
   });
 
-  it("does not call the entry to find out that it is a class", async () => {
+  it("does not call the entry to find out that it is not a factory", async () => {
     // Calling a class throws, and a check that relied on the throw would run
     // arbitrary constructor code for every legitimate factory.
     let constructed = 0;
@@ -620,59 +635,99 @@ describe("loadConfiguredPlugins rejects a class where a factory belongs", () => 
   });
 });
 
-describe("loadConfiguredPlugins accepts every legitimate callable shape", () => {
-  // The class check reads source text, so anything callable that is not a class
-  // has to survive it — including the shapes whose source text starts with a
-  // name rather than a keyword.
-  const boundFactory = function make(): ExplicitPlugin {
-    return new ExplicitPlugin();
-  }.bind(null);
-
-  const methodHolder = {
-    make(): ExplicitPlugin {
-      return new ExplicitPlugin();
+describe("loadConfiguredPlugins rejects a bare function where a factory belongs", () => {
+  // A factory is an object with a `createPlugin` method. A bare
+  // `(info) => plugin` function has no such member, so it is rejected on both
+  // paths: there is no shape that both contracts satisfy, and a caller carrying
+  // the older form learns at load time rather than at the first hook.
+  const callableShapes: Array<{ desc: string; entry: unknown }> = [
+    { desc: "an arrow function", entry: () => new ExplicitPlugin() },
+    {
+      desc: "a function expression",
+      entry: (): ExplicitPlugin => new ExplicitPlugin(),
     },
-    // Stringifies as `classify() { ... }`, so a check for the `class` prefix
-    // alone would reject it.
-    classify(): ExplicitPlugin {
-      return new ExplicitPlugin();
+    {
+      desc: "a bound function",
+      entry: function make(): ExplicitPlugin {
+        return new ExplicitPlugin();
+      }.bind(null),
     },
-  };
+    {
+      desc: "a callable object carrying unrelated members",
+      entry: Object.assign(() => new ExplicitPlugin(), { label: "callable" }),
+    },
+  ];
 
-  class FactoryHolder {
-    make(): ExplicitPlugin {
+  it.each(callableShapes)("rejects $desc in plugins", async ({ entry }) => {
+    await expect(
+      loadConfiguredPlugins([entry as DurableInstrumentationPluginFactory], {
+        environment: {},
+      }),
+    ).rejects.toThrow(
+      "Plugin at plugins[0] must be an object with a 'createPlugin(info)' method",
+    );
+  });
+
+  it.each(callableShapes)(
+    "rejects $desc as a provider export",
+    async ({ entry }) => {
+      await expect(
+        loadConfiguredPlugins([], {
+          environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
+          importModule: async () => moduleFor(entry),
+        }),
+      ).rejects.toThrow(
+        "Plugin provider '@example/plugin' must be an object with a 'createPlugin(info)' method",
+      );
+    },
+  );
+});
+
+describe("loadConfiguredPlugins accepts every legitimate factory shape", () => {
+  // The check is a property lookup for a callable `createPlugin`, so every value
+  // the type accepts has to survive it — including the shapes that keep the
+  // method somewhere other than on the object itself.
+  class FactoryClass {
+    createPlugin(): ExplicitPlugin {
       return new ExplicitPlugin();
     }
   }
 
-  /** Callable, but an instance of a class rather than a plain function. */
-  class CallableFactory extends Function {}
-  const callableInstance = new Proxy(new CallableFactory(), {
-    apply: (): ExplicitPlugin => new ExplicitPlugin(),
-  });
-
   const shapes: Array<{ desc: string; entry: unknown }> = [
-    { desc: "an arrow function", entry: () => new ExplicitPlugin() },
     {
-      desc: "a function expression",
-      entry: function (): ExplicitPlugin {
-        return new ExplicitPlugin();
+      desc: "an object literal with a method",
+      entry: {
+        createPlugin(): ExplicitPlugin {
+          return new ExplicitPlugin();
+        },
       },
     },
-    { desc: "a bound function", entry: boundFactory },
-    { desc: "an object method reference", entry: methodHolder.make },
     {
-      desc: "a method reference whose name starts with class",
-      entry: methodHolder.classify,
-    },
-    { desc: "a class method reference", entry: new FactoryHolder().make },
-    {
-      desc: "a class instance with a call signature",
-      entry: callableInstance,
+      desc: "an object with an arrow property",
+      entry: { createPlugin: (): ExplicitPlugin => new ExplicitPlugin() },
     },
     {
-      desc: "a callable object",
-      entry: Object.assign(() => new ExplicitPlugin(), { label: "callable" }),
+      desc: "a class instance whose method is on the prototype",
+      entry: new FactoryClass(),
+    },
+    {
+      desc: "an object inheriting the method from another factory",
+      entry: Object.create({
+        createPlugin: (): ExplicitPlugin => new ExplicitPlugin(),
+      }),
+    },
+    {
+      desc: "a function carrying the method as a property",
+      entry: Object.assign(function legacy(): void {}, {
+        createPlugin: (): ExplicitPlugin => new ExplicitPlugin(),
+      }),
+    },
+    {
+      desc: "a factory carrying unrelated members",
+      entry: {
+        createPlugin: (): ExplicitPlugin => new ExplicitPlugin(),
+        label: "factory",
+      },
     },
   ];
 
@@ -683,7 +738,9 @@ describe("loadConfiguredPlugins accepts every legitimate callable shape", () => 
     );
 
     expect(result).toEqual([entry]);
-    expect(result[0](invocationInfo)).toBeInstanceOf(ExplicitPlugin);
+    expect(result[0].createPlugin(invocationInfo)).toBeInstanceOf(
+      ExplicitPlugin,
+    );
   });
 
   it.each(shapes)("accepts $desc as a provider export", async ({ entry }) => {

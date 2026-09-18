@@ -35,7 +35,7 @@ function newPlugin(
   config?: OtelPluginConfig,
   info: InvocationInfo = makeInvocationInfo(),
 ): ExecutionOtelPlugin {
-  return createExecutionOtelPluginFactory(config)(info);
+  return createExecutionOtelPluginFactory(config).createPlugin(info);
 }
 
 const TEST_ARN =
@@ -354,7 +354,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     const ambientContext1 = trace.setSpan(ROOT_CONTEXT, ambientSpan1);
 
     const firstInfo = makeInvocationInfo();
-    const plugin = factory(firstInfo);
+    const plugin = factory.createPlugin(firstInfo);
     await context.with(ambientContext1, async () => {
       await plugin.onInvocationStart(firstInfo);
     });
@@ -374,7 +374,7 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
     const ambientContext2 = trace.setSpan(ROOT_CONTEXT, ambientSpan2);
 
     const secondInfo = makeInvocationInfo({ executionArn: TEST_ARN + "-2" });
-    const second = factory(secondInfo);
+    const second = factory.createPlugin(secondInfo);
     await context.with(ambientContext2, async () => {
       await second.onInvocationStart(secondInfo);
     });

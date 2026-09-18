@@ -13,36 +13,38 @@ function isStep(type?: string): boolean {
   return (type || "").toUpperCase() === "STEP";
 }
 
-const makePlugin: DurableInstrumentationPluginFactory = (invocation) => {
-  const emit = (rec: Record<string, unknown>): void => {
-    process.stdout.write(
-      JSON.stringify({
-        ...rec,
-        durableExecutionArn: invocation.executionArn,
-      }) + "\n",
-    );
-  };
+const makePlugin: DurableInstrumentationPluginFactory = {
+  createPlugin: (invocation) => {
+    const emit = (rec: Record<string, unknown>): void => {
+      process.stdout.write(
+        JSON.stringify({
+          ...rec,
+          durableExecutionArn: invocation.executionArn,
+        }) + "\n",
+      );
+    };
 
-  return {
-    async onOperationStart(info): Promise<void> {
-      if (!isStep(info.type)) return;
-      emit({
-        plugin: PLUGIN,
-        hook: "operation-start",
-        op: info.id,
-        replay: info.isReplay,
-      });
-    },
-    async onOperationEnd(info): Promise<void> {
-      if (!isStep(info.type)) return;
-      emit({
-        plugin: PLUGIN,
-        hook: "operation-end",
-        op: info.id,
-        status: info.status,
-      });
-    },
-  };
+    return {
+      async onOperationStart(info): Promise<void> {
+        if (!isStep(info.type)) return;
+        emit({
+          plugin: PLUGIN,
+          hook: "operation-start",
+          op: info.id,
+          replay: info.isReplay,
+        });
+      },
+      async onOperationEnd(info): Promise<void> {
+        if (!isStep(info.type)) return;
+        emit({
+          plugin: PLUGIN,
+          hook: "operation-end",
+          op: info.id,
+          status: info.status,
+        });
+      },
+    };
+  },
 };
 
 export const handler = withDurableExecution(

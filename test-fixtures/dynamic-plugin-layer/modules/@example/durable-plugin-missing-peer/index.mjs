@@ -3,4 +3,4 @@
 // missing peer named, not that the export is well-formed.
 import "@example/durable-plugin-peer-that-is-not-installed";
 
-export const durableExecutionPluginProvider = () => ({});
+export const durableExecutionPluginProvider = { createPlugin: () => ({}) };

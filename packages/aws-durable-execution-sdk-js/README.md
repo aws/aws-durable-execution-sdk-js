@@ -282,9 +282,11 @@ their configured order; environment-selected plugins follow in the order listed
 in `DURABLE_EXECUTION_PLUGINS`. Both sources are additive, including when they
 create the same plugin type.
 
-Provider modules export a factory named `durableExecutionPluginProvider`. The
-SDK calls it once per invocation, with that invocation's `InvocationInfo`, so the
-instance it returns serves exactly one invocation:
+Provider modules export a factory named `durableExecutionPluginProvider`. A
+factory is an object with a `createPlugin(info)` method; a bare function is not
+one and is rejected. The SDK calls `createPlugin` once per invocation, with that
+invocation's `InvocationInfo`, so the instance it returns serves exactly one
+invocation:
 
 ```typescript
 import type {
@@ -304,7 +306,9 @@ class AuditPlugin implements DurableInstrumentationPlugin {
 const exporter = new Exporter();
 
 export const durableExecutionPluginProvider: DurableInstrumentationPluginFactory<AuditPlugin> =
-  (info) => new AuditPlugin(exporter, info.executionArn);
+  {
+    createPlugin: (info) => new AuditPlugin(exporter, info.executionArn),
+  };
 ```
 
 Because an instance is dropped when its invocation returns, a plugin never has
@@ -326,13 +330,13 @@ plugin-layer.zip
 ```
 
 Malformed configuration, missing modules or exports, a
-`durableExecutionPluginProvider` that is not a function, and an entry in
-`DurableExecutionConfig.plugins` that is not a function are reported as
-`PluginLoadError` failures before execution state is read — the two sources are
-checked by the same rule, because an entry the SDK cannot call could never
-produce a plugin. A factory that throws when it runs, or returns nothing, is
-contained like any other plugin failure: that plugin sits out the invocation and
-the execution is unaffected.
+`durableExecutionPluginProvider` without a `createPlugin` method, and an entry in
+`DurableExecutionConfig.plugins` without one are reported as `PluginLoadError`
+failures before execution state is read — the two sources are checked by the same
+rule, because an entry with no `createPlugin` could never produce a plugin. A
+`createPlugin` that throws when it runs, or returns nothing, is contained like
+any other plugin failure: that plugin sits out the invocation and the execution
+is unaffected.
 
 ### Retry Strategies
 

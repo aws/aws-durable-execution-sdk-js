@@ -2,9 +2,10 @@
 
 > **Historical.** The plugin API shown below was superseded before release:
 > the shipped surface is `workflowInsight(config)`, which returns a
-> `DurableInstrumentationPluginFactory` that goes into `plugins`. Do not copy the
-> registration examples from this document — see `plugin-contracts.md` and the
-> package README.
+> `DurableInstrumentationPluginFactory` that goes into `plugins`. That factory is
+> an object whose `createPlugin` the SDK calls once per invocation, not a callable.
+> Do not copy the registration examples from this document — see
+> `plugin-contracts.md` and the package README.
 
 ## Overview
 

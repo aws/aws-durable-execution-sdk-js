@@ -11,37 +11,39 @@ function isWait(type?: string): boolean {
   return (type || "").toUpperCase() === "WAIT";
 }
 
-const makePlugin: DurableInstrumentationPluginFactory = (invocation) => {
-  const emit = (rec: Record<string, unknown>): void => {
-    process.stdout.write(
-      JSON.stringify({
-        ...rec,
-        durableExecutionArn: invocation.executionArn,
-      }) + "\n",
-    );
-  };
+const makePlugin: DurableInstrumentationPluginFactory = {
+  createPlugin: (invocation) => {
+    const emit = (rec: Record<string, unknown>): void => {
+      process.stdout.write(
+        JSON.stringify({
+          ...rec,
+          durableExecutionArn: invocation.executionArn,
+        }) + "\n",
+      );
+    };
 
-  return {
-    async onOperationStart(info): Promise<void> {
-      if (!isWait(info.type)) return;
-      emit({
-        plugin: PLUGIN,
-        hook: "operation-start",
-        op: info.id,
-        type: (info.type || "").toUpperCase(),
-      });
-    },
-    async onOperationEnd(info): Promise<void> {
-      if (!isWait(info.type)) return;
-      emit({
-        plugin: PLUGIN,
-        hook: "operation-end",
-        op: info.id,
-        type: (info.type || "").toUpperCase(),
-        status: info.status,
-      });
-    },
-  };
+    return {
+      async onOperationStart(info): Promise<void> {
+        if (!isWait(info.type)) return;
+        emit({
+          plugin: PLUGIN,
+          hook: "operation-start",
+          op: info.id,
+          type: (info.type || "").toUpperCase(),
+        });
+      },
+      async onOperationEnd(info): Promise<void> {
+        if (!isWait(info.type)) return;
+        emit({
+          plugin: PLUGIN,
+          hook: "operation-end",
+          op: info.id,
+          type: (info.type || "").toUpperCase(),
+          status: info.status,
+        });
+      },
+    };
+  },
 };
 
 export const handler = withDurableExecution(

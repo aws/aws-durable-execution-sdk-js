@@ -3,10 +3,11 @@
 ## 1. Plugin Configuration Contract
 
 `workflowInsight(config)` returns a `DurableInstrumentationPluginFactory`: the
-value goes straight into `plugins`, and the SDK calls it once per invocation to
-build that invocation's plugin instance. The exporters and the export scheduler
-below are created once, when `workflowInsight` is called, and are shared by every
-instance it hands out.
+value goes straight into `plugins`. A factory is an object with a
+`createPlugin(info)` method, not a callable, so the SDK calls `createPlugin` once
+per invocation to build that invocation's plugin instance. The exporters and the
+export scheduler below are created once, when `workflowInsight` is called, and
+are shared by every instance it hands out.
 
 ```typescript
 import type { DurableInstrumentationPluginFactory } from "@aws/durable-execution-sdk-js";

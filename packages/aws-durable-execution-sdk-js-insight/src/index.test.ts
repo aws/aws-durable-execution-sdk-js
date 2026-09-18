@@ -15,10 +15,10 @@ import { setFlagsFromString as setV8Flags } from "node:v8";
 import { runInNewContext } from "node:vm";
 
 /**
- * `workflowInsight` now returns a factory: the SDK calls it once per invocation
- * and dispatches that invocation's hooks to the instance it returns. Tests that
- * drive several executions through one environment therefore build one instance
- * per execution from a single factory.
+ * `workflowInsight` now returns a factory: the SDK calls its `createPlugin` once
+ * per invocation and dispatches that invocation's hooks to the instance it
+ * returns. Tests that drive several executions through one environment therefore
+ * build one instance per execution from a single factory.
  */
 type PluginFactory = DurableInstrumentationPluginFactory;
 
@@ -67,10 +67,10 @@ function startFromEnd(info: InvocationEndInfo): InvocationInfo {
  * record before it resolves, so awaiting it is the whole delivery guarantee.
  */
 async function endAndDrain(
-  createPlugin: PluginFactory,
+  factory: PluginFactory,
   info: InvocationEndInfo,
 ): Promise<void> {
-  const plugin = createPlugin(startFromEnd(info));
+  const plugin = factory.createPlugin(startFromEnd(info));
   await plugin.onInvocationEnd?.(info);
 }
 
@@ -122,7 +122,7 @@ function changeFor(
 
 /** Drives one full invocation of `arn` the way the SDK does. */
 async function runInvocation(
-  createPlugin: PluginFactory,
+  factory: PluginFactory,
   arn: string,
   opts: {
     changes?: number;
@@ -133,7 +133,7 @@ async function runInvocation(
   const start = startFor(arn, opts.start);
   // One instance per invocation, built from the same info onInvocationStart
   // receives, exactly as createInvocationPluginRunner does.
-  const plugin = createPlugin(start);
+  const plugin = factory.createPlugin(start);
   await plugin.onInvocationStart?.(start);
   for (let i = 0; i < (opts.changes ?? 0); i++) {
     await plugin.onOperationChange?.(
@@ -185,7 +185,7 @@ async function raceTimeout(
 describe("content filtering", () => {
   it("transforms input, omits output, filters operations, and gates results", async () => {
     const exporter = new CapturingExporter();
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-complete",
       content: {
@@ -209,7 +209,7 @@ describe("content filtering", () => {
     });
 
     await endAndDrain(
-      createPlugin,
+      factory,
       endInfo({
         status: "SUCCEEDED",
         executionInput: { customerId: "c1", ssn: "SECRET" },
@@ -269,13 +269,13 @@ describe("content filtering", () => {
     // explicitly, since the execution's real status/timing is already
     // captured at the top level of the record.
     const exporter = new CapturingExporter();
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-complete",
     });
 
     await endAndDrain(
-      createPlugin,
+      factory,
       endInfo({
         status: "SUCCEEDED",
         operations: {
@@ -297,10 +297,10 @@ describe("content filtering", () => {
 
   it("includes input/output as-is and omits results by default (no content config)", async () => {
     const exporter = new CapturingExporter();
-    const createPlugin = workflowInsight({ exporters: [exporter] });
+    const factory = workflowInsight({ exporters: [exporter] });
 
     await endAndDrain(
-      createPlugin,
+      factory,
       endInfo({
         status: "SUCCEEDED",
         executionInput: { a: 1 },
@@ -324,7 +324,7 @@ describe("content filtering", () => {
 
   it("passes the raw string to a result transform when the result is not JSON", async () => {
     const exporter = new CapturingExporter();
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       content: {
         operations: {
@@ -336,7 +336,7 @@ describe("content filtering", () => {
     });
 
     await endAndDrain(
-      createPlugin,
+      factory,
       endInfo({
         status: "SUCCEEDED",
         operations: {
@@ -357,7 +357,7 @@ describe("content filtering", () => {
 
   it("omits a field (never leaks raw data) when a transform throws", async () => {
     const exporter = new CapturingExporter();
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       content: {
         input: () => {
@@ -367,7 +367,7 @@ describe("content filtering", () => {
     });
 
     await endAndDrain(
-      createPlugin,
+      factory,
       endInfo({ status: "SUCCEEDED", executionInput: { secret: "x" } }),
     );
 
@@ -378,10 +378,10 @@ describe("content filtering", () => {
 describe("operation detail capture", () => {
   it("captures per-operation error and attempt by default", async () => {
     const exporter = new CapturingExporter();
-    const createPlugin = workflowInsight({ exporters: [exporter] });
+    const factory = workflowInsight({ exporters: [exporter] });
 
     await endAndDrain(
-      createPlugin,
+      factory,
       endInfo({
         status: "FAILED",
         operations: {
@@ -421,9 +421,9 @@ describe("operationDetail", () => {
 
   it("defaults to top-level (drops children)", async () => {
     const exporter = new CapturingExporter();
-    const createPlugin = workflowInsight({ exporters: [exporter] });
+    const factory = workflowInsight({ exporters: [exporter] });
 
-    await endAndDrain(createPlugin, endInfo({ operations: opsWithChildren }));
+    await endAndDrain(factory, endInfo({ operations: opsWithChildren }));
 
     const names = exporter.records[0].operations.map((o) => o.name);
     expect(names).toEqual(["reserve-inventory"]);
@@ -431,12 +431,12 @@ describe("operationDetail", () => {
 
   it("includes children when full-tree", async () => {
     const exporter = new CapturingExporter();
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       operationDetail: "full-tree",
     });
 
-    await endAndDrain(createPlugin, endInfo({ operations: opsWithChildren }));
+    await endAndDrain(factory, endInfo({ operations: opsWithChildren }));
 
     const names = exporter.records[0].operations.map((o) => o.name).sort();
     expect(names).toEqual(["reserve-inventory", "reserve-item"]);
@@ -444,12 +444,12 @@ describe("operationDetail", () => {
 
   it("drops operations with a parentId when top-level", async () => {
     const exporter = new CapturingExporter();
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       operationDetail: "top-level",
     });
 
-    await endAndDrain(createPlugin, endInfo({ operations: opsWithChildren }));
+    await endAndDrain(factory, endInfo({ operations: opsWithChildren }));
 
     const names = exporter.records[0].operations.map((o) => o.name);
     expect(names).toEqual(["reserve-inventory"]);
@@ -459,12 +459,12 @@ describe("operationDetail", () => {
 describe("status mapping", () => {
   it("maps a suspended (PENDING) execution to RUNNING", async () => {
     const exporter = new CapturingExporter();
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-change",
     });
 
-    await endAndDrain(createPlugin, endInfo({ status: "PENDING" }));
+    await endAndDrain(factory, endInfo({ status: "PENDING" }));
 
     expect(exporter.records[0].status).toBe("RUNNING");
   });
@@ -473,30 +473,30 @@ describe("status mapping", () => {
 describe("emit modes", () => {
   it("on-complete emits only on terminal status (not on suspends)", async () => {
     const exporter = new CapturingExporter();
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-complete",
     });
 
-    await endAndDrain(createPlugin, endInfo({ status: "PENDING" }));
+    await endAndDrain(factory, endInfo({ status: "PENDING" }));
     expect(exporter.records).toHaveLength(0);
 
-    await endAndDrain(createPlugin, endInfo({ status: "SUCCEEDED" }));
+    await endAndDrain(factory, endInfo({ status: "SUCCEEDED" }));
     expect(exporter.records).toHaveLength(1);
     expect(exporter.records[0].status).toBe("SUCCEEDED");
   });
 
   it("on-failure emits only on FAILED", async () => {
     const exporter = new CapturingExporter();
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-failure",
     });
 
-    await endAndDrain(createPlugin, endInfo({ status: "SUCCEEDED" }));
+    await endAndDrain(factory, endInfo({ status: "SUCCEEDED" }));
     expect(exporter.records).toHaveLength(0);
 
-    await endAndDrain(createPlugin, endInfo({ status: "FAILED" }));
+    await endAndDrain(factory, endInfo({ status: "FAILED" }));
     expect(exporter.records).toHaveLength(1);
     expect(exporter.records[0].status).toBe("FAILED");
   });
@@ -517,11 +517,11 @@ describe("sampling", () => {
   // plugin instance, the way the SDK does: onInvocationEnd drains this
   // execution's record before it resolves.
   async function runExecution(
-    createPlugin: PluginFactory,
+    factory: PluginFactory,
     arn: string,
     status: InvocationEndInfo["status"] = "SUCCEEDED",
   ): Promise<void> {
-    const plugin = createPlugin(baseInfo(arn));
+    const plugin = factory.createPlugin(baseInfo(arn));
     await plugin.onInvocationEnd?.({
       ...baseInfo(arn),
       status,
@@ -535,32 +535,32 @@ describe("sampling", () => {
   it("emits for every execution when samplingRate is 1.0 or omitted", async () => {
     for (const rate of [undefined, 1.0]) {
       const exporter = new CapturingExporter();
-      const createPlugin = workflowInsight({
+      const factory = workflowInsight({
         exporters: [exporter],
         samplingRate: rate,
       });
-      for (const name of NAMES) await runExecution(createPlugin, arnFor(name));
+      for (const name of NAMES) await runExecution(factory, arnFor(name));
       expect(exporter.records).toHaveLength(NAMES.length);
     }
   });
 
   it("emits for no execution when samplingRate is 0", async () => {
     const exporter = new CapturingExporter();
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       samplingRate: 0,
     });
-    for (const name of NAMES) await runExecution(createPlugin, arnFor(name));
+    for (const name of NAMES) await runExecution(factory, arnFor(name));
     expect(exporter.records).toHaveLength(0);
   });
 
   it("partitions the population at a fractional rate (not all-or-nothing)", async () => {
     const exporter = new CapturingExporter();
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       samplingRate: 0.5,
     });
-    for (const name of NAMES) await runExecution(createPlugin, arnFor(name));
+    for (const name of NAMES) await runExecution(factory, arnFor(name));
     // Deterministic hash → stable count; assert a healthy split rather than an
     // exact number so the bound doesn't couple to the hash implementation.
     expect(exporter.records.length).toBeGreaterThan(NAMES.length * 0.25);
@@ -571,11 +571,11 @@ describe("sampling", () => {
     const rate = 0.5;
     const decideAll = async (): Promise<Set<string>> => {
       const exporter = new CapturingExporter();
-      const createPlugin = workflowInsight({
+      const factory = workflowInsight({
         exporters: [exporter],
         samplingRate: rate,
       });
-      for (const name of NAMES) await runExecution(createPlugin, arnFor(name));
+      for (const name of NAMES) await runExecution(factory, arnFor(name));
       return new Set(exporter.records.map((r) => r.executionArn));
     };
 
@@ -595,13 +595,13 @@ describe("sampling", () => {
     const sampledIn: string[] = [];
     for (const name of NAMES) {
       const exporter = new CapturingExporter();
-      const createPlugin = workflowInsight({
+      const factory = workflowInsight({
         exporters: [exporter],
         samplingRate: 0.5,
       });
       const arn = arnFor(name);
-      await runExecution(createPlugin, arn);
-      await runExecution(createPlugin, arn);
+      await runExecution(factory, arn);
+      await runExecution(factory, arn);
       expect([0, 2]).toContain(exporter.records.length);
       if (exporter.records.length === 2) sampledIn.push(name);
     }
@@ -658,7 +658,7 @@ describe("per-exporter truncation", () => {
     const small = new LimitedExporter(700);
     const unlimited = new LimitedExporter(undefined);
 
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [small, unlimited],
       // Opt the big operation's result into the record so it dominates size.
       content: {
@@ -669,7 +669,7 @@ describe("per-exporter truncation", () => {
     });
 
     await endAndDrain(
-      createPlugin,
+      factory,
       endInfo({
         status: "SUCCEEDED",
         operations: {
@@ -715,7 +715,7 @@ describe("per-exporter truncation", () => {
       new TextEncoder().encode(JSON.stringify(v)).length;
 
     const exporter = new RenderExporter(900);
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       content: {
         operations: {
@@ -725,7 +725,7 @@ describe("per-exporter truncation", () => {
     });
 
     await endAndDrain(
-      createPlugin,
+      factory,
       endInfo({
         status: "SUCCEEDED",
         operations: {
@@ -757,7 +757,7 @@ describe("concurrent executions in one environment", () => {
 
   it("delivers every concurrent execution's terminal record exactly once (on-complete)", async () => {
     const exporter = new CapturingExporter();
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-complete",
     });
@@ -765,7 +765,7 @@ describe("concurrent executions in one environment", () => {
       arnFor(`concurrent-${i}`),
     );
 
-    await Promise.all(arns.map((arn) => runInvocation(createPlugin, arn)));
+    await Promise.all(arns.map((arn) => runInvocation(factory, arn)));
 
     // Exactly one terminal record per execution: sorted equality catches both a
     // lost record and a duplicated one.
@@ -782,7 +782,7 @@ describe("concurrent executions in one environment", () => {
 
   it("delivers every concurrent execution's terminal record with interleaved operation changes (on-change)", async () => {
     const exporter = new CapturingExporter();
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-change",
     });
@@ -791,7 +791,7 @@ describe("concurrent executions in one environment", () => {
     );
 
     await Promise.all(
-      arns.map((arn) => runInvocation(createPlugin, arn, { changes: 3 })),
+      arns.map((arn) => runInvocation(factory, arn, { changes: 3 })),
     );
 
     const terminal = exporter.records.filter((r) => r.status === "SUCCEEDED");
@@ -831,12 +831,12 @@ describe("concurrent executions in one environment", () => {
       },
     };
 
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-complete",
     });
     const arns = ["slow-a", "slow-b", "slow-c"].map(arnFor);
-    const plugins = arns.map((arn) => createPlugin(startFor(arn)));
+    const plugins = arns.map((arn) => factory.createPlugin(startFor(arn)));
 
     await Promise.all(
       plugins.map((plugin, i) => plugin.onInvocationStart?.(startFor(arns[i]))),
@@ -860,13 +860,13 @@ describe("concurrent executions in one environment", () => {
 
   it("emits nothing for an operation change delivered after the invocation ended", async () => {
     const exporter = new CapturingExporter();
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-change",
     });
     const arn = arnFor("late-change-hook");
     const start = startFor(arn);
-    const plugin = createPlugin(start);
+    const plugin = factory.createPlugin(start);
 
     await plugin.onInvocationStart?.(start);
     await plugin.onInvocationEnd?.(endFor(arn));
@@ -886,7 +886,7 @@ describe("concurrent executions in one environment", () => {
 
   it("resolves the execution start time afresh after a suspend", async () => {
     const exporter = new CapturingExporter();
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-complete",
     });
@@ -895,7 +895,7 @@ describe("concurrent executions in one environment", () => {
 
     // A suspend (PENDING) is an invocation end too: it emits nothing in
     // on-complete mode.
-    await runInvocation(createPlugin, arn, {
+    await runInvocation(factory, arn, {
       start: { executionStartTimestamp },
       end: {
         status: "PENDING",
@@ -909,7 +909,7 @@ describe("concurrent executions in one environment", () => {
     // from the SDK, so the record still spans the execution and not just this
     // invocation. Reporting the instance's own creation time here would give the
     // duration of the last invocation only.
-    await runInvocation(createPlugin, arn, {
+    await runInvocation(factory, arn, {
       start: { isFirstInvocation: false, executionStartTimestamp },
       end: { executionStartTimestamp },
     });
@@ -929,7 +929,7 @@ describe("concurrent executions in one environment", () => {
       return;
     }
 
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [new CapturingExporter()],
       emitMode: "on-complete",
     });
@@ -937,7 +937,7 @@ describe("concurrent executions in one environment", () => {
     for (let i = 0; i < 100; i++) {
       const executionInput = { payload: "x".repeat(4096) };
       refs.push(new WeakRef(executionInput));
-      await runInvocation(createPlugin, arnFor(`retained-${i}`), {
+      await runInvocation(factory, arnFor(`retained-${i}`), {
         start: { executionInput },
         end: {
           status: "PENDING",
@@ -957,7 +957,7 @@ describe("concurrent executions in one environment", () => {
     // them alive.
     expect(live).toBeLessThanOrEqual(1);
     // Keep the factory (and anything it reaches) alive across the measurement.
-    expect(createPlugin).toBeDefined();
+    expect(factory).toBeDefined();
   });
 });
 
@@ -983,7 +983,7 @@ describe("exporter failure containment", () => {
         return Promise.resolve();
       },
     };
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-complete",
     });
@@ -991,14 +991,14 @@ describe("exporter failure containment", () => {
     const second = arnFor("sync-throw-2");
 
     // The invocation whose export blew up still returns...
-    expect(await raceTimeout(runInvocation(createPlugin, first), HANG_MS)).toBe(
+    expect(await raceTimeout(runInvocation(factory, first), HANG_MS)).toBe(
       "settled",
     );
     // ...and an unrelated execution afterwards still reaches the exporter, so
     // the failure did not leave an armed in-flight marker behind.
-    expect(
-      await raceTimeout(runInvocation(createPlugin, second), HANG_MS),
-    ).toBe("settled");
+    expect(await raceTimeout(runInvocation(factory, second), HANG_MS)).toBe(
+      "settled",
+    );
     expect(delivered).toEqual([second]);
   });
 
@@ -1006,7 +1006,7 @@ describe("exporter failure containment", () => {
     let throwNext = true;
     const delivered: string[] = [];
     const exporter: InsightExporter = {
-      // Any limit makes the createPlugin call render() to size the record.
+      // Any limit makes the plugin call render() to size the record.
       maxRecordSizeBytes: 100,
       render(record: WorkflowInsightRecord): unknown {
         if (throwNext) {
@@ -1019,19 +1019,19 @@ describe("exporter failure containment", () => {
         delivered.push(record.executionArn);
       },
     };
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-complete",
     });
     const first = arnFor("render-throw-1");
     const second = arnFor("render-throw-2");
 
-    expect(await raceTimeout(runInvocation(createPlugin, first), HANG_MS)).toBe(
+    expect(await raceTimeout(runInvocation(factory, first), HANG_MS)).toBe(
       "settled",
     );
-    expect(
-      await raceTimeout(runInvocation(createPlugin, second), HANG_MS),
-    ).toBe("settled");
+    expect(await raceTimeout(runInvocation(factory, second), HANG_MS)).toBe(
+      "settled",
+    );
     expect(delivered).toEqual([second]);
   });
 
@@ -1056,14 +1056,14 @@ describe("exporter failure containment", () => {
         return slow ? sleep(60) : Promise.resolve();
       },
     };
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-complete",
     });
 
     const outcomes = await Promise.all(
       [first, poisoned, last].map((arn) => {
-        const plugin = createPlugin(startFor(arn));
+        const plugin = factory.createPlugin(startFor(arn));
         return raceTimeout(
           (async () => {
             await plugin.onInvocationStart?.(startFor(arn));
@@ -1083,7 +1083,7 @@ describe("exporter failure containment", () => {
     // The failing execution suspends and resumes. In on-complete mode the
     // suspend schedules nothing, so its drain must be a no-op — a leaked
     // outstanding entry would park this invocation until the Lambda timeout.
-    const resumed = createPlugin(startFor(poisoned));
+    const resumed = factory.createPlugin(startFor(poisoned));
     await resumed.onInvocationStart?.(startFor(poisoned));
     expect(
       await raceTimeout(
@@ -1096,7 +1096,7 @@ describe("exporter failure containment", () => {
 
   it("still emits for the next invocation when building the end record throws", async () => {
     const exporter = new CapturingExporter();
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-change",
     });
@@ -1115,7 +1115,7 @@ describe("exporter failure containment", () => {
       },
     } as unknown as Error;
 
-    const failing = createPlugin(startFor(arn));
+    const failing = factory.createPlugin(startFor(arn));
     await failing.onInvocationStart?.(startFor(arn));
     await swallow(
       failing.onInvocationEnd?.(
@@ -1130,7 +1130,7 @@ describe("exporter failure containment", () => {
     // A completely healthy second invocation of the same execution, on its own
     // instance.
     const start = startFor(arn, { isFirstInvocation: false });
-    const plugin = createPlugin(start);
+    const plugin = factory.createPlugin(start);
     await plugin.onInvocationStart?.(start);
     await plugin.onOperationChange?.(
       changeFor(arn, {
@@ -1223,7 +1223,7 @@ describe("exporter failure containment", () => {
         await sleep(20);
       },
     });
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: poison.exporters,
       emitMode: "on-complete",
     });
@@ -1242,7 +1242,7 @@ describe("exporter failure containment", () => {
       // would block until the pump reaches its record.
       const ends: Promise<void>[] = [];
       const endOne = async (arn: string): Promise<void> => {
-        const plugin = createPlugin(startFor(arn));
+        const plugin = factory.createPlugin(startFor(arn));
         await plugin.onInvocationStart?.(startFor(arn));
         ends.push(plugin.onInvocationEnd?.(endFor(arn)) ?? Promise.resolve());
       };
@@ -1295,21 +1295,21 @@ describe("exporter failure containment", () => {
       // queue entry.
       const inner = new CapturingExporter();
       const arrayLike = { length: 1, 0: inner } as unknown as InsightExporter[];
-      const createPlugin = workflowInsight({
+      const factory = workflowInsight({
         exporters: arrayLike,
         emitMode: "on-complete",
       });
       const first = arnFor("non-array-exporters-1");
       const second = arnFor("non-array-exporters-2");
 
-      expect(
-        await raceTimeout(runInvocation(createPlugin, first), HANG_MS),
-      ).toBe("settled");
+      expect(await raceTimeout(runInvocation(factory, first), HANG_MS)).toBe(
+        "settled",
+      );
       // A later execution in the same environment still exports, so the
       // fallback left the scheduler fully usable.
-      expect(
-        await raceTimeout(runInvocation(createPlugin, second), HANG_MS),
-      ).toBe("settled");
+      expect(await raceTimeout(runInvocation(factory, second), HANG_MS)).toBe(
+        "settled",
+      );
 
       // Warned once, at construction, not once per record.
       expect(warn).toHaveBeenCalledTimes(1);
@@ -1333,14 +1333,14 @@ describe("exporter failure containment", () => {
 describe("execution start time", () => {
   it("spans the execution, not just the last invocation, when the SDK reports no execution start timestamp", async () => {
     const exporter = new CapturingExporter();
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-complete",
     });
     const arn = arnFor("resume-without-start-timestamp");
     // A step that ran five minutes ago and is replayed into this invocation:
     // the oldest instant this invocation knows about. `executionStartTimestamp`
-    // is optional, so this is the fallback the createPlugin has to work with.
+    // is optional, so this is the fallback the plugin has to work with.
     const startedAt = new Date(Date.now() - 5 * 60_000);
     const operations = {
       o1: op({
@@ -1352,13 +1352,13 @@ describe("execution start time", () => {
       }),
     };
 
-    await runInvocation(createPlugin, arn, {
+    await runInvocation(factory, arn, {
       start: { operations },
       end: { status: "PENDING", operations, executionResult: undefined },
     });
     expect(exporter.records).toHaveLength(0);
 
-    await runInvocation(createPlugin, arn, {
+    await runInvocation(factory, arn, {
       start: { isFirstInvocation: false, operations },
       end: { operations },
     });
@@ -1371,7 +1371,7 @@ describe("execution start time", () => {
 
   it("normalizes an ISO-string execution start timestamp", async () => {
     const exporter = new CapturingExporter();
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-complete",
     });
@@ -1379,7 +1379,7 @@ describe("execution start time", () => {
     // Taken as-is it is not a Date, and building the record would throw.
     const wire = "2024-01-01T00:00:00.000Z" as unknown as Date;
 
-    await runInvocation(createPlugin, arnFor("wire-start-timestamp"), {
+    await runInvocation(factory, arnFor("wire-start-timestamp"), {
       start: { executionStartTimestamp: wire },
       end: { executionStartTimestamp: wire },
     });
@@ -1391,7 +1391,7 @@ describe("execution start time", () => {
 
   it("still emits the record when the execution start timestamp is an Invalid Date", async () => {
     const exporter = new CapturingExporter();
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-complete",
     });
@@ -1410,7 +1410,7 @@ describe("execution start time", () => {
       }),
     };
 
-    await runInvocation(createPlugin, arnFor("invalid-start-timestamp"), {
+    await runInvocation(factory, arnFor("invalid-start-timestamp"), {
       start: { executionStartTimestamp: invalid, operations },
       end: { executionStartTimestamp: invalid, operations },
     });
@@ -1456,7 +1456,7 @@ describe("flush serialization", () => {
 
   it("never overlaps a flush() with an export(), and flushes at most once per invocation", async () => {
     const exporter = new OverlapTrackingExporter(20);
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-complete",
     });
@@ -1464,7 +1464,7 @@ describe("flush serialization", () => {
 
     // Four executions end at once: each drains its own record and then flushes,
     // while the other three records are still queued behind it.
-    await Promise.all(arns.map((arn) => runInvocation(createPlugin, arn)));
+    await Promise.all(arns.map((arn) => runInvocation(factory, arn)));
 
     expect(exporter.records).toHaveLength(4);
     expect(exporter.flushDuringExport).toBe(0);
@@ -1493,7 +1493,7 @@ describe("flush serialization", () => {
     // none of them schedules a record, so their requests reach the pump's flush
     // turn together and one flushAll serves them all. The case where every end
     // *does* carry a record is the next test.
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-failure",
     });
@@ -1501,7 +1501,7 @@ describe("flush serialization", () => {
     const started = Date.now();
     await Promise.all(
       Array.from({ length: n }, (_, i) =>
-        runInvocation(createPlugin, arnFor(`flush-shared-${i}`)),
+        runInvocation(factory, arnFor(`flush-shared-${i}`)),
       ),
     );
     const elapsed = Date.now() - started;
@@ -1534,7 +1534,7 @@ describe("flush serialization", () => {
     // and N ends cost N flushes. The pump therefore exports the records a drain
     // is waiting on before it spends a flush fan-out, which releases those ends
     // so their requests join one batch.
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-complete",
     });
@@ -1542,7 +1542,7 @@ describe("flush serialization", () => {
     const started = Date.now();
     await Promise.all(
       Array.from({ length: n }, (_, i) =>
-        runInvocation(createPlugin, arnFor(`flush-record-shared-${i}`)),
+        runInvocation(factory, arnFor(`flush-record-shared-${i}`)),
       ),
     );
     const elapsed = Date.now() - started;
@@ -1580,7 +1580,7 @@ describe("flush serialization", () => {
         await sleep(flushMs);
       },
     };
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-complete",
     });
@@ -1588,7 +1588,7 @@ describe("flush serialization", () => {
     const elapsed = await Promise.all(
       Array.from({ length: n }, async (_, i) => {
         const started = Date.now();
-        await runInvocation(createPlugin, arnFor(`export-latency-${i}`));
+        await runInvocation(factory, arnFor(`export-latency-${i}`));
         return Date.now() - started;
       }),
     );
@@ -1657,7 +1657,7 @@ describe("flush serialization", () => {
     // without draining it, which is now the only way a queued record can have no
     // waiter — a terminal record is always drained by the end hook that
     // scheduled it.
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-change",
     });
@@ -1665,9 +1665,9 @@ describe("flush serialization", () => {
     // Parks the pump inside an export so everything below queues up behind it.
     // Nobody drains this one either.
     const blocker = arnFor("noflushdelay-blocker");
-    await createPlugin(startFor(blocker)).onInvocationStart?.(
-      startFor(blocker),
-    );
+    await factory
+      .createPlugin(startFor(blocker))
+      .onInvocationStart?.(startFor(blocker));
     await parked;
 
     // Two full invocations, queued in order. Each ends while the pump is parked,
@@ -1675,7 +1675,7 @@ describe("flush serialization", () => {
     // flush as soon as that record is out.
     const ends = ["noflushdelay-a", "noflushdelay-b"].map((name) => {
       const arn = arnFor(name);
-      const plugin = createPlugin(startFor(arn));
+      const plugin = factory.createPlugin(startFor(arn));
       void plugin.onInvocationStart?.(startFor(arn));
       return plugin.onInvocationEnd?.(endFor(arn)) ?? Promise.resolve();
     });
@@ -1683,7 +1683,9 @@ describe("flush serialization", () => {
     // Queued last, behind both of those: a change record nobody waits on — the
     // shape an on-change stream produces.
     const idle = arnFor("noflushdelay-idle");
-    await createPlugin(startFor(idle)).onInvocationStart?.(startFor(idle));
+    await factory
+      .createPlugin(startFor(idle))
+      .onInvocationStart?.(startFor(idle));
 
     release();
     await Promise.all(ends);
@@ -1704,25 +1706,25 @@ describe("flush serialization", () => {
 
   it("exports the record a drain is waiting on before another execution's flush", async () => {
     const { exporter, log, parked, release } = gatedExporter();
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-failure",
     });
 
     const blocker = arnFor("frontload-blocker");
-    void createPlugin(startFor(blocker)).onInvocationEnd?.(
-      endFor(blocker, { status: "FAILED" }),
-    );
+    void factory
+      .createPlugin(startFor(blocker))
+      .onInvocationEnd?.(endFor(blocker, { status: "FAILED" }));
     await parked;
 
     // A FAILED end: its record is queued *and* its own drain is waiting on it,
     // so it cannot ask for a flush yet.
-    const waiting = runInvocation(createPlugin, arnFor("frontload-waiting"), {
+    const waiting = runInvocation(factory, arnFor("frontload-waiting"), {
       end: { status: "FAILED" },
     });
     // A different execution's end, which schedules nothing and asks for a flush
     // straight away, so its request reaches the flush turn first.
-    const asker = runInvocation(createPlugin, arnFor("frontload-asker"));
+    const asker = runInvocation(factory, arnFor("frontload-asker"));
     await sleep(5);
 
     release();
@@ -1757,19 +1759,19 @@ describe("flush serialization", () => {
         }
       },
     };
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-complete",
     });
 
-    const first = runInvocation(createPlugin, arnFor("mid-flush-first"));
+    const first = runInvocation(factory, arnFor("mid-flush-first"));
     await reachedFirstFlush;
 
     // This execution's record is scheduled *after* the in-flight flush already
     // read the exporter's buffer, so that flush cannot stand in for its own: it
     // must wait for the next one.
     let secondDone = false;
-    const second = runInvocation(createPlugin, arnFor("mid-flush-second")).then(
+    const second = runInvocation(factory, arnFor("mid-flush-second")).then(
       () => {
         secondDone = true;
       },
@@ -1798,7 +1800,7 @@ describe("flush serialization", () => {
           return Promise.reject(new Error("async flush boom"));
         },
       };
-      const createPlugin = workflowInsight({
+      const factory = workflowInsight({
         exporters: [exporter],
         emitMode: "on-complete",
       });
@@ -1807,7 +1809,7 @@ describe("flush serialization", () => {
       );
 
       const settled = await Promise.race([
-        Promise.all(arns.map((arn) => runInvocation(createPlugin, arn))).then(
+        Promise.all(arns.map((arn) => runInvocation(factory, arn))).then(
           () => "settled",
         ),
         sleep(2000).then(() => "stranded"),
@@ -1843,9 +1845,9 @@ describe("record building re-entered by customer code", () => {
   it("drops an older snapshot when a nested change hook already published a newer one", async () => {
     const exporter = new CapturingExporter();
     const arn = arnFor("reentrant-change");
-    let plugin: ReturnType<PluginFactory> | undefined;
+    let plugin: ReturnType<PluginFactory["createPlugin"]> | undefined;
     let reentered = false;
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-change",
       operationDetail: "full-tree",
@@ -1865,7 +1867,7 @@ describe("record building re-entered by customer code", () => {
       },
     });
 
-    plugin = createPlugin(startFor(arn));
+    plugin = factory.createPlugin(startFor(arn));
     await plugin.onOperationChange?.(
       changeFor(arn, {
         a: op({ id: "a", name: "step-a", status: "SUCCEEDED" }),
@@ -1880,9 +1882,9 @@ describe("record building re-entered by customer code", () => {
   it("drops a RUNNING snapshot when a nested end hook already published the terminal record", async () => {
     const exporter = new CapturingExporter();
     const arn = arnFor("reentrant-end");
-    let plugin: ReturnType<PluginFactory> | undefined;
+    let plugin: ReturnType<PluginFactory["createPlugin"]> | undefined;
     let reentered = false;
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-change",
       operationDetail: "full-tree",
@@ -1903,7 +1905,7 @@ describe("record building re-entered by customer code", () => {
       },
     });
 
-    plugin = createPlugin(startFor(arn));
+    plugin = factory.createPlugin(startFor(arn));
     await plugin.onOperationChange?.(
       changeFor(arn, {
         a: op({ id: "a", name: "step-a", status: "SUCCEEDED" }),
@@ -1918,7 +1920,7 @@ describe("record building re-entered by customer code", () => {
   it("still emits a record for every hook when no nesting occurs", async () => {
     const exporter = new CapturingExporter();
     const arn = arnFor("no-reentry");
-    const createPlugin = workflowInsight({
+    const factory = workflowInsight({
       exporters: [exporter],
       emitMode: "on-change",
       operationDetail: "full-tree",
@@ -1926,7 +1928,7 @@ describe("record building re-entered by customer code", () => {
     });
 
     const start = startFor(arn);
-    const plugin = createPlugin(start);
+    const plugin = factory.createPlugin(start);
     // Each hook is given time to reach the exporter before the next one runs,
     // so the scheduler's per-execution coalescing cannot account for a missing
     // record and only the revision check could.

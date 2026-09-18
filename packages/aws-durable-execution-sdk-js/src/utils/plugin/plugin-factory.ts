@@ -8,7 +8,7 @@ import { createPluginRunner } from "./plugin-runner";
 /**
  * Builds the composite plugin runner for one invocation.
  *
- * Calling the factories here is what bounds a plugin instance's lifetime: each
+ * Calling `createPlugin` here is what bounds a plugin instance's lifetime: each
  * instance is created before the invocation's first hook fires, it is reachable
  * only from the runner this returns, and the SDK keeps that runner in a local of
  * the invocation — never in module state and never in a map keyed by execution —
@@ -20,9 +20,9 @@ import { createPluginRunner } from "./plugin-runner";
  * plugin can take its identity at construction instead of waiting for the first
  * hook.
  *
- * A factory that throws, or that hands back nothing, is contained the way a
- * failing plugin hook is contained: that plugin sits out this invocation and the
- * remaining plugins keep their relative order and behaviour.
+ * A `createPlugin` that throws, or that hands back nothing, is contained the way
+ * a failing plugin hook is contained: that plugin sits out this invocation and
+ * the remaining plugins keep their relative order and behaviour.
  *
  * @internal
  */
@@ -32,10 +32,10 @@ export function createInvocationPluginRunner(
 ): DurableInstrumentationPlugin {
   const plugins: DurableInstrumentationPlugin[] = [];
 
-  for (const createPlugin of factories) {
+  for (const factory of factories) {
     let plugin: DurableInstrumentationPlugin | undefined;
     try {
-      plugin = createPlugin(info);
+      plugin = factory.createPlugin(info);
     } catch {
       // Swallowed for the same reason hook errors are: instrumentation must not
       // decide whether an execution runs.

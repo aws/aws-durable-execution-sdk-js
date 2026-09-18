@@ -82,12 +82,12 @@ describe("Execution trace joining", () => {
     [
       "ExecutionOtelPlugin",
       (c?: OtelPluginConfig, info: InvocationInfo = makeInvocationInfo()) =>
-        createExecutionOtelPluginFactory(c)(info),
+        createExecutionOtelPluginFactory(c).createPlugin(info),
     ],
     [
       "InvocationOtelPlugin",
       (c?: OtelPluginConfig, info: InvocationInfo = makeInvocationInfo()) =>
-        createInvocationOtelPluginFactory(c)(info),
+        createInvocationOtelPluginFactory(c).createPlugin(info),
     ],
   ] as const)("%s", (_name, makePlugin) => {
     it("joins the propagated Root trace but anchors on a synthetic root when only a Root (no usable Parent) is propagated", async () => {
@@ -416,7 +416,7 @@ describe("Cross-invocation operation link stitching", () => {
       contextExtractor: () => undefined,
     });
     const firstInfo = makeInvocationInfo();
-    const plugin = factory(firstInfo);
+    const plugin = factory.createPlugin(firstInfo);
 
     // Invocation 1: the wait operation starts (initial logical span) and the
     // invocation suspends (PENDING) — the initial operation span is ended so it
@@ -447,7 +447,7 @@ describe("Cross-invocation operation link stitching", () => {
     // Invocation 2: the wait completes; a continuation span is emitted that
     // links back to the initial operation span on the same execution trace.
     const secondInfo = makeInvocationInfo({ isFirstInvocation: false });
-    const resumedPlugin = factory(secondInfo);
+    const resumedPlugin = factory.createPlugin(secondInfo);
     await resumedPlugin.onInvocationStart(secondInfo);
     await resumedPlugin.onOperationEnd({
       id: "op-wait",
@@ -497,7 +497,7 @@ describe("Cross-invocation operation link stitching", () => {
       }),
     });
     const firstInfo = makeInvocationInfo();
-    const plugin = factory(firstInfo);
+    const plugin = factory.createPlugin(firstInfo);
 
     await plugin.onInvocationStart(firstInfo);
     await plugin.onOperationStart({
@@ -521,7 +521,7 @@ describe("Cross-invocation operation link stitching", () => {
     exporter.reset();
 
     const secondInfo = makeInvocationInfo({ isFirstInvocation: false });
-    const resumedPlugin = factory(secondInfo);
+    const resumedPlugin = factory.createPlugin(secondInfo);
     await resumedPlugin.onInvocationStart(secondInfo);
     await resumedPlugin.onOperationEnd({
       id: "op-stable-extractor",
