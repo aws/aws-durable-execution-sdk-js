@@ -32,7 +32,7 @@ jobs:
     # Trial: run on an AWS CodeBuild-hosted GitHub Actions runner instead of a
     # GitHub-hosted runner, to compare queue latency and job duration.
     runs-on:
-      - codebuild-github-aciton-manual-test-wangyb-${{ github.run_id }}-${{ github.run_attempt }}
+      - codebuild-github-actions-dex-js-cdk-test-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v7
       - name: Use Node.js 22.x
@@ -59,7 +59,7 @@ jobs:
     # still gets real test results in the same run.
     needs: lint-commits
     runs-on:
-      - codebuild-github-aciton-manual-test-wangyb-${{ github.run_id }}-${{ github.run_attempt }}
+      - codebuild-github-actions-dex-js-cdk-test-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v7
       - name: Use Node.js 22.x

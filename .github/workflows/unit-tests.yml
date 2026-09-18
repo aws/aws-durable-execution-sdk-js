@@ -30,7 +30,7 @@ jobs:
     # `github.run_attempt` are the caller's in a reusable workflow, so the label
     # still matches the CodeBuild project's per-run webhook.
     runs-on:
-      - codebuild-github-aciton-manual-test-wangyb-${{ github.run_id }}-${{ github.run_attempt }}
+      - codebuild-github-actions-dex-js-cdk-test-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v7
       - name: Use Node.js ${{ inputs.node-version }}
