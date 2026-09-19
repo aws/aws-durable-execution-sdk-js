@@ -1826,6 +1826,55 @@ describe("flush serialization", () => {
       warn.mockRestore();
     }
   });
+
+  it("releases the ends waiting on a flush even if the front-load pass throws", async () => {
+    // The pump claims the pending flush resolvers before it front-loads the
+    // records other ends are waiting on. From that point they are not in
+    // flushWaiters, so nothing else can find them and no later pump serves them.
+    // A throw between the claim and the release therefore stranded them, and
+    // because onInvocationEnd is awaited before the Lambda response, those
+    // invocations hung until the function timed out.
+    //
+    // The front-load pass is the unguarded await: exportPending is a try/finally
+    // with no catch, so a synchronous throw from its fan-out escapes. Injected
+    // directly here, because reaching it through a real exporter needs an
+    // array-like that defeats the factory's Array.isArray check.
+    let flushes = 0;
+    const exporter: InsightExporter = {
+      async export(): Promise<void> {},
+      async flush(): Promise<void> {
+        flushes++;
+      },
+    };
+    const factory = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-complete",
+    });
+
+    const plugin = factory.createPlugin(startFor(arnFor("strand-probe")));
+    const scheduler = (
+      plugin as unknown as { env: { scheduler: Record<string, unknown> } }
+    ).env.scheduler;
+    scheduler.exportRecordsADrainIsWaitingFor = (): Promise<void> =>
+      Promise.reject(new TypeError("front-load pass is hostile"));
+
+    // An end that emits no record asks for a flush without draining first, which
+    // is the shape that reaches the flush turn with a claimed resolver.
+    const flushWait = (
+      scheduler as unknown as { flush: () => Promise<void> }
+    ).flush();
+
+    await expect(
+      Promise.race([
+        flushWait.then(() => "settled" as const),
+        sleep(2000).then(() => "hung" as const),
+      ]),
+    ).resolves.toBe("settled");
+    // The flush itself may or may not have run; what the contract owes the
+    // waiter is an answer, not a successful flush.
+    expect(flushes).toBeGreaterThanOrEqual(0);
+  });
+
 });
 
 /**

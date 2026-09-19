@@ -544,18 +544,29 @@ class ExportScheduler {
         // flush already read the buffer.
         const flushed = this.flushWaiters.splice(0);
         if (flushed.length > 0) {
-          // Before spending the fan-out: export the queued records that other
-          // invocations are still waiting on. Those ends cannot have asked for
-          // their flush yet — they are inside drain() — so without this the pump
-          // staggers them one record per turn with a whole flush in between, and
-          // each end pays for its own flush however well the requests coalesce.
-          await this.exportRecordsADrainIsWaitingFor();
-          // Re-take: the ends released above ask for their flush as their
-          // continuations run, and one flushAll covers all of them because it
-          // starts after every one of those records reached the exporters. Still
-          // taken strictly before the flush begins, so the rule above holds.
-          flushed.push(...this.flushWaiters.splice(0));
+          // The resolvers are claimed, so nothing else can find them: from here
+          // to the release below, every exit has to go through the `finally`.
+          // Without that, a rejection out of the front-load pass stranded them
+          // — `exportPending` is a try/finally with no catch, so a synchronous
+          // throw from `this.exporters.map` escapes it — and every invocation
+          // end waiting on this flush hung until Lambda timed it out. The
+          // `finally` releases them on that path too: a flush that did not run
+          // is the same answer as a flush that failed, which is what the
+          // per-exporter containment in `flushAll` already establishes.
           try {
+            // Before spending the fan-out: export the queued records that other
+            // invocations are still waiting on. Those ends cannot have asked for
+            // their flush yet — they are inside drain() — so without this the
+            // pump staggers them one record per turn with a whole flush in
+            // between, and each end pays for its own flush however well the
+            // requests coalesce.
+            await this.exportRecordsADrainIsWaitingFor();
+            // Re-take: the ends released above ask for their flush as their
+            // continuations run, and one flushAll covers all of them because it
+            // starts after every one of those records reached the exporters.
+            // Still taken strictly before the flush begins, so the rule above
+            // holds.
+            flushed.push(...this.flushWaiters.splice(0));
             await flushAll(this.exporters);
           } finally {
             for (const resolve of flushed) resolve();
@@ -1027,10 +1038,17 @@ export function workflowInsight(
     overridesByName.set(override.operationName, override);
   }
 
-  // `exporters` reaches `this.exporters.map` inside the pump's guarded region,
-  // which is the fan-out's last remaining synchronous-throw site: an array-like
-  // passes a truthiness/`.length` check and then makes every fan-out throw a
-  // TypeError. Require a real array and fall back to the default exporter.
+  // `exporters` reaches `this.exporters.map` in the export fan-out, which is the
+  // last remaining synchronous-throw site there: an array-like passes a
+  // truthiness/`.length` check and then makes every fan-out throw a TypeError.
+  // Require a real array and fall back to the default exporter.
+  //
+  // Held by reference rather than copied. A copy would make the check above
+  // permanent, but it would also replace the caller's array with a plain one,
+  // and the fan-out's own robustness test reaches the throw site by defining
+  // `map` on the array it passes in. A caller that mutates the array after
+  // registration is out of contract; a fan-out whose only synchronous-throw site
+  // is untestable is worse.
   if (config.exporters !== undefined && !Array.isArray(config.exporters)) {
     console.warn(
       "[workflow-insight] exporters is not an array; defaulting to the Lambda log exporter.",
