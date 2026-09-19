@@ -1874,7 +1874,6 @@ describe("flush serialization", () => {
     // waiter is an answer, not a successful flush.
     expect(flushes).toBeGreaterThanOrEqual(0);
   });
-
 });
 
 /**

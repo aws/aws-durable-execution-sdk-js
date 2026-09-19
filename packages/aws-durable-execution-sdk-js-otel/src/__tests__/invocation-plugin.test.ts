@@ -1493,8 +1493,14 @@ describe("InvocationOtelPlugin", () => {
         throwingPlugin.onInvocationStart(makeInvocationInfo()),
       ).rejects.toThrow("extractor boom");
 
-      expect((throwingPlugin as unknown as { tracingEnabled: boolean }).tracingEnabled).toBe(false);
-      expect((throwingPlugin as unknown as { executionTraceId: string }).executionTraceId).toBe("");
+      expect(
+        (throwingPlugin as unknown as { tracingEnabled: boolean })
+          .tracingEnabled,
+      ).toBe(false);
+      expect(
+        (throwingPlugin as unknown as { executionTraceId: string })
+          .executionTraceId,
+      ).toBe("");
 
       // Cross-invocation replay is the path that builds a link from the
       // execution trace ID. It must create nothing.
@@ -1517,7 +1523,8 @@ describe("InvocationOtelPlugin", () => {
       await throwingPlugin.onInvocationEnd(makeInvocationEndInfo());
 
       expect(
-        (throwingPlugin as unknown as { spanMap: Map<string, unknown> }).spanMap.size,
+        (throwingPlugin as unknown as { spanMap: Map<string, unknown> }).spanMap
+          .size,
       ).toBe(0);
       expect(findSpan("step-after-failed-start")).toBeUndefined();
       expect(findSpan("Invocation")).toBeUndefined();

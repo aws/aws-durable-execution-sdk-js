@@ -186,9 +186,9 @@ describe("declared core SDK ranges across the monorepo", () => {
       // therefore reject the next major, which is checked by asking whether it
       // admits a version no plugin built here can support.
       const nextMajor = `${(coreMajor as number) + 1}.0.0`;
-      expect(
-        satisfies(nextMajor, range, { includePrerelease: true }),
-      ).toBe(false);
+      expect(satisfies(nextMajor, range, { includePrerelease: true })).toBe(
+        false,
+      );
     },
   );
 });
@@ -246,9 +246,9 @@ describe("declared core SDK ranges admit core patch releases", () => {
     ({ range }) => {
       if (WORKSPACE_LOCAL.test(range)) return;
       const nextPatch = `${core?.major}.${core?.minor}.${(core?.patch ?? 0) + 1}`;
-      expect(
-        satisfies(nextPatch, range, { includePrerelease: true }),
-      ).toBe(true);
+      expect(satisfies(nextPatch, range, { includePrerelease: true })).toBe(
+        true,
+      );
     },
   );
 });
