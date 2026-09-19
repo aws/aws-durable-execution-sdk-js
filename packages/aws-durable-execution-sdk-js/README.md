@@ -282,30 +282,40 @@ their configured order; environment-selected plugins follow in the order listed
 in `DURABLE_EXECUTION_PLUGINS`. Both sources are additive, including when they
 create the same plugin type.
 
-Provider modules export a versioned factory named
-`durableExecutionPluginProvider`:
+Provider modules export a factory named `durableExecutionPluginProvider`. A
+factory is an object with a `createPlugin(info)` method; a bare function is not
+one and is rejected. The SDK calls `createPlugin` once per invocation, with that
+invocation's `InvocationInfo`, so the instance it returns serves exactly one
+invocation:
 
 ```typescript
 import type {
   DurableInstrumentationPlugin,
-  DurableInstrumentationPluginProvider,
+  DurableInstrumentationPluginFactory,
 } from "@aws/durable-execution-sdk-js";
 
 class AuditPlugin implements DurableInstrumentationPlugin {
+  constructor(
+    private readonly exporter: Exporter,
+    private readonly executionArn: string,
+  ) {}
   // Implement the lifecycle hooks needed by this plugin.
 }
 
-export const durableExecutionPluginProvider = {
-  pluginApiVersion: 1,
-  pluginType: AuditPlugin,
-  createPlugin: () => new AuditPlugin(),
-} satisfies DurableInstrumentationPluginProvider<AuditPlugin>;
+// Built once for the execution environment and shared by every instance.
+const exporter = new Exporter();
+
+export const durableExecutionPluginProvider: DurableInstrumentationPluginFactory<AuditPlugin> =
+  {
+    createPlugin: (info) => new AuditPlugin(exporter, info.executionArn),
+  };
 ```
 
-Declare `pluginApiVersion` as a literal instead of importing the SDK constant
-at runtime. The provider type checks the literal against the supported version,
-while the SDK loader performs the runtime compatibility check. This allows a
-provider package to depend on the SDK only for TypeScript types.
+Because an instance is dropped when its invocation returns, a plugin never has
+to key per-execution state by execution ARN, and two executions running
+concurrently in one execution environment cannot observe each other's state.
+State that belongs to the execution environment — an exporter, a tracer
+provider, a scheduler — belongs outside the factory, as above.
 
 The module specifier must be resolvable through normal application module
 resolution or Node.js module paths. For a Lambda layer, package the provider and
@@ -319,9 +329,14 @@ plugin-layer.zip
             `-- durable-audit
 ```
 
-Malformed configuration, missing modules or exports, incompatible provider API
-versions, invalid plugin types, and provider construction failures are reported
-as `PluginLoadError` failures before execution state is read.
+Malformed configuration, missing modules or exports, a
+`durableExecutionPluginProvider` without a `createPlugin` method, and an entry in
+`DurableExecutionConfig.plugins` without one are reported as `PluginLoadError`
+failures before execution state is read — the two sources are checked by the same
+rule, because an entry with no `createPlugin` could never produce a plugin. A
+`createPlugin` that throws when it runs, or returns nothing, is contained like
+any other plugin failure: that plugin sits out the invocation and the execution
+is unaffected.
 
 ### Retry Strategies
 

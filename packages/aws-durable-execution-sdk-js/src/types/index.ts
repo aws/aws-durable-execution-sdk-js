@@ -15,6 +15,7 @@ export * from "./operation-lifecycle-state";
 export * from "./operation-lifecycle";
 export {
   DurableInstrumentationPlugin,
+  DurableInstrumentationPluginFactory,
   InvocationBaseInfo as InvokeInfo,
   InvocationInfo,
   InvocationEndInfo,

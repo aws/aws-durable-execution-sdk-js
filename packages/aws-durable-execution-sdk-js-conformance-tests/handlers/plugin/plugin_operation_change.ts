@@ -2,44 +2,45 @@
 import {
   DurableContext,
   withDurableExecution,
-  DurableInstrumentationPlugin,
+  DurableInstrumentationPluginFactory,
 } from "@aws/durable-execution-sdk-js";
 
 const PLUGIN = "CONFPLUGIN";
 
-function makePlugin(): DurableInstrumentationPlugin {
-  let executionArn = "";
-  const emit = (rec: Record<string, unknown>): void => {
-    process.stdout.write(
-      JSON.stringify({ ...rec, durableExecutionArn: executionArn }) + "\n",
-    );
-  };
+const makePlugin: DurableInstrumentationPluginFactory = {
+  createPlugin: (invocation) => {
+    // Every record is scoped to the execution `createPlugin` was called for.
+    const emit = (rec: Record<string, unknown>): void => {
+      process.stdout.write(
+        JSON.stringify({
+          ...rec,
+          durableExecutionArn: invocation.executionArn,
+        }) + "\n",
+      );
+    };
 
-  return {
-    async onInvocationStart(info): Promise<void> {
-      // Capture the execution ARN so every subsequent record is scoped to it.
-      executionArn = info.executionArn;
-    },
-    async onOperationChange(info): Promise<void> {
-      const fullMap = info.operations;
-      for (const [id, op] of Object.entries(info.updatedOperations)) {
-        // Filter to step-type operations only.
-        if ((op.type || "").toUpperCase() !== "STEP") continue;
-        emit({
-          plugin: PLUGIN,
-          hook: "operation-change",
-          op: id,
-          status: op.status,
-          in_full_map: id in fullMap,
-        });
-      }
-    },
-  };
-}
+    return {
+      async onOperationChange(info): Promise<void> {
+        const fullMap = info.operations;
+        for (const [id, op] of Object.entries(info.updatedOperations)) {
+          // Filter to step-type operations only.
+          if ((op.type || "").toUpperCase() !== "STEP") continue;
+          emit({
+            plugin: PLUGIN,
+            hook: "operation-change",
+            op: id,
+            status: op.status,
+            in_full_map: id in fullMap,
+          });
+        }
+      },
+    };
+  },
+};
 
 export const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
     return await context.step(async () => `Hello, ${event}!`);
   },
-  { plugins: [makePlugin()] },
+  { plugins: [makePlugin] },
 );

@@ -10,6 +10,7 @@ import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import type { IdGenerator } from "@opentelemetry/sdk-trace-node";
 import type {
   DurableInstrumentationPlugin,
+  DurableInstrumentationPluginFactory,
   InvocationEndInfo,
   InvocationInfo,
 } from "@aws/durable-execution-sdk-js";
@@ -18,8 +19,8 @@ import {
   deriveTraceIdFromArn,
   deriveWorkflowSpanId,
 } from "../deterministic-id-generator";
-import { ExecutionOtelPlugin } from "../execution-plugin";
-import { InvocationOtelPlugin } from "../invocation-plugin";
+import { createExecutionOtelPluginFactory } from "../execution-plugin";
+import { createInvocationOtelPluginFactory } from "../invocation-plugin";
 import {
   type OtelPluginConfig,
   type TracerProviderFactory,
@@ -31,10 +32,6 @@ const EXECUTION_ARN_A =
 const EXECUTION_ARN_B =
   "arn:aws:lambda:us-east-1:123456789012:function:test:$LATEST:execution-b";
 const EXECUTION_START = new Date("2024-01-01T00:00:00.000Z");
-
-type PluginConstructor = new (
-  config?: OtelPluginConfig,
-) => DurableInstrumentationPlugin;
 
 function invocationInfo(executionArn: string): InvocationInfo {
   return {
@@ -73,10 +70,24 @@ function workflowSpan(plugin: DurableInstrumentationPlugin): Span {
   return span;
 }
 
+/**
+ * The plugin instance the SDK would build for one invocation: the factory called
+ * with that invocation's own info, which is then the info its hooks receive. A
+ * test that drives two invocations calls the same factory twice, so the two
+ * instances share one environment — which is where the "have we installed the ID
+ * generator yet?" state lives.
+ */
+function pluginFor(
+  factory: DurableInstrumentationPluginFactory,
+  info: InvocationInfo,
+): DurableInstrumentationPlugin {
+  return factory.createPlugin(info);
+}
+
 describe.each([
-  ["ExecutionOtelPlugin", ExecutionOtelPlugin],
-  ["InvocationOtelPlugin", InvocationOtelPlugin],
-] as const)("%s ID generation isolation", (pluginName, Plugin) => {
+  ["ExecutionOtelPlugin", createExecutionOtelPluginFactory],
+  ["InvocationOtelPlugin", createInvocationOtelPluginFactory],
+] as const)("%s ID generation isolation", (pluginName, createFactory) => {
   afterEach(() => {
     trace.disable();
     context.disable();
@@ -103,7 +114,8 @@ describe.each([
         };
       }
 
-      const plugin = new Plugin(config);
+      const info = invocationInfo(EXECUTION_ARN_A);
+      const plugin = pluginFor(createFactory(config), info);
       if (!provider) {
         throw new Error("TracerProvider factory was not called");
       }
@@ -115,14 +127,14 @@ describe.each([
         ROOT_CONTEXT,
       );
 
-      await plugin.onInvocationStart(invocationInfo(EXECUTION_ARN_A));
+      await plugin.onInvocationStart!(info);
       const workflow = workflowSpan(plugin);
       const during = unrelatedTracer.startSpan(
         "during",
         undefined,
         ROOT_CONTEXT,
       );
-      await plugin.onInvocationEnd(invocationEndInfo(EXECUTION_ARN_A));
+      await plugin.onInvocationEnd!(invocationEndInfo(EXECUTION_ARN_A));
       const after = unrelatedTracer.startSpan("after", undefined, ROOT_CONTEXT);
 
       expect(
@@ -172,7 +184,8 @@ describe.each([
           },
         };
       }
-      const plugin = new Plugin(config);
+      const info = invocationInfo(EXECUTION_ARN_A);
+      const plugin = pluginFor(createFactory(config), info);
       if (!provider) {
         throw new Error("TracerProvider factory was not called");
       }
@@ -185,12 +198,12 @@ describe.each([
         spanId: "0".repeat(15) + "1",
       });
 
-      await plugin.onInvocationStart(invocationInfo(EXECUTION_ARN_A));
+      await plugin.onInvocationStart!(info);
       expect(workflowSpan(plugin).spanContext()).toMatchObject({
         traceId: deriveTraceIdFromArn(EXECUTION_ARN_A, EXECUTION_START),
         spanId: deriveWorkflowSpanId(EXECUTION_ARN_A),
       });
-      await plugin.onInvocationEnd(invocationEndInfo(EXECUTION_ARN_A));
+      await plugin.onInvocationEnd!(invocationEndInfo(EXECUTION_ARN_A));
 
       expect(fallbackIdGenerator.generateTraceId).toHaveBeenCalled();
       expect(fallbackIdGenerator.generateSpanId).toHaveBeenCalled();
@@ -200,18 +213,22 @@ describe.each([
   );
 
   it("retries global installation after the provider registers", async () => {
-    const plugin = new Plugin();
+    // Building the instance resolves the environment against a global provider
+    // that is not registered yet, so the retry at invocation start is what has
+    // to succeed.
+    const info = invocationInfo(EXECUTION_ARN_A);
+    const plugin = pluginFor(createFactory(), info);
     const provider = new NodeTracerProvider();
     provider.register();
 
-    await plugin.onInvocationStart(invocationInfo(EXECUTION_ARN_A));
+    await plugin.onInvocationStart!(info);
 
     expect(workflowSpan(plugin).spanContext()).toMatchObject({
       traceId: deriveTraceIdFromArn(EXECUTION_ARN_A, EXECUTION_START),
       spanId: deriveWorkflowSpanId(EXECUTION_ARN_A),
     });
 
-    await plugin.onInvocationEnd(invocationEndInfo(EXECUTION_ARN_A));
+    await plugin.onInvocationEnd!(invocationEndInfo(EXECUTION_ARN_A));
     await provider.shutdown();
   });
 
@@ -219,22 +236,28 @@ describe.each([
     const consoleWarnSpy = jest
       .spyOn(console, "warn")
       .mockImplementation(() => {});
-    const plugin = new Plugin();
+    // Two invocations, so two instances from one factory: the disabled-then-
+    // recovered state belongs to the environment they share, not to an instance.
+    const factory = createFactory();
+    const firstInfo = invocationInfo(EXECUTION_ARN_A);
+    const firstPlugin = pluginFor(factory, firstInfo);
 
-    await plugin.onInvocationStart(invocationInfo(EXECUTION_ARN_A));
-    expect(currentWorkflowSpan(plugin)).toBeUndefined();
+    await firstPlugin.onInvocationStart!(firstInfo);
+    expect(currentWorkflowSpan(firstPlugin)).toBeUndefined();
     expect(consoleWarnSpy).toHaveBeenCalledTimes(1);
-    await plugin.onInvocationEnd(invocationEndInfo(EXECUTION_ARN_A));
+    await firstPlugin.onInvocationEnd!(invocationEndInfo(EXECUTION_ARN_A));
 
     const provider = new NodeTracerProvider();
     provider.register();
 
-    await plugin.onInvocationStart(invocationInfo(EXECUTION_ARN_B));
-    expect(workflowSpan(plugin).spanContext()).toMatchObject({
+    const secondInfo = invocationInfo(EXECUTION_ARN_B);
+    const secondPlugin = pluginFor(factory, secondInfo);
+    await secondPlugin.onInvocationStart!(secondInfo);
+    expect(workflowSpan(secondPlugin).spanContext()).toMatchObject({
       traceId: deriveTraceIdFromArn(EXECUTION_ARN_B, EXECUTION_START),
       spanId: deriveWorkflowSpanId(EXECUTION_ARN_B),
     });
-    await plugin.onInvocationEnd(invocationEndInfo(EXECUTION_ARN_B));
+    await secondPlugin.onInvocationEnd!(invocationEndInfo(EXECUTION_ARN_B));
 
     expect(consoleWarnSpy).toHaveBeenCalledTimes(1);
 
@@ -246,26 +269,32 @@ describe.each([
     const consoleWarnSpy = jest
       .spyOn(console, "warn")
       .mockImplementation(() => {});
-    const plugin = new Plugin();
+    // One factory, one environment, one instance per invocation: installation
+    // keeps failing, so each invocation is disabled and warns for itself.
+    const factory = createFactory();
+    const firstInfo = invocationInfo(EXECUTION_ARN_A);
+    const firstPlugin = pluginFor(factory, firstInfo);
 
-    await plugin.onInvocationStart(invocationInfo(EXECUTION_ARN_A));
-    await plugin.onOperationStart({
+    await firstPlugin.onInvocationStart!(firstInfo);
+    await firstPlugin.onOperationStart!({
       id: "disabled-operation-a",
       type: "STEP",
       isReplay: false,
     });
-    expect(currentWorkflowSpan(plugin)).toBeUndefined();
-    expect(plugin.enrichLogContext?.()).toBeUndefined();
-    await plugin.onInvocationEnd(invocationEndInfo(EXECUTION_ARN_A));
+    expect(currentWorkflowSpan(firstPlugin)).toBeUndefined();
+    expect(firstPlugin.enrichLogContext?.()).toBeUndefined();
+    await firstPlugin.onInvocationEnd!(invocationEndInfo(EXECUTION_ARN_A));
 
-    await plugin.onInvocationStart(invocationInfo(EXECUTION_ARN_B));
-    await plugin.onOperationStart({
+    const secondInfo = invocationInfo(EXECUTION_ARN_B);
+    const secondPlugin = pluginFor(factory, secondInfo);
+    await secondPlugin.onInvocationStart!(secondInfo);
+    await secondPlugin.onOperationStart!({
       id: "disabled-operation-b",
       type: "STEP",
       isReplay: false,
     });
-    expect(currentWorkflowSpan(plugin)).toBeUndefined();
-    await plugin.onInvocationEnd(invocationEndInfo(EXECUTION_ARN_B));
+    expect(currentWorkflowSpan(secondPlugin)).toBeUndefined();
+    await secondPlugin.onInvocationEnd!(invocationEndInfo(EXECUTION_ARN_B));
 
     expect(consoleWarnSpy).toHaveBeenCalledTimes(2);
     expect(consoleWarnSpy).toHaveBeenNthCalledWith(
@@ -290,34 +319,35 @@ describe.each([
     const consoleWarnSpy = jest
       .spyOn(console, "warn")
       .mockImplementation(() => {});
-    const plugin = new Plugin();
+    const info = invocationInfo(EXECUTION_ARN_A);
+    const plugin = pluginFor(createFactory(), info);
 
-    await plugin.onInvocationStart(invocationInfo(EXECUTION_ARN_A));
-    await plugin.onOperationStart({
+    await plugin.onInvocationStart!(info);
+    await plugin.onOperationStart!({
       id: "disabled-operation",
       type: "STEP",
       isReplay: false,
     });
-    await plugin.onOperationAttemptStart({
+    await plugin.onOperationAttemptStart!({
       id: "disabled-operation",
       type: "STEP",
       isReplay: false,
       attempt: 1,
     });
-    await plugin.onOperationAttemptEnd({
+    await plugin.onOperationAttemptEnd!({
       id: "disabled-operation",
       type: "STEP",
       isReplay: false,
       attempt: 1,
       outcome: "SUCCEEDED",
     });
-    await plugin.onOperationEnd({
+    await plugin.onOperationEnd!({
       id: "disabled-operation",
       type: "STEP",
       isReplay: false,
       status: "SUCCEEDED",
     });
-    await plugin.onInvocationEnd(invocationEndInfo(EXECUTION_ARN_A));
+    await plugin.onInvocationEnd!(invocationEndInfo(EXECUTION_ARN_A));
 
     expect(startSpan).not.toHaveBeenCalled();
     expect(consoleWarnSpy).toHaveBeenCalledTimes(1);
@@ -335,15 +365,16 @@ describe.each([
       });
       return provider;
     };
-    const firstPlugin = new Plugin({
-      tracerProviderFactory,
-    });
-    const secondPlugin = new Plugin({
-      tracerProviderFactory,
-    });
+    // Two interleaved invocations out of one factory, so they share the
+    // environment the tracerProviderFactory built.
+    const factory = createFactory({ tracerProviderFactory });
+    const firstInfo = invocationInfo(EXECUTION_ARN_A);
+    const secondInfo = invocationInfo(EXECUTION_ARN_B);
+    const firstPlugin = pluginFor(factory, firstInfo);
+    const secondPlugin = pluginFor(factory, secondInfo);
 
-    await firstPlugin.onInvocationStart(invocationInfo(EXECUTION_ARN_A));
-    await secondPlugin.onInvocationStart(invocationInfo(EXECUTION_ARN_B));
+    await firstPlugin.onInvocationStart!(firstInfo);
+    await secondPlugin.onInvocationStart!(secondInfo);
 
     expect(workflowSpan(firstPlugin).spanContext()).toMatchObject({
       traceId: deriveTraceIdFromArn(EXECUTION_ARN_A, EXECUTION_START),
@@ -354,12 +385,12 @@ describe.each([
       spanId: deriveWorkflowSpanId(EXECUTION_ARN_B),
     });
 
-    await firstPlugin.onOperationStart({
+    await firstPlugin.onOperationStart!({
       id: "operation",
       type: "STEP",
       isReplay: false,
     });
-    await secondPlugin.onOperationStart({
+    await secondPlugin.onOperationStart!({
       id: "operation",
       type: "STEP",
       isReplay: false,
@@ -390,8 +421,8 @@ describe.each([
       deriveSpanIdFromOperationId("operation", EXECUTION_ARN_B),
     );
 
-    await firstPlugin.onInvocationEnd(invocationEndInfo(EXECUTION_ARN_A));
-    await secondPlugin.onInvocationEnd(invocationEndInfo(EXECUTION_ARN_B));
+    await firstPlugin.onInvocationEnd!(invocationEndInfo(EXECUTION_ARN_A));
+    await secondPlugin.onInvocationEnd!(invocationEndInfo(EXECUTION_ARN_B));
     expect(provider).toBeDefined();
     await provider!.shutdown();
   });

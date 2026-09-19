@@ -19,14 +19,18 @@ import type { ReadableSpan, Sampler } from "@opentelemetry/sdk-trace-node";
 import { context, propagation, trace, TraceFlags } from "@opentelemetry/api";
 import type { Attributes, Span } from "@opentelemetry/api";
 import type {
+  AttemptEndInfo,
+  DurableInstrumentationPlugin,
+  DurableInstrumentationPluginFactory,
   InvocationInfo,
   InvocationEndInfo,
   OperationInfo,
   OperationEndInfo,
   AttemptInfo,
 } from "@aws/durable-execution-sdk-js";
-import { ExecutionOtelPlugin } from "../execution-plugin";
-import { InvocationOtelPlugin } from "../invocation-plugin";
+import { createExecutionOtelPluginFactory } from "../execution-plugin";
+import { createInvocationOtelPluginFactory } from "../invocation-plugin";
+import type { OtelPluginConfig } from "../otel-plugin-config";
 import { deriveSpanIdFromOperationId } from "../deterministic-id-generator";
 
 const ARN = "arn:aws:states:us-east-1:123456789012:execution:sm:exec-1";
@@ -96,12 +100,88 @@ function expectSpanInside(child: ReadableSpan, parent: ReadableSpan): void {
   expect(compareHrTime(child.endTime, parent.endTime)).toBeLessThanOrEqual(0);
 }
 
+/**
+ * Drives a plugin factory the way the SDK does: `onInvocationStart` materializes
+ * a fresh instance for that invocation and every later hook is dispatched to it,
+ * so a test that runs several invocations of one execution exercises one
+ * instance per invocation — which is what makes these suspend/resume cases real.
+ * `current` exposes that instance for the few assertions that inspect plugin
+ * state directly.
+ */
+class InvocationDriver {
+  private plugin: DurableInstrumentationPlugin | undefined;
+
+  constructor(private readonly factory: DurableInstrumentationPluginFactory) {}
+
+  get current(): DurableInstrumentationPlugin {
+    if (!this.plugin) {
+      throw new Error("No invocation has started on this driver");
+    }
+    return this.plugin;
+  }
+
+  /** Plugin-private per-invocation span map, for lifecycle assertions. */
+  get spanMap(): Map<string, Span> {
+    return (this.current as unknown as { spanMap: Map<string, Span> }).spanMap;
+  }
+
+  /** Plugin-private Workflow span identity, for lifecycle assertions. */
+  get workflowSpan(): Span {
+    return (this.current as unknown as { workflowSpan: Span }).workflowSpan;
+  }
+
+  async onInvocationStart(info: InvocationInfo): Promise<void> {
+    this.plugin = this.factory.createPlugin(info);
+    await this.plugin.onInvocationStart?.(info);
+  }
+
+  wrapInvocation<T>(info: InvocationInfo, fn: () => T): T {
+    return (
+      this.current as unknown as {
+        wrapInvocation(info: InvocationInfo, fn: () => T): T;
+      }
+    ).wrapInvocation(info, fn);
+  }
+
+  enrichLogContext(): Record<string, string | number | boolean> | undefined {
+    return this.current.enrichLogContext?.();
+  }
+
+  async onInvocationEnd(info: InvocationEndInfo): Promise<void> {
+    await this.current.onInvocationEnd?.(info);
+  }
+
+  async onOperationStart(info: OperationInfo): Promise<void> {
+    await this.current.onOperationStart?.(info);
+  }
+
+  async onOperationEnd(info: OperationEndInfo): Promise<void> {
+    await this.current.onOperationEnd?.(info);
+  }
+
+  async onOperationAttemptStart(info: AttemptInfo): Promise<void> {
+    await this.current.onOperationAttemptStart?.(info);
+  }
+
+  async onOperationAttemptEnd(info: AttemptEndInfo): Promise<void> {
+    await this.current.onOperationAttemptEnd?.(info);
+  }
+}
+
 const PLUGINS = [
-  ["ExecutionOtelPlugin", () => new ExecutionOtelPlugin({})],
-  ["InvocationOtelPlugin", () => new InvocationOtelPlugin({})],
+  [
+    "ExecutionOtelPlugin",
+    (config?: OtelPluginConfig) =>
+      new InvocationDriver(createExecutionOtelPluginFactory(config ?? {})),
+  ],
+  [
+    "InvocationOtelPlugin",
+    (config?: OtelPluginConfig) =>
+      new InvocationDriver(createInvocationOtelPluginFactory(config ?? {})),
+  ],
 ] as const;
 
-describe.each(PLUGINS)("%s span lifecycle", (_name, makePlugin) => {
+describe.each(PLUGINS)("%s span lifecycle", (_name, makeDriver) => {
   let exporter: InMemorySpanExporter;
   let provider: NodeTracerProvider;
 
@@ -126,7 +206,7 @@ describe.each(PLUGINS)("%s span lifecycle", (_name, makePlugin) => {
     "leaves no recording Workflow span on non-terminal status %s",
     async (status) => {
       register();
-      const plugin: any = makePlugin();
+      const plugin = makeDriver();
 
       await plugin.onInvocationStart(makeInvocationInfo());
       const workflowRef = plugin.workflowSpan as Span;
@@ -143,7 +223,7 @@ describe.each(PLUGINS)("%s span lifecycle", (_name, makePlugin) => {
 
   it("exports exactly one Workflow span across a suspend/resume pair", async () => {
     register();
-    const plugin: any = makePlugin();
+    const plugin = makeDriver();
 
     // Invocation 1 suspends.
     await plugin.onInvocationStart(makeInvocationInfo());
@@ -169,7 +249,7 @@ describe.each(PLUGINS)("%s span lifecycle", (_name, makePlugin) => {
 
   it("ends an in-flight attempt span left open by a non-terminal invocation", async () => {
     register();
-    const plugin: any = makePlugin();
+    const plugin = makeDriver();
 
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onOperationStart(makeOperationInfo({ name: "retry-step" }));
@@ -177,8 +257,9 @@ describe.each(PLUGINS)("%s span lifecycle", (_name, makePlugin) => {
       makeAttemptInfo({ name: "retry-step", attempt: 1 }),
     );
 
-    // Retain the attempt span reference before spanMap is cleared.
-    const spanMap = plugin.spanMap as Map<string, Span>;
+    // Retain the attempt span reference: the assertion is about the span being
+    // ended, not about it being forgotten.
+    const spanMap = plugin.spanMap;
     const attemptRef = [...spanMap.entries()].find(([k]) =>
       k.includes("attempt"),
     )?.[1];
@@ -197,7 +278,7 @@ describe.each(PLUGINS)("%s span lifecycle", (_name, makePlugin) => {
 
   it("gives a suspended WAIT and its later completion distinct identities", async () => {
     register();
-    const plugin: any = makePlugin();
+    const plugin = makeDriver();
 
     // Invocation 1: WAIT starts, then the invocation suspends.
     await plugin.onInvocationStart(makeInvocationInfo());
@@ -234,7 +315,7 @@ describe.each(PLUGINS)("%s span lifecycle", (_name, makePlugin) => {
 
   it("keeps identities unique for a STEP retried across three invocations", async () => {
     register();
-    const plugin: any = makePlugin();
+    const plugin = makeDriver();
 
     for (let i = 1; i <= 3; i++) {
       const base = {
@@ -277,7 +358,7 @@ describe.each(PLUGINS)("%s span lifecycle", (_name, makePlugin) => {
 
   it("keeps a non-negative Workflow duration when executionStartTimestamp is omitted", async () => {
     register();
-    const plugin: any = makePlugin();
+    const plugin = makeDriver();
 
     await plugin.onInvocationStart(
       makeInvocationInfo({ executionStartTimestamp: undefined }),
@@ -308,7 +389,7 @@ describe.each(PLUGINS)("%s span lifecycle", (_name, makePlugin) => {
   describe("sampling", () => {
     it("marks the Workflow context unsampled and exports nothing under an unsampled provider", async () => {
       register(new ParentBasedSampler({ root: new AlwaysOffSampler() }));
-      const plugin: any = makePlugin();
+      const plugin = makeDriver();
 
       await plugin.onInvocationStart(makeInvocationInfo());
       expect(plugin.workflowSpan.spanContext().traceFlags).toBe(
@@ -328,7 +409,7 @@ describe.each(PLUGINS)("%s span lifecycle", (_name, makePlugin) => {
 
     it("reports otelTraceSampled false from enrichLogContext under an unsampled provider", async () => {
       register(new ParentBasedSampler({ root: new AlwaysOffSampler() }));
-      const plugin: any = makePlugin();
+      const plugin = makeDriver();
 
       await plugin.onInvocationStart(makeInvocationInfo());
       const enriched = await plugin.wrapInvocation(
@@ -341,7 +422,7 @@ describe.each(PLUGINS)("%s span lifecycle", (_name, makePlugin) => {
 
     it("exports the Workflow root under a sampled provider (control)", async () => {
       register(new ParentBasedSampler({ root: new AlwaysOnSampler() }));
-      const plugin: any = makePlugin();
+      const plugin = makeDriver();
 
       await plugin.onInvocationStart(makeInvocationInfo());
       expect(plugin.workflowSpan.spanContext().traceFlags).toBe(
@@ -367,7 +448,7 @@ describe.each(PLUGINS)("%s span lifecycle", (_name, makePlugin) => {
         toString: () => "ArnAttributeSampler",
       };
       register(sampler);
-      const plugin: any = makePlugin();
+      const plugin = makeDriver();
 
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onInvocationEnd(
@@ -400,7 +481,7 @@ describe.each(PLUGINS)("%s span lifecycle", (_name, makePlugin) => {
       };
       sampler.shouldSample(null as any, "", "", 0 as any, {}, []); // burn the one sampled decision before the plugin runs
       register(sampler);
-      const plugin: any = makePlugin();
+      const plugin = makeDriver();
 
       await plugin.onInvocationStart(makeInvocationInfo());
       expect(plugin.workflowSpan.spanContext().traceFlags).toBe(
@@ -418,7 +499,7 @@ describe.each(PLUGINS)("%s span lifecycle", (_name, makePlugin) => {
     // step retried internally) must reuse the existing span rather than
     // overwrite the map entry and leak the first span un-ended.
     register();
-    const plugin: any = makePlugin();
+    const plugin = makeDriver();
     await plugin.onInvocationStart(makeInvocationInfo());
     await plugin.onOperationStart(makeOperationInfo({ name: "retry-step" }));
     // Second start for the SAME operation id, marked as replay.
@@ -467,7 +548,7 @@ describe("ExecutionOtelPlugin deferred operation spans", () => {
 
   it("contains attempts when the backend operation start timestamp is absent", async () => {
     register();
-    const plugin = new ExecutionOtelPlugin({});
+    const plugin = new InvocationDriver(createExecutionOtelPluginFactory({}));
 
     await plugin.onInvocationStart(makeInvocationInfo());
     const beforeStart = Date.now();
@@ -477,7 +558,7 @@ describe("ExecutionOtelPlugin deferred operation spans", () => {
     const afterStart = Date.now();
 
     const operationStarts = (
-      plugin as unknown as {
+      plugin.current as unknown as {
         operationStarts: Map<string, { startTimestamp?: Date }>;
       }
     ).operationStarts;
@@ -516,7 +597,7 @@ describe("ExecutionOtelPlugin deferred operation spans", () => {
 
   it("exports exactly one operation span for a WAIT that suspends then resumes", async () => {
     register();
-    const plugin = new ExecutionOtelPlugin({});
+    const plugin = new InvocationDriver(createExecutionOtelPluginFactory({}));
 
     // Invocation 1: the WAIT starts, then the invocation suspends (PENDING).
     // No operation span is exported yet — it is only a deferred placeholder.
