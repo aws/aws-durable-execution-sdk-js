@@ -178,6 +178,77 @@ describe("declared core SDK ranges across the monorepo", () => {
       const lowest = minVersion(range);
       expect(lowest).not.toBeNull();
       expect(lowest?.major).toBeGreaterThanOrEqual(coreMajor as number);
+
+      // ...and newer ones. A lower bound alone reproduces the defect this file
+      // guards, one major later: the next core that changes the plugin contract
+      // satisfies `>=3.0.0`, npm installs it, and the handler fails at
+      // initialization exactly as it did against core 2.4.0. The range must
+      // therefore reject the next major, which is checked by asking whether it
+      // admits a version no plugin built here can support.
+      const nextMajor = `${(coreMajor as number) + 1}.0.0`;
+      expect(
+        satisfies(nextMajor, range, { includePrerelease: true }),
+      ).toBe(false);
+    },
+  );
+});
+
+/**
+ * A range must not exclude core *patch* releases either. `<=3.0.0` looks like a
+ * ceiling but excludes 3.0.1, so the first core patch puts the declaring
+ * package's compatibility claim out of date and this file red — for a package
+ * that may not touch the plugin contract at all. The ceiling belongs on the
+ * major.
+ */
+describe("declared core SDK ranges admit core patch releases", () => {
+  const CORE_PKG_NAME = "@aws/durable-execution-sdk-js";
+  const WORKSPACE_LOCAL = /^(\*|workspace:|file:|link:|portal:)/;
+  const DEP_FIELDS = [
+    "dependencies",
+    "devDependencies",
+    "peerDependencies",
+    "optionalDependencies",
+  ] as const;
+
+  const packagesDir = join(__dirname, "..", "..", "..");
+  const readManifest = (dir: string): Record<string, unknown> =>
+    JSON.parse(readFileSync(join(dir, "package.json"), "utf-8")) as Record<
+      string,
+      unknown
+    >;
+  const coreVersion = readManifest(
+    join(packagesDir, "aws-durable-execution-sdk-js"),
+  ).version as string;
+  const core = minVersion(coreVersion);
+
+  const declared: { pkgName: string; field: string; range: string }[] = [];
+  for (const entry of readdirSync(packagesDir).sort()) {
+    const dir = join(packagesDir, entry);
+    if (!statSync(dir).isDirectory()) continue;
+    let manifest: Record<string, unknown>;
+    try {
+      manifest = readManifest(dir);
+    } catch {
+      continue;
+    }
+    const pkgName = (manifest.name as string) ?? entry;
+    if (pkgName === CORE_PKG_NAME) continue;
+    for (const field of DEP_FIELDS) {
+      const deps = (manifest[field] ?? {}) as Record<string, string>;
+      const range = deps[CORE_PKG_NAME];
+      if (range === undefined) continue;
+      declared.push({ pkgName, field, range });
+    }
+  }
+
+  it.each(declared)(
+    "$pkgName: $field range $range admits the next core patch",
+    ({ range }) => {
+      if (WORKSPACE_LOCAL.test(range)) return;
+      const nextPatch = `${core?.major}.${core?.minor}.${(core?.patch ?? 0) + 1}`;
+      expect(
+        satisfies(nextPatch, range, { includePrerelease: true }),
+      ).toBe(true);
     },
   );
 });
