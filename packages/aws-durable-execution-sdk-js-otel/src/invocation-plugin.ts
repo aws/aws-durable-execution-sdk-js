@@ -111,8 +111,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onInvocationStart(info: InvocationInfo): Promise<void> {
-    this.tracingEnabled = this.environment.ensureTracingEnabled(PLUGIN_NAME);
-    if (!this.tracingEnabled) {
+    if (!this.environment.ensureTracingEnabled(PLUGIN_NAME)) {
       return;
     }
 
@@ -198,6 +197,14 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       },
       invocationParentContext,
     );
+
+    // Set last, so `tracingEnabled` means what every later hook reads it to mean:
+    // this invocation's trace identity is resolved. Setting it at the top left a
+    // window where it was true and `executionTraceId` was still empty — the
+    // customer-supplied `contextExtractor` above can throw, the plugin runner
+    // contains that, and every later hook then passed its `tracingEnabled` check
+    // and emitted links carrying an invalid all-zero trace ID.
+    this.tracingEnabled = true;
   }
 
   wrapInvocation(

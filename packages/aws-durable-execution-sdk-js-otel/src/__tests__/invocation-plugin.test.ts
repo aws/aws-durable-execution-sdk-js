@@ -1472,6 +1472,57 @@ describe("InvocationOtelPlugin", () => {
   });
 
   describe("Error handling", () => {
+    it("stays disabled when the context extractor throws, so no hook emits on an unresolved trace", async () => {
+      // `contextExtractor` is customer config, and it runs inside
+      // onInvocationStart after the tracer is bound but before the execution
+      // trace identity is resolved. The plugin runner contains the rejected
+      // hook, so the invocation continues with this instance still installed.
+      // Every later hook gates on `tracingEnabled`, so that flag must not be
+      // true until the identity exists — otherwise a continuation or replay span
+      // is created and linked against an empty trace ID, which is an invalid
+      // SpanContext on the wire. Whether such a span survives sampling depends
+      // on the provider, so the assertion is on the gate itself.
+      const throwingPlugin = newPlugin({
+        tracerProviderFactory,
+        contextExtractor: () => {
+          throw new Error("extractor boom");
+        },
+      });
+
+      await expect(
+        throwingPlugin.onInvocationStart(makeInvocationInfo()),
+      ).rejects.toThrow("extractor boom");
+
+      expect((throwingPlugin as unknown as { tracingEnabled: boolean }).tracingEnabled).toBe(false);
+      expect((throwingPlugin as unknown as { executionTraceId: string }).executionTraceId).toBe("");
+
+      // Cross-invocation replay is the path that builds a link from the
+      // execution trace ID. It must create nothing.
+      await throwingPlugin.onOperationStart(
+        makeOperationInfo({
+          id: "op-after-failed-start",
+          type: "STEP",
+          isReplay: true,
+          name: "step-after-failed-start",
+        }),
+      );
+      await throwingPlugin.onOperationEnd(
+        makeOperationEndInfo({
+          id: "op-after-failed-start",
+          type: "STEP",
+          isReplay: true,
+          name: "step-after-failed-start",
+        }),
+      );
+      await throwingPlugin.onInvocationEnd(makeInvocationEndInfo());
+
+      expect(
+        (throwingPlugin as unknown as { spanMap: Map<string, unknown> }).spanMap.size,
+      ).toBe(0);
+      expect(findSpan("step-after-failed-start")).toBeUndefined();
+      expect(findSpan("Invocation")).toBeUndefined();
+    });
+
     it("onOperationEnd with error sets ERROR status and records exception", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onOperationStart(
