@@ -9,6 +9,7 @@ import type {
   DurableInstrumentationPlugin,
   InvocationEndInfo,
   InvocationInfo,
+  OperationChangeInfo,
   OperationInfo,
 } from "@aws/durable-execution-sdk-js";
 
@@ -627,5 +628,277 @@ describe("per-exporter truncation", () => {
     // record alone would have been measured smaller and mis-sized.
     expect(got.truncated).toBe(true);
     expect(sizeOf(exporter.render(got))).toBeLessThanOrEqual(900);
+  });
+});
+
+describe("export scheduling across concurrent executions", () => {
+  const arnFor = (name: string): string =>
+    `arn:aws:lambda:us-east-1:123456789012:function:fn:1/durable-execution/${name}/inv-1`;
+  const A = arnFor("exec-a");
+  const B = arnFor("exec-b");
+  const C = arnFor("exec-c");
+
+  /**
+   * Exporter whose `export()` can be held open. Records are captured when the
+   * call starts, so `records` reflects dispatch order; `maxActive` records the
+   * highest number of overlapping `export()` calls observed.
+   */
+  class GatedExporter implements InsightExporter {
+    records: WorkflowInsightRecord[] = [];
+    blocked = false;
+    active = 0;
+    maxActive = 0;
+    private gates: Array<() => void> = [];
+
+    async export(record: WorkflowInsightRecord): Promise<void> {
+      this.active++;
+      this.maxActive = Math.max(this.maxActive, this.active);
+      try {
+        this.records.push(record);
+        if (this.blocked) {
+          await new Promise<void>((resolve) => this.gates.push(resolve));
+        }
+      } finally {
+        this.active--;
+      }
+    }
+
+    /** Let every currently held `export()` call finish. */
+    release(): void {
+      const gates = this.gates;
+      this.gates = [];
+      for (const resolve of gates) resolve();
+    }
+
+    get held(): number {
+      return this.gates.length;
+    }
+
+    byArn(arn: string): WorkflowInsightRecord[] {
+      return this.records.filter((r) => r.executionArn === arn);
+    }
+  }
+
+  // Let the scheduler's pump reach the exporter (it awaits between records).
+  const tick = (): Promise<void> =>
+    new Promise((resolve) => setImmediate(resolve));
+
+  function startInfo(arn: string): InvocationInfo {
+    return {
+      executionArn: arn,
+      requestId: `req-${arn}`,
+      isFirstInvocation: true,
+      executionInput: undefined,
+      operations: {},
+    } as InvocationInfo;
+  }
+
+  async function changeOp(
+    plugin: DurableInstrumentationPlugin,
+    arn: string,
+    id: string,
+  ): Promise<void> {
+    const operation = op({ id, name: id, status: "SUCCEEDED" });
+    await plugin.onOperationChange?.({
+      executionArn: arn,
+      requestId: `req-${arn}`,
+      operations: { [id]: operation },
+      updatedOperations: { [id]: operation },
+    } as OperationChangeInfo);
+  }
+
+  async function end(
+    plugin: DurableInstrumentationPlugin,
+    arn: string,
+    status: InvocationEndInfo["status"] = "SUCCEEDED",
+  ): Promise<void> {
+    await plugin.onInvocationEnd?.(
+      endInfo({ executionArn: arn, requestId: `req-${arn}`, status }),
+    );
+  }
+
+  async function drainArn(
+    plugin: DurableInstrumentationPlugin,
+    arn: string,
+  ): Promise<void> {
+    await plugin.wrapInvocation?.(
+      startInfo(arn),
+      async () => ({}) as unknown as DurableExecutionInvocationOutput,
+    );
+  }
+
+  it("never lets one execution's record replace another's (#916)", async () => {
+    const exporter = new GatedExporter();
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-change",
+    });
+
+    // A's RUNNING snapshot is exported and held open.
+    exporter.blocked = true;
+    await changeOp(plugin, A, "step-1");
+    await tick();
+    expect(exporter.held).toBe(1);
+
+    // While it is held: B finishes, then A finishes. Previously A's terminal
+    // record overwrote B's in the single pending slot.
+    await end(plugin, B);
+    await end(plugin, A);
+
+    exporter.blocked = false;
+    exporter.release();
+    await Promise.all([drainArn(plugin, A), drainArn(plugin, B)]);
+
+    expect(exporter.records.map((r) => [r.executionArn, r.status])).toEqual([
+      [A, "RUNNING"],
+      [B, "SUCCEEDED"],
+      [A, "SUCCEEDED"],
+    ]);
+  });
+
+  it("still coalesces rapid snapshots of the same execution", async () => {
+    const exporter = new GatedExporter();
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-change",
+    });
+
+    exporter.blocked = true;
+    await changeOp(plugin, A, "step-0");
+    await tick();
+
+    for (let i = 1; i <= 5; i++) await changeOp(plugin, A, `step-${i}`);
+    await end(plugin, A);
+
+    exporter.blocked = false;
+    exporter.release();
+    await drainArn(plugin, A);
+
+    // First snapshot (already in flight) + the terminal one; the five
+    // intermediate RUNNING snapshots were superseded.
+    expect(exporter.byArn(A).map((r) => r.status)).toEqual([
+      "RUNNING",
+      "SUCCEEDED",
+    ]);
+  });
+
+  it("coalesces per execution and keeps first-scheduled order", async () => {
+    const exporter = new GatedExporter();
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-change",
+    });
+
+    exporter.blocked = true;
+    await changeOp(plugin, A, "step-1");
+    await tick();
+
+    await changeOp(plugin, B, "step-1");
+    await changeOp(plugin, C, "step-1");
+    await changeOp(plugin, B, "step-2"); // B re-scheduled: keeps its place
+    await end(plugin, B);
+
+    exporter.blocked = false;
+    exporter.release();
+    await Promise.all([
+      drainArn(plugin, A),
+      drainArn(plugin, B),
+      drainArn(plugin, C),
+    ]);
+
+    expect(exporter.records.map((r) => [r.executionArn, r.status])).toEqual([
+      [A, "RUNNING"],
+      [B, "SUCCEEDED"],
+      [C, "RUNNING"],
+    ]);
+  });
+
+  it("delivers every terminal record when many invocations run concurrently", async () => {
+    // Slow exporter: every export yields to the event loop, so invocations
+    // genuinely interleave with in-flight exports.
+    class SlowExporter extends GatedExporter {
+      async export(record: WorkflowInsightRecord): Promise<void> {
+        await super.export(record);
+        await tick();
+      }
+    }
+    const exporter = new SlowExporter();
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-complete",
+    });
+
+    const arns = Array.from({ length: 50 }, (_, i) => arnFor(`exec-${i}`));
+    await Promise.all(
+      arns.map((arn) =>
+        plugin.wrapInvocation?.(startInfo(arn), async () => {
+          await plugin.onInvocationStart?.(startInfo(arn));
+          await tick();
+          await end(plugin, arn, i(arn) % 2 === 0 ? "SUCCEEDED" : "FAILED");
+          return {} as unknown as DurableExecutionInvocationOutput;
+        }),
+      ),
+    );
+
+    expect(exporter.records).toHaveLength(arns.length);
+    expect(new Set(exporter.records.map((r) => r.executionArn))).toEqual(
+      new Set(arns),
+    );
+    expect(exporter.maxActive).toBe(1);
+
+    function i(arn: string): number {
+      return arns.indexOf(arn);
+    }
+  });
+
+  it("drains only the invoking execution, not the others", async () => {
+    const exporter = new GatedExporter();
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-complete",
+    });
+
+    // A's record is exported and completes.
+    await end(plugin, A);
+    await tick();
+    // B's record is exported and held open.
+    exporter.blocked = true;
+    await end(plugin, B);
+    await tick();
+    expect(exporter.held).toBe(1);
+
+    // A's invocation returns without waiting for B's export.
+    let aReturned = false;
+    const aDone = drainArn(plugin, A).then(() => {
+      aReturned = true;
+    });
+    await tick();
+    expect(aReturned).toBe(true);
+    expect(exporter.held).toBe(1);
+
+    exporter.blocked = false;
+    exporter.release();
+    await Promise.all([aDone, drainArn(plugin, B)]);
+    expect(exporter.records.map((r) => r.executionArn)).toEqual([A, B]);
+  });
+
+  it("a failing export for one execution does not block the others", async () => {
+    class FailingExporter extends GatedExporter {
+      async export(record: WorkflowInsightRecord): Promise<void> {
+        await super.export(record);
+        if (record.executionArn === A) throw new Error("boom");
+      }
+    }
+    const exporter = new FailingExporter();
+    const plugin = workflowInsight({
+      exporters: [exporter],
+      emitMode: "on-complete",
+    });
+
+    await end(plugin, A);
+    await end(plugin, B);
+    await Promise.all([drainArn(plugin, A), drainArn(plugin, B)]);
+
+    expect(exporter.records.map((r) => r.executionArn)).toEqual([A, B]);
   });
 });
