@@ -143,6 +143,42 @@ Integration test function deployment and tests are orchestrated using the [integ
 
 The SAM-managed integration test functions are deployed once per runtime and reused across PRs.
 
+### Lambda Managed Instances (LMI)
+
+The [capacity provider workflow](.github/workflows/capacity-provider-tests.yml)
+runs on Node.js 24.x for eligible same-repository pull requests. It deploys,
+tests, and cleans up only examples that export `capacityProviderConfig`.
+The same integration assertions run locally and against LMI; examples without
+this configuration are skipped in the LMI job. Count the passed tests in the
+Jest summary, not the total including skipped tests.
+
+The LMI selection contains 14 example suites and 24 test cases:
+
+| Examples | Cases | Coverage |
+| --- | ---: | --- |
+| `step-basic`, `step-attempt-fallback`, `step-error-determinism`, `retry-exhaustion` | 4 | Checkpointed results, retry success and exhaustion, error consistency after replay |
+| `wait`, `wait-for-condition` | 2 | Durable waits and polling state across resumes |
+| `create-callback`, `create-callback-timeout`, `wait-for-callback` | 9 | Callback success, failure, undefined results/errors, timeout and heartbeat timeout |
+| `run-in-child-context`, `run-in-child-context-failing-step` | 4 | Child results, operation hierarchy, and failure handling across replay |
+| `map-basic`, `parallel-basic` | 3 | Concurrent child operations and results after a wait |
+| `serde-basic` | 2 | Custom serialization preserving class methods after replay |
+
+To run this selection in your configured test account after building, set the
+cloud integration environment variables above, including
+`TEST_CAPACITY_PROVIDER_ARN`, and run:
+
+```bash
+npm run test:integration -- --capacity-provider-only --runtime 24.x
+# Clean up the capacity provider functions after testing.
+npm run test:integration -- --cleanup-only --capacity-provider-only --runtime 24.x
+```
+
+To extend LMI coverage, add `capacityProviderConfig: {}` to an example's
+`config` and use the shared `createTests` helper in its tests. The deployment
+catalog is generated from those configs during the examples build. Select
+tests that can run against a real Lambda function without local mocks or
+undeployed dependencies, and keep the coverage summary above in sync.
+
 ### Checking function logs
 
 The functions used in the integration tests are kept alive for reuse. This makes it possible to debug functions or function logs in the console.

@@ -5,6 +5,7 @@ import {
 import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
+  capacityProviderConfig: {},
   name: "Create Callback - Timeout",
   description:
     "Demonstrates callback timeout scenarios (heartbeat timeout and general timeout)",
