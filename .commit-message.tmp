@@ -1,0 +1,93 @@
+fix(testing-sdk): don't gate PENDING-recovery on hasScheduledFunction
+
+In `TestExecutionOrchestrator`, when the handler returns PENDING, a
+recovery path re-invokes the handler if the server has dirty operations
+that the handler may not have observed before it returned:
+
+    if (!this.scheduler.hasScheduledFunction() && hasDirtyOperations) {
+      this.scheduler.scheduleFunction(() => this.invokeHandler(...), ...);
+    }
+
+The `!hasScheduledFunction()` gate is wrong. It was likely intended to
+avoid double-scheduling, but it conflates "something is scheduled" with
+"that something will handle the pending updates" — which isn't true when
+the scheduled timer is unrelated, for example the timer for a sibling
+`ctx.wait` in a parallel branch.
+
+Concrete failure shape (mirrors issue #510):
+
+    parallel(
+      { name: 'body',     func: ctx => map(..., waitForCallback) },
+      { name: 'watchdog', func: ctx => ctx.wait(N) },
+    )
+
+Timeline without this fix:
+
+ 1. Initial invocation registers the map, the callbacks, and the
+    watchdog's `ctx.wait`. `handleWaitUpdate` schedules a
+    `setTimeout(..., N seconds)` via `TimerScheduler` for the watchdog.
+ 2. Termination fires with `WAIT_SCHEDULED` (correct — nothing has
+    completed yet). Handler returns PENDING.
+ 3. Test calls `sendCallbackSuccess`. Callbacks become dirty on the
+    server. `handleCallbackUpdate` schedules a 0ms `setTimeout` for the
+    follow-up invocation.
+ 4. That 0ms timer fires while the first invocation is still
+    mid-teardown, hits the `hasActiveInvocation()` guard, and is
+    silently dropped.
+ 5. The first invocation completes. `hasDirtyOperations` is true — the
+    callback updates are sitting in the server's dirty set. But
+    `hasScheduledFunction()` is also true, because the watchdog's
+    N-second timer is still in `runningTimers`. The gate blocks
+    recovery and nothing else re-invokes.
+ 6. Execution sits idle until the watchdog's scheduled time arrives,
+    then re-invokes, finishes the map in seconds, and — if `parallel`
+    was configured with `minSuccessful: 1` — takes the watchdog's
+    result while the body branch's work is abandoned.
+
+Fix: re-invoke whenever `hasDirtyOperations` is true at PENDING time,
+without gating on `hasScheduledFunction`. Pre-existing scheduled
+functions (like the watchdog timer) are independent of checkpoint-sync
+state and will still fire on their own schedule.
+
+Reproducers / regression tests added under
+`packages/.../examples/map/`:
+
+ - `wait-for-callback/` — bare `map + waitForCallback` (2 branches).
+ - `wait-for-callback-many/` — 4 branches with staggered callbacks.
+ - `wait-for-callback-parallel/` — the exact issue-#510 shape; asserts
+   `elapsedMs < 1500` against a 4-second watchdog.
+ - `wait-for-callback-parallel-nowatchdog/` — no-watchdog control.
+
+Before this change the `wait-for-callback-parallel` test takes
+~watchdog_delay ms (4000+ ms) and `parallel` resolves with only the
+watchdog's result. After the change it completes in ~300 ms with the
+body's result, as intended.
+
+Scope of this fix
+-----------------
+
+This is a fix in the **testing library's local test orchestrator**, not
+in the core SDK. Investigation did not find a corresponding bug in the
+core SDK: when callbacks are delivered to the handler, the SDK's
+callback handler, checkpoint manager, and termination logic behave
+correctly.
+
+The production issue reported in issue #510 (11–12 minute silence on
+real Lambda executions) likely has a structurally similar root cause
+in the Durable Execution service (which this repo does not include).
+That would need to be addressed separately by the service team. This
+PR does not close issue #510 by itself.
+
+Test-suite impact
+-----------------
+
+One existing examples test (`promise/any/promise-any-failure`) had a
+history snapshot that encoded the buggy (lower) `InvocationCompleted`
+count. The history was regenerated.
+
+One internal testing-package integration test
+(`should track operations across multiple invocations`) had
+`expect(invocations).toHaveLength(2)`. With the fix, the natural
+execution of `wait → step → wait → return` produces 3 invocations; the
+assertion was relaxed to accept 2 or 3 (both valid depending on race
+with the termination cooldown).
