@@ -2,31 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { EventEmitter } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
-import checkpointModule from "../packages/aws-durable-execution-sdk-js/src/utils/checkpoint/checkpoint-manager.ts";
-import terminationModule from "../packages/aws-durable-execution-sdk-js/src/termination-manager/termination-manager.ts";
 import { deferred } from "./scenarios.mjs";
+import { manager, preparePoll } from "./manager-support.mjs";
 
-const { CheckpointManager } = checkpointModule;
-const { TerminationManager } = terminationModule;
-
-function manager(client, token = "closed") {
-  const logger = { debug() {}, info() {}, warn() {}, error() {} };
-  return new CheckpointManager(
-    `arn:${token}`,
-    {},
-    client,
-    new TerminationManager(),
-    token,
-    new EventEmitter(),
-    logger,
-    new Set(),
-    {},
-    token,
-    () => 60000,
-  );
-}
 const update = {
   Type: "STEP",
   Action: "SUCCEED",
@@ -76,7 +55,9 @@ test("queued immediate cannot issue a request after dispose", async () => {
   assert.deepEqual(calls, []);
 });
 
-test("in-flight refresh cannot rearm polling after dispose", async () => {
+test("in-flight refresh cannot rearm polling after dispose", {
+  timeout: 5000,
+}, async () => {
   const entered = deferred(),
     release = deferred();
   let calls = 0;
@@ -89,9 +70,7 @@ test("in-flight refresh cannot rearm polling after dispose", async () => {
     },
   });
   // A still-executing sibling prevents suspension while this callback is in flight.
-  m.markOperationState("1", "EXECUTING");
-  m.markOperationState("2", "IDLE_NOT_AWAITED");
-  const op = m.getAllOperations().get("2");
+  const op = preparePoll(m);
   try {
     const refresh = m.forceRefreshAndCheckStatus("2");
     await entered.promise;

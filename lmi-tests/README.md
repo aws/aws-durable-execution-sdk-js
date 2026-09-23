@@ -54,7 +54,10 @@ substitute for an actual platform invocation timeout.
 ## Evidence and isolation
 
 Cloud deployment uses Node.js 24 / arm64, 2 GiB, environment concurrency **2**,
-and native scaling limits of exactly **one execution environment**. A shared
+exactly **one Node.js worker** (`AWS_LAMBDA_NODEJS_WORKER_COUNT=1`),
+and native scaling limits of exactly **one execution environment**. The worker
+count is explicit because [LMI defaults to multiple workers](https://docs.aws.amazon.com/lambda/latest/dg/lambda-managed-instances-nodejs-runtime.html);
+environment concurrency 2 alone does not force both requests onto one worker. A shared
 `/tmp` UUID identifies the environment; a module UUID, PID and worker thread ID
 identify the Node worker. Each request records live held-work heartbeats. The
 suite requires overlapping intervals inside the same worker before admitting
@@ -96,7 +99,7 @@ npm ci
 npm run build -w packages/aws-durable-execution-sdk-js
 pip install -r lmi-tests/requirements.txt
 npm run test:lmi:harness
-python -m pytest lmi-tests/tests/test_evidence.py lmi-tests/tests/test_deploy.py
+python -m pytest lmi-tests/tests/test_evidence.py lmi-tests/tests/test_deploy.py lmi-tests/tests/test_regression_summary.py
 npm run test:lmi:regressions  # expected to expose unfixed #927 assertions
 python lmi-tests/deploy.py build
 
@@ -120,3 +123,10 @@ do not suppress deployed evidence. No regression uses `skip`, `xfail`, or
 `continue-on-error`. Workflow cleanup runs even after failure; an expired-resource
 reconciler handles interrupted jobs. Histories, S3 events, runtime logs, deployment
 identity, JUnit outcomes and cleanup diagnostics are retained as artifacts.
+
+The local-regression job emits readable test diagnostics to its live log as well
+as JUnit. Its job summary separates assertion failures from test execution errors
+(such as missing checkpoint-operation metadata); an execution error is not SDK
+regression evidence. The passing harness job exercises the in-flight polling
+fixture while its manager is open, so setup failures are caught independently
+of the intentionally failing post-disposal contract.

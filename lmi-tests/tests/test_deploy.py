@@ -36,6 +36,7 @@ def test_template_deploys_lmi_at_two_concurrent_invocations_with_one_environment
     assert len(functions) == 3
     for function in functions:
         assert function["Runtime"] == "nodejs24.x"
+        assert function["Environment"]["Variables"]["AWS_LAMBDA_NODEJS_WORKER_COUNT"] == "1"
         assert function["Handler"] == "index.handler"
         assert function["FunctionScalingConfig"] == SCALING
         assert (
@@ -63,7 +64,13 @@ def configuration(manifest):
         State="Active",
         DurableConfig={"ExecutionTimeout": 300},
         Timeout=180,
-        Environment={"Variables": {"LMI_COMMIT": "commit", "LMI_RUN_ID": "run"}},
+        Environment={
+            "Variables": {
+                "LMI_COMMIT": "commit",
+                "LMI_RUN_ID": "run",
+                "AWS_LAMBDA_NODEJS_WORKER_COUNT": "1",
+            }
+        },
     )
 
 
@@ -103,3 +110,15 @@ def test_readback_rejects_extra_execution_environments(manifest):
             manifest,
             "normal",
         )
+
+
+@pytest.mark.parametrize("workers", [None, "2", "8"])
+def test_readback_rejects_missing_or_multiple_workers(manifest, workers):
+    config = configuration(manifest)
+    variables = config["Environment"]["Variables"]
+    if workers is None:
+        del variables["AWS_LAMBDA_NODEJS_WORKER_COUNT"]
+    else:
+        variables["AWS_LAMBDA_NODEJS_WORKER_COUNT"] = workers
+    with pytest.raises(ProvisioningError):
+        verify(config, {"AppliedFunctionScalingConfig": SCALING}, manifest, "normal")

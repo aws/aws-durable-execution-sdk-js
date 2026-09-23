@@ -31,7 +31,7 @@ jobs:
       - run: npm run test:lmi:harness
       - run: pip install -r lmi-tests/requirements.txt
       - run: ruff check lmi-tests && ruff format --check lmi-tests
-      - run: python -m pytest lmi-tests/tests/test_evidence.py lmi-tests/tests/test_deploy.py --junitxml=lmi-tests/artifacts/harness.xml
+      - run: python -m pytest lmi-tests/tests/test_evidence.py lmi-tests/tests/test_deploy.py lmi-tests/tests/test_regression_summary.py --junitxml=lmi-tests/artifacts/harness.xml
       - run: python lmi-tests/deploy.py build
       - uses: actions/upload-artifact@v7
         if: always()
@@ -57,7 +57,13 @@ jobs:
       - name: Run desired lifecycle contracts against this SDK
         run: |
           mkdir -p lmi-tests/artifacts
-          node --import tsx --test --test-reporter=junit lmi-tests/local.test.mjs lmi-tests/manager.test.mjs > lmi-tests/artifacts/regressions.xml
+          node --import tsx --test \
+            --test-reporter=spec --test-reporter-destination=stdout \
+            --test-reporter=junit --test-reporter-destination=lmi-tests/artifacts/regressions.xml \
+            lmi-tests/local.test.mjs lmi-tests/manager.test.mjs
+      - name: Summarize assertions and test execution errors
+        if: always()
+        run: python lmi-tests/summarize_regressions.py lmi-tests/artifacts/regressions.xml >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v7
         if: always()
         with:

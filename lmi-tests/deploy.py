@@ -178,6 +178,7 @@ def template(manifest, functions=True):
                             "LMI_BUCKET": bucket,
                             "LMI_COMMIT": manifest["commit"],
                             "LMI_RUN_ID": manifest["run"],
+                            "AWS_LAMBDA_NODEJS_WORKER_COUNT": "1",
                             "AWS_RETRY_MODE": "standard",
                         }
                     },
@@ -240,6 +241,8 @@ def verify(config, scaling, manifest, key):
     checks = [
         actual.get("CapacityProviderArn") == manifest["provider"],
         actual.get("PerExecutionEnvironmentMaxConcurrency") == manifest["concurrency"],
+        config.get("Environment", {}).get("Variables", {}).get("AWS_LAMBDA_NODEJS_WORKER_COUNT")
+        == "1",
         config.get("Runtime") == manifest["runtime"],
         config.get("Architectures") == ["arm64"],
         config.get("Version") == QUALIFIER,
@@ -301,6 +304,7 @@ def deploy(args):
         "runtime": args.runtime,
         "runtimeVersion": os.environ.get("LMI_RUNTIME_VERSION_ARN", ""),
         "concurrency": args.concurrency,
+        "workerCount": 1,
         "commit": built["commit"],
         "codeKey": "code/" + digest.hex() + ".zip",
         "codeSha256": base64.b64encode(digest).decode(),
