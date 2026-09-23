@@ -21,7 +21,16 @@ def cloud(request):
         pytest.fail("Cloud cases require --cloud and a verified deployment")
     instance = Cloud(json.loads((ARTIFACTS / "manifest.json").read_text()))
     instance.verify()
+    if not getattr(request.session, "lmi_ready", False):
+        instance.quiesce("before-first-case")
     try:
         yield instance
     finally:
-        instance.close_case()
+        try:
+            instance.close_case()
+            request.session.lmi_ready = True
+        except Exception:
+            request.session.shouldstop = (
+                "Shared LMI worker did not settle; refusing to run later cases"
+            )
+            raise

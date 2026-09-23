@@ -20,8 +20,7 @@ def manifest():
         provider="provider",
         commit="commit",
         run="run",
-        invocationTimeout=180,
-        deadlineTimeout=60,
+        invocationTimeout=60,
         executionTimeout=300,
     )
 
@@ -33,7 +32,7 @@ def test_template_deploys_lmi_at_two_concurrent_invocations_with_one_environment
     functions = [
         r["Properties"] for r in resources.values() if r["Type"] == "AWS::Lambda::Function"
     ]
-    assert len(functions) == 3
+    assert len(functions) == 1
     for function in functions:
         assert function["Runtime"] == "nodejs24.x"
         assert function["Environment"]["Variables"]["AWS_LAMBDA_NODEJS_WORKER_COUNT"] == "1"
@@ -45,7 +44,7 @@ def test_template_deploys_lmi_at_two_concurrent_invocations_with_one_environment
             ]
             == 2
         )
-    assert {f["Timeout"] for f in functions} == {60, 180}
+    assert {f["Timeout"] for f in functions} == {60}
 
 
 def configuration(manifest):
@@ -63,7 +62,7 @@ def configuration(manifest):
         MemorySize=2048,
         State="Active",
         DurableConfig={"ExecutionTimeout": 300},
-        Timeout=180,
+        Timeout=60,
         Environment={
             "Variables": {
                 "LMI_COMMIT": "commit",
@@ -79,7 +78,7 @@ def test_readback_accepts_exact_artifact_and_configuration(manifest):
         configuration(manifest),
         {"AppliedFunctionScalingConfig": SCALING},
         manifest,
-        "normal",
+        "shared",
     )
 
 
@@ -97,7 +96,7 @@ def test_readback_rejects_wrong_artifact_runtime_and_capacity(manifest, key, val
     config = configuration(manifest)
     config[key] = value
     with pytest.raises(ProvisioningError):
-        verify(config, {"AppliedFunctionScalingConfig": SCALING}, manifest, "normal")
+        verify(config, {"AppliedFunctionScalingConfig": SCALING}, manifest, "shared")
 
 
 def test_readback_rejects_extra_execution_environments(manifest):
@@ -108,7 +107,7 @@ def test_readback_rejects_extra_execution_environments(manifest):
             configuration(manifest),
             {"AppliedFunctionScalingConfig": scaling},
             manifest,
-            "normal",
+            "shared",
         )
 
 
@@ -121,4 +120,71 @@ def test_readback_rejects_missing_or_multiple_workers(manifest, workers):
     else:
         variables["AWS_LAMBDA_NODEJS_WORKER_COUNT"] = workers
     with pytest.raises(ProvisioningError):
-        verify(config, {"AppliedFunctionScalingConfig": SCALING}, manifest, "normal")
+        verify(config, {"AppliedFunctionScalingConfig": SCALING}, manifest, "shared")
+
+
+def test_persistent_resources_and_active_code_do_not_expire(manifest):
+    resources = template(manifest)["Resources"]
+    for resource in resources.values():
+        if resource["Type"] in {"AWS::Lambda::Function", "AWS::S3::Bucket", "AWS::Logs::LogGroup"}:
+            assert resource["DeletionPolicy"] == resource["UpdateReplacePolicy"] == "Retain"
+    rules = resources["Bucket"]["Properties"]["LifecycleConfiguration"]["Rules"]
+    assert {rule["Prefix"] for rule in rules} == {"control/", "events/"}
+
+
+def owned_stack(status="UPDATE_COMPLETE"):
+    from deploy import OWNER
+
+    return {
+        "StackStatus": status,
+        "Tags": [
+            {"Key": "Suite", "Value": OWNER},
+            {"Key": "Persistent", "Value": "true"},
+            {"Key": "Stack", "Value": "test-stack"},
+        ],
+    }
+
+
+def test_persistent_update_never_recreates_or_deletes_existing_functions(manifest, monkeypatch):
+    import deploy
+    from types import SimpleNamespace
+
+    calls = []
+    cfn = SimpleNamespace(update_stack=lambda **kwargs: calls.append(kwargs))
+    stack = owned_stack()
+    monkeypatch.setattr(deploy, "wait_stack", lambda *_args: stack)
+    assert deploy.update_persistent_stack(cfn, manifest, stack, []) == stack
+    assert len(calls) == 1 and calls[0]["StackName"] == "test-stack"
+
+
+@pytest.mark.parametrize("status", ["CREATE_FAILED", "UPDATE_IN_PROGRESS", "ROLLBACK_COMPLETE"])
+def test_unhealthy_stack_is_retained_for_recovery(status):
+    from deploy import require_owned_stack
+
+    with pytest.raises(ProvisioningError, match="resources retained"):
+        require_owned_stack(owned_stack(status), "test-stack")
+
+
+def test_unrelated_stack_is_not_updated():
+    from deploy import require_owned_stack
+
+    with pytest.raises(ProvisioningError, match="not owned"):
+        require_owned_stack(owned_stack(), "different-stack")
+
+
+def test_no_update_is_accepted_without_recreation(manifest):
+    import deploy
+    from botocore.exceptions import ClientError
+    from types import SimpleNamespace
+
+    def update(**_kwargs):
+        raise ClientError(
+            {"Error": {"Code": "ValidationError", "Message": "No updates are to be performed."}},
+            "UpdateStack",
+        )
+
+    stack = owned_stack()
+    assert (
+        deploy.update_persistent_stack(SimpleNamespace(update_stack=update), manifest, stack, [])
+        == stack
+    )

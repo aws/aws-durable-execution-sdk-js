@@ -13,6 +13,8 @@ export function deferred() {
 const noRetry = { retryStrategy: () => ({ shouldRetry: false }) };
 
 export async function workflow(event, ctx, io) {
+  if (event.scenario === "quiescence")
+    return ctx.step("snapshot", () => io.snapshot());
   const body = async (name, value = event.marker) => {
     await io.record("BODY", { operation: name });
     return value;

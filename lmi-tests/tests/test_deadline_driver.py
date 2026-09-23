@@ -42,7 +42,7 @@ def setup(monkeypatch, tmp_path):
     monkeypatch.setattr(driver, "client", lambda service: services[service])
     monkeypatch.setattr(driver, "time", clock)
     monkeypatch.setattr(driver, "ARTIFACTS", tmp_path)
-    instance = driver.Cloud({"bucket": "bucket", "functions": {"normal": "function"}})
+    instance = driver.Cloud({"bucket": "bucket", "run": "run", "functions": {"shared": "function"}})
     return instance, clock, calls, tmp_path
 
 
@@ -95,6 +95,7 @@ def test_prepared_but_uninvoked_probe_is_not_treated_as_execution_during_cleanup
     cloud, _clock, calls, _output = setup
     cloud.prepare("barrier")
     cloud.refresh = lambda: []
+    cloud.quiesce = lambda _label: None
     cloud.close_case()
     assert all(call[0] == "put" for call in calls)
     assert all(call[2]["Body"] == b"release" for call in calls[4:])

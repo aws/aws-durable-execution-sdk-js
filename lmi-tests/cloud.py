@@ -18,6 +18,7 @@ class Cloud:
         self.lam, self.s3, self.logs = client("lambda"), client("s3"), client("logs")
         self.items, self.gates, self.cache = [], set(), {}
         self.next_history_read = 0.0
+        self.completed_diagnostics = set()
 
     def verify(self):
         for key, arn in self.manifest["functions"].items():
@@ -32,7 +33,9 @@ class Cloud:
 
     def control(self, gate, value):
         self.s3.put_object(
-            Bucket=self.manifest["bucket"], Key="control/" + gate, Body=value.encode()
+            Bucket=self.manifest["bucket"],
+            Key=f"control/{self.manifest['run']}/" + gate,
+            Body=value.encode(),
         )
 
     @staticmethod
@@ -42,9 +45,13 @@ class Cloud:
     def save_item(self, item):
         save(ARTIFACTS / f"invocations/{item['marker']}.json", item)
 
-    def prepare(self, scenario, fixture="normal"):
+    def prepare(self, scenario, fixture="shared"):
         marker = scenario + "-" + uuid.uuid4().hex[:12]
-        gates = {key: marker + "-" + key for key in ("peer", "loser", "winner", "transport")}
+        gates = (
+            {}
+            if scenario == "quiescence"
+            else {key: marker + "-" + key for key in ("peer", "loser", "winner", "transport")}
+        )
         item = {
             "marker": marker,
             "scenario": scenario,
@@ -69,6 +76,7 @@ class Cloud:
             raise CollectionError("An Invoke attempt must not be silently repeated")
         payload = {key: item[key] for key in ("marker", "gates")}
         payload["scenario"] = item["scenario"]
+        payload["run"] = self.manifest["run"]
         # No control PUTs or evidence collection between this timestamp and Invoke.
         item["timing"]["invokeBegin"] = self.timestamp()
         try:
@@ -97,7 +105,7 @@ class Cloud:
         self.wait_until(target)
         return self.invoke(item)
 
-    def start(self, scenario, fixture="normal"):
+    def start(self, scenario, fixture="shared"):
         return self.invoke(self.prepare(scenario, fixture))
 
     def release(self, item, gate):
@@ -110,8 +118,10 @@ class Cloud:
             )
             self.save_item(item)
 
-    def refresh(self, full=False):
-        prefixes = ["events/"] if full else [f"events/{i['marker']}/" for i in self.items]
+    def refresh(self, full=False, markers=None):
+        prefix = f"events/{self.manifest['run']}/"
+        selected = markers if markers is not None else [i["marker"] for i in self.items]
+        prefixes = [prefix] if full else [prefix + marker + "/" for marker in selected]
         missing = []
         for prefix in prefixes:
             for page in self.s3.get_paginator("list_objects_v2").paginate(
@@ -168,12 +178,12 @@ class Cloud:
             **kwargs,
         )
 
-    def finish(self, item, status="SUCCEEDED"):
+    def finish(self, item, status="SUCCEEDED", seconds=150):
         def terminal():
             response = self.lam.get_durable_execution(DurableExecutionArn=item["arn"])
             return response if response["Status"] != "RUNNING" else None
 
-        result = self.poll(terminal, seconds=150)
+        result = self.poll(terminal, seconds=seconds)
         save(ARTIFACTS / f"executions/{item['marker']}.json", result)
         assert result["Status"] == status, result
         if status == "FAILED":
@@ -209,7 +219,11 @@ class Cloud:
 
     def collect(self):
         events = self.refresh(full=True)
-        items = {e["execution"]: {"arn": e["execution"], "marker": e["marker"]} for e in events}
+        items = {
+            e["execution"]: {"arn": e["execution"], "marker": e["marker"]}
+            for e in events
+            if not e["marker"].startswith("quiescence-")
+        }
         errors = []
         for item in items.values():
             try:
@@ -236,17 +250,140 @@ class Cloud:
             save(ARTIFACTS / "collection-errors.json", errors)
             raise CollectionError("; ".join(errors))
 
+    def running(self):
+        running = []
+        for arn in self.manifest["functions"].values():
+            for page in self.lam.get_paginator("list_durable_executions_by_function").paginate(
+                FunctionName=arn.rsplit(":", 1)[0], Statuses=["RUNNING"]
+            ):
+                running.extend(
+                    e
+                    for e in page.get("DurableExecutions", [])
+                    if e["DurableExecutionArn"] not in self.completed_diagnostics
+                )
+        return running
+
+    def load_markers(self, markers):
+        events = self.refresh(markers=markers)
+        items = {
+            e["execution"]: {"arn": e["execution"], "marker": e["marker"], "gates": {}}
+            for e in events
+            if e["marker"] in markers
+        }
+        # Invoke can have been accepted even if a failed test did not receive its
+        # response or the handler never entered. Match only this case's names.
+        for item in self.running():
+            if item.get("DurableExecutionName") in markers:
+                items[item["DurableExecutionArn"]] = {
+                    "arn": item["DurableExecutionArn"],
+                    "marker": item["DurableExecutionName"],
+                    "gates": {},
+                }
+        self.items = list(items.values())
+
+    def worker_snapshot(self):
+        item = self.start("quiescence")
+        try:
+            result = self.finish(item, seconds=30)
+            self.completed_diagnostics.add(item["arn"])
+            snapshot = json.loads(result["Result"])
+            if (
+                snapshot.get("schema") != 1
+                or snapshot.get("run") != self.manifest["run"]
+                or not isinstance(snapshot.get("activityVersion"), int)
+                or not isinstance(snapshot.get("environment"), str)
+                or not isinstance(snapshot.get("worker"), str)
+                or not isinstance(snapshot.get("requests"), list)
+            ):
+                raise CollectionError("Invalid quiescence snapshot or different deployed run")
+            return snapshot
+        finally:
+            # Diagnostic invocations are not business test cases. Their own
+            # lifecycle is excluded by the worker snapshot, not by clearing work.
+            self.items.remove(item)
+
+    def quiesce(self, label):
+        deadline = time.monotonic() + self.manifest.get("drainTimeout", 150)
+        quiet = self.manifest.get("quietSeconds", 5)
+        quiet_since, samples, previous_activity = None, [], None
+        while time.monotonic() < deadline:
+            snapshot = self.worker_snapshot()
+            running = self.running()
+            samples.append({"time": self.timestamp(), "worker": snapshot, "running": running})
+            save(
+                ARTIFACTS / f"quiescence/{label}.json", {"quietSeconds": quiet, "samples": samples}
+            )
+            activity = (
+                snapshot.get("environment"),
+                snapshot.get("worker"),
+                snapshot.get("activityVersion", 0),
+            )
+            if not snapshot["requests"] and not running:
+                if activity != previous_activity:
+                    quiet_since = None
+                quiet_since = time.monotonic() if quiet_since is None else quiet_since
+                if time.monotonic() - quiet_since >= quiet:
+                    return
+            else:
+                quiet_since = None
+            previous_activity = activity
+            time.sleep(2)
+        raise CollectionError(
+            "Shared LMI worker did not become quiescent; subsequent cases must not run"
+        )
+
     def close_case(self):
+        failures = []
         for gate in self.gates:
-            self.control(gate, "release")
-        # Stop retries after retaining evidence. Logical stop is not evidence that
-        # old JS stacks exited; timeout fixtures are isolated from normal/warm cases.
+            try:
+                self.control(gate, "release")
+            except Exception as error:
+                failures.append(str(error))
         for item in self.items:
             if not item.get("arn"):
                 continue
-            self.history(item)
-            result = self.lam.get_durable_execution(DurableExecutionArn=item["arn"])
-            save(ARTIFACTS / f"executions/{item['marker']}.json", result)
-            if result["Status"] == "RUNNING":
-                self.lam.stop_durable_execution(DurableExecutionArn=item["arn"])
+            try:
+                result = self.lam.get_durable_execution(DurableExecutionArn=item["arn"])
+                if result["Status"] == "RUNNING":
+                    try:
+                        self.lam.stop_durable_execution(DurableExecutionArn=item["arn"])
+                    except ClientError as error:
+                        if error.response["Error"]["Code"] != "ResourceConflictException":
+                            raise
+                        if (
+                            self.lam.get_durable_execution(DurableExecutionArn=item["arn"])[
+                                "Status"
+                            ]
+                            == "RUNNING"
+                        ):
+                            raise
+                self.history(item)
+                save(ARTIFACTS / f"executions/{item['marker']}.json", result)
+            except Exception as error:
+                failures.append(str(error))
+        label = self.items[0]["marker"] if self.items else "empty-" + uuid.uuid4().hex[:8]
+        if failures:
+            save(ARTIFACTS / f"quiescence/{label}-errors.json", failures)
+            raise CollectionError("Failed to release/stop this case: " + "; ".join(failures))
+        self.quiesce(label)
         self.refresh()
+
+    def settle_run(self):
+        # Most runs were already drained after their final case. Avoid rereading
+        # every old history/control on each deployment when the worker is idle.
+        if not self.running() and not self.worker_snapshot()["requests"]:
+            self.quiesce("between-runs-" + uuid.uuid4().hex[:8])
+            return
+        # Release this run's latches without deleting persistent infrastructure.
+        prefix = f"control/{self.manifest['run']}/"
+        for page in self.s3.get_paginator("list_objects_v2").paginate(
+            Bucket=self.manifest["bucket"], Prefix=prefix
+        ):
+            for obj in page.get("Contents", []):
+                gate = obj["Key"][len(prefix) :]
+                if gate != "release-all":
+                    self.gates.add(gate)
+        events = self.refresh(full=True)
+        markers = {e["marker"] for e in events if not e["marker"].startswith("quiescence-")}
+        self.load_markers(markers)
+        self.close_case()

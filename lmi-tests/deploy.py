@@ -1,6 +1,6 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Build, provision, verify, collect, and retire run-owned LMI resources."""
+"""Build, update, verify, and settle the persistent shared LMI fixture."""
 
 import argparse
 import base64
@@ -21,6 +21,7 @@ from evidence import ProvisioningError
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / "lmi-tests/artifacts"
 OWNER = "js-sdk-lmi-e2e"
+DEFAULT_STACK = "js-lmi-e2e"
 SCALING = {"MinExecutionEnvironments": 1, "MaxExecutionEnvironments": 1}
 QUALIFIER = "$LATEST.PUBLISHED"
 
@@ -94,11 +95,18 @@ def template(manifest, functions=True):
                 "LifecycleConfiguration": {
                     "Rules": [
                         {
-                            "Id": "expiry",
+                            "Id": "control-expiry",
+                            "Prefix": "control/",
                             "Status": "Enabled",
                             "ExpirationInDays": 2,
                             "AbortIncompleteMultipartUpload": {"DaysAfterInitiation": 1},
-                        }
+                        },
+                        {
+                            "Id": "event-expiry",
+                            "Prefix": "events/",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 7,
+                        },
                     ]
                 },
             },
@@ -136,11 +144,7 @@ def template(manifest, functions=True):
     }
     outputs = {}
     if functions:
-        for key, timeout in (
-            ("normal", manifest["invocationTimeout"]),
-            ("deadline", manifest["deadlineTimeout"]),
-            ("transport", manifest["deadlineTimeout"]),
-        ):
+        for key, timeout in (("shared", manifest["invocationTimeout"]),):
             name = manifest["stack"] + "-" + key
             resources[key + "Logs"] = {
                 "Type": "AWS::Logs::LogGroup",
@@ -205,6 +209,10 @@ def template(manifest, functions=True):
                     ]
                 }
             }
+    for resource in resources.values():
+        if resource["Type"] in {"AWS::Lambda::Function", "AWS::S3::Bucket", "AWS::Logs::LogGroup"}:
+            resource["DeletionPolicy"] = "Retain"
+            resource["UpdateReplacePolicy"] = "Retain"
     return {
         "AWSTemplateFormatVersion": "2010-09-09",
         "Resources": resources,
@@ -253,14 +261,68 @@ def verify(config, scaling, manifest, key):
         config.get("MemorySize") == 2048,
         config.get("State") == "Active",
         config.get("DurableConfig", {}).get("ExecutionTimeout") == manifest["executionTimeout"],
-        config.get("Timeout")
-        == manifest["invocationTimeout" if key == "normal" else "deadlineTimeout"],
+        config.get("Timeout") == manifest["invocationTimeout"],
         scaling.get("AppliedFunctionScalingConfig") == SCALING,
         config.get("Environment", {}).get("Variables", {}).get("LMI_COMMIT") == manifest["commit"],
         config.get("Environment", {}).get("Variables", {}).get("LMI_RUN_ID") == manifest["run"],
     ]
     if not all(checks):
         raise ProvisioningError(f"{key}: LMI configuration/artifact/scaling readback mismatch")
+
+
+def existing_stack(cfn, name):
+    try:
+        return cfn.describe_stacks(StackName=name)["Stacks"][0]
+    except ClientError as error:
+        if error.response["Error"]["Code"] == "ValidationError" and "does not exist" in str(error):
+            return None
+        raise
+
+
+def require_owned_stack(stack, name):
+    tags = {t["Key"]: t["Value"] for t in stack.get("Tags", [])}
+    if tags.get("Suite") != OWNER or tags.get("Persistent") != "true" or tags.get("Stack") != name:
+        raise ProvisioningError("Persistent stack is not owned by this suite")
+    if stack["StackStatus"] not in {
+        "CREATE_COMPLETE",
+        "UPDATE_COMPLETE",
+        "UPDATE_ROLLBACK_COMPLETE",
+    }:
+        raise ProvisioningError(
+            f"Persistent stack requires recovery from {stack['StackStatus']}; resources retained"
+        )
+
+
+def update_persistent_stack(cfn, manifest, stack, tags):
+    require_owned_stack(stack, manifest["stack"])
+    try:
+        cfn.update_stack(
+            StackName=manifest["stack"], TemplateBody=json.dumps(template(manifest)), Tags=tags
+        )
+    except ClientError as error:
+        if "No updates are to be performed" not in str(error):
+            raise
+        return stack
+    return wait_stack(cfn, manifest["stack"], "UPDATE_COMPLETE")
+
+
+def settle_previous(stack, bucket):
+    """Release and drain the previous deployment before publishing new code."""
+    if not stack.get("Outputs"):
+        return
+    arn = next(o["OutputValue"] for o in stack["Outputs"] if o["OutputKey"] == "shared")
+    config = client("lambda").get_function_configuration(FunctionName=arn)
+    previous_run = config["Environment"]["Variables"]["LMI_RUN_ID"]
+    response = client("s3").get_object(
+        Bucket=bucket, Key=f"deployments/{previous_run}/manifest.json"
+    )
+    with response["Body"] as body:
+        previous = json.loads(body.read())
+    from cloud import Cloud
+
+    cloud = Cloud(previous)
+    cloud.verify()
+    cloud.settle_run()
 
 
 def deploy(args):
@@ -291,12 +353,15 @@ def deploy(args):
     built = json.loads((ARTIFACTS / "build.json").read_text())
     if built["sha256"] != digest.hex():
         raise ProvisioningError("Artifact changed since build")
-    suffix = args.runtime.replace("nodejs", "").replace(".", "") + f"-c{args.concurrency}"
-    name = f"js-lmi-{args.run_id}-{suffix}"
+    name = args.stack_name
+    if not re.fullmatch(r"[a-z][a-z0-9-]{0,37}", name):
+        raise ProvisioningError("stack-name must be 1-38 lowercase letters, digits or hyphens")
+    bucket = f"{name}-{account}-{hashlib.sha256(os.environ['AWS_REGION'].encode()).hexdigest()[:8]}"
     manifest = {
         "run": args.run_id,
         "stack": name,
-        "bucket": name + "-" + account,
+        "persistent": True,
+        "bucket": bucket,
         "account": account,
         "region": os.environ["AWS_REGION"],
         "provider": provider,
@@ -308,185 +373,91 @@ def deploy(args):
         "commit": built["commit"],
         "codeKey": "code/" + digest.hex() + ".zip",
         "codeSha256": base64.b64encode(digest).decode(),
-        "invocationTimeout": 180,
-        "deadlineTimeout": 60,
+        "invocationTimeout": 60,
         "executionTimeout": 300,
         "driverTimeout": 150,
         "cleanupGrace": 5,
+        "quietSeconds": 5,
+        "drainTimeout": 150,
         "created": time.time(),
-        "expires": int(time.time()) + 4 * 3600,
-        "functions": {},
+        "functions": {
+            "shared": f"arn:aws:lambda:{os.environ['AWS_REGION']}:{account}:function:{name}-shared:{QUALIFIER}"
+        },
     }
-    save(ARTIFACTS / "manifest.json", manifest)  # enough to clean up partial provisioning
-    cfn = client("cloudformation")
+    cfn, s3 = client("cloudformation"), client("s3")
     tags = [
         {"Key": "Suite", "Value": OWNER},
-        {"Key": "RunId", "Value": args.run_id},
-        {"Key": "Expires", "Value": str(manifest["expires"])},
+        {"Key": "Stack", "Value": name},
+        {"Key": "Persistent", "Value": "true"},
     ]
-    # Create only. A collision cannot take over another run or mutate shared fixtures.
-    cfn.create_stack(StackName=name, TemplateBody=json.dumps(template(manifest, False)), Tags=tags)
-    manifest["owned"] = True
+    stack = existing_stack(cfn, name)
+    if stack is None:
+        cfn.create_stack(
+            StackName=name, TemplateBody=json.dumps(template(manifest, False)), Tags=tags
+        )
+        stack = wait_stack(cfn, name, "CREATE_COMPLETE", 180)
+    else:
+        require_owned_stack(stack, name)
+        settle_previous(stack, bucket)
+    # Do not expire code objects: the active deployment and CloudFormation rollback
+    # may still reference them. Only run-scoped controls/events have TTLs.
+    s3.put_object(Bucket=bucket, Key=manifest["codeKey"], Body=data)
+    s3.put_object(Bucket=bucket, Key=f"control/{args.run_id}/release-all", Body=b"hold")
+    s3.put_object(
+        Bucket=bucket,
+        Key=f"deployments/{args.run_id}/manifest.json",
+        Body=json.dumps(manifest).encode(),
+        IfNoneMatch="*",
+    )
     save(ARTIFACTS / "manifest.json", manifest)
-    wait_stack(cfn, name, "CREATE_COMPLETE", 180)
-    client("s3").put_object(Bucket=manifest["bucket"], Key=manifest["codeKey"], Body=data)
-    client("s3").put_object(Bucket=manifest["bucket"], Key="control/release-all", Body=b"hold")
-    cfn.update_stack(StackName=name, TemplateBody=json.dumps(template(manifest)), Tags=tags)
-    stack = wait_stack(cfn, name, "UPDATE_COMPLETE")
-    for output in stack["Outputs"]:
-        key, arn = output["OutputKey"], output["OutputValue"]
-        manifest["functions"][key] = arn
-        save(ARTIFACTS / "manifest.json", manifest)
+    save(ARTIFACTS / "template.json", template(manifest))
+    stack = update_persistent_stack(cfn, manifest, stack, tags)
+    outputs = {o["OutputKey"]: o["OutputValue"] for o in stack["Outputs"]}
+    if outputs != manifest["functions"]:
+        raise ProvisioningError("Persistent stack did not expose the one expected shared function")
+    for key, arn in manifest["functions"].items():
         config = client("lambda").get_function_configuration(FunctionName=arn)
         scaling = client("lambda").get_function_scaling_config(
             FunctionName=arn.rsplit(":", 1)[0], Qualifier=QUALIFIER
         )
-        save(
-            ARTIFACTS / f"configuration/{key}.json",
-            {"function": config, "scaling": scaling},
-        )
+        save(ARTIFACTS / f"configuration/{key}.json", {"function": config, "scaling": scaling})
         verify(config, scaling, manifest, key)
-    save(
-        ARTIFACTS / "function-name-map.json",
-        {"index.handler": manifest["functions"]["normal"]},
-    )
-
-
-def owned_stack(cfn, manifest):
-    try:
-        stack = cfn.describe_stacks(StackName=manifest["stack"])["Stacks"][0]
-    except ClientError as error:
-        if "does not exist" in str(error):
-            return None
-        raise
-    tags = {t["Key"]: t["Value"] for t in stack.get("Tags", [])}
-    if (
-        tags.get("Suite") != OWNER
-        or tags.get("RunId") != manifest["run"]
-        or not manifest["stack"].startswith("js-lmi-")
-    ):
-        raise ProvisioningError("Refusing to delete resources not owned by this suite/run")
-    return stack
-
-
-def cleanup(manifest):
-    if not manifest.get("owned"):
-        return  # create failed (including a name collision): do not delete that stack
-    cfn, s3, lam = client("cloudformation"), client("s3"), client("lambda")
-    stack = owned_stack(cfn, manifest)
-    if stack is None:
-        return
-    resources = cfn.describe_stack_resources(StackName=manifest["stack"])["StackResources"]
-    bucket_exists = any(
-        r["ResourceType"] == "AWS::S3::Bucket"
-        and r.get("PhysicalResourceId") == manifest["bucket"]
-        and r["ResourceStatus"] != "DELETE_COMPLETE"
-        for r in resources
-    )
-    if bucket_exists:
-        s3.put_object(Bucket=manifest["bucket"], Key="control/release-all", Body=b"release")
-    errors = []
-    stop_errors = []
-    for resource in resources:
-        if (
-            resource["ResourceType"] != "AWS::Lambda::Function"
-            or resource["ResourceStatus"] == "DELETE_COMPLETE"
-        ):
-            continue
-        try:
-            for page in lam.get_paginator("list_durable_executions_by_function").paginate(
-                FunctionName=resource["PhysicalResourceId"], Statuses=["RUNNING"]
-            ):
-                for execution in page.get("DurableExecutions", []):
-                    lam.stop_durable_execution(DurableExecutionArn=execution["DurableExecutionArn"])
-        except ClientError as error:
-            stop_errors.append(str(error))
-        try:
-            # Delete functions BEFORE emptying the bucket. This is the retirement
-            # path; stopping a logical execution alone cannot stop LMI JavaScript code.
-            lam.delete_function(FunctionName=resource["PhysicalResourceId"])
-        except ClientError as error:
-            if error.response["Error"]["Code"] != "ResourceNotFoundException":
-                errors.append(str(error))
-    if errors:
-        raise ProvisioningError("Function retirement failed: " + "; ".join(errors))
-    if stop_errors:
-        save(ARTIFACTS / "cleanup-stop-errors.json", stop_errors)
-    # Bounded retries account for already in-flight diagnostic PUTs during retirement.
-    for _attempt in range(6):
-        if bucket_exists:
-            for page in s3.get_paginator("list_objects_v2").paginate(Bucket=manifest["bucket"]):
-                keys = [{"Key": o["Key"]} for o in page.get("Contents", [])]
-                if keys:
-                    deleted = s3.delete_objects(Bucket=manifest["bucket"], Delete={"Objects": keys})
-                    if deleted.get("Errors"):
-                        raise ProvisioningError(
-                            "Could not empty run-owned bucket: " + str(deleted["Errors"])
-                        )
-        cfn.delete_stack(StackName=manifest["stack"])
-        try:
-            wait_stack(cfn, manifest["stack"], "DELETE_COMPLETE", 180)
-            save(
-                ARTIFACTS / "cleanup.json",
-                {"stack": manifest["stack"], "status": "DELETED"},
-            )
-            return
-        except ProvisioningError:
-            # A non-bucket failure stays visible after this finite retry budget.
-            time.sleep(2)
-    raise ProvisioningError(
-        "Run-owned stack retirement failed; use reconcile after investigating stack-events.json"
-    )
-
-
-def reconcile():
-    """Only expired, suite-tagged stacks; never mutate/delete the shared provider."""
-    cfn = client("cloudformation")
-    for page in cfn.get_paginator("describe_stacks").paginate():
-        for stack in page["Stacks"]:
-            tags = {t["Key"]: t["Value"] for t in stack.get("Tags", [])}
-            if tags.get("Suite") != OWNER or int(tags.get("Expires", "0")) >= time.time():
-                continue
-            if not tags.get("Expires") or not stack["StackName"].startswith("js-lmi-"):
-                continue
-            account = client("sts").get_caller_identity()["Account"]
-            cleanup(
-                {
-                    "owned": True,
-                    "stack": stack["StackName"],
-                    "bucket": stack["StackName"] + "-" + account,
-                    "run": tags["RunId"],
-                }
-            )
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["build", "deploy", "collect", "cleanup", "reconcile"])
+    parser.add_argument("command", choices=["build", "deploy", "collect", "settle", "settle-case"])
     parser.add_argument("--run-id")
+    parser.add_argument("--stack-name", default=DEFAULT_STACK)
     parser.add_argument("--runtime", choices=["nodejs24.x"], default="nodejs24.x")
-    parser.add_argument("--concurrency", type=int, choices=[1, 2], default=2)
+    parser.add_argument("--concurrency", type=int, choices=[2], default=2)
+    parser.add_argument("--markers", default="")
     args = parser.parse_args()
     try:
         if args.command == "build":
             build()
         elif args.command == "deploy":
             deploy(args)
-        elif args.command == "reconcile":
-            reconcile()
         else:
-            manifest = json.loads((ARTIFACTS / "manifest.json").read_text())
-            if args.command == "cleanup":
-                cleanup(manifest)
-            else:
-                from cloud import Cloud
+            from cloud import Cloud
 
-                Cloud(manifest).collect()
+            manifest = json.loads((ARTIFACTS / "manifest.json").read_text())
+            cloud = Cloud(manifest)
+            cloud.verify()
+            if args.command == "collect":
+                cloud.collect()
+            elif args.command == "settle":
+                cloud.settle_run()
+            else:
+                cloud.load_markers([m for m in args.markers.split(",") if m])
+                cloud.close_case()
     except Exception as error:
         save(
             ARTIFACTS / f"{args.command}-error.json",
             {"type": type(error).__name__, "message": str(error)},
         )
+        if args.command in {"settle", "settle-case"}:
+            save(ARTIFACTS / "quarantine.json", {"error": str(error)})
         raise
 
 

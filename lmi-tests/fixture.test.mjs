@@ -10,6 +10,7 @@ import { invocation } from "./local-support.mjs";
 test("cloud fixture executes the SDK and records real transport boundaries", async () => {
   const records = [];
   const requests = [];
+  let heldGate = "hold";
   const server = createServer(async (request, response) => {
     const chunks = [];
     for await (const chunk of request) chunks.push(chunk);
@@ -21,7 +22,13 @@ test("cloud fixture executes the SDK and records real transport boundaries", asy
       response.end();
     } else if (request.method === "GET") {
       response.writeHead(200, { "content-type": "text/plain" });
-      response.end("release");
+      response.end(
+        request.url.includes("release-all")
+          ? "hold"
+          : request.url.includes("hold-probe")
+            ? heldGate
+            : "release",
+      );
     } else {
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify({ CheckpointToken: "next-test-token" }));
@@ -118,6 +125,44 @@ test("cloud fixture executes the SDK and records real transport boundaries", asy
           e.request === "invalid-gate-request" && e.phase === "FIXTURE_ERROR",
       ),
     );
+    await delay(1200);
+    const diagnostics = () =>
+      handler(invocation("quiescence"), {
+        awsRequestId: `diagnostic-${records.length}`,
+        getRemainingTimeInMillis: () => 60000,
+      });
+    assert.deepEqual(JSON.parse((await diagnostics()).Result).requests, []);
+    const held = invocation("barrier");
+    held.InitialExecutionState.Operations[0].ExecutionDetails.InputPayload =
+      JSON.stringify({
+        scenario: "barrier",
+        marker: "held",
+        gates: { peer: "hold-probe" },
+      });
+    const running = handler(held, {
+      awsRequestId: "held-request",
+      getRemainingTimeInMillis: () => 60000,
+    });
+    try {
+      for (
+        let i = 0;
+        i < 200 &&
+        !records.some(
+          (e) => e.request === "held-request" && e.phase === "BLOCKED",
+        );
+        i++
+      )
+        await delay(10);
+      const state = JSON.parse((await diagnostics()).Result);
+      const active = state.requests.find((r) => r.request === "held-request");
+      assert.equal(active.active.holds, 1);
+      assert.equal(active.active.invocations, 1);
+    } finally {
+      heldGate = "release";
+      await running;
+      await delay(1200);
+    }
+    assert.deepEqual(JSON.parse((await diagnostics()).Result).requests, []);
     await delay(1200);
   } finally {
     server.closeAllConnections();

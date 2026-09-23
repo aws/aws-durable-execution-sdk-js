@@ -1,166 +1,154 @@
-# LMI lifecycle regressions
+# Shared persistent LMI tests
 
-These tests extend the capacity-provider examples with the invocation-lifecycle
-contracts in [JS #927](https://github.com/aws/aws-durable-execution-sdk-js/issues/927).
-They assert desired behavior; known defects are ordinary failures in a separate
-local-regression job and in the cloud job. Adding these tests does not fix or
-close #927, and a local result is not evidence of deployed LMI correctness.
+The 14 selected example suites (24 tests) and 12 lifecycle cases share **one**
+persistent function, `js-lmi-e2e-shared:$LATEST.PUBLISHED`. This replaces the
+previous 14 example functions plus three lifecycle functions. The function uses
+Node.js 24 / arm64, 2 GiB, a 60-second invocation timeout, a 300-second durable
+execution timeout, environment concurrency 2, one execution environment and
+`AWS_LAMBDA_NODEJS_WORKER_COUNT=1`.
 
-The fixture calls this checkout's built JS SDK, without instrumentation plugins.
-It uses one decorated handler and shared Lambda/S3 clients across invocations.
-A client decorator records attempted checkpoints, token hashes, service request
-settlement and actual sends. It does not simulate service token acceptance.
+These are regression tests for [JS #927](https://github.com/aws/aws-durable-execution-sdk-js/issues/927),
+including applicable scenarios from [Java #728](https://github.com/aws/aws-durable-execution-sdk-java/pull/728)
+and [Python #743](https://github.com/aws/aws-durable-execution-sdk-python/pull/743).
+Known SDK defects remain ordinary failing assertions. Adding tests does not fix
+or close #927; local evidence does not replace deployed LMI validation.
 
-| Coverage | JS tests | Related coverage |
-| --- | --- | --- |
-| Early completion and late-operation rejection | `race`, `any`, `map`, `parallel`, nested parallel, return/failure with an in-flight child | JS #927; Python #743 early completion and abandoned children; Java #728 in-flight cleanup |
-| Overlapping roots and nested progress | Same worker barriers; child/map/parallel with `maxConcurrency: 1` | Java #728 executor starvation; Python #743 branch pool progress |
-| Stored success/failure and suspension | Real wait and resume, stable failures, no duplicate completed bodies or artificial compensation | All three references |
-| Actual invocation deadline | Held step; real checkpoint response held across the platform deadline; original worker recovery and live peer | JS #927; Java #728 and Python #743 timeout isolation |
-| Warm reuse | Nine success/failure/suspension cycles; SDK timers/immediates observed after return; shared client remains usable | All three references |
-| Disposal races (local) | checkpoint/force after dispose, queued immediate, in-flight polling response | JS #927 |
+## Persistent deployment and isolation
 
-The broader capacity-provider catalog also opts in existing retry-success,
-retry-exhaustion, replayed-error, callback success/failure/timeout, wait/polling,
-child-context, map/parallel and serialization examples: **14 suites / 24 tests**.
-Their existing local/cloud assertions and event histories are reused.
+Following the Java suite's approach, deployment creates the CloudFormation stack
+once and subsequently updates it. Stack, function, bucket and log group names are
+stable. Ownership tags are checked before updates; failed stacks remain available
+for investigation. Code objects are content-addressed. Code and deployment manifests do not expire,
+since the active function, next deployment or CloudFormation rollback may still
+reference them.
 
-## Language-specific limits
+Each run gets its own `control/RUN/` and `events/RUN/` S3 prefixes; durable
+deployment metadata is stored under `deployments/RUN/`.
+The function receives the new run ID and commit through its environment. The
+driver verifies its code digest, qualifier, runtime, worker count, concurrency,
+scaling and run identity before invoking tests. Previous work is released and
+settled before updating code. The workflow's global `js-lmi-e2e` concurrency group
+serializes deployment, examples, lifecycle cases and settlement across all branches.
+Use a different `--stack-name` for local work that must not share the CI fixture.
 
-Java's finite shared executor and Python's thread pools have no direct JS API
-counterpart. The JS port tests nested progress through the public context APIs;
-it does not inject an artificial executor. Java's `finally-before-PENDING`
-contract is also not the JS suspension contract. JS suspended stacks stay pending:
-these tests assert no artificial rejection, compensation, or old-stack `finally`,
-while stored successes/failures replay in a fresh invocation.
+There is **no automatic function/stack/bucket deletion or expired-stack janitor**.
+`settle` releases this run's controlled work and stops remaining test executions;
+it retains all infrastructure. Only controls/events expire through
+S3 lifecycle rules. The test-account operator owns the persistent resources,
+execution role and capacity provider. The suite does not modify the provider.
 
-JS currently exposes neither an invocation cancellation signal nor an independent
-invocation resource-cleanup registration API. This suite does not invent those
-APIs or install a test plugin that cleans up on the SDK's behalf. Gates model
-**non-cooperative**, already-running work; their effects are recorded but are not
-asserted to be exactly-once or cancellable. Cooperative I/O cancellation, cleanup
-registrations, listener/connection-lease reclamation and repeated timeout/retry
-cycles still need tests once #927 defines those contracts. The timer observer
-covers SDK-created timeouts/immediates, excluding fixture I/O and shared pools.
-These limitations mean this PR alone cannot satisfy all of #927's fix acceptance.
+## Reusing the function between cases
 
-The checkpoint deadline fixture holds a response from a **real, completed** AWS
-checkpoint request before returning it to the SDK. It tests an SDK async boundary;
-it does not claim to stall the remote service or prove that a sent checkpoint can
-be retracted. Timeout evidence must identify the original request in service
-invocation history. A logical durable timeout or a client polling timeout cannot
-substitute for an actual platform invocation timeout.
+Example suites run with Jest `--runInBand`; lifecycle cases run sequentially.
+After each case, the driver releases its latches and stops any remaining logical
+executions, then probes the worker. The probe reports other invocations, held I/O,
+lifecycle checkpoint requests, evidence writes, delayed observations and SDK timers still
+active in that worker. It excludes its own invocation and does not cancel work,
+clear SDK timers or destroy shared clients to manufacture an idle result.
 
-## Evidence and isolation
+Both the service's running-execution list and the worker activity inventory must
+remain empty for at least **five continuous seconds**, with a **150-second drain
+budget**. A non-diagnostic activity counter also resets the quiet window if
+work occurs between samples; diagnostic probes do not reset it themselves. The SDK intentionally leaves suspended user stacks unresolved; those
+stacks alone do not count as active work after the wrapper has returned and its
+resources have settled. Quiet waiting is separate from the assertions already
+made by the case: cleanup does not turn a regression failure into a pass.
 
-Cloud deployment uses Node.js 24 / arm64, 2 GiB, environment concurrency **2**,
-exactly **one Node.js worker** (`AWS_LAMBDA_NODEJS_WORKER_COUNT=1`),
-and native scaling limits of exactly **one execution environment**. The worker
-count is explicit because [LMI defaults to multiple workers](https://docs.aws.amazon.com/lambda/latest/dg/lambda-managed-instances-nodejs-runtime.html);
-environment concurrency 2 alone does not force both requests onto one worker. A shared
-`/tmp` UUID identifies the environment; a module UUID, PID and worker thread ID
-identify the Node worker. Each request records live held-work heartbeats. The
-suite requires overlapping intervals inside the same worker before admitting
-lifecycle assertions. Concurrent client requests or matching start records alone
-do not pass. Placement/collection failures are errors, separate from assertions.
+If settlement fails, the suite quarantines the shared fixture and prevents later
+cases from invoking it. Quiescence samples and release/stop errors are retained.
+An idle previous run takes the short verification path; abandoned runs have their
+controls released before reuse. Shared AWS connection pools may remain open.
 
-S3 holds explicit `hold`/`release` controls and immutable per-request event records.
-The winner waits for loser entry and an external release. The driver releases the
-loser only after recording the actual SDK wrapper return, keeps a companion live,
-and continues observing. Timestamps and worker sequence numbers describe event
-order; eventual log delivery never extends a lifecycle budget. Token values are
-hashed; raw checkpoint tokens/callback IDs are redacted from retained artifacts.
+## Existing example coverage
 
-Normal fixtures have a 180-second invocation timeout; two separate deadline
-fixtures have 60-second timeouts. Durable executions are bounded at 300 seconds.
-Gates have a 120-second emergency escape, which cannot satisfy an assertion.
-The proposed recovery budget is deadline + 5 seconds, matching the related PRs;
-it is a test acceptance target, not a newly documented SDK guarantee. Deadline
-fixtures are separate from ordinary/warm cases to avoid cross-case contamination.
-Each case releases its controls and stops remaining logical executions; final
-cleanup retires the run-owned functions before deleting their evidence bucket.
+The generated registry bundles the original handlers selected by
+`capacityProviderConfig`: retry success/exhaustion, stored errors, waits, polling,
+callback success/failure/timeout, child contexts, map/parallel and serialization.
+The example runner adds a checkpointed routing envelope to Invoke. The dispatcher
+unwraps the original input for the selected handler, preserving all service
+checkpoints and the checkpoint token. The original handler, testing SDK, result
+assertions and event-history signatures execute unchanged. Raw service input
+retains the routing envelope for diagnosis.
 
-The deployment/cleanup driver adapts the run-owned CloudFormation approach in
-[Python #743](https://github.com/aws/aws-durable-execution-sdk-python/pull/743).
-It creates unique tagged stacks, retains deployed configuration and code SHA-256,
-checks `$LATEST.PUBLISHED`, concurrency, scaling, runtime and commit identity,
-and reconciles expired stacks with the same suite ownership tags. The existing
-capacity provider and execution role remain owned by the test-account operator.
-The bucket policy grants that role access only to this run's controls/evidence.
-The account needs CloudFormation, Lambda, S3 and Logs permissions and network
-access to Lambda/S3 endpoints. The workflow uses existing test-account OIDC secrets.
+The examples and lifecycle tests are now in the same LMI workflow. The old
+capacity-provider deploy/test/delete workflow is removed to avoid deploying the
+same examples again as separate functions. Ordinary on-demand integration tests
+continue to use their existing runner and deployment path.
+
+## Lifecycle coverage and evidence
+
+| Coverage | Cases |
+| --- | --- |
+| Same-worker concurrency | Shared decorated handler, child/map/parallel progress with branch concurrency 1 |
+| Early completion | race/any, map/parallel `minSuccessful`, nested parallel, root return/failure with in-flight children |
+| Suspension and replay | Real wait/resume, stored success and failure, no repeated completed bodies or artificial compensation |
+| Warm reuse | Repeated success/failure/suspension with post-return timer observations |
+| Actual deadlines | Held step and a real checkpoint response held at the SDK client boundary |
+| Local races | Post-dispose checkpoint/force calls, queued immediates, polling rearmed after I/O |
+
+Overlap is computed per `(requestId, gateId)` held interval. An earlier gate's
+release or another gate's heartbeat cannot invalidate or establish the selected
+hold. Deadline admission explicitly selects the original request; retries cannot
+substitute for it. Environment/worker/request identifiers and live heartbeats
+are required; concurrent client requests alone do not establish overlap.
+
+Recovery controls are prepared before the deadline, and probe Invoke is scheduled
+one second before it without S3 preparation or evidence polling on that path.
+The fault and healthy peer remain held through deadline + five seconds. The
+probe's handler-entry timestamp measures worker admission; its later blocked
+step proves progress. Wall-clock and monotonic driver timestamps separate
+preparation, Invoke, release, service registration and handler entry.
+
+Late driver submission or late service registration is a collection error and
+never extends the five-second recovery target. Invoke response latency is
+recorded separately. `deadlines/*.json` reports scheduling, old-request writes,
+recovery, healthy-peer progress and retry/replay independently, so one failure
+cannot hide another. This five-second bound is a test acceptance target, not a
+new SDK guarantee.
+
+The checkpoint fault holds a genuine service response before delivering it to
+the SDK; it does not claim to stall remote acceptance. Request-correlated service
+history must establish the real platform timeout. Controlled work has a bounded
+escape, which cannot satisfy regression assertions. Interrupted non-cooperative
+work may repeat under at-least-once semantics. A deadline-step retry arriving
+after release records `ALREADY_RELEASED`, never a fictitious new blocked interval.
+
+JS has no Java-style shared executor or public invocation cancellation/independent
+cleanup-registration API. The tests do not invent these APIs or install cleanup
+plugins. Cooperative cancellation and listener/connection-lease reclamation
+coverage still depend on the contract proposed in #927. JS suspension must not
+artificially unwind business catch/finally; replay runs a fresh invocation.
 
 ## Run
 
-From the JS repository root, with Node.js 24 and Python 3.12:
+From the repository root, with Node.js 24 and Python 3.12:
 
 ```sh
 npm ci
 npm run build -w packages/aws-durable-execution-sdk-js
+npm run build -w packages/aws-durable-execution-sdk-js-testing
+npm run generate-examples -w packages/aws-durable-execution-sdk-js-examples
 pip install -r lmi-tests/requirements.txt
 npm run test:lmi:harness
 python -m pytest lmi-tests/tests --ignore=lmi-tests/tests/test_cloud.py
-npm run test:lmi:regressions  # expected to expose unfixed #927 assertions
+npm run test:lmi:regressions  # exposes unfixed #927 assertions
 python lmi-tests/deploy.py build
 
 export AWS_REGION=us-west-2
 export CAPACITY_PROVIDER_ARN=arn:aws:lambda:REGION:ACCOUNT:capacity-provider:NAME
 export TEST_ACCOUNT_ID=ACCOUNT
 export TEST_LAMBDA_EXECUTION_ROLE_ARN=arn:aws:iam::ACCOUNT:role/ROLE
-# If needed, set LMI_RUNTIME_VERSION_ARN to the same temporary runtime pin used
-# in packages/aws-durable-execution-sdk-js-examples/scripts/deploy-lambda.ts.
-python lmi-tests/deploy.py deploy --run-id local-unique --concurrency 2
+python lmi-tests/deploy.py deploy --stack-name js-lmi-local --run-id local-unique
+node lmi-tests/run-examples.mjs
 python -m pytest lmi-tests/tests/test_cloud.py --cloud -v
 python lmi-tests/deploy.py collect
-python lmi-tests/deploy.py cleanup
+python lmi-tests/deploy.py settle
 ```
 
-`.github/workflows/lmi-lifecycle-tests.yml` runs harness, local regressions and
-cloud tests for every trusted PR update (including Draft PRs), main push and
-manual dispatch. Fork/Dependabot cloud credential restrictions are preserved.
-The cloud job depends only on passing harness tests so known local regressions
-do not suppress deployed evidence. No regression uses `skip`, `xfail`, or
-`continue-on-error`. Workflow cleanup runs even after failure; an expired-resource
-reconciler handles interrupted jobs. Histories, S3 events, runtime logs, deployment
-identity, JUnit outcomes and cleanup diagnostics are retained as artifacts.
-
-The local-regression job emits readable test diagnostics to its live log as well
-as JUnit. Its job summary separates assertion failures from test execution errors
-(such as missing checkpoint-operation metadata); an execution error is not SDK
-regression evidence. The passing harness job exercises the in-flight polling
-fixture while its manager is open, so setup failures are caught independently
-of the intentionally failing post-disposal contract.
-
-## Deadline measurement
-
-Overlap is evaluated per `(requestId, gateId)` held interval. `BLOCKED`, `ALIVE`,
-`RELEASED` and wrapper-exit events bound those intervals; a previous gate's release
-or another gate's heartbeat cannot close or validate the selected hold. Deadline
-admission explicitly selects the original request's `transport`/`loser` gate and
-the companion's `peer` gate. Retries cannot substitute for the original request.
-A reduced trace from cloud run `35911675108` reproduces the old false placement
-failure in the harness, alongside stale-heartbeat and wrong-worker controls.
-
-The recovery probe's controls are prepared before the deadline. Invoke is scheduled
-one second before the deadline, with no S3 writes or event polling on that path.
-The victim and healthy peer remain held through deadline + 5 seconds; manual fault
-release starts only after that window. Evidence collection follows submission and
-the observation window. The worker's `ENTER` timestamp measures admission;
-`BLOCKED` subsequently proves probe progress and overlap, without charging the
-probe's own first step/checkpoints against worker admission time.
-
-Per-invocation artifacts record wall-clock and monotonic timestamps for preparation,
-each control PUT, Invoke begin/end and release. Scheduling more than one second
-late (after the actual deadline), or service `ExecutionStarted` after deadline + 1 second is a collection error:
-such a run did not establish timely recovery demand. These checks never extend
-the SDK's five-second recovery bound. Invoke response latency is diagnostic and
-does not invalidate timely service acceptance. Monotonic timestamps measure driver spans;
-wall-clock timestamps correlate with the worker deadline and service history.
-
-`deadlines/*.json` records probe scheduling, old-request writes, worker recovery,
-healthy-peer progress and service-retry replay as independent outcomes. A failed
-recovery or observation check does not suppress evaluation of late checkpoints
-from the original timed-out request. The final test fails if any contract or
-observation failed and preserves every outcome. Deadline-step retries arriving
-after controlled I/O release record `ALREADY_RELEASED` and may finish interrupted
-work; they never manufacture a `BLOCKED` event or relax the original admission gate.
+Use a fresh run ID each time. Set `LMI_RUNTIME_VERSION_ARN` if the temporary managed
+runtime connectivity workaround in the workflow is still needed. The workflow
+uses existing test-account OIDC credentials, runs for trusted PRs (including
+Drafts), main pushes and manual dispatch, and retains fork/Dependabot restrictions.
+It keeps histories, S3 events, logs, deployment identity, quiescence samples and
+JUnit reports. The local-regression log and summary distinguish assertion failures
+from harness execution errors; known assertions remain red until the SDK is fixed.

@@ -122,12 +122,9 @@ def test_reused_worker_resources_after_repeated_success_failure_suspend(cloud):
     ev.resources(cloud.refresh())
 
 
-@pytest.mark.parametrize(
-    "scenario,fixture",
-    [("deadline-step", "deadline"), ("deadline-checkpoint", "transport")],
-)
-def test_platform_deadline_old_work_and_original_worker_recovery(cloud, scenario, fixture):
-    victim = cloud.start(scenario, fixture)
+@pytest.mark.parametrize("scenario", ["deadline-step", "deadline-checkpoint"])
+def test_platform_deadline_old_work_and_original_worker_recovery(cloud, scenario):
+    victim = cloud.start(scenario)
     blocked = cloud.phase(victim, "BLOCKED", "loser")[0]
     if scenario == "deadline-checkpoint":
         cloud.release(victim, "loser")
@@ -137,9 +134,9 @@ def test_platform_deadline_old_work_and_original_worker_recovery(cloud, scenario
         )
     # Prepare the probe well before the deadline. Submission below performs no
     # S3 writes or polling and therefore measures admission instead of setup.
-    probe = cloud.prepare("barrier", fixture)
+    probe = cloud.prepare("barrier")
     time.sleep(10)
-    peer = cloud.start("barrier", fixture)
+    peer = cloud.start("barrier")
     peer_blocked = cloud.phase(peer, "BLOCKED", "peer")[0]
     gate = "transport" if scenario == "deadline-checkpoint" else "loser"
     identity = overlap(

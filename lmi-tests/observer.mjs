@@ -4,7 +4,7 @@ import { AsyncLocalStorage, createHook } from "node:async_hooks";
 
 // Observe only SDK timers/immediates. Fixture polling and AWS client pools have
 // separate scopes, so an idle shared connection is not reported as an SDK leak.
-export function observer() {
+export function observer(onActivity) {
   const scope = new AsyncLocalStorage();
   const resources = new Map();
   const hook = createHook({
@@ -12,10 +12,12 @@ export function observer() {
       const state = scope.getStore();
       if (state?.kind === "sdk" && ["Timeout", "Immediate"].includes(type)) {
         resources.set(id, { state, type, resource });
+        onActivity?.(state);
       }
     },
     before(id) {
       const item = resources.get(id);
+      if (item) onActivity?.(item.state);
       if (item?.state.closed) item.state.lateCallbacks++;
     },
     destroy(id) {
