@@ -161,3 +161,12 @@ For implementation details on creating new tests and their corresponding history
 ## Conformance Tests
 
 Conformance tests verify cross-SDK behavioral parity and live in a separate repository: [aws-durable-execution-conformance-tests](https://github.com/aws/aws-durable-execution-conformance-tests). Contributors do not need to add conformance tests. If you believe a change warrants one, mention it in your PR description or [open an issue](https://github.com/aws/aws-durable-execution-conformance-tests/issues/new?template=new_requirement.yml) in that repository.
+
+## Lambda Managed Instances lifecycle coverage
+
+The capacity-provider catalog runs 14 existing example suites (24 tests), including
+retries, failed-step replay, waits, polling, callbacks, child contexts, map/parallel
+and serialization. Lifecycle-specific regressions additionally run in
+`.github/workflows/lmi-lifecycle-tests.yml`; see [lmi-tests/README.md](lmi-tests/README.md)
+for local commands, real-LMI configuration, scenario mapping, known failing
+assertions and the limits of the current cancellation/cleanup coverage.
