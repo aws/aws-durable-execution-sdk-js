@@ -47,6 +47,9 @@ await build({
   entryPoints: ["lmi-tests/entry.mjs"],
   outfile: "lmi-tests/build/index.cjs",
   bundle: true,
+  // Error types and unnamed-operation diagnostics can depend on function/class
+  // names. Preserve them when many original handlers share one bundle.
+  keepNames: true,
   platform: "node",
   target: "node24",
   format: "cjs",
