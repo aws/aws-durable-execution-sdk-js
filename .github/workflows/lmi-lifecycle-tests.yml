@@ -31,7 +31,7 @@ jobs:
       - run: npm run test:lmi:harness
       - run: pip install -r lmi-tests/requirements.txt
       - run: ruff check lmi-tests && ruff format --check lmi-tests
-      - run: python -m pytest lmi-tests/tests/test_evidence.py lmi-tests/tests/test_deploy.py lmi-tests/tests/test_regression_summary.py --junitxml=lmi-tests/artifacts/harness.xml
+      - run: python -m pytest lmi-tests/tests --ignore=lmi-tests/tests/test_cloud.py --junitxml=lmi-tests/artifacts/harness.xml
       - run: python lmi-tests/deploy.py build
       - uses: actions/upload-artifact@v7
         if: always()

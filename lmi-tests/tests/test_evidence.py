@@ -7,7 +7,7 @@ import pytest
 
 
 def event(phase, marker="a", **kwargs):
-    return dict(
+    result = dict(
         phase=phase,
         marker=marker,
         request=marker,
@@ -16,8 +16,9 @@ def event(phase, marker="a", **kwargs):
         pid=1,
         threadId=1,
         time=10,
-        **kwargs,
     )
+    result.update(kwargs)
+    return result
 
 
 def overlap_events():
@@ -174,3 +175,91 @@ def test_replay_requires_real_history_and_stable_failure():
     events[-1]["message"] = "different failure"
     with pytest.raises(AssertionError):
         ev.replay(events, HISTORY)
+
+
+def test_recorded_checkpoint_gate_transition_does_not_end_invocation():
+    import json
+    from pathlib import Path
+
+    # Reduced from run 35911675108: identifiers normalized, times relative to
+    # invocation entry. An earlier loser release must not close transport's hold.
+    events = json.loads((Path(__file__).parent / "fixtures/checkpoint-overlap.json").read_text())
+    assert ev.overlap(
+        events,
+        {"victim", "peer"},
+        gates={"victim": "transport", "peer": "peer"},
+        requests={"victim": "victim-request", "peer": "peer-request"},
+    ) == ("environment", "worker", 15, 1)
+
+
+@pytest.mark.parametrize(
+    "heartbeat_gate,heartbeat_time", [("old", 12), ("current", 9), ("current", 14)]
+)
+def test_other_gate_stale_or_post_release_heartbeat_cannot_establish_overlap(
+    heartbeat_gate, heartbeat_time
+):
+    events = [
+        event("BLOCKED", gate="current", time=8),
+        event("RELEASED", gate="current", time=13),
+        event("ALIVE", gate=heartbeat_gate, time=heartbeat_time),
+        event("BLOCKED", "b", gate="peer", time=10),
+        event("ALIVE", "b", gate="peer", time=11),
+    ]
+    with pytest.raises(ev.PlacementError):
+        ev.overlap(events, {"a", "b"})
+
+
+def test_new_hold_of_same_gate_does_not_reuse_an_earlier_release():
+    events = [
+        event("BLOCKED", gate="gate", time=0),
+        event("ALIVE", gate="gate", time=1),
+        event("RELEASED", gate="gate", time=2),
+        event("BLOCKED", gate="gate", time=3),
+        event("ALIVE", gate="gate", time=4),
+        event("BLOCKED", "b", time=3.5),
+        event("ALIVE", "b", time=4),
+    ]
+    assert ev.overlap(events, {"a", "b"}) == ("env", "worker", 1, 1)
+
+
+def test_retry_request_cannot_replace_original_request_in_overlap():
+    events = [
+        event("BLOCKED", request="original", time=0),
+        event("RETURN", request="original", time=1),
+        event("BLOCKED", request="retry", time=2),
+        event("ALIVE", request="retry", time=4),
+        event("BLOCKED", "b", time=3),
+        event("ALIVE", "b", time=4),
+    ]
+    with pytest.raises(ev.PlacementError):
+        ev.overlap(events, {"a", "b"}, requests={"a": "original"})
+
+
+def test_recovery_failure_does_not_mask_independent_late_checkpoint():
+    late = event("CHECKPOINT", time=12)
+
+    def unavailable_recovery():
+        raise ev.CollectionError("probe submitted too late")
+
+    outcomes = ev.check_all(
+        {
+            "recovery": unavailable_recovery,
+            "old-request": lambda: ev.no_late_work([late], event("RETURN")),
+        }
+    )
+    assert outcomes["recovery"]["status"] == "collection-error"
+    assert outcomes["old-request"]["status"] == "assertion-failed"
+    with pytest.raises(ev.CollectionError, match="closed invocation sent an SDK request"):
+        ev.require_checks(outcomes)
+
+
+def test_post_return_gate_cannot_count_as_a_live_invocation():
+    events = [
+        event("RETURN", time=1),
+        event("BLOCKED", gate="late", time=2),
+        event("ALIVE", gate="late", time=4),
+        event("BLOCKED", "b", time=3),
+        event("ALIVE", "b", time=4),
+    ]
+    with pytest.raises(ev.PlacementError):
+        ev.overlap(events, {"a", "b"})

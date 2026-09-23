@@ -99,7 +99,7 @@ npm ci
 npm run build -w packages/aws-durable-execution-sdk-js
 pip install -r lmi-tests/requirements.txt
 npm run test:lmi:harness
-python -m pytest lmi-tests/tests/test_evidence.py lmi-tests/tests/test_deploy.py lmi-tests/tests/test_regression_summary.py
+python -m pytest lmi-tests/tests --ignore=lmi-tests/tests/test_cloud.py
 npm run test:lmi:regressions  # expected to expose unfixed #927 assertions
 python lmi-tests/deploy.py build
 
@@ -130,3 +130,37 @@ as JUnit. Its job summary separates assertion failures from test execution error
 regression evidence. The passing harness job exercises the in-flight polling
 fixture while its manager is open, so setup failures are caught independently
 of the intentionally failing post-disposal contract.
+
+## Deadline measurement
+
+Overlap is evaluated per `(requestId, gateId)` held interval. `BLOCKED`, `ALIVE`,
+`RELEASED` and wrapper-exit events bound those intervals; a previous gate's release
+or another gate's heartbeat cannot close or validate the selected hold. Deadline
+admission explicitly selects the original request's `transport`/`loser` gate and
+the companion's `peer` gate. Retries cannot substitute for the original request.
+A reduced trace from cloud run `35911675108` reproduces the old false placement
+failure in the harness, alongside stale-heartbeat and wrong-worker controls.
+
+The recovery probe's controls are prepared before the deadline. Invoke is scheduled
+one second before the deadline, with no S3 writes or event polling on that path.
+The victim and healthy peer remain held through deadline + 5 seconds; manual fault
+release starts only after that window. Evidence collection follows submission and
+the observation window. The worker's `ENTER` timestamp measures admission;
+`BLOCKED` subsequently proves probe progress and overlap, without charging the
+probe's own first step/checkpoints against worker admission time.
+
+Per-invocation artifacts record wall-clock and monotonic timestamps for preparation,
+each control PUT, Invoke begin/end and release. Scheduling more than one second
+late (after the actual deadline), or service `ExecutionStarted` after deadline + 1 second is a collection error:
+such a run did not establish timely recovery demand. These checks never extend
+the SDK's five-second recovery bound. Invoke response latency is diagnostic and
+does not invalidate timely service acceptance. Monotonic timestamps measure driver spans;
+wall-clock timestamps correlate with the worker deadline and service history.
+
+`deadlines/*.json` records probe scheduling, old-request writes, worker recovery,
+healthy-peer progress and service-retry replay as independent outcomes. A failed
+recovery or observation check does not suppress evaluation of late checkpoints
+from the original timed-out request. The final test fails if any contract or
+observation failed and preserves every outcome. Deadline-step retries arriving
+after controlled I/O release record `ALREADY_RELEASED` and may finish interrupted
+work; they never manufacture a `BLOCKED` event or relax the original admission gate.

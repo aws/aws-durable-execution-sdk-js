@@ -35,29 +35,80 @@ class Cloud:
             Bucket=self.manifest["bucket"], Key="control/" + gate, Body=value.encode()
         )
 
-    def start(self, scenario, fixture="normal"):
+    @staticmethod
+    def timestamp():
+        return {"wall": time.time(), "monotonic": time.monotonic()}
+
+    def save_item(self, item):
+        save(ARTIFACTS / f"invocations/{item['marker']}.json", item)
+
+    def prepare(self, scenario, fixture="normal"):
         marker = scenario + "-" + uuid.uuid4().hex[:12]
         gates = {key: marker + "-" + key for key in ("peer", "loser", "winner", "transport")}
+        item = {
+            "marker": marker,
+            "scenario": scenario,
+            "fixture": fixture,
+            "gates": gates,
+            "timing": {"prepareBegin": self.timestamp(), "controls": [], "releases": []},
+        }
         for gate in gates.values():
+            begin = self.timestamp()
             self.control(gate, "hold")
+            item["timing"]["controls"].append(
+                {"gate": gate, "begin": begin, "end": self.timestamp()}
+            )
             self.gates.add(gate)
-        payload = {"marker": marker, "scenario": scenario, "gates": gates}
-        result = self.lam.invoke(
-            FunctionName=self.manifest["functions"][fixture],
-            InvocationType="Event",
-            DurableExecutionName=marker,
-            Payload=json.dumps(payload).encode(),
-        )
-        arn = result.get("DurableExecutionArn")
-        if not arn:
-            raise CollectionError("Invoke did not return DurableExecutionArn")
-        item = {"marker": marker, "arn": arn, "fixture": fixture, "gates": gates}
+        item["timing"]["prepareEnd"] = self.timestamp()
         self.items.append(item)
-        save(ARTIFACTS / f"invocations/{marker}.json", item)
+        self.save_item(item)
         return item
 
+    def invoke(self, item):
+        if "invokeBegin" in item["timing"]:
+            raise CollectionError("An Invoke attempt must not be silently repeated")
+        payload = {key: item[key] for key in ("marker", "gates")}
+        payload["scenario"] = item["scenario"]
+        # No control PUTs or evidence collection between this timestamp and Invoke.
+        item["timing"]["invokeBegin"] = self.timestamp()
+        try:
+            result = self.lam.invoke(
+                FunctionName=self.manifest["functions"][item["fixture"]],
+                InvocationType="Event",
+                DurableExecutionName=item["marker"],
+                Payload=json.dumps(payload).encode(),
+            )
+            item["arn"] = result.get("DurableExecutionArn")
+            item["invokeRequestId"] = result.get("ResponseMetadata", {}).get("RequestId")
+            if not item["arn"]:
+                raise CollectionError("Invoke did not return DurableExecutionArn")
+            return item
+        finally:
+            item["timing"]["invokeEnd"] = self.timestamp()
+            self.save_item(item)
+
+    @staticmethod
+    def wait_until(target):
+        # Only scheduling happens here. API polling never consumes this interval.
+        time.sleep(max(0, target - time.time()))
+
+    def invoke_at(self, item, target):
+        item["timing"]["scheduledFor"] = target
+        self.wait_until(target)
+        return self.invoke(item)
+
+    def start(self, scenario, fixture="normal"):
+        return self.invoke(self.prepare(scenario, fixture))
+
     def release(self, item, gate):
-        self.control(item["gates"][gate], "release")
+        begin = self.timestamp()
+        try:
+            self.control(item["gates"][gate], "release")
+        finally:
+            item["timing"]["releases"].append(
+                {"gate": gate, "begin": begin, "end": self.timestamp()}
+            )
+            self.save_item(item)
 
     def refresh(self, full=False):
         prefixes = ["events/"] if full else [f"events/{i['marker']}/" for i in self.items]
@@ -105,12 +156,14 @@ class Cloud:
             time.sleep(0.5)
         raise error(message)
 
-    def phase(self, item, phase, gate=None, **kwargs):
+    def phase(self, item, phase, gate=None, request=None, **kwargs):
         return self.poll(
             lambda: [
                 e
                 for e in self.events(item)
-                if e["phase"] == phase and (gate is None or e.get("gate") == gate)
+                if e["phase"] == phase
+                and (gate is None or e.get("gate") == gate)
+                and (request is None or e["request"] == request)
             ],
             **kwargs,
         )
@@ -189,6 +242,8 @@ class Cloud:
         # Stop retries after retaining evidence. Logical stop is not evidence that
         # old JS stacks exited; timeout fixtures are isolated from normal/warm cases.
         for item in self.items:
+            if not item.get("arn"):
+                continue
             self.history(item)
             result = self.lam.get_durable_execution(DurableExecutionArn=item["arn"])
             save(ARTIFACTS / f"executions/{item['marker']}.json", result)

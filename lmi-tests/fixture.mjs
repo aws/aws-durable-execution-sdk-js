@@ -81,7 +81,19 @@ async function hold(state, gate, onEnter) {
       return response.Body.transformToString();
     };
     try {
-      if ((await read()) !== "hold")
+      const initial = await read();
+      if (
+        initial === "release" &&
+        state.event.scenario === "deadline-step" &&
+        gate === "loser"
+      ) {
+        // A real service retry can enter after the driver released interrupted
+        // I/O. Admission still requires BLOCKED from the original request; this
+        // retry must not invent a second hold or overwrite the released latch.
+        await trace(state, "ALREADY_RELEASED", { gate });
+        return;
+      }
+      if (initial !== "hold")
         throw new Error(`Fixture gate was not held: ${gate}`);
       await trace(state, "BLOCKED", { gate });
       onEnter?.();

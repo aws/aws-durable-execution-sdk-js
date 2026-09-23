@@ -19,6 +19,9 @@ test("cloud fixture executes the SDK and records real transport boundaries", asy
       records.push(JSON.parse(body));
       response.writeHead(200, { ETag: '"test"' });
       response.end();
+    } else if (request.method === "GET") {
+      response.writeHead(200, { "content-type": "text/plain" });
+      response.end("release");
     } else {
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify({ CheckpointToken: "next-test-token" }));
@@ -70,6 +73,52 @@ test("cloud fixture executes the SDK and records real transport boundaries", asy
       requests.some((r) => r.method === "POST" && r.url.includes("checkpoint")),
     );
     assert.equal(new Set(records.map((e) => e.seq)).size, records.length);
+    // A retry can encounter the driver's completed latch. It must complete
+    // interrupted work without falsely advertising a fresh BLOCKED interval.
+    const resumed = invocation("deadline-step");
+    resumed.InitialExecutionState.Operations[0].ExecutionDetails.InputPayload =
+      JSON.stringify({
+        scenario: "deadline-step",
+        marker: "deadline-step",
+        gates: { loser: "released" },
+      });
+    const resumedResult = await handler(resumed, {
+      awsRequestId: "retry-request",
+      getRemainingTimeInMillis: () => 60000,
+    });
+    assert.equal(resumedResult.Status, "SUCCEEDED");
+    const retryEvents = records.filter((e) => e.request === "retry-request");
+    assert(retryEvents.some((e) => e.phase === "ALREADY_RELEASED"));
+    assert(
+      !retryEvents.some(
+        (e) => e.phase === "BLOCKED" || e.phase === "FIXTURE_ERROR",
+      ),
+    );
+    // Ordinary admission gates still reject a premature release.
+    const invalid = invocation("barrier");
+    invalid.InitialExecutionState.Operations[0].ExecutionDetails.InputPayload =
+      JSON.stringify({
+        scenario: "barrier",
+        marker: "barrier",
+        gates: { peer: "released" },
+      });
+    const invalidResult = await handler(invalid, {
+      awsRequestId: "invalid-gate-request",
+      getRemainingTimeInMillis: () => 60000,
+    });
+    assert.notEqual(invalidResult.Status, "SUCCEEDED");
+    assert(
+      !records.some(
+        (e) => e.request === "invalid-gate-request" && e.phase === "BLOCKED",
+      ),
+    );
+    assert(
+      records.some(
+        (e) =>
+          e.request === "invalid-gate-request" && e.phase === "FIXTURE_ERROR",
+      ),
+    );
+    await delay(1200);
   } finally {
     server.closeAllConnections();
     server.close();

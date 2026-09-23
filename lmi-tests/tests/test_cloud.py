@@ -4,14 +4,15 @@ import time
 
 import evidence as ev
 import pytest
+from deploy import ARTIFACTS, save
 
 
-def overlap(cloud, *items):
+def overlap(cloud, *items, gates=None, requests=None):
     markers = {i["marker"] for i in items}
 
     def observed():
         try:
-            return ev.overlap(cloud.refresh(), markers)
+            return ev.overlap(cloud.refresh(), markers, gates=gates, requests=requests)
         except ev.PlacementError:
             return None
 
@@ -134,45 +135,161 @@ def test_platform_deadline_old_work_and_original_worker_recovery(cloud, scenario
         assert ev.select(cloud.events(victim), "CHECKPOINT_SETTLED"), (
             "No genuine checkpoint completed before hold"
         )
-    # Start the companion later so its real platform deadline extends past the
-    # victim's cleanup/recovery window. Driver latency never extends that window.
+    # Prepare the probe well before the deadline. Submission below performs no
+    # S3 writes or polling and therefore measures admission instead of setup.
+    probe = cloud.prepare("barrier", fixture)
     time.sleep(10)
     peer = cloud.start("barrier", fixture)
-    identity = overlap(cloud, victim, peer)
-    deadline = blocked["deadline"]
-    time.sleep(max(0, deadline + 1 - time.time()))
+    peer_blocked = cloud.phase(peer, "BLOCKED", "peer")[0]
     gate = "transport" if scenario == "deadline-checkpoint" else "loser"
-    cloud.release(victim, gate)
-    cloud.phase(victim, "RELEASED", gate)
-    # Put demand on the victim's vacated slot while the original peer stays held.
-    probe = cloud.start("barrier", fixture)
-    recovered = cloud.phase(probe, "BLOCKED", "peer")
-    first_probe = recovered[0]
-    cloud.release(probe, "peer")
-    cloud.finish(probe)
-    healthy_after(cloud, peer, {"time": deadline})
-    # Service history, not getRemainingTimeInMillis stubbing or a client timeout.
-    cloud.poll(
-        lambda: ev.timeout_record(cloud.history(victim), blocked["request"]),
-        seconds=90,
-        message="No request-correlated platform timeout evidence",
+    identity = overlap(
+        cloud,
+        victim,
+        peer,
+        gates={victim["marker"]: gate, peer["marker"]: "peer"},
+        requests={victim["marker"]: blocked["request"], peer["marker"]: peer_blocked["request"]},
     )
-    assert (
-        first_probe["environment"],
-        first_probe["worker"],
-        first_probe["pid"],
-        first_probe["threadId"],
-    ) == identity, "Replacement environment is not worker recovery"
-    assert first_probe["time"] <= deadline + cloud.manifest["cleanupGrace"], (
-        "Worker capacity did not recover within deadline + grace"
+    deadline, grace = blocked["deadline"], cloud.manifest["cleanupGrace"]
+    observations, outcomes = {}, {}
+
+    def observe(name, fn):
+        try:
+            observations[name] = fn()
+        except AssertionError as error:
+            outcomes[name] = {"status": "assertion-failed", "message": str(error)}
+        except Exception as error:
+            # Preserve failed observation attempts without suppressing independent
+            # old-request assertions. Their tracebacks remain in the case artifact.
+            import traceback
+
+            outcomes[name] = {
+                "status": "collection-error",
+                "message": str(error),
+                "traceback": traceback.format_exc(),
+            }
+
+    def recorded(name):
+        if name not in observations:
+            raise ev.CollectionError(f"Required observation unavailable: {name}")
+        return observations[name]
+
+    observe("probe-submit", lambda: cloud.invoke_at(probe, deadline - 1))
+    # Do not make automatic worker recovery depend on our manual fault release.
+    # Keep the healthy peer and fault held for the entire five-second window.
+    cloud.wait_until(deadline + grace + 0.5)
+    observe("fault-release", lambda: cloud.release(victim, gate))
+    observe("peer-release", lambda: cloud.release(peer, "peer"))
+    # All evidence I/O is now outside the measured admission window. Event times
+    # (not arrival times) establish when the probe entered and overlapped the peer.
+    observe("probe-held", lambda: cloud.phase(probe, "BLOCKED", "peer", seconds=30))
+    observe("probe-release", lambda: cloud.release(probe, "peer"))
+    if probe.get("arn"):
+        observe("probe-result", lambda: cloud.finish(probe))
+        observe("probe-history", lambda: cloud.history(probe))
+    observe("peer-result", lambda: cloud.finish(peer))
+
+    def platform_timeout():
+        history = cloud.history(victim)
+        return history if ev.timeout_record(history, blocked["request"]) else None
+
+    observe(
+        "platform-timeout",
+        lambda: cloud.poll(
+            platform_timeout, seconds=90, message="No request-correlated platform timeout evidence"
+        ),
     )
-    boundary = {"time": deadline, "request": blocked["request"]}
-    ev.no_late_work(cloud.events(victim), boundary)
-    entries = ev.require(cloud.events(victim), "ENTER")
-    # A retry must belong to the same durable execution; it may repeat interrupted
-    # work, but never the already-checkpointed successful side effect.
-    if len({e["request"] for e in entries}) > 1:
-        assert (
-            len([e for e in ev.select(cloud.events(victim), "BODY") if e["operation"] == "success"])
-            == 1
+    # A retry must have its own request ID within the SAME durable execution.
+    observe(
+        "retry-entry",
+        lambda: cloud.poll(
+            lambda: [
+                e
+                for e in ev.select(cloud.events(victim), "ENTER")
+                if e["request"] != blocked["request"]
+            ],
+            seconds=40,
+            message="No service retry of the original execution was observed",
+        ),
+    )
+    time.sleep(2)  # Observe continuations after controlled release, not just responses.
+    observe("victim-events", lambda: cloud.events(victim))
+    observe("peer-events", lambda: cloud.events(peer))
+    observe("probe-events", lambda: cloud.events(probe))
+
+    def old_request():
+        recorded("platform-timeout")
+        recorded("fault-release")
+        ev.no_late_work(
+            recorded("victim-events"), {"time": deadline, "request": blocked["request"]}
         )
+
+    def worker_recovery():
+        recorded("platform-timeout")
+        ev.recovery(
+            recorded("probe-events"), probe, identity, deadline, grace, recorded("probe-history")
+        )
+
+    def healthy_peer():
+        events = recorded("peer-events")
+        assert any(
+            e["phase"] == "ALIVE"
+            and e["request"] == peer_blocked["request"]
+            and e.get("gate") == "peer"
+            and e["time"] >= deadline
+            for e in events
+        ), "Healthy peer did not progress after the deadline"
+        assert any(
+            e["phase"] == "RELEASED"
+            and e["request"] == peer_blocked["request"]
+            and e.get("gate") == "peer"
+            and e["time"] >= deadline + grace
+            for e in events
+        ), "Healthy peer was released before the recovery window ended"
+        result = recorded("peer-result")
+        assert result["Result"] == '"' + peer["marker"] + '"'
+        assert (
+            ev.overlap(
+                events + recorded("probe-events"),
+                {peer["marker"], probe["marker"]},
+                gates={peer["marker"]: "peer", probe["marker"]: "peer"},
+                requests={peer["marker"]: peer_blocked["request"]},
+            )
+            == identity
+        )
+        ev.tokens(events + recorded("probe-events") + recorded("victim-events"))
+
+    outcomes.update(
+        ev.check_all(
+            {
+                "probe-scheduling": lambda: ev.timely_probe(probe["timing"], deadline),
+                "old-request-writes": old_request,
+                "worker-recovery": worker_recovery,
+                "healthy-peer": healthy_peer,
+                "retry-replay": lambda: ev.timeout_retry(
+                    recorded("victim-events"), blocked["request"]
+                ),
+            }
+        )
+    )
+    probe_history = observations.get("probe-history", [])
+    save(
+        ARTIFACTS / f"deadlines/{victim['marker']}.json",
+        {
+            "deadline": deadline,
+            "grace": grace,
+            "originalRequest": blocked["request"],
+            "identity": identity,
+            "probe": probe,
+            "peer": peer,
+            "victim": victim,
+            "observedAt": cloud.timestamp(),
+            "outcomes": outcomes,
+            "probeServiceStart": next(
+                (e for e in probe_history if e.get("EventType") == "ExecutionStarted"), None
+            ),
+            "probeEntry": ev.select(observations.get("probe-events", []), "ENTER"),
+            "probeHeld": observations.get("probe-held"),
+            "victimRequests": ev.select(observations.get("victim-events", []), "ENTER"),
+        },
+    )
+    ev.require_checks(outcomes)
