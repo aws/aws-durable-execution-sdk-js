@@ -480,7 +480,7 @@ describe("Step Handler", () => {
   // context, a worker thread, etc.) are not `instanceof Error` in this realm.
   // The step handler used to flatten them to `new Error("Unknown Error")` before
   // handing them to the user's retryStrategy, discarding the real message. It
-  // must now forward the original error via the realm-safe `isErrorLike` check.
+  // must now forward the original error via the realm-safe `isError` check.
   describe("cross-realm errors (issue #306)", () => {
     const makeCrossRealmError = (message: string): unknown => {
       const context = vm.createContext({});

@@ -28,7 +28,7 @@ import { AnySerdes } from "../../utils/serdes/serdes";
 import { ChildContextError } from "../../errors/durable-error/durable-error";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
-import { isErrorLike } from "../../utils/error-object/is-error-like";
+import { isError } from "../../utils/error-object/is-error";
 
 /**
  * Valid {@link CompletionReason} values, used to validate a reason read back
@@ -591,8 +591,8 @@ export class ConcurrencyController<Logger extends DurableLogger> {
             error instanceof ChildContextError
               ? error
               : new ChildContextError(
-                  isErrorLike(error) ? error.message : String(error),
-                  isErrorLike(error) ? error : undefined,
+                  isError(error) ? error.message : String(error),
+                  isError(error) ? error : undefined,
                 );
           resultItems.push({
             error: err,
@@ -833,8 +833,8 @@ export class ConcurrencyController<Logger extends DurableLogger> {
                   error instanceof ChildContextError
                     ? error
                     : new ChildContextError(
-                        isErrorLike(error) ? error.message : String(error),
-                        isErrorLike(error) ? error : undefined,
+                        isError(error) ? error.message : String(error),
+                        isError(error) ? error : undefined,
                       );
                 resultItems[index] = {
                   error: err,

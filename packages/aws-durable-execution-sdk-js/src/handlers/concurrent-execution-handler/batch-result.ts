@@ -11,7 +11,7 @@ import {
   BatchCompletionError,
 } from "../../errors/durable-error/durable-error";
 import { Serdes, SerdesContext } from "../../utils/serdes/serdes";
-import { isErrorLike } from "../../utils/error-object/is-error-like";
+import { isError } from "../../utils/error-object/is-error";
 
 /**
  * Durable error type names that can be reconstructed into their concrete
@@ -54,7 +54,7 @@ function serializeBatchError(
       : { ErrorType: error.name, ErrorMessage: error.message };
 
   const cause = (error as { cause?: unknown }).cause;
-  if (isErrorLike(cause)) {
+  if (isError(cause)) {
     serialized.Cause = serializeBatchError(cause);
   }
 
@@ -270,7 +270,7 @@ export function createBatchResultSerdes<R>(): Serdes<BatchResult<R>> {
       const serialized = {
         all: value.all.map((item) => ({
           ...item,
-          error: isErrorLike(item.error)
+          error: isError(item.error)
             ? serializeBatchError(item.error)
             : undefined,
         })),

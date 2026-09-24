@@ -48,7 +48,7 @@ import {
   toOperationInfo,
 } from "../../utils/operation/operation";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
-import { isErrorLike } from "../../utils/error-object/is-error-like";
+import { isError } from "../../utils/error-object/is-error";
 
 export const createStepHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -397,11 +397,11 @@ export const createStepHandler = <Logger extends DurableLogger>(
           const currentAttempt = (stepData?.StepDetails?.Attempt || 0) + 1;
           const retryDecision =
             options?.retryStrategy?.(
-              isErrorLike(error) ? error : new Error("Unknown Error"),
+              isError(error) ? error : new Error("Unknown Error"),
               currentAttempt,
             ) ??
             retryPresets.default(
-              isErrorLike(error) ? error : new Error("Unknown Error"),
+              isError(error) ? error : new Error("Unknown Error"),
               currentAttempt,
             );
 
@@ -425,7 +425,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
               AttemptEndInfoOutcome.FAILED,
               {
                 attempt: currentAttempt,
-                error: isErrorLike(error) ? error : new Error(String(error)),
+                error: isError(error) ? error : new Error(String(error)),
               },
             );
             backfillOperationInfo(attemptEndInfo, opInfo);
@@ -433,7 +433,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
             await plugin.onOperationEnd?.({
               ...attemptEndInfo,
               isReplay: false,
-              error: isErrorLike(error) ? error : new Error(String(error)),
+              error: isError(error) ? error : new Error(String(error)),
             });
             throw DurableOperationError.fromErrorObject(
               createErrorObjectFromError(error),
@@ -461,7 +461,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
             AttemptEndInfoOutcome.FAILED,
             {
               attempt: currentAttempt,
-              error: isErrorLike(error) ? error : new Error(String(error)),
+              error: isError(error) ? error : new Error(String(error)),
             },
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
