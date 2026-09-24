@@ -155,7 +155,10 @@ npm install @aws/durable-execution-sdk-js-insight
 **Requirements:**
 
 - Node.js ≥ 22
-- `@aws/durable-execution-sdk-js` ≥ 2.0.0-alpha.1 (peer dependency)
+- `@aws/durable-execution-sdk-js` ≥ 3.0.0 (peer dependency). `workflowInsight()`
+  returns a plugin factory, and only core 3.0.0 and later accept a factory in
+  `plugins`. An earlier core expects a plugin instance and fails at handler
+  initialization.
 - Lambda runtime: `nodejs22.x` or later
 
 Exporter-specific AWS SDK packages (e.g., `@aws-sdk/client-s3`) are **optional peer dependencies** — they're already available in the Lambda runtime, so you don't need to install them. They're only needed if you bundle your own dependencies or run outside Lambda.

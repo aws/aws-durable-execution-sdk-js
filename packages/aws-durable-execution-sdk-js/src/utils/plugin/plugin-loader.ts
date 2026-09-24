@@ -2,11 +2,7 @@ import { createRequire } from "module";
 import { join } from "path";
 import { pathToFileURL } from "url";
 import { PluginLoadError } from "../../errors/plugin-load-error/plugin-load-error";
-import {
-  DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION,
-  DurableInstrumentationPlugin,
-  DurableInstrumentationPluginProvider,
-} from "../../types/plugin";
+import { DurableInstrumentationPluginFactory } from "../../types/plugin";
 
 export const PLUGIN_ENVIRONMENT_VARIABLE = "DURABLE_EXECUTION_PLUGINS";
 export const PLUGIN_PROVIDER_EXPORT = "durableExecutionPluginProvider";
@@ -193,87 +189,117 @@ function getProviderExport(
   return candidates[0];
 }
 
-function validateProvider(
-  specifier: string,
-  providerValue: unknown,
-): DurableInstrumentationPluginProvider {
-  if (!isRecord(providerValue)) {
-    throw new PluginLoadError(
-      `Plugin module '${specifier}' exports an invalid provider; expected an object.`,
-    );
-  }
-
+/**
+ * Whether a value can serve as a plugin factory: it exposes a callable
+ * `createPlugin`.
+ *
+ * Only a property lookup is performed, so an inherited method counts. A factory
+ * written as a class instance keeps `createPlugin` on its prototype, and its
+ * type says it is a factory, so the check has to agree. Functions are examined
+ * as well as objects, because a function carrying a `createPlugin` property also
+ * satisfies the interface.
+ */
+function isPluginFactory(
+  value: unknown,
+): value is DurableInstrumentationPluginFactory {
   if (
-    providerValue.pluginApiVersion !==
-    DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION
+    value === null ||
+    (typeof value !== "object" && typeof value !== "function")
   ) {
-    throw new PluginLoadError(
-      `Plugin provider '${specifier}' declares plugin API version '${String(providerValue.pluginApiVersion)}', ` +
-        `but @aws/durable-execution-sdk-js supports version ${DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION}. ` +
-        "Install compatible SDK and plugin package versions.",
-    );
+    return false;
   }
 
-  if (
-    typeof providerValue.pluginType !== "function" ||
-    !isRecord(providerValue.pluginType.prototype)
-  ) {
-    throw new PluginLoadError(
-      `Plugin provider '${specifier}' must declare a constructable 'pluginType'.`,
-    );
-  }
-
-  if (typeof providerValue.createPlugin !== "function") {
-    throw new PluginLoadError(
-      `Plugin provider '${specifier}' must define a 'createPlugin' factory function.`,
-    );
-  }
-
-  return providerValue as unknown as DurableInstrumentationPluginProvider;
-}
-
-function createPlugin(
-  specifier: string,
-  provider: DurableInstrumentationPluginProvider,
-): DurableInstrumentationPlugin {
-  let plugin: DurableInstrumentationPlugin;
-  try {
-    plugin = provider.createPlugin();
-  } catch (error) {
-    throw new PluginLoadError(
-      `Plugin provider '${specifier}' failed to create its plugin: ${errorMessage(error)}`,
-      { cause: error },
-    );
-  }
-
-  if (!(plugin instanceof provider.pluginType)) {
-    const actualType =
-      plugin == null
-        ? String(plugin)
-        : ((plugin as { constructor?: { name?: string } }).constructor?.name ??
-          typeof plugin);
-    throw new PluginLoadError(
-      `Plugin provider '${specifier}' declared plugin type '${provider.pluginType.name}' ` +
-        `but created '${actualType}'.`,
-    );
-  }
-
-  return plugin;
+  return (
+    typeof (value as { createPlugin?: unknown }).createPlugin === "function"
+  );
 }
 
 /**
- * Combines explicitly configured plugins with providers selected through the environment.
+ * Checks the one thing about a configured plugin entry that can be checked
+ * without running it: the entry carries a callable `createPlugin`, which is what
+ * the SDK calls once per invocation.
  *
- * Explicit plugins retain their order. Dynamically selected plugins follow in the order
- * listed in `DURABLE_EXECUTION_PLUGINS`.
+ * The shape test also rejects the values a caller is most likely to pass by
+ * mistake. A plugin instance is an object without `createPlugin`. The plugin
+ * class itself is callable but has no `createPlugin` either, so it is rejected
+ * here rather than throwing "Class constructor cannot be invoked without 'new'"
+ * once per invocation. A bare `(info) => plugin` function, which an earlier
+ * version of this contract accepted, has no `createPlugin` either, so the
+ * message names the shape that replaces it.
+ *
+ * The value is never called to find out whether it is a factory. Calling it
+ * would run arbitrary constructor or factory code at load time, for every
+ * legitimate entry.
+ *
+ * Nothing else about the value can be established here. What `createPlugin`
+ * returns is only known when it runs, and by then the invocation has started,
+ * where a plugin failure is contained rather than fatal. A value without
+ * `createPlugin`, by contrast, is a configuration or packaging mistake that
+ * would otherwise be rediscovered — and swallowed — on every invocation, so it
+ * fails the load instead.
+ *
+ * Applied to both ways a plugin arrives, so the two paths agree: an entry in
+ * `plugins` that has no `createPlugin` fails the load exactly as an
+ * environment-selected provider without one does. `subject` is what the message
+ * names, since one path has a module specifier and the other has a position in
+ * the caller's array.
+ */
+function validatePluginFactory(
+  subject: string,
+  providerValue: unknown,
+  guidance = "",
+): DurableInstrumentationPluginFactory {
+  if (!isPluginFactory(providerValue)) {
+    throw new PluginLoadError(
+      `${subject} must be an object with a 'createPlugin(info)' method that ` +
+        `creates a plugin for one invocation, but it is ` +
+        `${describeValue(providerValue)}.${guidance}`,
+    );
+  }
+
+  return providerValue;
+}
+
+function describeValue(value: unknown): string {
+  if (value === null) return "null";
+  if (value === undefined) return "undefined";
+  // `typeof []` is "object", so arrays need their own case to be named
+  // accurately.
+  if (Array.isArray(value)) return "an array";
+  const type = typeof value;
+  return type === "object" ? "an object" : `a ${type}`;
+}
+
+/**
+ * Combines explicitly configured plugin factories with providers selected
+ * through the environment.
+ *
+ * Explicit factories retain their order. Dynamically selected providers follow
+ * in the order listed in `DURABLE_EXECUTION_PLUGINS`.
+ *
+ * Every entry from either source is checked here for the one thing that can be
+ * checked once: that it carries a callable `createPlugin`. An entry that fails —
+ * a plugin instance, the plugin class itself, a bare factory function, or a value
+ * that is not an object at all — could never produce an instance, so it fails the
+ * load rather than being rediscovered and swallowed on every invocation.
+ *
+ * Every returned entry is a factory: no plugin is constructed here. Construction
+ * happens once per invocation, in {@link createInvocationPluginRunner}, which is
+ * what bounds a plugin instance's lifetime to a single invocation.
  *
  * @internal
  */
 export async function loadConfiguredPlugins(
-  explicitPlugins: readonly DurableInstrumentationPlugin[] | undefined,
+  explicitPlugins: readonly DurableInstrumentationPluginFactory[] | undefined,
   options: PluginLoaderOptions = {},
-): Promise<DurableInstrumentationPlugin[]> {
-  const plugins = [...(explicitPlugins ?? [])];
+): Promise<DurableInstrumentationPluginFactory[]> {
+  const plugins = (explicitPlugins ?? []).map((plugin, index) =>
+    validatePluginFactory(
+      `Plugin at plugins[${index}]`,
+      plugin,
+      " Pass a factory such as `{ createPlugin: (info) => new MyPlugin() }`.",
+    ),
+  );
   const environment = options.environment ?? process.env;
   const specifiers = parseConfiguredSpecifiers(environment);
   if (specifiers.length === 0) {
@@ -302,11 +328,12 @@ export async function loadConfiguredPlugins(
       );
     }
 
-    const provider = validateProvider(
-      specifier,
-      getProviderExport(specifier, importedModule),
+    plugins.push(
+      validatePluginFactory(
+        `Plugin provider '${specifier}'`,
+        getProviderExport(specifier, importedModule),
+      ),
     );
-    plugins.push(createPlugin(specifier, provider));
   }
 
   return plugins;

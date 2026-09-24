@@ -15,7 +15,7 @@ import {
   DurableExecutionInvocationInput,
   DurableExecutionInvocationOutput,
 } from "./core";
-import { DurableInstrumentationPlugin } from "./plugin";
+import { DurableInstrumentationPluginFactory } from "./plugin";
 
 /**
  * A handler function type for a durable execution that provides automatic state persistence,
@@ -164,28 +164,50 @@ export interface DurableExecutionConfig {
   durableExecutionClient?: DurableExecutionClient;
 
   /**
-   * Optional array of instrumentation plugins for observability and tracing.
+   * Optional array of instrumentation plugin factories for observability and
+   * tracing.
+   *
+   * Each entry is a {@link DurableInstrumentationPluginFactory}: an object whose
+   * `createPlugin(info)` method the SDK calls once per invocation, with that
+   * invocation's {@link InvocationInfo}, to build the plugin instance that
+   * serves it. The instance exists for one invocation only, so a plugin holding
+   * per-execution state never has to key it by execution ARN and concurrent
+   * executions in one execution environment cannot see each other's state.
+   * Anything that belongs to the execution environment — an exporter, a tracer
+   * provider — belongs on the factory or in its closure.
    *
    * Plugins receive lifecycle callbacks at key points during durable execution,
    * enabling integration with tracing systems (e.g., OpenTelemetry, X-Ray),
    * custom metrics, and logging enrichment.
    *
-   * Multiple plugins can be provided and will be called in order. Plugin errors
-   * are swallowed to prevent instrumentation from affecting execution correctness.
+   * Multiple factories can be provided and their plugins will be called in
+   * order. Plugin errors are swallowed to prevent instrumentation from
+   * affecting execution correctness; a `createPlugin` that throws or returns
+   * nothing is contained the same way. An entry with no callable `createPlugin`
+   * is a different case — no instance could ever come from it — and fails the
+   * invocation with a `PluginLoadError` when the handler is initialized, exactly
+   * as such an environment-selected provider does.
    *
    * @example
    * ```typescript
    * import { withDurableExecution } from '@aws/durable-execution-sdk-js';
-   * import { myTracingPlugin } from './tracing';
+   * import { MyTracingPlugin } from './tracing';
+   *
+   * const exporter = new Exporter(); // shared by every invocation
    *
    * export const handler = withDurableExecution(myHandler, {
-   *   plugins: [myTracingPlugin]
+   *   plugins: [
+   *     {
+   *       createPlugin: (info) =>
+   *         new MyTracingPlugin(exporter, info.executionArn),
+   *     },
+   *   ],
    * });
    * ```
    *
    * @experimental This parameter is experimental and may be changed or removed in future releases.
    */
-  plugins?: DurableInstrumentationPlugin[];
+  plugins?: DurableInstrumentationPluginFactory[];
 
   /**
    * Execution-level settings that affect how instrumentation plugins observe

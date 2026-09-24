@@ -39,11 +39,12 @@ import {
   DurableExecutionHandler,
   DurableLambdaHandler,
 } from "./types/durable-execution";
-import { createPluginRunner } from "./utils/plugin/plugin-runner";
+import { createInvocationPluginRunner } from "./utils/plugin/plugin-factory";
 import { loadConfiguredPlugins } from "./utils/plugin/plugin-loader";
 import { toOperationInfoMap } from "./utils/operation/operation";
 import {
   DurableInstrumentationPlugin,
+  DurableInstrumentationPluginFactory,
   InvocationBaseInfo,
   InvocationInfo,
   OperationInfo,
@@ -64,28 +65,9 @@ async function runHandler<
   durableExecutionMode: DurableExecutionMode,
   checkpointToken: string,
   handler: DurableExecutionHandler<Input, Output, Logger>,
-  plugin: DurableInstrumentationPlugin,
+  pluginFactories: readonly DurableInstrumentationPluginFactory[],
   config: DurableExecutionConfig | undefined,
 ): Promise<DurableExecutionInvocationOutput> {
-  // Create checkpoint manager and step data emitter
-  const stepDataEmitter = new EventEmitter();
-  const checkpointManager = new CheckpointManager(
-    executionContext.durableExecutionArn,
-    executionContext._stepData,
-    executionContext.durableExecutionClient,
-    executionContext.terminationManager,
-    checkpointToken,
-    stepDataEmitter,
-    createDefaultLogger(
-      executionContext,
-      plugin.enrichLogContext?.bind(plugin),
-    ),
-    new Set<string>(),
-    plugin,
-    executionContext.requestId,
-    executionContext.getRemainingTimeMs,
-  );
-
   // Extract customerHandlerEvent early so it's available for plugins in onInvocationStart
   const initialExecutionEvent =
     executionContext._stepData[Object.keys(executionContext._stepData)[0]];
@@ -116,6 +98,38 @@ async function runHandler<
       durableExecutionMode === DurableExecutionMode.ExecutionMode,
     updatedOperations,
   };
+
+  // One plugin instance per configured factory, per invocation, held only in this
+  // local. Built here because this is the first point at which the invocation is
+  // fully described, and still before any hook fires or any durable operation
+  // runs -- so a plugin can take its identity from the same `invocationInfo`
+  // object that `onInvocationStart` receives below. The SDK keeps no module state
+  // and no map keyed by execution, so nothing survives into the next invocation
+  // or leaks into a concurrent one sharing this execution environment.
+  const plugin: DurableInstrumentationPlugin = createInvocationPluginRunner(
+    pluginFactories,
+    invocationInfo,
+  );
+
+  // Create checkpoint manager and step data emitter
+  const stepDataEmitter = new EventEmitter();
+  const checkpointManager = new CheckpointManager(
+    executionContext.durableExecutionArn,
+    executionContext._stepData,
+    executionContext.durableExecutionClient,
+    executionContext.terminationManager,
+    checkpointToken,
+    stepDataEmitter,
+    createDefaultLogger(
+      executionContext,
+      plugin.enrichLogContext?.bind(plugin),
+    ),
+    new Set<string>(),
+    plugin,
+    executionContext.requestId,
+    executionContext.getRemainingTimeMs,
+  );
+
   await plugin.onInvocationStart?.(invocationInfo);
 
   // Reject invalid configuration before running the handler. It's a non-retryable
@@ -528,14 +542,12 @@ export const withDurableExecution = <
   handler: DurableExecutionHandler<TEvent, TResult, TLogger>,
   config?: DurableExecutionConfig,
 ): DurableLambdaHandler => {
-  const pluginPromise = loadConfiguredPlugins(config?.plugins).then(
-    createPluginRunner,
-  );
+  const pluginFactoriesPromise = loadConfiguredPlugins(config?.plugins);
   // Plugin loading starts during handler initialization. Attach a rejection handler
   // immediately so a cold-start configuration error cannot become an unhandled
   // rejection before Lambda invokes the exported handler; awaiting the original
   // promise below still reports the same error to the invocation.
-  void pluginPromise.catch(() => undefined);
+  void pluginFactoriesPromise.catch(() => undefined);
 
   return async (
     event: DurableExecutionInvocationInput,
@@ -557,9 +569,13 @@ export const withDurableExecution = <
       };
     }
 
-    let plugin: DurableInstrumentationPlugin;
+    let pluginFactories: readonly DurableInstrumentationPluginFactory[];
     try {
-      plugin = await pluginPromise;
+      // Awaited before execution state is read, so a misconfigured provider
+      // fails the invocation here rather than mid-execution. No plugin instance
+      // exists yet: instances are built per invocation inside runHandler, once
+      // the invocation is described.
+      pluginFactories = await pluginFactoriesPromise;
     } catch (error) {
       return {
         Status: InvocationStatus.FAILED,
@@ -577,7 +593,7 @@ export const withDurableExecution = <
         durableExecutionMode,
         checkpointToken,
         handler,
-        plugin,
+        pluginFactories,
         config,
       );
     } catch (error) {
