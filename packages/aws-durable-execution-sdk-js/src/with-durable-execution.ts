@@ -49,6 +49,7 @@ import {
   OperationInfo,
   PluginInvocationStatus,
 } from "./types/plugin";
+import { isError } from "./utils/error-object/is-error";
 
 // Lambda response size limit is 6MB
 const LAMBDA_RESPONSE_SIZE_LIMIT = 6 * 1024 * 1024 - 50; // 6MB in bytes, minus 50 bytes for envelope
@@ -410,8 +411,7 @@ async function runHandler<
           ...invocationBaseInfo,
           status: PluginInvocationStatus.FAILED,
           executionInput: customerHandlerEvent,
-          executionError:
-            error instanceof Error ? error : new Error(String(error)),
+          executionError: isError(error) ? error : new Error(String(error)),
           executionResult: undefined,
           operations: toOperationInfoMap(executionContext._stepData),
         });

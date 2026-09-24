@@ -41,6 +41,7 @@ import {
   toOperationInfo,
 } from "../../utils/operation/operation";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
+import { isError } from "../../utils/error-object/is-error";
 
 export const createWaitForConditionHandler = <Logger extends DurableLogger>(
   context: ExecutionContext,
@@ -382,7 +383,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             AttemptEndInfoOutcome.FAILED,
             {
               attempt: currentAttempt,
-              error: error instanceof Error ? error : new Error(String(error)),
+              error: isError(error) ? error : new Error(String(error)),
             },
           );
           backfillOperationInfo(attemptEndInfo, opInfo);
@@ -393,7 +394,7 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
           await plugin.onOperationEnd?.({
             ...attemptEndInfo,
             isReplay: false,
-            error: error instanceof Error ? error : new Error(String(error)),
+            error: isError(error) ? error : new Error(String(error)),
           });
           throw DurableOperationError.fromErrorObject(
             createErrorObjectFromError(error),

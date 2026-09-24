@@ -5,6 +5,7 @@ import {
   DurableLogger,
   DurableLoggingContext,
 } from "../../types/durable-logger";
+import { isError } from "../error-object/is-error";
 
 export interface LoggingExecutionContext {
   durableExecutionArn: string;
@@ -83,7 +84,7 @@ function jsonErrorReplacer(
   _key: string,
   value: DurableLogField,
 ): DurableLogField {
-  if (value instanceof Error) {
+  if (isError(value)) {
     return Object.assign(
       {
         errorType: value?.constructor?.name ?? "UnknownError",
@@ -173,7 +174,7 @@ function formatDurableLogData(
 
   result.message = formatWithOptions(FORMAT_OPTIONS, ...messageParams);
   for (const param of messageParams) {
-    if (param instanceof Error) {
+    if (isError(param)) {
       result.errorType = param?.constructor?.name ?? "UnknownError";
       result.errorMessage = param.message;
       result.stackTrace =
