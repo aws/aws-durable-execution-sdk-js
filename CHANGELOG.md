@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- A checkpoint response carrying no `CheckpointToken` now ends the invocation cleanly with
+  `{Status: "PENDING"}`. Every response carries the token for the next call, so one without a token
+  withdraws the invocation's ability to record anything further — for instance because a newer
+  invocation has taken the execution over. The checkpoint manager previously ignored the omission,
+  kept the token it had just spent and presented it again on the next call, which the service
+  rejects with `InvalidParameterValueException: Invalid checkpoint token`. That is classified as an
+  invocation error, so a condition the SDK could recognise ended the invocation with a Lambda error
+  one call later.
+
+  Whatever the SDK had not yet sent is abandoned rather than checkpointed, and replays on the next
+  invocation. This is the defined behaviour for `AT_LEAST_ONCE` operations; an `AT_MOST_ONCE` step
+  whose START reached the last accepted checkpoint will not run again, which is what `AT_MOST_ONCE`
+  means. The `NewExecutionState` on the token-less response is deliberately not applied: applying it
+  would wake operations the handler is awaiting and let it run on past the point where the service
+  can be told anything, possibly reaching a result that is never recorded.
+
+  The condition is logged at `WARN` rather than passing silently, since an absent token is
+  indistinguishable from a client that dropped the field.
+
+  New internal termination reason `EXECUTION_SUSPENDED_BY_SERVICE`, classified as a suspend. The
+  SDK's set of invocation responses is unchanged.
+
+### Added
+
+- `LocalDurableTestRunner.setupTestEnvironment` accepts `withholdCheckpointTokenOnCall`, which makes
+  the local checkpoint server answer an execution's nth checkpoint call — and only that one —
+  without a `CheckpointToken`. This reaches the suspend path above on purpose, so a handler can be
+  tested against having work it started thrown away mid-invocation. Counting is per execution, so
+  nested runners do not interfere with each other.
+
 ## [2.3.1]
 
 ### Fixed

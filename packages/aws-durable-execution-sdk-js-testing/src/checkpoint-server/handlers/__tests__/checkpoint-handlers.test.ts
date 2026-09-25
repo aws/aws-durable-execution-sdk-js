@@ -270,6 +270,43 @@ describe("checkpoint handlers", () => {
       expect(result.NewExecutionState?.NextMarker).toBeUndefined();
     });
 
+    it("omits the token but keeps the updates when asked to withhold it", () => {
+      // Withholding ends the invocation's ability to checkpoint again. It does not reject
+      // the checkpoint that carried the withheld token, so those updates still land.
+      const executionArn = "test-execution-arn";
+      const executionId = createExecutionId(executionArn);
+      const { invocationResult } = createExecutionWithOperations(executionId);
+
+      const input: CheckpointDurableExecutionRequest = {
+        DurableExecutionArn: executionArn,
+        CheckpointToken: encodeCheckpointToken({
+          executionId,
+          invocationId: invocationResult.invocationId,
+          token: "test-token",
+        }),
+        Updates: [
+          {
+            Id: "test-update-op",
+            Type: OperationType.STEP,
+            Action: OperationAction.SUCCEED,
+            Payload: "test result",
+          },
+        ],
+      };
+
+      const result = processCheckpointDurableExecution(
+        executionArn,
+        input,
+        executionManager,
+        true,
+      );
+
+      expect(result.CheckpointToken).toBeUndefined();
+      expect(
+        result.NewExecutionState?.Operations?.map((operation) => operation.Id),
+      ).toContain("test-update-op");
+    });
+
     it("should throw error when execution not found", () => {
       const getStorageSpy = jest
         .spyOn(executionManager, "getCheckpointsByExecution")

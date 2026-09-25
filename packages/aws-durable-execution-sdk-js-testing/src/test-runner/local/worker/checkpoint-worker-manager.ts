@@ -17,6 +17,7 @@ import { RealDate } from "../real-timers/real-timers";
 export type CheckpointWorkerManagerParams =
   | {
       checkpointDelaySettings?: number;
+      withholdCheckpointTokenOnCall?: number;
     }
   | undefined;
 

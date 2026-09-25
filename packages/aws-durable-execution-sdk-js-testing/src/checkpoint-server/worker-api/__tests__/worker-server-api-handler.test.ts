@@ -286,6 +286,8 @@ describe("WorkerServerApiHandler", () => {
           CheckpointToken: "test-checkpoint-token",
         },
         mockExecutionManagerInstance,
+        // No withholdCheckpointTokenOnCall configured, so every response carries a token.
+        false,
       );
     });
 
@@ -409,6 +411,77 @@ describe("WorkerServerApiHandler", () => {
       );
 
       expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 10);
+    });
+  });
+
+  describe("withholdCheckpointTokenOnCall", () => {
+    /**
+     * Withholding a checkpoint token is how a test reaches the SDK's suspend-on-revoked-token
+     * path. What this handler decides is which call it happens on; whether the response then
+     * carries a token is processCheckpointDurableExecution's half, covered in its own tests.
+     */
+    const checkpointRequest = (
+      durableExecutionArn: string,
+    ): {
+      type: ApiType.CheckpointDurableExecutionState;
+      requestId: string;
+      params: { DurableExecutionArn: string; CheckpointToken: string };
+    } => ({
+      type: ApiType.CheckpointDurableExecutionState as const,
+      requestId: TEST_UUIDS.SUCCESS,
+      params: {
+        DurableExecutionArn: durableExecutionArn,
+        CheckpointToken: "test-checkpoint-token",
+      },
+    });
+
+    /** The withhold flag passed to the handler, one entry per checkpoint call. */
+    const withholdFlags = (): boolean[] =>
+      mockProcessCheckpointDurableExecution.mock.calls.map(
+        (call) => call[3] as boolean,
+      );
+
+    beforeEach(() => {
+      mockProcessCheckpointDurableExecution.mockReturnValue({
+        CheckpointToken: "test-response-token",
+        NewExecutionState: { Operations: [], NextMarker: undefined },
+      });
+    });
+
+    it("withholds on the configured call and no other", async () => {
+      // Every later call answering without a token would suspend each replacement
+      // invocation the moment it checkpointed, and the execution would never finish.
+      const handler = new WorkerServerApiHandler({
+        withholdCheckpointTokenOnCall: 2,
+      });
+
+      for (let call = 0; call < 3; call++) {
+        await handler.performApiCall(checkpointRequest("execution-a"));
+      }
+
+      expect(withholdFlags()).toEqual([false, true, false]);
+    });
+
+    it("counts each execution separately", async () => {
+      // Nested runners share this handler, and a token belongs to one execution.
+      const handler = new WorkerServerApiHandler({
+        withholdCheckpointTokenOnCall: 2,
+      });
+
+      await handler.performApiCall(checkpointRequest("execution-a"));
+      await handler.performApiCall(checkpointRequest("execution-b"));
+      await handler.performApiCall(checkpointRequest("execution-a"));
+
+      expect(withholdFlags()).toEqual([false, false, true]);
+    });
+
+    it("withholds from nothing when unset", async () => {
+      const handler = new WorkerServerApiHandler();
+
+      await handler.performApiCall(checkpointRequest("execution-a"));
+      await handler.performApiCall(checkpointRequest("execution-a"));
+
+      expect(withholdFlags()).toEqual([false, false]);
     });
   });
 });

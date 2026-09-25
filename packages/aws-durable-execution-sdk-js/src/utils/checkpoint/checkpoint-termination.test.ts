@@ -6,6 +6,8 @@ import {
   OperationSubType,
 } from "../../types";
 import { TerminationManager } from "../../termination-manager/termination-manager";
+import { TerminationReason } from "../../termination-manager/types";
+import { DurableLogger } from "../../types/durable-logger";
 import { EventEmitter } from "events";
 import { createDefaultLogger } from "../logger/default-logger";
 import { OperationType } from "../../types/wire";
@@ -271,6 +273,95 @@ describe("CheckpointManager Termination Behavior", () => {
         "🔄",
         "Termination aborted - conditions changed",
       );
+    });
+  });
+
+  describe("checkpoint response without a CheckpointToken", () => {
+    /**
+     * Each checkpoint response carries the token for the next call, so one without a token
+     * withdraws this invocation's ability to record anything further. The composed tests in
+     * checkpoint-token-revoked.composed.test.ts pin the invocation's answer; these pin what
+     * the manager does to produce it.
+     */
+    let warningLogger: DurableLogger;
+    let revokingHandler: CheckpointManager;
+
+    beforeEach(() => {
+      warningLogger = {
+        error: jest.fn(),
+        warn: jest.fn(),
+        info: jest.fn(),
+        debug: jest.fn(),
+      };
+
+      revokingHandler = createTestCheckpointManager(
+        mockContext,
+        "test-token",
+        stepDataEmitter,
+        warningLogger,
+      );
+
+      (
+        mockContext.durableExecutionClient.checkpoint as jest.Mock
+      ).mockResolvedValue({
+        CheckpointToken: undefined,
+        NewExecutionState: { Operations: [] },
+      });
+    });
+
+    it("terminates with EXECUTION_SUSPENDED_BY_SERVICE", async () => {
+      const mockTerminate = jest.fn();
+      mockContext.terminationManager.terminate = mockTerminate;
+
+      await revokingHandler.checkpoint("test-step", {
+        Action: "START",
+        Type: "STEP",
+      });
+
+      expect(mockTerminate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reason: TerminationReason.EXECUTION_SUSPENDED_BY_SERVICE,
+        }),
+      );
+    });
+
+    it("warns, so an absent token is distinguishable from a dropped field", async () => {
+      await revokingHandler.checkpoint("test-step", {
+        Action: "START",
+        Type: "STEP",
+      });
+
+      expect(warningLogger.warn).toHaveBeenCalledWith(
+        expect.stringContaining("no CheckpointToken"),
+        expect.objectContaining({ durableExecutionArn: "test-arn" }),
+      );
+    });
+
+    it("sends nothing further, including for a forced checkpoint", async () => {
+      // The spent token is the only one the manager holds, so any later call presents a
+      // token the service has already rejected. forceCheckpoint is the case that reaches
+      // the queue without enqueueing an update, so a guard on the queue alone misses it.
+      const checkpointClient = mockContext.durableExecutionClient
+        .checkpoint as jest.Mock;
+
+      await revokingHandler.checkpoint("first-step", {
+        Action: "START",
+        Type: "STEP",
+      });
+
+      expect(checkpointClient).toHaveBeenCalledTimes(1);
+
+      // Neither is awaited: both are left unresolved on purpose, as during any other
+      // termination, so that the termination decides the invocation.
+      void revokingHandler.checkpoint("second-step", {
+        Action: "START",
+        Type: "STEP",
+      });
+      void revokingHandler.forceCheckpoint();
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(checkpointClient).toHaveBeenCalledTimes(1);
     });
   });
 });

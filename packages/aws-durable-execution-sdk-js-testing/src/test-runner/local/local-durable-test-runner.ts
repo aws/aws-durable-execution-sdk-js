@@ -96,6 +96,33 @@ export interface LocalDurableTestRunnerSetupParameters {
    * bugs, race conditions, or other issues.
    */
   checkpointDelay?: number;
+
+  /**
+   * Answer an execution's nth checkpoint call, and only that one, without a
+   * `CheckpointToken`.
+   *
+   * The service does this when an invocation may checkpoint no further -- for instance when
+   * a newer invocation has taken the execution over. The SDK responds by abandoning its
+   * in-flight operations and suspending: the invocation reports PENDING, and those
+   * operations replay on the next one. Set this to reach that path deliberately and see what
+   * a handler does when work it started is thrown away mid-invocation.
+   *
+   * Only the nth call is affected, so the invocation that follows checkpoints normally and
+   * the execution still reaches an end. 1 withholds the token from the very first call.
+   * Counting is per execution, so nested runners do not interfere with each other.
+   *
+   * @defaultValue undefined (every checkpoint is answered with a token)
+   *
+   * @example
+   * ```typescript
+   * // The execution's second checkpoint is answered without a token, so the first
+   * // invocation suspends there and a replacement invocation replays and finishes.
+   * await LocalDurableTestRunner.setupTestEnvironment({
+   *   withholdCheckpointTokenOnCall: 2,
+   * });
+   * ```
+   */
+  withholdCheckpointTokenOnCall?: number;
 }
 
 /**
@@ -484,6 +511,7 @@ export class LocalDurableTestRunner<TResult = any>
     }
     return CheckpointWorkerManager.getInstance({
       checkpointDelaySettings: params?.checkpointDelay,
+      withholdCheckpointTokenOnCall: params?.withholdCheckpointTokenOnCall,
     }).setup();
   }
 

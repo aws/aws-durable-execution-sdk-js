@@ -76,6 +76,11 @@ export class CheckpointManager implements Checkpoint {
   private readonly MAX_ITEMS_IN_BATCH = 250;
   private isTerminating = false;
   private disposed = false;
+  /**
+   * Set once the service answers a checkpoint without a token. See
+   * {@link CheckpointManager.handleRevokedCheckpointToken}.
+   */
+  private checkpointTokenRevoked = false;
 
   // Operation lifecycle tracking
   private operations = new Map<string, OperationInfo>();
@@ -368,6 +373,20 @@ export class CheckpointManager implements Checkpoint {
       return;
     }
 
+    // Nothing can be sent once the token is gone, so drop whatever arrived after it was
+    // withdrawn rather than making a call the service is certain to reject. Checked here
+    // and not only in checkpoint(): the isTerminating flag that normally turns callers
+    // away is set by the termination manager's callback, which a directly constructed
+    // manager need not have wired, and forceCheckpoint() reaches processQueue without
+    // enqueueing anything at all.
+    if (this.checkpointTokenRevoked) {
+      log("⚠️", "Checkpoint skipped - checkpoint token was withdrawn", {
+        queueLength: this.queue.length,
+      });
+      this.clearQueue();
+      return;
+    }
+
     const hasQueuedItems = this.queue.length > 0;
     const hasForceRequests = this.forceCheckpointPromises.length > 0;
 
@@ -504,15 +523,76 @@ export class CheckpointManager implements Checkpoint {
 
     const response = await this.storage.checkpoint(checkpointData, this.logger);
 
-    if (response.CheckpointToken) {
-      this.currentTaskToken = response.CheckpointToken;
+    if (!response.CheckpointToken) {
+      this.handleRevokedCheckpointToken();
+      return;
     }
+
+    this.currentTaskToken = response.CheckpointToken;
 
     if (response.NewExecutionState?.Operations) {
       await this.updateStepDataFromCheckpointResponse(
         normalizeOperations(response.NewExecutionState.Operations),
       );
     }
+  }
+
+  /**
+   * Ends the invocation when the service answers a checkpoint without a token.
+   *
+   * Each checkpoint response carries the token for the next one. A response without one
+   * withdraws this invocation's ability to record anything further: the token just spent is
+   * consumed, and sending it again earns `InvalidParameterValueException: Invalid checkpoint
+   * token`. Before this, the manager kept the spent token and did exactly that, turning a
+   * condition it could recognise into a Lambda error one call later.
+   *
+   * The checkpoint that prompted this response was accepted, so the updates in it are
+   * durable. In-flight operations are not: they are abandoned rather than checkpointed, and
+   * replay on the next invocation. That is correct for AT_LEAST_ONCE. An AT_MOST_ONCE step
+   * whose START reached the last accepted checkpoint will not run again, which is what
+   * AT_MOST_ONCE means.
+   *
+   * `NewExecutionState` from this response is deliberately not applied. Applying it
+   * resolves operations the handler is awaiting, letting it run on -- and possibly reach a
+   * result -- past the point where the service can be told about any of it. Terminating
+   * first keeps the invocation's answer to PENDING, which is the only answer left that is
+   * true.
+   *
+   * Where the handler has already returned, the invocation's answer is settled and
+   * terminating here changes nothing: TerminationManager.terminate is first-wins, and the
+   * result path has stopped awaiting it. That is the intended outcome for the one
+   * checkpoint the SDK sends after the handler resolves -- the oversized-result
+   * EXECUTION/SUCCEED in withDurableExecution -- where a response without a token is
+   * expected, the execution really has finished, and the invocation should keep reporting
+   * that it succeeded.
+   */
+  private handleRevokedCheckpointToken(): void {
+    this.checkpointTokenRevoked = true;
+
+    const message =
+      "Checkpoint response contained no CheckpointToken: the service will accept no " +
+      "further checkpoints from this invocation. Suspending; the execution continues on " +
+      "the next invocation.";
+
+    // Warned, not silent: an absent token is indistinguishable from a client that dropped
+    // the field, and a suspend that leaves no trace gives nobody a way to tell which
+    // happened.
+    this.logger.warn(message, {
+      durableExecutionArn: this.durableExecutionArn,
+      requestId: this.requestId,
+    });
+    log("🛑", "Checkpoint token withdrawn by service - suspending invocation", {
+      durableExecutionArn: this.durableExecutionArn,
+    });
+
+    // Silently, as on the checkpoint-failure path: callers awaiting a checkpoint that can
+    // no longer be sent are left unresolved so the termination decides the invocation.
+    this.clearQueue();
+
+    this.terminationManager.terminate({
+      reason: TerminationReason.EXECUTION_SUSPENDED_BY_SERVICE,
+      message,
+    });
   }
 
   private async updateStepDataFromCheckpointResponse(
@@ -808,6 +888,13 @@ export class CheckpointManager implements Checkpoint {
   }
 
   private checkAndTerminate(): void {
+    // The invocation is already ending, and every reason this would schedule is a suspend
+    // the termination manager would discard. Arming a cooldown timer for it only leaves a
+    // timer pending past the invocation.
+    if (this.checkpointTokenRevoked) {
+      return;
+    }
+
     const terminationReason = this.shouldTerminate();
 
     if (terminationReason) {
