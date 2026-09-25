@@ -6,6 +6,8 @@ import {
 } from "../../storage/execution-manager";
 import {
   processCompleteInvocation,
+  processPauseDurableExecution,
+  processResumeDurableExecution,
   processStartDurableExecution,
   processStartInvocation,
 } from "../../handlers/execution-handlers";
@@ -242,6 +244,30 @@ describe("WorkerServerApiHandler", () => {
       void handler.performApiCall(requestData);
 
       expect(mockProcessPollCheckpointData).toHaveBeenCalledWith(
+        "execution-123",
+        mockExecutionManagerInstance,
+      );
+    });
+
+    it("should delegate PauseDurableExecution and ResumeDurableExecution", () => {
+      const params = { executionId: "execution-123" as ExecutionId };
+
+      void handler.performApiCall({
+        type: ApiType.PauseDurableExecution as const,
+        requestId: TEST_UUIDS.SECOND,
+        params,
+      });
+      void handler.performApiCall({
+        type: ApiType.ResumeDurableExecution as const,
+        requestId: TEST_UUIDS.THIRD,
+        params,
+      });
+
+      expect(processPauseDurableExecution).toHaveBeenCalledWith(
+        "execution-123",
+        mockExecutionManagerInstance,
+      );
+      expect(processResumeDurableExecution).toHaveBeenCalledWith(
         "execution-123",
         mockExecutionManagerInstance,
       );

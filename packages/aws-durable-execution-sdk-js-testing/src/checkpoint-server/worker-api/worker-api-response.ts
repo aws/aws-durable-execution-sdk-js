@@ -34,6 +34,8 @@ export interface WorkerApiResponseMapping {
   [ApiType.SendDurableExecutionCallbackSuccess]: SendDurableExecutionCallbackSuccessResponse;
   [ApiType.SendDurableExecutionCallbackFailure]: SendDurableExecutionCallbackFailureResponse;
   [ApiType.SendDurableExecutionCallbackHeartbeat]: SendDurableExecutionCallbackHeartbeatResponse;
+  [ApiType.PauseDurableExecution]: Record<string, never>;
+  [ApiType.ResumeDurableExecution]: Record<string, never>;
 }
 
 export type WorkerApiResponse<TApiType extends ApiType> =

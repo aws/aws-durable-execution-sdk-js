@@ -270,6 +270,50 @@ describe("checkpoint handlers", () => {
       expect(result.NewExecutionState?.NextMarker).toBeUndefined();
     });
 
+    it("omits the token but keeps the updates while the execution is paused", () => {
+      // A paused execution still accepts the checkpoint: withholding the token only ends the
+      // invocation's ability to checkpoint again.
+      const executionArn = "test-execution-arn";
+      const executionId = createExecutionId(executionArn);
+      const { storage, invocationResult } =
+        createExecutionWithOperations(executionId);
+      storage.pause();
+
+      const input: CheckpointDurableExecutionRequest = {
+        DurableExecutionArn: executionArn,
+        CheckpointToken: encodeCheckpointToken({
+          executionId,
+          invocationId: invocationResult.invocationId,
+          token: "test-token",
+        }),
+        Updates: [
+          {
+            Id: "test-update-op",
+            Type: OperationType.STEP,
+            Action: OperationAction.SUCCEED,
+            Payload: "test result",
+          },
+        ],
+      };
+
+      const paused = processCheckpointDurableExecution(
+        executionArn,
+        input,
+        executionManager,
+      );
+
+      expect(paused.CheckpointToken).toBeUndefined();
+      expect(storage.getOperationData("test-update-op")).toBeDefined();
+
+      storage.resume();
+      const resumed = processCheckpointDurableExecution(
+        executionArn,
+        { ...input, Updates: [] },
+        executionManager,
+      );
+      expect(resumed.CheckpointToken).toBeDefined();
+    });
+
     it("should throw error when execution not found", () => {
       const getStorageSpy = jest
         .spyOn(executionManager, "getCheckpointsByExecution")

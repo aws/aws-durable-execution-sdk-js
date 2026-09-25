@@ -104,6 +104,8 @@ describe("TestExecutionOrchestrator - Pending Status Rejection", () => {
     mockOperationStorage.addHistoryEvent = jest.fn();
 
     checkpointApi = {
+      pauseExecution: jest.fn().mockResolvedValue(undefined),
+      resumeExecution: jest.fn().mockResolvedValue(undefined),
       startDurableExecution: jest.fn().mockResolvedValue({
         executionId: mockExecutionId,
         checkpointToken: mockCheckpointToken,

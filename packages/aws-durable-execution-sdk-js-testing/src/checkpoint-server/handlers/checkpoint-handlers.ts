@@ -110,11 +110,15 @@ export function processCheckpointDurableExecution(
   storage.registerUpdates(updates);
 
   const output: CheckpointDurableExecutionResponse = {
-    CheckpointToken: encodeCheckpointToken({
-      executionId: data.executionId,
-      invocationId: data.invocationId,
-      token: randomUUID(),
-    }),
+    // A paused execution still accepts this checkpoint: its updates were registered above.
+    // Withholding the token only ends the invocation's ability to checkpoint again.
+    CheckpointToken: storage.isPaused()
+      ? undefined
+      : encodeCheckpointToken({
+          executionId: data.executionId,
+          invocationId: data.invocationId,
+          token: randomUUID(),
+        }),
     NewExecutionState: {
       Operations: storage.getDirtyOperations(),
       NextMarker: undefined,

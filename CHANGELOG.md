@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- A checkpoint response carrying no `CheckpointToken` now ends the invocation cleanly with
+  `{Status: "PENDING"}`. Every response carries the token for the next call, so one without a token
+  withdraws the invocation's ability to record anything further — for instance because a newer
+  invocation has taken the execution over. The checkpoint manager previously ignored the omission,
+  kept the token it had just spent and presented it again on the next call, which the service
+  rejects with `InvalidParameterValueException: Invalid checkpoint token`. That is classified as an
+  invocation error, so a condition the SDK could recognise ended the invocation with a Lambda error
+  one call later.
+
+  Whatever the SDK had not yet sent is abandoned rather than checkpointed, and replays on the next
+  invocation. This is the defined behaviour for `AT_LEAST_ONCE` operations; an `AT_MOST_ONCE` step
+  whose START reached the last accepted checkpoint will not run again, which is what `AT_MOST_ONCE`
+  means. The `NewExecutionState` on the token-less response is deliberately not applied, and the
+  callers of the accepted checkpoint are not resolved: either would let the handler run on past the
+  point where the service can be told anything — starting its next step, or reaching a result that
+  is never recorded. The one exception is a checkpoint carrying the execution's own terminal update
+  (the oversized-result path), which finishes the execution and so still reports `SUCCEEDED`.
+
+  The condition is logged at `WARN` rather than passing silently, since an absent token is
+  indistinguishable from a client that dropped the field.
+
+  New internal termination reason `EXECUTION_SUSPENDED_BY_SERVICE`, classified as a suspend. The
+  SDK's set of invocation responses is unchanged.
+
+### Added
+
+- `LocalDurableTestRunner` gains `pauseExecution()` and `resumeExecution()`, **experimental**, to
+  test a handler
+  against the suspend path above. Pausing answers the running invocation's next checkpoint
+  without a `CheckpointToken` — that checkpoint is kept, and the invocation returns `PENDING` —
+  and starts no further invocation until resumed. Waits keep elapsing and callbacks can still be
+  sent while paused; the invocations they would start are held back, and `resumeExecution()`
+  starts one if anything is left to continue. `pauseExecution()` resolves once no invocation is
+  running, so assertions after it see a quiet execution. Both act on the execution `run()` has
+  in progress, so call `run()` first without awaiting it, and resume before awaiting it.
+
+  Both are also on the `DurableTestRunner` interface, so a test written against it compiles for
+  either runner; `CloudDurableTestRunner` rejects both as not implemented for now.
+
 ## [2.3.1]
 
 ### Fixed

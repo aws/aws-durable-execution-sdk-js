@@ -36,6 +36,8 @@ export class WorkerClientApiHandler {
     [ApiType.SendDurableExecutionCallbackSuccess]: new Map(),
     [ApiType.SendDurableExecutionCallbackFailure]: new Map(),
     [ApiType.SendDurableExecutionCallbackHeartbeat]: new Map(),
+    [ApiType.PauseDurableExecution]: new Map(),
+    [ApiType.ResumeDurableExecution]: new Map(),
   };
 
   handleApiCallResponse(apiResponse: WorkerApiResponse<ApiType>) {

@@ -124,6 +124,8 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
       });
 
     checkpointApi = {
+      pauseExecution: jest.fn().mockResolvedValue(undefined),
+      resumeExecution: jest.fn().mockResolvedValue(undefined),
       startDurableExecution: jest.fn().mockResolvedValue({
         executionId: mockExecutionId,
         checkpointToken: mockCheckpointToken,

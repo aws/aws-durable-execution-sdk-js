@@ -84,4 +84,16 @@ export class CheckpointWorkerApiClient implements CheckpointApiClient {
       error,
     });
   }
+
+  async pauseExecution(executionId: ExecutionId): Promise<void> {
+    await this.workerManager.sendApiRequest(ApiType.PauseDurableExecution, {
+      executionId,
+    });
+  }
+
+  async resumeExecution(executionId: ExecutionId): Promise<void> {
+    await this.workerManager.sendApiRequest(ApiType.ResumeDurableExecution, {
+      executionId,
+    });
+  }
 }
