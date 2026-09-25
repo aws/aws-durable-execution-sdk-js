@@ -309,14 +309,23 @@ describe("CheckpointManager Termination Behavior", () => {
       });
     });
 
+    /** Sends one checkpoint, deliberately unawaited, and waits for the response to land. */
+    const sendRevokedCheckpoint = async (stepId: string): Promise<boolean> => {
+      let resolved = false;
+      void revokingHandler
+        .checkpoint(stepId, { Action: "START", Type: "STEP" })
+        .then(() => {
+          resolved = true;
+        });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return resolved;
+    };
+
     it("terminates with EXECUTION_SUSPENDED_BY_SERVICE", async () => {
       const mockTerminate = jest.fn();
       mockContext.terminationManager.terminate = mockTerminate;
 
-      await revokingHandler.checkpoint("test-step", {
-        Action: "START",
-        Type: "STEP",
-      });
+      await sendRevokedCheckpoint("test-step");
 
       expect(mockTerminate).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -325,11 +334,15 @@ describe("CheckpointManager Termination Behavior", () => {
       );
     });
 
+    it("leaves the caller of the accepted checkpoint unresolved", async () => {
+      // The checkpoint was accepted, but resolving it lets the handler carry on -- start its
+      // next step, say -- after the service has stopped listening. That work would run for
+      // nothing and then run again on the next invocation.
+      expect(await sendRevokedCheckpoint("test-step")).toBe(false);
+    });
+
     it("warns, so an absent token is distinguishable from a dropped field", async () => {
-      await revokingHandler.checkpoint("test-step", {
-        Action: "START",
-        Type: "STEP",
-      });
+      await sendRevokedCheckpoint("test-step");
 
       expect(warningLogger.warn).toHaveBeenCalledWith(
         expect.stringContaining("no CheckpointToken"),
@@ -344,11 +357,7 @@ describe("CheckpointManager Termination Behavior", () => {
       const checkpointClient = mockContext.durableExecutionClient
         .checkpoint as jest.Mock;
 
-      await revokingHandler.checkpoint("first-step", {
-        Action: "START",
-        Type: "STEP",
-      });
-
+      await sendRevokedCheckpoint("first-step");
       expect(checkpointClient).toHaveBeenCalledTimes(1);
 
       // Neither is awaited: both are left unresolved on purpose, as during any other

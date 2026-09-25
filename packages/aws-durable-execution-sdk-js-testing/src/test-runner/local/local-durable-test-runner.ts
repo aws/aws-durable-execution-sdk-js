@@ -96,33 +96,6 @@ export interface LocalDurableTestRunnerSetupParameters {
    * bugs, race conditions, or other issues.
    */
   checkpointDelay?: number;
-
-  /**
-   * Answer an execution's nth checkpoint call, and only that one, without a
-   * `CheckpointToken`.
-   *
-   * The service does this when an invocation may checkpoint no further -- for instance when
-   * a newer invocation has taken the execution over. The SDK responds by abandoning its
-   * in-flight operations and suspending: the invocation reports PENDING, and those
-   * operations replay on the next one. Set this to reach that path deliberately and see what
-   * a handler does when work it started is thrown away mid-invocation.
-   *
-   * Only the nth call is affected, so the invocation that follows checkpoints normally and
-   * the execution still reaches an end. 1 withholds the token from the very first call.
-   * Counting is per execution, so nested runners do not interfere with each other.
-   *
-   * @defaultValue undefined (every checkpoint is answered with a token)
-   *
-   * @example
-   * ```typescript
-   * // The execution's second checkpoint is answered without a token, so the first
-   * // invocation suspends there and a replacement invocation replays and finishes.
-   * await LocalDurableTestRunner.setupTestEnvironment({
-   *   withholdCheckpointTokenOnCall: 2,
-   * });
-   * ```
-   */
-  withholdCheckpointTokenOnCall?: number;
 }
 
 /**
@@ -165,6 +138,8 @@ export class LocalDurableTestRunner<TResult = any>
   private readonly handlerFunction: DurableLambdaHandler;
   private readonly functionStorage: FunctionStorage;
   private readonly durableApi: DurableApiClient;
+  /** The orchestrator of the run in progress, which pause and resume act on. */
+  private currentExecution: TestExecutionOrchestrator | undefined;
 
   /**
    * Creates a new LocalDurableTestRunner instance and starts the checkpoint server.
@@ -241,6 +216,7 @@ export class LocalDurableTestRunner<TResult = any>
           fakeClock: LocalDurableTestRunner.fakeClock,
         },
       );
+      this.currentExecution = orchestrator;
 
       const lambdaResponse = await orchestrator.executeHandler(params);
       return this.resultFormatter.formatTestResult(
@@ -255,8 +231,64 @@ export class LocalDurableTestRunner<TResult = any>
         this.operationStorage,
       );
     } finally {
+      this.currentExecution = undefined;
       this.waitManager.clearWaitingOperations();
     }
+  }
+
+  /**
+   * Pauses the execution started by {@link LocalDurableTestRunner.run}, resolving once no
+   * invocation of it is running.
+   *
+   * The invocation running at the time, if any, is answered without a `CheckpointToken` on
+   * its next checkpoint — which is what the service does to an invocation it will accept no
+   * further checkpoints from. That checkpoint is kept. The SDK abandons whatever it had not
+   * yet sent, and the invocation returns PENDING. The abandoned work replays after
+   * {@link LocalDurableTestRunner.resumeExecution}.
+   *
+   * No invocation starts while paused. Waits keep elapsing and callbacks can still be sent;
+   * the invocations they would start are held back until the execution is resumed. So
+   * `run()` does not settle while paused: resume before awaiting it.
+   *
+   * Pausing applies to this runner's execution only, not to durable functions it invokes.
+   * Idempotent, and a no-op once the execution has finished.
+   *
+   * @throws If no execution is in progress — call `run()` first, without awaiting it.
+   *
+   * @example
+   * ```typescript
+   * const execution = runner.run({ payload: {} });
+   *
+   * // Pause once the first step has started.
+   * await runner.getOperation("charge-card").waitForData(WaitingOperationStatus.STARTED);
+   * await runner.pauseExecution();
+   *
+   * // Nothing runs until resumed, and the abandoned work then replays.
+   * await runner.resumeExecution();
+   * const result = await execution;
+   * ```
+   */
+  async pauseExecution(): Promise<void> {
+    await this.requireCurrentExecution("pauseExecution").pause();
+  }
+
+  /**
+   * Resumes an execution paused with {@link LocalDurableTestRunner.pauseExecution}, starting
+   * the invocation that was held back, if any. Idempotent.
+   *
+   * @throws If no execution is in progress.
+   */
+  async resumeExecution(): Promise<void> {
+    await this.requireCurrentExecution("resumeExecution").resume();
+  }
+
+  private requireCurrentExecution(method: string): TestExecutionOrchestrator {
+    if (!this.currentExecution) {
+      throw new Error(
+        `${method}() needs an execution in progress. Call run() first, and do not await it before calling ${method}().`,
+      );
+    }
+    return this.currentExecution;
   }
 
   /**
@@ -511,7 +543,6 @@ export class LocalDurableTestRunner<TResult = any>
     }
     return CheckpointWorkerManager.getInstance({
       checkpointDelaySettings: params?.checkpointDelay,
-      withholdCheckpointTokenOnCall: params?.withholdCheckpointTokenOnCall,
     }).setup();
   }
 

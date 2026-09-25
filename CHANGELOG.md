@@ -21,9 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Whatever the SDK had not yet sent is abandoned rather than checkpointed, and replays on the next
   invocation. This is the defined behaviour for `AT_LEAST_ONCE` operations; an `AT_MOST_ONCE` step
   whose START reached the last accepted checkpoint will not run again, which is what `AT_MOST_ONCE`
-  means. The `NewExecutionState` on the token-less response is deliberately not applied: applying it
-  would wake operations the handler is awaiting and let it run on past the point where the service
-  can be told anything, possibly reaching a result that is never recorded.
+  means. The `NewExecutionState` on the token-less response is deliberately not applied, and the
+  callers of the accepted checkpoint are not resolved: either would let the handler run on past the
+  point where the service can be told anything — starting its next step, or reaching a result that
+  is never recorded. The one exception is a checkpoint carrying the execution's own terminal update
+  (the oversized-result path), which finishes the execution and so still reports `SUCCEEDED`.
 
   The condition is logged at `WARN` rather than passing silently, since an absent token is
   indistinguishable from a client that dropped the field.
@@ -33,11 +35,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `LocalDurableTestRunner.setupTestEnvironment` accepts `withholdCheckpointTokenOnCall`, which makes
-  the local checkpoint server answer an execution's nth checkpoint call — and only that one —
-  without a `CheckpointToken`. This reaches the suspend path above on purpose, so a handler can be
-  tested against having work it started thrown away mid-invocation. Counting is per execution, so
-  nested runners do not interfere with each other.
+- `LocalDurableTestRunner` gains `pauseExecution()` and `resumeExecution()`, to test a handler
+  against the suspend path above. Pausing answers the running invocation's next checkpoint
+  without a `CheckpointToken` — that checkpoint is kept, and the invocation returns `PENDING` —
+  and starts no further invocation until resumed. Waits keep elapsing and callbacks can still be
+  sent while paused; the invocations they would start are held back, and `resumeExecution()`
+  starts one if anything is left to continue. `pauseExecution()` resolves once no invocation is
+  running, so assertions after it see a quiet execution. Both act on the execution `run()` has
+  in progress, so call `run()` first without awaiting it, and resume before awaiting it.
 
 ## [2.3.1]
 

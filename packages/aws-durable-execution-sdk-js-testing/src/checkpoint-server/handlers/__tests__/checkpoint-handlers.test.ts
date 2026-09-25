@@ -270,12 +270,14 @@ describe("checkpoint handlers", () => {
       expect(result.NewExecutionState?.NextMarker).toBeUndefined();
     });
 
-    it("omits the token but keeps the updates when asked to withhold it", () => {
-      // Withholding ends the invocation's ability to checkpoint again. It does not reject
-      // the checkpoint that carried the withheld token, so those updates still land.
+    it("omits the token but keeps the updates while the execution is paused", () => {
+      // A paused execution still accepts the checkpoint: withholding the token only ends the
+      // invocation's ability to checkpoint again.
       const executionArn = "test-execution-arn";
       const executionId = createExecutionId(executionArn);
-      const { invocationResult } = createExecutionWithOperations(executionId);
+      const { storage, invocationResult } =
+        createExecutionWithOperations(executionId);
+      storage.pause();
 
       const input: CheckpointDurableExecutionRequest = {
         DurableExecutionArn: executionArn,
@@ -294,17 +296,22 @@ describe("checkpoint handlers", () => {
         ],
       };
 
-      const result = processCheckpointDurableExecution(
+      const paused = processCheckpointDurableExecution(
         executionArn,
         input,
         executionManager,
-        true,
       );
 
-      expect(result.CheckpointToken).toBeUndefined();
-      expect(
-        result.NewExecutionState?.Operations?.map((operation) => operation.Id),
-      ).toContain("test-update-op");
+      expect(paused.CheckpointToken).toBeUndefined();
+      expect(storage.getOperationData("test-update-op")).toBeDefined();
+
+      storage.resume();
+      const resumed = processCheckpointDurableExecution(
+        executionArn,
+        { ...input, Updates: [] },
+        executionManager,
+      );
+      expect(resumed.CheckpointToken).toBeDefined();
     });
 
     it("should throw error when execution not found", () => {

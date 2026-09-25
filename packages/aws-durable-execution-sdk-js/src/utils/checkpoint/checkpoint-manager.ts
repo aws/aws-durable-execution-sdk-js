@@ -3,6 +3,7 @@ import {
   OperationUpdate,
   Operation,
   OperationStatus,
+  OperationType,
 } from "../../types/wire";
 import { DurableExecutionClient } from "../../types/durable-execution";
 import { log } from "../logger/logger";
@@ -434,6 +435,13 @@ export class CheckpointManager implements Checkpoint {
         await this.processBatch(batch);
       }
 
+      // The batch was accepted, but resolving its callers would let the handler run on past
+      // the point where the service can be told anything -- the same reason the response's
+      // NewExecutionState is not applied. Left unresolved, as on every other termination.
+      if (this.checkpointTokenRevoked) {
+        return;
+      }
+
       batch.forEach((item) => {
         item.resolve();
       });
@@ -524,6 +532,17 @@ export class CheckpointManager implements Checkpoint {
     const response = await this.storage.checkpoint(checkpointData, this.logger);
 
     if (!response.CheckpointToken) {
+      // A batch carrying the execution's own terminal update -- the oversized-result
+      // EXECUTION/SUCCEED withDurableExecution sends after the handler returns -- finishes the
+      // execution, so there is nothing a missing token could stop and no invocation left to
+      // suspend. Its caller awaits this checkpoint outside the termination race, so leaving it
+      // unresolved would hold the invocation open until Lambda's timeout. Nothing further is
+      // sent after it; if something were, the spent token is rejected as before.
+      if (updates.some((update) => update.Type === OperationType.EXECUTION)) {
+        log("ℹ️", "No CheckpointToken after the execution's terminal update");
+        return;
+      }
+
       this.handleRevokedCheckpointToken();
       return;
     }
@@ -552,19 +571,15 @@ export class CheckpointManager implements Checkpoint {
    * whose START reached the last accepted checkpoint will not run again, which is what
    * AT_MOST_ONCE means.
    *
-   * `NewExecutionState` from this response is deliberately not applied. Applying it
-   * resolves operations the handler is awaiting, letting it run on -- and possibly reach a
-   * result -- past the point where the service can be told about any of it. Terminating
-   * first keeps the invocation's answer to PENDING, which is the only answer left that is
-   * true.
+   * `NewExecutionState` from this response is deliberately not applied, and the callers of
+   * the accepted batch are deliberately not resolved. Either one lets the handler run on --
+   * start its next step, or reach a result -- past the point where the service can be told
+   * about any of it, so that work runs for nothing and then again on the next invocation.
+   * Terminating instead keeps the invocation's answer to PENDING, which is the only answer
+   * left that is true.
    *
-   * Where the handler has already returned, the invocation's answer is settled and
-   * terminating here changes nothing: TerminationManager.terminate is first-wins, and the
-   * result path has stopped awaiting it. That is the intended outcome for the one
-   * checkpoint the SDK sends after the handler resolves -- the oversized-result
-   * EXECUTION/SUCCEED in withDurableExecution -- where a response without a token is
-   * expected, the execution really has finished, and the invocation should keep reporting
-   * that it succeeded.
+   * A batch carrying the execution's own terminal update never reaches here: see the
+   * EXECUTION check in processBatch.
    */
   private handleRevokedCheckpointToken(): void {
     this.checkpointTokenRevoked = true;

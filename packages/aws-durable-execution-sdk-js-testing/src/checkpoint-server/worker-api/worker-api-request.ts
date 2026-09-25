@@ -37,6 +37,14 @@ export interface PollCheckpointDataRequest {
   executionId: ExecutionId;
 }
 
+export interface PauseDurableExecutionRequest {
+  executionId: ExecutionId;
+}
+
+export interface ResumeDurableExecutionRequest {
+  executionId: ExecutionId;
+}
+
 export interface WorkerApiRequestMapping {
   [ApiType.StartDurableExecution]: StartDurableExecutionRequest;
   [ApiType.StartInvocation]: StartInvocationRequest;
@@ -48,6 +56,8 @@ export interface WorkerApiRequestMapping {
   [ApiType.SendDurableExecutionCallbackSuccess]: SendDurableExecutionCallbackSuccessRequest;
   [ApiType.SendDurableExecutionCallbackFailure]: SendDurableExecutionCallbackFailureRequest;
   [ApiType.SendDurableExecutionCallbackHeartbeat]: SendDurableExecutionCallbackHeartbeatRequest;
+  [ApiType.PauseDurableExecution]: PauseDurableExecutionRequest;
+  [ApiType.ResumeDurableExecution]: ResumeDurableExecutionRequest;
 }
 
 export interface WorkerApiRequest<TApiType extends ApiType> {
@@ -66,4 +76,6 @@ export type WorkerApiRequestMessage =
   | WorkerApiRequest<ApiType.CheckpointDurableExecutionState>
   | WorkerApiRequest<ApiType.SendDurableExecutionCallbackSuccess>
   | WorkerApiRequest<ApiType.SendDurableExecutionCallbackFailure>
-  | WorkerApiRequest<ApiType.SendDurableExecutionCallbackHeartbeat>;
+  | WorkerApiRequest<ApiType.SendDurableExecutionCallbackHeartbeat>
+  | WorkerApiRequest<ApiType.PauseDurableExecution>
+  | WorkerApiRequest<ApiType.ResumeDurableExecution>;

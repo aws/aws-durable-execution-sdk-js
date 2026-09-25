@@ -158,4 +158,41 @@ describe("checkpoint response without a CheckpointToken", () => {
     expect(calls).toEqual(["token-1", "token-2"]);
     expect(result).toEqual({ Status: InvocationStatus.PENDING });
   });
+
+  it("does not hold back work that depends on the accepted checkpoint", async () => {
+    // "first"'s SUCCEED is the checkpoint answered without a token. It was accepted, but
+    // resolving it would let the handler start "second" after the service stopped listening
+    // -- work that runs for nothing and then again on the next invocation.
+    const { client } = clientDroppingTokenOnCall(2);
+    const secondRuns: number[] = [];
+
+    await invoke(client, async (_event, context) => {
+      await context.step("first", async () => {
+        // A real macrotask, so the SUCCEED goes out in its own checkpoint batch.
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return "a";
+      });
+      await context.step("second", async () => {
+        secondRuns.push(1);
+        return "b";
+      });
+      return "finished";
+    });
+
+    expect(secondRuns).toEqual([]);
+  });
+
+  it("still reports an oversized result that the service accepted", async () => {
+    // The oversized-result path checkpoints the execution's own SUCCEED after the handler has
+    // returned, and awaits it outside the termination race. A response without a token is to
+    // be expected there -- the execution is finished -- so the invocation must go on to
+    // report success rather than wait on a checkpoint that will never resolve.
+    const oversized = "x".repeat(6 * 1024 * 1024 + 1000);
+    const { client, calls } = clientDroppingTokenOnCall(1);
+
+    const result = await invoke(client, async () => oversized);
+
+    expect(calls).toHaveLength(1);
+    expect(result).toEqual({ Status: InvocationStatus.SUCCEEDED, Result: "" });
+  });
 });

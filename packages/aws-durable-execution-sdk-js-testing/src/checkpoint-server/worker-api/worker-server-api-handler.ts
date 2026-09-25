@@ -2,6 +2,8 @@ import { WorkerApiRequestMessage } from "./worker-api-request";
 import { ApiType } from "./worker-api-types";
 import {
   processCompleteInvocation,
+  processPauseDurableExecution,
+  processResumeDurableExecution,
   processStartDurableExecution,
   processStartInvocation,
 } from "../handlers/execution-handlers";
@@ -21,51 +23,14 @@ import { CheckpointDurableExecutionResponse } from "@aws/durable-execution-sdk-j
 
 export interface WorkerServerApiHandlerParams {
   checkpointDelaySettings?: number;
-  /**
-   * Answer an execution's nth checkpoint call, and only that one, without a
-   * `CheckpointToken`. 1 withholds it from the first call.
-   */
-  withholdCheckpointTokenOnCall?: number;
 }
 
 export class WorkerServerApiHandler {
   private readonly executionManager = new ExecutionManager();
   private readonly checkpointDelaySettings: number | undefined;
-  private readonly withholdCheckpointTokenOnCall: number | undefined;
-  /**
-   * Checkpoint calls seen per execution ARN.
-   *
-   * Per execution rather than per handler: a checkpoint token belongs to one execution's
-   * invocation, and nested runners put several executions through this one handler. The
-   * count carries across an execution's invocations, which is what leaves the invocation
-   * after a withheld token free to finish.
-   */
-  private readonly checkpointCallCounts = new Map<string, number>();
 
   constructor(params?: WorkerServerApiHandlerParams) {
     this.checkpointDelaySettings = params?.checkpointDelaySettings;
-    this.withholdCheckpointTokenOnCall = params?.withholdCheckpointTokenOnCall;
-  }
-
-  /**
-   * Whether this execution's next checkpoint response should omit its token, counting the
-   * call as it asks.
-   */
-  private shouldWithholdCheckpointToken(
-    durableExecutionArn: string | undefined,
-  ): boolean {
-    if (this.withholdCheckpointTokenOnCall === undefined) {
-      return false;
-    }
-
-    const key = durableExecutionArn ?? "";
-    const callNumber = (this.checkpointCallCounts.get(key) ?? 0) + 1;
-    this.checkpointCallCounts.set(key, callNumber);
-
-    // That one call and no other. Withholding from every later call as well would suspend
-    // each replacement invocation as soon as it checkpointed, and the execution would never
-    // get anywhere.
-    return callNumber === this.withholdCheckpointTokenOnCall;
   }
 
   performApiCall(data: WorkerApiRequestMessage) {
@@ -95,18 +60,22 @@ export class WorkerServerApiHandler {
           data.params.executionId,
           this.executionManager,
         );
+      case ApiType.PauseDurableExecution:
+        return processPauseDurableExecution(
+          data.params.executionId,
+          this.executionManager,
+        );
+      case ApiType.ResumeDurableExecution:
+        return processResumeDurableExecution(
+          data.params.executionId,
+          this.executionManager,
+        );
       case ApiType.GetDurableExecutionState:
         return processGetDurableExecutionState(
           data.params.DurableExecutionArn,
           this.executionManager,
         );
       case ApiType.CheckpointDurableExecutionState: {
-        // Counted before the delay timer, so the count follows the order the calls arrived
-        // in rather than the order their timers fire.
-        const withholdCheckpointToken = this.shouldWithholdCheckpointToken(
-          data.params.DurableExecutionArn,
-        );
-
         return new Promise<CheckpointDurableExecutionResponse>(
           (resolve, reject) => {
             setTimeout(() => {
@@ -116,7 +85,6 @@ export class WorkerServerApiHandler {
                     data.params.DurableExecutionArn,
                     data.params,
                     this.executionManager,
-                    withholdCheckpointToken,
                   ),
                 );
               } catch (err: unknown) {

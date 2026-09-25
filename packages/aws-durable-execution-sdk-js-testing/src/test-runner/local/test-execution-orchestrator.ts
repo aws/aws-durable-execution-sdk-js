@@ -53,6 +53,31 @@ export class TestExecutionOrchestrator {
   private readonly scheduler: Scheduler;
   private readonly pendingOperations = new Set<string>();
 
+  // Pausing. The checkpoint server's half is to answer checkpoints without a token, which
+  // suspends the invocation running at the time; this half is to start no invocation while
+  // paused and to start the one that was held back once resumed. See pause().
+  private paused = false;
+  /**
+   * The invocation held back while paused, started by resume(). Carries the parameters of
+   * the initial invocation if that was the one held back, since it cannot be recreated.
+   */
+  private deferredInvocation:
+    | { params?: Omit<InvocationResult, "executionId"> }
+    | undefined;
+  /** In-flight pause(), which resume() waits for so the two cannot interleave. */
+  private pausing: Promise<void> = Promise.resolve();
+  private runningInvocations = 0;
+  private idleWaiters: (() => void)[] = [];
+  private settled = false;
+  private resolveExecutionId!: (executionId: ExecutionId) => void;
+  private rejectExecutionId!: (err: unknown) => void;
+  private readonly executionId: Promise<ExecutionId> = new Promise(
+    (resolve, reject) => {
+      this.resolveExecutionId = resolve;
+      this.rejectExecutionId = reject;
+    },
+  );
+
   constructor(
     private handlerFunction: DurableLambdaHandler,
     private operationStorage: LocalOperationStorage,
@@ -66,6 +91,84 @@ export class TestExecutionOrchestrator {
     this.scheduler = this.skipTimeProps.enabled
       ? new QueueScheduler()
       : new TimerScheduler();
+    // Only pause() and resume() await this, and neither need be called: without a handler a
+    // failed start would surface as an unhandled rejection besides the error run() reports.
+    this.executionId.catch(() => undefined);
+  }
+
+  /**
+   * Pauses the execution, resolving once no invocation is running.
+   *
+   * The invocation running now, if any, is answered without a checkpoint token on its next
+   * checkpoint. That checkpoint is accepted, the SDK abandons whatever it had not yet sent,
+   * and the invocation returns PENDING. No invocation starts again until {@link resume}.
+   * Waits keep elapsing and callbacks can still be completed while paused; the invocations
+   * they would start are held back instead.
+   *
+   * Idempotent. Resolves at once if the execution has already finished.
+   */
+  pause(): Promise<void> {
+    this.pausing = this.pausing.then(async () => {
+      const executionId = await this.executionId;
+      if (this.settled) {
+        return;
+      }
+
+      if (!this.paused) {
+        // Set before telling the server, so that no invocation can start in between.
+        this.paused = true;
+        await this.checkpointApi.pauseExecution(executionId);
+      }
+
+      await this.waitUntilIdle();
+    });
+    return this.pausing;
+  }
+
+  /**
+   * Resumes a paused execution, starting the invocation that was held back, if any.
+   *
+   * Idempotent. Waits for an in-flight {@link pause} to finish first.
+   */
+  async resume(): Promise<void> {
+    await this.pausing;
+    const executionId = await this.executionId;
+    if (!this.paused) {
+      return;
+    }
+
+    // The server first, then the flag: an invocation starting in between would otherwise be
+    // answered without a token again, and its PENDING judged as if nothing were paused.
+    // Until the flag clears, anything starting is still held back and so still started below.
+    await this.checkpointApi.resumeExecution(executionId);
+    this.paused = false;
+
+    const deferred = this.deferredInvocation;
+    this.deferredInvocation = undefined;
+    if (deferred && !this.settled) {
+      this.scheduler.scheduleFunction(
+        () => this.invokeHandler(executionId, deferred.params),
+        (err) => {
+          this.executionState.rejectWith(err);
+        },
+      );
+    }
+  }
+
+  private waitUntilIdle(): Promise<void> {
+    if (this.runningInvocations === 0 || this.settled) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      this.idleWaiters.push(resolve);
+    });
+  }
+
+  private notifyIdle(): void {
+    const waiters = this.idleWaiters.splice(0);
+    for (const waiter of waiters) {
+      waiter();
+    }
   }
 
   private async handleCompletedExecution(
@@ -135,6 +238,7 @@ export class TestExecutionOrchestrator {
         payload: JSON.stringify(params?.payload),
         invocationId,
       });
+      this.resolveExecutionId(executionId);
 
       const executionOperationId = initialOperationsEvents
         .at(0)
@@ -167,7 +271,16 @@ export class TestExecutionOrchestrator {
         executionId,
         executionOperationId,
       );
+    } catch (err) {
+      // A no-op once the id has resolved. Before that, it is what stops a pause() waiting
+      // on an execution that never started.
+      this.rejectExecutionId(err);
+      throw err;
     } finally {
+      // Nothing left to pause, so release anyone waiting for the execution to go quiet.
+      this.settled = true;
+      this.notifyIdle();
+
       // Stop polling
       await new Promise<void>((resolve) => {
         // TODO: improve the polling mechanism so that we don't need an arbitrary timer
@@ -580,11 +693,38 @@ export class TestExecutionOrchestrator {
    * When the handler returns "SUCCEEDED/FAILED" status, the execution is resolved
    * and polling stops. For "PENDING" status, execution continues.
    *
+   * While paused, the invocation is held back rather than started, and resume() starts it.
+   *
    * @param executionId Current execution ID
    * @param invocationParams Data for the invocation if an invocation was already created.
    * If not provided, a new invocation will be created.
    */
   private async invokeHandler(
+    executionId: ExecutionId,
+    invocationParams?: Omit<InvocationResult, "executionId">,
+  ): Promise<void> {
+    if (this.paused) {
+      defaultLogger.debug("Holding back invocation while execution is paused");
+      // One held-back invocation stands for any number: each would replay the same state.
+      // The initial invocation's parameters are kept if they were the ones held back.
+      this.deferredInvocation = {
+        params: invocationParams ?? this.deferredInvocation?.params,
+      };
+      return;
+    }
+
+    this.runningInvocations++;
+    try {
+      await this.runInvocation(executionId, invocationParams);
+    } finally {
+      this.runningInvocations--;
+      if (this.runningInvocations === 0) {
+        this.notifyIdle();
+      }
+    }
+  }
+
+  private async runInvocation(
     executionId: ExecutionId,
     invocationParams?: Omit<InvocationResult, "executionId">,
   ): Promise<void> {
@@ -653,6 +793,20 @@ export class TestExecutionOrchestrator {
           error: value.Error,
           status: OperationStatus.FAILED,
         });
+        return;
+      }
+
+      // A PENDING while paused is judged by the same rules as below, except that where they
+      // would start an invocation or reject the response, resume() starts one instead. The
+      // rejection in particular is for a PENDING that nothing can ever continue; here resume()
+      // will.
+      if (this.paused) {
+        if (
+          !this.scheduler.hasScheduledFunction() &&
+          (hasDirtyOperations || !this.pendingOperations.size)
+        ) {
+          this.deferredInvocation ??= {};
+        }
         return;
       }
 

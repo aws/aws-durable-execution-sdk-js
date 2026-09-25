@@ -79,16 +79,11 @@ export function processUpdateCheckpointData(
 
 /**
  * The API for CheckpointDurableExecution used by the Language SDK and DEX service model.
- *
- * @param withholdCheckpointToken - Answer without a `CheckpointToken`, which tells the SDK
- * this invocation may checkpoint no further and should suspend with PENDING. Exists so a
- * handler can be tested against that path; the production service decides it for itself.
  */
 export function processCheckpointDurableExecution(
   durableExecutionArn: string | undefined,
   input: CheckpointDurableExecutionRequest,
   executionManager: ExecutionManager,
-  withholdCheckpointToken = false,
 ): CheckpointDurableExecutionResponse {
   const storage = executionManager.getCheckpointsByExecution(
     createExecutionId(durableExecutionArn),
@@ -115,9 +110,9 @@ export function processCheckpointDurableExecution(
   storage.registerUpdates(updates);
 
   const output: CheckpointDurableExecutionResponse = {
-    // The updates in this call are registered either way: withholding the token ends the
-    // invocation's ability to checkpoint again, it does not reject the checkpoint carrying it.
-    CheckpointToken: withholdCheckpointToken
+    // A paused execution still accepts this checkpoint: its updates were registered above.
+    // Withholding the token only ends the invocation's ability to checkpoint again.
+    CheckpointToken: storage.isPaused()
       ? undefined
       : encodeCheckpointToken({
           executionId: data.executionId,
