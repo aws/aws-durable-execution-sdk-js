@@ -796,17 +796,14 @@ export class TestExecutionOrchestrator {
         return;
       }
 
-      // A PENDING while paused is judged by the same rules as below, except that where they
-      // would start an invocation or reject the response, resume() starts one instead. The
-      // rejection in particular is for a PENDING that nothing can ever continue; here resume()
-      // will.
+      // A PENDING while paused leaves resume() an invocation to start, whatever else is
+      // pending. The checks below cannot decide it: they ask whether the scheduler still has
+      // work, and the queue scheduler used with skipTime counts the invocation now ending as
+      // work, so they would conclude something else will continue the execution when nothing
+      // will. At worst this costs one extra invocation after resume, which replays and returns
+      // PENDING again if nothing is ready.
       if (this.paused) {
-        if (
-          !this.scheduler.hasScheduledFunction() &&
-          (hasDirtyOperations || !this.pendingOperations.size)
-        ) {
-          this.deferredInvocation ??= {};
-        }
+        this.deferredInvocation ??= {};
         return;
       }
 

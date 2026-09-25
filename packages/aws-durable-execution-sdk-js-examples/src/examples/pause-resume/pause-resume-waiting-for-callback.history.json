@@ -1,0 +1,160 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "5797b2a2-d216-43b1-b9f6-16f574e783f2",
+    "EventTimestamp": "2026-09-25T18:24:29.954Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"orderId\":\"order-8\"}"
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "reserve-stock",
+    "EventTimestamp": "2026-09-25T18:24:29.958Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 3,
+    "Id": "c4ca4238a0b92382",
+    "Name": "reserve-stock",
+    "EventTimestamp": "2026-09-25T18:24:30.158Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"reserved-order-8\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "WaitForCallback",
+    "EventId": 4,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "manager-approval",
+    "EventTimestamp": "2026-09-25T18:24:30.160Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "Callback",
+    "EventId": 5,
+    "Id": "8fbdbf5573b18fae",
+    "EventTimestamp": "2026-09-25T18:24:30.160Z",
+    "ParentId": "c81e728d9d4c2f63",
+    "CallbackStartedDetails": {
+      "CallbackId": "eyJleGVjdXRpb25JZCI6IjI1YTE4NjJjLTY2NTUtNGY0Ny04MjJiLWFiMDQ2YmJkZjk2ZSIsIm9wZXJhdGlvbklkIjoiOGZiZGJmNTU3M2IxOGZhZSIsInRva2VuIjoiNjQyZTEwNDctYjEyYi00NmVhLThhYzctYzU4MDU2NjhjNDFhIn0=",
+      "Input": {}
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 6,
+    "Id": "3c46a0407be60a1f",
+    "EventTimestamp": "2026-09-25T18:24:30.162Z",
+    "ParentId": "c81e728d9d4c2f63",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "3c46a0407be60a1f",
+    "EventTimestamp": "2026-09-25T18:24:30.162Z",
+    "ParentId": "c81e728d9d4c2f63",
+    "StepSucceededDetails": {
+      "Result": {},
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 8,
+    "EventTimestamp": "2026-09-25T18:24:30.184Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-09-25T18:24:29.954Z",
+      "EndTimestamp": "2026-09-25T18:24:30.184Z",
+      "Error": {},
+      "RequestId": "1719e84c-7cbb-4339-91bd-1874bfbdce05"
+    }
+  },
+  {
+    "EventType": "CallbackSucceeded",
+    "SubType": "Callback",
+    "EventId": 9,
+    "Id": "8fbdbf5573b18fae",
+    "EventTimestamp": "2026-09-25T18:24:30.184Z",
+    "ParentId": "c81e728d9d4c2f63",
+    "CallbackSucceededDetails": {
+      "Result": {
+        "Payload": "approved"
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "WaitForCallback",
+    "EventId": 10,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "manager-approval",
+    "EventTimestamp": "2026-09-25T18:24:30.390Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "\"approved\""
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 11,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "ship-order",
+    "EventTimestamp": "2026-09-25T18:24:30.390Z",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 12,
+    "Id": "eccbc87e4b5ce2fe",
+    "Name": "ship-order",
+    "EventTimestamp": "2026-09-25T18:24:30.390Z",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "\"shipped-order-8\""
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 13,
+    "EventTimestamp": "2026-09-25T18:24:30.390Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-09-25T18:24:30.388Z",
+      "EndTimestamp": "2026-09-25T18:24:30.390Z",
+      "Error": {},
+      "RequestId": "7180ee4a-e06d-4751-9082-a0c4257aed62"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 14,
+    "Id": "5797b2a2-d216-43b1-b9f6-16f574e783f2",
+    "EventTimestamp": "2026-09-25T18:24:30.391Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"reservation\":\"reserved-order-8\",\"approval\":\"approved\",\"shipment\":\"shipped-order-8\"}"
+      }
+    }
+  }
+]

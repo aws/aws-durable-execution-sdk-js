@@ -64,4 +64,38 @@ describe("pauseExecution and resumeExecution with skipTime", () => {
     expect(result.getStatus()).toBe("SUCCEEDED");
     expect(result.getResult()).toBe("done");
   }, 30000);
+
+  it("continues an invocation paused mid-step", async () => {
+    // With skipTime the queue scheduler counts the invocation that is ending as scheduled
+    // work, so the orchestrator must not take that as a sign that something else will
+    // continue the execution. Nothing will; resume has to.
+    const secondRuns: number[] = [];
+
+    const handler = withDurableExecution(
+      async (_event: unknown, context: DurableContext) => {
+        await context.step("first", async () => {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          return "a";
+        });
+        return context.step("second", async () => {
+          secondRuns.push(1);
+          return "b";
+        });
+      },
+    );
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+
+    const execution = runner.run({ payload: {} });
+    await runner
+      .getOperation("first")
+      .waitForData(WaitingOperationStatus.STARTED);
+    await runner.pauseExecution();
+    expect(secondRuns).toEqual([]);
+
+    await runner.resumeExecution();
+    const result = await execution;
+
+    expect(result.getResult()).toBe("b");
+    expect(secondRuns).toEqual([1]);
+  }, 30000);
 });
