@@ -35,7 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `LocalDurableTestRunner` gains `pauseExecution()` and `resumeExecution()`, to test a handler
+- `LocalDurableTestRunner` gains `pauseExecution()` and `resumeExecution()`, **experimental**, to
+  test a handler
   against the suspend path above. Pausing answers the running invocation's next checkpoint
   without a `CheckpointToken` — that checkpoint is kept, and the invocation returns `PENDING` —
   and starts no further invocation until resumed. Waits keep elapsing and callbacks can still be
@@ -43,6 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   starts one if anything is left to continue. `pauseExecution()` resolves once no invocation is
   running, so assertions after it see a quiet execution. Both act on the execution `run()` has
   in progress, so call `run()` first without awaiting it, and resume before awaiting it.
+
+  Both are also on the `DurableTestRunner` interface, so a test written against it compiles for
+  either runner; `CloudDurableTestRunner` rejects both as not implemented for now.
 
 ## [2.3.1]
 

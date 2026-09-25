@@ -255,6 +255,8 @@ export class LocalDurableTestRunner<TResult = any>
    *
    * @throws If no execution is in progress — call `run()` first, without awaiting it.
    *
+   * @experimental This method is experimental and may be changed or removed in future releases.
+   *
    * @example
    * ```typescript
    * const execution = runner.run({ payload: {} });
@@ -277,6 +279,8 @@ export class LocalDurableTestRunner<TResult = any>
    * the invocation that was held back, if any. Idempotent.
    *
    * @throws If no execution is in progress.
+   *
+   * @experimental This method is experimental and may be changed or removed in future releases.
    */
   async resumeExecution(): Promise<void> {
     await this.requireCurrentExecution("resumeExecution").resume();
