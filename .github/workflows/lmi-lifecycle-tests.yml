@@ -1,0 +1,149 @@
+name: LMI lifecycle tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+
+jobs:
+  harness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.x
+          cache: npm
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - run: npm run build -w packages/aws-durable-execution-sdk-js
+      - run: npm run build -w packages/aws-durable-execution-sdk-js-testing
+      - run: npm run generate-examples -w packages/aws-durable-execution-sdk-js-examples
+      - run: npm run test:lmi:harness
+      - run: pip install -r lmi-tests/requirements.txt
+      - run: ruff check lmi-tests && ruff format --check lmi-tests
+      - run: python -m pytest lmi-tests/tests --ignore=lmi-tests/tests/test_cloud.py --junitxml=lmi-tests/artifacts/harness.xml
+      - run: python lmi-tests/deploy.py build
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: lmi-fixture
+          path: |
+            lmi-tests/build/function.zip
+            lmi-tests/build/examples.json
+            lmi-tests/artifacts/
+            packages/aws-durable-execution-sdk-js/dist*/**
+            packages/aws-durable-execution-sdk-js-testing/dist*/**
+
+  local-regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Known SDK defects remain ordinary failing assertions. They do not prevent
+    # the independent cloud job from establishing real-service evidence.
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.x
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w packages/aws-durable-execution-sdk-js
+      - name: Run desired lifecycle contracts against this SDK
+        run: |
+          mkdir -p lmi-tests/artifacts
+          node --import tsx --test \
+            --test-reporter=spec --test-reporter-destination=stdout \
+            --test-reporter=junit --test-reporter-destination=lmi-tests/artifacts/regressions.xml \
+            lmi-tests/local.test.mjs lmi-tests/manager.test.mjs
+      - name: Summarize assertions and test execution errors
+        if: always()
+        run: python lmi-tests/summarize_regressions.py lmi-tests/artifacts/regressions.xml >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: lmi-local-regressions
+          path: lmi-tests/artifacts/
+
+  cloud:
+    # All branches share one persistent function. Never overlap code updates,
+    # examples, lifecycle cases or settlement across workflow runs.
+    concurrency:
+      group: js-lmi-e2e
+      cancel-in-progress: false
+    needs: harness
+    if: >-
+      github.actor != 'dependabot[bot]' &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 85
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      LMI_STACK_NAME: js-lmi-e2e
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-west-2' }}
+      CAPACITY_PROVIDER_ARN: ${{ secrets.TEST_CAPACITY_PROVIDER_ARN }}
+      TEST_ACCOUNT_ID: ${{ secrets.TEST_ACCOUNT_ID }}
+      TEST_LAMBDA_EXECUTION_ROLE_ARN: ${{ secrets.TEST_LAMBDA_EXECUTION_ROLE_ARN }}
+      # Same temporary v29 connectivity workaround as deploy-lambda.ts. Remove
+      # with that workaround once the managed Node.js runtime is repaired.
+      LMI_RUNTIME_VERSION_ARN: ${{ (vars.AWS_REGION == 'us-west-2' || vars.AWS_REGION == '') && 'arn:aws:lambda:us-west-2::runtime:33c885f25b2bbcf5fe2728c23ed25a2d438e49c5d08c29476328b3a18e0ca9d1' || '' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: pip install -r lmi-tests/requirements.txt
+      - uses: actions/download-artifact@v8
+        with:
+          name: lmi-fixture
+          path: .
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.x
+          cache: npm
+      - run: npm ci
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.TEST_ROLE_ARN }}
+          role-session-name: jsLmiLifecycle
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Create or update the persistent shared function
+        id: deploy
+        run: python lmi-tests/deploy.py deploy --stack-name "$LMI_STACK_NAME" --run-id "${{ github.run_id }}-${{ github.run_attempt }}" --concurrency 2
+      - name: Run 14 existing example suites through the shared function
+        run: node lmi-tests/run-examples.mjs
+      - name: Run real-service lifecycle regressions
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' && !hashFiles('lmi-tests/artifacts/quarantine.json') && hashFiles('lmi-tests/artifacts/manifest.json') }}
+        run: python -m pytest lmi-tests/tests/test_cloud.py --cloud -v --junitxml=lmi-tests/artifacts/cloud.xml
+      - name: Retain histories, worker evidence, and platform logs
+        if: always()
+        run: |
+          if test -f lmi-tests/artifacts/manifest.json; then
+            python lmi-tests/deploy.py collect
+          fi
+      - name: Release and settle test work; retain the shared function
+        if: always()
+        timeout-minutes: 8
+        run: |
+          if test -f lmi-tests/artifacts/manifest.json; then
+            python lmi-tests/deploy.py settle
+          fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: lmi-cloud-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 7
+          path: lmi-tests/artifacts/

@@ -25,7 +25,9 @@
     "lint:async-safety": "biome lint --changed --only=nursery/noFloatingPromises --only=nursery/noMisusedPromises --only=nursery/useAwaitThenable --diagnostic-level=warn --no-errors-on-unmatched",
     "lint:suppressions": "biome check --reporter=json --max-diagnostics=none | node .github/workflows/scripts/biome/check-unused-suppressions.mjs",
     "lint:versions": "node .github/workflows/scripts/biome/check-tool-version-sync.mjs",
-    "lint:filenames": "git ls-files \"packages/aws-durable-execution-sdk-js/src/**/*.ts\" | sed \"s|^packages/aws-durable-execution-sdk-js/||\" | node packages/aws-durable-execution-sdk-js/scripts/check-filenames.js"
+    "lint:filenames": "git ls-files \"packages/aws-durable-execution-sdk-js/src/**/*.ts\" | sed \"s|^packages/aws-durable-execution-sdk-js/||\" | node packages/aws-durable-execution-sdk-js/scripts/check-filenames.js",
+    "test:lmi:harness": "node --import tsx --test lmi-tests/controls.test.mjs lmi-tests/fixture.test.mjs lmi-tests/manager-fixture.test.mjs lmi-tests/routing.test.mjs",
+    "test:lmi:regressions": "node --import tsx --test lmi-tests/local.test.mjs lmi-tests/manager.test.mjs"
   },
   "repository": {
     "type": "git",
@@ -44,6 +46,7 @@
   "devDependencies": {
     "@aws-sdk/client-cloudwatch-logs": "^3.1009.0",
     "@aws-sdk/client-lambda": "^3.1014.0",
+    "@aws-sdk/client-s3": "^3.1076.0",
     "@biomejs/biome": "2.5.11",
     "@rollup/plugin-esm-shim": "^0.1.8",
     "@rollup/plugin-json": "^6.1.0",

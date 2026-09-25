@@ -6,6 +6,7 @@ import {
 import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
+  capacityProviderConfig: {},
   name: "Basic Serdes with createClassSerdes",
   description:
     "Demonstrates using createClassSerdes to preserve class methods across replay. " +
