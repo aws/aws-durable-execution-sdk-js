@@ -228,6 +228,28 @@ async function runHandler<
           log("⚠️", "Error waiting for checkpoint completion:", error);
         }
 
+        // waitForQueueCompletion() resolves whether the drain succeeded or
+        // failed: on failure processQueue's catch resolves the waiter via
+        // clearQueue(), and the CHECKPOINT_FAILED termination it raises lands
+        // after Promise.race has settled, so on this path nothing observes it.
+        // Reachable from ordinary awaited code -- run-in-child-context-handler
+        // does not await its terminal checkpoint -- and reports success for a
+        // checkpoint that was discarded, with no later invocation to retry it.
+        //
+        // Only this path needs the check: a suspend-class termination cannot
+        // leave a batch to drain, since shouldTerminate() requires an idle
+        // queue, and a fault-class one already returns FAILED carrying its own
+        // error.
+        if (resultType === "handler") {
+          const batchFailure =
+            durableExecution.checkpointManager.getBatchFailure();
+
+          if (batchFailure) {
+            log("🛑", "Checkpoint batch failed - handling termination");
+            throw batchFailure;
+          }
+        }
+
         // If termination was due to checkpoint failure, throw the appropriate error
         if (
           resultType === "termination" &&
