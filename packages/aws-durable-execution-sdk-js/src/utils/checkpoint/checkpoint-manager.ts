@@ -122,6 +122,15 @@ export class CheckpointManager implements Checkpoint {
   }
 
   /**
+   * Whether the service has withdrawn this invocation's checkpoint token. Once it has, the
+   * invocation can record nothing further, including its own result. See
+   * {@link CheckpointManager.handleRevokedCheckpointToken}.
+   */
+  isCheckpointTokenRevoked(): boolean {
+    return this.checkpointTokenRevoked;
+  }
+
+  /**
    * Releases everything this manager armed, and refuses to arm anything further.
    *
    * Timers outlive the invocation that armed them. Nothing else clears them on the normal
@@ -535,9 +544,10 @@ export class CheckpointManager implements Checkpoint {
       // A batch carrying the execution's own terminal update -- the oversized-result
       // EXECUTION/SUCCEED withDurableExecution sends after the handler returns -- finishes the
       // execution, so there is nothing a missing token could stop and no invocation left to
-      // suspend. Its caller awaits this checkpoint outside the termination race, so leaving it
-      // unresolved would hold the invocation open until Lambda's timeout. Nothing further is
-      // sent after it; if something were, the spent token is rejected as before.
+      // suspend. Returning normally resolves that checkpoint, and the invocation reports the
+      // SUCCEEDED the service has already recorded. Treating it as revoked would answer
+      // PENDING for a finished execution. Nothing further is sent after it; if something were,
+      // the spent token is rejected as before.
       if (updates.some((update) => update.Type === OperationType.EXECUTION)) {
         log("ℹ️", "No CheckpointToken after the execution's terminal update");
         return;

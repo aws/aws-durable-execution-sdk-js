@@ -55,7 +55,10 @@ interface RecordingClient {
  * `calls` records the token each call presented, which is what shows both that the SDK
  * stopped calling and that it never replayed the spent token.
  */
-const clientDroppingTokenOnCall = (dropOn: number): RecordingClient => {
+const clientDroppingTokenOnCall = (
+  dropOn: number,
+  { delayFirstCallMs = 0 }: { delayFirstCallMs?: number } = {},
+): RecordingClient => {
   const calls: (string | undefined)[] = [];
 
   return {
@@ -70,11 +73,18 @@ const clientDroppingTokenOnCall = (dropOn: number): RecordingClient => {
         request,
       ): Promise<CheckpointDurableExecutionResponse> => {
         calls.push(request.CheckpointToken);
+        const callNumber = calls.length;
 
-        return calls.length >= dropOn
+        // Holds the first call in flight, so a test can have the handler return before
+        // that call's response arrives.
+        if (callNumber === 1 && delayFirstCallMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, delayFirstCallMs));
+        }
+
+        return callNumber >= dropOn
           ? { CheckpointToken: undefined, NewExecutionState: undefined }
           : {
-              CheckpointToken: `token-${calls.length + 1}`,
+              CheckpointToken: `token-${callNumber + 1}`,
               NewExecutionState: undefined,
             };
       },
@@ -194,5 +204,88 @@ describe("checkpoint response without a CheckpointToken", () => {
 
     expect(calls).toHaveLength(1);
     expect(result).toEqual({ Status: InvocationStatus.SUCCEEDED, Result: "" });
+  });
+
+  describe("when the token is withdrawn after the handler has returned", () => {
+    /**
+     * A step the handler does not await keeps checkpointing after the handler returns. Here
+     * its first checkpoint is held in flight for 100 ms and then answered without a token.
+     * The handler returns after 20 ms, so it has already won the race against termination
+     * when the token is withdrawn. map and parallel with early completion reach the same
+     * state through their unfinished branches.
+     */
+    const handlerReturningEarly =
+      (outcome: () => unknown) =>
+      async (_event: unknown, context: DurableContext): Promise<unknown> => {
+        void context.step("background", async () => "bg").catch(() => {});
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return outcome();
+      };
+
+    /** Rejects if `promise` has not settled within `ms`, instead of waiting for Jest's timeout. */
+    const within = <T>(promise: Promise<T>, ms: number): Promise<T> =>
+      Promise.race([
+        promise,
+        new Promise<T>((_resolve, reject) =>
+          setTimeout(
+            () => reject(new Error(`still pending after ${ms} ms`)),
+            ms,
+          ),
+        ),
+      ]);
+
+    it("answers PENDING rather than the handler's result", async () => {
+      // The result was never recorded: the service stopped accepting checkpoints from this
+      // invocation before the SDK could report it. So SUCCEEDED would claim a result the
+      // execution does not have.
+      const { client } = clientDroppingTokenOnCall(1, {
+        delayFirstCallMs: 100,
+      });
+
+      const result = await invoke(
+        client,
+        handlerReturningEarly(() => "small result"),
+      );
+
+      expect(result).toEqual({ Status: InvocationStatus.PENDING });
+    });
+
+    it("answers PENDING rather than the handler's error", async () => {
+      const { client } = clientDroppingTokenOnCall(1, {
+        delayFirstCallMs: 100,
+      });
+
+      const result = await invoke(
+        client,
+        handlerReturningEarly(() => {
+          throw new Error("handler failed");
+        }),
+      );
+
+      expect(result).toEqual({ Status: InvocationStatus.PENDING });
+    });
+
+    it("answers PENDING for an oversized result queued behind the withdrawn batch", async () => {
+      // The oversized result's EXECUTION update waits in the queue behind the in-flight
+      // batch. When that batch is answered without a token, the queue is cleared and the
+      // update is never sent, so the checkpoint awaiting it never resolves. The invocation
+      // must still end rather than run until the Lambda timeout.
+      const oversized = "x".repeat(6 * 1024 * 1024 + 1000);
+      const { client, calls } = clientDroppingTokenOnCall(1, {
+        delayFirstCallMs: 100,
+      });
+
+      const result = await within(
+        invoke(
+          client,
+          handlerReturningEarly(() => oversized),
+        ),
+        2000,
+      );
+
+      expect(result).toEqual({ Status: InvocationStatus.PENDING });
+      // Only the withdrawn batch was sent; the oversized result never was.
+      expect(calls).toHaveLength(1);
+    });
   });
 });

@@ -27,11 +27,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is never recorded. The one exception is a checkpoint carrying the execution's own terminal update
   (the oversized-result path), which finishes the execution and so still reports `SUCCEEDED`.
 
+  The same applies when the handler has already returned or thrown while a checkpoint it did not
+  await is still in flight, for example from the unfinished branches of a `map` or `parallel` with
+  early completion. If that checkpoint is answered without a token, the invocation answers
+  `PENDING` rather than `SUCCEEDED` or `FAILED`, because the service will not record that outcome.
+
   The condition is logged at `WARN` rather than passing silently, since an absent token is
   indistinguishable from a client that dropped the field.
 
   New internal termination reason `EXECUTION_SUSPENDED_BY_SERVICE`, classified as a suspend. The
   SDK's set of invocation responses is unchanged.
+
+### Fixed
+
+- An oversized result could keep the invocation running until the Lambda timeout. The SDK
+  checkpoints a result over the response size limit after the handler returns, and waited for
+  that checkpoint alone. When an earlier checkpoint in the queue failed, or was answered without a
+  token, the checkpoint manager cleared the queue without sending the result, so the wait never
+  ended. The wait now also ends on termination: a failed checkpoint throws its classified error,
+  and a withdrawn token answers `PENDING`.
 
 ### Added
 

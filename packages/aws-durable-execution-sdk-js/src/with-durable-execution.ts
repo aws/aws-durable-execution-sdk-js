@@ -177,6 +177,40 @@ async function runHandler<
 
   const executeInvocation =
     async (): Promise<DurableExecutionInvocationOutput> => {
+      // The answer for every suspend: the invocation is done for now and the execution
+      // continues on a later invocation.
+      const answerPending =
+        async (): Promise<DurableExecutionInvocationOutput> => {
+          await plugin.onInvocationEnd?.({
+            ...invocationBaseInfo,
+            status: PluginInvocationStatus.PENDING,
+            executionInput: customerHandlerEvent,
+            executionResult: undefined,
+            executionError: undefined,
+            operations: toOperationInfoMap(executionContext._stepData),
+          });
+
+          return {
+            Status: InvocationStatus.PENDING,
+          };
+        };
+
+      // A handler can return, or throw, while a checkpoint it did not await is still in
+      // flight. If the service answers that checkpoint without a token, it will record
+      // nothing further from this invocation. That includes the invocation's own result, so
+      // reporting SUCCEEDED or FAILED would claim an outcome the execution does not have.
+      // The next invocation replays and reaches the outcome again.
+      const tokenRevokedAfterHandlerSettled = (): boolean => {
+        if (!durableExecution.checkpointManager.isCheckpointTokenRevoked()) {
+          return false;
+        }
+        log(
+          "🛑",
+          "Checkpoint token withdrawn after the handler settled - answering PENDING",
+        );
+        return true;
+      };
+
       try {
         log(
           "🎯",
@@ -228,6 +262,10 @@ async function runHandler<
           log("⚠️", "Error waiting for checkpoint completion:", error);
         }
 
+        if (resultType === "handler" && tokenRevokedAfterHandlerSettled()) {
+          return await answerPending();
+        }
+
         // If termination was due to checkpoint failure, throw the appropriate error
         if (
           resultType === "termination" &&
@@ -256,18 +294,7 @@ async function runHandler<
               reason: result.reason,
             });
 
-            await plugin.onInvocationEnd?.({
-              ...invocationBaseInfo,
-              status: PluginInvocationStatus.PENDING,
-              executionInput: customerHandlerEvent,
-              executionResult: undefined,
-              executionError: undefined,
-              operations: toOperationInfoMap(executionContext._stepData),
-            });
-
-            return {
-              Status: InvocationStatus.PENDING,
-            };
+            return await answerPending();
           }
 
           const error = result.error ?? new Error(result.message);
@@ -314,12 +341,38 @@ async function runHandler<
           const stepId = `execution-result-${Date.now()}`;
 
           try {
-            await durableExecution.checkpointManager.checkpoint(stepId, {
-              Id: stepId,
-              Action: "SUCCEED",
-              Type: OperationType.EXECUTION,
-              Payload: serializedResult, // Reuse the already serialized result
-            });
+            // Raced against termination because the race above has already settled, so
+            // nothing else can end this await. A termination here means the checkpoint
+            // manager cleared its queue without sending the result, and the checkpoint
+            // promise then never settles:
+            // - A batch queued ahead of this one was answered without a token. The
+            //   invocation can record nothing further, so it answers PENDING, and the next
+            //   invocation produces the result again.
+            // - A batch failed. The manager's classified error is thrown, as on the path
+            //   above.
+            // A response without a token to the batch that carries this update does not
+            // terminate: that update finishes the execution. See processBatch.
+            const termination = await Promise.race([
+              durableExecution.checkpointManager
+                .checkpoint(stepId, {
+                  Id: stepId,
+                  Action: "SUCCEED",
+                  Type: OperationType.EXECUTION,
+                  Payload: serializedResult, // Reuse the already serialized result
+                })
+                .then(() => undefined),
+              terminationPromise.then(([, details]) => details),
+            ]);
+
+            if (termination) {
+              log("🛑", "Terminated while checkpointing the large result", {
+                reason: termination.reason,
+              });
+              if (classifyTermination(termination.reason) === "suspend") {
+                return await answerPending();
+              }
+              throw termination.error ?? new Error(termination.message);
+            }
 
             log("✅", "Large result successfully checkpointed");
 
@@ -365,6 +418,10 @@ async function runHandler<
           // Continue anyway - the checkpoint will be retried on next invocation
         }
 
+        if (tokenRevokedAfterHandlerSettled()) {
+          return await answerPending();
+        }
+
         await plugin.onInvocationEnd?.({
           ...invocationBaseInfo,
           status: PluginInvocationStatus.SUCCEEDED,
@@ -404,6 +461,10 @@ async function runHandler<
         } catch (waitError) {
           log("⚠️", "Error waiting for checkpoint queue completion:", waitError);
           // Continue anyway - the checkpoint will be retried on next invocation
+        }
+
+        if (tokenRevokedAfterHandlerSettled()) {
+          return await answerPending();
         }
 
         await plugin.onInvocationEnd?.({

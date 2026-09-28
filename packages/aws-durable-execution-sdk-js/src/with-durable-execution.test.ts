@@ -81,6 +81,7 @@ describe("withDurableExecution", () => {
     (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
       checkpoint: jest.fn().mockResolvedValue(undefined),
       setTerminating: jest.fn(),
+      isCheckpointTokenRevoked: jest.fn().mockReturnValue(false),
       dispose: jest.fn(),
       waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
     }));
@@ -100,6 +101,7 @@ describe("withDurableExecution", () => {
     (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
       checkpoint: jest.fn().mockResolvedValue(undefined),
       setTerminating: jest.fn(),
+      isCheckpointTokenRevoked: jest.fn().mockReturnValue(false),
       dispose,
       waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
     }));
@@ -120,6 +122,7 @@ describe("withDurableExecution", () => {
     (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
       checkpoint: jest.fn().mockResolvedValue(undefined),
       setTerminating: jest.fn(),
+      isCheckpointTokenRevoked: jest.fn().mockReturnValue(false),
       dispose,
       waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
     }));
@@ -558,6 +561,7 @@ describe("withDurableExecution", () => {
     (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
       checkpoint: jest.fn().mockRejectedValue(checkpointError),
       setTerminating: jest.fn(),
+      isCheckpointTokenRevoked: jest.fn().mockReturnValue(false),
       dispose: jest.fn(),
     }));
 

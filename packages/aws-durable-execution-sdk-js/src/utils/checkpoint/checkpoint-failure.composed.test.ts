@@ -109,6 +109,30 @@ describe("CHECKPOINT_FAILED terminations", () => {
     });
   });
 
+  it("rethrows when the transport fails an oversized result's checkpoint", async () => {
+    // The oversized result is checkpointed after the handler has won the race against
+    // termination. A failed batch is cleared without rejecting its callers, so an await on
+    // that checkpoint alone never settled, and the invocation ran until the Lambda timeout.
+    const invocation = invoke(failingClient(), async () =>
+      "x".repeat(6 * 1024 * 1024 + 1000),
+    );
+
+    await expect(
+      Promise.race([
+        invocation,
+        new Promise((_resolve, reject) =>
+          setTimeout(
+            () => reject(new Error("still pending after 2000 ms")),
+            2000,
+          ),
+        ),
+      ]),
+    ).rejects.toThrow(/Checkpoint failed/);
+    await expect(invocation).rejects.toMatchObject({
+      isUnrecoverableInvocation: true,
+    });
+  });
+
   it("rethrows stale checkpoint token failures as invocation errors", async () => {
     const invocation = invoke(
       staleCheckpointTokenClient(),
