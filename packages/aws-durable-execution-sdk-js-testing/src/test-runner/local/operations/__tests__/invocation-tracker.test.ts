@@ -13,6 +13,8 @@ describe("InvocationTracker", () => {
 
   beforeEach(() => {
     mockCheckpointApi = {
+      pauseExecution: jest.fn().mockResolvedValue(undefined),
+      resumeExecution: jest.fn().mockResolvedValue(undefined),
       startDurableExecution: jest.fn(),
       pollCheckpointData: jest.fn(),
       updateCheckpointData: jest.fn(),

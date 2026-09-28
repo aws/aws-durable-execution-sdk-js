@@ -20,6 +20,7 @@ import {
   WireOperation,
 } from "../../types/wire";
 import { CheckpointUnrecoverableInvocationError } from "../../errors/checkpoint-errors/checkpoint-errors";
+import { SerdesFailedError } from "../../errors/serdes-errors/serdes-errors";
 import { Context } from "aws-lambda";
 
 const lambdaContext = {
@@ -109,6 +110,30 @@ describe("CHECKPOINT_FAILED terminations", () => {
     });
   });
 
+  it("rethrows when the transport fails an oversized result's checkpoint", async () => {
+    // The oversized result is checkpointed after the handler has won the race against
+    // termination. A failed batch is cleared without rejecting its callers, so an await on
+    // that checkpoint alone never settled, and the invocation ran until the Lambda timeout.
+    const invocation = invoke(failingClient(), async () =>
+      "x".repeat(6 * 1024 * 1024 + 1000),
+    );
+
+    await expect(
+      Promise.race([
+        invocation,
+        new Promise((_resolve, reject) =>
+          setTimeout(
+            () => reject(new Error("still pending after 2000 ms")),
+            2000,
+          ),
+        ),
+      ]),
+    ).rejects.toThrow(/Checkpoint failed/);
+    await expect(invocation).rejects.toMatchObject({
+      isUnrecoverableInvocation: true,
+    });
+  });
+
   it("rethrows stale checkpoint token failures as invocation errors", async () => {
     const invocation = invoke(
       staleCheckpointTokenClient(),
@@ -122,6 +147,87 @@ describe("CHECKPOINT_FAILED terminations", () => {
     await expect(invocation).rejects.toMatchObject({
       isUnrecoverableInvocation: true,
     });
+  });
+
+  it("answers a failed batch the same way whatever the result size", async () => {
+    // A batch the handler did not await fails after the handler returned. The classified
+    // error decides the answer, and the size of the handler's result does not. Before this,
+    // a small result answered SUCCEEDED while an oversized one threw.
+    const oversized = "x".repeat(6 * 1024 * 1024 + 1000);
+
+    const failAfterFirstCall = (): DurableExecutionClient => {
+      let calls = 0;
+      return {
+        ...workingClient(),
+        checkpoint: async () => {
+          calls++;
+          // Held in flight so the handler returns before the failure lands.
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          if (calls === 1) {
+            throw Object.assign(new Error("Service Unavailable"), {
+              name: "ServiceException",
+              $metadata: { httpStatusCode: 503 },
+            });
+          }
+          return { CheckpointToken: "token-2", NewExecutionState: undefined };
+        },
+      };
+    };
+
+    const handlerReturningEarly =
+      (outcome: () => unknown) =>
+      async (_event: unknown, context: DurableContext): Promise<unknown> => {
+        void context
+          .step("background", async () => "bg")
+          .catch(() => undefined);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return outcome();
+      };
+
+    await expect(
+      invoke(
+        failAfterFirstCall(),
+        handlerReturningEarly(() => "small"),
+      ),
+    ).rejects.toThrow(/Checkpoint failed/);
+
+    await expect(
+      invoke(
+        failAfterFirstCall(),
+        handlerReturningEarly(() => oversized),
+      ),
+    ).rejects.toThrow(/Checkpoint failed/);
+  });
+
+  it("rethrows a serdes failure as SerdesFailedError whatever the result size", async () => {
+    // SerdesFailedError is an invocation error, so Lambda retries. A plain Error is not, so
+    // the execution would fail for good. The oversized path threw a plain Error because a
+    // SERDES_FAILED termination carries no error object.
+    const oversized = "x".repeat(6 * 1024 * 1024 + 1000);
+
+    const handlerFailingSerdes =
+      (outcome: () => unknown) =>
+      async (_event: unknown, context: DurableContext): Promise<unknown> => {
+        void context
+          .step("background", async () => BigInt(1) as unknown as string)
+          .catch(() => undefined);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return outcome();
+      };
+
+    await expect(
+      invoke(
+        workingClient(),
+        handlerFailingSerdes(() => "small"),
+      ),
+    ).rejects.toThrow(SerdesFailedError);
+
+    await expect(
+      invoke(
+        workingClient(),
+        handlerFailingSerdes(() => oversized),
+      ),
+    ).rejects.toThrow(SerdesFailedError);
   });
 
   it("rethrows when step code raises a checkpoint error itself", async () => {

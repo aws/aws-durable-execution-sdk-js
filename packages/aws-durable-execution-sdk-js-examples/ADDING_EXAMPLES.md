@@ -82,6 +82,7 @@ export const config: ExampleConfig = {
   - **Managed instance function**: Deployment with 2048MB memory, arm64 architecture, and capacity provider configuration for testing on managed instances
 
   Both functions are deployed with automatically generated names (the capacity provider version gets a `-CapacityProvider` suffix) and both are tested during integration runs. This ensures your durable function works correctly in both standard Lambda and managed instance environments. If you don't need managed instance testing, simply omit this configuration option.
+- `localOnly`: (Default: false) Run the example's tests with `LocalDurableTestRunner` only. The example is left out of the SAM template, so it is never deployed, and its tests are skipped under `NODE_ENV=integration`. Use it for examples that depend on local-runner features, such as `pauseExecution()` in `src/examples/pause-resume/`.
 
 ### 3. Create the Test File
 
