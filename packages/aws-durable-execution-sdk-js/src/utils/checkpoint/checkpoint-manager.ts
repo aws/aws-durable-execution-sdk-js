@@ -62,7 +62,23 @@ interface QueuedCheckpoint {
   sizeBytes: number;
   resolve: () => void;
   reject: (error: Error) => void;
+  /**
+   * Called instead of {@link QueuedCheckpoint.resolve} when the manager gives up on this
+   * update, either by clearing the queue or by abandoning the batch it was sent in.
+   *
+   * Only {@link CheckpointManager.checkpointExecutionResult} sets it. Every other caller is
+   * left unresolved on those paths, so that the termination decides the invocation.
+   */
+  onAbandon?: () => void;
 }
+
+/**
+ * Whether an update reached the service.
+ *
+ * `"sent"` means the service accepted it. `"abandoned"` means the manager could not send it
+ * and will not retry it in this invocation.
+ */
+export type CheckpointOutcome = "sent" | "abandoned";
 
 export class CheckpointManager implements Checkpoint {
   private queue: QueuedCheckpoint[] = [];
@@ -231,15 +247,88 @@ export class CheckpointManager implements Checkpoint {
 
   public clearQueue(): void {
     // Silently clear queue - we're terminating so no need to reject promises
+    const abandoned = this.queue;
     this.queue = [];
     this.forceCheckpointPromises = [];
     // Resolve any waiting queue completion promises since we're clearing
     this.notifyQueueCompletion();
+    this.notifyAbandoned(abandoned);
+  }
+
+  /**
+   * Tells the callers that asked to hear about it that their updates were never sent.
+   *
+   * Without this, such a caller waits for a promise nothing settles. That is the intended
+   * outcome for handler code, because the termination ends the invocation instead. It is not
+   * the outcome for a caller that runs after the handler has settled: nothing else will end
+   * its wait, so the invocation would run until Lambda stops it.
+   */
+  private notifyAbandoned(items: QueuedCheckpoint[]): void {
+    for (const item of items) {
+      item.onAbandon?.();
+    }
   }
 
   // Alias for backward compatibility with Checkpoint interface
   async force(): Promise<void> {
     return this.forceCheckpoint();
+  }
+
+  /**
+   * Sends the execution's own terminal update and reports whether the service accepted it.
+   *
+   * For `withDurableExecution`'s oversized-result path, which checkpoints the handler's
+   * result after the handler has returned. That caller is past the point where a termination
+   * can end its wait, so it needs an answer in every case rather than a promise that another
+   * path settles.
+   *
+   * Returns `"sent"` once the service has accepted the update. The execution is then
+   * recorded as finished, whatever else has happened in this invocation, so the caller
+   * reports success. A termination that arrived while the update was in flight does not
+   * change that.
+   *
+   * Returns `"abandoned"` when the manager cannot send the update: it is already
+   * terminating, the token is already withdrawn, or the queue was cleared before the update
+   * went out. The termination details are set by then, so the caller decides its answer from
+   * the termination reason.
+   */
+  async checkpointExecutionResult(
+    stepId: string,
+    data: Partial<OperationUpdate>,
+  ): Promise<CheckpointOutcome> {
+    if (this.isTerminating || this.checkpointTokenRevoked) {
+      log("⚠️", "Execution result not checkpointed - manager is terminating:", {
+        stepId,
+        checkpointTokenRevoked: this.checkpointTokenRevoked,
+      });
+      return "abandoned";
+    }
+
+    return new Promise<CheckpointOutcome>((resolve, reject) => {
+      const queuedItem: QueuedCheckpoint = {
+        stepId,
+        data,
+        sizeBytes: Buffer.byteLength(JSON.stringify({ stepId, data }), "utf8"),
+        resolve: () => {
+          resolve("sent");
+        },
+        reject: (error: Error) => {
+          reject(error);
+        },
+        onAbandon: () => {
+          log("⚠️", "Execution result was never sent:", { stepId });
+          resolve("abandoned");
+        },
+      };
+
+      this.queue.push(queuedItem);
+
+      if (!this.isProcessing) {
+        setImmediate(() => {
+          this.processQueue();
+        });
+      }
+    });
   }
 
   async checkpoint(
@@ -481,6 +570,11 @@ export class CheckpointManager implements Checkpoint {
         message: checkpointError.message,
         error: checkpointError,
       });
+
+      // This batch left the queue before it was sent, so clearQueue did not cover it.
+      // Reported after the termination, so a caller that reads the termination details sees
+      // them already set.
+      this.notifyAbandoned(batch);
     } finally {
       this.isProcessing = false;
 

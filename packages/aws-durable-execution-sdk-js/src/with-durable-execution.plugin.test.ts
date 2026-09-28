@@ -75,6 +75,7 @@ beforeEach(() => {
     checkpoint: jest.fn().mockResolvedValue(undefined),
     setTerminating: jest.fn(),
     isCheckpointTokenRevoked: jest.fn().mockReturnValue(false),
+    checkpointExecutionResult: jest.fn().mockResolvedValue("sent"),
     dispose: jest.fn(),
     waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
   }));
@@ -549,6 +550,20 @@ describe("onInvocationEnd reflects the class of a termination", () => {
 
     expect(endInfo.status).toBe(PluginInvocationStatus.PENDING);
     expect(endInfo.executionError).toBeUndefined();
+    expect(endInfo.executionResult).toBeUndefined();
+  });
+
+  it("reports PENDING with the error when a suspend carries one", async () => {
+    // A suspend reports no outcome to the service, so the error reaches plugins only. Where
+    // the suspend has a cause, dropping it leaves nothing to diagnose from.
+    const error = new Error("handler failed");
+    const endInfo = await runWithTermination(
+      TerminationReason.EXECUTION_SUSPENDED_BY_SERVICE,
+      { message: "Checkpoint token withdrawn", error },
+    );
+
+    expect(endInfo.status).toBe(PluginInvocationStatus.PENDING);
+    expect(endInfo.executionError).toBe(error);
     expect(endInfo.executionResult).toBeUndefined();
   });
 });

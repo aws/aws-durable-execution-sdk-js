@@ -10,6 +10,7 @@ import { isUnrecoverableInvocationError } from "./errors/unrecoverable-error/unr
 import { isNonRetryableCustomerError } from "./errors/non-retryable-errors";
 import {
   TerminationReason,
+  TerminationResponse,
   classifyTermination,
 } from "./termination-manager/types";
 import { resolveRootPreserveChildDepth } from "./utils/child-operations-depth/child-operations-depth";
@@ -178,37 +179,41 @@ async function runHandler<
   const executeInvocation =
     async (): Promise<DurableExecutionInvocationOutput> => {
       // The answer for every suspend: the invocation is done for now and the execution
-      // continues on a later invocation.
-      const answerPending =
-        async (): Promise<DurableExecutionInvocationOutput> => {
-          await plugin.onInvocationEnd?.({
-            ...invocationBaseInfo,
-            status: PluginInvocationStatus.PENDING,
-            executionInput: customerHandlerEvent,
-            executionResult: undefined,
-            executionError: undefined,
-            operations: toOperationInfoMap(executionContext._stepData),
-          });
+      // continues on a later invocation. The error, when there is one, is reported to plugins
+      // but not to the service, which records no outcome from a suspended invocation.
+      const answerPending = async (
+        executionError?: Error,
+      ): Promise<DurableExecutionInvocationOutput> => {
+        await plugin.onInvocationEnd?.({
+          ...invocationBaseInfo,
+          status: PluginInvocationStatus.PENDING,
+          executionInput: customerHandlerEvent,
+          executionResult: undefined,
+          executionError,
+          operations: toOperationInfoMap(executionContext._stepData),
+        });
 
-          return {
-            Status: InvocationStatus.PENDING,
-          };
+        return {
+          Status: InvocationStatus.PENDING,
         };
+      };
 
-      // A handler can return, or throw, while a checkpoint it did not await is still in
-      // flight. If the service answers that checkpoint without a token, it will record
-      // nothing further from this invocation. That includes the invocation's own result, so
-      // reporting SUCCEEDED or FAILED would claim an outcome the execution does not have.
-      // The next invocation replays and reaches the outcome again.
-      const tokenRevokedAfterHandlerSettled = (): boolean => {
-        if (!durableExecution.checkpointManager.isCheckpointTokenRevoked()) {
-          return false;
-        }
-        log(
-          "🛑",
-          "Checkpoint token withdrawn after the handler settled - answering PENDING",
-        );
-        return true;
+      const answerFailed = async (
+        error: Error,
+      ): Promise<DurableExecutionInvocationOutput> => {
+        const response = {
+          Status: InvocationStatus.FAILED,
+          Error: createErrorObjectFromError(error),
+        };
+        await plugin.onInvocationEnd?.({
+          ...invocationBaseInfo,
+          status: PluginInvocationStatus.FAILED,
+          executionInput: customerHandlerEvent,
+          executionError: error,
+          executionResult: undefined,
+          operations: toOperationInfoMap(executionContext._stepData),
+        });
+        return response;
       };
 
       try {
@@ -218,6 +223,13 @@ async function runHandler<
         );
         let handlerPromiseResolved = false;
         let terminationPromiseResolved = false;
+        /**
+         * The termination details, once a termination has happened. Read after the race as
+         * well as inside it: a termination can arrive while the checkpoint queue drains, so
+         * the handler can win the race and still leave the invocation unable to report its
+         * outcome.
+         */
+        let termination: TerminationResponse | undefined;
 
         const handlerPromise = runWithContext("root", undefined, () =>
           handler(customerHandlerEvent, durableContext),
@@ -231,6 +243,7 @@ async function runHandler<
           .getTerminationPromise()
           .then((result) => {
             terminationPromiseResolved = true;
+            termination = result;
             log("💥", "Termination promise resolved first!");
             // Set checkpoint manager as terminating when termination starts
             durableExecution.setTerminating();
@@ -262,67 +275,86 @@ async function runHandler<
           log("⚠️", "Error waiting for checkpoint completion:", error);
         }
 
-        if (resultType === "handler" && tokenRevokedAfterHandlerSettled()) {
-          return await answerPending();
-        }
-
-        // If termination was due to checkpoint failure, throw the appropriate error
-        if (
-          resultType === "termination" &&
-          result.reason === TerminationReason.CHECKPOINT_FAILED
-        ) {
-          log("🛑", "Checkpoint failed - handling termination");
-          // checkpoint.ts always provides classified error
-          throw result.error;
-        }
-
-        // If termination was due to serdes failure, throw an error to terminate the Lambda
-        if (
-          resultType === "termination" &&
-          result.reason === TerminationReason.SERDES_FAILED
-        ) {
-          log("🛑", "Serdes failed - terminating Lambda execution");
-          throw new SerdesFailedError(result.message);
-        }
-
-        // Every remaining termination reason is decided by its class: a suspend means the
-        // execution continues later and answers PENDING, a fault answers FAILED carrying
-        // the error. See TERMINATION_CLASS for what each reason is and why.
-        if (resultType === "termination") {
-          if (classifyTermination(result.reason) === "suspend") {
-            log("🛑", "Returning termination response", {
-              reason: result.reason,
-            });
-
-            return await answerPending();
+        /**
+         * The invocation's answer when it cannot report the handler's outcome, or `undefined`
+         * when it can.
+         *
+         * Read on every exit, including the ones the handler won. A termination, or a
+         * withdrawn token, can arrive while the checkpoint queue drains. Reporting SUCCEEDED
+         * or FAILED then claims an outcome the service will not record.
+         *
+         * The order of the cases matters.
+         *
+         * 1. A withdrawn token comes first. The service accepts nothing further from this
+         *    invocation, so an error it reported would not be recorded either, and a Lambda
+         *    retry would present the same withdrawn token and get nowhere. PENDING ends the
+         *    invocation, and the next one replays.
+         * 2. A checkpoint failure throws its classified error. That class decides whether
+         *    Lambda retries the invocation or the execution fails.
+         * 3. A serdes failure throws SerdesFailedError, which is an invocation error, so
+         *    Lambda retries.
+         * 4. Every other reason is decided by its class. A suspend answers PENDING. A fault
+         *    answers FAILED and carries the error. See TERMINATION_CLASS.
+         */
+        const answerWhenOutcomeCannotBeReported = async (): Promise<
+          DurableExecutionInvocationOutput | undefined
+        > => {
+          if (durableExecution.checkpointManager.isCheckpointTokenRevoked()) {
+            log(
+              "🛑",
+              "Checkpoint token withdrawn - answering PENDING",
+              termination ? { reason: termination.reason } : {},
+            );
+            return await answerPending(termination?.error);
           }
 
-          const error = result.error ?? new Error(result.message);
+          if (!termination) {
+            return undefined;
+          }
+
+          if (termination.reason === TerminationReason.CHECKPOINT_FAILED) {
+            log("🛑", "Checkpoint failed - handling termination");
+            // checkpoint.ts always provides classified error
+            throw termination.error;
+          }
+
+          if (termination.reason === TerminationReason.SERDES_FAILED) {
+            log("🛑", "Serdes failed - terminating Lambda execution");
+            throw new SerdesFailedError(termination.message);
+          }
+
+          if (classifyTermination(termination.reason) === "suspend") {
+            log("🛑", "Returning termination response", {
+              reason: termination.reason,
+            });
+            return await answerPending(termination.error);
+          }
+
+          const error = termination.error ?? new Error(termination.message);
           log(
             "🛑",
-            `Terminated with ${result.reason} - returning FAILED status`,
+            `Terminated with ${termination.reason} - returning FAILED status`,
             {
-              message: result.message,
+              message: termination.message,
             },
           );
+          return await answerFailed(error);
+        };
 
-          const response = {
-            Status: InvocationStatus.FAILED,
-            Error: createErrorObjectFromError(error),
-          };
-          await plugin.onInvocationEnd?.({
-            ...invocationBaseInfo,
-            status: PluginInvocationStatus.FAILED,
-            executionInput: customerHandlerEvent,
-            executionError: error,
-            executionResult: undefined,
-            operations: toOperationInfoMap(executionContext._stepData),
-          });
-          return response;
+        const answer = await answerWhenOutcomeCannotBeReported();
+        if (answer) {
+          return answer;
+        }
+
+        // Nothing above overrode the handler, so no termination is outstanding, and the race
+        // was won by the handler. This guard states that rather than assuming it.
+        if (resultType !== "handler") {
+          throw new Error(
+            `Unhandled termination reason: ${String(termination?.reason)}`,
+          );
         }
 
         log("✅", "Returning normal completion response");
-
         // Stringify the result once to avoid multiple JSON.stringify calls
         const serializedResult = JSON.stringify(result);
         const serializedSize = new TextEncoder().encode(
@@ -341,39 +373,41 @@ async function runHandler<
           const stepId = `execution-result-${Date.now()}`;
 
           try {
-            // Raced against termination because the race above has already settled, so
-            // nothing else can end this await. A termination here means the checkpoint
-            // manager cleared its queue without sending the result, and the checkpoint
-            // promise then never settles:
-            // - A batch queued ahead of this one was answered without a token. The
-            //   invocation can record nothing further, so it answers PENDING, and the next
-            //   invocation produces the result again.
-            // - A batch failed. The manager's classified error is thrown, as on the path
-            //   above.
-            // A response without a token to the batch that carries this update does not
-            // terminate: that update finishes the execution. See processBatch.
-            const termination = await Promise.race([
-              durableExecution.checkpointManager
-                .checkpoint(stepId, {
+            // Reports whether the service accepted the update rather than waiting for a
+            // promise another path settles. This caller is past the race above, so a
+            // termination cannot end its wait, and the manager leaves the callers of an
+            // update it never sent unresolved.
+            const outcome =
+              await durableExecution.checkpointManager.checkpointExecutionResult(
+                stepId,
+                {
                   Id: stepId,
                   Action: "SUCCEED",
                   Type: OperationType.EXECUTION,
                   Payload: serializedResult, // Reuse the already serialized result
-                })
-                .then(() => undefined),
-              terminationPromise.then(([, details]) => details),
-            ]);
+                },
+              );
 
-            if (termination) {
-              log("🛑", "Terminated while checkpointing the large result", {
-                reason: termination.reason,
-              });
-              if (classifyTermination(termination.reason) === "suspend") {
-                return await answerPending();
+            // The manager could not send it: it was already terminating, the token was
+            // already withdrawn, or the queue was cleared before the update went out. So the
+            // execution has no result, and the termination decides the answer. The next
+            // invocation replays and produces the result again.
+            if (outcome === "abandoned") {
+              const abandonedAnswer = await answerWhenOutcomeCannotBeReported();
+              if (abandonedAnswer) {
+                return abandonedAnswer;
               }
-              throw termination.error ?? new Error(termination.message);
+              // No termination explains the abandonment, which should not happen. Failing
+              // the invocation is the answer that does not claim a result the execution
+              // does not have.
+              throw new Error(
+                "Execution result was not checkpointed and no termination was recorded",
+              );
             }
 
+            // Accepted, so the execution is recorded as finished. That holds even if a
+            // termination arrived while the update was in flight, so nothing below consults
+            // the termination.
             log("✅", "Large result successfully checkpointed");
 
             // Wait for any pending checkpoints to complete before returning
@@ -418,8 +452,10 @@ async function runHandler<
           // Continue anyway - the checkpoint will be retried on next invocation
         }
 
-        if (tokenRevokedAfterHandlerSettled()) {
-          return await answerPending();
+        // A termination, or a withdrawn token, can arrive while this last queue drain runs.
+        const lateAnswer = await answerWhenOutcomeCannotBeReported();
+        if (lateAnswer) {
+          return lateAnswer;
         }
 
         await plugin.onInvocationEnd?.({
@@ -439,6 +475,21 @@ async function runHandler<
         log("❌", "Handler threw an error:", error);
 
         // Check if this is an unrecoverable invocation error (includes checkpoint invocation failures)
+        // A withdrawn token comes first. Rethrowing makes Lambda retry the invocation, and
+        // that retry receives the same withdrawn token in its event, so its first checkpoint
+        // is rejected and it rethrows again. Suspending ends the invocation instead, and the
+        // service starts the next one with a token of its own.
+        if (
+          isUnrecoverableInvocationError(error) &&
+          durableExecution.checkpointManager.isCheckpointTokenRevoked()
+        ) {
+          log(
+            "🛑",
+            "Unrecoverable invocation error after the token was withdrawn - answering PENDING",
+          );
+          return await answerPending(error);
+        }
+
         if (isUnrecoverableInvocationError(error)) {
           log(
             "🛑",
@@ -463,8 +514,14 @@ async function runHandler<
           // Continue anyway - the checkpoint will be retried on next invocation
         }
 
-        if (tokenRevokedAfterHandlerSettled()) {
-          return await answerPending();
+        // The handler threw. A withdrawn token means the service records neither that error
+        // nor anything else from this invocation, so the invocation suspends instead. The
+        // error still reaches plugins.
+        if (durableExecution.checkpointManager.isCheckpointTokenRevoked()) {
+          log("🛑", "Checkpoint token withdrawn - answering PENDING");
+          return await answerPending(
+            error instanceof Error ? error : new Error(String(error)),
+          );
         }
 
         await plugin.onInvocationEnd?.({

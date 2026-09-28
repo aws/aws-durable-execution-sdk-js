@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   await is still in flight, for example from the unfinished branches of a `map` or `parallel` with
   early completion. If that checkpoint is answered without a token, the invocation answers
   `PENDING` rather than `SUCCEEDED` or `FAILED`, because the service will not record that outcome.
+  A `PENDING` that follows a handler error carries that error to plugins, which report no outcome
+  to the service in any case.
 
   The condition is logged at `WARN` rather than passing silently, since an absent token is
   indistinguishable from a client that dropped the field.
@@ -44,8 +46,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   checkpoints a result over the response size limit after the handler returns, and waited for
   that checkpoint alone. When an earlier checkpoint in the queue failed, or was answered without a
   token, the checkpoint manager cleared the queue without sending the result, so the wait never
-  ended. The wait now also ends on termination: a failed checkpoint throws its classified error,
-  and a withdrawn token answers `PENDING`.
+  ended. The manager now reports whether it sent that update. An update it never sent answers from
+  the termination: a failed checkpoint throws its classified error, and a withdrawn token answers
+  `PENDING`. An update the service accepted still reports `SUCCEEDED`, even when a termination
+  arrived while it was in flight, because the execution is then recorded as finished.
+
+- An invocation could report an outcome the service had already refused to record. Every exit that
+  reports `SUCCEEDED` or `FAILED` now consults the termination and the token state first, so these
+  cases agree rather than depending on which exit was taken:
+  - A checkpoint that failed after the handler returned answered `SUCCEEDED` for a small result and
+    threw for an oversized one. Both now throw the classified error.
+  - A serdes failure during the oversized-result path threw a plain `Error` instead of
+    `SerdesFailedError`, so the execution failed for good rather than the invocation being retried.
+  - A fault termination followed by a withdrawn token answered `FAILED`. It now answers `PENDING`.
+  - An unrecoverable invocation error was rethrown after the token was withdrawn, so Lambda retried
+    with a token the service had already rejected. It now answers `PENDING`.
 
 ### Added
 

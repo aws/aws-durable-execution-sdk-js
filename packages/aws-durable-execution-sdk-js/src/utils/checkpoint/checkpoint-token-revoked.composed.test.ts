@@ -287,5 +287,94 @@ describe("checkpoint response without a CheckpointToken", () => {
       // Only the withdrawn batch was sent; the oversized result never was.
       expect(calls).toHaveLength(1);
     });
+
+    it("reports SUCCEEDED for an oversized result the service accepted before terminating", async () => {
+      // A termination can arrive from background handler code while the oversized result is
+      // in flight. The service still accepts that update, so the execution is recorded as
+      // finished. Answering anything but SUCCEEDED would contradict a result the service
+      // holds. Deciding from the termination alone reported FAILED here.
+      const oversized = "x".repeat(6 * 1024 * 1024 + 1000);
+      const calls: string[] = [];
+      let failBackgroundStep: (() => void) | undefined;
+
+      const client: DurableExecutionClient = {
+        getExecutionState:
+          async (): Promise<GetDurableExecutionStateResponse> => ({
+            Operations: [],
+            NextMarker: undefined,
+          }),
+        checkpoint: async (
+          request,
+        ): Promise<CheckpointDurableExecutionResponse> => {
+          const kinds = (request.Updates ?? []).map(
+            (update) => `${update.Type}/${update.Action}`,
+          );
+          calls.push(kinds.join(","));
+
+          // Hold the result's own checkpoint in flight, and terminate the invocation while
+          // it is there. The response then arrives, carrying a token, so the service
+          // accepted the update.
+          if (kinds.some((kind) => kind.startsWith("EXECUTION/"))) {
+            failBackgroundStep?.();
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }
+
+          return {
+            CheckpointToken: `token-${calls.length + 1}`,
+            NewExecutionState: undefined,
+          };
+        },
+      };
+
+      const result = await within(
+        invoke(client, async (_event, context) => {
+          // Serializing a BigInt fails, and the serdes failure terminates the invocation.
+          // Not awaited, so the handler returns first, and the failure lands later.
+          const pending = new Promise<void>((resolve) => {
+            failBackgroundStep = resolve;
+          });
+          void context
+            .step("background", async () => {
+              await pending;
+              return BigInt(1) as unknown as string;
+            })
+            .catch(() => undefined);
+
+          return oversized;
+        }),
+        3000,
+      );
+
+      expect(result).toEqual({
+        Status: InvocationStatus.SUCCEEDED,
+        Result: "",
+      });
+      expect(calls).toContain("EXECUTION/SUCCEED");
+    });
+
+    it("answers PENDING when a fault termination is followed by a withdrawn token", async () => {
+      // A fault normally answers FAILED. Here the token is withdrawn while the queue drains
+      // after that fault, so the service will not record the FAILED either. PENDING is the
+      // only answer left, and the invocation that took the execution over reports the fault
+      // if it recurs.
+      const { client } = clientDroppingTokenOnCall(1, {
+        delayFirstCallMs: 100,
+      });
+
+      const result = await within(
+        invoke(client, async (_event, context) => {
+          void context
+            .step("background", async () => "bg")
+            .catch(() => undefined);
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          // An invalid concurrency raises CONFIG_VALIDATION_ERROR, a fault-class reason.
+          await context.parallel("branches", [], { maxConcurrency: 0 });
+          return "finished";
+        }),
+        2000,
+      );
+
+      expect(result).toEqual({ Status: InvocationStatus.PENDING });
+    });
   });
 });
