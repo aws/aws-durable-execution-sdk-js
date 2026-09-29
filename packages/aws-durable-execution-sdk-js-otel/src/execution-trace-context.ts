@@ -4,6 +4,7 @@ import { SamplingDecision } from "@opentelemetry/sdk-trace-node";
 import {
   deriveTraceIdFromArn,
   deriveExecutionRootSpanId,
+  deriveTraceRootSpanId,
 } from "./deterministic-id-generator";
 import {
   hasCompleteRemoteParent,
@@ -199,9 +200,16 @@ export function resolveExecutionTraceContext(
   const samplingContext = hasValidTraceId(extracted) ? extracted : undefined;
   const decision = explicitDecision(samplingContext, rootSamplingDecision);
   const flags = traceFlagsFromDecision(decision);
+  // A valid propagated Root can be shared by chained executions. In that
+  // case root identity belongs to the trace, otherwise each execution would
+  // invent a distinct root on the same trace. Without a valid propagated Root,
+  // the canonical trace is execution-local, so preserve the ARN-scoped identity.
+  const syntheticRootSpanId = hasValidTraceId(extracted)
+    ? deriveTraceRootSpanId(canonical)
+    : deriveExecutionRootSpanId(executionArn);
   const syntheticRoot: SpanContext = {
     traceId: canonical,
-    spanId: deriveExecutionRootSpanId(executionArn),
+    spanId: syntheticRootSpanId,
     traceFlags: flags,
     isRemote: false,
   };

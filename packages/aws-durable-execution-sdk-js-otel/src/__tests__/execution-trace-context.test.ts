@@ -16,6 +16,7 @@ import { deriveExecutionTraceId } from "../index";
 import {
   deriveTraceIdFromArn,
   deriveExecutionRootSpanId,
+  deriveTraceRootSpanId,
 } from "../deterministic-id-generator";
 import type { ContextExtractorResult } from "../context-extractors";
 
@@ -208,7 +209,7 @@ describe("resolveExecutionTraceContext", () => {
 
     expect(execCtx.executionAncestor.traceId).toBe(REMOTE_TRACE_ID);
     expect(execCtx.executionAncestor.spanId).toBe(
-      deriveExecutionRootSpanId(ARN),
+      deriveTraceRootSpanId(REMOTE_TRACE_ID),
     );
   });
 
@@ -325,7 +326,7 @@ describe("resolveExecutionTraceContext", () => {
 
     expect(execCtx.executionAncestor.traceId).toBe(REMOTE_TRACE_ID);
     expect(execCtx.executionAncestor.spanId).toBe(
-      deriveExecutionRootSpanId(ARN),
+      deriveTraceRootSpanId(REMOTE_TRACE_ID),
     );
     expect(execCtx.traceFlags & 1).toBe(1); // supplier decides for a synthetic root
   });
@@ -342,9 +343,33 @@ describe("resolveExecutionTraceContext", () => {
     );
 
     expect(execCtx.executionAncestor.spanId).toBe(
-      deriveExecutionRootSpanId(ARN),
+      deriveTraceRootSpanId(REMOTE_TRACE_ID),
     );
     expect(execCtx.traceFlags & 1).toBe(1);
+  });
+
+  it("uses one synthetic root identity for executions sharing a propagated Root", () => {
+    const extracted = { traceId: REMOTE_TRACE_ID };
+    const otherArn = `${ARN}:chained-child`;
+    const first = resolveExecutionTraceContext(
+      extracted,
+      REMOTE_TRACE_ID,
+      ARN,
+      () => SamplingDecision.RECORD_AND_SAMPLED,
+    );
+    const second = resolveExecutionTraceContext(
+      extracted,
+      REMOTE_TRACE_ID,
+      otherArn,
+      () => SamplingDecision.RECORD_AND_SAMPLED,
+    );
+
+    expect(first.executionAncestor.spanId).toBe(
+      deriveTraceRootSpanId(REMOTE_TRACE_ID),
+    );
+    expect(second.executionAncestor.spanId).toBe(
+      first.executionAncestor.spanId,
+    );
   });
 
   it("synthesizes a root on the ARN-derived trace with no context, supplier decides", () => {

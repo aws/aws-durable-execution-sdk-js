@@ -117,11 +117,167 @@ describe("Execution trace joining", () => {
       // complete remote parent it anchors on the deterministic synthetic root,
       // NOT the ambient span.
       expect(workflow.parentSpanContext?.spanId).not.toBe(ambientCtx.spanId);
-      // The Invocation span, however, still parents onto the active ambient
-      // span because that span is already on the (canonical) execution trace —
-      // this keeps the per-invocation span nested under the layer's handler
-      // span without changing the execution ancestor.
-      expect(invocation.parentSpanContext?.spanId).toBe(ambientCtx.spanId);
+      // Without a complete remote Parent, fallback mode makes the
+      // SDK-owned synthetic root the common parent of Workflow and Invocation.
+      expect(invocation.parentSpanContext?.spanId).toBe(
+        workflow.parentSpanContext?.spanId,
+      );
+      expect(invocation.parentSpanContext?.spanId).not.toBe(ambientCtx.spanId);
+
+      const syntheticRoot = exporter
+        .getFinishedSpans()
+        .find(
+          (span) =>
+            span.name === "DurableExecutionRoot" &&
+            span.spanContext().spanId === workflow.parentSpanContext?.spanId,
+        );
+      expect(syntheticRoot).toBeDefined();
+      expect(syntheticRoot!.parentSpanContext).toBeUndefined();
+      expect(syntheticRoot!.spanContext().traceId).toBe(ambientCtx.traceId);
+    });
+
+    it.each(["SUCCEEDED", "FAILED"] as const)(
+      "exports a connected synthetic root on terminal %s",
+      async (status) => {
+        const plugin = makePlugin({ contextExtractor: () => undefined });
+
+        await plugin.onInvocationStart(makeInvocationInfo());
+        await plugin.onInvocationEnd(
+          makeInvocationEndInfo({
+            status: status as any,
+            executionError:
+              status === "FAILED"
+                ? new Error("expected test failure")
+                : undefined,
+          }),
+        );
+
+        const spans = exporter.getFinishedSpans();
+        const workflow = spans.find((span) => span.name === "Workflow")!;
+        const invocation = spans.find((span) => span.name === "Invocation")!;
+        const roots = spans.filter(
+          (span) => span.name === "DurableExecutionRoot",
+        );
+
+        expect(roots).toHaveLength(1);
+        expect(roots[0].parentSpanContext).toBeUndefined();
+        expect(workflow.parentSpanContext?.spanId).toBe(
+          roots[0].spanContext().spanId,
+        );
+        expect(invocation.parentSpanContext?.spanId).toBe(
+          roots[0].spanContext().spanId,
+        );
+        expect(workflow.spanContext().traceId).toBe(
+          roots[0].spanContext().traceId,
+        );
+        expect(invocation.spanContext().traceId).toBe(
+          roots[0].spanContext().traceId,
+        );
+      },
+    );
+
+    it("does not export a synthetic root before terminal completion", async () => {
+      const plugin = makePlugin({ contextExtractor: () => undefined });
+
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: "PENDING" as any }),
+      );
+
+      expect(
+        exporter
+          .getFinishedSpans()
+          .filter((span) => span.name === "DurableExecutionRoot"),
+      ).toHaveLength(0);
+      expect(
+        exporter.getFinishedSpans().filter((span) => span.name === "Workflow"),
+      ).toHaveLength(0);
+
+      await plugin.onInvocationStart(
+        makeInvocationInfo({ requestId: "req-2", isFirstInvocation: false }),
+      );
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({
+          requestId: "req-2",
+          status: "SUCCEEDED" as any,
+        }),
+      );
+
+      expect(
+        exporter
+          .getFinishedSpans()
+          .filter((span) => span.name === "DurableExecutionRoot"),
+      ).toHaveLength(1);
+    });
+
+    it("does not emit a stray synthetic root for explicit Sampled=0 fallback", async () => {
+      const dropExporter = new InMemorySpanExporter();
+      let dropProvider: NodeTracerProvider | undefined;
+      const plugin = makePlugin({
+        tracerProviderFactory: (createIdGenerator) => {
+          dropProvider = new NodeTracerProvider({
+            sampler: new AlwaysOnSampler(),
+            spanProcessors: [new SimpleSpanProcessor(dropExporter)],
+            idGenerator: createIdGenerator(),
+          });
+          return dropProvider;
+        },
+        contextExtractor: () => ({
+          traceId: "9".repeat(32),
+          sampling: "NOT_SAMPLED" as const,
+        }),
+      });
+
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      expect(dropExporter.getFinishedSpans()).toHaveLength(0);
+      await dropProvider?.shutdown();
+    });
+
+    it("uses one distinct root identity for executions sharing a propagated Root", async () => {
+      const sharedTraceId = "8".repeat(32);
+      const targetArn = `${TEST_ARN}-target`;
+      const config = {
+        contextExtractor: () => ({
+          traceId: sharedTraceId,
+          sampling: "SAMPLED" as const,
+        }),
+      };
+
+      const first = makePlugin(config);
+      const second = makePlugin(config);
+
+      await first.onInvocationStart(makeInvocationInfo());
+      await first.onInvocationEnd(makeInvocationEndInfo());
+      await second.onInvocationStart(
+        makeInvocationInfo({
+          executionArn: targetArn,
+          requestId: "req-target",
+        }),
+      );
+      await second.onInvocationEnd(
+        makeInvocationEndInfo({
+          executionArn: targetArn,
+          requestId: "req-target",
+        }),
+      );
+
+      const roots = exporter
+        .getFinishedSpans()
+        .filter((span) => span.name === "DurableExecutionRoot");
+      expect(roots.length).toBeGreaterThanOrEqual(1);
+      expect(new Set(roots.map((span) => span.spanContext().spanId)).size).toBe(
+        1,
+      );
+
+      const workflows = exporter
+        .getFinishedSpans()
+        .filter((span) => span.name === "Workflow");
+      expect(workflows).toHaveLength(2);
+      expect(
+        new Set(workflows.map((span) => span.parentSpanContext?.spanId)).size,
+      ).toBe(1);
     });
 
     it("does NOT parent Invocation onto a same-trace ambient span whose sampled bit differs from the execution ancestor", async () => {
