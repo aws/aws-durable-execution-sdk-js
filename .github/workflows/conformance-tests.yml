@@ -40,7 +40,8 @@ jobs:
     # 1. Run for non-PR events, such as scheduled runs and manual invocations
     # 2. For PRs, run only same-repo branches from non-Dependabot actors; forked PRs or Dependabot should not access secrets.
     if: github.event_name != 'pull_request' || (github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: ubuntu-latest
+    runs-on:
+      - codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
     outputs:
       suites: ${{ steps.discover.outputs.suites }}
     steps:
@@ -54,7 +55,11 @@ jobs:
   conformance:
     name: conformance (${{ matrix.suite }})
     needs: discover_suites
-    runs-on: ubuntu-latest
+    # CodeBuild-hosted runner in the JS testing account (Lambda compute, 8 GB,
+    # nodejs24 image). Each matrix entry gets its own runner; the label must
+    # match the CodeBuild project name exactly.
+    runs-on:
+      - codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
     # Global lock per suite stack: runs from different branches/PRs share the
     # persistent conformance-js-<suite> stacks, so deploys to the same stack
     # must never overlap. Queued (not cancelled) so every run still executes.
@@ -89,12 +94,16 @@ jobs:
         run: npm run build # rollup -> dist/<handler>.js
 
       - name: Setup Python
-        uses: actions/setup-python@v7
+        # The runner image is Amazon Linux; actions/setup-python only ships
+        # Ubuntu builds, so uv provides the Python 3.14 the conformance runner
+        # requires and activates a venv for the steps below.
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           python-version: "3.14"
+          activate-environment: true
 
       - name: Install conformance runner
-        run: pip install "git+https://github.com/aws/aws-durable-execution-conformance-tests.git@main#subdirectory=packages/aws-durable-execution-conformance-tests"
+        run: uv pip install "git+https://github.com/aws/aws-durable-execution-conformance-tests.git@main#subdirectory=packages/aws-durable-execution-conformance-tests"
 
       - name: Get AWS Credentials
         uses: aws-actions/configure-aws-credentials@v6
