@@ -6,6 +6,7 @@ import { ExampleConfig } from "../../../types";
 import { log } from "../../../utils/logger";
 
 export const config: ExampleConfig = {
+  capacityProviderConfig: {},
   name: "Create Callback",
   description: "Creating a callback ID for external systems to use",
 };

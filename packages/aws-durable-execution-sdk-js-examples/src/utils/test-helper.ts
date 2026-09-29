@@ -11,6 +11,7 @@ import {
 } from "@aws/durable-execution-sdk-js-testing";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
+import { sharedLmi } from "./shared-lmi";
 
 export interface FunctionNameMap {
   getFunctionName(functionName: string): string;
@@ -279,6 +280,7 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
     };
 
     describe(`${parsedFunctionName} (cloud)`, () => {
+      const shared = sharedLmi(runnerParams.client, parsedFunctionName);
       const runner = new CloudDurableTestRunner<ResultType>({
         ...runnerParams,
         functionName,
@@ -291,11 +293,15 @@ export function createTests<ResultType>(testDef: TestDefinition<ResultType>) {
         : undefined;
 
       beforeEach(() => {
+        shared?.before();
         // TODO: fix the testing library to allow the same runner to run multiple times on the same handler
         // instead of needing to reset the operation storage
         runner.reset();
       });
 
+      afterEach(async () => {
+        await shared?.after();
+      }, 180000);
       testDef.tests(runner, testHelper);
       if (capacityProviderRunner) {
         describe("using a capacity provider", () => {
