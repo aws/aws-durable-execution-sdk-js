@@ -8,5 +8,6 @@ const defaultPreset = createDefaultPreset({
 export default {
   ...defaultPreset,
   testMatch: ["**/__tests__/**/*.test.ts"],
+  setupFiles: ["<rootDir>/jest.setup.mjs"],
   coverageReporters: ["cobertura", "html", "text"],
 };
