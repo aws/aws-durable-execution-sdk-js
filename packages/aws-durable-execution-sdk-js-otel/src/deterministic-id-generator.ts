@@ -201,27 +201,3 @@ export function deriveExecutionRootSpanId(executionArn: string): string {
 
   return spanId;
 }
-
-/**
- * Derive one deterministic synthetic-root span ID for a propagated trace.
- * Multiple durable executions can share one propagated Root, so the trace ID,
- * not an execution ARN, is the identity boundary in that fallback case.
- */
-export function deriveTraceRootSpanId(traceId: string): string {
-  if (
-    traceId.length !== 32 ||
-    !/^[0-9a-f]{32}$/.test(traceId) ||
-    traceId === "0".repeat(32)
-  ) {
-    throw new Error(
-      "Trace ID must be a valid non-zero 32-character hex string",
-    );
-  }
-
-  const spanId = createHash("sha256")
-    .update("trace-root:" + traceId)
-    .digest("hex")
-    .slice(0, 16);
-
-  return spanId === "0000000000000000" ? "0000000000000001" : spanId;
-}

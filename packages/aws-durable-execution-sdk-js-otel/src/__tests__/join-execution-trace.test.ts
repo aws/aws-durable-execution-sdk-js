@@ -6,6 +6,7 @@ import {
   AlwaysOnSampler,
 } from "@opentelemetry/sdk-trace-node";
 import { context, trace, propagation, ROOT_CONTEXT } from "@opentelemetry/api";
+import { resourceFromAttributes } from "@opentelemetry/resources";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
 import type {
   InvocationInfo,
@@ -235,18 +236,43 @@ describe("Execution trace joining", () => {
       await dropProvider?.shutdown();
     });
 
-    it("uses one distinct root identity for executions sharing a propagated Root", async () => {
+    it("keeps execution-owned synthetic roots unique across different resources when executions share a propagated Root", async () => {
       const sharedTraceId = "8".repeat(32);
       const targetArn = `${TEST_ARN}-target`;
-      const config = {
+      const targetStart = new Date(TEST_START.getTime() + 60_000);
+      const firstExporter = new InMemorySpanExporter();
+      const secondExporter = new InMemorySpanExporter();
+      let firstProvider: NodeTracerProvider | undefined;
+      let secondProvider: NodeTracerProvider | undefined;
+
+      const first = makePlugin({
+        tracerProviderFactory: (createIdGenerator) => {
+          firstProvider = new NodeTracerProvider({
+            resource: resourceFromAttributes({ "service.name": "caller" }),
+            spanProcessors: [new SimpleSpanProcessor(firstExporter)],
+            idGenerator: createIdGenerator(),
+          });
+          return firstProvider;
+        },
         contextExtractor: () => ({
           traceId: sharedTraceId,
           sampling: "SAMPLED" as const,
         }),
-      };
-
-      const first = makePlugin(config);
-      const second = makePlugin(config);
+      });
+      const second = makePlugin({
+        tracerProviderFactory: (createIdGenerator) => {
+          secondProvider = new NodeTracerProvider({
+            resource: resourceFromAttributes({ "service.name": "callee" }),
+            spanProcessors: [new SimpleSpanProcessor(secondExporter)],
+            idGenerator: createIdGenerator(),
+          });
+          return secondProvider;
+        },
+        contextExtractor: () => ({
+          traceId: sharedTraceId,
+          sampling: "SAMPLED" as const,
+        }),
+      });
 
       await first.onInvocationStart(makeInvocationInfo());
       await first.onInvocationEnd(makeInvocationEndInfo());
@@ -254,30 +280,57 @@ describe("Execution trace joining", () => {
         makeInvocationInfo({
           executionArn: targetArn,
           requestId: "req-target",
+          executionStartTimestamp: targetStart,
         }),
       );
       await second.onInvocationEnd(
         makeInvocationEndInfo({
           executionArn: targetArn,
           requestId: "req-target",
+          executionStartTimestamp: targetStart,
         }),
       );
 
-      const roots = exporter
+      const firstRoot = firstExporter
         .getFinishedSpans()
-        .filter((span) => span.name === "DurableExecutionRoot");
-      expect(roots.length).toBeGreaterThanOrEqual(1);
-      expect(new Set(roots.map((span) => span.spanContext().spanId)).size).toBe(
-        1,
+        .find((span) => span.name === "DurableExecutionRoot");
+      const secondRoot = secondExporter
+        .getFinishedSpans()
+        .find((span) => span.name === "DurableExecutionRoot");
+      expect(firstRoot).toBeDefined();
+      expect(secondRoot).toBeDefined();
+      expect(firstRoot!.spanContext().traceId).toBe(sharedTraceId);
+      expect(secondRoot!.spanContext().traceId).toBe(sharedTraceId);
+      expect(firstRoot!.spanContext().spanId).not.toBe(
+        secondRoot!.spanContext().spanId,
+      );
+      expect(
+        new Set([
+          `${firstRoot!.spanContext().traceId}:${firstRoot!.spanContext().spanId}`,
+          `${secondRoot!.spanContext().traceId}:${secondRoot!.spanContext().spanId}`,
+        ]).size,
+      ).toBe(2);
+      expect(firstRoot!.startTime.join(":")).not.toBe(
+        secondRoot!.startTime.join(":"),
+      );
+      expect(firstRoot!.resource.attributes["service.name"]).toBe("caller");
+      expect(secondRoot!.resource.attributes["service.name"]).toBe("callee");
+
+      const firstWorkflow = firstExporter
+        .getFinishedSpans()
+        .find((span) => span.name === "Workflow");
+      const secondWorkflow = secondExporter
+        .getFinishedSpans()
+        .find((span) => span.name === "Workflow");
+      expect(firstWorkflow?.parentSpanContext?.spanId).toBe(
+        firstRoot!.spanContext().spanId,
+      );
+      expect(secondWorkflow?.parentSpanContext?.spanId).toBe(
+        secondRoot!.spanContext().spanId,
       );
 
-      const workflows = exporter
-        .getFinishedSpans()
-        .filter((span) => span.name === "Workflow");
-      expect(workflows).toHaveLength(2);
-      expect(
-        new Set(workflows.map((span) => span.parentSpanContext?.spanId)).size,
-      ).toBe(1);
+      await firstProvider?.shutdown();
+      await secondProvider?.shutdown();
     });
 
     it("does NOT parent Invocation onto a same-trace ambient span whose sampled bit differs from the execution ancestor", async () => {

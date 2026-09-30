@@ -4,7 +4,6 @@ import { SamplingDecision } from "@opentelemetry/sdk-trace-node";
 import {
   deriveTraceIdFromArn,
   deriveExecutionRootSpanId,
-  deriveTraceRootSpanId,
 } from "./deterministic-id-generator";
 import {
   hasCompleteRemoteParent,
@@ -55,8 +54,10 @@ export interface ExecutionTraceEnvironment {
  * remote parent left unsampled would make a parent-based sampler drop every
  * child span.
  *
- * The ancestor is a non-recording context: it is either the external backend
- * server span or a synthetic root the SDK does not export.
+ * The ancestor is a non-recording context used to force deterministic
+ * parenting. It is either the external backend server span or an SDK-owned
+ * synthetic root whose recording counterpart is materialized by the plugins
+ * for sampled fallback traces.
  */
 export interface ExecutionTraceContext {
   /** The common parent context for the Workflow and Invocation spans. */
@@ -200,13 +201,12 @@ export function resolveExecutionTraceContext(
   const samplingContext = hasValidTraceId(extracted) ? extracted : undefined;
   const decision = explicitDecision(samplingContext, rootSamplingDecision);
   const flags = traceFlagsFromDecision(decision);
-  // A valid propagated Root can be shared by chained executions. In that
-  // case root identity belongs to the trace, otherwise each execution would
-  // invent a distinct root on the same trace. Without a valid propagated Root,
-  // the canonical trace is execution-local, so preserve the ARN-scoped identity.
-  const syntheticRootSpanId = hasValidTraceId(extracted)
-    ? deriveTraceRootSpanId(canonical)
-    : deriveExecutionRootSpanId(executionArn);
+  // This synthetic root is created and exported by one durable execution,
+  // so its span identity must remain owned by that execution. Multiple
+  // executions may legitimately share a propagated trace ID, but reusing one
+  // span ID across independently timed/resource-scoped roots would create
+  // conflicting OpenTelemetry span identities.
+  const syntheticRootSpanId = deriveExecutionRootSpanId(executionArn);
   const syntheticRoot: SpanContext = {
     traceId: canonical,
     spanId: syntheticRootSpanId,

@@ -16,7 +16,6 @@ import { deriveExecutionTraceId } from "../index";
 import {
   deriveTraceIdFromArn,
   deriveExecutionRootSpanId,
-  deriveTraceRootSpanId,
 } from "../deterministic-id-generator";
 import type { ContextExtractorResult } from "../context-extractors";
 
@@ -209,7 +208,7 @@ describe("resolveExecutionTraceContext", () => {
 
     expect(execCtx.executionAncestor.traceId).toBe(REMOTE_TRACE_ID);
     expect(execCtx.executionAncestor.spanId).toBe(
-      deriveTraceRootSpanId(REMOTE_TRACE_ID),
+      deriveExecutionRootSpanId(ARN),
     );
   });
 
@@ -326,7 +325,7 @@ describe("resolveExecutionTraceContext", () => {
 
     expect(execCtx.executionAncestor.traceId).toBe(REMOTE_TRACE_ID);
     expect(execCtx.executionAncestor.spanId).toBe(
-      deriveTraceRootSpanId(REMOTE_TRACE_ID),
+      deriveExecutionRootSpanId(ARN),
     );
     expect(execCtx.traceFlags & 1).toBe(1); // supplier decides for a synthetic root
   });
@@ -343,12 +342,12 @@ describe("resolveExecutionTraceContext", () => {
     );
 
     expect(execCtx.executionAncestor.spanId).toBe(
-      deriveTraceRootSpanId(REMOTE_TRACE_ID),
+      deriveExecutionRootSpanId(ARN),
     );
     expect(execCtx.traceFlags & 1).toBe(1);
   });
 
-  it("uses one synthetic root identity for executions sharing a propagated Root", () => {
+  it("keeps synthetic root identities execution-scoped when executions share a propagated Root", () => {
     const extracted = { traceId: REMOTE_TRACE_ID };
     const otherArn = `${ARN}:chained-child`;
     const first = resolveExecutionTraceContext(
@@ -364,10 +363,13 @@ describe("resolveExecutionTraceContext", () => {
       () => SamplingDecision.RECORD_AND_SAMPLED,
     );
 
-    expect(first.executionAncestor.spanId).toBe(
-      deriveTraceRootSpanId(REMOTE_TRACE_ID),
-    );
+    expect(first.executionAncestor.traceId).toBe(REMOTE_TRACE_ID);
+    expect(second.executionAncestor.traceId).toBe(REMOTE_TRACE_ID);
+    expect(first.executionAncestor.spanId).toBe(deriveExecutionRootSpanId(ARN));
     expect(second.executionAncestor.spanId).toBe(
+      deriveExecutionRootSpanId(otherArn),
+    );
+    expect(second.executionAncestor.spanId).not.toBe(
       first.executionAncestor.spanId,
     );
   });
