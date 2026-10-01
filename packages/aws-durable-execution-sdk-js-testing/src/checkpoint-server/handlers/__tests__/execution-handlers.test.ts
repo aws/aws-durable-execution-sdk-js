@@ -4,6 +4,8 @@ import {
   processStartDurableExecution,
   processStartInvocation,
   processCompleteInvocation,
+  processPauseDurableExecution,
+  processResumeDurableExecution,
 } from "../execution-handlers";
 import { ExecutionManager } from "../../storage/execution-manager";
 import {
@@ -170,6 +172,37 @@ describe("execution handlers", () => {
         event: mockEvent,
         hasDirtyOperations: false,
       });
+    });
+  });
+
+  describe("processPauseDurableExecution and processResumeDurableExecution", () => {
+    it("set and clear the execution's paused flag", () => {
+      const { executionId } = processStartDurableExecution(
+        { invocationId: createInvocationId() },
+        executionManager,
+      );
+      const storage = executionManager.getCheckpointsByExecution(executionId);
+
+      expect(
+        processPauseDurableExecution(executionId, executionManager),
+      ).toEqual({});
+      expect(storage?.isPaused()).toBe(true);
+
+      expect(
+        processResumeDurableExecution(executionId, executionManager),
+      ).toEqual({});
+      expect(storage?.isPaused()).toBe(false);
+    });
+
+    it("reject an unknown execution", () => {
+      const unknown = createExecutionId("no-such-execution");
+
+      expect(() =>
+        processPauseDurableExecution(unknown, executionManager),
+      ).toThrow("Execution not found");
+      expect(() =>
+        processResumeDurableExecution(unknown, executionManager),
+      ).toThrow("Execution not found");
     });
   });
 });

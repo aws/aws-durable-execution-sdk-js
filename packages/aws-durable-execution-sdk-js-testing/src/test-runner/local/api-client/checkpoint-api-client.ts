@@ -59,4 +59,14 @@ export interface CheckpointApiClient {
     invocationId: InvocationId,
     error: ErrorObject | undefined,
   ): Promise<CompleteInvocationResponse>;
+
+  /**
+   * Make the checkpoint server answer this execution's checkpoints without a token.
+   */
+  pauseExecution(executionId: ExecutionId): Promise<void>;
+
+  /**
+   * Make the checkpoint server answer this execution's checkpoints with a token again.
+   */
+  resumeExecution(executionId: ExecutionId): Promise<void>;
 }

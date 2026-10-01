@@ -9,4 +9,6 @@ export enum ApiType {
   SendDurableExecutionCallbackSuccess = "SendDurableExecutionCallbackSuccess",
   SendDurableExecutionCallbackFailure = "SendDurableExecutionCallbackFailure",
   SendDurableExecutionCallbackHeartbeat = "SendDurableExecutionCallbackHeartbeat",
+  PauseDurableExecution = "PauseDurableExecution",
+  ResumeDurableExecution = "ResumeDurableExecution",
 }

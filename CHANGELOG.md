@@ -7,6 +7,91 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- A checkpoint response carrying no `CheckpointToken` now ends the invocation cleanly with
+  `{Status: "PENDING"}`. Every response carries the token for the next call, so one without a token
+  withdraws the invocation's ability to record anything further — for instance because a newer
+  invocation has taken the execution over. The checkpoint manager previously ignored the omission,
+  kept the token it had just spent and presented it again on the next call, which the service
+  rejects with `InvalidParameterValueException: Invalid checkpoint token`. That is classified as an
+  invocation error, so a condition the SDK could recognise ended the invocation with a Lambda error
+  one call later.
+
+  Whatever the SDK had not yet sent is abandoned rather than checkpointed, and replays on the next
+  invocation. This is the defined behaviour for `AT_LEAST_ONCE` operations; an `AT_MOST_ONCE` step
+  whose START reached the last accepted checkpoint will not run again, which is what `AT_MOST_ONCE`
+  means. The `NewExecutionState` on the token-less response is deliberately not applied, and the
+  callers of the accepted checkpoint are not resolved: either would let the handler run on past the
+  point where the service can be told anything — starting its next step, or reaching a result that
+  is never recorded. The one exception is a checkpoint carrying the execution's own terminal update
+  (the oversized-result path), which finishes the execution and so still reports `SUCCEEDED`.
+
+  The same applies when the handler has already returned or thrown while a checkpoint it did not
+  await is still in flight, for example from the unfinished branches of a `map` or `parallel` with
+  early completion. If that checkpoint is answered without a token, the invocation answers
+  `PENDING` rather than `SUCCEEDED` or `FAILED`, because the service will not record that outcome.
+  A `PENDING` that follows a handler error carries that error to plugins, which report no outcome
+  to the service in any case.
+
+  The condition is logged at `WARN` rather than passing silently, since an absent token is
+  indistinguishable from a client that dropped the field.
+
+  New internal termination reason `EXECUTION_SUSPENDED_BY_SERVICE`, classified as a suspend. The
+  SDK's set of invocation responses is unchanged.
+
+### Fixed
+
+- An oversized result could keep the invocation running until the Lambda timeout. The SDK
+  checkpoints a result over the response size limit after the handler returns, and waited for
+  that checkpoint alone. When an earlier checkpoint in the queue failed, or was answered without a
+  token, the checkpoint manager cleared the queue without sending the result, so the wait never
+  ended. The manager now reports whether it sent that update. An update it never sent answers from
+  the termination: a failed checkpoint throws its classified error, and a withdrawn token answers
+  `PENDING`. An update the service accepted still reports `SUCCEEDED`, even when a termination
+  arrived while it was in flight, because the execution is then recorded as finished.
+
+- An invocation could report an outcome the service had already refused to record. Every exit that
+  reports `SUCCEEDED` or `FAILED` now consults the termination and the token state first, so these
+  cases agree rather than depending on which exit was taken:
+  - A checkpoint that failed after the handler returned answered `SUCCEEDED` for a small result and
+    threw for an oversized one. Both now throw the classified error.
+  - A serdes failure during the oversized-result path threw a plain `Error` instead of
+    `SerdesFailedError`, so the execution failed for good rather than the invocation being retried.
+  - A fault termination followed by a withdrawn token answered `FAILED`. It now answers `PENDING`.
+  - An unrecoverable invocation error was rethrown after the token was withdrawn, so Lambda retried
+    with a token the service had already rejected. It now answers `PENDING`.
+
+### Added
+
+- `LocalDurableTestRunner` gains `pauseExecution()` and `resumeExecution()`, **experimental**, to
+  test a handler
+  against the suspend path above. Pausing answers the running invocation's next checkpoint
+  without a `CheckpointToken` — that checkpoint is kept, and the invocation returns `PENDING` —
+  and starts no further invocation until resumed. Waits keep elapsing and callbacks can still be
+  sent while paused; the invocations they would start are held back, and `resumeExecution()`
+  starts one if anything is left to continue. `pauseExecution()` resolves once no invocation is
+  running, so assertions after it see a quiet execution. Both act on the execution `run()` has
+  in progress, so call `run()` first without awaiting it, and resume before awaiting it.
+
+  Both are also on the `DurableTestRunner` interface, so a test written against it compiles for
+  either runner; `CloudDurableTestRunner` rejects both as not implemented for now.
+
+- `StepConfig.subType` and `CreateCallbackConfig.subType` label a step or a callback with a custom
+  subtype, as `ChildConfig.subType` already does for child contexts. The subtype is recorded on
+  the operation's checkpoint and passed to plugin events. It replaces the default `Step` or
+  `Callback` subtype. So history tools can tell the parts of a composed operation apart without
+  parsing names. Replay compares the subtype, and a replayed operation whose subtype changed
+  terminates as non-deterministic. A step with a custom subtype that waits for a retry still
+  suspends the invocation with `RETRY_SCHEDULED`.
+
+- The testing SDK's local checkpoint server validates `SubType` as the service does. A subtype
+  must have 1 to 32 characters from `[a-zA-Z0-9-_]`. An invalid subtype rejects the whole
+  checkpoint request with HTTP 400 `ValidationException`, with the service's message. So a test
+  with an invalid subtype fails the same way as an execution in AWS. Errors from the local
+  checkpoint server now keep their `name` and `$metadata` across the worker thread, so the SDK
+  classifies them as it classifies the service's errors.
+
 ## [2.3.1]
 
 ### Fixed

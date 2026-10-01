@@ -113,6 +113,8 @@ beforeEach(() => {
   (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
     checkpoint: jest.fn().mockResolvedValue(undefined),
     setTerminating: jest.fn(),
+    isCheckpointTokenRevoked: jest.fn().mockReturnValue(false),
+    checkpointExecutionResult: jest.fn().mockResolvedValue("sent"),
     dispose: jest.fn(),
     waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
   }));

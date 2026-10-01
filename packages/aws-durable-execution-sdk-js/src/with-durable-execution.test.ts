@@ -81,6 +81,8 @@ describe("withDurableExecution", () => {
     (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
       checkpoint: jest.fn().mockResolvedValue(undefined),
       setTerminating: jest.fn(),
+      isCheckpointTokenRevoked: jest.fn().mockReturnValue(false),
+      checkpointExecutionResult: jest.fn().mockResolvedValue("sent"),
       dispose: jest.fn(),
       waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
     }));
@@ -100,6 +102,8 @@ describe("withDurableExecution", () => {
     (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
       checkpoint: jest.fn().mockResolvedValue(undefined),
       setTerminating: jest.fn(),
+      isCheckpointTokenRevoked: jest.fn().mockReturnValue(false),
+      checkpointExecutionResult: jest.fn().mockResolvedValue("sent"),
       dispose,
       waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
     }));
@@ -120,6 +124,8 @@ describe("withDurableExecution", () => {
     (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
       checkpoint: jest.fn().mockResolvedValue(undefined),
       setTerminating: jest.fn(),
+      isCheckpointTokenRevoked: jest.fn().mockReturnValue(false),
+      checkpointExecutionResult: jest.fn().mockResolvedValue("sent"),
       dispose,
       waitForQueueCompletion: jest.fn().mockResolvedValue(undefined),
     }));
@@ -555,15 +561,22 @@ describe("withDurableExecution", () => {
     );
 
     // Mock CheckpointManager to fail on checkpoint
+    // The real manager does not reject the result checkpoint on a failure: it terminates with
+    // CHECKPOINT_FAILED and reports the update as abandoned. The classified error then comes
+    // from the termination, which is what this mock reproduces.
     (CheckpointManager as unknown as jest.Mock).mockImplementation(() => ({
       checkpoint: jest.fn().mockRejectedValue(checkpointError),
       setTerminating: jest.fn(),
+      isCheckpointTokenRevoked: jest.fn().mockReturnValue(false),
+      checkpointExecutionResult: jest.fn().mockResolvedValue("abandoned"),
       dispose: jest.fn(),
     }));
 
-    mockTerminationManager.getTerminationPromise.mockReturnValue(
-      new Promise(() => {}),
-    );
+    mockTerminationManager.getTerminationPromise.mockResolvedValue({
+      reason: TerminationReason.CHECKPOINT_FAILED,
+      message: checkpointError.message,
+      error: checkpointError,
+    });
 
     // Execute & Verify
     const wrappedHandler = withDurableExecution(mockHandler);

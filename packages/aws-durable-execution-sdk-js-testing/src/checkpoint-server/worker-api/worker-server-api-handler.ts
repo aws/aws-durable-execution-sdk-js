@@ -2,6 +2,8 @@ import { WorkerApiRequestMessage } from "./worker-api-request";
 import { ApiType } from "./worker-api-types";
 import {
   processCompleteInvocation,
+  processPauseDurableExecution,
+  processResumeDurableExecution,
   processStartDurableExecution,
   processStartInvocation,
 } from "../handlers/execution-handlers";
@@ -55,6 +57,16 @@ export class WorkerServerApiHandler {
         );
       case ApiType.PollCheckpointData:
         return processPollCheckpointData(
+          data.params.executionId,
+          this.executionManager,
+        );
+      case ApiType.PauseDurableExecution:
+        return processPauseDurableExecution(
+          data.params.executionId,
+          this.executionManager,
+        );
+      case ApiType.ResumeDurableExecution:
+        return processResumeDurableExecution(
           data.params.executionId,
           this.executionManager,
         );

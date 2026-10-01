@@ -39,6 +39,13 @@ export class CheckpointManager {
   private _isExecutionCompleted = false;
 
   /**
+   * Whether the test has paused this execution. While set, every checkpoint is accepted
+   * but answered without a `CheckpointToken`, which is how the service tells an invocation
+   * it may checkpoint no further. See {@link pause}.
+   */
+  private _isPaused = false;
+
+  /**
    * Id of the execution's own EXECUTION-typed operation, assigned in
    * {@link initialize}.
    *
@@ -65,6 +72,23 @@ export class CheckpointManager {
 
   hasDirtyOperations(): boolean {
     return !!this.dirtyOperationIds.size;
+  }
+
+  /**
+   * Pauses the execution. The invocation running now, if any, is answered without a token
+   * on its next checkpoint, which makes the SDK suspend it with PENDING. Starting no further
+   * invocations until {@link resume} is the orchestrator's half of pausing, not this one's.
+   */
+  pause(): void {
+    this._isPaused = true;
+  }
+
+  resume(): void {
+    this._isPaused = false;
+  }
+
+  isPaused(): boolean {
+    return this._isPaused;
   }
 
   getDirtyOperations(): Operation[] {
