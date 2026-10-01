@@ -263,6 +263,28 @@ const results = await context.promise.allSettled([operation1(), operation2()]);
 
 **Note**: Promise combinators accept already-executing promises and cannot provide concurrency control or durability. Use `map()` or `parallel()` for durable, controlled execution.
 
+## Operation Subtypes
+
+`runInChildContext`, `step`, and `createCallback` accept a `subType` option. A function that composes several operations can use it to label its parts. The SDK records the subtype in the checkpoint and passes it to plugins. So execution history and plugins can filter the parts without parsing names.
+
+```typescript
+ctx.runInChildContext(
+  name,
+  async (child) => {
+    const receipt = await child.step("charge", async () => charge(orderId), {
+      subType: "OrderCharge",
+    });
+    await child.step("notify", async () => notify(receipt), {
+      subType: "OrderNotify",
+    });
+    return receipt;
+  },
+  { subType: "ChargeAndNotify" },
+);
+```
+
+The service accepts 1 to 32 characters from `[a-zA-Z0-9-_]`. An empty string selects the default subtype, such as `Step` or `Callback`. Replay compares the subtype with the checkpoint. So changing a subtype is a breaking change for executions in flight.
+
 ## Configuration
 
 ### Dynamic Instrumentation Plugins

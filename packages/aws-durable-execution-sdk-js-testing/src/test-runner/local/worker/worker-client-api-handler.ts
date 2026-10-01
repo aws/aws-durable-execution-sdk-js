@@ -11,6 +11,7 @@ import {
 import { randomUUID } from "node:crypto";
 import { WorkerCommandType } from "../../../checkpoint-server/worker/worker-message-types";
 import { defaultLogger } from "../../../logger";
+import { deserializeWorkerApiError } from "../../../checkpoint-server/worker-api/worker-api-error";
 
 export interface ApiCallHandler<TResult> {
   readonly reject: (err: unknown) => void;
@@ -53,7 +54,7 @@ export class WorkerClientApiHandler {
     apiMap.delete(apiResponse.requestId);
 
     if ("error" in apiResponse) {
-      handler.reject(apiResponse.error);
+      handler.reject(deserializeWorkerApiError(apiResponse.error));
       return;
     }
 

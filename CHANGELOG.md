@@ -77,6 +77,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Both are also on the `DurableTestRunner` interface, so a test written against it compiles for
   either runner; `CloudDurableTestRunner` rejects both as not implemented for now.
 
+- `StepConfig.subType` and `CreateCallbackConfig.subType` label a step or a callback with a custom
+  subtype, as `ChildConfig.subType` already does for child contexts. The subtype is recorded on
+  the operation's checkpoint and passed to plugin events. It replaces the default `Step` or
+  `Callback` subtype. So history tools can tell the parts of a composed operation apart without
+  parsing names. Replay compares the subtype, and a replayed operation whose subtype changed
+  terminates as non-deterministic. A step with a custom subtype that waits for a retry still
+  suspends the invocation with `RETRY_SCHEDULED`.
+
+- The testing SDK's local checkpoint server validates `SubType` as the service does. A subtype
+  must have 1 to 32 characters from `[a-zA-Z0-9-_]`. An invalid subtype rejects the whole
+  checkpoint request with HTTP 400 `ValidationException`, with the service's message. So a test
+  with an invalid subtype fails the same way as an execution in AWS. Errors from the local
+  checkpoint server now keep their `name` and `$metadata` across the worker thread, so the SDK
+  classifies them as it classifies the service's errors.
+
 ## [2.3.1]
 
 ### Fixed
