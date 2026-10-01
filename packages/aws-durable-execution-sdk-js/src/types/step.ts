@@ -115,6 +115,19 @@ export interface StepConfig<T> {
   semantics?: StepSemantics;
   /** Serialization/deserialization configuration for step data */
   serdes?: Serdes<T>;
+  /**
+   * Subtype recorded in the checkpoint, in replay validation, and in plugin
+   * events. The default is `"Step"`.
+   *
+   * A custom operation built from steps uses this to label its steps, so
+   * history and plugins can filter them without parsing names. The service
+   * accepts 1 to 32 characters from `[a-zA-Z0-9-_]`. An empty string selects
+   * the default.
+   *
+   * Replay compares the subtype with the checkpoint. So changing the subtype
+   * of an existing step is a breaking change for executions in flight.
+   */
+  subType?: string;
 }
 
 /**

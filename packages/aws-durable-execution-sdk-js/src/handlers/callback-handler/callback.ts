@@ -58,6 +58,10 @@ export const createCallback = (
     }
 
     const stepId = createStepId();
+    // A custom subtype labels callbacks of a custom operation. It is typed as
+    // OperationSubType, like ChildConfig.subType in the child context handler.
+    const subType =
+      (config?.subType as OperationSubType) || OperationSubType.CALLBACK;
     const serdes =
       config?.serdes ||
       (getDefaultCallbackDeserializer
@@ -68,7 +72,7 @@ export const createCallback = (
       id: hashId(stepId),
       name: pluginOperationName ?? name,
       type: OperationType.CALLBACK,
-      subType: OperationSubType.CALLBACK,
+      subType,
       parentId: parentId ? hashId(parentId) : undefined,
     };
 
@@ -86,7 +90,7 @@ export const createCallback = (
         {
           type: OperationType.CALLBACK,
           name,
-          subType: OperationSubType.CALLBACK,
+          subType,
         },
         stepData,
         context,
@@ -105,7 +109,7 @@ export const createCallback = (
               stepId,
               name,
               type: OperationType.CALLBACK,
-              subType: OperationSubType.CALLBACK,
+              subType,
               parentId,
             },
           },
@@ -140,7 +144,7 @@ export const createCallback = (
               stepId,
               name,
               type: OperationType.CALLBACK,
-              subType: OperationSubType.CALLBACK,
+              subType,
               parentId,
             },
           },
@@ -165,7 +169,7 @@ export const createCallback = (
           Id: stepId,
           ParentId: parentId,
           Action: "START",
-          SubType: OperationSubType.CALLBACK,
+          SubType: subType,
           Type: OperationType.CALLBACK,
           Name: name,
           CallbackOptions: {
@@ -198,7 +202,7 @@ export const createCallback = (
             stepId,
             name,
             type: OperationType.CALLBACK,
-            subType: OperationSubType.CALLBACK,
+            subType,
             parentId,
           },
         },

@@ -845,6 +845,28 @@ describe("CheckpointManager - Centralized Termination", () => {
         reason: TerminationReason.CALLBACK_PENDING,
       });
     });
+
+    // The retry check keys on the operation type. So a step with a custom
+    // subtype still ends the invocation as a scheduled retry.
+    it("should use RETRY_SCHEDULED for a retrying step with a custom subtype", () => {
+      checkpointManager.markOperationState(
+        "step-1",
+        OperationLifecycleState.RETRY_WAITING,
+        {
+          metadata: {
+            stepId: "step-1",
+            type: OperationType.STEP,
+            subType: "OrderCharge" as OperationSubType,
+          },
+        },
+      );
+
+      jest.advanceTimersByTime(200);
+
+      expect(mockTerminationManager.terminate).toHaveBeenCalledWith({
+        reason: TerminationReason.RETRY_SCHEDULED,
+      });
+    });
   });
 
   describe("getAllOperations", () => {
