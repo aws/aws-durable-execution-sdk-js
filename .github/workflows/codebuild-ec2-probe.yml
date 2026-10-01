@@ -1,0 +1,75 @@
+name: CodeBuild EC2 probe
+
+# Temporary probe: verifies that a job can override the Lambda-compute runner
+# project onto EC2 compute via runs-on labels, and records what the EC2
+# environment offers (root, docker, tools, Lambda env vars). Not for merge.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/codebuild-ec2-probe.yml
+
+permissions: {}
+
+jobs:
+  lambda-baseline:
+    name: baseline (lambda, project default)
+    runs-on:
+      - codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Probe environment
+        run: |
+          echo "started_at=$(date -u +%FT%TZ)"
+          echo "uname: $(uname -a)"
+          echo "user: $(id)"
+          sudo -n true 2>/dev/null && echo "sudo: yes" || echo "sudo: no"
+          command -v docker >/dev/null && (docker info >/dev/null 2>&1 && echo "docker: usable" || echo "docker: present, daemon unusable") || echo "docker: absent"
+          for t in gh jq git node python3 java go aws curl; do printf '%s: ' "$t"; command -v "$t" >/dev/null && echo yes || echo no; done
+          echo "_X_AMZN_TRACE_ID set: $([ -n "${_X_AMZN_TRACE_ID:-}" ] && echo yes || echo no)"
+          echo "AWS_LAMBDA_FUNCTION_NAME set: $([ -n "${AWS_LAMBDA_FUNCTION_NAME:-}" ] && echo yes || echo no)"
+          echo "AWS_REGION=${AWS_REGION:-unset}"
+          echo "nproc=$(nproc) mem=$(free -g 2>/dev/null | awk '/Mem/ {print $2"G"}')"
+          echo "writable_home: $(touch "$HOME/.probe" 2>/dev/null && echo yes || echo no)"
+
+  ec2-ubuntu:
+    name: ec2 (ubuntu-7.0 small)
+    runs-on:
+      - codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
+        image:ubuntu-7.0
+        instance-size:small
+    steps:
+      - name: Probe environment
+        run: |
+          echo "started_at=$(date -u +%FT%TZ)"
+          echo "uname: $(uname -a)"
+          echo "user: $(id)"
+          sudo -n true 2>/dev/null && echo "sudo: yes" || echo "sudo: no"
+          command -v docker >/dev/null && (docker info >/dev/null 2>&1 && echo "docker: usable" || echo "docker: present, daemon unusable") || echo "docker: absent"
+          for t in gh jq git node python3 java go aws curl; do printf '%s: ' "$t"; command -v "$t" >/dev/null && echo yes || echo no; done
+          echo "_X_AMZN_TRACE_ID set: $([ -n "${_X_AMZN_TRACE_ID:-}" ] && echo yes || echo no)"
+          echo "AWS_LAMBDA_FUNCTION_NAME set: $([ -n "${AWS_LAMBDA_FUNCTION_NAME:-}" ] && echo yes || echo no)"
+          echo "AWS_REGION=${AWS_REGION:-unset}"
+          echo "nproc=$(nproc) mem=$(free -g 2>/dev/null | awk '/Mem/ {print $2"G"}')"
+          echo "writable_home: $(touch "$HOME/.probe" 2>/dev/null && echo yes || echo no)"
+
+  ec2-al2023:
+    name: ec2 (linux-5.0 small)
+    runs-on:
+      - codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
+        image:linux-5.0
+        instance-size:small
+    steps:
+      - name: Probe environment
+        run: |
+          echo "started_at=$(date -u +%FT%TZ)"
+          echo "uname: $(uname -a)"
+          echo "user: $(id)"
+          sudo -n true 2>/dev/null && echo "sudo: yes" || echo "sudo: no"
+          command -v docker >/dev/null && (docker info >/dev/null 2>&1 && echo "docker: usable" || echo "docker: present, daemon unusable") || echo "docker: absent"
+          for t in gh jq git node python3 java go aws curl; do printf '%s: ' "$t"; command -v "$t" >/dev/null && echo yes || echo no; done
+          echo "_X_AMZN_TRACE_ID set: $([ -n "${_X_AMZN_TRACE_ID:-}" ] && echo yes || echo no)"
+          echo "AWS_LAMBDA_FUNCTION_NAME set: $([ -n "${AWS_LAMBDA_FUNCTION_NAME:-}" ] && echo yes || echo no)"
+          echo "AWS_REGION=${AWS_REGION:-unset}"
+          echo "nproc=$(nproc) mem=$(free -g 2>/dev/null | awk '/Mem/ {print $2"G"}')"
+          echo "writable_home: $(touch "$HOME/.probe" 2>/dev/null && echo yes || echo no)"
