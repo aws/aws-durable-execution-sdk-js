@@ -31,10 +31,90 @@ export const DEFAULT_REQUEST_RETRY_WINDOW_MS = 60_000;
  */
 export const INVOCATION_RESERVE_MS = 10_000;
 
+/**
+ * A call that would start with less than this much time before the reserve
+ * is not started. A shorter call is unlikely to finish, and the step retries
+ * the job in a later invocation anyway.
+ */
+const MIN_CALL_MS = 1_000;
+
 const INITIAL_DELAY_MS = 250;
 const MAX_DELAY_MS = 4_000;
 const REQUEST_TIMEOUT_MS = 10_000;
 const AUTH_TOKEN_MINUTES = 5;
+
+/**
+ * Returns the time by which every call of the first tier must end: the
+ * start of the invocation reserve. Returns `undefined` when the compute
+ * reports no deadline.
+ *
+ * A Lambda timeout during a step attempt records no outcome for the attempt.
+ * So the reserve is a hard limit. A call that is still running at the reserve
+ * uses the time that the step needs to throw and to checkpoint.
+ */
+export function reserveStartsAt(
+  remainingTimeMs: (() => number | undefined) | undefined,
+): number | undefined {
+  const remaining = remainingTimeMs?.();
+  // remainingTime() already turns a value that is not a finite number into
+  // undefined. This check also covers a caller that passes its own reader.
+  return remaining === undefined || !Number.isFinite(remaining)
+    ? undefined
+    : Date.now() + remaining - INVOCATION_RESERVE_MS;
+}
+
+/**
+ * Returns how long the next call may run: at most `capMs`, and never past
+ * `hardDeadline`. Throws the result of `onExpired` when less than
+ * {@link MIN_CALL_MS} remains before `hardDeadline`.
+ */
+function callBudgetMs(
+  hardDeadline: number | undefined,
+  capMs: number,
+  onExpired: () => Error,
+): number {
+  if (hardDeadline === undefined) {
+    return capMs;
+  }
+  const left = hardDeadline - Date.now();
+  if (left < MIN_CALL_MS) {
+    throw onExpired();
+  }
+  return Math.min(capMs, left);
+}
+
+/**
+ * Runs one AWS SDK call that must end before `hardDeadline`.
+ *
+ * 1. Without a deadline, the call runs with the client's own settings.
+ * 2. With a deadline, the call gets an abort signal that fires at the
+ *    deadline. The signal also stops the AWS SDK's own retries of the call.
+ * 3. An aborted call throws the result of `onExpired`. That error is
+ *    retryable, so the step retries the job in a later invocation. The
+ *    AWS SDK's `AbortError` is not retryable, so it is not rethrown.
+ *
+ * @internal
+ */
+export async function callBeforeDeadline<T>(
+  call: (options: { abortSignal?: AbortSignal }) => Promise<T>,
+  hardDeadline: number | undefined,
+  onExpired: () => Error,
+): Promise<T> {
+  if (hardDeadline === undefined) {
+    return call({});
+  }
+  const signal = AbortSignal.timeout(
+    callBudgetMs(hardDeadline, Number.MAX_SAFE_INTEGER, onExpired),
+  );
+  try {
+    return await call({ abortSignal: signal });
+  } catch (error) {
+    if (signal.aborted) {
+      throw onExpired();
+    }
+    throw error;
+  }
+}
 
 /**
  * Thrown when the endpoint rejects the job with a status that a retry cannot
@@ -147,6 +227,16 @@ export interface SendJobOptions {
  * {@link MicrovmEndpointUnavailableError}, and the step retry strategy takes
  * over.
  *
+ * The two limits differ:
+ *
+ * - The retry window limits when an attempt may start. An attempt that
+ *   starts inside the window may end after it.
+ * - The invocation reserve limits when every call must end. Each request and
+ *   each `CreateMicrovmAuthToken` call stops at the reserve. A call that
+ *   would start with less than 1 second before the reserve does not start.
+ *   A Lambda timeout during the attempt would record no outcome, and the
+ *   reserve exists to prevent that.
+ *
  * The endpoint can accept a request before Lambda has sent the `run` hook.
  * So the job request carries the MicroVM identifier too.
  *
@@ -165,24 +255,39 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
   const started = options.windowStartedAt ?? Date.now();
   const deadline = (): number => {
     const byWindow = started + options.retryWindowMs;
-    const remaining = options.remainingTimeMs?.();
-    // remainingTime() already turns a value that is not a finite number into
-    // undefined. This check also covers a caller that passes its own reader.
-    // A NaN deadline would make every comparison false, and Infinity means no
-    // deadline. So both count as unknown, and only the window applies.
-    return remaining === undefined || !Number.isFinite(remaining)
-      ? byWindow
-      : Math.min(byWindow, Date.now() + remaining - INVOCATION_RESERVE_MS);
+    const reserve = reserveStartsAt(options.remainingTimeMs);
+    // A NaN deadline would make every comparison false, and Infinity means
+    // no deadline. reserveStartsAt returns undefined for both. So only the
+    // window applies then.
+    return reserve === undefined ? byWindow : Math.min(byWindow, reserve);
   };
+
+  let attempt = 0;
+  let lastFailure = "no attempt";
+  const unavailable = (): MicrovmEndpointUnavailableError =>
+    new MicrovmEndpointUnavailableError(
+      `The MicroVM did not accept the job at ${options.path} after ${attempt} attempts in ${Date.now() - started} ms. Last failure: ${lastFailure}.`,
+    );
+  const newToken = (): Promise<Record<string, string>> =>
+    callBeforeDeadline(
+      (sendOptions) => createAuthToken(options, sendOptions),
+      reserveStartsAt(options.remainingTimeMs),
+      unavailable,
+    );
 
   let endpoint = options.endpoint;
   let url = endpointUrl(endpoint, options.path);
-  let token = await createAuthToken(options);
+  let token = await newToken();
   let refreshedToken = false;
   let delay = INITIAL_DELAY_MS;
-  let lastFailure = "no attempt";
 
-  for (let attempt = 1; ; attempt++) {
+  for (attempt = 1; ; attempt++) {
+    // The request must end before the reserve, like every call in the tier.
+    const timeoutMs = callBudgetMs(
+      reserveStartsAt(options.remainingTimeMs),
+      REQUEST_TIMEOUT_MS,
+      unavailable,
+    );
     let status: number | undefined;
     try {
       const response = await options.fetch(url, {
@@ -195,7 +300,7 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
           }),
         },
         body: options.body,
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
       });
       status = response.status;
       // The body is not used. Reading it releases the connection.
@@ -218,7 +323,9 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
           );
         }
         refreshedToken = true;
-        token = await createAuthToken(options);
+        // The refresh checks the reserve like every other call. The next
+        // request then checks it again.
+        token = await newToken();
         options.log("auth token refreshed", { attempt, status });
         continue;
       }
@@ -236,10 +343,6 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
       }
     }
 
-    const unavailable = (): MicrovmEndpointUnavailableError =>
-      new MicrovmEndpointUnavailableError(
-        `The MicroVM did not accept the job at ${options.path} after ${attempt} attempts in ${Date.now() - started} ms. Last failure: ${lastFailure}.`,
-      );
     if (Date.now() + delay > deadline()) {
       throw unavailable();
     }
@@ -265,6 +368,7 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
 
 async function createAuthToken(
   options: SendJobOptions,
+  sendOptions: { abortSignal?: AbortSignal },
 ): Promise<Record<string, string>> {
   const response = await options.client.send(
     new CreateMicrovmAuthTokenCommand({
@@ -272,6 +376,7 @@ async function createAuthToken(
       expirationInMinutes: AUTH_TOKEN_MINUTES,
       allowedPorts: [{ port: options.port }],
     }),
+    sendOptions,
   );
   if (!response.authToken) {
     throw new Error("CreateMicrovmAuthToken returned no authToken");

@@ -6,8 +6,9 @@ import {
 } from "@aws-sdk/client-lambda-microvms";
 import { MICROVM_STATE_ERROR_NAME } from "./errors";
 import {
-  INVOCATION_RESERVE_MS,
+  callBeforeDeadline,
   MicrovmEndpointUnavailableError,
+  reserveStartsAt,
 } from "./request";
 
 /**
@@ -73,7 +74,8 @@ export interface EnsureRunningOptions {
  * It polls after 250 milliseconds, doubling the wait up to 2 seconds. It
  * stops after `maxWaitMs`, or 10 seconds before the invocation times out. It
  * then throws `MicrovmEndpointUnavailableError`, and the step retry strategy
- * takes over.
+ * takes over. Each GetMicrovm and ResumeMicrovm call also stops 10 seconds
+ * before the invocation times out, with the same error.
  *
  * @returns The endpoint that GetMicrovm reports, or `undefined` when it
  * reports none.
@@ -86,30 +88,53 @@ export async function ensureRunning(
     ((ms: number): Promise<void> =>
       new Promise((resolve) => setTimeout(resolve, ms)));
   const started = Date.now();
-  const remaining = options.remainingTimeMs?.();
-  // remainingTime() already turns a value that is not a finite number into
-  // undefined. This check also covers a caller that passes its own reader.
   // A NaN deadline would make every comparison false, and Infinity means no
-  // deadline. So both count as unknown, and only maxWaitMs applies.
+  // deadline. reserveStartsAt returns undefined for both. So only maxWaitMs
+  // applies then.
+  const reserve = reserveStartsAt(options.remainingTimeMs);
   const deadline =
-    remaining === undefined || !Number.isFinite(remaining)
+    reserve === undefined
       ? started + options.maxWaitMs
-      : Math.min(
-          started + options.maxWaitMs,
-          started + remaining - INVOCATION_RESERVE_MS,
-        );
+      : Math.min(started + options.maxWaitMs, reserve);
   let resumeSent = false;
   let delay = INITIAL_POLL_MS;
+  let lastState: string | undefined;
+  const unavailable = (): MicrovmEndpointUnavailableError =>
+    new MicrovmEndpointUnavailableError(
+      `MicroVM ${options.microvmId} did not reach RUNNING in ${Date.now() - started} ms. Last state: ${lastState ?? "unknown"}.`,
+    );
+  // Each GetMicrovm and ResumeMicrovm call must end before the invocation
+  // reserve. A Lambda timeout during the step attempt would record no
+  // outcome. So each call gets an abort signal at the reserve.
+  const getMicrovm = () =>
+    callBeforeDeadline(
+      (sendOptions) =>
+        options.client.send(
+          new GetMicrovmCommand({ microvmIdentifier: options.microvmId }),
+          sendOptions,
+        ),
+      reserve,
+      unavailable,
+    );
+  const resumeMicrovm = () =>
+    callBeforeDeadline(
+      (sendOptions) =>
+        options.client.send(
+          new ResumeMicrovmCommand({ microvmIdentifier: options.microvmId }),
+          sendOptions,
+        ),
+      reserve,
+      unavailable,
+    );
 
   for (;;) {
     let state: string | undefined;
     let endpoint: string | undefined;
     let stateReason: string | undefined;
     try {
-      const current = await options.client.send(
-        new GetMicrovmCommand({ microvmIdentifier: options.microvmId }),
-      );
+      const current = await getMicrovm();
       state = current.state;
+      lastState = state;
       endpoint = current.endpoint;
       stateReason = current.stateReason;
     } catch (error) {
@@ -135,9 +160,7 @@ export async function ensureRunning(
     }
     if (state === "SUSPENDED" && !resumeSent) {
       try {
-        await options.client.send(
-          new ResumeMicrovmCommand({ microvmIdentifier: options.microvmId }),
-        );
+        await resumeMicrovm();
       } catch (error) {
         // ConflictException means a transition is already in progress, for
         // example an auto-resume. Polling continues either way.
@@ -150,9 +173,7 @@ export async function ensureRunning(
     }
 
     if (Date.now() + delay > deadline) {
-      throw new MicrovmEndpointUnavailableError(
-        `MicroVM ${options.microvmId} did not reach RUNNING in ${Date.now() - started} ms. Last state: ${state ?? "unknown"}.`,
-      );
+      throw unavailable();
     }
     await sleep(delay);
     delay = Math.min(delay * 2, MAX_POLL_MS);

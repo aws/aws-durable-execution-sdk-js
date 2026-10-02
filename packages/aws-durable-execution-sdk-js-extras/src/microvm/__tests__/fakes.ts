@@ -17,7 +17,27 @@ import type {
 // AWS_REGION. Tests that need it unset remove it themselves.
 process.env.AWS_REGION ??= "us-east-1";
 
-export type Handler = (input: unknown) => Promise<unknown>;
+export interface SendOptions {
+  abortSignal?: AbortSignal;
+}
+
+export type Handler = (
+  input: unknown,
+  options?: SendOptions,
+) => Promise<unknown>;
+
+/**
+ * A call that never answers. It rejects only when its abort signal fires, as
+ * the AWS SDK does. Without a signal, it waits forever.
+ */
+export const hangUntilAborted: Handler = (_input, options) =>
+  new Promise((_resolve, reject) => {
+    options?.abortSignal?.addEventListener("abort", () => {
+      const error = new Error("Request aborted");
+      error.name = "AbortError";
+      reject(error);
+    });
+  });
 
 /**
  * Records every command and answers from a per-command queue. When the queue
@@ -32,6 +52,7 @@ export class FakeMicrovmsClient {
   getResponses: Handler[] = [];
   suspendResponses: Handler[] = [];
   resumeResponses: Handler[] = [];
+  tokenResponses: Handler[] = [];
   /**
    * The MicroVM state that GetMicrovm reports when its queue is empty.
    * SuspendMicrovm sets it to SUSPENDED, and ResumeMicrovm to RUNNING.
@@ -40,7 +61,7 @@ export class FakeMicrovmsClient {
   /** Each lifecycle command in call order, such as "get:RUNNING" or "suspend". */
   readonly events: string[] = [];
 
-  async send(command: unknown): Promise<unknown> {
+  async send(command: unknown, options?: SendOptions): Promise<unknown> {
     if (command instanceof RunMicrovmCommand) {
       this.runInputs.push(command.input);
       const next = this.runResponses.shift();
@@ -55,7 +76,7 @@ export class FakeMicrovmsClient {
     if (command instanceof GetMicrovmCommand) {
       const next = this.getResponses.shift();
       const response = next
-        ? await next(command.input)
+        ? await next(command.input, options)
         : {
             microvmId: "mvm-1",
             state: this.microvmState,
@@ -77,13 +98,17 @@ export class FakeMicrovmsClient {
       this.events.push("resume");
       const next = this.resumeResponses.shift();
       if (next) {
-        return next(command.input);
+        return next(command.input, options);
       }
       this.microvmState = "RUNNING";
       return {};
     }
     if (command instanceof CreateMicrovmAuthTokenCommand) {
       this.tokenInputs.push(command.input);
+      const next = this.tokenResponses.shift();
+      if (next) {
+        return next(command.input, options);
+      }
       return {
         authToken: { "X-aws-proxy-auth": `token-${this.tokenInputs.length}` },
       };
@@ -133,11 +158,12 @@ export interface RecordedRequest {
 
 /**
  * Answers each POST from a queue. A number is an HTTP status. An Error is a
- * connection failure. An empty queue answers 202.
+ * connection failure. "hang" is a request that never answers: it rejects
+ * only when its abort signal fires. An empty queue answers 202.
  */
 export class FakeEndpoint {
   readonly requests: RecordedRequest[] = [];
-  responses: (number | Error)[] = [];
+  responses: (number | Error | "hang")[] = [];
 
   readonly fetch = (async (url: string, init: RequestInit) => {
     this.requests.push({
@@ -146,6 +172,13 @@ export class FakeEndpoint {
       body: JSON.parse(init.body as string),
     });
     const next = this.responses.shift() ?? 202;
+    if (next === "hang") {
+      return new Promise((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () =>
+          reject(init.signal?.reason),
+        );
+      });
+    }
     if (next instanceof Error) {
       throw next;
     }

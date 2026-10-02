@@ -145,13 +145,14 @@ describe("ensureRunning", () => {
     client.getResponses = Array.from({ length: 5 }, () => state("SUSPENDING"));
     const opts = {
       ...options(client),
-      // 10.5 seconds left keeps 500 ms after the 10-second reserve. The
-      // 250 ms poll and the next 500 ms poll do not both fit.
+      // 10.5 seconds left keeps 500 ms after the 10-second reserve. A call
+      // needs at least 1 second before the reserve. So no GetMicrovm starts.
       remainingTimeMs: () => 10_500,
     };
 
     await expect(ensureRunning(opts)).rejects.toBeInstanceOf(
       MicrovmEndpointUnavailableError,
     );
+    expect(client.events).toEqual([]);
   });
 });
