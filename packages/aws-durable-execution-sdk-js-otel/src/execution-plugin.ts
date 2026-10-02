@@ -328,6 +328,30 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       this.executionAncestor &&
       (info.status === "SUCCEEDED" || info.status === "FAILED")
     ) {
+      // A synthetic ancestor is SDK-owned and therefore must be exported.
+      // Materialize it only on terminal completion, alongside the one real
+      // Workflow span, so wait/resume and retries do not emit conflicting copies.
+      const syntheticRootSpan = this.executionAncestor.isRemote
+        ? undefined
+        : this.idGenerator.withIds(
+            {
+              traceId: this.executionTraceId,
+              spanId: this.executionAncestor.spanId,
+            },
+            () =>
+              this.startSpan(
+                "DurableExecutionRoot",
+                {
+                  kind: SpanKind.INTERNAL,
+                  attributes: {
+                    "durable.execution.synthetic_root": true,
+                  },
+                  startTime: this.executionStartTimestamp ?? new Date(),
+                },
+                ROOT_CONTEXT,
+              ),
+          );
+
       const workflowSpanId = deriveWorkflowSpanId(this.executionArn);
       const executionAncestorContext = trace.setSpanContext(
         ROOT_CONTEXT,
@@ -358,8 +382,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         workflowSpan.setStatus({ code: SpanStatusCode.OK });
       }
       workflowSpan.end();
+      syntheticRootSpan?.end();
     }
-    // Non-terminal (PENDING/RETRYING): no real Workflow_Span is created, so
+    // Non-terminal (PENDING/RETRYING): no real Workflow_Span or synthetic root is created, so
     // nothing to end — the identity was only ever a non-recording context.
 
     // 3. End any attempt span still open (safeguard against a leak on a
@@ -451,14 +476,16 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   ) {
     const activeContext = context.active();
     const ambient = trace.getSpanContext(activeContext);
-    // Adopt the ambient span as the Invocation parent only when it is on the
-    // execution trace AND carries the same sampled bit as the execution
-    // ancestor. Matching the trace ID alone is not enough: if the ambient span's
+    // Adopt the ambient span only in propagated-parent mode, when it is on
+    // the execution trace AND carries the same sampled bit as the execution
+    // ancestor. Synthetic fallback keeps Workflow and Invocation on the same
+    // SDK-owned root. Matching the trace ID alone is not enough: if the ambient span's
     // sampled bit differs, the Invocation span would inherit the ambient
     // decision and could export after an explicit Sampled=0, or drop after the
     // root sampler chose sampled. On a mismatch, fall back to the execution
     // ancestor, which carries the authoritative decision.
     if (
+      executionAncestor.isRemote &&
       ambient &&
       isSpanContextValid(ambient) &&
       ambient.traceId === canonical &&
