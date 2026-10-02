@@ -623,3 +623,26 @@ remote parent, or a synthetic execution root).
 ## License
 
 Apache-2.0
+
+## Chained-invoke propagation groundwork (draft)
+
+The optional `providePropagationMetadata(input)` hook prepares SDK-owned
+`PropagationMetadata` with an optional `xAmznTraceId` string. Its readonly input
+contains `executionArn`, `operationId`, optional `parentOperationId`, and
+`targetFunctionName`. Both OTel views encode the resolved execution trace,
+that operation's deterministic span ID, and the resolved sampling decision,
+including `Sampled=0`. Producing metadata does not create a span.
+
+The dispatcher calls providers synchronously with a frozen input snapshot.
+The first non-null supported value wins; identical values do not conflict.
+Later different values generate a warning with both plugin identities and a
+conflict count. Invalid results and ordinary plugin failures are isolated.
+Plugins that omit the hook remain compatible.
+
+This is contract and producer groundwork only. **No invocation request consumes
+or transmits this metadata.** Current public Lambda service models lack
+`ChainedInvokeOptions.XAmznTraceId` and `DistributedMapOptions`. Completing
+propagation requires supported generated serialization, backend rollout,
+consuming the hook on the real START path, replay and failed-checkpoint
+integration, and deployed topology validation. This draft does not complete
+[#952](https://github.com/aws/aws-durable-execution-sdk-js/issues/952).
