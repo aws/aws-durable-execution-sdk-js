@@ -451,9 +451,26 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
       processSpan!.spanContext().spanId,
     );
 
-    // Operation and attempt spans link to the Invocation span (no ambient invocation span locally)
+    const syntheticRoot = spans.find(
+      (span) => span.name === "DurableExecutionRoot",
+    );
+    expect(syntheticRoot).toBeDefined();
+    expect(syntheticRoot!.parentSpanContext).toBeUndefined();
+    expect(workflowSpan!.parentSpanContext?.spanId).toBe(
+      syntheticRoot!.spanContext().spanId,
+    );
+    expect(invocationSpan!.parentSpanContext?.spanId).toBe(
+      syntheticRoot!.spanContext().spanId,
+    );
+
+    // Operation and attempt spans link to Invocation. The synthetic root is the
+    // parentless trace anchor and therefore does not carry that link.
     for (const span of spans) {
-      if (span.name !== "Workflow" && span.name !== "Invocation") {
+      if (
+        span.name !== "Workflow" &&
+        span.name !== "Invocation" &&
+        span.name !== "DurableExecutionRoot"
+      ) {
         expect(span.links.length).toBe(1);
         expect(span.links[0].context.spanId).toBe(
           invocationSpan!.spanContext().spanId,
