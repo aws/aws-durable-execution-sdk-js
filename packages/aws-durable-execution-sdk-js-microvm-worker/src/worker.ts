@@ -42,7 +42,7 @@ export const HOOK_PATH_PREFIX = "/aws/lambda-microvms/runtime/v1/";
  * `microvm` sends a job here when the job is too large for the `run` hook.
  * `vm.invoke` sends a job here when it has no `path`. So `handler` receives
  * every job that names no route, whatever its size. The value must equal
- * `DEFAULT_MICROVM_JOB_PATH` in `@aws/durable-execution-sdk-js-helpers`.
+ * `DEFAULT_MICROVM_JOB_PATH` in `@aws/durable-execution-sdk-js-extras`.
  *
  * @experimental This constant is experimental and may be changed or removed in future releases.
  */

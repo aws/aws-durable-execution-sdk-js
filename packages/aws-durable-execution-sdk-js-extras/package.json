@@ -1,14 +1,14 @@
 {
-  "name": "@aws/durable-execution-sdk-js-helpers",
+  "name": "@aws/durable-execution-sdk-js-extras",
   "description": "Custom durable operations for the AWS Durable Execution SDK, such as running a job in an AWS Lambda MicroVM",
   "version": "0.1.0-alpha.0",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+ssh://git@github.com/aws/aws-durable-execution-sdk-js.git",
-    "directory": "packages/aws-durable-execution-sdk-js-helpers"
+    "directory": "packages/aws-durable-execution-sdk-js-extras"
   },
-  "homepage": "https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-helpers",
+  "homepage": "https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-extras",
   "engines": {
     "node": ">=22"
   },

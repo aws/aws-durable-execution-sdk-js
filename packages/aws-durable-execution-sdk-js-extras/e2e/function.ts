@@ -8,7 +8,7 @@ import {
   type MicrovmConfig,
   microvm,
   microvmSession,
-} from "@aws/durable-execution-sdk-js-helpers/microvm";
+} from "@aws/durable-execution-sdk-js-extras/microvm";
 
 export interface E2eJob {
   /** What the job in the MicroVM does. See microvm-app.ts. */

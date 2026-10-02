@@ -1,4 +1,4 @@
-// The helpers package builds the documents that the worker package parses.
+// The extras package builds the documents that the worker package parses.
 // The two packages declare the contract types separately, because one runs in
 // the function and the other in the MicroVM. These tests fail when the two
 // declarations or the two implementations drift apart.
@@ -88,7 +88,7 @@ async function runMicrovm(
   return { client, endpoint };
 }
 
-describe("contract between helpers and the worker", () => {
+describe("contract between extras and the worker", () => {
   it("declares the same types in both packages", () => {
     expect([jobDocumentsMatch, jobRequestsMatch, runHookPayloadsMatch]).toEqual(
       [true, true, true],

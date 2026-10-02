@@ -92,14 +92,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   checkpoint server now keep their `name` and `$metadata` across the worker thread, so the SDK
   classifies them as it classifies the service's errors.
 
-- New packages, **experimental**: `@aws/durable-execution-sdk-js-helpers` and
-  `@aws/durable-execution-sdk-js-microvm-worker`, at `0.1.0-alpha.0`. The helpers package adds
+- New packages, **experimental**: `@aws/durable-execution-sdk-js-extras` and
+  `@aws/durable-execution-sdk-js-microvm-worker`, at `0.1.0-alpha.0`. The extras package adds
   `microvm(context, ...)`, which runs one job in a new Lambda MicroVM, and
   `microvmSession(context, ...)`, which sends several jobs to one MicroVM. Both are built from
   `step`, `createCallback`, and `runInChildContext`, and label their parts with `subType`. The
   worker package runs in the MicroVM image. It answers the lifecycle hooks, runs each job, sends
   heartbeats, reports the outcome to the job's callback, and can suspend the MicroVM when idle.
-  The helpers package requires core SDK 2.6.0 or later.
+  The extras package requires core SDK 2.6.0 or later.
 
 ## [2.3.1]
 

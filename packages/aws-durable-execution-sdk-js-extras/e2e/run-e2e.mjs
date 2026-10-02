@@ -6,9 +6,9 @@
 // was terminated.
 //
 // Prerequisites: AWS CLI v2 credentials for the target account, and a built
-// workspace (npm run build in the SDK, helpers, and microvm-worker packages).
+// workspace (npm run build in the SDK, extras, and microvm-worker packages).
 //
-// Usage: node e2e/run-e2e.mjs            (from the helpers package)
+// Usage: node e2e/run-e2e.mjs            (from the extras package)
 //        AWS_REGION=us-east-1 node e2e/run-e2e.mjs
 
 import { execFileSync } from "node:child_process";
@@ -934,7 +934,7 @@ for (const outcome of outcomes) {
     if (outcome.microvmIds.length === 0) {
       problems.push("no launch step result");
     }
-    // The helpers label their operations. The names come from the scenario,
+    // The operations label their parts. The names come from the scenario,
     // so match the generated ones by suffix.
     const bySuffix = {
       ".callback": "MicrovmCallback",

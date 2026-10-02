@@ -2,7 +2,7 @@
 
 > **Experimental.** Every API in this package is experimental. It may change or be removed in a future release, without a major version bump.
 
-Runs inside an AWS Lambda MicroVM. It receives jobs from the durable function's [`microvm` operation](../aws-durable-execution-sdk-js-helpers), sends heartbeats while each job runs, and reports each job's result or error to the durable function.
+Runs inside an AWS Lambda MicroVM. It receives jobs from the durable function's [`microvm` operation](../aws-durable-execution-sdk-js-extras), sends heartbeats while each job runs, and reports each job's result or error to the durable function.
 
 ## Usage
 

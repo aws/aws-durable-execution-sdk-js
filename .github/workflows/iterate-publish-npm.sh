@@ -30,7 +30,7 @@ else
     "packages/aws-durable-execution-sdk-js-otel"
     "packages/aws-durable-execution-sdk-js-insight"
     "packages/aws-durable-execution-sdk-js-insight-mcp"
-    "packages/aws-durable-execution-sdk-js-helpers"
+    "packages/aws-durable-execution-sdk-js-extras"
     "packages/aws-durable-execution-sdk-js-microvm-worker"
   )
 fi

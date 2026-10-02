@@ -3,7 +3,7 @@
  *
  * @remarks
  * The contract types in this file match the ones in
- * `@aws/durable-execution-sdk-js-helpers`. The two packages do not depend on
+ * `@aws/durable-execution-sdk-js-extras`. The two packages do not depend on
  * each other, because one runs in the function and the other in the MicroVM.
  * So a change to one declaration must be made in the other too.
  *

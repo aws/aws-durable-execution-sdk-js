@@ -1,16 +1,16 @@
-# AWS Durable Execution SDK Helpers
+# AWS Durable Execution SDK Extras
 
 > **Experimental.** Every API in this package is experimental. It may change or be removed in a future release, without a major version bump.
 
-Ready-made custom operations for the [AWS Durable Execution SDK](../aws-durable-execution-sdk-js). Each helper composes the SDK's built-in operations and calls AWS APIs. The helpers live in this package so the core SDK does not depend on those APIs' clients.
+Ready-made custom operations for the [AWS Durable Execution SDK](../aws-durable-execution-sdk-js). Each operation composes the SDK's built-in operations and calls AWS APIs. The operations live in this package so the core SDK does not depend on those APIs' clients.
 
 ## Installation
 
 ```bash
-npm install @aws/durable-execution-sdk-js @aws/durable-execution-sdk-js-helpers
+npm install @aws/durable-execution-sdk-js @aws/durable-execution-sdk-js-extras
 ```
 
-The helpers need `@aws/durable-execution-sdk-js` 2.6.0 or later. Earlier versions have no `subType` option on steps and callbacks. They would drop the subtypes that the helpers record, and replay after an upgrade would then fail.
+This package needs `@aws/durable-execution-sdk-js` 2.6.0 or later. Earlier versions have no `subType` option on steps and callbacks. They would drop the subtypes that these operations record, and replay after an upgrade would then fail.
 
 ## `microvm`: run a job in an AWS Lambda MicroVM
 
@@ -18,7 +18,7 @@ The helpers need `@aws/durable-execution-sdk-js` 2.6.0 or later. Earlier version
 
 ```typescript
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
-import { microvm } from "@aws/durable-execution-sdk-js-helpers/microvm";
+import { microvm } from "@aws/durable-execution-sdk-js-extras/microvm";
 
 export const handler = withDurableExecution(async (event, context) =>
   microvm<{ passed: boolean }>(
@@ -118,7 +118,7 @@ Every MicroVM failure is a `MicrovmError`. Catch the base class for all of them,
 import {
   MicrovmError,
   MicrovmTimeoutError,
-} from "@aws/durable-execution-sdk-js-helpers/microvm";
+} from "@aws/durable-execution-sdk-js-extras/microvm";
 
 try {
   await microvm(context, "build", input, config);
@@ -203,7 +203,7 @@ The code in the MicroVM must:
 `microvmSession` launches one MicroVM and runs a handler that sends it jobs over HTTP. The jobs share the MicroVM's files and processes, so a later job can use what an earlier job wrote. The session terminates the MicroVM when the handler returns or throws, and returns the handler's value.
 
 ```typescript
-import { microvmSession } from "@aws/durable-execution-sdk-js-helpers/microvm";
+import { microvmSession } from "@aws/durable-execution-sdk-js-extras/microvm";
 
 const result = await microvmSession(
   context,
@@ -304,9 +304,9 @@ It checks the execution status, the operation history, and that every MicroVM en
 
 ```bash
 npm run build -w packages/aws-durable-execution-sdk-js \
-  && npm run build -w packages/aws-durable-execution-sdk-js-helpers \
+  && npm run build -w packages/aws-durable-execution-sdk-js-extras \
   && npm run build -w packages/aws-durable-execution-sdk-js-microvm-worker
-cd packages/aws-durable-execution-sdk-js-helpers
+cd packages/aws-durable-execution-sdk-js-extras
 AWS_REGION=us-east-1 node e2e/run-e2e.mjs
 ```
 
