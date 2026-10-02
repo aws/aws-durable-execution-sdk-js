@@ -51,21 +51,46 @@ export const MAX_RUN_HOOK_PAYLOAD_LENGTH = 4_096;
 
 /**
  * Returns true when `payload` has at most
- * {@link MAX_RUN_HOOK_PAYLOAD_LENGTH} code points.
+ * {@link MAX_RUN_HOOK_PAYLOAD_LENGTH} Unicode code points. A payload that
+ * fits goes in the `run` hook. A payload that does not fit goes over HTTP.
  *
- * A code point is one or two UTF-16 code units. So a string of at most the
- * limit in code units always fits, and a string of more than twice the limit
- * never fits. Only the strings between those lengths need a count.
+ * Why code points:
+ *
+ * 1. RunMicrovm counts the limit in code points. The probe results are on
+ *    {@link MAX_RUN_HOOK_PAYLOAD_LENGTH}.
+ * 2. `string.length` counts UTF-16 code units. An emoji is 1 code point and
+ *    2 code units. So `string.length` sends a job with emoji over HTTP
+ *    before the service limit requires it.
+ * 3. A UTF-8 byte count is larger still. "日" is 1 code point and 3 bytes.
+ *    So a byte count sends most non-ASCII jobs over HTTP without need.
+ * 4. Each extra HTTP delivery gives the MicroVM an ingress connector and
+ *    adds a request step. So the check counts exactly what the service
+ *    counts.
+ *
+ * How it counts:
+ *
+ * 1. A code point is one or two UTF-16 code units.
+ * 2. So a string of at most the limit in code units has at most the limit
+ *    in code points. It always fits.
+ * 3. A string of more than twice the limit in code units has more than the
+ *    limit in code points. It never fits.
+ * 4. Only a string between those two lengths needs a count. The count stops
+ *    at the first code point past the limit.
+ *
+ * `JSON.stringify` escapes a lone surrogate as `\uXXXX`. So the payload has
+ * only well-formed code points, and the count matches the service's count.
  */
 export function fitsRunHook(payload: string): boolean {
+  // Case 2 above: always fits.
   if (payload.length <= MAX_RUN_HOOK_PAYLOAD_LENGTH) {
     return true;
   }
+  // Case 3 above: never fits.
   if (payload.length > 2 * MAX_RUN_HOOK_PAYLOAD_LENGTH) {
     return false;
   }
+  // Case 4 above. A string iterator yields one code point per step.
   let codePoints = 0;
-  // A string iterator yields one code point per step.
   for (const _ of payload) {
     if (++codePoints > MAX_RUN_HOOK_PAYLOAD_LENGTH) {
       return false;

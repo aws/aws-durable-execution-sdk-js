@@ -118,16 +118,42 @@ export function microvm<TOutput = unknown, TInput = unknown>(
       );
       const job = jobDocument(callbackId, input, config.heartbeatTimeout);
 
-      // The delivery depends on the payload size, and the payload contains
-      // the callback ID. So the choice runs after createCallback. It is
-      // deterministic: the callback ID comes from the checkpoint on replay,
-      // and the input must be the same on every replay.
+      // The operation can deliver the job to the MicroVM in two ways:
+      //
+      // 1. Run hook. The job goes in the RunMicrovm request as the
+      //    `runHookPayload`. Lambda passes the payload to the worker's `run`
+      //    lifecycle hook when the MicroVM starts. The MicroVM receives no
+      //    inbound request, so it gets the NO_INGRESS connector.
+      // 2. HTTP. The RunMicrovm request carries no job. After the launch, a
+      //    request step POSTs the job to the MicroVM's endpoint. So the
+      //    MicroVM needs an ingress connector and an endpoint.
+      //
+      // The run hook is preferred. It opens no ingress, and it needs no
+      // extra durable step. HTTP is used in two cases:
+      //
+      // 1. The caller set `request.path`. The worker runs a run hook job with
+      //    its `handler`, not a route. So a job for a route must go over HTTP.
+      // 2. The payload is larger than the run hook limit. RunMicrovm rejects
+      //    an oversized payload with ValidationException. The default retry
+      //    strategy does not retry that error, because the same payload
+      //    fails the same way. So the operation would fail with
+      //    MicrovmLaunchError. So the size is checked here, before the
+      //    launch. See fitsRunHook.
+      //
+      // The size check measures the whole payload, and the payload contains
+      // the callback ID. So the choice runs after createCallback. The choice
+      // is deterministic: the callback ID comes from the checkpoint on
+      // replay, and the input must be the same on every replay. So every
+      // replay picks the same delivery as the first attempt.
       const withJob = JSON.stringify({
         version: 1,
         region: scope.region,
         job,
       } satisfies MicrovmRunHookPayload<TInput>);
       const overHttp = request?.path !== undefined || !fitsRunHook(withJob);
+      // The worker rejects a run hook payload without `version` and
+      // `region`. So the HTTP delivery still sends those two fields, and
+      // omits only the job.
       const runHookPayload = overHttp
         ? JSON.stringify({
             version: 1,
