@@ -167,12 +167,17 @@ export function microvm<TOutput = unknown, TInput = unknown>(
           timeoutSeconds,
           defaultIngress: overHttp ? "ALL_INGRESS" : "NO_INGRESS",
           runHookPayload,
-          needsEndpoint: overHttp,
+          delivery: overHttp ? "http" : "run-hook",
         }),
       );
 
       try {
-        if (overHttp) {
+        // Replay computes `overHttp` again from the current input and
+        // config. A deploy between the launch and a replay can change both.
+        // The launch step's result comes from the checkpoint on replay, and
+        // it records the delivery that the launch prepared for. So the
+        // operation follows the launch's delivery, not the new computation.
+        if (launched.delivery === "http") {
           await inStage(name, "delivery", () =>
             deliverJob(child, scope, name, launched, request ?? {}, job),
           );

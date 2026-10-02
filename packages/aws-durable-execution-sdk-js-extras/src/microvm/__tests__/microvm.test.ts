@@ -386,6 +386,45 @@ describe("microvm", () => {
     },
   );
 
+  it("follows the launch's delivery when a replay computes another one", async () => {
+    // The first invocation sends a small input, so the launch puts the job
+    // in the run hook. The replay after the callback sends a large input,
+    // as after a deploy that changed the code. The replay must not deliver
+    // over HTTP: the MicroVM has the job already, and the launch recorded no
+    // endpoint.
+    const client = new FakeMicrovmsClient();
+    const endpoint = new FakeEndpoint();
+    let invocations = 0;
+    const handler = withDurableExecution(
+      async (_event: unknown, context: DurableContext) => {
+        invocations++;
+        const input = invocations === 1 ? "small" : "x".repeat(10_000);
+        return microvm(context, "build", input, {
+          ...baseConfig(client),
+          fetch: endpoint.fetch,
+        });
+      },
+    );
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+
+    const execution = runner.run({ payload: {} });
+    await runner
+      .getOperation("build.launch")
+      .waitForData(WaitingOperationStatus.COMPLETED);
+    await runner
+      .getOperation("build.callback")
+      .sendCallbackSuccess(JSON.stringify("done"));
+    const result = await execution;
+
+    expect(result.getStatus()).toBe("SUCCEEDED");
+    expect(invocations).toBeGreaterThan(1);
+    expect(client.payload().job).toBeDefined();
+    expect(endpoint.requests).toHaveLength(0);
+    expect(
+      result.getOperations().map((operation) => operation.getName()),
+    ).not.toContain("build.request");
+  });
+
   it.each<[string, Partial<MicrovmConfig>, string]>([
     ["imageIdentifier", { imageIdentifier: "" }, "imageIdentifier is required"],
     [

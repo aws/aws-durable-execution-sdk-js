@@ -147,7 +147,7 @@ export function microvmSession<TOutput = unknown>(
           timeoutSeconds,
           defaultIngress: "ALL_INGRESS",
           runHookPayload: JSON.stringify(payload),
-          needsEndpoint: true,
+          delivery: "http",
           extra: config.idlePolicy ? { idlePolicy: config.idlePolicy } : {},
         }),
       );

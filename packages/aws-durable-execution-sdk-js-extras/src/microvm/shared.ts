@@ -108,10 +108,25 @@ const LAUNCH_MARGIN_SECONDS = 300;
 
 const defaultClients = new Map<string, LambdaMicrovmsClient>();
 
+/**
+ * How the job reaches the MicroVM.
+ *
+ * - `run-hook`: the job is in the RunMicrovm request's `runHookPayload`.
+ * - `http`: the RunMicrovm request has no job. A request step POSTs it to
+ *   the MicroVM's endpoint after the launch.
+ */
+export type JobDelivery = "run-hook" | "http";
+
 /** The checkpointed result of the launch step. */
 export interface LaunchResult {
   microvmId: string;
+  /** Present only for `http` delivery. */
   endpoint?: string;
+  /**
+   * The delivery that the launch used. Replay reads it from the checkpoint.
+   * So every replay delivers the job the way the launch prepared for.
+   */
+  delivery: JobDelivery;
 }
 
 export type RetryStrategy = (
@@ -262,7 +277,7 @@ export function launch(
     timeoutSeconds: number;
     defaultIngress: "NO_INGRESS" | "ALL_INGRESS";
     runHookPayload: string;
-    needsEndpoint: boolean;
+    delivery: JobDelivery;
     extra?: Partial<RunMicrovmCommandInput>;
   },
 ): Promise<LaunchResult> {
@@ -296,12 +311,14 @@ export function launch(
       if (!response.microvmId) {
         throw new Error("RunMicrovm returned no microvmId");
       }
-      if (options.needsEndpoint && !response.endpoint) {
+      const overHttp = options.delivery === "http";
+      if (overHttp && !response.endpoint) {
         throw new Error("RunMicrovm returned no endpoint");
       }
       return {
         microvmId: response.microvmId,
-        ...(options.needsEndpoint && { endpoint: response.endpoint }),
+        ...(overHttp && { endpoint: response.endpoint }),
+        delivery: options.delivery,
       };
     },
     {
@@ -393,11 +410,20 @@ export async function deliverJob<TInput>(
       const endpoint = options.resume
         ? ((await running()) ?? launched.endpoint)
         : launched.endpoint;
+      // The launch records an endpoint for every `http` delivery, and the
+      // caller delivers over HTTP only then. So a missing endpoint is a
+      // defect, not a transient failure. The error name is not retryable,
+      // so the step fails at once instead of sending to "https://undefined".
+      if (endpoint === undefined) {
+        throw new Error(
+          `MicroVM "${jobName}": the launch recorded no endpoint for MicroVM ${launched.microvmId}, so the job cannot be sent over HTTP`,
+        );
+      }
       await sendJob({
         client,
         fetch: scope.config.fetch ?? fetch,
         microvmId: launched.microvmId,
-        endpoint: endpoint as string,
+        endpoint,
         path: request.path ?? DEFAULT_MICROVM_JOB_PATH,
         port: request.port ?? DEFAULT_MICROVM_PORT,
         body: JSON.stringify(body),
