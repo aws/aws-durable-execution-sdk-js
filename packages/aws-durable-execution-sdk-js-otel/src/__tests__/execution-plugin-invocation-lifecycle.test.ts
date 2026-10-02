@@ -162,6 +162,8 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
         tracerProviderFactory,
         contextExtractor: () => ({
           traceId: ambientSpan.spanContext().traceId,
+          parentSpanId: "a".repeat(16),
+          sampling: "SAMPLED" as const,
         }),
       });
 
@@ -316,6 +318,8 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       const plugin = new ExecutionOtelPlugin({
         contextExtractor: () => ({
           traceId: ambientSpan.spanContext().traceId,
+          parentSpanId: "a".repeat(16),
+          sampling: "SAMPLED" as const,
         }),
       });
 
