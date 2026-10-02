@@ -1,7 +1,18 @@
-import type {
-  PropagationInput,
-  PropagationMetadata,
-} from "@aws/durable-execution-sdk-js";
+// Structural view of the SDK-owned optional hook contract. Keeping these
+// declarations local avoids importing newly added core type names into the
+// public OTel .d.ts files consumed with older supported cores. The plugin's
+// implements clause checks compatibility with the canonical SDK contract.
+export interface PropagationInput {
+  readonly executionArn: string;
+  readonly operationId: string;
+  readonly parentOperationId?: string;
+  readonly targetFunctionName: string;
+}
+
+export interface PropagationMetadata {
+  readonly xAmznTraceId?: string;
+}
+
 import { isValidTraceId, isValidSpanId } from "./context-extractors";
 import { deriveSpanIdFromOperationId } from "./deterministic-id-generator";
 

@@ -1,7 +1,5 @@
 import type {
   DurableInstrumentationPlugin,
-  PropagationInput,
-  PropagationMetadata,
   InvocationInfo,
   InvocationEndInfo,
   OperationInfo,
@@ -47,6 +45,10 @@ import { tryInstallGlobalIdGenerator } from "./global-id-generator";
 import { DurableSampler, tryInstallDurableSampler } from "./global-sampler";
 
 import { createPropagationMetadata } from "./propagation-metadata";
+import type {
+  PropagationInput,
+  PropagationMetadata,
+} from "./propagation-metadata";
 
 const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
 
