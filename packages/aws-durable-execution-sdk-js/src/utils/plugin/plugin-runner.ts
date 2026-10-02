@@ -27,11 +27,6 @@ type PluginWrapperHookFn = (
   info: PluginInfo,
   fn: CustomerFnResult,
 ) => CallbackResult;
-type PluginHookName = Exclude<
-  keyof DurableInstrumentationPlugin,
-  "registration"
->;
-
 type PluginHookFn = (info: PluginInfo) => CallbackResult;
 
 /**
@@ -44,7 +39,7 @@ export function createPluginRunner(
 ): DurableInstrumentationPlugin {
   if (plugins.length === 0) return {};
 
-  const runAsCallback = <K extends PluginHookName>(
+  const runAsCallback = <K extends keyof DurableInstrumentationPlugin>(
     method: K,
     info: Parameters<NonNullable<DurableInstrumentationPlugin[K]>>[0],
     fn: CustomerFn,
@@ -132,7 +127,7 @@ export function createPluginRunner(
    * return without awaiting it; see {@link DurableInstrumentationPlugin} for
    * the caveats of doing so in Lambda.
    */
-  const run = async <K extends PluginHookName>(
+  const run = async <K extends keyof DurableInstrumentationPlugin>(
     method: K,
     info: Parameters<NonNullable<DurableInstrumentationPlugin[K]>>[0],
   ): Promise<void> => {

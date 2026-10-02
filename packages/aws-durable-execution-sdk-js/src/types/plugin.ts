@@ -219,15 +219,6 @@ export interface OperationChangeInfo {
  * its promise.
  */
 export interface DurableInstrumentationPlugin {
-  /**
-   * Optional registration metadata. Only one plugin in an exclusive group may
-   * be configured for a handler, across explicit and environment registration.
-   * Configuration conflicts are rejected before invocation hooks run.
-   */
-  readonly registration?: {
-    readonly name: string;
-    readonly exclusiveGroup?: string;
-  };
   onInvocationStart?(info: InvocationInfo): Promise<void>;
   wrapInvocation?(
     info: InvocationInfo,
@@ -314,3 +305,21 @@ export interface DurableInstrumentationPluginProvider<
  */
 export type CustomerFnResult = unknown;
 export type CustomerFn = () => CustomerFnResult;
+
+/**
+ * Opt-in registration metadata key. Ordinary plugin properties remain untouched.
+ * Symbol.for keeps the protocol shared across application and Lambda-layer copies.
+ * @experimental
+ */
+export const DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION = Symbol.for(
+  "aws.lambda.durable.instrumentation.plugin-registration",
+);
+
+/** @experimental Optional registration protocol, separate from the hook interface. */
+export interface RegisteredDurableInstrumentationPlugin
+  extends DurableInstrumentationPlugin {
+  readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: {
+    readonly name: string;
+    readonly exclusiveGroup?: string;
+  };
+}

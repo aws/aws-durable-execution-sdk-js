@@ -1,6 +1,7 @@
 import { PluginLoadError } from "../../errors/plugin-load-error/plugin-load-error";
 import {
   DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION,
+  DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION,
   DurableInstrumentationPlugin,
   DurableInstrumentationPluginProvider,
 } from "../../types/plugin";
@@ -467,10 +468,18 @@ describe("loadConfiguredPlugins", () => {
 
 describe("exclusive plugin registration", () => {
   class First implements DurableInstrumentationPlugin {
-    readonly registration = { name: "first view", exclusiveGroup: "views" };
+    async onInvocationStart(): Promise<void> {}
+    readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION] = {
+      name: "first view",
+      exclusiveGroup: "views",
+    };
   }
   class Second implements DurableInstrumentationPlugin {
-    readonly registration = { name: "second view", exclusiveGroup: "views" };
+    async onInvocationStart(): Promise<void> {}
+    readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION] = {
+      name: "second view",
+      exclusiveGroup: "views",
+    };
   }
   const factories = [() => new First(), () => new Second()];
   it.each([false, true])(
@@ -511,7 +520,13 @@ describe("exclusive plugin registration", () => {
       [new First(), new ExplicitPlugin()],
       [
         new First(),
-        { registration: { name: "metrics", exclusiveGroup: "metrics" } },
+        {
+          async onInvocationStart() {},
+          [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: {
+            name: "metrics",
+            exclusiveGroup: "metrics",
+          },
+        },
       ],
     ]) {
       await expect(
@@ -524,4 +539,38 @@ describe("exclusive plugin registration", () => {
       loadConfiguredPlugins([new First(), new First()], { environment: {} }),
     ).rejects.toThrow(PluginLoadError);
   });
+});
+
+describe("legacy unrelated registration properties", () => {
+  it("does not interpret or read an ordinary registration field", async () => {
+    class LegacyPlugin implements DurableInstrumentationPlugin {
+      registration = 42;
+      async onInvocationStart() {}
+    }
+    const getter = {
+      async onInvocationStart() {},
+      get registration(): never {
+        throw new Error("not SDK metadata");
+      },
+    };
+    const plugins = [new LegacyPlugin(), getter];
+    await expect(
+      loadConfiguredPlugins(plugins, { environment: {} }),
+    ).resolves.toEqual(plugins);
+  });
+});
+
+it("does not probe symbol getters on legacy plugins that did not opt into registration metadata", async () => {
+  const legacy = new Proxy(
+    { async onInvocationStart() {} },
+    {
+      get(target, property, receiver) {
+        if (typeof property === "symbol")
+          throw new Error("unsupported symbol getter");
+        return Reflect.get(target, property, receiver);
+      },
+    },
+  );
+  const result = await loadConfiguredPlugins([legacy], { environment: {} });
+  expect(result[0]).toBe(legacy);
 });

@@ -4,6 +4,8 @@ import { pathToFileURL } from "url";
 import { PluginLoadError } from "../../errors/plugin-load-error/plugin-load-error";
 import {
   DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION,
+  DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION,
+  RegisteredDurableInstrumentationPlugin,
   DurableInstrumentationPlugin,
   DurableInstrumentationPluginProvider,
 } from "../../types/plugin";
@@ -266,7 +268,10 @@ function validateExclusiveGroups(
 ): void {
   const groups = new Map<string, string>();
   for (const plugin of plugins) {
-    const registration = plugin.registration;
+    if (!(DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION in plugin)) continue;
+    const registration = (
+      plugin as Partial<RegisteredDurableInstrumentationPlugin>
+    )[DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION];
     const group = registration?.exclusiveGroup;
     if (!group) continue;
     const previous = groups.get(group);

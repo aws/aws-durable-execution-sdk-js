@@ -44,6 +44,8 @@ import { createTracerProvider } from "./otel-plugin-provider";
 import { tryInstallGlobalIdGenerator } from "./global-id-generator";
 import { DurableSampler, tryInstallDurableSampler } from "./global-sampler";
 
+import { PLUGIN_REGISTRATION } from "./plugin-registration";
+
 const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
 
 /**
@@ -60,7 +62,7 @@ const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
  * onOperationEnd, so nothing is left un-ended across invocations (issue #831).
  */
 export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
-  readonly registration = {
+  private readonly [PLUGIN_REGISTRATION] = {
     name: "ExecutionOtelPlugin",
     exclusiveGroup: "durable-opentelemetry-view",
   } as const;
