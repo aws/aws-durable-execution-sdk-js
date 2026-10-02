@@ -8,6 +8,7 @@ const defaultPreset = createDefaultPreset({
 module.exports = {
   ...defaultPreset,
   testMatch: ["**/__tests__/**.test.ts", "**/src/examples/**/*.test.ts"],
+  setupFiles: ["<rootDir>/jest.setup.js"],
   coverageReporters: ["cobertura", "html", "text"],
   coverageDirectory: "coverage-sdk",
   collectCoverageFrom: [
