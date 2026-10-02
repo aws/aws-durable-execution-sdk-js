@@ -123,6 +123,9 @@ describe("plugin hooks", () => {
     });
     await handler(mockEvent, mockContext);
 
+    expect(
+      jest.mocked(plugin.onInvocationStart!).mock.calls[0][0],
+    ).not.toHaveProperty("xRayTraceId");
     expect(plugin.onInvocationStart).toHaveBeenCalledWith({
       requestId: "req-123",
       executionArn: "arn:test",

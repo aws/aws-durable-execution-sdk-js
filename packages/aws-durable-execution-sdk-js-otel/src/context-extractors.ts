@@ -198,7 +198,15 @@ export function parseXRayTraceHeader(
 export function xRayContextExtractor(
   info: InvocationInfo,
 ): ContextExtractorResult {
-  return parseXRayTraceHeader(info.xRayTraceId ?? process.env._X_AMZN_TRACE_ID);
+  return parseXRayTraceHeader(selectXRayTraceHeader(info, process.env));
+}
+
+/** @internal Shared carrier precedence for the extractor and trace-ID helper. */
+export function selectXRayTraceHeader(
+  invocation: { readonly xRayTraceId?: string },
+  environment: { readonly _X_AMZN_TRACE_ID?: string },
+): string | undefined {
+  return invocation.xRayTraceId ?? environment._X_AMZN_TRACE_ID;
 }
 
 /**

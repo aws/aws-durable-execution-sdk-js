@@ -551,11 +551,13 @@ deriveSpanIdFromOperationId(
 `deriveTraceIdFromXRayRoot` converts a valid X-Ray `Root` value to an
 OpenTelemetry trace ID and returns `undefined` for invalid input.
 `deriveExecutionTraceId` applies the default plugin precedence to an explicit
-environment: a valid `_X_AMZN_TRACE_ID` `Root` wins, otherwise it uses the same
-ARN-and-start-time fallback as the plugins. Pass `process.env` in Lambda or a
-plain object in tests. When no valid X-Ray Root is available, pass the same
-execution start timestamp supplied to the plugin; omit it only when it is
-unavailable to both callers.
+carrier: optional `xRayTraceId` from the current Lambda context takes precedence
+over `_X_AMZN_TRACE_ID`. A present but invalid local header suppresses the
+environment carrier and uses the ARN-and-start-time fallback. Existing callers
+can still pass `process.env`; on Managed Instances pass
+`{ xRayTraceId: context.xRayTraceId, _X_AMZN_TRACE_ID: process.env._X_AMZN_TRACE_ID }`.
+When no valid Root is available, pass the same execution start timestamp as the
+plugin; omit it only when it is unavailable to both callers.
 `deriveWorkflowSpanId` hashes `workflow:<execution ARN>`,
 `deriveExecutionRootSpanId` hashes `execution-root:<execution ARN>` (a distinct
 namespace so the synthetic root never collides with the Workflow or operation
@@ -626,9 +628,14 @@ Apache-2.0
 
 ## Core compatibility
 
-OTel 1.2 requires `@aws/durable-execution-sdk-js >=2.7.0 <3.0.0` as a required
-peer. Core 2.7 supplies invocation-local headers and validates mutually
-exclusive OTel views; core 2.6 and earlier cannot provide those contracts.
-Upgrade core and OTel together. The coordinated minor release must include
-both #955 and #956 before publication; the later core 3 factory migration is
-outside this compatibility range.
+OTel 1.2 preserves valid core 2.4–2.x registrations, including separate
+OTel-only Lambda layers. Its core peer is optional (`>=2.4.0 <3.0.0`), and the
+dynamic provider contract remains version 1. Existing on-demand environment
+carrier behavior remains available on older cores; upgrading the plugin alone
+does not add fields to the invocation metadata those cores supply.
+
+The new invocation-local LMI carrier and core registration exclusivity require
+the coordinated core 2.7 / OTel 1.2 pair. Upgrade both for those capabilities.
+Older core/plugin combinations do not gain those guarantees. The two OTel views
+remain an unsupported combination, and the updated core rejects it with updated
+plugin metadata. The later core 3 factory migration is a separate major release.

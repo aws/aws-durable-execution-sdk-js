@@ -17,15 +17,13 @@ describe("installed core compatibility for invocation-local headers", () => {
     current?.cleanup();
   });
 
-  it("excludes the published core that cannot supply the header and accepts the new minor", () => {
+  it("retains old valid peers while requiring the new core for local-header forwarding", () => {
     expect(previous.coreVersion).toBe("2.6.0");
-    expect(previous.peerAccepted).toBe(false);
-    const invalid = previous.validateInstalledPeers();
-    expect(invalid.status).not.toBe(0);
-    expect(invalid.output).toContain(
-      "invalid: @aws/durable-execution-sdk-js@2.6.0",
-    );
-    expect(current.coreRequired).toBe(true);
+    expect(previous.peerAccepted).toBe(true);
+    expect(previous.validateInstalledPeers().status).toBe(0);
+    expect(current.coreRequired).toBe(false);
+    expect(satisfies("2.4.0", current.peerRange)).toBe(true);
+    expect(satisfies("2.5.0", current.peerRange)).toBe(true);
     expect(satisfies("2.7.0", current.peerRange)).toBe(true);
     expect(satisfies("2.7.1", current.peerRange)).toBe(true);
     expect(satisfies("3.0.0", current.peerRange)).toBe(false);

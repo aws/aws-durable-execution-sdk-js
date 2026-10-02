@@ -34,24 +34,24 @@ Bump the version in the appropriate `package.json` file(s) and merge to `main` b
 
 ### Coordinated OTel 1.2 minor release
 
-Core **2.7.0**, OTel **1.2.0**, and testing **1.3.1** are the coordinated
-compatibility update. Core 2.7.0 must contain both invocation-local X-Ray header
-forwarding (#955) and OTel view exclusivity (#956); merge #953 through #956
-before cutting this release. The version edits prepare the release and do not
-publish it.
+Core **2.7.0**, OTel **1.2.0**, and testing **1.3.1** prepare the coordinated
+minor release. Merge #953 through #956 before release so the new core/plugin
+pair supplies invocation-local headers and rejects competing OTel views.
+These version edits do not publish packages.
 
-OTel 1.2 requires core `>=2.7.0 <3.0.0`. Released core 2.6.0 cannot forward the
-new header or enforce view registration, so it is no longer an accepted peer.
-The required peer also prevents omitting the core dependency from an installed
-consumer. Testing 1.3.1 admits compatible core 1.x/2.x releases with
-`>=1.0.1 <3.0.0`, including subsequent patches. Core 3's factory migration needs
-its own major plugin compatibility update.
+Preserve supported older combinations: OTel's optional core peer is
+`>=2.4.0 <3.0.0`, its dynamic provider API remains version 1, and separate
+OTel-only Lambda layers remain supported. Existing valid on-demand registrations
+keep their environment carrier behavior. New LMI-header and registration
+exclusivity capabilities require the new core/plugin pair; updating a plugin
+cannot retrofit an older core's metadata or registration path. Testing 1.3.1
+admits compatible core versions with `>=1.0.1 <3.0.0`, including later patches.
 
-Installed-package regressions pack the candidate packages and run them from an
-isolated consumer against both pinned published core 2.6.0 and the candidate
-core. They reproduce the old-core failure, require npm's installed-tree check
-to reject that combination, and verify the new behavior with an accepted peer.
-Do not use `--force` or `--legacy-peer-deps` to bypass these constraints.
+Installed-package tests load pinned published core 2.4/2.6 and OTel 1.1 alongside
+candidate packages, check source and runtime compatibility, and exercise separate
+application/layer trees. Provider-version rejection and a raised dependency
+floor are not substitutes for backward-compatibility evidence. Core 3's factory
+migration remains separate and must use its matching major plugin release.
 
 ## Cutting a Release
 

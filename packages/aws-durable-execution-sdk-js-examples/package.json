@@ -54,7 +54,8 @@
     "@aws-sdk/client-dynamodb": "^3.1014.0",
     "@aws-sdk/client-lambda": "^3.1014.0",
     "@aws/durable-execution-sdk-js": "*",
-    "@aws/durable-execution-sdk-js-testing": "*"
+    "@aws/durable-execution-sdk-js-testing": "*",
+    "@aws/durable-execution-sdk-js-otel": "*"
   },
   "devDependencies": {
     "@aws-sdk/client-cloudwatch-logs": "^3.948.0",

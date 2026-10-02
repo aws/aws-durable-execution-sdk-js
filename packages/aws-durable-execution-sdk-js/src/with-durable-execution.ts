@@ -111,12 +111,14 @@ async function runHandler<
     executionStartTimestamp: initialExecutionEvent?.StartTimestamp ?? undefined,
   };
 
+  const xRayTraceId = (context as Context & { xRayTraceId?: string })
+    .xRayTraceId;
   const invocationInfo: InvocationInfo = {
     ...invocationBaseInfo,
     isFirstInvocation:
       durableExecutionMode === DurableExecutionMode.ExecutionMode,
     updatedOperations,
-    xRayTraceId: (context as Context & { xRayTraceId?: string }).xRayTraceId,
+    ...(xRayTraceId === undefined ? {} : { xRayTraceId }),
   };
   await plugin.onInvocationStart?.(invocationInfo);
 
