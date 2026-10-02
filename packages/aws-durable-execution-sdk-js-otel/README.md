@@ -623,3 +623,12 @@ remote parent, or a synthetic execution root).
 ## License
 
 Apache-2.0
+
+## Core compatibility
+
+OTel 1.2 requires `@aws/durable-execution-sdk-js >=2.7.0 <3.0.0` as a required
+peer. Core 2.7 supplies invocation-local headers and validates mutually
+exclusive OTel views; core 2.6 and earlier cannot provide those contracts.
+Upgrade core and OTel together. The coordinated minor release must include
+both #955 and #956 before publication; the later core 3 factory migration is
+outside this compatibility range.

@@ -32,6 +32,27 @@ Each package maintains its own version in the `version` field of its `package.js
 
 Bump the version in the appropriate `package.json` file(s) and merge to `main` before creating a release.
 
+### Coordinated OTel 1.2 minor release
+
+Core **2.7.0**, OTel **1.2.0**, and testing **1.3.1** are the coordinated
+compatibility update. Core 2.7.0 must contain both invocation-local X-Ray header
+forwarding (#955) and OTel view exclusivity (#956); merge #953 through #956
+before cutting this release. The version edits prepare the release and do not
+publish it.
+
+OTel 1.2 requires core `>=2.7.0 <3.0.0`. Released core 2.6.0 cannot forward the
+new header or enforce view registration, so it is no longer an accepted peer.
+The required peer also prevents omitting the core dependency from an installed
+consumer. Testing 1.3.1 admits compatible core 1.x/2.x releases with
+`>=1.0.1 <3.0.0`, including subsequent patches. Core 3's factory migration needs
+its own major plugin compatibility update.
+
+Installed-package regressions pack the candidate packages and run them from an
+isolated consumer against both pinned published core 2.6.0 and the candidate
+core. They reproduce the old-core failure, require npm's installed-tree check
+to reject that combination, and verify the new behavior with an accepted peer.
+Do not use `--force` or `--legacy-peer-deps` to bypass these constraints.
+
 ## Cutting a Release
 
 ### 1. Bump the version
