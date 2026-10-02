@@ -98,7 +98,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `microvmSession(context, ...)`, which sends several jobs to one MicroVM. Both are built from
   `step`, `createCallback`, and `runInChildContext`, and label their parts with `subType`. The
   worker package runs in the MicroVM image. It answers the lifecycle hooks, runs each job, sends
-  heartbeats, reports the outcome to the job's callback, and can suspend the MicroVM when idle.
+  heartbeats, reports the outcome to the job's callback, and can suspend the MicroVM when idle, if
+  the session opts in with `autoSuspendOnIdle: true`.
   The extras package requires core SDK 2.6.0 or later.
 
 ## [2.3.1]

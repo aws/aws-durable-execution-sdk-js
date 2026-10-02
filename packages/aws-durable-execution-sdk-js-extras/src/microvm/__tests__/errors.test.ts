@@ -217,9 +217,14 @@ describe("MicroVM errors", () => {
         context,
         "pipeline",
         { ...baseConfig(client), fetch: endpoint.fetch },
-        async (vm) => {
+        async (vm, ctx) => {
           try {
-            return await vm.invoke("build", {}, { timeout: { minutes: 5 } });
+            return await vm.invoke(
+              ctx,
+              "build",
+              {},
+              { timeout: { minutes: 5 } },
+            );
           } catch (error) {
             inHandler = await see(() => Promise.reject(error));
             // The handler lets the failure leave the session.

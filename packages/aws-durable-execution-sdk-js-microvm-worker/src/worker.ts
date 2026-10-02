@@ -298,7 +298,8 @@ export interface MicrovmWorkerListener {
  *
  * The listener counts only jobs. It cannot see background processes, or
  * inbound traffic that is not a job. A MicroVM that must keep such work
- * running sets `autoSuspendOnIdle: false` in the session.
+ * running leaves `autoSuspendOnIdle` off in the session, which is the
+ * default.
  *
  * Every other lifecycle hook gets HTTP 200. This includes the `ready` image
  * hook, which the service requires whenever the `run` hook is enabled. Other

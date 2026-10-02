@@ -31,8 +31,8 @@ describe("operations with a custom-logger context", () => {
         await ctx.map("items", [1, 2], (itemCtx, n) =>
           microvm(itemCtx, `item-${n}`, n, config),
         );
-        return microvmSession(ctx, "session", config, async (vm) =>
-          vm.invoke("job", 1, { timeout: { minutes: 1 } }),
+        return microvmSession(ctx, "session", config, async (vm, ctx) =>
+          vm.invoke(ctx, "job", 1, { timeout: { minutes: 1 } }),
         );
       },
     );

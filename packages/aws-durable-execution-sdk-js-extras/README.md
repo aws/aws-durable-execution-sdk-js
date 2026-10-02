@@ -215,13 +215,17 @@ const result = await microvmSession(
     timeout: { hours: 2 }, // the whole session, at most 8 hours
   },
   async (vm, ctx) => {
-    const build = await vm.invoke("clone-build", { repo: event.repo }, {
+    const build = await vm.invoke(ctx, "clone-build", { repo: event.repo }, {
       path: "/clone-build",
       timeout: { minutes: 15 },
       heartbeatTimeout: { seconds: 30 },
     });
     await ctx.waitForCallback("approval", sendApprovalRequest);
-    const tests = await vm.invoke("test", { build }, { path: "/test", timeout: { minutes: 10 } });
+    const tests = await vm.invoke(ctx, "test", { build }, {
+      path: "/test",
+      timeout: { minutes: 10 },
+      heartbeatTimeout: { seconds: 30 },
+    });
     return { build, tests };
   },
 );
@@ -245,18 +249,26 @@ pipeline                  Context (MicrovmSession)
 
 - The session ID is random and checkpointed. So the client token is unique per session and stable across retries and replays.
 - The first job is sent right after the launch. The MicroVM endpoint holds or refuses requests until the `run` hook returns, and the request step retries a refused request inside its own attempt. So the session needs no separate readiness wait.
-- Each `vm.invoke` works like `microvm` with HTTP delivery, without its own launch and terminate. It returns the job's result. Without `path`, the job goes to the worker's `handler`.
+- Each `vm.invoke(ctx, name, input, options)` works like `microvm` with HTTP delivery, without its own launch and terminate. It returns the job's result. Without `path`, the job goes to the worker's `handler`.
+- `vm.invoke` takes the context first, as `microvm` does. It creates the job's durable operations in that context. Pass the context that the call runs in: the handler's `ctx`, or a nested one, such as a `map` item's context. A durable operation created in a parent context from inside a child context fails the execution.
 - The session `timeout` sets the MicroVM's lifetime: the service terminates it at the timeout plus 5 minutes. The timeout does not limit the handler or its jobs. A job still running when the MicroVM ends waits for its own `timeout`, which can be up to 8 hours. So set a `heartbeatTimeout` on every `vm.invoke`. The job then fails at its heartbeat timeout after the MicroVM ends.
 - A failed `vm.invoke` rejects inside the handler with a `MicrovmError`. The handler can catch it and continue with the same MicroVM. An uncaught error ends the session.
 - The handler receives the session's child context as its second argument. Use it for durable operations between jobs, and `ctx.promise.all` to run jobs in parallel.
 - Inside `ctx.promise.all`, a failed `vm.invoke` rejects with the SDK's `PromiseCombinatorError`, not with a `MicrovmError`. The MicroVM error type appears only as the `name` of an inner `cause`: `PromiseCombinatorError`, then `StepError`, then an `Error` named, for example, `MicrovmJobFailedError`. When that error ends the session, the checkpoint records only the outer type. So the caller of `microvmSession` gets a `PromiseCombinatorError` with no MicroVM type in its chain. To branch on the MicroVM error type, catch the `PromiseCombinatorError` inside the handler, and read the `name` of its innermost `cause`.
-- Inside a nested child context, such as a `map` item, call `vm.withContext(itemCtx).invoke(...)`. A durable operation created in a parent context from inside a child context fails the execution.
-- `idlePolicy` is not set by default. The session already suspends an idle MicroVM (see below). An idle policy counts only inbound traffic, so it also counts a running job as idle, because the job receives none. So set it only for a MicroVM that serves inbound traffic of its own, and make `maxIdleDurationSeconds` longer than the longest job.
+- `idlePolicy` is not set by default. With `autoSuspendOnIdle: true`, the session suspends an idle MicroVM itself (see below). An idle policy counts only inbound traffic, so it also counts a running job as idle, because the job receives none. So set it only for a MicroVM that serves inbound traffic of its own, and make `maxIdleDurationSeconds` longer than the longest job.
 - The session's value is checkpointed as the child context result. So it must be JSON-serializable, and it counts toward the checkpoint size limit.
 
 ### Suspending the MicroVM between jobs
 
-A running MicroVM pays compute charges. A suspended MicroVM pays only for snapshot storage, and it keeps its memory and files. So the worker in a session MicroVM suspends its own MicroVM when it is idle:
+A running MicroVM pays compute charges. A suspended MicroVM pays only for snapshot storage, and it keeps its memory and files. With `autoSuspendOnIdle: true`, the worker in a session MicroVM suspends its own MicroVM when it is idle.
+
+Suspending is off by default, for three reasons:
+
+1. The function's role needs `lambda:GetMicrovm` and `lambda:ResumeMicrovm`. Without them, every job fails.
+2. The MicroVM's role needs `lambda:SuspendMicrovm` on the image. That permission lets any MicroVM of the image suspend any other.
+3. Background processes that an earlier job started stop while the MicroVM is suspended.
+
+Without it, a session needs only the permissions of `microvm` with HTTP delivery. With it on:
 
 1. The session passes the idle time to the worker in the run hook payload. The default is 60 seconds, or the session `timeout` if that is shorter.
 2. The worker counts its running jobs. When no job has run for the idle time, it calls SuspendMicrovm with its own MicroVM ID. A job that starts cancels the idle time, so the worker never suspends the MicroVM during a job.
@@ -267,8 +279,8 @@ A running MicroVM pays compute charges. A suspended MicroVM pays only for snapsh
 ```typescript
 await microvmSession(ctx, "pipeline", {
   ...config,
-  autoSuspendOnIdle: true,              // the default
-  autoSuspendIdleTime: { seconds: 60 }, // the default
+  autoSuspendOnIdle: true,              // off by default
+  autoSuspendIdleTime: { seconds: 60 }, // the default when suspending is on
 }, handler);
 ```
 
@@ -277,18 +289,18 @@ The worker cannot see other work in the MicroVM. So it also suspends the MicroVM
 - Background processes that an earlier job started.
 - A MicroVM that serves inbound traffic that is not a job, such as a preview environment waiting for an approval.
 
-Set `autoSuspendOnIdle: false` for such a workload. A shorter `autoSuspendIdleTime` saves more compute during long waits, and makes back-to-back jobs more likely to pay for a resume. A resume measured in us-east-1 took about 1 second. The job's `timeout` and `heartbeatTimeout` start before the resume, so they include it. Suspending does not extend the MicroVM's lifetime.
+Leave suspending off for such a workload. A shorter `autoSuspendIdleTime` saves more compute during long waits, and makes back-to-back jobs more likely to pay for a resume. A resume measured in us-east-1 took about 1 second. The job's `timeout` and `heartbeatTimeout` start before the resume, so they include it. Suspending does not extend the MicroVM's lifetime.
 
-The session rejects these settings before it creates any durable operation: an `autoSuspendIdleTime` under 10 seconds, one longer than the session `timeout`, and an `autoSuspendIdleTime` while `autoSuspendOnIdle` is `false`. A session whose `timeout` is under 10 seconds does not suspend by default.
+The session rejects these settings before it creates any durable operation: an `autoSuspendIdleTime` under 10 seconds, one longer than the session `timeout`, and an `autoSuspendIdleTime` while `autoSuspendOnIdle` is not `true`. With suspending on, a session whose `timeout` is under 10 seconds still does not suspend by default.
 
 A session MicroVM lives at most its session `timeout` plus 5 minutes, and never longer than 8 hours. What the next `vm.invoke` reports after the MicroVM ends depends on the state check:
 
-- With `autoSuspendOnIdle` on, or an `idlePolicy` set, the request step calls GetMicrovm before each job. A MicroVM that no longer exists, or that is terminating, then fails the job at once with a `MicrovmNotRunningError`. It is a `MicrovmDeliveryError`, and it is not retried.
-- With `autoSuspendOnIdle: false` and no `idlePolicy`, the session makes no GetMicrovm call. A terminated MicroVM's endpoint answers 502, measured in us-east-1. The request step treats a 502 as a MicroVM that is still starting. So the job fails with a plain `MicrovmDeliveryError`, only after both retry tiers: 5 step attempts with the default retry strategy, each up to the 60-second `retryWindow`. Each attempt bills Lambda compute while it retries.
+- With `autoSuspendOnIdle: true`, or an `idlePolicy` set, the request step calls GetMicrovm before each job. A MicroVM that no longer exists, or that is terminating, then fails the job at once with a `MicrovmNotRunningError`. It is a `MicrovmDeliveryError`, and it is not retried.
+- By default, with no `idlePolicy`, the session makes no GetMicrovm call. A terminated MicroVM's endpoint answers 502, measured in us-east-1. The request step treats a 502 as a MicroVM that is still starting. So the job fails with a plain `MicrovmDeliveryError`, only after both retry tiers: 5 step attempts with the default retry strategy, each up to the 60-second `retryWindow`. Each attempt bills Lambda compute while it retries.
 
-The session needs the same permissions as `microvm` with HTTP delivery, including `lambda:CreateMicrovmAuthToken`. It also needs `lambda:GetMicrovm` and `lambda:ResumeMicrovm`. With `autoSuspendOnIdle: false` and no `idlePolicy`, it needs neither.
+The session needs the same permissions as `microvm` with HTTP delivery, including `lambda:CreateMicrovmAuthToken`. With `autoSuspendOnIdle: true` or an `idlePolicy`, it also needs `lambda:GetMicrovm` and `lambda:ResumeMicrovm`.
 
-The MicroVM's execution role needs `lambda:SuspendMicrovm` for the worker's self-suspend. The action authorizes on the MicroVM image, so the statement names the image ARN (`arn:aws:lambda:<region>:<account>:microvm-image:<name>`). A MicroVM can then suspend any MicroVM from the same image, not only itself. So code in one MicroVM can suspend another during its job, and that job then waits until its `heartbeatTimeout` or its `timeout`. Use one image per trust boundary. Without the permission, the worker logs a warning, and the MicroVM keeps running.
+With `autoSuspendOnIdle: true`, the MicroVM's execution role needs `lambda:SuspendMicrovm` for the worker's self-suspend. The action authorizes on the MicroVM image, so the statement names the image ARN (`arn:aws:lambda:<region>:<account>:microvm-image:<name>`). A MicroVM can then suspend any MicroVM from the same image, not only itself. So code in one MicroVM can suspend another during its job, and that job then waits until its `heartbeatTimeout` or its `timeout`. Use one image per trust boundary. Without the permission, the worker logs a warning, and the MicroVM keeps running.
 
 ## End-to-end test
 

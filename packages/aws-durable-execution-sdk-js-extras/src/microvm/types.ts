@@ -198,9 +198,9 @@ export interface MicrovmSessionConfig extends MicrovmBaseConfig {
   /**
    * The MicroVM idle policy. Not set by default.
    *
-   * The session already suspends an idle MicroVM through
-   * {@link autoSuspendOnIdle}, which counts running jobs. An idle policy
-   * counts only inbound traffic, and a running job receives none. So
+   * With {@link autoSuspendOnIdle}, the session suspends an idle MicroVM
+   * itself, and it counts running jobs. An idle policy counts only inbound
+   * traffic, and a running job receives none. So
    * `maxIdleDurationSeconds` must be longer than the longest job, or the
    * service suspends the MicroVM during that job. Set it only for a MicroVM
    * that serves inbound traffic of its own.
@@ -209,7 +209,20 @@ export interface MicrovmSessionConfig extends MicrovmBaseConfig {
 
   /**
    * Whether the MicroVM suspends itself when no job has run for
-   * {@link autoSuspendIdleTime}. Defaults to `true`.
+   * {@link autoSuspendIdleTime}. Defaults to `false`.
+   *
+   * It is off by default because it needs more permissions and changes what
+   * the MicroVM does between jobs:
+   *
+   * 1. The function's role needs `lambda:GetMicrovm` and
+   *    `lambda:ResumeMicrovm`. Without them, every job fails.
+   * 2. The MicroVM's role needs `lambda:SuspendMicrovm` on the image. That
+   *    permission lets any MicroVM of the image suspend any other.
+   * 3. Background processes that an earlier job started stop while the
+   *    MicroVM is suspended.
+   *
+   * Without it, a session needs only the permissions of {@link microvm} with
+   * HTTP delivery.
    *
    * A running MicroVM pays compute charges. A suspended MicroVM pays only
    * for snapshot storage and keeps its memory and files. The worker in the
@@ -224,7 +237,7 @@ export interface MicrovmSessionConfig extends MicrovmBaseConfig {
    * - A MicroVM that serves inbound traffic that is not a job, such as a
    *   preview environment waiting for an approval.
    *
-   * Set `false` for such a workload. A resume adds latency to the next job,
+   * Leave it off for such a workload. A resume adds latency to the next job,
    * about 1 second in us-east-1, and the job's `timeout` and
    * `heartbeatTimeout` count that latency. Suspending does not extend the
    * MicroVM's lifetime.
@@ -254,8 +267,9 @@ export interface MicrovmSessionConfig extends MicrovmBaseConfig {
   /**
    * How long the worker waits with no running job before it suspends the
    * MicroVM. Defaults to 60 seconds, or to the session `timeout` if that is
-   * shorter. A session whose `timeout` is under 10 seconds does not suspend
-   * by default. Applies only when {@link autoSuspendOnIdle} is not `false`.
+   * shorter. Applies only when {@link autoSuspendOnIdle} is `true`, and
+   * setting it otherwise throws a `TypeError`. With suspending on, a session
+   * whose `timeout` is under 10 seconds still does not suspend by default.
    *
    * A shorter time saves more compute during long waits. It also makes
    * back-to-back jobs more likely to pay for a suspend and a resume that
@@ -317,10 +331,12 @@ export interface MicrovmSession {
    * {@link DEFAULT_MICROVM_JOB_PATH}, which the worker serves with its
    * `handler`.
    *
-   * Each call creates a child context named `name`, with a job callback
-   * `<name>.callback` and a request step `<name>.request`. The durable
-   * operations are created in the session's context. To call it inside a
-   * nested child context, such as a `map` item, use {@link withContext}.
+   * Each call creates a child context named `name` in `context`, with a job
+   * callback `<name>.callback` and a request step `<name>.request`. Pass the
+   * context that the call runs in, as for {@link microvm}: the session's
+   * child context, or a nested one, such as a `map` item's context. A durable
+   * operation created in a parent context from inside a child context fails
+   * the execution.
    *
    * @throws \{MicrovmJobFailedError\} When the job handler in the MicroVM
    * throws.
@@ -328,22 +344,16 @@ export interface MicrovmSession {
    * @throws \{MicrovmNotRunningError\} When the session's MicroVM has ended.
    * @throws \{MicrovmDeliveryError\} When the request fails after all
    * retries, or the route rejects the job.
-   * @throws \{TypeError\} When `name`, `path`, or `port` is invalid.
+   * @throws \{TypeError\} When `context` is not a durable context, or
+   * `name`, `path`, or `port` is invalid.
    * @throws \{RangeError\} When `timeout` or `retryWindow` is out of range.
    */
   invoke<TOutput = unknown, TInput = unknown>(
+    context: DurableContext,
     name: string,
     input: TInput,
     options: MicrovmInvokeOptions,
   ): DurablePromise<TOutput>;
-
-  /**
-   * Returns a handle that creates its durable operations in `context`. Use it
-   * inside a child context of the session handler, such as a `map` item or a
-   * `runInChildContext` function. A durable operation created in a parent
-   * context from inside a child context fails the execution.
-   */
-  withContext(context: DurableContext): MicrovmSession;
 }
 
 /**

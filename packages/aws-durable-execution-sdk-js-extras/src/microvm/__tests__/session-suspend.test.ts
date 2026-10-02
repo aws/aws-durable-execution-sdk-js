@@ -59,6 +59,8 @@ function runnerFor(
             ...baseConfig(client),
             timeout: { hours: 1 },
             fetch: endpoint.fetch,
+            // Suspending is off by default. These tests are about suspending.
+            autoSuspendOnIdle: true,
             ...overrides,
           },
           handler,
@@ -82,14 +84,14 @@ async function complete(
 
 /** A session that runs one job, waits, and runs a second job. */
 const twoJobsWithWait: MicrovmSessionHandler<unknown> = async (vm, ctx) => {
-  const first = await vm.invoke("first", 1, { ...job, path: "/first" });
+  const first = await vm.invoke(ctx, "first", 1, { ...job, path: "/first" });
   await ctx.wait("pause", { minutes: 30 });
-  const second = await vm.invoke("second", 2, { ...job, path: "/second" });
+  const second = await vm.invoke(ctx, "second", 2, { ...job, path: "/second" });
   return [first, second];
 };
 
 describe("microvmSession with a MicroVM that suspends itself", () => {
-  it("asks the worker to suspend after 60 seconds by default, and checks the state before each job", async () => {
+  it("asks the worker to suspend after 60 seconds by default when suspending is on, and checks the state before each job", async () => {
     const client = new FakeMicrovmsClient();
     const endpoint = recordingEndpoint(client);
     const runner = runnerFor(client, endpoint, twoJobsWithWait);
@@ -160,8 +162,8 @@ describe("microvmSession with a MicroVM that suspends itself", () => {
         return { state: "SUSPENDED" };
       },
     ];
-    const runner = runnerFor(client, endpoint, async (vm) =>
-      vm.invoke("only", 1, { ...job, path: "/only" }),
+    const runner = runnerFor(client, endpoint, async (vm, ctx) =>
+      vm.invoke(ctx, "only", 1, { ...job, path: "/only" }),
     );
 
     const executionPromise = runner.run({ payload: {} });
@@ -195,8 +197,8 @@ describe("microvmSession with a MicroVM that suspends itself", () => {
         return { state: "SUSPENDED" };
       },
     ];
-    const runner = runnerFor(client, endpoint, async (vm) =>
-      vm.invoke("only", 1, { ...job, path: "/only" }),
+    const runner = runnerFor(client, endpoint, async (vm, ctx) =>
+      vm.invoke(ctx, "only", 1, { ...job, path: "/only" }),
     );
 
     const executionPromise = runner.run({ payload: {} });
@@ -216,7 +218,7 @@ describe("microvmSession with a MicroVM that suspends itself", () => {
     ]);
   });
 
-  it("does not suspend by default when the session timeout is under 10 seconds", async () => {
+  it("does not suspend by default when suspending is on and the session timeout is under 10 seconds", async () => {
     const client = new FakeMicrovmsClient();
     const endpoint = recordingEndpoint(client);
     const runner = runnerFor(client, endpoint, async () => "none", {
@@ -245,12 +247,15 @@ describe("microvmSession with a MicroVM that suspends itself", () => {
     expect(client.payload().autoSuspendIdleSeconds).toBe(120);
   });
 
-  it("does nothing extra when autoSuspendOnIdle is false and no idle policy is set", async () => {
+  it.each<[string, Partial<MicrovmSessionConfig>]>([
+    ["by default", { autoSuspendOnIdle: undefined }],
+    ["when autoSuspendOnIdle is false", { autoSuspendOnIdle: false }],
+  ])("does nothing extra %s with no idle policy", async (_label, overrides) => {
+    // The function then needs no lambda:GetMicrovm or lambda:ResumeMicrovm,
+    // and the MicroVM needs no lambda:SuspendMicrovm.
     const client = new FakeMicrovmsClient();
     const endpoint = recordingEndpoint(client);
-    const runner = runnerFor(client, endpoint, twoJobsWithWait, {
-      autoSuspendOnIdle: false,
-    });
+    const runner = runnerFor(client, endpoint, twoJobsWithWait, overrides);
 
     const executionPromise = runner.run({ payload: {} });
     await complete(runner, "first", "one");
@@ -314,7 +319,12 @@ describe("microvmSession with a MicroVM that suspends itself", () => {
     [
       "an idle time while autoSuspendOnIdle is false",
       { autoSuspendOnIdle: false, autoSuspendIdleTime: { seconds: 30 } },
-      "autoSuspendIdleTime is set, but autoSuspendOnIdle is false",
+      "autoSuspendIdleTime is set, but autoSuspendOnIdle is not true",
+    ],
+    [
+      "an idle time while autoSuspendOnIdle is not set",
+      { autoSuspendOnIdle: undefined, autoSuspendIdleTime: { seconds: 30 } },
+      "autoSuspendIdleTime is set, but autoSuspendOnIdle is not true",
     ],
   ])(
     "rejects %s before any durable operation",
@@ -367,7 +377,7 @@ describe("microvmSession with a MicroVM that suspends itself", () => {
     const caught: { notRunning: boolean; delivery: boolean }[] = [];
     const runner = runnerFor(client, endpoint, async (vm, ctx) => {
       try {
-        await vm.invoke("gone", 1, job);
+        await vm.invoke(ctx, "gone", 1, job);
         return "unexpected";
       } catch (error) {
         caught.push({

@@ -132,6 +132,7 @@ describe("MicrovmOperationSubType", () => {
             },
             async (vm, ctx) => {
               const build = await vm.invoke(
+                ctx,
                 "build",
                 {},
                 {

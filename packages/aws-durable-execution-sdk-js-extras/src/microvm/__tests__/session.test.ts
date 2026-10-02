@@ -86,8 +86,13 @@ describe("microvmSession", () => {
   it("sends a job without a path to the default job path", async () => {
     const client = new FakeMicrovmsClient();
     const endpoint = new FakeEndpoint();
-    const runner = runnerFor(client, endpoint, async (vm) =>
-      vm.invoke("build", { repo: "org/app" }, { timeout: { minutes: 10 } }),
+    const runner = runnerFor(client, endpoint, async (vm, ctx) =>
+      vm.invoke(
+        ctx,
+        "build",
+        { repo: "org/app" },
+        { timeout: { minutes: 10 } },
+      ),
     );
 
     const executionPromise = runner.run({ payload: {} });
@@ -104,13 +109,14 @@ describe("microvmSession", () => {
   it("sends two jobs to one MicroVM and returns the handler's value", async () => {
     const client = new FakeMicrovmsClient();
     const endpoint = new FakeEndpoint();
-    const runner = runnerFor(client, endpoint, async (vm) => {
+    const runner = runnerFor(client, endpoint, async (vm, ctx) => {
       const build = await vm.invoke<{ artifact: string }>(
+        ctx,
         "clone-build",
         { repo: "org/app" },
         job("/clone-build"),
       );
-      const tests = await vm.invoke("test", { build }, job("/test"));
+      const tests = await vm.invoke(ctx, "test", { build }, job("/test"));
       return { build, tests, microvmId: vm.microvmId };
     });
 
@@ -137,11 +143,8 @@ describe("microvmSession", () => {
     expect(client.runInputs[0].ingressNetworkConnectors).toEqual([
       `arn:aws:lambda:${region}:aws:network-connector:aws-network-connector:ALL_INGRESS`,
     ]);
-    expect(client.payload()).toEqual({
-      version: 1,
-      region,
-      autoSuspendIdleSeconds: 60,
-    });
+    // Suspending is off by default. So the payload asks for no suspend.
+    expect(client.payload()).toEqual({ version: 1, region });
 
     // Each job has its own callback and is delivered once.
     expect(endpoint.requests.map((r) => r.url)).toEqual([
@@ -160,9 +163,9 @@ describe("microvmSession", () => {
     const client = new FakeMicrovmsClient();
     const endpoint = new FakeEndpoint();
     const runner = runnerFor(client, endpoint, async (vm, ctx) => {
-      const first = await vm.invoke("first", 1, job("/job"));
+      const first = await vm.invoke(ctx, "first", 1, job("/job"));
       await ctx.wait("pause", { minutes: 30 });
-      const second = await vm.invoke("second", 2, job("/job"));
+      const second = await vm.invoke(ctx, "second", 2, job("/job"));
       return [first, second];
     });
 
@@ -182,8 +185,8 @@ describe("microvmSession", () => {
     const endpoint = new FakeEndpoint();
     const runner = runnerFor(client, endpoint, async (vm, ctx) =>
       ctx.promise.all([
-        vm.invoke("left", "L", job("/job")),
-        vm.invoke("right", "R", job("/job")),
+        vm.invoke(ctx, "left", "L", job("/job")),
+        vm.invoke(ctx, "right", "R", job("/job")),
       ]),
     );
 
@@ -222,8 +225,8 @@ describe("microvmSession", () => {
             async (vm, ctx) => {
               try {
                 return await ctx.promise.all([
-                  vm.invoke("left", "L", job("/job")),
-                  vm.invoke("right", "R", job("/job")),
+                  vm.invoke(ctx, "left", "L", job("/job")),
+                  vm.invoke(ctx, "right", "R", job("/job")),
                 ]);
               } catch (error) {
                 inside = chain(error);
@@ -252,12 +255,12 @@ describe("microvmSession", () => {
     });
   });
 
-  it("runs jobs from map items through withContext", async () => {
+  it("runs jobs from map items with each item's context", async () => {
     const client = new FakeMicrovmsClient();
     const endpoint = new FakeEndpoint();
     const runner = runnerFor(client, endpoint, async (vm, ctx) => {
       const batch = await ctx.map("shards", [0, 1], (itemCtx, shard) =>
-        vm.withContext(itemCtx).invoke(`shard-${shard}`, shard, job("/job")),
+        vm.invoke(itemCtx, `shard-${shard}`, shard, job("/job")),
       );
       return batch.getResults();
     });
@@ -272,15 +275,36 @@ describe("microvmSession", () => {
     expect(client.runInputs).toHaveLength(1);
   });
 
-  it("lets the handler catch a failed job and continue on the same MicroVM", async () => {
+  it("rejects an invoke without a durable context as its first argument", async () => {
     const client = new FakeMicrovmsClient();
     const endpoint = new FakeEndpoint();
     const runner = runnerFor(client, endpoint, async (vm) => {
+      // The shape before the context came first: vm.invoke(name, input, options).
+      const invoke = vm.invoke as unknown as (
+        ...args: unknown[]
+      ) => Promise<unknown>;
+      return invoke("build", null, job("/job")).catch(
+        (error: Error) => `${error.name}: ${error.message}`,
+      );
+    });
+
+    const execution = await runner.run({ payload: {} });
+
+    expect(execution.getResult()).toBe(
+      'TypeError: MicroVM session "pipeline": invoke requires the durable context to create the job in, as its first argument',
+    );
+    expect(endpoint.requests).toHaveLength(0);
+  });
+
+  it("lets the handler catch a failed job and continue on the same MicroVM", async () => {
+    const client = new FakeMicrovmsClient();
+    const endpoint = new FakeEndpoint();
+    const runner = runnerFor(client, endpoint, async (vm, ctx) => {
       try {
-        await vm.invoke("flaky", null, job("/job"));
+        await vm.invoke(ctx, "flaky", null, job("/job"));
         return "unexpected";
       } catch (error) {
-        const recovered = await vm.invoke("fallback", null, job("/job"));
+        const recovered = await vm.invoke(ctx, "fallback", null, job("/job"));
         return { caught: (error as Error).message, recovered };
       }
     });
@@ -302,8 +326,8 @@ describe("microvmSession", () => {
   it("fails with an uncaught job error and still terminates the MicroVM", async () => {
     const client = new FakeMicrovmsClient();
     const endpoint = new FakeEndpoint();
-    const runner = runnerFor(client, endpoint, async (vm) =>
-      vm.invoke("build", null, job("/job")),
+    const runner = runnerFor(client, endpoint, async (vm, ctx) =>
+      vm.invoke(ctx, "build", null, job("/job")),
     );
 
     const executionPromise = runner.run({ payload: {} });
@@ -333,7 +357,7 @@ describe("microvmSession", () => {
   it("rejects an invalid job inside the handler, where the handler can catch it", async () => {
     const client = new FakeMicrovmsClient();
     const endpoint = new FakeEndpoint();
-    const runner = runnerFor(client, endpoint, async (vm) => {
+    const runner = runnerFor(client, endpoint, async (vm, ctx) => {
       const errors: string[] = [];
       for (const options of [
         { path: "no-slash", timeout: { minutes: 1 } },
@@ -345,7 +369,7 @@ describe("microvmSession", () => {
         },
       ]) {
         try {
-          await vm.invoke("bad", null, options);
+          await vm.invoke(ctx, "bad", null, options);
         } catch (error) {
           errors.push((error as Error).name);
         }
@@ -370,8 +394,8 @@ describe("microvmSession", () => {
       throwing(new ThrottlingException({ message: "slow down", ...metadata })),
     ];
     const endpoint = new FakeEndpoint();
-    const runner = runnerFor(client, endpoint, async (vm) =>
-      vm.invoke("only", null, job("/job")),
+    const runner = runnerFor(client, endpoint, async (vm, ctx) =>
+      vm.invoke(ctx, "only", null, job("/job")),
     );
 
     const executionPromise = runner.run({ payload: {} });

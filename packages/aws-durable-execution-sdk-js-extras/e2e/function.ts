@@ -79,8 +79,8 @@ export const handler = withDurableExecution(
           timeout: config.timeout,
           idlePolicy: event.idlePolicy,
         },
-        async (vm) =>
-          vm.invoke("long", event.job, {
+        async (vm, ctx) =>
+          vm.invoke(ctx, "long", event.job, {
             path: "/job",
             timeout: config.timeout,
             heartbeatTimeout: config.heartbeatTimeout,
@@ -100,12 +100,14 @@ export const handler = withDurableExecution(
           imageIdentifier: config.imageIdentifier,
           executionRoleArn: config.executionRoleArn,
           timeout: config.timeout,
+          autoSuspendOnIdle: true,
           ...(event.autoSuspendIdleSeconds !== undefined && {
             autoSuspendIdleTime: { seconds: event.autoSuspendIdleSeconds },
           }),
         },
         async (vm, sessionContext) => {
           const remembered = await vm.invoke<{ pid: number }>(
+            sessionContext,
             "remember",
             { value: event.job.label },
             { path: "/remember", timeout: { minutes: 5 } },
@@ -115,6 +117,7 @@ export const handler = withDurableExecution(
           });
           await sessionContext.wait("second-pause", { seconds: 20 });
           const recalled = await vm.invoke<{ pid: number; value: string }>(
+            sessionContext,
             "recall",
             {},
             { path: "/recall", timeout: { minutes: 5 } },
@@ -138,12 +141,14 @@ export const handler = withDurableExecution(
         async (vm, sessionContext) => {
           const key = event.job.label;
           const written = await vm.invoke<{ microvmId: string }>(
+            sessionContext,
             "write",
             { key, value: `written-by-${key}` },
             { path: "/write", timeout: { minutes: 5 } },
           );
           await sessionContext.wait("pause", { seconds: 5 });
           const read = await vm.invoke<{ microvmId: string; value: string }>(
+            sessionContext,
             "read",
             { key },
             { path: "/read", timeout: { minutes: 5 } },

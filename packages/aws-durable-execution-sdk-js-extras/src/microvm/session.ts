@@ -48,10 +48,10 @@ import type {
  * 4. `<name>.terminate` calls TerminateMicrovm after the handler returns or
  *    throws.
  *
- * Between jobs, the worker in the MicroVM suspends its own MicroVM when no
- * job has run for `autoSuspendIdleTime`. The default is 60 seconds, or the
- * session `timeout` if that is shorter. A session shorter than 10 seconds
- * does not suspend by default. The next `vm.invoke` resumes it. See
+ * With `autoSuspendOnIdle: true`, the worker in the MicroVM suspends its own
+ * MicroVM between jobs, when no job has run for `autoSuspendIdleTime`. The
+ * default idle time is 60 seconds, or the session `timeout` if that is
+ * shorter. The next `vm.invoke` resumes it. Suspending is off by default. See
  * {@link MicrovmSessionConfig.autoSuspendOnIdle}.
  *
  * Each durable operation records a subtype from
@@ -63,9 +63,10 @@ import type {
  * The session sends its first job right after the launch. The MicroVM
  * endpoint holds or refuses requests until the `run` hook returns. The request
  * step retries a refused request inside its own attempt. So the session needs
- * no separate readiness wait, which would cost one more invocation. Before
- * each job, the request step calls GetMicrovm. It resumes a suspended
- * MicroVM, and it returns at once for a new MicroVM that is still booting.
+ * no separate readiness wait, which would cost one more invocation. When the
+ * MicroVM can be suspended, the request step calls GetMicrovm before each
+ * job. It resumes a suspended MicroVM, and it returns at once for a new
+ * MicroVM that is still booting.
  *
  * A failed `vm.invoke` rejects inside the handler. The handler can catch the
  * error and continue with the same MicroVM. An error that leaves the handler
@@ -76,11 +77,11 @@ import type {
  * the checkpoint size limit.
  *
  * Pass the context that the call runs in, such as a child context or a
- * `map` item's context:
+ * `map` item's context. `vm.invoke` takes its context the same way:
  * ```typescript
  * const result = await microvmSession(context, "pipeline", config, async (vm, ctx) => {
- *   const build = await vm.invoke("build", input, { path: "/build", timeout: { minutes: 15 } });
- *   return vm.invoke("test", build, { path: "/test", timeout: { minutes: 10 } });
+ *   const build = await vm.invoke(ctx, "build", input, { path: "/build", timeout: { minutes: 15 } });
+ *   return vm.invoke(ctx, "test", build, { path: "/test", timeout: { minutes: 10 } });
  * });
  * ```
  *
@@ -98,7 +99,7 @@ import type {
  * or `autoSuspendIdleTime` is shorter than 10 seconds or longer than
  * `timeout`.
  * @throws \{TypeError\} When `autoSuspendIdleTime` is set while
- * `autoSuspendOnIdle` is `false`.
+ * `autoSuspendOnIdle` is not `true`.
  * @throws \{MicrovmLaunchError\} When the launch fails after all retries.
  *
  * @public
@@ -159,7 +160,7 @@ export function microvmSession<TOutput = unknown>(
 
       try {
         return await handler(
-          createSession(child, scope, launched, resumeBeforeDelivery),
+          createSession(scope, launched, resumeBeforeDelivery),
           child,
         );
       } finally {
@@ -203,10 +204,13 @@ function validateAutoSuspend(
   config: MicrovmSessionConfig,
   timeoutSeconds: number,
 ): number | undefined {
-  if (config.autoSuspendOnIdle === false) {
+  // Suspending is opt-in. It needs lambda:GetMicrovm and
+  // lambda:ResumeMicrovm in the function's role, and lambda:SuspendMicrovm in
+  // the MicroVM's role. It also stops background processes between jobs.
+  if (config.autoSuspendOnIdle !== true) {
     if (config.autoSuspendIdleTime !== undefined) {
       throw new TypeError(
-        `MicroVM session "${name}": autoSuspendIdleTime is set, but autoSuspendOnIdle is false`,
+        `MicroVM session "${name}": autoSuspendIdleTime is set, but autoSuspendOnIdle is not true`,
       );
     }
     return undefined;
@@ -237,14 +241,15 @@ function validateAutoSuspend(
 }
 
 /**
- * Creates the session handle for one context.
+ * Creates the session handle.
  *
- * Each `invoke` creates its durable operations in `context`. So a handle
- * made for the session's child context must not be used inside a nested
- * child context. `withContext` returns a handle for the nested context.
+ * Each `invoke` creates its durable operations in the context that the caller
+ * passes, as `microvm` does. A durable operation created in a parent context
+ * from inside a child context fails the execution. So the handle holds no
+ * context of its own, and one handle works in the session's child context,
+ * in a nested child context, and in `map` and `parallel` items.
  */
 function createSession(
-  context: DurableContext,
   scope: OperationScope,
   launched: LaunchResult,
   resumeBeforeDelivery: boolean,
@@ -252,6 +257,7 @@ function createSession(
   return {
     microvmId: launched.microvmId,
     invoke: <TOutput = unknown, TInput = unknown>(
+      context: DurableContext,
       jobName: string,
       input: TInput,
       options: MicrovmInvokeOptions,
@@ -265,8 +271,6 @@ function createSession(
         input,
         options,
       ),
-    withContext: (other: DurableContext): MicrovmSession =>
-      createSession(other, scope, launched, resumeBeforeDelivery),
   };
 }
 
@@ -288,6 +292,16 @@ function invokeJob<TOutput, TInput>(
   options: MicrovmInvokeOptions,
 ): DurablePromise<TOutput> {
   try {
+    // A call in the shape vm.invoke(name, input, options) passes a string
+    // here. This check reports that, instead of a TypeError from inside.
+    if (
+      typeof (context as { runInChildContext?: unknown } | undefined)
+        ?.runInChildContext !== "function"
+    ) {
+      throw new TypeError(
+        `MicroVM session "${scope.name}": invoke requires the durable context to create the job in, as its first argument`,
+      );
+    }
     if (typeof jobName !== "string" || jobName.length === 0) {
       throw new TypeError(
         `MicroVM session "${scope.name}": invoke requires a non-empty job name`,

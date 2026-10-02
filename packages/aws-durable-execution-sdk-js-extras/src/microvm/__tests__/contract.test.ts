@@ -154,7 +154,11 @@ describe("contract between extras and the worker", () => {
           microvmSession(
             context,
             "session",
-            { ...baseConfig(client), fetch: endpoint.fetch },
+            {
+              ...baseConfig(client),
+              fetch: endpoint.fetch,
+              autoSuspendOnIdle: true,
+            },
             async () => "no jobs",
           ),
       ),
