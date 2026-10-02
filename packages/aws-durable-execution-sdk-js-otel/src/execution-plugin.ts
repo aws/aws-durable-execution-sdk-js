@@ -520,11 +520,24 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       return;
     }
 
-    // The only place an operation span is created: start+end it here under its
-    // deterministic ID, so it is exported exactly once even across suspend/resume.
+    // Release placeholders even when this is a previously observed completion.
     const started = this.operationStarts.get(info.id);
     this.operationContexts.delete(info.id);
     this.operationStarts.delete(info.id);
+
+    // External completions are emitted when first observed. Later successful
+    // invocations replaying the stored outcome must not export it again.
+    // Redelivery after an interrupted invocation still has isReplay=false and
+    // can re-export the same deterministic span for recovery.
+    if (
+      info.isReplay &&
+      (info.type === "WAIT" ||
+        info.type === "INVOKE" ||
+        info.type === "CHAINED_INVOKE" ||
+        info.type === "CALLBACK")
+    ) {
+      return;
+    }
 
     // The end event may omit name/subType; fall back to what start captured.
     const name = info.name ?? started?.name;
