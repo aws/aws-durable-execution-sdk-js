@@ -344,39 +344,47 @@ describe("microvm", () => {
     expect(endpoint.requests[0].body.input).toEqual(input);
   });
 
-  it("keeps the run hook for the largest job that fits, and switches to HTTP one character later", async () => {
-    // The payload length depends on the callback ID. So the test measures
-    // the payload of an empty-string input first, then pads the input.
-    const launchWith = async (paddingLength: number) => {
-      const client = new FakeMicrovmsClient();
-      const endpoint = new FakeEndpoint();
-      const handler = withDurableExecution(
-        async (event: { padding: number }, context: DurableContext) =>
-          microvm(context, "build", "x".repeat(event.padding), {
-            ...baseConfig(client),
-            fetch: endpoint.fetch,
-          }),
+  // The service counts code points. "日" is 1 code point and 3 UTF-8 bytes.
+  // "😀" is 1 code point, 2 UTF-16 code units, and 4 UTF-8 bytes.
+  it.each(["x", "日", "😀"])(
+    "keeps the run hook for the largest job that fits, and switches to HTTP one code point later, with %s padding",
+    async (char) => {
+      // The payload length depends on the callback ID. So the test measures
+      // the payload of an empty-string input first, then pads the input.
+      const launchWith = async (paddingLength: number) => {
+        const client = new FakeMicrovmsClient();
+        const endpoint = new FakeEndpoint();
+        const handler = withDurableExecution(
+          async (event: { padding: number }, context: DurableContext) =>
+            microvm(context, "build", char.repeat(event.padding), {
+              ...baseConfig(client),
+              fetch: endpoint.fetch,
+            }),
+        );
+        const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+        const execution = runner.run({ payload: { padding: paddingLength } });
+        await runner
+          .getOperation("build.launch")
+          .waitForData(WaitingOperationStatus.COMPLETED);
+        await runner
+          .getOperation("build.callback")
+          .sendCallbackSuccess(JSON.stringify("done"));
+        expect((await execution).getStatus()).toBe("SUCCEEDED");
+        return client.runInputs[0].runHookPayload as string;
+      };
+      const codePoints = (text: string) => [...text].length;
+
+      const base = codePoints(await launchWith(0));
+      const fits = await launchWith(MAX_RUN_HOOK_PAYLOAD_LENGTH - base);
+      const tooLarge = await launchWith(MAX_RUN_HOOK_PAYLOAD_LENGTH - base + 1);
+
+      expect(codePoints(fits)).toBe(MAX_RUN_HOOK_PAYLOAD_LENGTH);
+      expect(JSON.parse(fits).job.input).toBe(
+        char.repeat(MAX_RUN_HOOK_PAYLOAD_LENGTH - base),
       );
-      const runner = new LocalDurableTestRunner({ handlerFunction: handler });
-      const execution = runner.run({ payload: { padding: paddingLength } });
-      await runner
-        .getOperation("build.launch")
-        .waitForData(WaitingOperationStatus.COMPLETED);
-      await runner
-        .getOperation("build.callback")
-        .sendCallbackSuccess(JSON.stringify("done"));
-      expect((await execution).getStatus()).toBe("SUCCEEDED");
-      return client.runInputs[0].runHookPayload as string;
-    };
-
-    const base = (await launchWith(0)).length;
-    const fits = await launchWith(MAX_RUN_HOOK_PAYLOAD_LENGTH - base);
-    const tooLarge = await launchWith(MAX_RUN_HOOK_PAYLOAD_LENGTH - base + 1);
-
-    expect(fits).toHaveLength(MAX_RUN_HOOK_PAYLOAD_LENGTH);
-    expect(JSON.parse(fits).job).toBeDefined();
-    expect(JSON.parse(tooLarge).job).toBeUndefined();
-  });
+      expect(JSON.parse(tooLarge).job).toBeUndefined();
+    },
+  );
 
   it.each<[string, Partial<MicrovmConfig>, string]>([
     ["imageIdentifier", { imageIdentifier: "" }, "imageIdentifier is required"],

@@ -35,6 +35,8 @@ export interface E2eEvent {
   requestPath?: string;
   /** Adds this many characters of padding to the input. */
   paddingLength?: number;
+  /** The padding character. The default is "x". */
+  paddingChar?: string;
   /** The session idle policy, for the idle-session scenario. */
   idlePolicy?: {
     autoResumeEnabled: boolean;
@@ -57,7 +59,10 @@ export const handler = withDurableExecution(
       }),
     };
     const job = event.paddingLength
-      ? { ...event.job, padding: "x".repeat(event.paddingLength) }
+      ? {
+          ...event.job,
+          padding: (event.paddingChar ?? "x").repeat(event.paddingLength),
+        }
       : event.job;
 
     if (event.scenario === "idle-session") {

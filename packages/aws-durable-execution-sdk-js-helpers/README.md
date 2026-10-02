@@ -46,7 +46,7 @@ The first argument is the context that the call runs in. Inside a child context 
 
 The operation picks the delivery from the input size, so the caller does not choose:
 
-1. A job whose `run` hook payload fits in 4096 characters goes in the `RunMicrovm` request, and Lambda passes it to the `run` lifecycle hook. The input can be about 3.6 KB of JSON, because the payload also holds the callback ID. The MicroVM gets the `NO_INGRESS` connector, so nothing can reach it.
+1. A job whose `run` hook payload fits in 4096 Unicode code points goes in the `RunMicrovm` request, and Lambda passes it to the `run` lifecycle hook. The service counts code points, not bytes. So an input of about 3,600 code points fits, whether they are ASCII, CJK, or emoji. The payload also holds the callback ID. The MicroVM gets the `NO_INGRESS` connector, so nothing can reach it.
 2. A larger job goes over HTTP. The launch request carries no job, and a request step POSTs the job to the MicroVM after it starts. The input is limited only by the HTTP body. The MicroVM gets an ingress connector, and every request uses a short-lived auth token that the operation creates.
 
 The worker package runs its `handler` for both deliveries. So the code in the MicroVM does not change with the input size.
@@ -286,7 +286,7 @@ The MicroVM's execution role needs `lambda:SuspendMicrovm` for the worker's self
 
 ## End-to-end test
 
-`e2e/run-e2e.mjs` deploys a durable function and a MicroVM image to a real AWS account and runs nine scenarios:
+`e2e/run-e2e.mjs` deploys a durable function and a MicroVM image to a real AWS account and runs twelve scenarios:
 
 - A job that succeeds with heartbeats. Its small input goes in the `run` hook.
 - A job that fails.
@@ -294,6 +294,8 @@ The MicroVM's execution role needs `lambda:SuspendMicrovm` for the worker's self
 - Two jobs in a `map`.
 - A job with a 10 KB input and no route. It must go over HTTP to the worker's `handler`.
 - A job on a named route with a 10 KB input.
+- Two jobs with 3,400 code points of CJK and of emoji input, about 10.6 KB and 13.9 KB. They must go in the `run` hook and reach the MicroVM unchanged.
+- A job with 4,200 code points of CJK input. It must go over HTTP.
 - A failing job over HTTP.
 - A session whose second job reads a file that its first job wrote, with a durable wait between them.
 - A session whose last job reads a value that its first job kept in memory, with two durable waits between them. Its idle time is 10 seconds, so the worker suspends the MicroVM during the first wait. The runner polls the MicroVM state and requires `SUSPENDED`.

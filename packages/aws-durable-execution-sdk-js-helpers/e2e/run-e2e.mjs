@@ -514,6 +514,76 @@ const SCENARIOS = [
     },
   },
   {
+    id: "run-hook-cjk",
+    event: {
+      scenario: "single",
+      job: { mode: "succeed", sleepSeconds: 2, label: "run-hook-cjk" },
+      timeoutSeconds: 600,
+      heartbeatTimeoutSeconds: 15,
+      // 3,400 code points and about 10,600 UTF-8 bytes. It fits the run hook
+      // only because the service counts code points.
+      paddingLength: 3_400,
+      paddingChar: "日",
+    },
+    expect: ({ execution, result, operationNames }) => {
+      assert(execution.Status === "SUCCEEDED", `status ${execution.Status}`);
+      assert(
+        result?.padding === "日".repeat(3_400),
+        "the MicroVM did not receive the padding unchanged",
+      );
+      assert(
+        !operationNames.includes("job.request"),
+        "the job went over HTTP, not in the run hook",
+      );
+    },
+  },
+  {
+    id: "run-hook-emoji",
+    event: {
+      scenario: "single",
+      job: { mode: "succeed", sleepSeconds: 2, label: "run-hook-emoji" },
+      timeoutSeconds: 600,
+      heartbeatTimeoutSeconds: 15,
+      // 3,400 code points, 6,800 UTF-16 code units, and about 13,900 bytes.
+      paddingLength: 3_400,
+      paddingChar: "😀",
+    },
+    expect: ({ execution, result, operationNames }) => {
+      assert(execution.Status === "SUCCEEDED", `status ${execution.Status}`);
+      assert(
+        result?.padding === "😀".repeat(3_400),
+        "the MicroVM did not receive the padding unchanged",
+      );
+      assert(
+        !operationNames.includes("job.request"),
+        "the job went over HTTP, not in the run hook",
+      );
+    },
+  },
+  {
+    id: "auto-http-cjk",
+    event: {
+      scenario: "single",
+      job: { mode: "succeed", sleepSeconds: 2, label: "auto-http-cjk" },
+      timeoutSeconds: 600,
+      heartbeatTimeoutSeconds: 15,
+      // 4,200 code points: past the run hook limit.
+      paddingLength: 4_200,
+      paddingChar: "日",
+    },
+    expect: ({ execution, result, operationNames }) => {
+      assert(execution.Status === "SUCCEEDED", `status ${execution.Status}`);
+      assert(
+        result?.padding === "日".repeat(4_200),
+        "the MicroVM did not receive the padding unchanged",
+      );
+      assert(
+        operationNames.includes("job.request"),
+        "history has no job.request operation",
+      );
+    },
+  },
+  {
     id: "request-fail",
     event: {
       scenario: "single",

@@ -153,7 +153,8 @@ export interface MicrovmConfig extends MicrovmBaseConfig {
    * HTTP delivery settings.
    *
    * The operation picks the delivery itself. A job whose `run` hook payload
-   * fits in {@link MAX_RUN_HOOK_PAYLOAD_LENGTH} characters goes in the `run`
+   * fits in {@link MAX_RUN_HOOK_PAYLOAD_LENGTH} Unicode code points goes in
+   * the `run`
    * hook. A larger job goes over HTTP to `request.path`, which defaults to
    * {@link DEFAULT_MICROVM_JOB_PATH}. Setting `request.path` sends every job
    * over HTTP to that route.

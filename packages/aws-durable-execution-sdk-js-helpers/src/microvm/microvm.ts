@@ -6,9 +6,9 @@ import {
   createJobCallback,
   createScope,
   deliverJob,
+  fitsRunHook,
   jobDocument,
   launch,
-  MAX_RUN_HOOK_PAYLOAD_LENGTH,
   type OperationScope,
   terminate,
   validateBaseConfig,
@@ -32,9 +32,10 @@ import type { MicrovmConfig, MicrovmRunHookPayload } from "./types";
  *    digest of the callback ID. So a retried or replayed launch returns the
  *    same MicroVM instead of starting a second one.
  * 3. The operation picks the delivery. A job whose `run` hook payload fits in
- *    4096 characters goes in the launch request, and the MicroVM receives it
- *    in the `run` hook. A larger job, or any job with `config.request.path`,
- *    goes over HTTP: `<name>.request` POSTs it after the launch.
+ *    4096 Unicode code points goes in the launch request, and the MicroVM
+ *    receives it in the `run` hook. A larger job, or any job with
+ *    `config.request.path`, goes over HTTP: `<name>.request` POSTs it after
+ *    the launch.
  * 4. The child context waits on the callback. The invocation ends while it
  *    waits, so no Lambda compute is billed. The MicroVM completes the callback
  *    with its result or its failure.
@@ -126,9 +127,7 @@ export function microvm<TOutput = unknown, TInput = unknown>(
         region: scope.region,
         job,
       } satisfies MicrovmRunHookPayload<TInput>);
-      const overHttp =
-        request?.path !== undefined ||
-        withJob.length > MAX_RUN_HOOK_PAYLOAD_LENGTH;
+      const overHttp = request?.path !== undefined || !fitsRunHook(withJob);
       const runHookPayload = overHttp
         ? JSON.stringify({
             version: 1,

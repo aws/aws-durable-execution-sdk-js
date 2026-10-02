@@ -13,6 +13,7 @@ interface E2eJob {
   mode: "succeed" | "fail" | "crash";
   sleepSeconds: number;
   label: string;
+  padding?: string;
 }
 
 const SESSION_DIR = "/tmp/session";
@@ -56,6 +57,8 @@ const runJob: MicrovmJobHandler<E2eJob, unknown> = async (job, context) => {
     microvmId: context.microvmId,
     node: process.version,
     inputLength: JSON.stringify(job).length,
+    // Echoed so that a test can compare what the MicroVM received.
+    padding: job.padding,
     finishedAt: new Date().toISOString(),
   };
 };

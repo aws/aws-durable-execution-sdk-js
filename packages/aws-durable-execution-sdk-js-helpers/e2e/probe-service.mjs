@@ -7,10 +7,14 @@
 //    after the first MicroVM is terminated?
 // 2. The runHookPayload limit. The API reference says 4096 characters, and
 //    the developer guide says 16 KB.
+// 3. The unit of that limit. ASCII padding has one UTF-16 code unit per
+//    UTF-8 byte, so it cannot tell bytes from characters. This probe pads
+//    with "日" (1 unit, 3 bytes) and "😀" (2 units, 4 bytes) as well.
 //
 // Every MicroVM the probe starts is terminated before it exits.
 //
-// Usage: MICROVM_IMAGE_ARN=<arn> node e2e/probe-service.mjs
+// Usage: MICROVM_IMAGE_ARN=<arn> [PROBES=token,payload,unit] \
+//   node e2e/probe-service.mjs
 
 import { randomUUID } from "node:crypto";
 import {
@@ -39,6 +43,47 @@ function payload(length) {
     ...base,
     pad: "x".repeat(Math.max(0, length - overhead)),
   });
+}
+
+/**
+ * A run hook payload of exactly `bytes` UTF-8 bytes. The padding is as many
+ * copies of `char` as fit, and ASCII "x" fills the remainder.
+ */
+function payloadOfBytes(bytes, char) {
+  const base = { version: 1, region: REGION, pad: "" };
+  const overhead = Buffer.byteLength(JSON.stringify(base), "utf8");
+  const room = bytes - overhead;
+  const charBytes = Buffer.byteLength(char, "utf8");
+  const copies = Math.floor(room / charBytes);
+  const pad = char.repeat(copies) + "x".repeat(room - copies * charBytes);
+  const text = JSON.stringify({ ...base, pad });
+  if (Buffer.byteLength(text, "utf8") !== bytes) {
+    throw new Error(`payloadOfBytes(${bytes}) built the wrong size`);
+  }
+  return text;
+}
+
+/**
+ * A run hook payload of exactly `count` Unicode code points. The padding is
+ * `char` only, so a 2-unit `char` makes the UTF-16 length much larger.
+ */
+function payloadOfCodePoints(count, char) {
+  const base = { version: 1, region: REGION, pad: "" };
+  const overhead = [...JSON.stringify(base)].length;
+  const text = JSON.stringify({ ...base, pad: char.repeat(count - overhead) });
+  if ([...text].length !== count) {
+    throw new Error(`payloadOfCodePoints(${count}) built the wrong size`);
+  }
+  return text;
+}
+
+/** The three ways to count the length of a string. */
+function measure(text) {
+  return {
+    utf16Units: text.length,
+    codePoints: [...text].length,
+    utf8Bytes: Buffer.byteLength(text, "utf8"),
+  };
 }
 
 async function run(clientToken, overrides = {}) {
@@ -78,9 +123,10 @@ async function terminateAndWait(microvmId) {
 }
 
 const results = {};
+const probes = new Set((process.env.PROBES ?? "token,payload,unit").split(","));
 
 // ---------------------------------------------------------------- 1. token
-{
+if (probes.has("token")) {
   const token = `probe-${randomUUID()}`;
   const first = await run(token);
   const repeat = await run(token);
@@ -104,7 +150,7 @@ const results = {};
 }
 
 // ---------------------------------------------------------------- 2. payload
-{
+if (probes.has("payload")) {
   const sizes = [4_096, 4_097, 16_384, 16_385];
   results.runHookPayload = {};
   for (const size of sizes) {
@@ -112,6 +158,36 @@ const results = {};
       runHookPayload: payload(size),
     });
     results.runHookPayload[size] = outcome.ok ? "accepted" : outcome.error;
+  }
+}
+
+// ---------------------------------------------------------------- 3. unit
+if (probes.has("unit")) {
+  // Each case is accepted under one counting rule and rejected under another.
+  const cases = [
+    // At most 4,096 units, more than 4,096 bytes.
+    ["cjk-5658-bytes", payloadOfBytes(5_658, "日")],
+    ["cjk-12288-bytes", payloadOfBytes(12_288, "日")],
+    // Exactly at, and one past, 16,384 bytes. Both are far below 16,384 units.
+    ["cjk-16384-bytes", payloadOfBytes(16_384, "日")],
+    ["cjk-16385-bytes", payloadOfBytes(16_385, "日")],
+    // 😀 is 2 units and 1 code point, so this separates units from code points.
+    ["emoji-16384-bytes", payloadOfBytes(16_384, "😀")],
+    ["emoji-16385-bytes", payloadOfBytes(16_385, "😀")],
+    // At and one past 4,096 code points. Both are about 8,170 units.
+    ["emoji-4096-code-points", payloadOfCodePoints(4_096, "😀")],
+    ["emoji-4097-code-points", payloadOfCodePoints(4_097, "😀")],
+    ["cjk-4096-code-points", payloadOfCodePoints(4_096, "日")],
+  ];
+  results.runHookPayloadUnit = {};
+  for (const [label, text] of cases) {
+    const outcome = await run(`probe-${randomUUID()}`, {
+      runHookPayload: text,
+    });
+    results.runHookPayloadUnit[label] = {
+      ...measure(text),
+      outcome: outcome.ok ? "accepted" : outcome.error,
+    };
   }
 }
 

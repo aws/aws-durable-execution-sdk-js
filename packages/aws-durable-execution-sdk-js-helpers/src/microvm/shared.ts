@@ -37,11 +37,42 @@ import type {
 export const MAX_MICROVM_DURATION_SECONDS = 28_800;
 
 /**
- * RunMicrovm accepts a `runHookPayload` of at most 4096 characters.
+ * RunMicrovm accepts a `runHookPayload` of at most 4096 Unicode code points.
+ *
+ * The service counts code points, not UTF-8 bytes or UTF-16 code units. A
+ * probe against the service accepted 1,916 code points in 5,658 bytes, and
+ * 4,096 code points of "😀" in 8,149 code units. It rejected 4,097 code
+ * points. A code point is at most 4 bytes, so the payload is at most the
+ * 16,384 bytes that the API model states.
  *
  * @experimental This constant is experimental and may be changed or removed in future releases.
  */
 export const MAX_RUN_HOOK_PAYLOAD_LENGTH = 4_096;
+
+/**
+ * Returns true when `payload` has at most
+ * {@link MAX_RUN_HOOK_PAYLOAD_LENGTH} code points.
+ *
+ * A code point is one or two UTF-16 code units. So a string of at most the
+ * limit in code units always fits, and a string of more than twice the limit
+ * never fits. Only the strings between those lengths need a count.
+ */
+export function fitsRunHook(payload: string): boolean {
+  if (payload.length <= MAX_RUN_HOOK_PAYLOAD_LENGTH) {
+    return true;
+  }
+  if (payload.length > 2 * MAX_RUN_HOOK_PAYLOAD_LENGTH) {
+    return false;
+  }
+  let codePoints = 0;
+  // A string iterator yields one code point per step.
+  for (const _ of payload) {
+    if (++codePoints > MAX_RUN_HOOK_PAYLOAD_LENGTH) {
+      return false;
+    }
+  }
+  return true;
+}
 
 /**
  * The time added to the operation timeout to get the MicroVM's maximum
