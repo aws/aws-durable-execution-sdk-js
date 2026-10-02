@@ -12,6 +12,7 @@ import { validateChainedInvokeOperation } from "./operation-type/validate-chaine
 import { validateStepOperation } from "./operation-type/validate-step-operation";
 import { validateWaitOperation } from "./operation-type/validate-wait-operation";
 import { validateValidActionsByOperationType } from "./valid-actions-by-operation-type-validator";
+import { validateSubTypes } from "./validate-sub-type";
 import { OperationEvents } from "../../test-runner/common/operations/operation-with-data";
 
 const MAX_ERROR_PAYLOAD_SIZE_BYTES = 32768; // 32KB
@@ -32,6 +33,9 @@ export function validateCheckpointUpdates(
     return;
   }
 
+  // The service checks the request against its model first. So an invalid
+  // subtype rejects the request before any other check.
+  validateSubTypes(updates);
   validateConflictingExecutionUpdate(updates);
   validateParentIdAndDuplicateId(updates, checkpointOperations);
 

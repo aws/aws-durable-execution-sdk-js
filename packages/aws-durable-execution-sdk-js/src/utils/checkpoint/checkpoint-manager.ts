@@ -1079,11 +1079,14 @@ export class CheckpointManager implements Checkpoint {
   private determineTerminationReason(ops: OperationInfo[]): TerminationReason {
     // Priority: RETRY_SCHEDULED > WAIT_SCHEDULED > CALLBACK_PENDING
 
+    // Only STEP operations reach RETRY_WAITING. The check keys on the type,
+    // not the subtype, because a step can carry a custom subtype
+    // (StepConfig.subType).
     if (
       ops.some(
         (op) =>
           op.state === OperationLifecycleState.RETRY_WAITING &&
-          op.metadata.subType === "Step",
+          op.metadata.type === OperationType.STEP,
       )
     ) {
       return TerminationReason.RETRY_SCHEDULED;
