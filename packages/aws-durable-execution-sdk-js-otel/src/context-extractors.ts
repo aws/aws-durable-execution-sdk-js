@@ -191,12 +191,14 @@ export function parseXRayTraceHeader(
 }
 
 /**
- * Reads the X-Ray trace header from the `_X_AMZN_TRACE_ID` environment variable.
+ * Prefers the invocation-local Lambda runtime header (required on LMI), falling
+ * back to `_X_AMZN_TRACE_ID` only when the runtime did not supply a header.
+ * A present but invalid local header must not adopt another invocation's carrier.
  */
 export function xRayContextExtractor(
-  _info: InvocationInfo,
+  info: InvocationInfo,
 ): ContextExtractorResult {
-  return parseXRayTraceHeader(process.env._X_AMZN_TRACE_ID);
+  return parseXRayTraceHeader(info.xRayTraceId ?? process.env._X_AMZN_TRACE_ID);
 }
 
 /**

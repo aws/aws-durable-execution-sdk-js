@@ -96,6 +96,27 @@ describe("plugin hooks", () => {
     };
   });
 
+  it("forwards each runtime X-Ray header to invocation hooks on initial and resumed calls", async () => {
+    const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
+      plugins: [plugin],
+    });
+    for (const mode of [
+      DurableExecutionMode.ExecutionMode,
+      DurableExecutionMode.ReplayMode,
+    ]) {
+      (initializeExecutionContext as jest.Mock).mockResolvedValue({
+        executionContext: mockExecutionContext,
+        checkpointToken: TEST_CONSTANTS.CHECKPOINT_TOKEN,
+        durableExecutionMode: mode,
+      });
+      const xRayTraceId = `Root=1-5759e988-bd862e3fe1be46a994272793;Parent=53995c3f42cd8ad8;Sampled=0`;
+      await handler(mockEvent, { ...mockContext, xRayTraceId } as Context);
+      expect(plugin.onInvocationStart).toHaveBeenLastCalledWith(
+        expect.objectContaining({ xRayTraceId }),
+      );
+    }
+  });
+
   it("calls onInvocationStart with isFirstInvocation=true on first invocation", async () => {
     const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
       plugins: [plugin],

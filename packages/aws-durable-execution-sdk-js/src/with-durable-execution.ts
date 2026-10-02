@@ -116,6 +116,7 @@ async function runHandler<
     isFirstInvocation:
       durableExecutionMode === DurableExecutionMode.ExecutionMode,
     updatedOperations,
+    xRayTraceId: (context as Context & { xRayTraceId?: string }).xRayTraceId,
   };
   await plugin.onInvocationStart?.(invocationInfo);
 
