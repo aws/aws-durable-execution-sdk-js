@@ -27,7 +27,13 @@ import {
   ResultTooLargeError,
   startMicrovmWorker,
 } from "..";
-import { heartbeatIntervalMs, startHeartbeats } from "../worker";
+import {
+  heartbeatDelayMs,
+  heartbeatIntervalMs,
+  heartbeatRetryDelayMs,
+  jitterSource,
+  startHeartbeats,
+} from "../worker";
 
 type Sent =
   | { kind: "heartbeat"; callbackId: string }
@@ -978,19 +984,29 @@ describe("heartbeat interval", () => {
   );
 
   describe("after a failed heartbeat", () => {
-    let random: jest.SpyInstance;
     beforeEach(() => {
       jest.useFakeTimers({
         doNotFake: ["nextTick", "queueMicrotask", "setImmediate"],
       });
-      // No jitter: the retry comes after a quarter interval, and a normal
-      // wait is the interval minus 1 second.
-      random = jest.spyOn(Math, "random").mockReturnValue(0);
     });
     afterEach(() => {
-      random.mockRestore();
       jest.useRealTimers();
     });
+
+    // The job's heartbeat timeout is 40 seconds, so the interval is 13,333 ms.
+    const INTERVAL_MS = 13_333;
+    /**
+     * The waits that the worker schedules for job cb-1, in order. Each wait
+     * takes the next value of the job's jitter source, as the worker does.
+     */
+    const waits = (...kinds: ("retry" | "normal")[]): number[] => {
+      const random = jitterSource("cb-1");
+      return kinds.map((kind) =>
+        kind === "retry"
+          ? heartbeatRetryDelayMs(INTERVAL_MS, random)
+          : heartbeatDelayMs(INTERVAL_MS, random),
+      );
+    };
 
     const startJob = async (
       client: FakeLambdaClient,
@@ -1286,7 +1302,7 @@ describe("heartbeat interval", () => {
       expect(send).toHaveBeenCalledTimes(2);
     });
 
-    it("retries a rejected heartbeat after a quarter interval, like other failures", async () => {
+    it("retries a rejected heartbeat after a short delay, like other failures", async () => {
       const client = new FakeLambdaClient();
       client.heartbeatFailures = [
         Object.assign(new Error("not allowed"), {
@@ -1295,22 +1311,25 @@ describe("heartbeat interval", () => {
         }),
       ];
       const listener = await startJob(client);
+      const [retry] = waits("retry");
 
-      await jest.advanceTimersByTimeAsync(3_332);
+      await jest.advanceTimersByTimeAsync(retry - 1);
       expect(client.sent).toEqual([]);
       await jest.advanceTimersByTimeAsync(1);
       expect(client.sent).toEqual([{ kind: "heartbeat", callbackId: "cb-1" }]);
       listener.close();
     });
 
-    it("retries after a quarter interval, and not before", async () => {
+    it("retries after an eighth to a quarter interval, and not before", async () => {
       const client = new FakeLambdaClient();
       client.heartbeatFailures = [new Error("transient")];
       const listener = await startJob(client);
       expect(client.sent).toEqual([]);
+      const [retry] = waits("retry");
+      expect(retry).toBeGreaterThanOrEqual(Math.floor(INTERVAL_MS / 8));
+      expect(retry).toBeLessThanOrEqual(Math.floor(INTERVAL_MS / 4));
 
-      // The interval is 13,333 ms, so the retry comes after 3,333 ms.
-      await jest.advanceTimersByTimeAsync(3_332);
+      await jest.advanceTimersByTimeAsync(retry - 1);
       expect(client.sent).toEqual([]);
       await jest.advanceTimersByTimeAsync(1);
       expect(client.sent).toEqual([{ kind: "heartbeat", callbackId: "cb-1" }]);
@@ -1326,18 +1345,19 @@ describe("heartbeat interval", () => {
         new Error("two"),
       ];
       const listener = await startJob(client);
+      const [retry, normal, secondRetry] = waits("retry", "normal", "retry");
 
-      // The quick retry succeeds at 3,333 ms.
-      await jest.advanceTimersByTimeAsync(3_333);
+      // The quick retry succeeds.
+      await jest.advanceTimersByTimeAsync(retry);
       expect(client.sent).toHaveLength(1);
-      // After the success, the next call waits the normal 12,333 ms.
-      await jest.advanceTimersByTimeAsync(12_332);
+      // After the success, the next call waits a normal interval.
+      await jest.advanceTimersByTimeAsync(normal - 1);
       expect(client.heartbeatFailures).toHaveLength(1);
       await jest.advanceTimersByTimeAsync(1);
       expect(client.heartbeatFailures).toHaveLength(0);
       // That call fails. It is the first failure of a new run, so the retry
       // is quick again.
-      await jest.advanceTimersByTimeAsync(3_333);
+      await jest.advanceTimersByTimeAsync(secondRetry);
       expect(client.sent).toHaveLength(2);
       listener.close();
     });
@@ -1350,12 +1370,13 @@ describe("heartbeat interval", () => {
         new Error("three"),
       ];
       const listener = await startJob(client);
+      const [first, second, normal] = waits("retry", "retry", "normal");
 
       // Two quick retries, both failing.
-      await jest.advanceTimersByTimeAsync(3_333 * 2);
+      await jest.advanceTimersByTimeAsync(first + second);
       expect(client.heartbeatFailures).toEqual([]);
-      // The fourth call waits the normal 12,333 ms.
-      await jest.advanceTimersByTimeAsync(12_332);
+      // The fourth call waits a normal interval.
+      await jest.advanceTimersByTimeAsync(normal - 1);
       expect(client.sent).toEqual([]);
       await jest.advanceTimersByTimeAsync(1);
       expect(client.sent).toEqual([{ kind: "heartbeat", callbackId: "cb-1" }]);
@@ -1375,13 +1396,14 @@ describe("heartbeat interval", () => {
         rejected(),
       ];
       const listener = await startJob(client);
+      const [first, second, normal] = waits("retry", "retry", "normal");
 
       // A rejection and a transient failure each get a quick retry.
-      await jest.advanceTimersByTimeAsync(3_333 * 2);
+      await jest.advanceTimersByTimeAsync(first + second);
       expect(client.heartbeatFailures).toEqual([]);
-      // After the third failure in a row, the fourth call waits the normal
-      // 12,333 ms.
-      await jest.advanceTimersByTimeAsync(12_332);
+      // After the third failure in a row, the fourth call waits a normal
+      // interval.
+      await jest.advanceTimersByTimeAsync(normal - 1);
       expect(client.sent).toEqual([]);
       await jest.advanceTimersByTimeAsync(1);
       expect(client.sent).toEqual([{ kind: "heartbeat", callbackId: "cb-1" }]);
@@ -2006,6 +2028,26 @@ describe("startMicrovmWorker", () => {
           ErrorType: "InvalidRunHookPayloadError",
         }),
       }),
+    ]);
+  });
+
+  it("runs only the job of the first valid run hook", async () => {
+    const client = new FakeLambdaClient();
+    const handler = jest.fn(async () => "done");
+    const target = await start(client, handler);
+
+    const first = await post(target, "run", runBody(validPayload()));
+    const later = await post(target, "run", {
+      ...runBody(validPayload({ callbackId: "cb-2" })),
+      microvmId: "mvm-2",
+    });
+    await target.idle();
+
+    expect(first.status).toBe(200);
+    expect(later.status).toBe(200);
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(client.completions()).toEqual([
+      expect.objectContaining({ kind: "success", callbackId: "cb-1" }),
     ]);
   });
 

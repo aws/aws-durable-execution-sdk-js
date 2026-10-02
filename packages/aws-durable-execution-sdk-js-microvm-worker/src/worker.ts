@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   createServer,
   type IncomingMessage,
@@ -180,13 +181,15 @@ export interface MicrovmWorkerOptions<TInput = unknown, TOutput = unknown> {
   /**
    * Creates the Lambda MicroVMs client that suspends this MicroVM when it is
    * idle. Defaults to a client that uses the default credential chain.
-   * Called only when the session asks the worker to suspend when idle.
+   * Called only when the session asks the worker to suspend when idle. The
+   * worker never destroys a client that this function returns; it destroys
+   * only the default clients it creates itself.
    */
   createMicrovmsClient?: (region: string) => LambdaMicrovmsClient;
   /**
    * The heartbeat interval in milliseconds. Defaults to one third of the
    * job's `heartbeatTimeoutSeconds`, at most 15 minutes. Each wait is the
-   * interval minus a random 1 to 2 seconds, capped at half the interval. No
+   * interval minus 1 to 2 seconds, capped at half the interval. No
    * heartbeats are sent when the job has no heartbeat timeout. After a
    * failed heartbeat, the next one comes after an eighth to a quarter of the
    * interval, for at most two failures in a row.
@@ -364,10 +367,16 @@ export function createMicrovmWorkerListener<
   const background = new Set<Promise<void>>();
   // Set by the run hook. A job request that arrives first sets it too.
   let microvmId = "unknown";
+  // Lambda sends one run hook per MicroVM. The endpoint also forwards a
+  // request to the hook path from any caller that holds an auth token for
+  // the MicroVM. A probe confirmed it: the worker answered such a request.
+  // SuspendMicrovm authorizes on the image, so a later run hook could make
+  // the worker suspend another MicroVM of the same image. So the worker acts
+  // only on the first valid run hook, and ignores every later one.
+  let runHookAccepted = false;
   // Set from the run hook payload of a session that suspends when idle.
   // `microvmId` here is the run hook's ID. SuspendMicrovm uses it, never an
-  // ID from a job request. Lambda sends one run hook per MicroVM. A later run
-  // hook without autoSuspendIdleSeconds would keep these settings.
+  // ID from a job request.
   let autoSuspend:
     | { idleMs: number; region: string; microvmId: string }
     | undefined;
@@ -433,10 +442,13 @@ export function createMicrovmWorkerListener<
     target: string,
   ): Promise<void> {
     let client: LambdaMicrovmsClient;
+    // The worker destroys only a client that it created itself. A client
+    // from createMicrovmsClient belongs to the caller.
+    let ownsClient = false;
     try {
-      client =
-        options.createMicrovmsClient?.(region) ??
-        new LambdaMicrovmsClient({ region });
+      const provided = options.createMicrovmsClient?.(region);
+      ownsClient = provided === undefined;
+      client = provided ?? new LambdaMicrovmsClient({ region });
     } catch (error) {
       // No call was made. So jobs can run again at once.
       logger.error("could not create the Lambda MicroVMs client", {
@@ -475,6 +487,12 @@ export function createMicrovmWorkerListener<
         "the suspend call for the idle MicroVM had an unknown outcome. The worker refuses jobs until the MicroVM resumes, or for 30 seconds.",
         { microvmId: target, error: describe(error) },
       );
+    } finally {
+      // Each suspend creates its own client. Destroying it releases its
+      // connections, as CallbackReporter does for its clients.
+      if (ownsClient) {
+        client.destroy();
+      }
     }
     // A resume hook that arrived during the call has already ended the
     // refusal. The grace timer also runs after close(), so a closed listener
@@ -542,6 +560,15 @@ export function createMicrovmWorkerListener<
       return;
     }
 
+    if (runHookAccepted) {
+      logger.warn("later run hook ignored", {
+        microvmId,
+        hookMicrovmId: parsed.microvmId,
+      });
+      respond(response, 200, {});
+      return;
+    }
+    runHookAccepted = true;
     microvmId = parsed.microvmId;
     const payload = parsed.payload;
     if (!payload) {
@@ -921,6 +948,9 @@ export function startHeartbeats<TInput>(
     intervalOverrideMs,
   );
   const callTimeoutMs = heartbeatCallTimeoutMs(intervalMs);
+  // The jitter comes from the callback ID, not from Math.random. See
+  // jitterSource for why.
+  const random = jitterSource(job.callbackId);
 
   let stopped = false;
   // Set when the handler has settled. A terminal heartbeat error then only
@@ -1006,8 +1036,8 @@ export function startHeartbeats<TInput>(
     timer = setTimeout(
       run,
       failures > 0 && failures <= MAX_QUICK_HEARTBEAT_RETRIES
-        ? heartbeatRetryDelayMs(intervalMs)
-        : heartbeatDelayMs(intervalMs),
+        ? heartbeatRetryDelayMs(intervalMs, random)
+        : heartbeatDelayMs(intervalMs, random),
     );
   };
   const run = (): void => {
@@ -1076,19 +1106,46 @@ export function heartbeatIntervalMs(
   return Math.min(overrideMs ?? MAX_HEARTBEAT_INTERVAL_MS, thirdMs);
 }
 
+/**
+ * Returns a source of numbers in [0, 1) that differs per job: the n-th call
+ * returns the first 32 bits of SHA-256 of `<callbackId>:<n>`, scaled to [0, 1).
+ *
+ * Why not Math.random:
+ *
+ * 1. Lambda snapshots the running worker process when it builds the image.
+ * 2. Math.random keeps its generator state in that process's memory.
+ * 3. So every MicroVM restored from the snapshot starts with the same
+ *    generator state, and the same calls return the same values.
+ * 4. So MicroVMs that start together, for example from a `map`, would get
+ *    the same heartbeat delays, and would retry failed heartbeats together.
+ * 5. Each job has its own callback ID. So a hash of the ID differs per job,
+ *    whatever the generator state is after a restore.
+ *
+ * @internal
+ */
+export function jitterSource(callbackId: string): () => number {
+  let n = 0;
+  return () =>
+    createHash("sha256")
+      .update(`${callbackId}:${n++}`)
+      .digest()
+      .readUInt32BE(0) /
+    2 ** 32;
+}
+
 /** Failed heartbeats in a row that are retried after a short delay. */
 const MAX_QUICK_HEARTBEAT_RETRIES = 2;
 
 /**
- * Returns the delay before a heartbeat that follows a failed one: a random
- * value between an eighth and a quarter of the interval. The jitter keeps
- * MicroVMs that failed together from retrying together.
+ * Returns the delay before a heartbeat that follows a failed one: a value
+ * between an eighth and a quarter of the interval, from `random`. The jitter
+ * keeps MicroVMs that failed together from retrying together.
  *
  * @internal
  */
 export function heartbeatRetryDelayMs(
   intervalMs: number,
-  random: () => number = Math.random,
+  random: () => number,
 ): number {
   return Math.max(1, Math.floor(intervalMs / 4 - (random() * intervalMs) / 8));
 }
@@ -1135,7 +1192,9 @@ const MAX_HEARTBEAT_JITTER_MS = 2_000;
  *
  * Many MicroVMs can start at the same moment, for example from a `map`. With a
  * fixed interval, their heartbeats would reach the service at the same
- * moments. So each delay is the interval minus a random 1 to 2 seconds.
+ * moments. So each delay is the interval minus 1 to 2 seconds. The value
+ * comes from `random`, which {@link jitterSource} derives from the job's
+ * callback ID.
  *
  * The jitter is subtracted, not added. So a heartbeat never arrives later
  * than the interval, and the interval stays below the heartbeat timeout. The
@@ -1145,7 +1204,7 @@ const MAX_HEARTBEAT_JITTER_MS = 2_000;
  */
 export function heartbeatDelayMs(
   intervalMs: number,
-  random: () => number = Math.random,
+  random: () => number,
 ): number {
   const jitterMs = Math.min(
     MIN_HEARTBEAT_JITTER_MS +

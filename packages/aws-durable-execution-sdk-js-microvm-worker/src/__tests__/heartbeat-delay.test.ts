@@ -2,6 +2,7 @@ import {
   heartbeatCallTimeoutMs,
   heartbeatDelayMs,
   heartbeatRetryDelayMs,
+  jitterSource,
 } from "../worker";
 
 describe("heartbeatDelayMs", () => {
@@ -14,8 +15,9 @@ describe("heartbeatDelayMs", () => {
   });
 
   it("stays between the interval minus 2 seconds and minus 1 second", () => {
+    const random = jitterSource("cb-1");
     for (let i = 0; i < 1_000; i++) {
-      const delay = heartbeatDelayMs(10_000);
+      const delay = heartbeatDelayMs(10_000, random);
       expect(delay).toBeGreaterThanOrEqual(8_000);
       expect(delay).toBeLessThanOrEqual(9_000);
     }
@@ -54,5 +56,46 @@ describe("heartbeatRetryDelayMs", () => {
 
   it("waits at least 1 millisecond", () => {
     expect(heartbeatRetryDelayMs(1, () => 1)).toBe(1);
+  });
+});
+
+describe("jitterSource", () => {
+  const take = (source: () => number, count: number): number[] =>
+    Array.from({ length: count }, source);
+
+  it("returns numbers in [0, 1)", () => {
+    for (const value of take(jitterSource("cb-1"), 1_000)) {
+      expect(value).toBeGreaterThanOrEqual(0);
+      expect(value).toBeLessThan(1);
+    }
+  });
+
+  it("returns a different sequence for each callback ID", () => {
+    // Two MicroVMs restored from one snapshot share the Math.random state.
+    // Their jobs have different callback IDs, so their delays differ.
+    expect(take(jitterSource("cb-a"), 5)).not.toEqual(
+      take(jitterSource("cb-b"), 5),
+    );
+  });
+
+  it("returns the same sequence for the same callback ID", () => {
+    expect(take(jitterSource("cb-a"), 5)).toEqual(
+      take(jitterSource("cb-a"), 5),
+    );
+  });
+
+  it("returns a different value on each call", () => {
+    const values = take(jitterSource("cb-a"), 100);
+    expect(new Set(values).size).toBe(100);
+  });
+
+  it("does not read Math.random", () => {
+    const spy = jest.spyOn(Math, "random");
+    try {
+      take(jitterSource("cb-a"), 10);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

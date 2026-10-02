@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import type { LambdaClient } from "@aws-sdk/client-lambda";
 import {
-  type LambdaMicrovmsClient,
+  LambdaMicrovmsClient,
   SuspendMicrovmCommand,
 } from "@aws-sdk/client-lambda-microvms";
 import {
@@ -27,6 +27,8 @@ class FakeMicrovmsClient {
   readonly suspended: string[] = [];
   failure: Error | undefined;
   hold = false;
+  /** The worker must never call it, because the test owns this client. */
+  readonly destroy = jest.fn();
   private pending: (() => void) | undefined;
 
   async send(command: unknown): Promise<unknown> {
@@ -183,6 +185,38 @@ describe("auto-suspend when idle", () => {
     expect(microvms.suspended).toEqual(["mvm-1"]);
   });
 
+  it("destroys the default client after each suspend, and never a provided one", async () => {
+    const send = jest
+      .spyOn(LambdaMicrovmsClient.prototype, "send")
+      .mockImplementation(async () => ({}));
+    const destroy = jest.spyOn(LambdaMicrovmsClient.prototype, "destroy");
+    try {
+      // No createMicrovmsClient, so the worker creates the client itself.
+      target = createMicrovmWorkerListener({
+        handler: async () => "done",
+        createClient: () => lambdaClient,
+        logger: { info: () => {}, warn: () => {}, error: () => {} },
+      });
+      await runHook(target, IDLE_SECONDS);
+      await advance(IDLE_MS);
+
+      expect(send).toHaveBeenCalledTimes(1);
+      expect(destroy).toHaveBeenCalledTimes(1);
+    } finally {
+      send.mockRestore();
+      destroy.mockRestore();
+    }
+
+    const microvms = new FakeMicrovmsClient();
+    target.close();
+    const worker = start(microvms);
+    await runHook(worker, IDLE_SECONDS);
+    await advance(IDLE_MS);
+
+    expect(microvms.suspended).toEqual(["mvm-1"]);
+    expect(microvms.destroy).not.toHaveBeenCalled();
+  });
+
   it("never suspends when the run hook payload does not ask for it", async () => {
     const microvms = new FakeMicrovmsClient();
     const worker = start(microvms);
@@ -245,6 +279,40 @@ describe("auto-suspend when idle", () => {
     });
     await advance(IDLE_MS);
 
+    expect(microvms.suspended).toEqual(["mvm-1"]);
+  });
+
+  it("ignores a later run hook that asks to suspend another MicroVM", async () => {
+    // The endpoint forwards the hook path from any caller with an auth
+    // token. SuspendMicrovm authorizes on the image, so the later hook must
+    // not choose the suspend target.
+    const microvms = new FakeMicrovmsClient();
+    const worker = start(microvms);
+
+    await runHook(worker);
+    const status = await call(worker, `${HOOK_PATH_PREFIX}run`, {
+      microvmId: "mvm-2",
+      runHookPayload: JSON.stringify({
+        version: 1,
+        region: "us-east-1",
+        autoSuspendIdleSeconds: IDLE_SECONDS,
+      }),
+    });
+    await advance(IDLE_MS * 2);
+
+    expect(status).toBe(200);
+    expect(microvms.suspended).toEqual([]);
+  });
+
+  it("accepts a valid run hook after an invalid one", async () => {
+    const microvms = new FakeMicrovmsClient();
+    const worker = start(microvms);
+
+    const invalid = await call(worker, `${HOOK_PATH_PREFIX}run`, {});
+    await runHook(worker, IDLE_SECONDS);
+    await advance(IDLE_MS);
+
+    expect(invalid).toBe(400);
     expect(microvms.suspended).toEqual(["mvm-1"]);
   });
 
