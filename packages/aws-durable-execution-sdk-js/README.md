@@ -285,6 +285,8 @@ ctx.runInChildContext(
 
 The service accepts 1 to 32 characters from `[a-zA-Z0-9-_]`. An empty string selects the default subtype, such as `Step` or `Callback`. Replay compares the subtype with the checkpoint. So changing a subtype is a breaking change for executions in flight.
 
+[`@aws/durable-execution-sdk-js-helpers`](../aws-durable-execution-sdk-js-helpers) ships ready-made operations built this way, such as `microvm`.
+
 ## Configuration
 
 ### Dynamic Instrumentation Plugins

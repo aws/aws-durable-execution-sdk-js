@@ -33,6 +33,10 @@ const scopes = new Set([
   "deps",
   "deps-dev",
   "otel",
+  // Custom durable operations in packages/aws-durable-execution-sdk-js-helpers.
+  "helpers",
+  // The MicroVM-side package in packages/aws-durable-execution-sdk-js-microvm-worker.
+  "microvm-worker",
   // Workflow Insight: the VS Code extension, the desktop app, and the host-free
   // modules they share.
   "insight",
