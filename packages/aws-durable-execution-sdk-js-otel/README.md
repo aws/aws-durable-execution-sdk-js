@@ -183,6 +183,13 @@ needed.
 
 ## Choosing a Plugin
 
+Configure exactly one durable OTel view: `ExecutionOtelPlugin` for a workflow
+view, or `InvocationOtelPlugin` for an invocation view. Registering both (or
+registering one view twice) raises `PluginLoadError` before invocation hooks
+run. This applies to explicit `plugins`, `DURABLE_EXECUTION_PLUGINS`, and any
+combination of the two. Other instrumentation plugins can run alongside the
+selected view.
+
 ### `ExecutionOtelPlugin`
 
 Use this plugin for a workflow-centered view. Operations and attempts are

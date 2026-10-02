@@ -60,6 +60,11 @@ const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
  * onOperationEnd, so nothing is left un-ended across invocations (issue #831).
  */
 export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
+  readonly registration = {
+    name: "ExecutionOtelPlugin",
+    exclusiveGroup: "durable-opentelemetry-view",
+  } as const;
+
   // Shared utilities (reused from existing package)
   private idGenerator: DeterministicIdGenerator;
   private readonly contextExtractor: ContextExtractor;

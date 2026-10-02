@@ -219,6 +219,15 @@ export interface OperationChangeInfo {
  * its promise.
  */
 export interface DurableInstrumentationPlugin {
+  /**
+   * Optional registration metadata. Only one plugin in an exclusive group may
+   * be configured for a handler, across explicit and environment registration.
+   * Configuration conflicts are rejected before invocation hooks run.
+   */
+  readonly registration?: {
+    readonly name: string;
+    readonly exclusiveGroup?: string;
+  };
   onInvocationStart?(info: InvocationInfo): Promise<void>;
   wrapInvocation?(
     info: InvocationInfo,

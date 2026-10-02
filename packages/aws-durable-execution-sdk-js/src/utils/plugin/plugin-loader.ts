@@ -261,6 +261,24 @@ function createPlugin(
   return plugin;
 }
 
+function validateExclusiveGroups(
+  plugins: readonly DurableInstrumentationPlugin[],
+): void {
+  const groups = new Map<string, string>();
+  for (const plugin of plugins) {
+    const registration = plugin.registration;
+    const group = registration?.exclusiveGroup;
+    if (!group) continue;
+    const previous = groups.get(group);
+    if (previous !== undefined) {
+      throw new PluginLoadError(
+        `Plugins '${previous}' and '${registration.name}' are mutually exclusive in group '${group}'. Configure only one.`,
+      );
+    }
+    groups.set(group, registration.name);
+  }
+}
+
 /**
  * Combines explicitly configured plugins with providers selected through the environment.
  *
@@ -277,6 +295,7 @@ export async function loadConfiguredPlugins(
   const environment = options.environment ?? process.env;
   const specifiers = parseConfiguredSpecifiers(environment);
   if (specifiers.length === 0) {
+    validateExclusiveGroups(plugins);
     return plugins;
   }
 
@@ -309,5 +328,6 @@ export async function loadConfiguredPlugins(
     plugins.push(createPlugin(specifier, provider));
   }
 
+  validateExclusiveGroups(plugins);
   return plugins;
 }

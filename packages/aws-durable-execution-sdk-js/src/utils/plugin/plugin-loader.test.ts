@@ -464,3 +464,64 @@ describe("loadConfiguredPlugins", () => {
     ).rejects.toBeInstanceOf(PluginLoadError);
   });
 });
+
+describe("exclusive plugin registration", () => {
+  class First implements DurableInstrumentationPlugin {
+    readonly registration = { name: "first view", exclusiveGroup: "views" };
+  }
+  class Second implements DurableInstrumentationPlugin {
+    readonly registration = { name: "second view", exclusiveGroup: "views" };
+  }
+  const factories = [() => new First(), () => new Second()];
+  it.each([false, true])(
+    "rejects explicit, dynamic and mixed conflicts (reverse=%s)",
+    async (reverse) => {
+      const [first, second] = reverse ? [...factories].reverse() : factories;
+      const modules = {
+        first: moduleFor(
+          providerFor(first().constructor as typeof First, first),
+        ),
+        second: moduleFor(
+          providerFor(second().constructor as typeof Second, second),
+        ),
+      };
+      const importModule = async (specifier: string) =>
+        modules[specifier as keyof typeof modules];
+      for (const [explicit, configured] of [
+        [[first(), second()], ""],
+        [[], "first,second"],
+        [[first()], "second"],
+      ] as const) {
+        await expect(
+          loadConfiguredPlugins(explicit, {
+            environment: { DURABLE_EXECUTION_PLUGINS: configured },
+            importModule,
+          }),
+        ).rejects.toThrow(
+          /Plugins '(first|second) view' and '(first|second) view'.*Configure only one/,
+        );
+      }
+    },
+  );
+  it("allows no view, either single view, and unrelated plugins", async () => {
+    for (const plugins of [
+      [],
+      [new First()],
+      [new Second()],
+      [new First(), new ExplicitPlugin()],
+      [
+        new First(),
+        { registration: { name: "metrics", exclusiveGroup: "metrics" } },
+      ],
+    ]) {
+      await expect(
+        loadConfiguredPlugins(plugins, { environment: {} }),
+      ).resolves.toEqual(plugins);
+    }
+  });
+  it("rejects two registrations of the same view", async () => {
+    await expect(
+      loadConfiguredPlugins([new First(), new First()], { environment: {} }),
+    ).rejects.toThrow(PluginLoadError);
+  });
+});
