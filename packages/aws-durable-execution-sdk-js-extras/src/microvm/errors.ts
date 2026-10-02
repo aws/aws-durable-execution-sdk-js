@@ -74,8 +74,19 @@ export class MicrovmDeliveryError extends MicrovmError {
  * A session MicroVM lives at most its session `timeout` plus 5 minutes, and
  * never longer than 8 hours, running or suspended. The platform then
  * terminates and removes it. A TerminateMicrovm call from outside the session
- * ends it too. A later attempt finds the same state, so the job is not
- * retried. To continue, start a new session.
+ * ends it too.
+ *
+ * Only a session that checks the MicroVM state before each job reports this
+ * error. It checks when `autoSuspendOnIdle` is on, which is the default, or
+ * when an `idlePolicy` is set. The check calls GetMicrovm, and a later
+ * attempt finds the same state. So the job is not retried. To continue,
+ * start a new session.
+ *
+ * With `autoSuspendOnIdle: false` and no `idlePolicy`, the session makes no
+ * GetMicrovm call. The endpoint of a terminated MicroVM answers 502, and the
+ * request step retries a 502 as a MicroVM that is still starting. So the job
+ * fails with a plain {@link MicrovmDeliveryError}, after the retries of both
+ * tiers.
  *
  * @public
  *
@@ -256,30 +267,47 @@ export function microvmErrorMapper(
     );
 }
 
-const PASS_THROUGH_ERROR_TYPES: ReadonlySet<string> = new Set([
+/**
+ * Every error type that `DurableOperationError.fromErrorObject` in the core
+ * SDK rebuilds as its own class. A test checks this list against the SDK.
+ *
+ * @internal
+ */
+export const SDK_ERROR_TYPES: ReadonlySet<string> = new Set([
+  "StepError",
   "CallbackError",
   "CallbackExternalError",
   "CallbackTimeoutError",
-  "StepError",
+  "CallbackSubmitterError",
+  "InvokeError",
+  "ChildContextError",
+  "WaitForConditionError",
+  "PromiseCombinatorError",
 ]);
 
 /**
  * The error mapper of a session. The session handler is caller code. So only
- * MicroVM errors are restored, and every other error keeps its SDK type.
+ * MicroVM errors are restored, and every SDK error keeps its type.
+ *
+ * The rule:
+ *
+ * 1. A MicroVM error is restored to its class.
+ * 2. An SDK error type that `fromErrorObject` knows passes through. The SDK
+ *    rebuilds such an error with `cause.name` set to its type.
+ * 3. Any other error is wrapped in `ChildContextError`, as `runInChildContext`
+ *    does without an error mapper.
  *
  * The SDK rebuilds an error type that it does not know, such as a plain
  * `Error` thrown by the handler, as `StepError`, and keeps the original type
  * as `cause.name`. So `errorType` alone cannot tell a failed step from a
- * failed handler. An SDK error passes through only when its `cause.name`
- * matches its type. Any other error is wrapped in `ChildContextError`, as
- * `runInChildContext` does without an error mapper.
+ * failed handler. So rule 2 also requires `cause.name` to match the type.
  */
 export function sessionErrorMapper(
   error: DurableOperationError,
 ): DurableOperationError {
   return (
     rebuildMicrovmError(error) ??
-    (PASS_THROUGH_ERROR_TYPES.has(error.errorType) &&
+    (SDK_ERROR_TYPES.has(error.errorType) &&
     error.cause?.name === error.errorType
       ? error
       : new ChildContextError(error.message, error))

@@ -479,8 +479,14 @@ export async function terminate(
       },
     );
   } catch (error) {
-    child.logger.warn(
-      `MicroVM "${scope.name}": terminate failed for ${microvmId}. The platform terminates it at maximumDurationInSeconds.`,
+    // The job's outcome is already recorded, so the operation still returns
+    // it. But the MicroVM keeps running, and is billed, until the platform
+    // ends it at maximumDurationInSeconds: the timeout plus 5 minutes. A
+    // missing permission fails every terminate this way, and the default
+    // retry strategy does not retry AccessDeniedException. This log is the
+    // only sign of it. So it is an error, not a warning.
+    child.logger.error(
+      `MicroVM "${scope.name}": terminate failed for ${microvmId}. The MicroVM keeps running, and is billed, until the platform ends it at maximumDurationInSeconds, the operation timeout plus 5 minutes. A missing permission needs lambda:TerminateMicrovm in the function's execution role.`,
       { error },
     );
   }

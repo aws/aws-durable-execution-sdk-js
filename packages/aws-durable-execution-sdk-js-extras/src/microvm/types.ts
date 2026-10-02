@@ -36,6 +36,11 @@ export interface MicrovmRequestConfig {
   /**
    * The port of the route inside the MicroVM. Defaults to 8080, the port that
    * the MicroVM endpoint forwards to by default.
+   *
+   * It applies only when the job goes over HTTP. Lambda sends the `run` hook
+   * to the port in the image's hook configuration, not to this port. So for
+   * {@link microvm}, a port without a `path` is used only for an input too
+   * large for the `run` hook. Set `path` to send every job to this port.
    */
   port?: number;
 
@@ -171,13 +176,22 @@ export interface MicrovmConfig extends MicrovmBaseConfig {
  */
 export interface MicrovmSessionConfig extends MicrovmBaseConfig {
   /**
-   * The maximum duration of the whole session, including durable waits
-   * between jobs.
+   * The lifetime of the session's MicroVM, including durable waits between
+   * jobs.
    *
-   * A MicroVM lives at most 8 hours, running or suspended. So the timeout
-   * must be between 1 second and 8 hours. The MicroVM's
-   * `maximumDurationInSeconds` is set to this timeout plus 5 minutes, capped
-   * at 8 hours.
+   * The MicroVM's `maximumDurationInSeconds` is set to this timeout plus 5
+   * minutes, capped at 8 hours. The service then terminates the MicroVM. A
+   * MicroVM lives at most 8 hours, running or suspended. So the timeout must
+   * be between 1 second and 8 hours. The session also uses it to cap the
+   * default {@link autoSuspendIdleTime}.
+   *
+   * The timeout does not limit the handler or its jobs. Each job's callback
+   * waits for that job's own `timeout`. So a job that is still running when
+   * the MicroVM ends waits until its own timeout, unless it has a
+   * `heartbeatTimeout`. For example, a session with a 1-hour timeout starts
+   * a job with an 8-hour timeout at 0:58. The service terminates the MicroVM
+   * at about 1:05. Without a heartbeat timeout, the job fails at 8:58. So set
+   * a `heartbeatTimeout` on every `vm.invoke`.
    */
   timeout: Duration;
 
@@ -261,9 +275,13 @@ export interface MicrovmSessionConfig extends MicrovmBaseConfig {
  */
 export interface MicrovmInvokeOptions extends MicrovmRequestConfig {
   /**
-   * The maximum time to wait for this job's result. At most 8 hours, and the
-   * session's own timeout still applies. The time starts before the job is
-   * delivered. So it includes a resume of a suspended MicroVM.
+   * The maximum time to wait for this job's result. At most 8 hours. The
+   * time starts before the job is delivered. So it includes a resume of a
+   * suspended MicroVM.
+   *
+   * The session's `timeout` does not shorten it. The session's MicroVM ends
+   * at the session `timeout` plus 5 minutes. A job still running then fails
+   * only at this timeout, or earlier at its {@link heartbeatTimeout}.
    */
   timeout: Duration;
 
@@ -273,6 +291,9 @@ export interface MicrovmInvokeOptions extends MicrovmRequestConfig {
    * sends its first heartbeat when the job arrives. So the first period
    * includes a resume of a suspended MicroVM. Keep it longer than a resume
    * plus the delivery, for example 30 seconds.
+   *
+   * Set it on every job. It is the only way that a job fails soon after its
+   * MicroVM ends, for example at the end of the session's lifetime.
    */
   heartbeatTimeout?: Duration;
 }

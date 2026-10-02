@@ -1,5 +1,15 @@
 import {
+  CallbackError,
+  CallbackExternalError,
+  CallbackSubmitterError,
+  CallbackTimeoutError,
+  ChildContextError,
   type DurableContext,
+  DurableOperationError,
+  InvokeError,
+  PromiseCombinatorError,
+  StepError,
+  WaitForConditionError,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import {
@@ -23,6 +33,7 @@ import {
   metadata,
   throwing,
 } from "./fakes";
+import { SDK_ERROR_TYPES } from "../errors";
 
 beforeAll(() =>
   LocalDurableTestRunner.setupTestEnvironment({ skipTime: true }),
@@ -368,5 +379,58 @@ describe("MicroVM errors", () => {
     expect(execution.getResult()).toEqual({
       chain: ["ChildContextError", "StepError", "MicrovmLaunchError"],
     });
+  });
+
+  it("passes through every SDK error type that fromErrorObject rebuilds as its own class", () => {
+    const classes = [
+      StepError,
+      CallbackError,
+      CallbackExternalError,
+      CallbackTimeoutError,
+      CallbackSubmitterError,
+      InvokeError,
+      ChildContextError,
+      WaitForConditionError,
+      PromiseCombinatorError,
+    ];
+    const types = classes.map((ErrorClass) => new ErrorClass("m").errorType);
+
+    expect([...SDK_ERROR_TYPES].sort()).toEqual([...types].sort());
+    for (const type of SDK_ERROR_TYPES) {
+      const rebuilt = DurableOperationError.fromErrorObject({
+        ErrorType: type,
+        ErrorMessage: "m",
+      });
+      expect(rebuilt.errorType).toBe(type);
+      expect(rebuilt.cause?.name).toBe(type);
+    }
+  });
+
+  it("keeps the CallbackSubmitterError of a failed waitForCallback submitter in a session", async () => {
+    const runner = new LocalDurableTestRunner({
+      handlerFunction: withDurableExecution(
+        async (_event: unknown, context: DurableContext) =>
+          microvmSession(
+            context,
+            "pipeline",
+            {
+              ...baseConfig(new FakeMicrovmsClient()),
+              fetch: new FakeEndpoint().fetch,
+            },
+            async (_vm, child) =>
+              child.waitForCallback(
+                "approval",
+                async () => {
+                  throw new Error("could not send the request");
+                },
+                { retryStrategy: () => ({ shouldRetry: false }) },
+              ),
+          ).catch((error: unknown) => (error as Error).constructor.name),
+      ),
+    });
+
+    const execution = await runner.run({ payload: {} });
+
+    expect(execution.getResult()).toBe("CallbackSubmitterError");
   });
 });

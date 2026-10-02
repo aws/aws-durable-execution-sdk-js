@@ -198,6 +198,60 @@ describe("microvmSession", () => {
     expect(endpoint.requests).toHaveLength(2);
   });
 
+  it("reports a failed parallel job as PromiseCombinatorError, with the MicroVM type only in the cause chain", async () => {
+    // ctx.promise.all maps every failure to PromiseCombinatorError. The
+    // checkpoint of the failed session keeps only that outer type. So the
+    // caller of the session sees no MicroVM type at all.
+    const chain = (error: unknown): string[] => {
+      const names: string[] = [];
+      for (let e = error; e instanceof Error; e = e.cause) {
+        names.push(`${e.constructor.name}(${e.name})`);
+      }
+      return names;
+    };
+    const client = new FakeMicrovmsClient();
+    const endpoint = new FakeEndpoint();
+    let inside: string[] | undefined;
+    const runner = new LocalDurableTestRunner({
+      handlerFunction: withDurableExecution(
+        async (_event: unknown, context: DurableContext) =>
+          microvmSession(
+            context,
+            "pipeline",
+            sessionConfig(client, endpoint),
+            async (vm, ctx) => {
+              try {
+                return await ctx.promise.all([
+                  vm.invoke("left", "L", job("/job")),
+                  vm.invoke("right", "R", job("/job")),
+                ]);
+              } catch (error) {
+                inside = chain(error);
+                throw error;
+              }
+            },
+          ).catch((error: unknown) => ({ inside, outside: chain(error) })),
+      ),
+    });
+
+    const executionPromise = runner.run({ payload: {} });
+    await complete(runner, "left", { result: "l" });
+    await complete(runner, "right", { error: "disk full" });
+    const execution = await executionPromise;
+
+    expect(execution.getResult()).toEqual({
+      inside: [
+        "PromiseCombinatorError(PromiseCombinatorError)",
+        "StepError(StepError)",
+        "Error(MicrovmJobFailedError)",
+      ],
+      outside: [
+        "PromiseCombinatorError(PromiseCombinatorError)",
+        "Error(PromiseCombinatorError)",
+      ],
+    });
+  });
+
   it("runs jobs from map items through withContext", async () => {
     const client = new FakeMicrovmsClient();
     const endpoint = new FakeEndpoint();

@@ -74,7 +74,7 @@ The operation runs its durable operations inside one child context named after t
 4. The child context waits for the MicroVM to complete the callback.
 5. `<name>.terminate` calls `TerminateMicrovm`. It runs after success, failure, and timeout alike.
 
-A terminate failure does not fail the operation. The job result is already recorded at that point, and `maximumDurationInSeconds` bounds how long the MicroVM can keep running. So the operation logs a warning instead.
+A terminate failure does not fail the operation. The job result is already recorded at that point. So the operation logs an error instead of throwing. The MicroVM then keeps running, and is billed, until the platform ends it at `maximumDurationInSeconds`, the operation timeout plus 5 minutes. For example, a job with an 8-hour timeout that finishes in 5 minutes leaves its MicroVM running for almost 8 more hours.
 
 ### Subtypes
 
@@ -110,7 +110,7 @@ Every MicroVM failure is a `MicrovmError`. Catch the base class for all of them,
 |---|---|
 | `MicrovmLaunchError` | `RunMicrovm` failed after all retries, so no MicroVM runs the job. |
 | `MicrovmDeliveryError` | HTTP delivery failed after all retries, or the route answered a 4xx status such as 404. |
-| `MicrovmNotRunningError` | A `MicrovmDeliveryError` of a session job: the session's MicroVM is terminating, terminated, or removed. It is not retried. |
+| `MicrovmNotRunningError` | A `MicrovmDeliveryError` of a session job: the session's MicroVM is terminating, terminated, or removed. It is not retried. Only a session that checks the MicroVM state before each job reports it. See [Suspending the MicroVM between jobs](#suspending-the-microvm-between-jobs). |
 | `MicrovmJobFailedError` | The job handler in the MicroVM failed. The message includes the job's error type, and `errorData` is the data that the MicroVM reported. |
 | `MicrovmTimeoutError` | No result arrived within `timeout`, or no heartbeat within `heartbeatTimeout`. A MicroVM that crashed ends this way. |
 
@@ -134,7 +134,8 @@ try {
 The class is the same on the first run and on every replay, so code that branches on it stays deterministic. Other errors keep their own types:
 
 - An invalid config throws `TypeError` or `RangeError` before any durable operation.
-- An error from a session handler's own code is not a `MicrovmError`. It reaches the caller as `ChildContextError`, as from `runInChildContext`. A `StepError` from a step that the handler ran, and a callback error, keep their type.
+- An error from a session handler's own code is not a `MicrovmError`. It reaches the caller as `ChildContextError`, as from `runInChildContext`.
+- An SDK error from a durable operation that the handler ran keeps its type. This covers every type that the SDK rebuilds as its own class: `StepError`, `CallbackError`, `CallbackExternalError`, `CallbackTimeoutError`, `CallbackSubmitterError`, `InvokeError`, `ChildContextError`, `WaitForConditionError`, and `PromiseCombinatorError`.
 - A failed terminate is logged, not thrown.
 
 A `MicrovmError` that leaves your own `runInChildContext` reaches the next caller as the SDK's `ChildContextError`. Its cause is a `StepError` whose `cause.name` is the MicroVM error type. The SDK rebuilds every error type it does not know this way.
@@ -149,7 +150,7 @@ A `MicrovmError` that leaves your own `runInChildContext` reaches the next calle
 
 The function's execution role needs:
 
-- `lambda:RunMicrovm` and `lambda:TerminateMicrovm`.
+- `lambda:RunMicrovm` and `lambda:TerminateMicrovm`. Without `lambda:TerminateMicrovm`, every operation still returns its result, but every MicroVM runs until its timeout plus 5 minutes. The only sign is an error in the function's log.
 - `lambda:CreateMicrovmAuthToken`, for HTTP delivery. Grant it unless every input is small.
 - `lambda:PassNetworkConnector` on the connectors the MicroVM uses. RunMicrovm authorizes each connector separately. With the defaults, that is `arn:aws:lambda:<region>:aws:network-connector:aws-network-connector:*`.
 - `iam:PassRole` on the MicroVM execution role.
@@ -245,8 +246,10 @@ pipeline                  Context (MicrovmSession)
 - The session ID is random and checkpointed. So the client token is unique per session and stable across retries and replays.
 - The first job is sent right after the launch. The MicroVM endpoint holds or refuses requests until the `run` hook returns, and the request step retries a refused request inside its own attempt. So the session needs no separate readiness wait.
 - Each `vm.invoke` works like `microvm` with HTTP delivery, without its own launch and terminate. It returns the job's result. Without `path`, the job goes to the worker's `handler`.
+- The session `timeout` sets the MicroVM's lifetime: the service terminates it at the timeout plus 5 minutes. The timeout does not limit the handler or its jobs. A job still running when the MicroVM ends waits for its own `timeout`, which can be up to 8 hours. So set a `heartbeatTimeout` on every `vm.invoke`. The job then fails at its heartbeat timeout after the MicroVM ends.
 - A failed `vm.invoke` rejects inside the handler with a `MicrovmError`. The handler can catch it and continue with the same MicroVM. An uncaught error ends the session.
 - The handler receives the session's child context as its second argument. Use it for durable operations between jobs, and `ctx.promise.all` to run jobs in parallel.
+- Inside `ctx.promise.all`, a failed `vm.invoke` rejects with the SDK's `PromiseCombinatorError`, not with a `MicrovmError`. The MicroVM error type appears only as the `name` of an inner `cause`: `PromiseCombinatorError`, then `StepError`, then an `Error` named, for example, `MicrovmJobFailedError`. When that error ends the session, the checkpoint records only the outer type. So the caller of `microvmSession` gets a `PromiseCombinatorError` with no MicroVM type in its chain. To branch on the MicroVM error type, catch the `PromiseCombinatorError` inside the handler, and read the `name` of its innermost `cause`.
 - Inside a nested child context, such as a `map` item, call `vm.withContext(itemCtx).invoke(...)`. A durable operation created in a parent context from inside a child context fails the execution.
 - `idlePolicy` is not set by default. The session already suspends an idle MicroVM (see below). An idle policy counts only inbound traffic, so it also counts a running job as idle, because the job receives none. So set it only for a MicroVM that serves inbound traffic of its own, and make `maxIdleDurationSeconds` longer than the longest job.
 - The session's value is checkpointed as the child context result. So it must be JSON-serializable, and it counts toward the checkpoint size limit.
@@ -278,7 +281,10 @@ Set `autoSuspendOnIdle: false` for such a workload. A shorter `autoSuspendIdleTi
 
 The session rejects these settings before it creates any durable operation: an `autoSuspendIdleTime` under 10 seconds, one longer than the session `timeout`, and an `autoSuspendIdleTime` while `autoSuspendOnIdle` is `false`. A session whose `timeout` is under 10 seconds does not suspend by default.
 
-A MicroVM that no longer exists, or that is terminating, fails the next `vm.invoke` at once with a `MicrovmNotRunningError`. It is a `MicrovmDeliveryError`, and it is not retried. A session MicroVM lives at most its session `timeout` plus 5 minutes, and never longer than 8 hours.
+A session MicroVM lives at most its session `timeout` plus 5 minutes, and never longer than 8 hours. What the next `vm.invoke` reports after the MicroVM ends depends on the state check:
+
+- With `autoSuspendOnIdle` on, or an `idlePolicy` set, the request step calls GetMicrovm before each job. A MicroVM that no longer exists, or that is terminating, then fails the job at once with a `MicrovmNotRunningError`. It is a `MicrovmDeliveryError`, and it is not retried.
+- With `autoSuspendOnIdle: false` and no `idlePolicy`, the session makes no GetMicrovm call. A terminated MicroVM's endpoint answers 502, measured in us-east-1. The request step treats a 502 as a MicroVM that is still starting. So the job fails with a plain `MicrovmDeliveryError`, only after both retry tiers: 5 step attempts with the default retry strategy, each up to the 60-second `retryWindow`. Each attempt bills Lambda compute while it retries.
 
 The session needs the same permissions as `microvm` with HTTP delivery, including `lambda:CreateMicrovmAuthToken`. It also needs `lambda:GetMicrovm` and `lambda:ResumeMicrovm`. With `autoSuspendOnIdle: false` and no `idlePolicy`, it needs neither.
 
