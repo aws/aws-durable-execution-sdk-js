@@ -46,12 +46,10 @@ function captureCarrier(context: DurableContext): CarrierObservation {
     forwardedHeader: info.xRayTraceId ?? null,
     extracted: xRayContextExtractor(info) ?? null,
     traceId: deriveExecutionTraceId(
-      {
-        xRayTraceId: runtimeHeader,
-        _X_AMZN_TRACE_ID: process.env._X_AMZN_TRACE_ID,
-      },
+      process.env,
       info.executionArn,
       info.executionStartTimestamp,
+      { xRayTraceId: runtimeHeader },
     ),
   };
 }

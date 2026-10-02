@@ -527,6 +527,7 @@ const span = generator.withIds(
 deriveTraceIdFromArn(
   executionArn: string,
   executionStartTimestamp?: Date,
+  invocation?: { readonly xRayTraceId?: string },
 ): string;
 
 deriveTraceIdFromXRayRoot(xRayRoot: string): string | undefined;
@@ -551,11 +552,12 @@ deriveSpanIdFromOperationId(
 `deriveTraceIdFromXRayRoot` converts a valid X-Ray `Root` value to an
 OpenTelemetry trace ID and returns `undefined` for invalid input.
 `deriveExecutionTraceId` applies the default plugin precedence to an explicit
-carrier: optional `xRayTraceId` from the current Lambda context takes precedence
-over `_X_AMZN_TRACE_ID`. A present but invalid local header suppresses the
-environment carrier and uses the ARN-and-start-time fallback. Existing callers
-can still pass `process.env`; on Managed Instances pass
-`{ xRayTraceId: context.xRayTraceId, _X_AMZN_TRACE_ID: process.env._X_AMZN_TRACE_ID }`.
+environment and an optional fourth invocation-context argument. Only
+`_X_AMZN_TRACE_ID` is read from the environment, preserving existing callers even
+if they have an unrelated variable named `xRayTraceId`. On Managed Instances,
+pass `{ xRayTraceId: context.xRayTraceId }` as the fourth argument; that local
+header takes precedence. A present but invalid local header suppresses the
+environment carrier and uses the ARN-and-start-time fallback.
 When no valid Root is available, pass the same execution start timestamp as the
 plugin; omit it only when it is unavailable to both callers.
 `deriveWorkflowSpanId` hashes `workflow:<execution ARN>`,

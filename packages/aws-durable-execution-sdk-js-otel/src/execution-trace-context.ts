@@ -18,13 +18,12 @@ import { getConfiguredSampler } from "./global-sampler";
 /**
  * Environment values used to resolve the default X-Ray execution trace ID.
  *
- * `process.env` remains supported. Callers on Managed Instances can also pass
- * the invocation-local `xRayTraceId` alongside the optional environment carrier.
- * This keeps {@link deriveExecutionTraceId} pure and uses the plugin precedence.
+ * `process.env` remains supported and only `_X_AMZN_TRACE_ID` is interpreted.
+ * Invocation-local context is passed separately to avoid treating arbitrary
+ * environment variables as invocation metadata.
  */
 export interface ExecutionTraceEnvironment {
   readonly _X_AMZN_TRACE_ID?: string;
-  readonly xRayTraceId?: string;
 }
 
 /**
@@ -120,9 +119,10 @@ export function deriveExecutionTraceId(
   environment: ExecutionTraceEnvironment,
   executionArn: string,
   executionStartTimestamp?: Date,
+  invocation?: { readonly xRayTraceId?: string },
 ): string {
   return canonicalTraceId(
-    parseXRayTraceHeader(selectXRayTraceHeader(environment, environment)),
+    parseXRayTraceHeader(selectXRayTraceHeader(invocation ?? {}, environment)),
     executionArn,
     executionStartTimestamp,
   );
