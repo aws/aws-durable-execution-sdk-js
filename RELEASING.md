@@ -179,3 +179,12 @@ Before publishing a release:
 - [ ] CI checks pass on `main`
 - [ ] Release notes written with separate sections per package
 - [ ] Tag follows the naming convention (`sdk-X.Y.Z`, `otel-X.Y.Z`, `test-X.Y.Z`, `eslint-X.Y.Z`, `insight-X.Y.Z`, `mcp-X.Y.Z`, or `/`-joined)
+
+## SDK 3.x migration release order
+
+The coordinated minor fixes prepare testing SDK 1.3.1 for core 2.x. This major
+migration uses testing SDK 1.3.2 with its broadened `>=1.0.1 <4.0.0` peer range,
+so publication cannot skip the new range because 1.3.1 already exists. Core
+3.0.0 and OTel 2.0.0 carry the explicit factory migration; testing remains a
+compatible patch. Land and release the approved minor fixes before the separate
+major migration. Version metadata does not authorize a merge or publication.

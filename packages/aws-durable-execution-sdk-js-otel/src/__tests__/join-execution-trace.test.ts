@@ -6,6 +6,7 @@ import {
   AlwaysOnSampler,
 } from "@opentelemetry/sdk-trace-node";
 import { context, trace, propagation, ROOT_CONTEXT } from "@opentelemetry/api";
+import { resourceFromAttributes } from "@opentelemetry/resources";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
 import type {
   InvocationInfo,
@@ -121,11 +122,226 @@ describe("Execution trace joining", () => {
       // complete remote parent it anchors on the deterministic synthetic root,
       // NOT the ambient span.
       expect(workflow.parentSpanContext?.spanId).not.toBe(ambientCtx.spanId);
-      // The Invocation span, however, still parents onto the active ambient
-      // span because that span is already on the (canonical) execution trace —
-      // this keeps the per-invocation span nested under the layer's handler
-      // span without changing the execution ancestor.
-      expect(invocation.parentSpanContext?.spanId).toBe(ambientCtx.spanId);
+      // Without a complete remote Parent, fallback mode makes the
+      // SDK-owned synthetic root the common parent of Workflow and Invocation.
+      expect(invocation.parentSpanContext?.spanId).toBe(
+        workflow.parentSpanContext?.spanId,
+      );
+      expect(invocation.parentSpanContext?.spanId).not.toBe(ambientCtx.spanId);
+
+      const syntheticRoot = exporter
+        .getFinishedSpans()
+        .find(
+          (span) =>
+            span.name === "DurableExecutionRoot" &&
+            span.spanContext().spanId === workflow.parentSpanContext?.spanId,
+        );
+      expect(syntheticRoot).toBeDefined();
+      expect(syntheticRoot!.parentSpanContext).toBeUndefined();
+      expect(syntheticRoot!.spanContext().traceId).toBe(ambientCtx.traceId);
+    });
+
+    it.each(["SUCCEEDED", "FAILED"] as const)(
+      "exports a connected synthetic root on terminal %s",
+      async (status) => {
+        const plugin = makePlugin({ contextExtractor: () => undefined });
+
+        await plugin.onInvocationStart(makeInvocationInfo());
+        await plugin.onInvocationEnd(
+          makeInvocationEndInfo({
+            status: status as any,
+            executionError:
+              status === "FAILED"
+                ? new Error("expected test failure")
+                : undefined,
+          }),
+        );
+
+        const spans = exporter.getFinishedSpans();
+        const workflow = spans.find((span) => span.name === "Workflow")!;
+        const invocation = spans.find((span) => span.name === "Invocation")!;
+        const roots = spans.filter(
+          (span) => span.name === "DurableExecutionRoot",
+        );
+
+        expect(roots).toHaveLength(1);
+        expect(roots[0].parentSpanContext).toBeUndefined();
+        expect(workflow.parentSpanContext?.spanId).toBe(
+          roots[0].spanContext().spanId,
+        );
+        expect(invocation.parentSpanContext?.spanId).toBe(
+          roots[0].spanContext().spanId,
+        );
+        expect(workflow.spanContext().traceId).toBe(
+          roots[0].spanContext().traceId,
+        );
+        expect(invocation.spanContext().traceId).toBe(
+          roots[0].spanContext().traceId,
+        );
+      },
+    );
+
+    it("does not export a synthetic root before terminal completion", async () => {
+      const plugin = makePlugin({ contextExtractor: () => undefined });
+
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: "PENDING" as any }),
+      );
+
+      expect(
+        exporter
+          .getFinishedSpans()
+          .filter((span) => span.name === "DurableExecutionRoot"),
+      ).toHaveLength(0);
+      expect(
+        exporter.getFinishedSpans().filter((span) => span.name === "Workflow"),
+      ).toHaveLength(0);
+
+      await plugin.onInvocationStart(
+        makeInvocationInfo({ requestId: "req-2", isFirstInvocation: false }),
+      );
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({
+          requestId: "req-2",
+          status: "SUCCEEDED" as any,
+        }),
+      );
+
+      expect(
+        exporter
+          .getFinishedSpans()
+          .filter((span) => span.name === "DurableExecutionRoot"),
+      ).toHaveLength(1);
+    });
+
+    it("does not emit a stray synthetic root for explicit Sampled=0 fallback", async () => {
+      const dropExporter = new InMemorySpanExporter();
+      let dropProvider: NodeTracerProvider | undefined;
+      const plugin = makePlugin({
+        tracerProviderFactory: (createIdGenerator) => {
+          dropProvider = new NodeTracerProvider({
+            sampler: new AlwaysOnSampler(),
+            spanProcessors: [new SimpleSpanProcessor(dropExporter)],
+            idGenerator: createIdGenerator(),
+          });
+          return dropProvider;
+        },
+        contextExtractor: () => ({
+          traceId: "9".repeat(32),
+          sampling: "NOT_SAMPLED" as const,
+        }),
+      });
+
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+
+      expect(dropExporter.getFinishedSpans()).toHaveLength(0);
+      await dropProvider?.shutdown();
+    });
+
+    it("keeps execution-owned synthetic roots unique across different resources when executions share a propagated Root", async () => {
+      const sharedTraceId = "8".repeat(32);
+      const targetArn = `${TEST_ARN}-target`;
+      const targetStart = new Date(TEST_START.getTime() + 60_000);
+      const firstExporter = new InMemorySpanExporter();
+      const secondExporter = new InMemorySpanExporter();
+      let firstProvider: NodeTracerProvider | undefined;
+      let secondProvider: NodeTracerProvider | undefined;
+
+      const first = makePlugin({
+        tracerProviderFactory: (createIdGenerator) => {
+          firstProvider = new NodeTracerProvider({
+            resource: resourceFromAttributes({ "service.name": "caller" }),
+            spanProcessors: [new SimpleSpanProcessor(firstExporter)],
+            idGenerator: createIdGenerator(),
+          });
+          return firstProvider;
+        },
+        contextExtractor: () => ({
+          traceId: sharedTraceId,
+          sampling: "SAMPLED" as const,
+        }),
+      });
+      const second = makePlugin(
+        {
+          tracerProviderFactory: (createIdGenerator) => {
+            secondProvider = new NodeTracerProvider({
+              resource: resourceFromAttributes({ "service.name": "callee" }),
+              spanProcessors: [new SimpleSpanProcessor(secondExporter)],
+              idGenerator: createIdGenerator(),
+            });
+            return secondProvider;
+          },
+          contextExtractor: () => ({
+            traceId: sharedTraceId,
+            sampling: "SAMPLED" as const,
+          }),
+        },
+        makeInvocationInfo({
+          executionArn: targetArn,
+          requestId: "req-target",
+          executionStartTimestamp: targetStart,
+        }),
+      );
+
+      await first.onInvocationStart(makeInvocationInfo());
+      await first.onInvocationEnd(makeInvocationEndInfo());
+      await second.onInvocationStart(
+        makeInvocationInfo({
+          executionArn: targetArn,
+          requestId: "req-target",
+          executionStartTimestamp: targetStart,
+        }),
+      );
+      await second.onInvocationEnd(
+        makeInvocationEndInfo({
+          executionArn: targetArn,
+          requestId: "req-target",
+          executionStartTimestamp: targetStart,
+        }),
+      );
+
+      const firstRoot = firstExporter
+        .getFinishedSpans()
+        .find((span) => span.name === "DurableExecutionRoot");
+      const secondRoot = secondExporter
+        .getFinishedSpans()
+        .find((span) => span.name === "DurableExecutionRoot");
+      expect(firstRoot).toBeDefined();
+      expect(secondRoot).toBeDefined();
+      expect(firstRoot!.spanContext().traceId).toBe(sharedTraceId);
+      expect(secondRoot!.spanContext().traceId).toBe(sharedTraceId);
+      expect(firstRoot!.spanContext().spanId).not.toBe(
+        secondRoot!.spanContext().spanId,
+      );
+      expect(
+        new Set([
+          `${firstRoot!.spanContext().traceId}:${firstRoot!.spanContext().spanId}`,
+          `${secondRoot!.spanContext().traceId}:${secondRoot!.spanContext().spanId}`,
+        ]).size,
+      ).toBe(2);
+      expect(firstRoot!.startTime.join(":")).not.toBe(
+        secondRoot!.startTime.join(":"),
+      );
+      expect(firstRoot!.resource.attributes["service.name"]).toBe("caller");
+      expect(secondRoot!.resource.attributes["service.name"]).toBe("callee");
+
+      const firstWorkflow = firstExporter
+        .getFinishedSpans()
+        .find((span) => span.name === "Workflow");
+      const secondWorkflow = secondExporter
+        .getFinishedSpans()
+        .find((span) => span.name === "Workflow");
+      expect(firstWorkflow?.parentSpanContext?.spanId).toBe(
+        firstRoot!.spanContext().spanId,
+      );
+      expect(secondWorkflow?.parentSpanContext?.spanId).toBe(
+        secondRoot!.spanContext().spanId,
+      );
+
+      await firstProvider?.shutdown();
+      await secondProvider?.shutdown();
     });
 
     it("does NOT parent Invocation onto a same-trace ambient span whose sampled bit differs from the execution ancestor", async () => {

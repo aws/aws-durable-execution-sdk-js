@@ -646,3 +646,14 @@ remote parent, or a synthetic execution root).
 ## License
 
 Apache-2.0
+
+## Migration from the v1 provider contract
+
+With core 3.x, legacy providers declaring `pluginApiVersion` fail with
+`PluginLoadError` for explicit and environment registration. Upgrade the OTel
+package/layer to the compatible 2.x factory implementation and use
+`createExecutionOtelPluginFactory` or `createInvocationOtelPluginFactory`.
+The old handler-lifetime `createPlugin()` contract is not silently treated as a
+per-invocation factory. Custom factories must return a fresh plugin for every
+`createPlugin(info)` call; process-owned tracer providers may remain shared.
+This required migration belongs to the core 3.x major release only.

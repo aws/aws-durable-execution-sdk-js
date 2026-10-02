@@ -623,3 +623,34 @@ Measure your own workload before switching.
 ## License
 
 This project is licensed under the Apache-2.0 License.
+
+## SDK 3.x plugin migration
+
+SDK 3.x requires an explicit migration from the legacy v1 provider contract.
+Providers declaring `pluginApiVersion` are rejected with `PluginLoadError` in
+both `plugins` and `DURABLE_EXECUTION_PLUGINS` registration. They are not silently
+called with a different lifetime: v1 `createPlugin()` ran once per handler,
+whereas a 3.x factory's `createPlugin(info)` runs once per invocation.
+
+Replace legacy provider/instance registrations with a factory object:
+
+```typescript
+import { withDurableExecution, type InvocationInfo } from "@aws/durable-execution-sdk-js";
+
+const factory = {
+  createPlugin(info: InvocationInfo) {
+    return new MyPlugin(info);
+  },
+};
+const handler = withDurableExecution(myHandler, { plugins: [factory] });
+```
+
+Return a fresh plugin instance for each invocation. Keep intentionally shared
+resources, such as a tracer provider/exporter, outside the invocation instance;
+keep invocation-specific spans, operation maps and buffers inside it. Remove
+legacy `pluginApiVersion` and `pluginType` metadata after migrating the factory.
+Environment-loaded modules still export `durableExecutionPluginProvider`, whose
+value is now this factory shape. Upgrade bundled OTel layers together with core
+3.x and use their factory builders; an old 1.x layer is rejected rather than
+silently reinterpreted. Core 2.x's supported v1 providers are unaffected by this
+major-only policy.

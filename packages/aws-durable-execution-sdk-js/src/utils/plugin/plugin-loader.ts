@@ -249,6 +249,23 @@ function validatePluginFactory(
   providerValue: unknown,
   guidance = "",
 ): DurableInstrumentationPluginFactory {
+  // SDK 3.x does not reinterpret the v1 handler-lifetime provider contract as
+  // a per-invocation factory. Test presence rather than reading the value: an
+  // old CJS provider can import the now-removed version constant as undefined.
+  if (
+    providerValue != null &&
+    (typeof providerValue === "object" ||
+      typeof providerValue === "function") &&
+    "pluginApiVersion" in providerValue
+  ) {
+    throw new PluginLoadError(
+      `${subject} declares the legacy v1 provider contract, which SDK 3.x no longer accepts. ` +
+        "Migrate to a factory with createPlugin(info) that returns a fresh plugin for each invocation, " +
+        "and remove the legacy pluginApiVersion/pluginType metadata. " +
+        "For bundled OTel plugins, upgrade to the SDK 3.x-compatible OTel factory package.",
+    );
+  }
+
   if (!isPluginFactory(providerValue)) {
     throw new PluginLoadError(
       `${subject} must be an object with a 'createPlugin(info)' method that ` +

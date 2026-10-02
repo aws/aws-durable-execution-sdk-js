@@ -251,10 +251,9 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
       ambientSpanContext.spanId,
     );
 
-    // Assertion 3: Invocation_Span shares the execution trace with the Workflow
-    // span. It parents onto the active ambient span (which is on the canonical
-    // execution trace), keeping the per-invocation span nested under the layer's
-    // handler span without changing the execution ancestor.
+    // Assertion 3: With a Root but no usable Parent, fallback mode makes
+    // the exported SDK-owned synthetic root the common parent of Workflow and
+    // Invocation. The ambient handler span is not stable across reinvocations.
     const invocationSpan = findSpan(exporter, "Invocation");
     expect(invocationSpan).toBeDefined();
     expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(TEST_ARN);
@@ -262,7 +261,20 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
       workflowSpan!.spanContext().traceId,
     );
     expect(invocationSpan!.parentSpanContext?.spanId).toBe(
+      workflowSpan!.parentSpanContext?.spanId,
+    );
+    expect(invocationSpan!.parentSpanContext?.spanId).not.toBe(
       ambientSpanContext.spanId,
+    );
+
+    const syntheticRoot = findSpan(exporter, "DurableExecutionRoot");
+    expect(syntheticRoot).toBeDefined();
+    expect(syntheticRoot!.parentSpanContext).toBeUndefined();
+    expect(syntheticRoot!.spanContext().spanId).toBe(
+      workflowSpan!.parentSpanContext?.spanId,
+    );
+    expect(syntheticRoot!.spanContext().traceId).toBe(
+      workflowSpan!.spanContext().traceId,
     );
 
     // Assertion 4: Operation span has link to the plugin-created Invocation_Span

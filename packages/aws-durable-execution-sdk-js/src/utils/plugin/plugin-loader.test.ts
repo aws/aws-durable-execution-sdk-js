@@ -769,3 +769,85 @@ describe("describeValue names what an invalid entry was", () => {
     });
   });
 });
+
+describe("SDK 3.x legacy provider migration", () => {
+  it.each(["explicit", "environment"] as const)(
+    "rejects declared v1 providers in %s registration without calling them",
+    async (registration) => {
+      const createPlugin = jest.fn(() => new FirstDynamicPlugin());
+      const legacy = {
+        pluginApiVersion: 1,
+        pluginType: FirstDynamicPlugin,
+        createPlugin,
+      };
+      const loaded =
+        registration === "explicit"
+          ? loadConfiguredPlugins([legacy], { environment: {} })
+          : loadConfiguredPlugins(undefined, {
+              environment: { DURABLE_EXECUTION_PLUGINS: "@example/legacy-v1" },
+              importModule: async () => moduleFor(legacy),
+            });
+      await expect(loaded).rejects.toMatchObject({
+        name: "PluginLoadError",
+        message: expect.stringContaining("legacy v1 provider contract"),
+      });
+      await expect(loaded).rejects.toThrow("createPlugin(info)");
+      await expect(loaded).rejects.toThrow("fresh plugin for each invocation");
+      expect(createPlugin).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["explicit", "environment"] as const)(
+    "recognizes legacy metadata whose removed version import is undefined (%s)",
+    async (registration) => {
+      const createPlugin = jest.fn(() => new FirstDynamicPlugin());
+      const legacy = {
+        pluginApiVersion: undefined,
+        pluginType: FirstDynamicPlugin,
+        createPlugin,
+      };
+      const loaded =
+        registration === "explicit"
+          ? loadConfiguredPlugins([legacy], { environment: {} })
+          : loadConfiguredPlugins(undefined, {
+              environment: { DURABLE_EXECUTION_PLUGINS: "@example/legacy-v1" },
+              importModule: async () => ({ default: moduleFor(legacy) }),
+            });
+      await expect(loaded).rejects.toBeInstanceOf(PluginLoadError);
+      expect(createPlugin).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not call a legacy metadata getter while rejecting its declared contract", async () => {
+    const getter = jest.fn(() => {
+      throw new Error("should not run");
+    });
+    const legacy = Object.defineProperty(
+      { createPlugin: () => new FirstDynamicPlugin() },
+      "pluginApiVersion",
+      { get: getter },
+    );
+    await expect(
+      loadConfiguredPlugins([legacy], { environment: {} }),
+    ).rejects.toThrow("legacy v1 provider contract");
+    expect(getter).not.toHaveBeenCalled();
+  });
+
+  it("accepts a migrated factory and creates fresh instances for separate invocations", async () => {
+    const createPlugin = jest.fn(() => new FirstDynamicPlugin());
+    const [factory] = await loadConfiguredPlugins([{ createPlugin }], {
+      environment: {},
+    });
+    expect(createPlugin).not.toHaveBeenCalled();
+    const first = factory.createPlugin(invocationInfo);
+    const secondInfo = {
+      ...invocationInfo,
+      requestId: "next-request",
+      isFirstInvocation: false,
+    };
+    const second = factory.createPlugin(secondInfo);
+    expect(first).not.toBe(second);
+    expect(createPlugin).toHaveBeenNthCalledWith(1, invocationInfo);
+    expect(createPlugin).toHaveBeenNthCalledWith(2, secondInfo);
+  });
+});

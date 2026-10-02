@@ -545,3 +545,39 @@ describe("a plugin class passed instead of a factory fails the invocation", () =
     expect(created[0].startedArns).toEqual(["arn:exec:1"]);
   });
 });
+
+describe("SDK 3.x rejects legacy providers before user execution", () => {
+  it.each(["explicit", "environment"] as const)(
+    "returns PluginLoadError for %s v1 registration",
+    async (registration) => {
+      const createPlugin = jest.fn(() => new RecordingPlugin());
+      const legacy = {
+        pluginApiVersion: 1,
+        pluginType: RecordingPlugin,
+        createPlugin,
+      };
+      mockedLoadConfiguredPlugins.mockImplementation((explicit) =>
+        actualLoadConfiguredPlugins(explicit, {
+          environment:
+            registration === "environment"
+              ? { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/legacy-v1" }
+              : {},
+          importModule: async () => ({ [PLUGIN_PROVIDER_EXPORT]: legacy }),
+        }),
+      );
+      const handlerFn = jest.fn(async () => ({ ok: true }));
+      const handler = withDurableExecution(handlerFn, {
+        plugins: registration === "explicit" ? [legacy] : [],
+      });
+      await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
+        Status: InvocationStatus.FAILED,
+        Error: {
+          ErrorType: "PluginLoadError",
+          ErrorMessage: expect.stringContaining("legacy v1 provider contract"),
+        },
+      });
+      expect(createPlugin).not.toHaveBeenCalled();
+      expect(handlerFn).not.toHaveBeenCalled();
+    },
+  );
+});

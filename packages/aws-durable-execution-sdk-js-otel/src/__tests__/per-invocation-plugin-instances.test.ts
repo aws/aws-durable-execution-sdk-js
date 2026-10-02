@@ -45,6 +45,7 @@ import type {
 import {
   deriveSpanIdFromOperationId,
   deriveTraceIdFromArn,
+  deriveExecutionRootSpanId,
   deriveWorkflowSpanId,
 } from "../deterministic-id-generator";
 import {
@@ -257,8 +258,24 @@ describe.each([
       );
       expect(new Set(operationSpanIds).size).toBe(2);
 
-      // Nothing crossed over: every span carries one ARN and one trace ID.
-      for (const span of spans) {
+      // Nothing crossed over. Synthetic roots carry their execution identity
+      // in the deterministic span ID rather than an execution-ARN attribute.
+      const roots = spansNamed(spans, "DurableExecutionRoot");
+      expect(roots).toHaveLength(2);
+      for (const executionArn of [ARN_A, ARN_B]) {
+        const root = roots.find(
+          (span) =>
+            span.spanContext().spanId ===
+            deriveExecutionRootSpanId(executionArn),
+        );
+        expect(root).toBeDefined();
+        expect(root!.spanContext().traceId).toBe(
+          deriveTraceIdFromArn(executionArn, EXECUTION_START),
+        );
+      }
+      for (const span of spans.filter(
+        (span) => span.name !== "DurableExecutionRoot",
+      )) {
         expect(span.spanContext().traceId).toBe(
           deriveTraceIdFromArn(arnOf(span), EXECUTION_START),
         );

@@ -29,7 +29,10 @@ function newPlugin(
 ): InvocationOtelPlugin {
   return createInvocationOtelPluginFactory(config).createPlugin(info);
 }
-import { deriveSpanIdFromOperationId } from "../deterministic-id-generator";
+import {
+  deriveSpanIdFromOperationId,
+  deriveExecutionRootSpanId,
+} from "../deterministic-id-generator";
 import type { TracerProviderFactory } from "../otel-plugin-config";
 import type {
   InvocationInfo,
@@ -423,10 +426,14 @@ describe("InvocationOtelPlugin", () => {
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
       const spans = getExportedSpans();
-      // Should have: op-1, op-2, invocation, Workflow (all ended)
-      expect(spans.length).toBe(4);
+      // Should have: op-1, op-2, Invocation, Workflow, and the exported
+      // synthetic root that anchors fallback traces.
+      expect(spans).toHaveLength(5);
       expect(findSpan("Invocation")).toBeDefined();
       expect(findSpan("Workflow")).toBeDefined();
+      const syntheticRoot = findSpan("DurableExecutionRoot");
+      expect(syntheticRoot).toBeDefined();
+      expect(syntheticRoot!.parentSpanContext).toBeUndefined();
     });
 
     it("flushes spans (they appear in exporter)", async () => {
@@ -468,11 +475,29 @@ describe("InvocationOtelPlugin", () => {
       expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(
         "arn:second",
       );
-      // Only invocation span + Workflow span from second invocation, no leftover op-1
-      expect(spans.length).toBe(2);
-      for (const span of spans) {
+      // The second invocation owns its Invocation, Workflow and synthetic root;
+      // no operation or execution identity from the first invocation survives.
+      expect(spans).toHaveLength(3);
+      const syntheticRoot = findSpan("DurableExecutionRoot");
+      expect(syntheticRoot).toBeDefined();
+      expect(syntheticRoot!.parentSpanContext).toBeUndefined();
+      expect(syntheticRoot!.spanContext().spanId).toBe(
+        deriveExecutionRootSpanId(secondInfo.executionArn),
+      );
+      expect(syntheticRoot!.spanContext().spanId).not.toBe(
+        deriveExecutionRootSpanId(firstInfo.executionArn),
+      );
+      expect(syntheticRoot!.spanContext().traceId).toBe(
+        invocationSpan!.spanContext().traceId,
+      );
+      for (const span of spans.filter((span) => span !== syntheticRoot)) {
         expect(span.attributes["durable.execution.arn"]).toBe("arn:second");
       }
+      expect(
+        spans.find(
+          (span) => span.attributes["durable.operation.id"] === "op-1",
+        ),
+      ).toBeUndefined();
     });
   });
 
