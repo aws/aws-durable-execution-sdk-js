@@ -2027,6 +2027,55 @@ describe("startMicrovmWorker", () => {
     ]);
   });
 
+  it("answers 400 with a generic message when reading the body fails", async () => {
+    const error = jest.fn();
+    const listener = createMicrovmWorkerListener({
+      handler: jest.fn(),
+      createClient: () => new FakeLambdaClient().asClient(),
+      logger: { info: () => {}, warn: () => {}, error },
+    });
+    // The stream fails with an error whose message is internal detail.
+    const request = Object.assign(
+      new Readable({
+        read() {
+          this.destroy(new Error("ECONNRESET at /opt/app/internal.js:42"));
+        },
+      }),
+      { url: `${HOOK_PATH_PREFIX}run`, method: "POST" },
+    );
+    const answer = await new Promise<{ status: number; body: string }>(
+      (resolve) => {
+        let status = 0;
+        listener.listener(
+          request as never,
+          {
+            headersSent: false,
+            writeHead(code: number) {
+              status = code;
+              return this;
+            },
+            end(body: string) {
+              resolve({ status, body });
+              return this;
+            },
+          } as never,
+        );
+      },
+    );
+
+    expect(answer.status).toBe(400);
+    expect(JSON.parse(answer.body)).toEqual({ error: "invalid request" });
+    expect(error).toHaveBeenCalledWith(
+      "could not read the request",
+      expect.objectContaining({
+        error: expect.objectContaining({
+          message: "ECONNRESET at /opt/app/internal.js:42",
+        }),
+      }),
+    );
+    listener.close();
+  });
+
   it("answers 400 to a body that is not JSON", async () => {
     const client = new FakeLambdaClient();
     const target = await start(client, jest.fn());

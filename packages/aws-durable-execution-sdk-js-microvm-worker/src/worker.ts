@@ -593,11 +593,23 @@ export function createMicrovmWorkerListener<
   }
 
   /** Answers 400 and, when the document named a callback, fails it. */
+  /**
+   * Answers 400 to a request that the worker could not accept.
+   *
+   * Only the worker's own validation messages are sent back. They describe
+   * the request, not the worker. Any other error, such as a connection that
+   * failed while the body was read, is logged, and the caller gets a generic
+   * message. So no internal error text reaches the HTTP response.
+   */
   function reject(error: unknown, response: ServerResponse): void {
-    const message = error instanceof Error ? error.message : String(error);
-    logger.error("invalid request", { error: message });
-    respond(response, 400, { error: message });
-    if (error instanceof InvalidRunHookPayloadError && error.callbackId) {
+    if (!(error instanceof InvalidRunHookPayloadError)) {
+      logger.error("could not read the request", { error: describe(error) });
+      respond(response, 400, { error: "invalid request" });
+      return;
+    }
+    logger.error("invalid request", { error: error.message });
+    respond(response, 400, { error: error.message });
+    if (error.callbackId) {
       const region = error.region ?? process.env.AWS_REGION;
       if (region) {
         track(reportInvalid(error, error.callbackId, region));
