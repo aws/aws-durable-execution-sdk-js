@@ -116,7 +116,11 @@ describe.each([ExecutionOtelPlugin, InvocationOtelPlugin])(
         const spans = exporter.getFinishedSpans();
         if (sampling === "NOT_SAMPLED") expect(spans).toHaveLength(0);
         else {
-          expect(spans).toHaveLength(3);
+          expect(spans.map((span) => span.name).sort()).toEqual(
+            sampling === undefined
+              ? ["DurableExecutionRoot", "Invocation", "Workflow", "call"]
+              : ["Invocation", "Workflow", "call"],
+          );
           const span = spans.find((span) => span.name === "call")!;
           expect(parsed?.traceId).toBe(span.spanContext().traceId);
           expect(parsed?.parentSpanId).toBe(span.spanContext().spanId);
