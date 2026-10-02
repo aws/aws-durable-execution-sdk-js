@@ -111,7 +111,11 @@ describe("installed core compatibility for exclusive OTel views", () => {
       const result = current.run<ProbeResult>(viewProbe([view], 1));
       expect(result.result?.Status).toBe("SUCCEEDED");
       expect(result.handlerCalls).toBe(1);
-      expect(result.spanNames.sort()).toEqual(["Invocation", "Workflow"]);
+      expect(result.spanNames.sort()).toEqual([
+        "DurableExecutionRoot",
+        "Invocation",
+        "Workflow",
+      ]);
     },
   );
 });
