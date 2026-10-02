@@ -25,6 +25,7 @@
     "lint": "biome check src --diagnostic-level=error",
     "lint:fix": "biome check --write src",
     "prebuild": "rm -rf dist dist-cjs dist-types",
+    "pretest": "npm run build --workspace=@aws/durable-execution-sdk-js-microvm-worker",
     "test": "tsc --noEmit && jest --config jest.config.mjs --collectCoverage --collectCoverageFrom=src/**/*.{ts,js}"
   },
   "exports": {

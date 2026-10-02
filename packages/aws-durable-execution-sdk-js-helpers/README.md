@@ -134,7 +134,7 @@ try {
 The class is the same on the first run and on every replay, so code that branches on it stays deterministic. Other errors keep their own types:
 
 - An invalid config throws `TypeError` or `RangeError` before any durable operation.
-- An error from a session handler's own code is not a `MicrovmError`.
+- An error from a session handler's own code is not a `MicrovmError`. It reaches the caller as `ChildContextError`, as from `runInChildContext`. A `StepError` from a step that the handler ran, and a callback error, keep their type.
 - A failed terminate is logged, not thrown.
 
 A `MicrovmError` that leaves your own `runInChildContext` reaches the next caller as the SDK's `ChildContextError`. Its cause is a `StepError` whose `cause.name` is the MicroVM error type. The SDK rebuilds every error type it does not know this way.
@@ -192,7 +192,7 @@ A job request can arrive before the `run` hook, because the endpoint can accept 
 The code in the MicroVM must:
 
 1. Return HTTP 200 from the `run` hook within the hook timeout (at most 60 seconds). A failed or timed-out `run` hook can send the MicroVM straight to `TERMINATING`.
-2. Answer a job request with a 2xx status at once. The same job can arrive twice, so ignore a second request for a running callback ID. Do not wait for the `run` hook before running a job request.
+2. Answer a job request with a 2xx status at once. The same job can arrive again, also after it ended, so ignore a second request for a callback ID that you already ran. Do not wait for the `run` hook before running a job request.
 3. Run each job in the background.
 4. Create its AWS clients after the `run` hook or the first job request arrives, not at image build. Lambda snapshots the running process at build time, and every MicroVM from the image shares that state.
 5. When `heartbeatTimeoutSeconds` is set, call `SendDurableExecutionCallbackHeartbeat` more often than that interval, for example every third of it.

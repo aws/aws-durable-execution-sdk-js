@@ -266,13 +266,21 @@ const PASS_THROUGH_ERROR_TYPES: ReadonlySet<string> = new Set([
 /**
  * The error mapper of a session. The session handler is caller code. So only
  * MicroVM errors are restored, and every other error keeps its SDK type.
+ *
+ * The SDK rebuilds an error type that it does not know, such as a plain
+ * `Error` thrown by the handler, as `StepError`, and keeps the original type
+ * as `cause.name`. So `errorType` alone cannot tell a failed step from a
+ * failed handler. An SDK error passes through only when its `cause.name`
+ * matches its type. Any other error is wrapped in `ChildContextError`, as
+ * `runInChildContext` does without an error mapper.
  */
 export function sessionErrorMapper(
   error: DurableOperationError,
 ): DurableOperationError {
   return (
     rebuildMicrovmError(error) ??
-    (PASS_THROUGH_ERROR_TYPES.has(error.errorType)
+    (PASS_THROUGH_ERROR_TYPES.has(error.errorType) &&
+    error.cause?.name === error.errorType
       ? error
       : new ChildContextError(error.message, error))
   );

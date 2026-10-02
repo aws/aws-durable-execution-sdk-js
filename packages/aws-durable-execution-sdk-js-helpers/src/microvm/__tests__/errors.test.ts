@@ -253,6 +253,85 @@ describe("MicroVM errors", () => {
     expect(firstRun.message).toContain("handler gave up");
   });
 
+  it.each<[string, (context: DurableContext) => Promise<unknown>]>([
+    [
+      "a session",
+      (context) =>
+        microvmSession(
+          context,
+          "pipeline",
+          {
+            ...baseConfig(new FakeMicrovmsClient()),
+            fetch: new FakeEndpoint().fetch,
+          },
+          async () => {
+            throw new Error("handler gave up");
+          },
+        ),
+    ],
+    [
+      "runInChildContext",
+      (context) =>
+        context.runInChildContext("pipeline", async () => {
+          throw new Error("handler gave up");
+        }),
+    ],
+  ])(
+    "reports a plain Error from the handler of %s as ChildContextError, then StepError, then Error",
+    async (_label, operation) => {
+      // The chain of class names, outermost first.
+      const chain = (error: unknown): string[] => {
+        const names: string[] = [];
+        for (let e = error as Error | undefined; e; e = e.cause as Error) {
+          names.push(e instanceof Error ? e.constructor.name : typeof e);
+        }
+        return names;
+      };
+      const runner = new LocalDurableTestRunner({
+        handlerFunction: withDurableExecution(
+          async (_event: unknown, context: DurableContext) =>
+            operation(context).catch((error: unknown) => chain(error)),
+        ),
+      });
+
+      const execution = await runner.run({ payload: {} });
+
+      expect(execution.getResult()).toEqual([
+        "ChildContextError",
+        "StepError",
+        "Error",
+      ]);
+    },
+  );
+
+  it("keeps the StepError of a step that failed inside the session handler", async () => {
+    const runner = new LocalDurableTestRunner({
+      handlerFunction: withDurableExecution(
+        async (_event: unknown, context: DurableContext) =>
+          microvmSession(
+            context,
+            "pipeline",
+            {
+              ...baseConfig(new FakeMicrovmsClient()),
+              fetch: new FakeEndpoint().fetch,
+            },
+            async (_vm, child) =>
+              child.step(
+                "check",
+                async () => {
+                  throw new Error("check failed");
+                },
+                { retryStrategy: () => ({ shouldRetry: false }) },
+              ),
+          ).catch((error: unknown) => (error as Error).constructor.name),
+      ),
+    });
+
+    const execution = await runner.run({ payload: {} });
+
+    expect(execution.getResult()).toBe("StepError");
+  });
+
   it("reaches a caller outside another child context wrapped, with the MicroVM type in the cause chain", async () => {
     // The SDK wraps a failure that leaves a child context without an error
     // mapper in ChildContextError. It rebuilds the inner error type, which it

@@ -321,6 +321,9 @@ export async function deliverJob<TInput>(
       // GetMicrovm reports now.
       // A transition must fit in the first retry tier, like the request
       // that follows it. A recheck gets what remains of the tier.
+      // The state check before delivery and the request's retries share
+      // one window. So the wait for a resume counts toward it.
+      const windowStartedAt = Date.now();
       const running = (
         maxWaitMs = retryWindowMs,
       ): Promise<string | undefined> =>
@@ -343,6 +346,7 @@ export async function deliverJob<TInput>(
         port: request.port ?? DEFAULT_MICROVM_PORT,
         body: JSON.stringify(body),
         retryWindowMs,
+        windowStartedAt,
         remainingTimeMs: remainingTime(child),
         log,
         ...(options.resume && { recheck: running }),

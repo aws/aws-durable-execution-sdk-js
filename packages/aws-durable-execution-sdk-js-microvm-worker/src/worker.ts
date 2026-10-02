@@ -55,6 +55,17 @@ const MAX_HOOK_BODY_BYTES = 64 * 1024;
 const MAX_JOB_BODY_BYTES = 6 * 1024 * 1024;
 
 /**
+ * How many finished callback IDs the worker remembers.
+ *
+ * The durable function can deliver a job again after it finished. Its
+ * request step re-runs on replay when its success checkpoint was not saved,
+ * and it resends a job whose 202 answer was lost. Each callback ID belongs
+ * to one job. So the worker ignores a callback ID that it already ran. A
+ * callback ID is a short string, so 1,000 of them use well under 1 MB.
+ */
+const MAX_FINISHED_JOBS = 1_000;
+
+/**
  * The longest time the worker waits for its own SuspendMicrovm call. The
  * call measured 75 to 94 milliseconds from inside a MicroVM in us-east-1.
  */
@@ -242,8 +253,11 @@ export interface MicrovmWorkerListener {
  * listener completes the job's callback with the result, or fails it with
  * the error.
  *
- * A second delivery of a running job's callback ID is answered like the first
- * and ignored. So a retried delivery never runs a job twice.
+ * A second delivery of a callback ID is answered like the first and ignored,
+ * while that job runs and after it ended. The listener remembers the last
+ * 1,000 finished callback IDs. So a retried delivery runs a job once, unless
+ * more than 1,000 other jobs ended in between, or the worker process
+ * restarted.
  *
  * A document that does not match the contract gets HTTP 400. If the document
  * still names a callback, the listener fails that callback. So the durable
@@ -332,6 +346,21 @@ export function createMicrovmWorkerListener<
   // task. An unhandled rejection would end the worker process.
   const logger = safeLogger(options.logger ?? jsonLogger);
   const jobs = new Map<string, Promise<void>>();
+  // Callback IDs of jobs that ended, oldest first. A Set keeps insertion
+  // order, so the first entry is the oldest.
+  const finished = new Set<string>();
+  const remember = (callbackId: string): void => {
+    finished.add(callbackId);
+    if (finished.size > MAX_FINISHED_JOBS) {
+      const oldest = finished.values().next().value;
+      if (oldest !== undefined) {
+        finished.delete(oldest);
+      }
+    }
+  };
+  /** Whether a job with this callback ID runs now, or ran recently. */
+  const isKnownJob = (callbackId: string): boolean =>
+    jobs.has(callbackId) || finished.has(callbackId);
   const background = new Set<Promise<void>>();
   // Set by the run hook. A job request that arrives first sets it too.
   let microvmId = "unknown";
@@ -529,7 +558,7 @@ export function createMicrovmWorkerListener<
     }
 
     const job = payload.job;
-    if (job && jobs.has(job.callbackId)) {
+    if (job && isKnownJob(job.callbackId)) {
       logger.warn("duplicate job ignored", { microvmId });
       respond(response, 200, {});
       return;
@@ -585,14 +614,13 @@ export function createMicrovmWorkerListener<
       return;
     }
     respond(response, 202, {});
-    if (jobs.has(job.callbackId)) {
+    if (isKnownJob(job.callbackId)) {
       logger.warn("duplicate job ignored", { microvmId });
       return;
     }
     startJob(handler, job, job.region);
   }
 
-  /** Answers 400 and, when the document named a callback, fails it. */
   /**
    * Answers 400 to a request that the worker could not accept.
    *
@@ -662,6 +690,7 @@ export function createMicrovmWorkerListener<
       )
       .finally(() => {
         jobs.delete(job.callbackId);
+        remember(job.callbackId);
         startIdleTime();
       })
       // A last guard: nothing above should reject, and a rejection here

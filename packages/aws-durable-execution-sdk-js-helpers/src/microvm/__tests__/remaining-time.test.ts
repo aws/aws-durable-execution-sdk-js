@@ -184,3 +184,38 @@ describe("sendJob with a recheck", () => {
     expect(endpoint.requests).toHaveLength(1);
   });
 });
+
+describe("sendJob with a window that started earlier", () => {
+  it("ends at the shared window, and reports the whole window's time", async () => {
+    // A session's state check waited 1,500 ms of a 2,000 ms window before
+    // the request. The fake clock advances by each sleep.
+    let now = 1_000_000;
+    const spy = jest.spyOn(Date, "now").mockImplementation(() => now);
+    const endpoint = new FakeEndpoint();
+    endpoint.responses = Array.from({ length: 50 }, () => 503);
+    try {
+      const error = await sendJob({
+        client: new FakeMicrovmsClient().asClient(),
+        fetch: endpoint.fetch,
+        microvmId: "mvm-1",
+        endpoint: "mvm-1.example",
+        path: "/job",
+        port: 8080,
+        body: "{}",
+        retryWindowMs: 2_000,
+        windowStartedAt: now - 1_500,
+        log: jest.fn(),
+        sleep: async (ms) => {
+          now += ms;
+        },
+      }).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(MicrovmEndpointUnavailableError);
+      // 250 ms of backoff fits in the 500 ms that remain, and 500 ms does not.
+      expect(endpoint.requests).toHaveLength(2);
+      expect((error as Error).message).toContain("after 2 attempts in 1750 ms");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});

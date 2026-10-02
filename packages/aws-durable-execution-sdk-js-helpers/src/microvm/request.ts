@@ -99,6 +99,13 @@ export interface SendJobOptions {
   /** The first-tier retry window in milliseconds. */
   retryWindowMs: number;
   /**
+   * When the retry window started, in milliseconds since the epoch. The
+   * default is the moment `sendJob` is called. A session sets it to the start
+   * of the state check that runs before delivery. So the wait for a resume
+   * and the request's own retries share one window.
+   */
+  windowStartedAt?: number;
+  /**
    * The remaining invocation time. `undefined`, as a value or as a result,
    * means the compute reports no deadline, and only the retry window applies.
    */
@@ -145,7 +152,8 @@ export interface SendJobOptions {
  *
  * A request can reach the MicroVM while its response is lost. The next
  * request then delivers the same job again. The worker ignores a second
- * request for a running callback ID, so the job still runs once.
+ * request for a callback ID that runs or recently ended, so the job still
+ * runs once.
  *
  * @returns The status that accepted the job.
  */
@@ -154,7 +162,7 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
     options.sleep ??
     ((ms: number): Promise<void> =>
       new Promise((resolve) => setTimeout(resolve, ms)));
-  const started = Date.now();
+  const started = options.windowStartedAt ?? Date.now();
   const deadline = (): number => {
     const byWindow = started + options.retryWindowMs;
     const remaining = options.remainingTimeMs?.();

@@ -2281,6 +2281,64 @@ describe("startMicrovmWorker", () => {
     expect(client.completions()).toHaveLength(1);
   });
 
+  it("runs a job once when its request arrives again after the job ended", async () => {
+    const client = new FakeLambdaClient();
+    const route = jest.fn(async () => "ok");
+    const warn = jest.fn();
+    const target = await start(client, undefined, undefined, {
+      routes: { "/job": route },
+      logger: { info: () => {}, warn, error: () => {} },
+    });
+
+    const first = await postRoute(target, "/job", jobRequest());
+    await target.idle();
+    const again = await postRoute(target, "/job", jobRequest());
+    await target.idle();
+
+    expect([first.status, again.status]).toEqual([202, 202]);
+    expect(route).toHaveBeenCalledTimes(1);
+    expect(client.completions()).toHaveLength(1);
+    expect(warn).toHaveBeenCalledWith(
+      "duplicate job ignored",
+      expect.anything(),
+    );
+  });
+
+  it("runs a run hook job once when the hook arrives again after the job ended", async () => {
+    const client = new FakeLambdaClient();
+    const handler = jest.fn(async () => "ok");
+    const target = await start(client, handler);
+
+    await post(target, "run", runBody(validPayload()));
+    await target.idle();
+    const again = await post(target, "run", runBody(validPayload()));
+    await target.idle();
+
+    expect(again.status).toBe(200);
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(client.completions()).toHaveLength(1);
+  });
+
+  it("forgets the oldest finished job after 1,000 others ended", async () => {
+    const client = new FakeLambdaClient();
+    const route = jest.fn(async () => "ok");
+    const target = await start(client, undefined, undefined, {
+      routes: { "/job": route },
+    });
+
+    for (let i = 0; i <= 1_000; i++) {
+      await postRoute(target, "/job", jobRequest({ callbackId: `cb-${i}` }));
+      await target.idle();
+    }
+    // cb-1 is still remembered, and cb-0 is not.
+    await postRoute(target, "/job", jobRequest({ callbackId: "cb-1" }));
+    await target.idle();
+    expect(route).toHaveBeenCalledTimes(1_001);
+    await postRoute(target, "/job", jobRequest({ callbackId: "cb-0" }));
+    await target.idle();
+    expect(route).toHaveBeenCalledTimes(1_002);
+  }, 60_000);
+
   it("answers 400 to an invalid job request and fails the named callback", async () => {
     const client = new FakeLambdaClient();
     const route = jest.fn();

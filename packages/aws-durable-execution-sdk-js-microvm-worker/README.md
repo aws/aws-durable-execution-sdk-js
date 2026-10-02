@@ -85,7 +85,7 @@ A session's run hook payload can set `autoSuspendIdleSeconds`. The worker then s
 
 The worker counts only jobs. It cannot see background processes, or inbound traffic that is not a job. A session with such work sets `autoSuspendOnIdle: false`, and the payload then has no `autoSuspendIdleSeconds`.
 
-A second delivery of a running job is answered like the first and ignored. The durable function retries a delivery whose response it did not receive, so the same job can arrive twice.
+A second delivery of a job is answered like the first and ignored, while the job runs and after it ended. The durable function can deliver the same job again: it retries a delivery whose response it did not receive, and its request step runs again on replay when its result was not checkpointed. The worker remembers the callback IDs of the last 1,000 finished jobs. So a job runs once, unless more than 1,000 other jobs ended in between, or the worker process restarted.
 
 It creates a Lambda client for each job, after the job arrives, not at image build. A client created before the snapshot would share build-time state across every MicroVM, and a client kept across jobs would keep connections that a suspend of the MicroVM can leave dead. So each job's first heartbeat pays for the credential fetch and the connection setup within its call timeout, which is half the interval: a sixth of the heartbeat timeout with the default interval. A heartbeat timeout under about 10 seconds can therefore lose the first heartbeat. The quick retry usually covers it. The worker destroys each job's default client when the job ends, and never destroys a client from `createClient`.
 
