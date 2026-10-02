@@ -295,7 +295,9 @@ async function getCurrentConfiguration(
   const command = new GetFunctionConfigurationCommand({
     FunctionName: functionName,
   });
-  return await lambdaClient.send(command);
+  // Retry the read in place: restarting deployment after a throttled poll can
+  // recreate or republish a function that is already being provisioned.
+  return retryOnConflict(() => lambdaClient.send(command));
 }
 
 async function ensureLogGroupRetention(functionName: string): Promise<void> {
@@ -557,7 +559,7 @@ async function showFinalConfiguration(
 }
 
 // Main function
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   try {
     // Parse arguments and load configuration
     const { example, functionName, runtime, useCapacityProvider } = parseArgs();
@@ -652,13 +654,19 @@ async function main(): Promise<void> {
     await retryOnConflict(
       async () => {
         if (functionExists) {
+          // A previous attempt may have created the function or failed while
+          // loading its configuration. Never reuse an absent or stale snapshot.
+          currentConfig = await getCurrentConfiguration(
+            lambdaClient,
+            functionName,
+          );
           await updateFunction(
             lambdaClient,
             functionName,
             exampleConfig,
             zipFile,
             env,
-            currentConfig!,
+            currentConfig,
             useCapacityProvider,
             selectedRuntime,
           );
@@ -674,6 +682,7 @@ async function main(): Promise<void> {
               useCapacityProvider,
               selectedRuntime,
             );
+            functionExists = true;
           } catch (error: unknown) {
             // The function can appear mid-deploy (a cancelled run's cleanup or a
             // racing run). Switch to update instead of retrying create.
@@ -681,11 +690,11 @@ async function main(): Promise<void> {
               console.log(
                 "Function already exists (created concurrently); switching to update",
               );
-              functionExists = true;
               currentConfig = await getCurrentConfiguration(
                 lambdaClient,
                 functionName,
               );
+              functionExists = true;
               await updateFunction(
                 lambdaClient,
                 functionName,
