@@ -271,8 +271,10 @@ Live span boundaries and exception events share a clock anchored to `Date.now()`
 once at invocation start, then advanced by elapsed `performance.now()` time.
 This matches ordinary OpenTelemetry spans' current wall-clock epoch without
 letting a wall-clock adjustment collapse or inflate live SDK span durations.
-Starts retain whole-millisecond precision, matching default user-span starts;
-ends retain fractional elapsed time. Open spans share one end timestamp at
+Starts and ends retain the same elapsed-time precision so sequential SDK spans
+cannot overlap merely because a start was rounded down. Default user spans have
+whole-millisecond starts; portable conformance allows their existing 1 ms
+rounding difference. Open spans share one end timestamp at
 invocation cleanup. Each resumed invocation takes a fresh anchor; Workflow and
 synthetic root spans retain their historical execution start.
 
