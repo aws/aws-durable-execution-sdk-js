@@ -4,7 +4,7 @@ import type {
   OperationInfo,
 } from "@aws/durable-execution-sdk-js";
 import { context, trace, SpanStatusCode } from "@opentelemetry/api";
-import { timeInputToHrTime } from "@opentelemetry/core";
+import { otperformance, timeInputToHrTime } from "@opentelemetry/core";
 import {
   InMemorySpanExporter,
   NodeTracerProvider,
@@ -235,34 +235,62 @@ describe.each([
   });
 
   it("uses the live exception-time fallback when the completion has no end timestamp", async () => {
-    const current = createPlugin();
-    await current.onInvocationStart({
-      ...invocation,
-      updatedOperations: {
-        external: {
-          ...operation,
-          status: "FAILED",
-          endTimestamp: undefined,
-          error: new Error("failed without end time"),
-        },
-      },
-    });
-    const before = nanoseconds(timeInputToHrTime(new Date()));
-    await current.onInvocationEnd({ ...invocation, status: "PENDING" });
-    const after = nanoseconds(timeInputToHrTime(new Date()));
-    expect(spans()).toHaveLength(1);
-    const span = spans()[0];
-    expect(span.events).toHaveLength(1);
-    const eventTime = nanoseconds(span.events[0].time);
-    if (view === "execution") {
-      expect(eventTime).toBeGreaterThanOrEqual(before);
-      expect(eventTime).toBeLessThanOrEqual(after);
-    }
-    expect(eventTime).toBeGreaterThanOrEqual(nanoseconds(span.startTime));
-    expect(eventTime - nanoseconds(span.endTime)).toBeLessThanOrEqual(0n);
-    expect(span.events[0].attributes?.["exception.message"]).toBe(
-      "failed without end time",
+    // Pin both clock sources to one instant. This verifies live fallback rather
+    // than assuming two independent wall/monotonic samples have equal precision.
+    const fallbackMillis = end.getTime() + 10_000;
+    const originalNow = Object.getOwnPropertyDescriptor(otperformance, "now");
+    const originalOrigin = Object.getOwnPropertyDescriptor(
+      otperformance,
+      "timeOrigin",
     );
+    const wallClock = jest.spyOn(Date, "now").mockReturnValue(fallbackMillis);
+    Object.defineProperty(otperformance, "now", {
+      configurable: true,
+      value: () => 100,
+    });
+    Object.defineProperty(otperformance, "timeOrigin", {
+      configurable: true,
+      value: fallbackMillis - 100,
+    });
+    try {
+      const current = createPlugin();
+      await current.onInvocationStart({
+        ...invocation,
+        updatedOperations: {
+          external: {
+            ...operation,
+            status: "FAILED",
+            endTimestamp: undefined,
+            error: new Error("failed without end time"),
+          },
+        },
+      });
+      const before = nanoseconds(timeInputToHrTime(new Date(Date.now())));
+      await current.onInvocationEnd({ ...invocation, status: "PENDING" });
+      const after = nanoseconds(timeInputToHrTime(new Date(Date.now())));
+      expect(spans()).toHaveLength(1);
+      const span = spans()[0];
+      expect(span.events).toHaveLength(1);
+      const eventTime = nanoseconds(span.events[0].time);
+      if (view === "execution") {
+        expect(eventTime).toBeGreaterThanOrEqual(before);
+        expect(eventTime).toBeLessThanOrEqual(after);
+      }
+      expect(eventTime).toBeGreaterThanOrEqual(nanoseconds(span.startTime));
+      expect(eventTime - nanoseconds(span.endTime)).toBeLessThanOrEqual(0n);
+      expect(span.events[0].attributes?.["exception.message"]).toBe(
+        "failed without end time",
+      );
+    } finally {
+      wallClock.mockRestore();
+      for (const [name, descriptor] of [
+        ["now", originalNow],
+        ["timeOrigin", originalOrigin],
+      ] as const) {
+        if (descriptor) Object.defineProperty(otperformance, name, descriptor);
+        else Reflect.deleteProperty(otperformance, name);
+      }
+    }
   });
 
   it("does not label a terminal failure without an error as successful", async () => {
