@@ -1,6 +1,7 @@
 import { PluginLoadError } from "../../errors/plugin-load-error/plugin-load-error";
 import {
   DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION,
+  DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION,
   DurableInstrumentationPlugin,
   DurableInstrumentationPluginProvider,
 } from "../../types/plugin";
@@ -463,4 +464,113 @@ describe("loadConfiguredPlugins", () => {
       }),
     ).rejects.toBeInstanceOf(PluginLoadError);
   });
+});
+
+describe("exclusive plugin registration", () => {
+  class First implements DurableInstrumentationPlugin {
+    async onInvocationStart(): Promise<void> {}
+    readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION] = {
+      name: "first view",
+      exclusiveGroup: "views",
+    };
+  }
+  class Second implements DurableInstrumentationPlugin {
+    async onInvocationStart(): Promise<void> {}
+    readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION] = {
+      name: "second view",
+      exclusiveGroup: "views",
+    };
+  }
+  const factories = [() => new First(), () => new Second()];
+  it.each([false, true])(
+    "rejects explicit, dynamic and mixed conflicts (reverse=%s)",
+    async (reverse) => {
+      const [first, second] = reverse ? [...factories].reverse() : factories;
+      const modules = {
+        first: moduleFor(
+          providerFor(first().constructor as typeof First, first),
+        ),
+        second: moduleFor(
+          providerFor(second().constructor as typeof Second, second),
+        ),
+      };
+      const importModule = async (specifier: string) =>
+        modules[specifier as keyof typeof modules];
+      for (const [explicit, configured] of [
+        [[first(), second()], ""],
+        [[], "first,second"],
+        [[first()], "second"],
+      ] as const) {
+        await expect(
+          loadConfiguredPlugins(explicit, {
+            environment: { DURABLE_EXECUTION_PLUGINS: configured },
+            importModule,
+          }),
+        ).rejects.toThrow(
+          /Plugins '(first|second) view' and '(first|second) view'.*Configure only one/,
+        );
+      }
+    },
+  );
+  it("allows no view, either single view, and unrelated plugins", async () => {
+    for (const plugins of [
+      [],
+      [new First()],
+      [new Second()],
+      [new First(), new ExplicitPlugin()],
+      [
+        new First(),
+        {
+          async onInvocationStart() {},
+          [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: {
+            name: "metrics",
+            exclusiveGroup: "metrics",
+          },
+        },
+      ],
+    ]) {
+      await expect(
+        loadConfiguredPlugins(plugins, { environment: {} }),
+      ).resolves.toEqual(plugins);
+    }
+  });
+  it("rejects two registrations of the same view", async () => {
+    await expect(
+      loadConfiguredPlugins([new First(), new First()], { environment: {} }),
+    ).rejects.toThrow(PluginLoadError);
+  });
+});
+
+describe("legacy unrelated registration properties", () => {
+  it("does not interpret or read an ordinary registration field", async () => {
+    class LegacyPlugin implements DurableInstrumentationPlugin {
+      registration = 42;
+      async onInvocationStart() {}
+    }
+    const getter = {
+      async onInvocationStart() {},
+      get registration(): never {
+        throw new Error("not SDK metadata");
+      },
+    };
+    const plugins = [new LegacyPlugin(), getter];
+    await expect(
+      loadConfiguredPlugins(plugins, { environment: {} }),
+    ).resolves.toEqual(plugins);
+  });
+});
+
+it("does not probe symbol getters on legacy plugins that did not opt into registration metadata", async () => {
+  const legacy = new Proxy(
+    { async onInvocationStart() {} },
+    {
+      get(target, property, receiver) {
+        if (typeof property === "symbol")
+          throw new Error("unsupported symbol getter");
+        return Reflect.get(target, property, receiver);
+      },
+    },
+  );
+  const result = await loadConfiguredPlugins([legacy], { environment: {} });
+  expect(result[0]).toBe(legacy);
 });

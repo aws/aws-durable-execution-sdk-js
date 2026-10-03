@@ -4,6 +4,8 @@ import { pathToFileURL } from "url";
 import { PluginLoadError } from "../../errors/plugin-load-error/plugin-load-error";
 import {
   DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION,
+  DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION,
+  RegisteredDurableInstrumentationPlugin,
   DurableInstrumentationPlugin,
   DurableInstrumentationPluginProvider,
 } from "../../types/plugin";
@@ -261,6 +263,27 @@ function createPlugin(
   return plugin;
 }
 
+function validateExclusiveGroups(
+  plugins: readonly DurableInstrumentationPlugin[],
+): void {
+  const groups = new Map<string, string>();
+  for (const plugin of plugins) {
+    if (!(DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION in plugin)) continue;
+    const registration = (
+      plugin as Partial<RegisteredDurableInstrumentationPlugin>
+    )[DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION];
+    const group = registration?.exclusiveGroup;
+    if (!group) continue;
+    const previous = groups.get(group);
+    if (previous !== undefined) {
+      throw new PluginLoadError(
+        `Plugins '${previous}' and '${registration.name}' are mutually exclusive in group '${group}'. Configure only one.`,
+      );
+    }
+    groups.set(group, registration.name);
+  }
+}
+
 /**
  * Combines explicitly configured plugins with providers selected through the environment.
  *
@@ -277,6 +300,7 @@ export async function loadConfiguredPlugins(
   const environment = options.environment ?? process.env;
   const specifiers = parseConfiguredSpecifiers(environment);
   if (specifiers.length === 0) {
+    validateExclusiveGroups(plugins);
     return plugins;
   }
 
@@ -309,5 +333,6 @@ export async function loadConfiguredPlugins(
     plugins.push(createPlugin(specifier, provider));
   }
 
+  validateExclusiveGroups(plugins);
   return plugins;
 }

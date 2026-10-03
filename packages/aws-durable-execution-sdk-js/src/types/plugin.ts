@@ -305,3 +305,21 @@ export interface DurableInstrumentationPluginProvider<
  */
 export type CustomerFnResult = unknown;
 export type CustomerFn = () => CustomerFnResult;
+
+/**
+ * Opt-in registration metadata key. Ordinary plugin properties remain untouched.
+ * Symbol.for keeps the protocol shared across application and Lambda-layer copies.
+ * @experimental
+ */
+export const DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION = Symbol.for(
+  "aws.lambda.durable.instrumentation.plugin-registration",
+);
+
+/** @experimental Optional registration protocol, separate from the hook interface. */
+export interface RegisteredDurableInstrumentationPlugin
+  extends DurableInstrumentationPlugin {
+  readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: {
+    readonly name: string;
+    readonly exclusiveGroup?: string;
+  };
+}
