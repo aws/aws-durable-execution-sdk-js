@@ -238,11 +238,19 @@ Open operation spans are ended at the invocation boundary and retain
 `durable.operation.status=STARTED`. When an operation completes in a later
 invocation, the plugin emits a continuation span in that invocation.
 
-Live span boundaries use explicit millisecond wall-clock timestamps, matching
-the start clock used by ordinary OpenTelemetry user spans. This avoids mixing
-the process performance clock's epoch with the current wall clock. Open spans
-share one end timestamp at invocation cleanup; Workflow and synthetic root
-spans retain their backdated execution start.
+Live span boundaries and exception events share a clock anchored to `Date.now()`
+once at invocation start, then advanced by elapsed `performance.now()` time.
+This matches ordinary OpenTelemetry spans' current wall-clock epoch without
+letting a wall-clock adjustment collapse or inflate live SDK span durations.
+Starts retain whole-millisecond precision, matching default user-span starts;
+ends retain fractional elapsed time. Open spans share one end timestamp at
+invocation cleanup. Each resumed invocation takes a fresh anchor; Workflow and
+synthetic root spans retain their historical execution start.
+
+An ordinary user span opened after a wall-clock adjustment takes the adjusted
+wall time from its provider. Its timestamps can therefore fall outside a parent
+opened before that adjustment, even though both measure durations monotonically.
+The plugin does not change the application's provider or rewrite user spans.
 
 Because the original span context is not checkpointed, replayed `STEP` and
 `CONTEXT` spans and cross-invocation continuation spans use new provider IDs.
