@@ -348,6 +348,106 @@ describe.each([10, -10])(
       propagation.disable();
     });
 
+    it.each([
+      { stalls: [0], side: "after", reads: 1, residual: 0 },
+      { stalls: [20, 0], side: "after", reads: 2, residual: 0 },
+      { stalls: [20, 10, 0], side: "after", reads: 3, residual: 0 },
+      { stalls: [20, 0], side: "before", reads: 2, residual: 0 },
+      { stalls: [40, 10, 30], side: "after", reads: 3, residual: 5 },
+      { stalls: [40, 10, 30], side: "before", reads: 3, residual: -5 },
+    ])(
+      "bounds clock sampling with stalls $stalls ms $side the wall read",
+      async ({ stalls, side, reads, residual }) => {
+        let sampling = true;
+        let wallReads = 0;
+        let monotonicReads = 0;
+        let sampledWallReads = 0;
+        let sampledMonotonicReads = 0;
+        jest.spyOn(Date, "now").mockImplementation(() => {
+          const stall = sampling ? (stalls[wallReads++] ?? 100) : 0;
+          if (side === "before") advance(stall);
+          const value = Math.floor(wallMillis);
+          if (side === "after") advance(stall);
+          return value;
+        });
+        Object.defineProperty(otperformance, "now", {
+          configurable: true,
+          value: () => {
+            if (sampling) monotonicReads++;
+            return monotonicMillis;
+          },
+        });
+        plugin = new InvocationOtelPlugin({
+          contextExtractor: () => {
+            sampling = false;
+            sampledWallReads = wallReads;
+            sampledMonotonicReads = monotonicReads;
+            return undefined;
+          },
+        });
+        const info: InvocationInfo = {
+          executionArn:
+            "arn:aws:lambda:us-east-1:123456789012:durable-execution:fn:1:clock-sampling",
+          executionStartTimestamp: new Date(epoch - 120_000),
+          requestId: "sampling",
+          isFirstInvocation: true,
+          executionInput: {},
+          operations: {},
+          updatedOperations: {},
+        };
+        const operation: OperationInfo = {
+          id: "sampled-step",
+          type: "STEP",
+          name: "sampled-step",
+          isReplay: false,
+        };
+        const attempt: AttemptInfo = { ...operation, attempt: 1 };
+        const userTracer = trace.getTracer("sampling-user");
+        await plugin.onInvocationStart(info);
+        await plugin.wrapInvocation(info, async () => {
+          const handlerSpan = userTracer.startSpan("user-handler");
+          advance(2);
+          handlerSpan.end();
+          await plugin.onOperationStart(operation);
+          await plugin.onOperationAttemptStart(attempt);
+          await plugin.wrapOperationAttemptFn(attempt, async () => {
+            const userSpan = userTracer.startSpan("user-later-attempt");
+            advance(2);
+            userSpan.end();
+          });
+          await plugin.onOperationAttemptEnd({
+            ...attempt,
+            outcome: "SUCCEEDED",
+          });
+          await plugin.onOperationEnd({ ...operation, status: "SUCCEEDED" });
+          return { Status: InvocationStatus.SUCCEEDED };
+        });
+        await plugin.onInvocationEnd({ ...info, status: "SUCCEEDED" });
+        const invocation = find("Invocation");
+        const step = find("sampled-step");
+        const sdkAttempt = find("sampled-step attempt 1");
+        const user = find("user-later-attempt");
+        // A stalled anchor otherwise contaminates even later, unstalled spans.
+        // When every bounded sample stalls, retain the smallest window: its
+        // midpoint has a 5 ms residual here, not the first/last window's 20/15.
+        expect(
+          nanoseconds(user.endTime) - nanoseconds(sdkAttempt.endTime),
+        ).toBe(BigInt(residual) * 1_000_000n);
+        if (residual === 0) {
+          expectChildOf(find("user-handler"), invocation, 1_000_000n);
+          expectChildOf(user, sdkAttempt, 1_000_000n);
+        }
+        expectChildOf(sdkAttempt, step);
+        expectChildOf(step, invocation);
+        expectChildOf(invocation, find("DurableExecutionRoot"));
+        expect(nanoseconds(invocation.duration)).toBe(4_000_000n);
+        // No unbounded retry if every attempt is interrupted. A stall can
+        // delay any individual read; this bounds reads, not scheduler latency.
+        expect(sampledWallReads).toBe(reads);
+        expect(sampledMonotonicReads).toBe(reads * 2);
+      },
+    );
+
     it("anchors an omitted execution start before a millisecond rollover", async () => {
       jest.useFakeTimers({ now: epoch, doNotFake: ["performance"] });
       try {

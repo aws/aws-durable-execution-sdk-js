@@ -26,7 +26,11 @@ import {
   isSpanContextValid,
   TraceFlags,
 } from "@opentelemetry/api";
-import { millisToHrTime, otperformance } from "@opentelemetry/core";
+import {
+  captureInvocationClock,
+  readInvocationClock,
+  type InvocationClock,
+} from "./invocation-clock";
 import { SamplingDecision } from "@opentelemetry/sdk-trace-node";
 import {
   DeterministicIdGenerator,
@@ -68,9 +72,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   private readonly enrichLogger: boolean;
 
   // Per-invocation state
-  private invocationClock:
-    | { epochMillis: number; monotonicMillis: number }
-    | undefined;
+  private invocationClock: InvocationClock | undefined;
   private spanMap: Map<string, Span> = new Map();
   private spanStack: Span[] = [];
   private invocationSpan: Span | undefined;
@@ -131,10 +133,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     // Match the epoch/elapsed-time model of an ordinary OTel span, but share
     // this anchor across all live spans in the invocation. Never use the
     // process timeOrigin: it can differ from the current wall-clock epoch.
-    this.invocationClock = {
-      epochMillis: Date.now(),
-      monotonicMillis: otperformance.now(),
-    };
+    this.invocationClock = captureInvocationClock();
 
     // 1. Store the execution ARN
     this.executionArn = info.executionArn;
@@ -400,12 +399,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   private liveTimestamp(): HrTime {
-    const clock = this.invocationClock!;
-    // A numeric TimeInput can also mean performance.now(). Use an explicit
-    // absolute time so OTel never infers a relative clock after a wall step.
-    return millisToHrTime(
-      clock.epochMillis + (otperformance.now() - clock.monotonicMillis),
-    );
+    return readInvocationClock(this.invocationClock!);
   }
 
   private resetInvocationState(): void {

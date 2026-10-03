@@ -213,6 +213,16 @@ ID on the execution trace**. Because there is one span per logical operation,
 no cross-invocation link is needed to stitch it together — unlike
 `InvocationOtelPlugin` below.
 
+Invocation timing uses a sampled wall-clock start and monotonic elapsed time.
+At cleanup, its end is extended only when an operation or attempt timestamp
+observed during that invocation is later. This keeps authoritative backend
+boundaries inside the invocation without adding a fixed padding interval or
+rewriting historical operation dates. Open attempts and terminal roots use the
+same cleanup boundary. The observation is cleared at every invocation boundary;
+it does not reconstruct other invocations' clocks. Logical operations spanning
+a suspension retain their original start, which can precede the invocation
+where they complete.
+
 ### `InvocationOtelPlugin`
 
 Use this plugin for an invocation-centered view. Operations and attempts are
@@ -250,6 +260,14 @@ whole-millisecond starts; portable conformance allows their existing 1 ms
 rounding difference. Open spans share one end timestamp at
 invocation cleanup. Each resumed invocation takes a fresh anchor; Workflow and
 synthetic root spans retain their historical execution start.
+
+The anchor brackets the wall-clock read with monotonic reads. It takes at most
+three samples, stopping at a sub-millisecond interval and otherwise choosing the
+smallest interval's midpoint. This reduces offsets from an interrupted sample;
+it does not make the clocks atomic. If every sample is interrupted, the retained
+interval still has uncertainty, in addition to wall-clock rounding. The bound
+limits sampling work, not scheduler/GC pauses, and does not change how the
+application's provider samples its own spans.
 
 The terminal Workflow and synthetic root use the historical execution start and
 the terminal invocation's local completion time. Their timestamp interval cannot

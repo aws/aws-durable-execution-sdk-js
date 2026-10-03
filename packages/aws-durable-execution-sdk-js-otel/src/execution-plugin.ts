@@ -16,6 +16,7 @@ import type {
   SpanContext,
   Context,
   Link,
+  HrTime,
 } from "@opentelemetry/api";
 import {
   context,
@@ -43,6 +44,12 @@ import type { OtelPluginConfig } from "./otel-plugin-config";
 import { createTracerProvider } from "./otel-plugin-provider";
 import { tryInstallGlobalIdGenerator } from "./global-id-generator";
 import { DurableSampler, tryInstallDurableSampler } from "./global-sampler";
+import { millisToHrTime, timeInputToHrTime } from "@opentelemetry/core";
+import {
+  captureInvocationClock,
+  readInvocationClock,
+  type InvocationClock,
+} from "./invocation-clock";
 
 const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
 
@@ -73,6 +80,8 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   // span is created+ended once, at the terminal invocation (issue #831).
   private workflowSpan: Span | undefined;
   private invocationSpan: Span | undefined;
+  private invocationClock: InvocationClock | undefined;
+  private latestObservedTimestamp: HrTime | undefined;
   // Holds only recording ATTEMPT spans; operation spans are deferred (see
   // operationContexts), never recording between start and end.
   private spanMap: Map<string, Span>;
@@ -149,6 +158,8 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       return;
     }
 
+    this.invocationClock = captureInvocationClock();
+
     // 1. Store the execution ARN
     this.executionArn = info.executionArn;
 
@@ -196,7 +207,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     this.executionStartTimestamp =
       info.executionStartTimestamp ??
       this.executionStartTimestamp ??
-      new Date();
+      new Date(this.invocationClock.epochMillis);
     this.workflowSpan = trace.wrapSpanContext({
       traceId: this.executionTraceId,
       spanId: workflowSpanId,
@@ -250,6 +261,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       {
         kind: SpanKind.INTERNAL,
         attributes: invocationAttributes,
+        // Use the sampled wall boundary, before initialization and user work.
+        // A fractional live start can follow a Date in the same millisecond.
+        startTime: millisToHrTime(this.invocationClock.epochMillis),
       },
       invocationParentContext,
     );
@@ -270,6 +284,11 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       this.resetInvocationState();
       return;
     }
+
+    // Backend operation dates remain authoritative. Do not let a fractional
+    // local clock end this invocation before a boundary it actually observed.
+    this.observeTimestamp(this.liveTimestamp());
+    const endTime = this.latestObservedTimestamp!;
 
     // 1. Always end and export Invocation_Span
     if (this.invocationSpan) {
@@ -294,7 +313,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       }
       // RETRYING: leave status UNSET (default)
 
-      this.invocationSpan.end();
+      this.invocationSpan.end(endTime);
     }
 
     // 2. Terminal invocation ONLY: create and end the one real Workflow_Span,
@@ -363,8 +382,8 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       } else {
         workflowSpan.setStatus({ code: SpanStatusCode.OK });
       }
-      workflowSpan.end();
-      syntheticRootSpan?.end();
+      workflowSpan.end(endTime);
+      syntheticRootSpan?.end(endTime);
     }
     // Non-terminal (PENDING/RETRYING): no real Workflow_Span or synthetic root is created, so
     // nothing to end — the identity was only ever a non-recording context.
@@ -374,7 +393,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     // recording span and are dropped in resetInvocationState.
     for (const span of this.spanMap.values()) {
       if (span.isRecording()) {
-        span.end();
+        span.end(endTime);
       }
     }
 
@@ -422,6 +441,8 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   private resetInvocationState(): void {
+    this.invocationClock = undefined;
+    this.latestObservedTimestamp = undefined;
     this.spanMap.clear();
     this.operationContexts.clear();
     this.operationStarts.clear();
@@ -434,6 +455,24 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     this.executionTraceFlags = 0;
     this.executionSamplingDecision = SamplingDecision.NOT_RECORD;
     this.tracingEnabled = false;
+  }
+
+  private liveTimestamp(): HrTime {
+    return readInvocationClock(this.invocationClock!);
+  }
+
+  /** Keep only this invocation's latest emitted/observed SDK boundary. */
+  private observeTimestamp<T extends Date | HrTime>(timestamp: T): T {
+    const time = timeInputToHrTime(timestamp);
+    const latest = this.latestObservedTimestamp;
+    if (
+      !latest ||
+      time[0] > latest[0] ||
+      (time[0] === latest[0] && time[1] > latest[1])
+    ) {
+      this.latestObservedTimestamp = time;
+    }
+    return timestamp;
   }
 
   private startSpan(
@@ -586,10 +625,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
     // Earliest known start, so the span never begins after its own attempt/child
     // spans (created earlier at start).
-    const startTime = this.earliestStart(
-      started?.startTimestamp,
-      info.startTimestamp,
-    );
+    const startTime =
+      this.earliestStart(started?.startTimestamp, info.startTimestamp) ??
+      this.liveTimestamp();
 
     const operationSpanId = deriveSpanIdFromOperationId(
       info.id,
@@ -603,17 +641,19 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       () =>
         this.startSpan(
           spanName,
-          { attributes, startTime, links },
+          { attributes, startTime: this.observeTimestamp(startTime), links },
           parentContext,
         ),
     );
 
+    // Reuse the same logical completion for the error event and the span end.
+    const endTime = info.endTimestamp ?? this.liveTimestamp();
     if (info.error) {
       span.setStatus({
         code: SpanStatusCode.ERROR,
         message: info.error.message,
       });
-      span.recordException(info.error);
+      span.recordException(info.error, endTime);
     } else if (info.status === "SUCCEEDED") {
       // Stamp explicit OK ONLY on a SUCCEEDED terminal status. Terminal
       // FAILURE statuses (TIMED_OUT/STOPPED/FAILED/CANCELLED) can arrive with
@@ -622,7 +662,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       span.setStatus({ code: SpanStatusCode.OK });
     }
 
-    span.end(info.endTimestamp);
+    span.end(this.observeTimestamp(endTime));
   }
 
   /**
@@ -692,7 +732,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       spanName,
       {
         attributes,
-        startTime: info.startTimestamp,
+        startTime: this.observeTimestamp(
+          info.startTimestamp ?? this.liveTimestamp(),
+        ),
         links,
       },
       parentContext,
@@ -723,6 +765,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     const key = this.getAttemptKey(info.id, info.attempt);
     const attemptSpan = this.spanMap.get(key);
     if (attemptSpan) {
+      const endTime = info.endTimestamp ?? this.liveTimestamp();
       attemptSpan.setAttribute("durable.attempt.outcome", info.outcome);
       if (info.outcome === "FAILED") {
         attemptSpan.setStatus({
@@ -730,13 +773,13 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
           message: info.error?.message ?? "Attempt failed",
         });
         if (info.error) {
-          attemptSpan.recordException(info.error);
+          attemptSpan.recordException(info.error, endTime);
         }
       } else {
         // Non-failed attempt: stamp explicit OK (matches Python OTel #604).
         attemptSpan.setStatus({ code: SpanStatusCode.OK });
       }
-      attemptSpan.end(info.endTimestamp);
+      attemptSpan.end(this.observeTimestamp(endTime));
       this.spanMap.delete(key);
     }
   }
