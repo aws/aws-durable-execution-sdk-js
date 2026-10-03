@@ -26,7 +26,11 @@ import {
   isSpanContextValid,
   TraceFlags,
 } from "@opentelemetry/api";
-import { millisToHrTime, otperformance } from "@opentelemetry/core";
+import {
+  captureInvocationClock,
+  readInvocationClock,
+  type InvocationClock,
+} from "./invocation-clock";
 import { SamplingDecision } from "@opentelemetry/sdk-trace-node";
 import {
   DeterministicIdGenerator,
@@ -44,6 +48,7 @@ import type { OtelPluginConfig } from "./otel-plugin-config";
 import { createTracerProvider } from "./otel-plugin-provider";
 import { tryInstallGlobalIdGenerator } from "./global-id-generator";
 import { DurableSampler, tryInstallDurableSampler } from "./global-sampler";
+import { ExternalCompletions } from "./external-completions";
 
 const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
 
@@ -64,13 +69,12 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   private globalIdGeneratorInstalled: boolean;
   private durableSampler: DurableSampler | undefined;
   private tracingEnabled = false;
+  private readonly externalCompletions = new ExternalCompletions();
   private readonly workflowSpanName: string;
   private readonly enrichLogger: boolean;
 
   // Per-invocation state
-  private invocationClock:
-    | { epochMillis: number; monotonicMillis: number }
-    | undefined;
+  private invocationClock: InvocationClock | undefined;
   private spanMap: Map<string, Span> = new Map();
   private spanStack: Span[] = [];
   private invocationSpan: Span | undefined;
@@ -131,10 +135,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     // Match the epoch/elapsed-time model of an ordinary OTel span, but share
     // this anchor across all live spans in the invocation. Never use the
     // process timeOrigin: it can differ from the current wall-clock epoch.
-    this.invocationClock = {
-      epochMillis: Date.now(),
-      monotonicMillis: otperformance.now(),
-    };
+    this.invocationClock = captureInvocationClock();
 
     // 1. Store the execution ARN
     this.executionArn = info.executionArn;
@@ -222,6 +223,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       },
       invocationParentContext,
     );
+    this.externalCompletions.observe(info.updatedOperations);
   }
 
   wrapInvocation(
@@ -241,6 +243,13 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     if (!this.tracingEnabled) {
       this.resetInvocationState();
       return;
+    }
+
+    // Prefer normal lifecycle hooks, which preserve live parent scopes. Before
+    // returning, export any fresh completion the workflow did not reach. A
+    // later resume may label it replay even though it has never been exported.
+    for (const operation of this.externalCompletions.pending.values()) {
+      await this.onOperationEnd({ ...operation, isReplay: false });
     }
 
     const endTime = this.liveTimestamp();
@@ -400,15 +409,11 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   private liveTimestamp(): HrTime {
-    const clock = this.invocationClock!;
-    // A numeric TimeInput can also mean performance.now(). Use an explicit
-    // absolute time so OTel never infers a relative clock after a wall step.
-    return millisToHrTime(
-      clock.epochMillis + (otperformance.now() - clock.monotonicMillis),
-    );
+    return readInvocationClock(this.invocationClock!);
   }
 
   private resetInvocationState(): void {
+    this.externalCompletions.clear();
     this.invocationClock = undefined;
     this.spanMap.clear();
     this.spanStack = [];
@@ -607,14 +612,10 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       return;
     }
 
-    // Skip span creation for WAIT, INVOKE, CHAINED_INVOKE, and CALLBACK operations on replay
-    if (
-      info.isReplay &&
-      (info.type === "WAIT" ||
-        info.type === "INVOKE" ||
-        info.type === "CHAINED_INVOKE" ||
-        info.type === "CALLBACK")
-    ) {
+    // Updates and traversal can report the same completion in either order.
+    // The set is reset each invocation so failed-invocation redelivery remains
+    // eligible, while normal replay never exports a completion a second time.
+    if (this.externalCompletions.shouldSkip(info)) {
       return;
     }
 
@@ -741,6 +742,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       // Immediately end
       continuationSpan.end(this.liveTimestamp());
     }
+    this.externalCompletions.markExported(info);
   }
 
   async onOperationAttemptStart(info: AttemptInfo): Promise<void> {
@@ -826,8 +828,10 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     }
   }
 
-  async onOperationChange(_info: OperationChangeInfo): Promise<void> {
-    // No-op for this plugin
+  async onOperationChange(info: OperationChangeInfo): Promise<void> {
+    if (this.tracingEnabled) {
+      this.externalCompletions.observe(info.updatedOperations);
+    }
   }
 
   enrichLogContext(): Record<string, string | number | boolean> | undefined {

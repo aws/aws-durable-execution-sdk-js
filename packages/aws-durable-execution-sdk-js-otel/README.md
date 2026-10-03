@@ -213,6 +213,16 @@ ID on the execution trace**. Because there is one span per logical operation,
 no cross-invocation link is needed to stitch it together — unlike
 `InvocationOtelPlugin` below.
 
+Invocation timing uses a sampled wall-clock start and monotonic elapsed time.
+At cleanup, its end is extended only when an operation or attempt timestamp
+observed during that invocation is later. This keeps authoritative backend
+boundaries inside the invocation without adding a fixed padding interval or
+rewriting historical operation dates. Open attempts and terminal roots use the
+same cleanup boundary. The observation is cleared at every invocation boundary;
+it does not reconstruct other invocations' clocks. Logical operations spanning
+a suspension retain their original start, which can precede the invocation
+where they complete.
+
 ### `InvocationOtelPlugin`
 
 Use this plugin for an invocation-centered view. Operations and attempts are
@@ -250,6 +260,14 @@ whole-millisecond starts; portable conformance allows their existing 1 ms
 rounding difference. Open spans share one end timestamp at
 invocation cleanup. Each resumed invocation takes a fresh anchor; Workflow and
 synthetic root spans retain their historical execution start.
+
+The anchor brackets the wall-clock read with monotonic reads. It takes at most
+three samples, stopping at a sub-millisecond interval and otherwise choosing the
+smallest interval's midpoint. This reduces offsets from an interrupted sample;
+it does not make the clocks atomic. If every sample is interrupted, the retained
+interval still has uncertainty, in addition to wall-clock rounding. The bound
+limits sampling work, not scheduler/GC pauses, and does not change how the
+application's provider samples its own spans.
 
 The terminal Workflow and synthetic root use the historical execution start and
 the terminal invocation's local completion time. Their timestamp interval cannot
@@ -618,6 +636,20 @@ w3cClientContextExtractor(info: InvocationInfo): ContextExtractorResult;
 The package also exports the `ContextExtractor`, `ContextExtractorResult`,
 `ExecutionTraceEnvironment`, `IdGeneratorFactory`, `TracerProviderFactory`, and
 `OtelPluginConfig` types.
+
+### External completions and replay
+
+Both views retain terminal wait, invoke, and callback notifications received at
+invocation start or in checkpoint responses. If workflow traversal does not
+reach a completed operation before suspending or returning, its completion is
+exported at invocation end. Supplied operation timestamps, parent identity,
+status, and error details are preserved in the execution view; the invocation
+view completes the live segment or emits a linked continuation.
+
+Notifications and operation-end hooks are deduplicated within each invocation.
+Normal replay does not re-export stored external completions. Deduplication is
+not persisted: redelivery after a failed invocation can export the completion
+again, as required for recovery.
 
 ## Verification and Troubleshooting
 
