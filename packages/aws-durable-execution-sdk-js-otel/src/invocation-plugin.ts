@@ -549,19 +549,11 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       // to the reproducible Workflow span, and links back to the initial logical
       // operation span (deterministic on the execution trace) so the segments
       // stay correlated across invocations.
-      //
-      // WaitForCondition is modeled differently by the OTel conformance
-      // contract: the resumed operation span keeps only its Workflow link, while
-      // the non-terminal first polling attempt links back to the first operation
-      // span once it is known to have completed successfully.
       span = this.startSpan(
         spanName,
         {
           attributes,
-          links:
-            info.subType === "WaitForCondition"
-              ? this.workflowLinks()
-              : this.replayLinks(info.id),
+          links: this.replayLinks(info.id),
           startTime: hrTime(),
         },
         parentContext,
@@ -792,7 +784,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     const key = this.attemptSpanKey(info.id, info.attempt);
     const attemptSpan = this.spanMap.get(key);
     if (attemptSpan) {
-      attemptSpan.addLinks(this.attemptLinks(info));
+      attemptSpan.addLinks(this.workflowLinks());
       attemptSpan.setAttribute("durable.attempt.outcome", info.outcome);
       if (info.outcome === "FAILED") {
         attemptSpan.setStatus({
@@ -863,17 +855,6 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     }
     links.push(...this.workflowLinks());
     return links;
-  }
-
-  private attemptLinks(info: AttemptEndInfo): Link[] {
-    if (
-      info.subType === "WaitForCondition" &&
-      info.attempt === 1 &&
-      info.outcome === "SUCCEEDED"
-    ) {
-      return this.replayLinks(info.id);
-    }
-    return this.workflowLinks();
   }
 
   private attemptSpanKey(operationId: string, attempt: number): string {
