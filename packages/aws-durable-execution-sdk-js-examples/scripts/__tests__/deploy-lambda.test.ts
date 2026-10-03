@@ -7,6 +7,7 @@ import {
   UpdateFunctionConfigurationCommand,
   PublishVersionCommand,
   PutFunctionScalingConfigCommand,
+  PutRuntimeManagementConfigCommand,
   DeleteFunctionCommand,
   LastUpdateStatusReasonCode,
   ResourceNotFoundException,
@@ -14,6 +15,8 @@ import {
 } from "@aws-sdk/client-lambda";
 import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
 import { main } from "../deploy-lambda";
+
+let mockUseCapacityProvider = true;
 
 jest.mock("@aws-sdk/client-lambda", () => ({
   ...jest.requireActual("@aws-sdk/client-lambda"),
@@ -30,7 +33,7 @@ jest.mock("argparse", () => ({
       example: "step-basic",
       function_name: "deploy-regression",
       runtime: "24.x",
-      use_capacity_provider: true,
+      use_capacity_provider: mockUseCapacityProvider,
     }),
   })),
 }));
@@ -82,6 +85,7 @@ describe("deployment retries", () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
+    mockUseCapacityProvider = true;
     jest.replaceProperty(process, "env", {
       ...process.env,
       AWS_ACCOUNT_ID: "123456789012",
@@ -178,6 +182,121 @@ describe("deployment retries", () => {
       expect(
         commands(UpdateFunctionConfigurationCommand)[0].input.DurableConfig,
       ).toBeUndefined();
+    },
+  );
+
+  test.each([
+    { existing: false, capacityProvider: false, phaseAttempts: 10 },
+    { existing: true, capacityProvider: false, phaseAttempts: 10 },
+    { existing: false, capacityProvider: true, phaseAttempts: 120 },
+    { existing: true, capacityProvider: true, phaseAttempts: 120 },
+  ])(
+    "bounds configuration throttles to $phaseAttempts phase attempts (existing=$existing, capacityProvider=$capacityProvider)",
+    async ({ existing, capacityProvider, phaseAttempts }) => {
+      mockUseCapacityProvider = capacityProvider;
+      const normal = send.getMockImplementation()!;
+      const throttled = throttle();
+      let initialRead = existing;
+      let phaseReads = 0;
+      send.mockImplementation(async (command) => {
+        if (existing && command instanceof GetFunctionCommand) return {};
+        if (command instanceof CreateFunctionCommand) throw conflict();
+        if (command instanceof GetFunctionConfigurationCommand) {
+          if (initialRead) {
+            initialRead = false;
+            return {
+              ...configuration,
+              CapacityProviderConfig: capacityProvider ? {} : undefined,
+            };
+          }
+          phaseReads++;
+          throw throttled;
+        }
+        return normal(command);
+      });
+      const startedAt = Date.now();
+      const result = main().then(
+        () => undefined,
+        (error: Error) => error,
+      );
+      await jest.runAllTimersAsync();
+      expect(await result).toEqual(new Error("Deployment exited with failure"));
+      expect(exit).toHaveBeenCalledWith(1);
+      expect(console.error).toHaveBeenCalledWith(
+        "Deployment failed:",
+        throttled,
+      );
+      expect(phaseReads).toBe(phaseAttempts);
+      // Include maximum jitter, but never an extra per-read retry budget.
+      expect(Date.now() - startedAt).toBeLessThan(phaseAttempts * 20_250);
+      expect(commands(GetFunctionConfigurationCommand)).toHaveLength(
+        phaseAttempts + (existing ? 1 : 0),
+      );
+      expect(commands(CreateFunctionCommand)).toHaveLength(existing ? 0 : 1);
+      expect(commands(DeleteFunctionCommand)).toHaveLength(0);
+      expect(commands(UpdateFunctionCodeCommand)).toHaveLength(0);
+      expect(commands(UpdateFunctionConfigurationCommand)).toHaveLength(0);
+      expect(commands(PutRuntimeManagementConfigCommand)).toHaveLength(0);
+      expect(commands(PublishVersionCommand)).toHaveLength(0);
+      expect(commands(PutFunctionScalingConfigCommand)).toHaveLength(0);
+    },
+  );
+
+  test.each([false, true])(
+    "refreshes configuration on the last phase attempt and preserves later retries (existing=%s)",
+    async (existing) => {
+      const normal = send.getMockImplementation()!;
+      let initialRead = existing;
+      let updated = false;
+      let phaseReads = 0;
+      let publishedPolls = 0;
+      let scalingAttempts = 0;
+      send.mockImplementation(async (command) => {
+        if (existing && command instanceof GetFunctionCommand) return {};
+        if (command instanceof CreateFunctionCommand) throw conflict();
+        if (command instanceof GetFunctionConfigurationCommand) {
+          if (initialRead) {
+            initialRead = false;
+            return configuration;
+          }
+          if (!updated) {
+            if (++phaseReads < 120) throw throttle();
+            return {
+              ...configuration,
+              DurableConfig: { ExecutionTimeout: 30, RetentionPeriodInDays: 2 },
+            };
+          }
+          if (
+            command.input.FunctionName?.endsWith(":$LATEST.PUBLISHED") &&
+            ++publishedPolls < 10
+          ) {
+            throw throttle();
+          }
+        }
+        if (command instanceof UpdateFunctionConfigurationCommand)
+          updated = true;
+        if (
+          command instanceof PutFunctionScalingConfigCommand &&
+          ++scalingAttempts === 1
+        ) {
+          throw throttle();
+        }
+        return normal(command);
+      });
+      await deploy();
+      expect(phaseReads).toBe(120);
+      expect(publishedPolls).toBe(10);
+      expect(scalingAttempts).toBe(2);
+      expect(commands(CreateFunctionCommand)).toHaveLength(existing ? 0 : 1);
+      expect(commands(DeleteFunctionCommand)).toHaveLength(0);
+      expect(commands(UpdateFunctionCodeCommand)).toHaveLength(1);
+      expect(commands(UpdateFunctionConfigurationCommand)).toHaveLength(1);
+      // The initial snapshot matched; the successful phase read must win.
+      expect(
+        commands(UpdateFunctionConfigurationCommand)[0].input.DurableConfig,
+      ).toEqual(configuration.DurableConfig);
+      expect(commands(PutRuntimeManagementConfigCommand)).toHaveLength(1);
+      expect(commands(PublishVersionCommand)).toHaveLength(1);
     },
   );
 
