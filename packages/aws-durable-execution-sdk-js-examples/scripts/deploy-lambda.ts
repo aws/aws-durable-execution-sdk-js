@@ -265,27 +265,59 @@ async function retryOnConflict<T>(
   throw new Error("Max retries exceeded");
 }
 
-async function runWithRetry<T, P>(
+async function runWithRetry<T>(
   operation: () => Promise<T>,
   checkOperationResult: (result: T) => {
     shouldRetry?: boolean;
     reason: string;
   },
-  maxRetries: number,
+  maxAttempts: number,
 ) {
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const result = await operation();
-    const operationResult = checkOperationResult(result);
-    if (!operationResult.shouldRetry) {
-      console.log(`Stopped retrying. Reason: ${operationResult.reason}`);
-      return result;
+  // Each raw read consumes one attempt, whether it returns Pending or throws.
+  // Preserve the one-second polling window as a deadline shared by reads and
+  // backoff. A successful Pending read must not start a new retry budget.
+  const pollIntervalMs = 1000;
+  const deadline = Date.now() + maxAttempts * pollIntervalMs;
+  let consecutiveErrors = 0;
+  let lastError: unknown;
+  for (
+    let attempt = 0;
+    attempt < maxAttempts && Date.now() < deadline;
+    attempt++
+  ) {
+    let delayMs = pollIntervalMs;
+    let reason: string;
+    try {
+      const result = await operation();
+      const operationResult = checkOperationResult(result);
+      if (!operationResult.shouldRetry) {
+        console.log(`Stopped retrying. Reason: ${operationResult.reason}`);
+        return result;
+      }
+      reason = operationResult.reason;
+      consecutiveErrors = 0;
+      lastError = undefined;
+    } catch (error: unknown) {
+      const isThrottle = isThrottlingError(error);
+      if (!(error instanceof ResourceConflictException) && !isThrottle) {
+        throw error;
+      }
+      lastError = error;
+      const baseDelayMs = isThrottle
+        ? Math.min(1000 * 2 ** consecutiveErrors, 20000)
+        : pollIntervalMs;
+      consecutiveErrors++;
+      delayMs = baseDelayMs + Math.floor(Math.random() * 250);
+      reason = `Transient Lambda control-plane error: ${(error as Error).message}`;
     }
-    console.log(
-      `Retrying: ${operationResult.reason}. ${attempt + 1}/${maxRetries} attempts`,
+    const remainingMs = deadline - Date.now();
+    if (attempt === maxAttempts - 1 || remainingMs <= 0) break;
+    console.log(`Retrying: ${reason}. ${attempt + 1}/${maxAttempts} attempts`);
+    await new Promise((resolve) =>
+      setTimeout(resolve, Math.min(delayMs, remainingMs)),
     );
-    await new Promise((resolve) => setTimeout(resolve, 1000));
   }
-  throw new Error("Max retries exceeded");
+  throw lastError ?? new Error("Max retries exceeded");
 }
 
 async function getCurrentConfiguration(
@@ -295,9 +327,18 @@ async function getCurrentConfiguration(
   const command = new GetFunctionConfigurationCommand({
     FunctionName: functionName,
   });
-  // Retry the read in place: restarting deployment after a throttled poll can
-  // recreate or republish a function that is already being provisioned.
-  return retryOnConflict(() => lambdaClient.send(command));
+  // Reads inside a deployment phase or poll share that phase's retry budget.
+  return lambdaClient.send(command);
+}
+
+async function getCurrentConfigurationWithRetry(
+  lambdaClient: LambdaClient,
+  functionName: string,
+): Promise<GetFunctionConfigurationCommandOutput> {
+  // The standalone initial inspection has no phase or polling retry budget.
+  return retryOnConflict(() =>
+    getCurrentConfiguration(lambdaClient, functionName),
+  );
 }
 
 async function ensureLogGroupRetention(functionName: string): Promise<void> {
@@ -619,7 +660,10 @@ export async function main(): Promise<void> {
 
     // Handle function deletion if configuration changes require it (outside retry logic)
     if (functionExists) {
-      currentConfig = await getCurrentConfiguration(lambdaClient, functionName);
+      currentConfig = await getCurrentConfigurationWithRetry(
+        lambdaClient,
+        functionName,
+      );
       if (!!currentConfig.DurableConfig !== !!exampleConfig.durableConfig) {
         console.log("Deleting function since durability changed");
         functionExists = false;
@@ -689,8 +733,8 @@ export async function main(): Promise<void> {
               console.log(
                 "Function already exists (created concurrently); switching to update",
               );
-              // The conflict already proves existence. If this read exhausts
-              // its retry budget, the update path refreshes configuration.
+              // Record existence before reading so a throttled read retries
+              // the update path with fresh configuration.
               functionExists = true;
               currentConfig = await getCurrentConfiguration(
                 lambdaClient,
