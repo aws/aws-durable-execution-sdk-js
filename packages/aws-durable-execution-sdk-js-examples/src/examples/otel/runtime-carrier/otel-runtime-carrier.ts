@@ -49,7 +49,9 @@ function captureCarrier(context: DurableContext): CarrierObservation {
       process.env,
       info.executionArn,
       info.executionStartTimestamp,
-      { xRayTraceId: runtimeHeader },
+      "xRayTraceId" in context.lambdaContext
+        ? { xRayTraceId: runtimeHeader }
+        : undefined,
     ),
   };
 }
