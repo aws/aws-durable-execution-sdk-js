@@ -535,7 +535,7 @@ deriveExecutionTraceId(
   environment: ExecutionTraceEnvironment,
   executionArn: string,
   executionStartTimestamp?: Date,
-  invocation?: { readonly xRayTraceId?: string },
+  invocation?: { readonly xRayTraceId?: string | null | undefined },
 ): string;
 
 deriveWorkflowSpanId(executionArn: string): string;

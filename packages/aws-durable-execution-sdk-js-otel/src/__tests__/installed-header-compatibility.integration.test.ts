@@ -31,6 +31,31 @@ describe("installed core compatibility for invocation-local headers", () => {
     expect(current.validateInstalledPeers().status).toBe(0);
   });
 
+  it("accepts all authoritative carrier values with exact optional properties", () => {
+    for (const fixture of [previous, current]) {
+      const result = fixture.typecheckConsumer(
+        `
+import { deriveExecutionTraceId } from '@aws/durable-execution-sdk-js-otel';
+declare const runtimeHeader: string | undefined;
+const environment = { _X_AMZN_TRACE_ID: 'stale' };
+const arn = 'arn:execution:types';
+deriveExecutionTraceId(environment, arn, undefined, { xRayTraceId: runtimeHeader });
+deriveExecutionTraceId(environment, arn, undefined, { xRayTraceId: undefined });
+deriveExecutionTraceId(environment, arn, undefined, { xRayTraceId: null });
+deriveExecutionTraceId(environment, arn, undefined, { xRayTraceId: '' });
+deriveExecutionTraceId(environment, arn, undefined, {});
+deriveExecutionTraceId(environment, arn);
+`,
+        true,
+        // Released core logger declarations have unrelated exact-optional errors.
+        // Check real consumer calls; existing strict declaration tests stay enabled.
+        true,
+      );
+      expect(result.output).toBe("");
+      expect(result.status).toBe(0);
+    }
+  });
+
   it.each(["ExecutionOtelPlugin", "InvocationOtelPlugin"])(
     "preserves absent-carrier fallback and isolates empty carriers with installed %s",
     (view) => {

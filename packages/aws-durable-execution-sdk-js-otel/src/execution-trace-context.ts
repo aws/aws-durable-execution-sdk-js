@@ -120,7 +120,7 @@ export function deriveExecutionTraceId(
   environment: ExecutionTraceEnvironment,
   executionArn: string,
   executionStartTimestamp?: Date,
-  invocation?: { readonly xRayTraceId?: string },
+  invocation?: { readonly xRayTraceId?: string | null | undefined },
 ): string {
   return canonicalTraceId(
     parseXRayTraceHeader(selectXRayTraceHeader(invocation ?? {}, environment)),

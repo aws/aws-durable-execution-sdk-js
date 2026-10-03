@@ -203,12 +203,12 @@ export function xRayContextExtractor(
 
 /** @internal Shared carrier precedence for the extractor and trace-ID helper. */
 export function selectXRayTraceHeader(
-  invocation: { readonly xRayTraceId?: string },
+  invocation: { readonly xRayTraceId?: string | null | undefined },
   environment: { readonly _X_AMZN_TRACE_ID?: string },
 ): string | undefined {
   const localHeader = invocation.xRayTraceId;
   return localHeader !== undefined || "xRayTraceId" in invocation
-    ? localHeader
+    ? (localHeader ?? undefined)
     : environment._X_AMZN_TRACE_ID;
 }
 
