@@ -179,6 +179,58 @@ describe.each([
     },
   );
 
+  it.each(["WAIT", "INVOKE", "CHAINED_INVOKE", "CALLBACK"])(
+    "exports pending replay-marked %s once during traversal without mutating SDK info",
+    async (type) => {
+      for (const source of ["start", "change"] as const) {
+        exporter.reset();
+        const current = createPlugin();
+        const completion = Object.freeze({ ...operation, type });
+        const replay = Object.freeze({ ...completion, isReplay: true });
+        await current.onInvocationStart({
+          ...invocation,
+          updatedOperations: source === "start" ? { external: completion } : {},
+        });
+        if (source === "change") {
+          await current.onOperationChange({
+            ...invocation,
+            updatedOperations: { external: completion },
+          });
+        }
+        await current.onOperationEnd(replay);
+        // Both implementations must export now. Fixing just shouldSkip causes
+        // invocation view to acknowledge the completion without creating a span.
+        expect(spans()).toHaveLength(1);
+        expect(replay.isReplay).toBe(true);
+        expect(spans()[0].status.code).toBe(SpanStatusCode.OK);
+        // Repeated notifications and end hooks in either order stay deduplicated.
+        await current.onOperationChange({
+          ...invocation,
+          updatedOperations: { external: completion },
+        });
+        await current.onOperationEnd(replay);
+        await current.onInvocationEnd({ ...invocation, status: "RETRYING" });
+        expect(spans()).toHaveLength(1);
+        // A redelivery in the next invocation is still eligible for recovery.
+        await current.onInvocationStart({
+          ...invocation,
+          updatedOperations: { external: completion },
+        });
+        await current.onOperationEnd(replay);
+        await current.onInvocationEnd({ ...invocation, status: "PENDING" });
+        expect(spans()).toHaveLength(2);
+        // Full history without a fresh update is ordinary replay and adds none.
+        await current.onInvocationStart({
+          ...invocation,
+          operations: { external: completion },
+        });
+        await current.onOperationEnd(replay);
+        await current.onInvocationEnd({ ...invocation, status: "SUCCEEDED" });
+        expect(spans()).toHaveLength(2);
+      }
+    },
+  );
+
   it.each(["update-first", "end-first"])(
     "deduplicates a normal completion and repeated notifications (%s)",
     async (order) => {

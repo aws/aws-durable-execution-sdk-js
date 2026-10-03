@@ -32,8 +32,12 @@ export class ExternalCompletions {
   }
 
   shouldSkip(info: OperationInfo): boolean {
+    // Replay describes the SDK's initial state, not whether a completion that
+    // arrived later in a checkpoint response has already been exported.
     return (
-      isExternalOperation(info) && (info.isReplay || this.exported.has(info.id))
+      isExternalOperation(info) &&
+      (this.exported.has(info.id) ||
+        (info.isReplay && !this.pending.has(info.id)))
     );
   }
 

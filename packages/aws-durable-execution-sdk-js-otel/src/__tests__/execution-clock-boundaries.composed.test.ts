@@ -155,6 +155,96 @@ describe.each(["global", "factory"] as const)(
       },
     );
 
+    it.each([-60_000, 60_000])(
+      "keeps a virtual context on the invocation clock after a %i ms wall step",
+      async (wallStep) => {
+        const actualDate = Date;
+        // Control Date construction as well as Date.now, without replacing the
+        // asynchronous primitives used by provider flushing.
+        globalThis.Date = new Proxy(actualDate, {
+          construct(target, args) {
+            return Reflect.construct(
+              target,
+              args.length ? args : [Math.floor(wall)],
+            );
+          },
+        });
+        try {
+          const invocationInfo = info(true);
+          await plugin.onInvocationStart(invocationInfo);
+          wall += wallStep;
+          const operation: OperationInfo = {
+            id: "virtual",
+            name: "virtual",
+            type: "CONTEXT",
+            subType: "RUN_IN_CHILD_CONTEXT",
+            isReplay: true,
+          };
+          // Virtual child contexts supply no backend timestamps on either hook.
+          await plugin.onOperationStart(operation);
+          advance(5);
+          await plugin.onOperationEnd({ ...operation, status: "SUCCEEDED" });
+          await plugin.onInvocationEnd({
+            ...invocationInfo,
+            status: "SUCCEEDED",
+          });
+          const spans = exporter.getFinishedSpans();
+          const child = spans.find((span) => span.name === "virtual")!;
+          const invocation = spans.find((span) => span.name === "Invocation")!;
+          expect(nanos(child.endTime) - nanos(child.startTime)).toBe(
+            5_000_000n,
+          );
+          inside(child, invocation);
+        } finally {
+          globalThis.Date = actualDate;
+        }
+      },
+    );
+
+    it("uses an observed attempt start when its operation fallback is later", async () => {
+      wall = epoch + 0.75;
+      const invocationInfo = info(true);
+      await plugin.onInvocationStart(invocationInfo);
+      advance(0.125);
+      const operation: OperationInfo = {
+        id: "coarse-attempt",
+        name: "coarse-attempt",
+        type: "STEP",
+        isReplay: false,
+      };
+      await plugin.onOperationStart(operation);
+      const attempt: AttemptInfo = {
+        ...operation,
+        attempt: 1,
+        startTimestamp: new Date(Math.floor(wall)),
+      };
+      await plugin.onOperationAttemptStart(attempt);
+      advance(0.125);
+      const endTimestamp = new Date(Math.floor(wall));
+      await plugin.onOperationAttemptEnd({
+        ...attempt,
+        outcome: "SUCCEEDED",
+        endTimestamp,
+      });
+      await plugin.onOperationEnd({
+        ...operation,
+        status: "SUCCEEDED",
+        endTimestamp,
+      });
+      await plugin.onInvocationEnd({ ...invocationInfo, status: "SUCCEEDED" });
+      const spans = exporter.getFinishedSpans();
+      const parent = spans.find((span) => span.name === "coarse-attempt")!;
+      const child = spans.find(
+        (span) => span.name === "coarse-attempt attempt 1",
+      )!;
+      expect(child.parentSpanContext?.spanId).toBe(parent.spanContext().spanId);
+      expect(nanos(child.startTime)).toBeGreaterThanOrEqual(
+        nanos(parent.startTime),
+      );
+      expect(nanos(child.endTime)).toBeLessThanOrEqual(nanos(parent.endTime));
+      expect(parent.startTime).toEqual(child.startTime);
+    });
+
     it.each([-10, 10])(
       "contains authoritative attempt dates across resume with %i ms origin offset",
       async (offset) => {

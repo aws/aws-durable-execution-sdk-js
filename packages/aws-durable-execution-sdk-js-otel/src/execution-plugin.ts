@@ -92,7 +92,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   // Naming/timing captured at start, reused when onOperationEnd omits them.
   private operationStarts: Map<
     string,
-    { name?: string; subType?: string; startTimestamp?: Date }
+    { name?: string; subType?: string; startTimestamp?: Date | HrTime }
   >;
   private executionArn: string;
   private executionTraceId: string;
@@ -564,7 +564,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     // backend start timestamp, so capture the hook time as the fallback. Keep
     // the earliest observation if the same operation starts again on replay.
     const existingStart = this.operationStarts.get(info.id);
-    const observedStart = info.startTimestamp ?? new Date();
+    const observedStart = info.startTimestamp ?? this.liveTimestamp();
     this.operationStarts.set(info.id, {
       name: info.name ?? existingStart?.name,
       subType: info.subType ?? existingStart?.subType,
@@ -707,16 +707,21 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
   /** The earlier of two timestamps, ignoring undefined; undefined only when both are. */
   private earliestStart(
-    a: Date | undefined,
-    b: Date | undefined,
-  ): Date | undefined {
+    a: Date | HrTime | undefined,
+    b: Date | HrTime | undefined,
+  ): Date | HrTime | undefined {
     if (!a) {
       return b;
     }
     if (!b) {
       return a;
     }
-    return a.getTime() <= b.getTime() ? a : b;
+    const first = timeInputToHrTime(a);
+    const second = timeInputToHrTime(b);
+    return first[0] < second[0] ||
+      (first[0] === second[0] && first[1] <= second[1])
+      ? a
+      : b;
   }
 
   private getAttemptKey(id: string, attempt: number): string {
@@ -749,13 +754,22 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
     const links = this.buildInvocationLinks();
 
+    const startTime = info.startTimestamp ?? this.liveTimestamp();
+    // A backend attempt Date can precede a fractional local operation fallback.
+    // Keep its actual observed boundary when the deferred parent is exported.
+    const operationStart = this.operationStarts.get(info.id);
+    this.operationStarts.set(info.id, {
+      ...operationStart,
+      startTimestamp: this.earliestStart(
+        operationStart?.startTimestamp,
+        startTime,
+      ),
+    });
     const attemptSpan = this.startSpan(
       spanName,
       {
         attributes,
-        startTime: this.observeTimestamp(
-          info.startTimestamp ?? this.liveTimestamp(),
-        ),
+        startTime: this.observeTimestamp(startTime),
         links,
       },
       parentContext,
