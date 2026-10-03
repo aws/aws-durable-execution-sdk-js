@@ -219,6 +219,17 @@ export interface OperationChangeInfo {
  * its promise.
  */
 export interface DurableInstrumentationPlugin {
+  /**
+   * Synchronously supplies SDK-owned metadata for a prospective chained invoke.
+   * Omit the hook or return undefined for no metadata. The collector isolates
+   * plugin failures and keeps the first non-null value for each supported field.
+   *
+   * Groundwork only: the invoke START path does not consume this hook until
+   * the public Lambda service models and backend support propagation fields.
+   */
+  providePropagationMetadata?(
+    input: PropagationInput,
+  ): PropagationMetadata | undefined;
   onInvocationStart?(info: InvocationInfo): Promise<void>;
   wrapInvocation?(
     info: InvocationInfo,
@@ -256,6 +267,25 @@ export interface DurableInstrumentationPlugin {
   onOperationAttemptEnd?(info: AttemptEndInfo): Promise<void>;
   onOperationChange?(info: OperationChangeInfo): Promise<void>;
   enrichLogContext?(): Record<string, string | number | boolean> | undefined;
+}
+
+/**
+ * Immutable identity of a prospective chained-invoke operation.
+ * @experimental This interface is experimental and may change.
+ */
+export interface PropagationInput {
+  readonly executionArn: string;
+  readonly operationId: string;
+  readonly parentOperationId?: string;
+  readonly targetFunctionName: string;
+}
+
+/**
+ * SDK-owned propagation values, independent of Lambda wire and OTel types.
+ * @experimental This interface is experimental and may change.
+ */
+export interface PropagationMetadata {
+  readonly xAmznTraceId?: string;
 }
 
 /**

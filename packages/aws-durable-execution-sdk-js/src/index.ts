@@ -149,6 +149,8 @@ export { DurableExecutionInvocationInputWithClient } from "./utils/durable-execu
 export {
   DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION,
   DurableInstrumentationPlugin,
+  PropagationInput,
+  PropagationMetadata,
   DurableInstrumentationPluginProvider,
   DurableInstrumentationPluginType,
   InvocationInfo,
