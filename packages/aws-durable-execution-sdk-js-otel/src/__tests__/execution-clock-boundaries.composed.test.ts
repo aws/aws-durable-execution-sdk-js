@@ -155,6 +155,52 @@ describe.each(["global", "factory"] as const)(
       },
     );
 
+    it.each([-60_000, 60_000])(
+      "keeps a virtual context on the invocation clock after a %i ms wall step",
+      async (wallStep) => {
+        const actualDate = Date;
+        // Control Date construction as well as Date.now, without replacing the
+        // asynchronous primitives used by provider flushing.
+        globalThis.Date = new Proxy(actualDate, {
+          construct(target, args) {
+            return Reflect.construct(
+              target,
+              args.length ? args : [Math.floor(wall)],
+            );
+          },
+        });
+        try {
+          const invocationInfo = info(true);
+          await plugin.onInvocationStart(invocationInfo);
+          wall += wallStep;
+          const operation: OperationInfo = {
+            id: "virtual",
+            name: "virtual",
+            type: "CONTEXT",
+            subType: "RUN_IN_CHILD_CONTEXT",
+            isReplay: true,
+          };
+          // Virtual child contexts supply no backend timestamps on either hook.
+          await plugin.onOperationStart(operation);
+          advance(5);
+          await plugin.onOperationEnd({ ...operation, status: "SUCCEEDED" });
+          await plugin.onInvocationEnd({
+            ...invocationInfo,
+            status: "SUCCEEDED",
+          });
+          const spans = exporter.getFinishedSpans();
+          const child = spans.find((span) => span.name === "virtual")!;
+          const invocation = spans.find((span) => span.name === "Invocation")!;
+          expect(nanos(child.endTime) - nanos(child.startTime)).toBe(
+            5_000_000n,
+          );
+          inside(child, invocation);
+        } finally {
+          globalThis.Date = actualDate;
+        }
+      },
+    );
+
     it.each([-10, 10])(
       "contains authoritative attempt dates across resume with %i ms origin offset",
       async (offset) => {
