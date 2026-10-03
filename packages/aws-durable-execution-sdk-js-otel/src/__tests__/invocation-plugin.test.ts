@@ -683,7 +683,7 @@ describe("InvocationOtelPlugin", () => {
   });
 
   describe("operation span timing envelope", () => {
-    it("uses a shared monotonic clock so nested spans stay strictly contained", async () => {
+    it("uses one invocation clock so nested SDK spans stay strictly contained", async () => {
       const wallClockStart = Date.now();
       let wallClockCalls = 0;
       const dateNow = jest
@@ -2528,7 +2528,7 @@ describe("InvocationOtelPlugin", () => {
       expect(attemptSpan!.events).toHaveLength(0);
     });
 
-    it("waitForCondition links the first polling attempt, not the resumed operation", async () => {
+    it("waitForCondition links its resumed operation to the initial segment", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onOperationStart(
         makeOperationInfo({
@@ -2625,16 +2625,26 @@ describe("InvocationOtelPlugin", () => {
       expect(resumedOperationSpan).toBeDefined();
       expect(secondAttemptSpan).toBeDefined();
 
-      expect(firstAttemptSpan!.links).toHaveLength(2);
+      // The first attempt belongs to the initial operation; it is not a
+      // continuation. Both attempts correlate directly to Workflow only.
+      expect(firstAttemptSpan!.links).toHaveLength(1);
       expect(firstAttemptSpan!.links[0].context.spanId).toBe(
-        firstOperationSpan!.spanContext().spanId,
-      );
-      expect(firstAttemptSpan!.links[1].context.spanId).toBe(
         workflowSpan!.spanContext().spanId,
       );
 
-      expect(resumedOperationSpan!.links).toHaveLength(1);
-      expect(resumedOperationSpan!.links[0].context.spanId).toBe(
+      // The resumed operation is the distinct continuation of the initial
+      // logical operation, so it owns the cross-invocation link (case 9).
+      expect(resumedOperationSpan!.spanContext().spanId).not.toBe(
+        firstOperationSpan!.spanContext().spanId,
+      );
+      expect(resumedOperationSpan!.links).toHaveLength(2);
+      expect(resumedOperationSpan!.links[0].context).toEqual(
+        expect.objectContaining({
+          traceId: firstOperationSpan!.spanContext().traceId,
+          spanId: firstOperationSpan!.spanContext().spanId,
+        }),
+      );
+      expect(resumedOperationSpan!.links[1].context.spanId).toBe(
         workflowSpan!.spanContext().spanId,
       );
       expect(secondAttemptSpan!.links).toHaveLength(1);
