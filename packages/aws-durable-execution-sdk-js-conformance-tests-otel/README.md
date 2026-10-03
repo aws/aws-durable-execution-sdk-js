@@ -28,12 +28,12 @@ lands.
 
 ## Coverage
 
-Three suites, 44 requirements:
+Three suites, 52 requirements:
 
 | Suite               | Requirements             | What it pins down                                                                                                                                                                                                          |
 | ------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `otel-invocation`   | `otel-invocation-1..20`  | The spans a single invocation emits: steps, attempts, retries, waits, callbacks, child contexts (including virtual ones, which emit a span without checkpointing a context), parallel, map, and the failure shape of each. |
-| `otel-execution`    | `otel-execution-1..20`   | The same scenarios seen as one execution spanning many invocations — parentage has to hold across suspend and resume.                                                                                                      |
+| `otel-invocation`   | `otel-invocation-1..24`  | The spans a single invocation emits: steps, attempts, retries, waits, callbacks, child contexts (including virtual ones, which emit a span without checkpointing a context), parallel, map, and the failure shape of each. |
+| `otel-execution`    | `otel-execution-1..24`   | The same scenarios seen as one execution spanning many invocations — parentage has to hold across suspend and resume.                                                                                                      |
 | `otel-long-running` | `otel-long-running-1..4` | Long durable delays, retry backoff, callbacks, and chained invokes, where the trace has to stay coherent over hours.                                                                                                       |
 
 ## Layout

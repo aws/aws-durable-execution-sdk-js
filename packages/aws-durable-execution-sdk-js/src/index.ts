@@ -147,10 +147,11 @@ export { retryPresets } from "./utils/retry/retry-presets/retry-presets";
 export { withRetry, WithRetryConfig, RetryableFunc } from "./utils/with-retry";
 export { DurableExecutionInvocationInputWithClient } from "./utils/durable-execution-invocation-input/durable-execution-invocation-input";
 export {
-  DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION,
   DurableInstrumentationPlugin,
-  DurableInstrumentationPluginProvider,
-  DurableInstrumentationPluginType,
+  DurableInstrumentationPluginFactory,
+  DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION,
+  RegisteredDurableInstrumentationPlugin,
+  RegisteredDurableInstrumentationPluginFactory,
   InvocationInfo,
   InvocationEndInfo,
   PluginInvocationStatus,

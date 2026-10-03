@@ -4,7 +4,7 @@ import {
   withDurableExecution,
   createRetryStrategy,
   JitterStrategy,
-  DurableInstrumentationPlugin,
+  DurableInstrumentationPluginFactory,
 } from "@aws/durable-execution-sdk-js";
 
 const PLUGIN = "CONFPLUGIN";
@@ -13,48 +13,49 @@ function isStep(type?: string): boolean {
   return (type || "").toUpperCase() === "STEP";
 }
 
-function makePlugin(): DurableInstrumentationPlugin {
-  let executionArn = "";
-  const emit = (rec: Record<string, unknown>): void => {
-    process.stdout.write(
-      JSON.stringify({ ...rec, durableExecutionArn: executionArn }) + "\n",
-    );
-  };
+const makePlugin: DurableInstrumentationPluginFactory = {
+  createPlugin: (invocation) => {
+    const emit = (rec: Record<string, unknown>): void => {
+      process.stdout.write(
+        JSON.stringify({
+          ...rec,
+          durableExecutionArn: invocation.executionArn,
+        }) + "\n",
+      );
+    };
 
-  return {
-    async onInvocationStart(info): Promise<void> {
-      executionArn = info.executionArn;
-    },
-    async onOperationAttemptStart(info): Promise<void> {
-      if (!isStep(info.type)) return;
-      emit({
-        plugin: PLUGIN,
-        hook: "attempt-start",
-        n: info.attempt,
-        op: info.id,
-      });
-    },
-    async onOperationAttemptEnd(info): Promise<void> {
-      if (!isStep(info.type)) return;
-      emit({
-        plugin: PLUGIN,
-        hook: "attempt-end",
-        n: info.attempt,
-        outcome: info.outcome,
-        op: info.id,
-      });
-    },
-    async onOperationEnd(info): Promise<void> {
-      if (!isStep(info.type)) return;
-      emit({
-        plugin: PLUGIN,
-        hook: "operation-end",
-        op: info.id,
-        status: info.status,
-      });
-    },
-  };
-}
+    return {
+      async onOperationAttemptStart(info): Promise<void> {
+        if (!isStep(info.type)) return;
+        emit({
+          plugin: PLUGIN,
+          hook: "attempt-start",
+          n: info.attempt,
+          op: info.id,
+        });
+      },
+      async onOperationAttemptEnd(info): Promise<void> {
+        if (!isStep(info.type)) return;
+        emit({
+          plugin: PLUGIN,
+          hook: "attempt-end",
+          n: info.attempt,
+          outcome: info.outcome,
+          op: info.id,
+        });
+      },
+      async onOperationEnd(info): Promise<void> {
+        if (!isStep(info.type)) return;
+        emit({
+          plugin: PLUGIN,
+          hook: "operation-end",
+          op: info.id,
+          status: info.status,
+        });
+      },
+    };
+  },
+};
 
 export const handler = withDurableExecution(
   async (_event: any, context: DurableContext) => {
@@ -75,5 +76,5 @@ export const handler = withDurableExecution(
     );
     return "unreachable";
   },
-  { plugins: [makePlugin()] },
+  { plugins: [makePlugin] },
 );

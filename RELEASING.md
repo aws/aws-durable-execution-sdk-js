@@ -32,6 +32,29 @@ Each package maintains its own version in the `version` field of its `package.js
 
 Bump the version in the appropriate `package.json` file(s) and merge to `main` before creating a release.
 
+### Coordinated OTel 1.2 minor release
+
+The preceding minor release uses core **2.7.0**, OTel **1.2.0**, and testing
+**1.3.1**. Merge #953 through #956, the shared CI prerequisite #959, and the
+focused clock/replay corrections #962/#964 with conformance #960 before that
+release. The major factory migration retains those fixes and the 21–24
+conformance handlers; its package versions are listed below. Version edits do
+not publish packages.
+
+Preserve supported older combinations: OTel's optional core peer is
+`>=2.4.0 <3.0.0`, its dynamic provider API remains version 1, and separate
+OTel-only Lambda layers remain supported. Existing valid on-demand registrations
+keep their environment carrier behavior. New LMI-header and registration
+exclusivity capabilities require the new core/plugin pair; updating a plugin
+cannot retrofit an older core's metadata or registration path. Testing 1.3.1
+admits compatible core versions with `>=1.0.1 <3.0.0`, including later patches.
+
+Installed-package tests load pinned published core 2.4/2.6 and OTel 1.1 alongside
+candidate packages, check source and runtime compatibility, and exercise separate
+application/layer trees. Provider-version rejection and a raised dependency
+floor are not substitutes for backward-compatibility evidence. Core 3's factory
+migration remains separate and must use its matching major plugin release.
+
 ## Cutting a Release
 
 ### 1. Bump the version
@@ -179,3 +202,12 @@ Before publishing a release:
 - [ ] CI checks pass on `main`
 - [ ] Release notes written with separate sections per package
 - [ ] Tag follows the naming convention (`sdk-X.Y.Z`, `otel-X.Y.Z`, `test-X.Y.Z`, `eslint-X.Y.Z`, `insight-X.Y.Z`, `mcp-X.Y.Z`, or `/`-joined)
+
+## SDK 3.x migration release order
+
+The coordinated minor fixes prepare testing SDK 1.3.1 for core 2.x. This major
+migration uses testing SDK 1.3.2 with its broadened `>=1.0.1 <4.0.0` peer range,
+so publication cannot skip the new range because 1.3.1 already exists. Core
+3.0.0 and OTel 2.0.0 carry the explicit factory migration; testing remains a
+compatible patch. Land and release the approved minor fixes before the separate
+major migration. Version metadata does not authorize a merge or publication.

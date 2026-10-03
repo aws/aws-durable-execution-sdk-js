@@ -1,14 +1,6 @@
 import { DurableExecutionInvocationOutput } from "./core";
 
 /**
- * Current version of the dynamic instrumentation plugin provider contract.
- *
- * @beta
- * @experimental This constant is experimental and may be changed or removed in future releases.
- */
-export const DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION = 1;
-
-/**
  * Status enumeration for plugin invocation end hooks.
  *
  * This enum is separate from the core InvocationStatus and provides
@@ -144,6 +136,12 @@ export interface InvocationBaseInfo {
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface InvocationInfo extends InvocationBaseInfo {
+  /**
+   * Invocation-local X-Ray header supplied by the Lambda runtime (including LMI).
+   * An empty string means the runtime exposes the carrier but has no header;
+   * omission preserves legacy environment fallback when no carrier is available.
+   */
+  xRayTraceId?: string;
   isFirstInvocation: boolean;
   /**
    * Operations that were updated externally between the previous invocation and this one
@@ -259,43 +257,71 @@ export interface DurableInstrumentationPlugin {
 }
 
 /**
- * Constructor for a concrete durable instrumentation plugin implementation.
+ * Creates the plugin instance that serves a single durable execution invocation.
  *
- * @beta
+ * @remarks
+ * This is the only way to install a plugin. The SDK calls
+ * {@link DurableInstrumentationPluginFactory.createPlugin} once per invocation,
+ * so every instance it returns is used by exactly one invocation: created
+ * before that invocation's first hook fires and dropped when the invocation
+ * returns. Nothing an instance holds survives into the next invocation, so an
+ * instance never has to key its per-execution state by execution ARN, and two
+ * executions running concurrently in one execution environment (as Lambda
+ * Managed Instances makes routine) cannot observe each other's state.
+ *
+ * State that belongs to the execution environment rather than to one
+ * invocation — a shared exporter, a tracer provider, a scheduler — belongs on
+ * the factory itself or in its closure, where it outlives the instances the
+ * factory hands out.
+ *
+ * `createPlugin` receives the same {@link InvocationInfo} object that is then
+ * passed to {@link DurableInstrumentationPlugin.onInvocationStart}, so an
+ * instance can take its identity at construction rather than waiting for the
+ * first hook.
+ *
+ * Errors thrown by `createPlugin` are contained exactly like errors thrown by a
+ * plugin hook: the invocation proceeds without that plugin and the execution
+ * outcome is unaffected. The same holds for a `createPlugin` that returns
+ * nothing.
+ *
+ * A package that supports environment-based plugin loading exports one of these
+ * factories as `durableExecutionPluginProvider`; the SDK loads only the modules
+ * listed in `DURABLE_EXECUTION_PLUGINS`.
+ *
+ * This is an object with a method rather than a bare function so that later
+ * additions to the contract stay additive. A hook that belongs to the process
+ * rather than to one invocation — flushing on execution environment shutdown,
+ * for example — can be added here as an optional second member, which every
+ * existing factory keeps satisfying. A function type has nowhere to put such a
+ * member, so adding one would have to change the type's kind, and that is a
+ * breaking change for every caller.
+ *
+ * @example
+ * ```typescript
+ * const exporter = new Exporter(); // shared by every invocation
+ *
+ * export const handler = withDurableExecution(myHandler, {
+ *   plugins: [
+ *     { createPlugin: (info) => new MyPlugin(exporter, info.executionArn) },
+ *   ],
+ * });
+ * ```
+ *
  * @experimental This type is experimental and may be changed or removed in future releases.
  */
-export type DurableInstrumentationPluginType<
-  Plugin extends DurableInstrumentationPlugin = DurableInstrumentationPlugin,
-> = abstract new (
-  ...args: never[]
-) => Plugin;
-
-/**
- * Versioned factory exported by packages that support environment-based plugin loading.
- *
- * Provider modules must export an object named `durableExecutionPluginProvider`.
- * The SDK loads only modules explicitly listed in `DURABLE_EXECUTION_PLUGINS`.
- *
- * @beta
- * @experimental This interface is experimental and may be changed or removed in future releases.
- */
-export interface DurableInstrumentationPluginProvider<
+export interface DurableInstrumentationPluginFactory<
   Plugin extends DurableInstrumentationPlugin = DurableInstrumentationPlugin,
 > {
   /**
-   * Provider contract version expected by the SDK.
+   * Creates the plugin instance for the described invocation.
+   *
+   * @param info - The invocation the returned instance will observe. This is
+   * the same object {@link DurableInstrumentationPlugin.onInvocationStart}
+   * receives.
+   * @returns The plugin instance serving this invocation, and no other, or
+   * `null` or `undefined` to skip instrumentation for this invocation.
    */
-  readonly pluginApiVersion: typeof DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION;
-
-  /**
-   * Concrete class returned by `createPlugin`.
-   */
-  readonly pluginType: DurableInstrumentationPluginType<Plugin>;
-
-  /**
-   * Creates one plugin instance during wrapped handler initialization.
-   */
-  createPlugin(): Plugin;
+  createPlugin(info: InvocationInfo): Plugin | null | undefined;
 }
 
 /**
@@ -305,3 +331,27 @@ export interface DurableInstrumentationPluginProvider<
  */
 export type CustomerFnResult = unknown;
 export type CustomerFn = () => CustomerFnResult;
+
+/**
+ * Opt-in registration metadata key. Ordinary plugin properties remain untouched.
+ * Symbol.for keeps the protocol shared across application and Lambda-layer copies.
+ * @experimental
+ */
+export const DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION = Symbol.for(
+  "aws.lambda.durable.instrumentation.plugin-registration",
+);
+
+/** @experimental Optional registration protocol, separate from the hook interface. */
+export interface RegisteredDurableInstrumentationPlugin
+  extends DurableInstrumentationPlugin {
+  readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: {
+    readonly name: string;
+    readonly exclusiveGroup?: string;
+  };
+}
+
+/** @experimental Factory registration is checked without constructing a plugin. */
+export interface RegisteredDurableInstrumentationPluginFactory
+  extends DurableInstrumentationPluginFactory {
+  readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: RegisteredDurableInstrumentationPlugin[typeof DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION];
+}
