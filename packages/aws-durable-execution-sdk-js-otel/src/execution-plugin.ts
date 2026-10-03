@@ -129,8 +129,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onInvocationStart(info: InvocationInfo): Promise<void> {
-    this.tracingEnabled = this.environment.ensureTracingEnabled(PLUGIN_NAME);
-    if (!this.tracingEnabled) {
+    if (!this.environment.ensureTracingEnabled(PLUGIN_NAME)) {
       return;
     }
 
@@ -236,6 +235,8 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       },
       invocationParentContext,
     );
+    // A failed extractor or span setup leaves later hooks inert for this instance.
+    this.tracingEnabled = true;
   }
 
   wrapInvocation(

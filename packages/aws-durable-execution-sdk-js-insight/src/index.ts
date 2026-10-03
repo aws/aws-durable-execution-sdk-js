@@ -809,8 +809,8 @@ class WorkflowInsightInvocation
    */
   private readonly sampledIn: boolean;
   /**
-   * Set once this invocation has ended. A late hook still lands on this same
-   * instance — the SDK does not order `onOperationChange` against
+   * Set once this execution has reached a terminal status. A late hook lands on
+   * this same instance — the SDK does not order `onOperationChange` against
    * `onInvocationEnd`, so a checkpoint that completed just before the end can
    * deliver its change afterwards — and it must emit nothing: exporters that
    * upsert by execution ARN would otherwise revert a finished execution back to
@@ -956,10 +956,10 @@ class WorkflowInsightInvocation
           ? isFailure
           : isTerminal;
 
-    // This invocation is over: a hook that still arrives is late and must emit
-    // nothing, or an exporter that upserts by execution ARN would revert the
-    // state we are about to write.
-    this.closed = true;
+    // Only a terminal execution must reject late RUNNING snapshots. A pending
+    // or retrying invocation can still receive newer checkpoint state while its
+    // final export/flush is draining.
+    this.closed ||= isTerminal;
 
     // The drain is in a `finally` so it also covers the paths that never reach
     // the schedule above: a sampled-in end that emits nothing in this mode may
@@ -988,8 +988,15 @@ class WorkflowInsightInvocation
       // scheduler so it is serialized against exports: an exporter never sees
       // one execution's flush() overlap another's export().
       if (this.sampledIn) {
-        await this.env.scheduler.drain(this);
-        await this.env.scheduler.flush();
+        let flushedRevision: number;
+        do {
+          await this.env.scheduler.drain(this);
+          flushedRevision = this.buildRevision;
+          await this.env.scheduler.flush();
+          // A nonterminal checkpoint update can arrive while flush awaits I/O.
+          // Even an already exported update needs a new flush if the previous
+          // flush took its buffer snapshot before that update was scheduled.
+        } while (this.outstanding || this.buildRevision !== flushedRevision);
       }
     }
   }

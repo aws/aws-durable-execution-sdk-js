@@ -2016,3 +2016,110 @@ function exposeGc(): (() => void) | undefined {
     setV8Flags("--no-expose-gc");
   }
 }
+
+describe("late nonterminal checkpoint updates", () => {
+  const deferred = () => {
+    let resolve!: () => void;
+    const promise = new Promise<void>((done) => {
+      resolve = done;
+    });
+    return { promise, resolve };
+  };
+
+  it.each(["PENDING", "RETRYING"] as const)(
+    "drains a change arriving while %s is exporting",
+    async (status) => {
+      const entered = deferred();
+      const release = deferred();
+      const exported: WorkflowInsightRecord[] = [];
+      const flushed: WorkflowInsightRecord[] = [];
+      const exporter: InsightExporter = {
+        async export(record) {
+          if (exported.length === 0) {
+            entered.resolve();
+            await release.promise;
+          }
+          exported.push(record);
+        },
+        async flush() {
+          flushed.push(...exported);
+        },
+      };
+      const arn = arnFor(`late-${status}`);
+      const plugin = workflowInsight({
+        exporters: [exporter],
+        emitMode: "on-change",
+      }).createPlugin(startFor(arn));
+      const end = plugin.onInvocationEnd?.(endFor(arn, { status }));
+      await entered.promise;
+      await plugin.onOperationChange?.(
+        changeFor(arn, {
+          a: op({ id: "a", name: "late-step", status: "SUCCEEDED" }),
+        }),
+      );
+      release.resolve();
+      await end;
+      expect(flushed.at(-1)?.status).toBe("RUNNING");
+      expect(
+        flushed.at(-1)?.operations.map((operation) => operation.name),
+      ).toEqual(["late-step"]);
+    },
+  );
+
+  it.each(["PENDING", "RETRYING"] as const)(
+    "drains and flushes a change arriving during the %s flush before returning",
+    async (status) => {
+      const flushing = deferred();
+      const releaseFlush = deferred();
+      const exportingUpdate = deferred();
+      const releaseUpdate = deferred();
+      const exported: WorkflowInsightRecord[] = [];
+      const flushed: WorkflowInsightRecord[] = [];
+      let flushes = 0;
+      const exporter: InsightExporter = {
+        async export(record) {
+          if (record.operations.length > 0) {
+            exportingUpdate.resolve();
+            await releaseUpdate.promise;
+          }
+          exported.push(record);
+        },
+        async flush() {
+          const snapshot = [...exported];
+          if (++flushes === 1) {
+            flushing.resolve();
+            await releaseFlush.promise;
+          }
+          flushed.push(...snapshot);
+        },
+      };
+      const arn = arnFor(`flush-${status}`);
+      const plugin = workflowInsight({
+        exporters: [exporter],
+        emitMode: "on-change",
+      }).createPlugin(startFor(arn));
+      let ended = false;
+      const end = Promise.resolve(
+        plugin.onInvocationEnd?.(endFor(arn, { status })),
+      ).then(() => {
+        ended = true;
+      });
+      await flushing.promise;
+      await plugin.onOperationChange?.(
+        changeFor(arn, {
+          a: op({ id: "a", name: "late-step", status: "SUCCEEDED" }),
+        }),
+      );
+      releaseFlush.resolve();
+      // Either the update starts, or a broken end returns without exporting it.
+      await Promise.race([exportingUpdate.promise, end]);
+      expect(ended).toBe(false);
+      releaseUpdate.resolve();
+      await end;
+      expect(
+        flushed.at(-1)?.operations.map((operation) => operation.name),
+      ).toEqual(["late-step"]);
+      expect(flushes).toBe(2);
+    },
+  );
+});

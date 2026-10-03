@@ -192,6 +192,45 @@ describe.each([
       propagation.disable();
     });
 
+    it("keeps a failed extractor inert without disabling another invocation", async () => {
+      const exporter = new InMemorySpanExporter();
+      let tracerProvider: NodeTracerProvider | undefined;
+      const factory = createFactory({
+        tracerProviderFactory: (createIdGenerator) => {
+          tracerProvider = new NodeTracerProvider({
+            idGenerator: createIdGenerator(),
+            spanProcessors: [new SimpleSpanProcessor(exporter)],
+          });
+          return tracerProvider;
+        },
+        contextExtractor: (info) => {
+          if (info.executionArn === ARN_A) throw new Error("extractor failed");
+          return undefined;
+        },
+      });
+      try {
+        const failed = sdkInvocation(factory, ARN_A);
+        const flush = jest.spyOn(tracerProvider!, "forceFlush");
+        await expect(failed.start()).rejects.toThrow("extractor failed");
+        // The runner contains the failed start hook and continues dispatching.
+        await failed.operation();
+        await failed.end();
+        expect(exporter.getFinishedSpans()).toEqual([]);
+        expect(flush).not.toHaveBeenCalled();
+
+        const healthy = sdkInvocation(factory, ARN_B);
+        await healthy.start();
+        await healthy.operation();
+        await healthy.end();
+        expect(
+          soleSpanFor(exporter.getFinishedSpans(), "Workflow", ARN_B),
+        ).toBeDefined();
+        expect(flush).toHaveBeenCalledTimes(1);
+      } finally {
+        await tracerProvider?.shutdown();
+      }
+    });
+
     it("keeps each execution's spans on its own trace when the SDK drives the provider", async () => {
       const exporter = new InMemorySpanExporter();
       const tracerProvider = new NodeTracerProvider({
