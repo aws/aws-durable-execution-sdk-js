@@ -150,6 +150,10 @@ describe("declared core SDK ranges across the monorepo", () => {
     }
     const pkgName = (manifest.name as string) ?? entry;
     if (pkgName === CORE_PKG_NAME) continue;
+    // This private workspace installs released artifacts as compatibility controls,
+    // not as consumers of the candidate core. Its exact pins are checked below.
+    if (pkgName === "otel-compatibility-fixtures" && manifest.private === true)
+      continue;
     for (const field of DEP_FIELDS) {
       const deps = (manifest[field] ?? {}) as Record<string, string>;
       const range = deps[CORE_PKG_NAME];
@@ -233,6 +237,10 @@ describe("declared core SDK ranges admit core patch releases", () => {
     }
     const pkgName = (manifest.name as string) ?? entry;
     if (pkgName === CORE_PKG_NAME) continue;
+    // This private workspace installs released artifacts as compatibility controls,
+    // not as consumers of the candidate core. Its exact pins are checked below.
+    if (pkgName === "otel-compatibility-fixtures" && manifest.private === true)
+      continue;
     for (const field of DEP_FIELDS) {
       const deps = (manifest[field] ?? {}) as Record<string, string>;
       const range = deps[CORE_PKG_NAME];
@@ -251,4 +259,30 @@ describe("declared core SDK ranges admit core patch releases", () => {
       );
     },
   );
+});
+
+describe("historical installed-package controls", () => {
+  it("keeps only the private compatibility fixture pinned to real released tarballs", () => {
+    const fixture = JSON.parse(
+      readFileSync(
+        join(
+          __dirname,
+          "..",
+          "..",
+          "..",
+          "otel-compatibility-fixtures",
+          "package.json",
+        ),
+        "utf-8",
+      ),
+    );
+    expect(fixture.name).toBe("otel-compatibility-fixtures");
+    expect(fixture.private).toBe(true);
+    expect(fixture.dependencies).toEqual({
+      "@aws/durable-execution-sdk-js":
+        "https://registry.npmjs.org/@aws/durable-execution-sdk-js/-/durable-execution-sdk-js-2.4.0.tgz",
+      "@aws/durable-execution-sdk-js-otel":
+        "https://registry.npmjs.org/@aws/durable-execution-sdk-js-otel/-/durable-execution-sdk-js-otel-1.1.0.tgz",
+    });
+  });
 });

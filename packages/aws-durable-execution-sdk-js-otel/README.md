@@ -31,12 +31,12 @@ npm install @aws/durable-execution-sdk-js-otel \
             @opentelemetry/sdk-trace-node
 ```
 
-The package requires Node.js 22 or later, and
-`@aws/durable-execution-sdk-js` 3.0.0 or later. The plugin is installed by
-passing a factory in `plugins`, and only core 3.0.0 and later accept a factory
-there; an earlier core expects a plugin instance and fails at handler
-initialization. Exporters, span processors, propagators, resources, and library
-instrumentation are application or ADOT responsibilities.
+OTel 2.x requires Node.js 22 or later and core SDK 3.x (`>=3.0.0 <4.0.0`).
+Register a factory in `plugins`; earlier cores do not implement this contract.
+Upgrade the core and OTel packages together. Existing core 2.x deployments can
+continue using their compatible OTel 1.x package until that migration.
+Exporters, span processors, propagators, resources, and library instrumentation
+are application or ADOT responsibilities.
 
 ## Quick Start
 
@@ -67,6 +67,14 @@ under Lambda Managed Instances) from overwriting each other.
 
 Use `createInvocationOtelPluginFactory()` instead when operations should appear
 under each Lambda invocation rather than under the durable Workflow.
+
+Register one OTel view. The core rejects conflicting explicit, environment, or
+mixed factory registrations with `PluginLoadError` before constructing any plugin.
+Unrelated factories remain supported. The bundled factories advertise their
+exclusive group through
+`Symbol.for("aws.lambda.durable.instrumentation.plugin-registration")`;
+custom factories can opt in through `RegisteredDurableInstrumentationPluginFactory`.
+Registration metadata stays separate from the invocation hooks.
 
 ## Provider Setup
 
@@ -197,6 +205,13 @@ configuration is needed.
 
 ## Choosing a Plugin
 
+Configure exactly one durable OTel view: `ExecutionOtelPlugin` for a workflow
+view, or `InvocationOtelPlugin` for an invocation view. Registering both (or
+registering one view twice) raises `PluginLoadError` before invocation hooks
+run. This applies to explicit `plugins`, `DURABLE_EXECUTION_PLUGINS`, and any
+combination of the two. Other instrumentation plugins can run alongside the
+selected view.
+
 ### `ExecutionOtelPlugin`
 
 Use this plugin for a workflow-centered view. Operations and attempts are
@@ -251,6 +266,20 @@ The plugin makes Invocation the active span while durable handler code runs.
 Open operation spans are ended at the invocation boundary and retain
 `durable.operation.status=STARTED`. When an operation completes in a later
 invocation, the plugin emits a continuation span in that invocation.
+
+Live span boundaries and exception events share a clock anchored to `Date.now()`
+once at invocation start, then advanced by elapsed `performance.now()` time.
+This matches ordinary OpenTelemetry spans' current wall-clock epoch without
+letting a wall-clock adjustment collapse or inflate live SDK span durations.
+Starts retain whole-millisecond precision, matching default user-span starts;
+ends retain fractional elapsed time. Open spans share one end timestamp at
+invocation cleanup. Each resumed invocation takes a fresh anchor; Workflow and
+synthetic root spans retain their historical execution start.
+
+An ordinary user span opened after a wall-clock adjustment takes the adjusted
+wall time from its provider. Its timestamps can therefore fall outside a parent
+opened before that adjustment, even though both measure durations monotonically.
+The plugin does not change the application's provider or rewrite user spans.
 
 Because the original span context is not checkpointed, replayed `STEP` and
 `CONTEXT` spans and cross-invocation continuation spans use new provider IDs.
@@ -558,6 +587,7 @@ deriveExecutionTraceId(
   environment: ExecutionTraceEnvironment,
   executionArn: string,
   executionStartTimestamp?: Date,
+  invocation?: { readonly xRayTraceId?: string },
 ): string;
 
 deriveWorkflowSpanId(executionArn: string): string;
@@ -574,11 +604,14 @@ deriveSpanIdFromOperationId(
 `deriveTraceIdFromXRayRoot` converts a valid X-Ray `Root` value to an
 OpenTelemetry trace ID and returns `undefined` for invalid input.
 `deriveExecutionTraceId` applies the default plugin precedence to an explicit
-environment: a valid `_X_AMZN_TRACE_ID` `Root` wins, otherwise it uses the same
-ARN-and-start-time fallback as the plugins. Pass `process.env` in Lambda or a
-plain object in tests. When no valid X-Ray Root is available, pass the same
-execution start timestamp supplied to the plugin; omit it only when it is
-unavailable to both callers.
+environment and an optional fourth invocation-context argument. Only
+`_X_AMZN_TRACE_ID` is read from the environment, preserving existing callers even
+if they have an unrelated variable named `xRayTraceId`. On Managed Instances,
+pass `{ xRayTraceId: context.xRayTraceId }` as the fourth argument; that local
+header takes precedence. A present but invalid local header suppresses the
+environment carrier and uses the ARN-and-start-time fallback.
+When no valid Root is available, pass the same execution start timestamp as the
+plugin; omit it only when it is unavailable to both callers.
 `deriveWorkflowSpanId` hashes `workflow:<execution ARN>`,
 `deriveExecutionRootSpanId` hashes `execution-root:<execution ARN>` (a distinct
 namespace so the synthetic root never collides with the Workflow or operation

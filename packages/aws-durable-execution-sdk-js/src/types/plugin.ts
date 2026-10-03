@@ -136,6 +136,8 @@ export interface InvocationBaseInfo {
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface InvocationInfo extends InvocationBaseInfo {
+  /** Invocation-local X-Ray header supplied by the Lambda runtime (including LMI). */
+  xRayTraceId?: string;
   isFirstInvocation: boolean;
   /**
    * Operations that were updated externally between the previous invocation and this one
@@ -324,3 +326,27 @@ export interface DurableInstrumentationPluginFactory<
  */
 export type CustomerFnResult = unknown;
 export type CustomerFn = () => CustomerFnResult;
+
+/**
+ * Opt-in registration metadata key. Ordinary plugin properties remain untouched.
+ * Symbol.for keeps the protocol shared across application and Lambda-layer copies.
+ * @experimental
+ */
+export const DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION = Symbol.for(
+  "aws.lambda.durable.instrumentation.plugin-registration",
+);
+
+/** @experimental Optional registration protocol, separate from the hook interface. */
+export interface RegisteredDurableInstrumentationPlugin
+  extends DurableInstrumentationPlugin {
+  readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: {
+    readonly name: string;
+    readonly exclusiveGroup?: string;
+  };
+}
+
+/** @experimental Factory registration is checked without constructing a plugin. */
+export interface RegisteredDurableInstrumentationPluginFactory
+  extends DurableInstrumentationPluginFactory {
+  readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: RegisteredDurableInstrumentationPlugin[typeof DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION];
+}

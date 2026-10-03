@@ -93,11 +93,14 @@ async function runHandler<
     executionStartTimestamp: initialExecutionEvent?.StartTimestamp ?? undefined,
   };
 
+  const xRayTraceId = (context as Context & { xRayTraceId?: string })
+    .xRayTraceId;
   const invocationInfo: InvocationInfo = {
     ...invocationBaseInfo,
     isFirstInvocation:
       durableExecutionMode === DurableExecutionMode.ExecutionMode,
     updatedOperations,
+    ...(xRayTraceId === undefined ? {} : { xRayTraceId }),
   };
 
   // One plugin instance per configured factory, per invocation, held only in this

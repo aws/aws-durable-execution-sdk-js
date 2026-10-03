@@ -29,6 +29,36 @@ describe("xRayContextExtractor", () => {
     process.env = originalEnv;
   });
 
+  it.each(["0", "1"])(
+    "prefers the invocation-local carrier with Sampled=%s",
+    (sampled) => {
+      process.env._X_AMZN_TRACE_ID =
+        "Root=1-11111111-111111111111111111111111;Parent=1111111111111111;Sampled=1";
+      const xRayTraceId = `Root=1-5759e988-bd862e3fe1be46a994272793;Parent=53995c3f42cd8ad8;Sampled=${sampled}`;
+      expect(xRayContextExtractor({ ...baseInfo, xRayTraceId })).toEqual({
+        traceId: "5759e988bd862e3fe1be46a994272793",
+        parentSpanId: "53995c3f42cd8ad8",
+        sampling: sampled === "0" ? "NOT_SAMPLED" : "SAMPLED",
+      });
+      expect(process.env._X_AMZN_TRACE_ID).toContain("11111111");
+    },
+  );
+
+  it.each([
+    "",
+    "malformed",
+    "Root=1-00000000-000000000000000000000000;Sampled=0",
+  ])(
+    "does not substitute a shared carrier for an invalid local header: %s",
+    (xRayTraceId) => {
+      process.env._X_AMZN_TRACE_ID =
+        "Root=1-11111111-111111111111111111111111;Parent=1111111111111111;Sampled=1";
+      expect(
+        xRayContextExtractor({ ...baseInfo, xRayTraceId }),
+      ).toBeUndefined();
+    },
+  );
+
   it("returns undefined when _X_AMZN_TRACE_ID is not set", () => {
     delete process.env._X_AMZN_TRACE_ID;
     expect(xRayContextExtractor(baseInfo)).toBeUndefined();

@@ -2,6 +2,7 @@ import { PluginLoadError } from "../../errors/plugin-load-error/plugin-load-erro
 import {
   DurableInstrumentationPlugin,
   DurableInstrumentationPluginFactory,
+  DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION,
   InvocationInfo,
 } from "../../types/plugin";
 import {
@@ -849,5 +850,99 @@ describe("SDK 3.x legacy provider migration", () => {
     expect(first).not.toBe(second);
     expect(createPlugin).toHaveBeenNthCalledWith(1, invocationInfo);
     expect(createPlugin).toHaveBeenNthCalledWith(2, secondInfo);
+  });
+});
+
+describe("exclusive factory registration", () => {
+  function view(name: string, exclusiveGroup = "views") {
+    return {
+      createPlugin: jest.fn(() => new FirstDynamicPlugin()),
+      [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: { name, exclusiveGroup },
+    };
+  }
+
+  it.each([false, true])(
+    "rejects explicit, environment and mixed conflicts without constructing plugins (reverse=%s)",
+    async (reverse) => {
+      const views = [view("first view"), view("second view")];
+      const [first, second] = reverse ? [...views].reverse() : views;
+      const modules = { first: moduleFor(first), second: moduleFor(second) };
+      const importModule = async (specifier: string) =>
+        modules[specifier as keyof typeof modules];
+      for (const [explicit, configured] of [
+        [[first, second], ""],
+        [[], "first,second"],
+        [[first], "second"],
+      ] as const) {
+        await expect(
+          loadConfiguredPlugins(explicit, {
+            environment: { DURABLE_EXECUTION_PLUGINS: configured },
+            importModule,
+          }),
+        ).rejects.toThrow(
+          /Plugins '(first|second) view' and '(first|second) view'.*Configure only one/,
+        );
+        expect(first.createPlugin).not.toHaveBeenCalled();
+        expect(second.createPlugin).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it("accepts zero/single views and unrelated factories without eager creation", async () => {
+    const first = view("first view");
+    const second = view("second view");
+    const metrics = view("metrics", "metrics");
+    const unrelated = { createPlugin: () => new ExplicitPlugin() };
+    for (const factories of [
+      [],
+      [first],
+      [second],
+      [first, unrelated],
+      [first, metrics],
+    ]) {
+      await expect(
+        loadConfiguredPlugins(factories, { environment: {} }),
+      ).resolves.toEqual(factories);
+    }
+    expect(first.createPlugin).not.toHaveBeenCalled();
+    expect(second.createPlugin).not.toHaveBeenCalled();
+    expect(metrics.createPlugin).not.toHaveBeenCalled();
+  });
+
+  it("rejects the same registered view twice", async () => {
+    const factory = view("first view");
+    await expect(
+      loadConfiguredPlugins([factory, factory], { environment: {} }),
+    ).rejects.toBeInstanceOf(PluginLoadError);
+    expect(factory.createPlugin).not.toHaveBeenCalled();
+  });
+
+  it("ignores ordinary registration properties and unadvertised symbol getters", async () => {
+    const getter = {
+      createPlugin: () => new ExplicitPlugin(),
+      get registration(): never {
+        throw new Error("ordinary property");
+      },
+    };
+    const proxy = new Proxy(
+      { createPlugin: () => new ExplicitPlugin() },
+      {
+        get(target, property, receiver) {
+          if (typeof property === "symbol") throw new Error("unknown symbol");
+          return Reflect.get(target, property, receiver);
+        },
+      },
+    );
+    const factories = [
+      { createPlugin: () => new ExplicitPlugin(), registration: 42 },
+      getter,
+      proxy,
+    ];
+    const loaded = await loadConfiguredPlugins(factories, { environment: {} });
+    expect(loaded).toHaveLength(factories.length);
+    // Compare identities without Jest itself probing the guarded symbol getter.
+    expect(loaded.every((factory, index) => factory === factories[index])).toBe(
+      true,
+    );
   });
 });

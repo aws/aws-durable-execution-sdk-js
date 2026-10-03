@@ -2,7 +2,11 @@ import { createRequire } from "module";
 import { join } from "path";
 import { pathToFileURL } from "url";
 import { PluginLoadError } from "../../errors/plugin-load-error/plugin-load-error";
-import { DurableInstrumentationPluginFactory } from "../../types/plugin";
+import {
+  DurableInstrumentationPluginFactory,
+  DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION,
+  RegisteredDurableInstrumentationPluginFactory,
+} from "../../types/plugin";
 
 export const PLUGIN_ENVIRONMENT_VARIABLE = "DURABLE_EXECUTION_PLUGINS";
 export const PLUGIN_PROVIDER_EXPORT = "durableExecutionPluginProvider";
@@ -214,6 +218,27 @@ function isPluginFactory(
   );
 }
 
+function validateExclusiveGroups(
+  plugins: readonly DurableInstrumentationPluginFactory[],
+): void {
+  const groups = new Map<string, string>();
+  for (const plugin of plugins) {
+    if (!(DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION in plugin)) continue;
+    const registration = (
+      plugin as Partial<RegisteredDurableInstrumentationPluginFactory>
+    )[DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION];
+    const group = registration?.exclusiveGroup;
+    if (!group) continue;
+    const previous = groups.get(group);
+    if (previous !== undefined) {
+      throw new PluginLoadError(
+        `Plugins '${previous}' and '${registration.name}' are mutually exclusive in group '${group}'. Configure only one.`,
+      );
+    }
+    groups.set(group, registration.name);
+  }
+}
+
 /**
  * Checks the one thing about a configured plugin entry that can be checked
  * without running it: the entry carries a callable `createPlugin`, which is what
@@ -320,6 +345,7 @@ export async function loadConfiguredPlugins(
   const environment = options.environment ?? process.env;
   const specifiers = parseConfiguredSpecifiers(environment);
   if (specifiers.length === 0) {
+    validateExclusiveGroups(plugins);
     return plugins;
   }
 
@@ -353,5 +379,6 @@ export async function loadConfiguredPlugins(
     );
   }
 
+  validateExclusiveGroups(plugins);
   return plugins;
 }

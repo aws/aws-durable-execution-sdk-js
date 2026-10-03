@@ -85,6 +85,50 @@ describe("canonicalTraceId", () => {
 });
 
 describe("deriveExecutionTraceId", () => {
+  it("does not reinterpret a legacy environment variable named xRayTraceId", () => {
+    const environment = {
+      _X_AMZN_TRACE_ID: "Root=1-5759e988-bd862e3fe1be46a994272793;Sampled=1",
+      xRayTraceId: "ordinary-environment-value",
+    };
+    expect(deriveExecutionTraceId(environment, ARN, START)).toBe(
+      "5759e988bd862e3fe1be46a994272793",
+    );
+  });
+
+  it("prefers a separately supplied invocation-local header", () => {
+    expect(
+      deriveExecutionTraceId(
+        {
+          _X_AMZN_TRACE_ID:
+            "Root=1-aaaaaaaa-aaaaaaaaaaaaaaaaaaaaaaaa;Sampled=1",
+        },
+        ARN,
+        START,
+        {
+          xRayTraceId:
+            "Root=1-5759e988-bd862e3fe1be46a994272793;Parent=53995c3f42cd8ad8;Sampled=0",
+        },
+      ),
+    ).toBe("5759e988bd862e3fe1be46a994272793");
+  });
+
+  it.each(["", "invalid", "Root=1-00000000-000000000000000000000000"])(
+    "suppresses the environment carrier for invalid local input: %s",
+    (xRayTraceId) => {
+      expect(
+        deriveExecutionTraceId(
+          {
+            _X_AMZN_TRACE_ID:
+              "Root=1-aaaaaaaa-aaaaaaaaaaaaaaaaaaaaaaaa;Sampled=1",
+          },
+          ARN,
+          START,
+          { xRayTraceId },
+        ),
+      ).toBe(deriveTraceIdFromArn(ARN, START));
+    },
+  );
+
   it("uses the X-Ray Root from the supplied environment", () => {
     expect(
       deriveExecutionTraceId(

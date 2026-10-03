@@ -17,6 +17,7 @@ export class DurableExecutionInvocationInputWithClient
   };
   public readonly DurableExecutionArn: string;
   public readonly CheckpointToken: string;
+  public readonly UpdatedOperationIds?: string[];
   constructor(
     params: DurableExecutionInvocationInput,
     public readonly durableExecutionClient: DurableExecutionClient,
@@ -24,6 +25,7 @@ export class DurableExecutionInvocationInputWithClient
     this.InitialExecutionState = params.InitialExecutionState;
     this.DurableExecutionArn = params.DurableExecutionArn;
     this.CheckpointToken = params.CheckpointToken;
+    this.UpdatedOperationIds = params.UpdatedOperationIds;
   }
 
   static isInstance(
