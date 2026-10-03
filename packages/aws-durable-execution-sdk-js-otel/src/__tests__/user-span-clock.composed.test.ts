@@ -348,6 +348,52 @@ describe.each([10, -10])(
       propagation.disable();
     });
 
+    it("anchors an omitted execution start before a millisecond rollover", async () => {
+      jest.useFakeTimers({ now: epoch, doNotFake: ["performance"] });
+      try {
+        plugin = new InvocationOtelPlugin({
+          contextExtractor: () => {
+            // Date advances by one integer millisecond while only a fraction
+            // elapses since the invocation's wall/monotonic clock was sampled.
+            monotonicMillis += 0.25;
+            jest.setSystemTime(epoch + 1);
+            return undefined;
+          },
+        });
+        const info: InvocationInfo = {
+          executionArn:
+            "arn:aws:lambda:us-east-1:123456789012:durable-execution:fn:1:clock-rollover",
+          requestId: "rollover",
+          isFirstInvocation: true,
+          executionInput: {},
+          operations: {},
+          updatedOperations: {},
+        };
+        await plugin.onInvocationStart(info);
+        monotonicMillis += 1;
+        await plugin.onInvocationEnd({
+          ...info,
+          status: InvocationStatus.SUCCEEDED,
+        });
+        const spans = exporter.getFinishedSpans();
+        const invocation = spans.find((span) => span.name === "Invocation")!;
+        const workflow = spans.find((span) => span.name === "Workflow")!;
+        const root = spans.find(
+          (span) => span.name === "DurableExecutionRoot",
+        )!;
+        expect(nanoseconds(workflow.startTime)).toBeLessThanOrEqual(
+          nanoseconds(invocation.startTime),
+        );
+        expectChildOf(invocation, root);
+        expectChildOf(workflow, root);
+        expect(nanoseconds(workflow.endTime)).toBeGreaterThanOrEqual(
+          nanoseconds(workflow.startTime),
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it.each(
       [-60_000, 0, 60_000].flatMap((wallStep) =>
         [0, 0.75].flatMap((wallFraction) =>

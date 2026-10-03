@@ -186,7 +186,9 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     this.executionStartTimestamp =
       info.executionStartTimestamp ??
       this.executionStartTimestamp ??
-      new Date();
+      // Reuse the invocation anchor: a later Date sample can round up to the
+      // next millisecond and start the Workflow after its live Invocation.
+      new Date(this.invocationClock.epochMillis);
     this.workflowSpan = trace.wrapSpanContext({
       traceId: this.executionTraceId,
       spanId: workflowSpanId,
