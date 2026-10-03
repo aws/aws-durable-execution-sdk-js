@@ -1,0 +1,52 @@
+{
+  "name": "@aws/durable-execution-sdk-js-microvm-worker",
+  "description": "Runs inside an AWS Lambda MicroVM: receives a job from a durable function's microvm operation, sends heartbeats, and reports the result",
+  "version": "0.1.0-alpha.0",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/aws/aws-durable-execution-sdk-js.git",
+    "directory": "packages/aws-durable-execution-sdk-js-microvm-worker"
+  },
+  "homepage": "https://github.com/aws/aws-durable-execution-sdk-js/tree/main/packages/aws-durable-execution-sdk-js-microvm-worker",
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "./dist-cjs/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist-types/index.d.ts",
+  "scripts": {
+    "clean": "rm -rf dist dist-cjs dist-types node_modules coverage .tsbuildinfo .rollup.cache",
+    "build": "concurrently npm:build:esm npm:build:cjs npm:build:types",
+    "build:esm": "rollup --config rollup.config.mjs --environment MODE:esm",
+    "build:cjs": "rollup --config rollup.config.mjs --environment MODE:cjs",
+    "build:types": "tsc --project tsconfig.build.json --outDir dist-types",
+    "prepublishOnly": "npm run build && npm run test",
+    "lint": "biome check src --diagnostic-level=error",
+    "lint:fix": "biome check --write src",
+    "prebuild": "rm -rf dist dist-cjs dist-types",
+    "test": "tsc --noEmit && jest --config jest.config.mjs --collectCoverage --collectCoverageFrom=src/**/*.{ts,js}"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist-types/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist-cjs/index.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "dist-cjs/",
+    "dist-types"
+  ],
+  "dependencies": {
+    "@aws-sdk/client-lambda": "^3.1014.0",
+    "@aws-sdk/client-lambda-microvms": "^3.1140.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.11",
+    "jest": "^30.5.1",
+    "typescript": "^6.0.3"
+  },
+  "private": false
+}
