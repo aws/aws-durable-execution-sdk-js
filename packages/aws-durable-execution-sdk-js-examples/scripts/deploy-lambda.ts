@@ -864,6 +864,14 @@ export async function main(): Promise<void> {
             },
             120,
           );
+          if (attempts === 2) {
+            throw new Error(
+              `Function ${functionWithQualifier} exceeded capacity after two publication attempts: ` +
+                (result.LastUpdateStatusReason ??
+                  result.StateReason ??
+                  "CapacityProviderScalingLimitExceeded"),
+            );
+          }
         } catch (err) {
           if (err instanceof ResourceConflictException) {
             throw new Error(
