@@ -217,11 +217,28 @@ Invocation timing uses a sampled wall-clock start and monotonic elapsed time.
 At cleanup, its end is extended only when an operation or attempt timestamp
 observed during that invocation is later. This keeps authoritative backend
 boundaries inside the invocation without adding a fixed padding interval or
-rewriting historical operation dates. Open attempts and terminal roots use the
-same cleanup boundary. The observation is cleared at every invocation boundary;
+rewriting historical operation dates. Open attempts use the logical cleanup
+time; Invocation and terminal roots use the physical cleanup time. The
+observation is cleared at every invocation boundary;
 it does not reconstruct other invocations' clocks. Logical operations spanning
 a suspension retain their original start, which can precede the invocation
 where they complete.
+
+When an operation or attempt timestamp is absent, both its start and end use
+checkpoint millisecond precision correlated to the same captured monotonic clock.
+Wall-tick observations refine the phase only within the original sample's
+uncertainty interval; wall-clock adjustments outside that interval are ignored.
+These local fallbacks cannot precede an SDK timestamp already observed during
+the invocation. This preserves sequential ordering across coarse checkpoint
+Dates and local fallback times; sub-millisecond logical durations can be zero.
+Provided Dates are preserved, and error events use the same completion timestamp
+as their span. The physical Invocation clock retains its elapsed-time precision.
+
+While a containing context is still active, its deferred start also includes
+the earliest start observed from its children and their attempts. This preserves
+provided timestamp objects and does not round or pad them. Ancestor tracking
+stops at ended or unknown parents and is cleared at each invocation boundary;
+provided completion timestamps are unchanged.
 
 ### `InvocationOtelPlugin`
 

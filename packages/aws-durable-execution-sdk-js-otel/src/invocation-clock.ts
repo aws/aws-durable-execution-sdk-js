@@ -1,7 +1,11 @@
 import type { HrTime } from "@opentelemetry/api";
 import { millisToHrTime, otperformance } from "@opentelemetry/core";
 
-export type InvocationClock = { epochMillis: number; monotonicMillis: number };
+export type InvocationClock = {
+  epochMillis: number;
+  monotonicMillis: number;
+  sampleWindowMillis: number;
+};
 
 export function captureInvocationClock(): InvocationClock {
   let smallestWindow = Infinity;
@@ -19,6 +23,7 @@ export function captureInvocationClock(): InvocationClock {
       bestSample = {
         epochMillis,
         monotonicMillis: before + window / 2,
+        sampleWindowMillis: window,
       };
     }
     if (window < 1) break;
