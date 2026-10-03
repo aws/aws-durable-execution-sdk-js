@@ -245,6 +245,425 @@ describe.each(["global", "factory"] as const)(
       expect(parent.startTime).toEqual(child.startTime);
     });
 
+    it.each([0.051, 0.275, 0.777])(
+      "logical precision keeps a resumed wait before the next checkpoint Date (%f ms)",
+      async (elapsed) => {
+        wall = epoch + 0.125;
+        await plugin.onInvocationStart(info(false));
+        advance(elapsed);
+        const waitStart = new Date(epoch - 1000);
+        await plugin.onOperationEnd({
+          id: "wait",
+          name: "wait",
+          type: "WAIT",
+          isReplay: false,
+          startTimestamp: waitStart,
+          status: "SUCCEEDED",
+        });
+        const stepStart = new Date(Math.floor(wall));
+        const step: OperationInfo = {
+          id: "next",
+          name: "next",
+          type: "STEP",
+          isReplay: false,
+          startTimestamp: stepStart,
+        };
+        const attempt: AttemptInfo = { ...step, attempt: 1 };
+        const starts = jest.spyOn(
+          provider.getTracer("aws-durable-execution-sdk-js"),
+          "startSpan",
+        );
+        await plugin.onOperationStart(step);
+        await plugin.onOperationAttemptStart(attempt);
+        await plugin.wrapOperationAttemptFn(attempt, async () => {
+          const user = trace
+            .getTracer("logical-precision-user")
+            .startSpan("ordinary-user");
+          advance(2);
+          user.end();
+        });
+        const stepEnd = new Date(Math.floor(wall));
+        await plugin.onOperationAttemptEnd({
+          ...attempt,
+          outcome: "SUCCEEDED",
+          endTimestamp: stepEnd,
+        });
+        await plugin.onOperationEnd({
+          ...step,
+          status: "SUCCEEDED",
+          endTimestamp: stepEnd,
+        });
+        await plugin.onInvocationEnd({ ...info(false), status: "SUCCEEDED" });
+        const spans = exporter.getFinishedSpans();
+        const wait = spans.find((s) => s.name === "wait")!,
+          next = spans.find((s) => s.name === "next")!;
+        expect(nanos(wait.endTime)).toBeLessThanOrEqual(nanos(next.startTime));
+        expect(wait.endTime[1] % 1_000_000).toBe(0);
+        expect(nanos(wait.startTime)).toBe(
+          BigInt(waitStart.getTime()) * 1_000_000n,
+        );
+        expect(
+          starts.mock.calls.find(([name]) => name === "next")![1]!.startTime,
+        ).toBe(stepStart);
+        expect(nanos(next.endTime)).toBe(
+          BigInt(stepEnd.getTime()) * 1_000_000n,
+        );
+        inside(next, spans.find((s) => s.name === "Invocation")!);
+        const user = spans.find((s) => s.name === "ordinary-user")!,
+          parent = spans.find((s) => s.name === "next attempt 1")!;
+        expect(user.parentSpanContext?.spanId).toBe(
+          parent.spanContext().spanId,
+        );
+      },
+    );
+
+    it("logical precision uses whole milliseconds for all missing operation and attempt boundaries", async () => {
+      await plugin.onInvocationStart(info(true));
+      advance(0.051);
+      const operation: OperationInfo = {
+        id: "local",
+        name: "local",
+        type: "STEP",
+        isReplay: false,
+      };
+      const attempt: AttemptInfo = { ...operation, attempt: 1 };
+      await plugin.onOperationStart(operation);
+      await plugin.onOperationAttemptStart(attempt);
+      advance(0.726);
+      const error = new Error("logical precision");
+      await plugin.onOperationAttemptEnd({
+        ...attempt,
+        outcome: "FAILED",
+        error,
+      });
+      await plugin.onOperationEnd({ ...operation, status: "FAILED", error });
+      await plugin.onOperationAttemptStart({
+        id: "cleanup",
+        name: "cleanup",
+        type: "STEP",
+        isReplay: false,
+        attempt: 1,
+      });
+      await plugin.onInvocationEnd({ ...info(true), status: "FAILED" });
+      const spans = exporter.getFinishedSpans();
+      for (const name of ["local", "local attempt 1"]) {
+        const span = spans.find((s) => s.name === name)!;
+        expect(span.startTime[1] % 1_000_000).toBe(0);
+        expect(span.endTime[1] % 1_000_000).toBe(0);
+        expect(span.events[0].time).toEqual(span.endTime);
+        expect(nanos(span.endTime)).toBeGreaterThanOrEqual(
+          nanos(span.startTime),
+        );
+      }
+      const invocation = spans.find((s) => s.name === "Invocation")!;
+      const cleanup = spans.find((s) => s.name === "cleanup attempt 1")!;
+      expect(cleanup.startTime[1] % 1_000_000).toBe(0);
+      expect(cleanup.endTime[1] % 1_000_000).toBe(0);
+      inside(cleanup, invocation);
+      expect(nanos(invocation.duration)).toBeGreaterThan(0n);
+      expect(invocation.endTime[1] % 1_000_000).not.toBe(0);
+    });
+
+    it("logical precision retains the wall tick phase around ordinary user spans", async () => {
+      wall = epoch + 0.75;
+      await plugin.onInvocationStart(info(true));
+      advance(0.375);
+      const operation: OperationInfo = {
+        id: "phase",
+        name: "phase",
+        type: "CONTEXT",
+        isReplay: false,
+      };
+      await plugin.onOperationStart(operation);
+      await plugin.wrapChildContextFn(operation, async () => {
+        const user = trace
+          .getTracer("logical-phase-user")
+          .startSpan("user-phase");
+        advance(0.25);
+        user.end();
+      });
+      await plugin.onOperationEnd({ ...operation, status: "SUCCEEDED" });
+      await plugin.onInvocationEnd({ ...info(true), status: "SUCCEEDED" });
+      const spans = exporter.getFinishedSpans();
+      const parent = spans.find((s) => s.name === "phase")!,
+        user = spans.find((s) => s.name === "user-phase")!;
+      expect(user.parentSpanContext?.spanId).toBe(parent.spanContext().spanId);
+      expect(nanos(user.endTime) - nanos(parent.endTime)).toBeLessThanOrEqual(
+        1_000_000n,
+      );
+      expect(parent.startTime).toEqual(user.startTime);
+      expect(parent.endTime[1] % 1_000_000).toBe(0);
+      inside(parent, spans.find((s) => s.name === "Invocation")!);
+    });
+
+    it("logical precision never ends an active context before an observed child checkpoint", async () => {
+      wall = epoch + 0.75;
+      await plugin.onInvocationStart(info(true));
+      const parent: OperationInfo = {
+        id: "context",
+        name: "context",
+        type: "CONTEXT",
+        isReplay: false,
+      };
+      await plugin.onOperationStart(parent);
+      const child: OperationInfo = {
+        id: "checkpointed",
+        name: "checkpointed",
+        parentId: parent.id,
+        type: "STEP",
+        isReplay: false,
+        startTimestamp: new Date(epoch),
+      };
+      await plugin.onOperationStart(child);
+      advance(0.725);
+      const authoritativeEnd = new Date(Math.floor(wall));
+      await plugin.onOperationEnd({
+        ...child,
+        status: "SUCCEEDED",
+        endTimestamp: authoritativeEnd,
+      });
+      await plugin.onOperationEnd({ ...parent, status: "SUCCEEDED" });
+      await plugin.onInvocationEnd({ ...info(true), status: "SUCCEEDED" });
+      const spans = exporter.getFinishedSpans(),
+        ancestor = spans.find((s) => s.name === "context")!,
+        step = spans.find((s) => s.name === "checkpointed")!;
+      expect(nanos(step.endTime)).toBe(
+        BigInt(authoritativeEnd.getTime()) * 1_000_000n,
+      );
+      expect(nanos(ancestor.endTime)).toBeGreaterThanOrEqual(
+        nanos(step.endTime),
+      );
+      expect(ancestor.endTime).toEqual(step.endTime);
+      inside(ancestor, spans.find((s) => s.name === "Invocation")!);
+    });
+
+    it.each(["operation start", "attempt start", "operation end"])(
+      "carries a coarse child Date into active ancestors at %s",
+      async (observedAt) => {
+        wall = epoch + 0.75;
+        await plugin.onInvocationStart(info(true));
+        advance(0.051);
+        const starts = jest.spyOn(
+          provider.getTracer("aws-durable-execution-sdk-js"),
+          "startSpan",
+        );
+        const outer: OperationInfo = {
+          id: "map",
+          name: "map",
+          type: "CONTEXT",
+          isReplay: false,
+        };
+        const iteration: OperationInfo = {
+          id: "iteration",
+          name: "iteration",
+          parentId: outer.id,
+          type: "CONTEXT",
+          isReplay: false,
+        };
+        const coarse = new Date(epoch);
+        const step: OperationInfo = {
+          id: "nested-step",
+          name: "nested-step",
+          parentId: iteration.id,
+          type: "STEP",
+          isReplay: false,
+          ...(observedAt === "operation start"
+            ? { startTimestamp: coarse }
+            : {}),
+        };
+        const attempt: AttemptInfo = {
+          ...step,
+          attempt: 1,
+          ...(observedAt === "attempt start" ? { startTimestamp: coarse } : {}),
+        };
+        await plugin.onOperationStart(outer);
+        await plugin.onOperationStart(iteration);
+        await plugin.onOperationStart(step);
+        await plugin.onOperationAttemptStart(attempt);
+        await plugin.wrapOperationAttemptFn(attempt, async () => {
+          const user = trace
+            .getTracer("ancestor-clock-user")
+            .startSpan("ordinary-user-span");
+          advance(2);
+          user.end();
+        });
+        const endTimestamp = new Date(Math.floor(wall));
+        await plugin.onOperationAttemptEnd({
+          ...attempt,
+          outcome: "SUCCEEDED",
+          endTimestamp,
+        });
+        await plugin.onOperationEnd({
+          ...step,
+          status: "SUCCEEDED",
+          endTimestamp,
+          ...(observedAt === "operation end" ? { startTimestamp: coarse } : {}),
+        });
+        advance(1);
+        await plugin.onOperationEnd({ ...iteration, status: "SUCCEEDED" });
+        await plugin.onOperationEnd({ ...outer, status: "SUCCEEDED" });
+        await plugin.onInvocationEnd({ ...info(true), status: "SUCCEEDED" });
+        const spans = exporter.getFinishedSpans();
+        const byName = (name: string) =>
+          spans.find((span) => span.name === name)!;
+        for (const [childName, parentName] of [
+          ["nested-step attempt 1", "nested-step"],
+          ["nested-step", "iteration"],
+          ["iteration", "map"],
+        ]) {
+          const child = byName(childName),
+            parent = byName(parentName);
+          expect(child.parentSpanContext?.spanId).toBe(
+            parent.spanContext().spanId,
+          );
+          expect(child.spanContext().traceId).toBe(
+            parent.spanContext().traceId,
+          );
+          expect(nanos(child.startTime)).toBeGreaterThanOrEqual(
+            nanos(parent.startTime),
+          );
+          expect(nanos(child.endTime)).toBeLessThanOrEqual(
+            nanos(parent.endTime),
+          );
+        }
+        // Preserve the observed timestamp object, not a rounded/rebuilt value.
+        for (const name of ["map", "iteration", "nested-step"]) {
+          expect(
+            starts.mock.calls.find(([spanName]) => spanName === name)![1]!
+              .startTime,
+          ).toBe(coarse);
+        }
+        expect(coarse.getTime()).toBe(epoch);
+        expect(byName("ordinary-user-span").parentSpanContext?.spanId).toBe(
+          byName("nested-step attempt 1").spanContext().spanId,
+        );
+      },
+    );
+
+    it("preserves earlier parent dates and stops at ended parents", async () => {
+      await plugin.onInvocationStart(info(true));
+      const historical = new Date(epoch - 10);
+      const parent: OperationInfo = {
+        id: "closed",
+        name: "closed",
+        type: "CONTEXT",
+        isReplay: false,
+        startTimestamp: historical,
+      };
+      const starts = jest.spyOn(
+        provider.getTracer("aws-durable-execution-sdk-js"),
+        "startSpan",
+      );
+      await plugin.onOperationStart(parent);
+      await plugin.onOperationStart({
+        id: "child",
+        name: "child",
+        parentId: parent.id,
+        type: "STEP",
+        isReplay: false,
+        startTimestamp: new Date(epoch),
+      });
+      await plugin.onOperationEnd({
+        id: "child",
+        name: "child",
+        parentId: parent.id,
+        type: "STEP",
+        isReplay: false,
+        status: "SUCCEEDED",
+      });
+      await plugin.onOperationEnd({ ...parent, status: "SUCCEEDED" });
+      const cache = (
+        plugin as unknown as { operationStarts: Map<string, unknown> }
+      ).operationStarts;
+      expect(cache.has(parent.id)).toBe(false);
+      const closedStart = exporter
+        .getFinishedSpans()
+        .find((span) => span.name === "closed")!.startTime;
+      await plugin.onOperationStart({
+        id: "late",
+        parentId: parent.id,
+        type: "STEP",
+        isReplay: false,
+        startTimestamp: new Date(epoch - 20),
+      });
+      expect(cache.has(parent.id)).toBe(false);
+      expect(
+        exporter.getFinishedSpans().find((span) => span.name === "closed")!
+          .startTime,
+      ).toEqual(closedStart);
+      expect(
+        starts.mock.calls.find(([name]) => name === "closed")![1]!.startTime,
+      ).toBe(historical);
+      await plugin.onInvocationEnd({ ...info(true), status: "PENDING" });
+      expect(cache.size).toBe(0);
+      wall += 1000;
+      monotonic += 1000;
+      await plugin.onInvocationStart(info(false));
+      await plugin.onOperationStart({
+        id: "closed",
+        name: "resumed",
+        type: "CONTEXT",
+        isReplay: true,
+      });
+      await plugin.onOperationEnd({
+        id: "closed",
+        name: "resumed",
+        type: "CONTEXT",
+        isReplay: true,
+        status: "SUCCEEDED",
+      });
+      await plugin.onInvocationEnd({ ...info(false), status: "SUCCEEDED" });
+      expect(
+        nanos(
+          exporter.getFinishedSpans().find((span) => span.name === "resumed")!
+            .startTime,
+        ),
+      ).toBe(BigInt(epoch + 1000) * 1_000_000n);
+    });
+
+    it("terminates the private ancestor walk when parent IDs form a cycle", async () => {
+      await plugin.onInvocationStart(info(true));
+      advance(0.051);
+      await plugin.onOperationStart({
+        id: "a",
+        parentId: "b",
+        type: "CONTEXT",
+        isReplay: false,
+      });
+      await plugin.onOperationStart({
+        id: "b",
+        parentId: "a",
+        type: "CONTEXT",
+        isReplay: false,
+      });
+      const cache = (
+        plugin as unknown as {
+          operationStarts: Map<string, { startTimestamp?: Date | HrTime }>;
+        }
+      ).operationStarts;
+      const originalGet = cache.get.bind(cache);
+      let reads = 0;
+      const get = jest.spyOn(cache, "get").mockImplementation((id) => {
+        if (++reads > 32)
+          throw new Error("ancestor traversal failed to terminate");
+        return originalGet(id);
+      });
+      const coarse = new Date(epoch);
+      await plugin.onOperationStart({
+        id: "child",
+        parentId: "b",
+        type: "STEP",
+        isReplay: false,
+        startTimestamp: coarse,
+      });
+      expect(reads).toBeLessThanOrEqual(16);
+      get.mockRestore();
+      expect(cache.get("a")!.startTimestamp).toBe(coarse);
+      expect(cache.get("b")!.startTimestamp).toBe(coarse);
+      await plugin.onInvocationEnd({ ...info(true), status: "PENDING" });
+      expect(cache.size).toBe(0);
+    });
+
     it.each([-10, 10])(
       "contains authoritative attempt dates across resume with %i ms origin offset",
       async (offset) => {

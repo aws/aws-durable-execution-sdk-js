@@ -45,7 +45,11 @@ import { createTracerProvider } from "./otel-plugin-provider";
 import { tryInstallGlobalIdGenerator } from "./global-id-generator";
 import { DurableSampler, tryInstallDurableSampler } from "./global-sampler";
 import { ExternalCompletions } from "./external-completions";
-import { millisToHrTime, timeInputToHrTime } from "@opentelemetry/core";
+import {
+  hrTimeToMilliseconds,
+  millisToHrTime,
+  timeInputToHrTime,
+} from "@opentelemetry/core";
 import {
   captureInvocationClock,
   readInvocationClock,
@@ -92,7 +96,12 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   // Naming/timing captured at start, reused when onOperationEnd omits them.
   private operationStarts: Map<
     string,
-    { name?: string; subType?: string; startTimestamp?: Date | HrTime }
+    {
+      name?: string;
+      subType?: string;
+      parentId?: string;
+      startTimestamp?: Date | HrTime;
+    }
   >;
   private executionArn: string;
   private executionTraceId: string;
@@ -296,6 +305,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     }
     // Backend operation dates remain authoritative. Do not let a fractional
     // local clock end this invocation before a boundary it actually observed.
+    const logicalEndTime = this.logicalTimestamp();
     this.observeTimestamp(this.liveTimestamp());
     const endTime = this.latestObservedTimestamp!;
 
@@ -402,7 +412,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     // recording span and are dropped in resetInvocationState.
     for (const span of this.spanMap.values()) {
       if (span.isRecording()) {
-        span.end(endTime);
+        span.end(logicalEndTime);
       }
     }
 
@@ -469,6 +479,28 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
   private liveTimestamp(): HrTime {
     return readInvocationClock(this.invocationClock!);
+  }
+
+  private logicalTimestamp(): HrTime {
+    const before = hrTimeToMilliseconds(this.liveTimestamp());
+    const wallMillis = Date.now();
+    const after = this.liveTimestamp();
+    const uncertainty = this.invocationClock!.sampleWindowMillis / 2;
+    // Date.now() loses the phase within its millisecond when the anchor is
+    // captured. Accept a wall tick only inside that original sampling interval
+    // (including integer truncation). Clock adjustments outside it are ignored.
+    const correlated =
+      wallMillis >= Math.floor(before - uncertainty) &&
+      wallMillis <= Math.ceil(hrTimeToMilliseconds(after) + uncertainty);
+    // Checkpoints use whole milliseconds. Use that precision for both logical
+    // boundaries so a fractional fallback cannot overtake the next Date.
+    // Already observed SDK timestamps also bound subsequent local fallbacks.
+    this.observeTimestamp(
+      correlated
+        ? millisToHrTime(wallMillis)
+        : [after[0], Math.floor(after[1] / 1_000_000) * 1_000_000],
+    );
+    return this.latestObservedTimestamp!;
   }
 
   /** Keep only this invocation's latest emitted/observed SDK boundary. */
@@ -564,15 +596,19 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     // backend start timestamp, so capture the hook time as the fallback. Keep
     // the earliest observation if the same operation starts again on replay.
     const existingStart = this.operationStarts.get(info.id);
-    const observedStart = info.startTimestamp ?? this.liveTimestamp();
+    const observedStart = info.startTimestamp ?? this.logicalTimestamp();
+    const startTimestamp = this.earliestStart(
+      existingStart?.startTimestamp,
+      observedStart,
+    )!;
+    const parentId = info.parentId ?? existingStart?.parentId;
     this.operationStarts.set(info.id, {
       name: info.name ?? existingStart?.name,
       subType: info.subType ?? existingStart?.subType,
-      startTimestamp: this.earliestStart(
-        existingStart?.startTimestamp,
-        observedStart,
-      ),
+      parentId,
+      startTimestamp,
     });
+    this.observeAncestorStart(parentId, startTimestamp);
   }
 
   wrapChildContextFn(info: OperationInfo, fn: () => unknown): unknown {
@@ -643,7 +679,8 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     // spans (created earlier at start).
     const startTime =
       this.earliestStart(started?.startTimestamp, info.startTimestamp) ??
-      this.liveTimestamp();
+      this.logicalTimestamp();
+    this.observeAncestorStart(info.parentId ?? started?.parentId, startTime);
 
     const operationSpanId = deriveSpanIdFromOperationId(
       info.id,
@@ -663,7 +700,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     );
 
     // Reuse the same logical completion for the error event and the span end.
-    const endTime = info.endTimestamp ?? this.liveTimestamp();
+    const endTime = info.endTimestamp ?? this.logicalTimestamp();
     if (info.error) {
       span.setStatus({
         code: SpanStatusCode.ERROR,
@@ -705,6 +742,24 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     return context.active();
   }
 
+  /** Carry an observed child boundary only through still-active deferred parents. */
+  private observeAncestorStart(
+    parentId: string | undefined,
+    start: Date | HrTime,
+  ): void {
+    const visited = new Set<string>();
+    while (parentId !== undefined && !visited.has(parentId)) {
+      visited.add(parentId);
+      const parent = this.operationStarts.get(parentId);
+      // Never recreate a parent that has already ended or was not observed in
+      // this invocation. Its exported timestamps can no longer be corrected.
+      if (!parent || !this.operationContexts.has(parentId)) return;
+      start = this.earliestStart(parent.startTimestamp, start)!;
+      parent.startTimestamp = start;
+      parentId = parent.parentId;
+    }
+  }
+
   /** The earlier of two timestamps, ignoring undefined; undefined only when both are. */
   private earliestStart(
     a: Date | HrTime | undefined,
@@ -718,6 +773,10 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     }
     const first = timeInputToHrTime(a);
     const second = timeInputToHrTime(b);
+    if (first[0] === second[0] && first[1] === second[1]) {
+      // When a checkpoint matches a local fallback, keep the supplied Date.
+      return b instanceof Date && !(a instanceof Date) ? b : a;
+    }
     return first[0] < second[0] ||
       (first[0] === second[0] && first[1] <= second[1])
       ? a
@@ -754,17 +813,21 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
     const links = this.buildInvocationLinks();
 
-    const startTime = info.startTimestamp ?? this.liveTimestamp();
+    const startTime = info.startTimestamp ?? this.logicalTimestamp();
     // A backend attempt Date can precede a fractional local operation fallback.
     // Keep its actual observed boundary when the deferred parent is exported.
     const operationStart = this.operationStarts.get(info.id);
+    const observedStart = this.earliestStart(
+      operationStart?.startTimestamp,
+      startTime,
+    )!;
+    const parentId = info.parentId ?? operationStart?.parentId;
     this.operationStarts.set(info.id, {
       ...operationStart,
-      startTimestamp: this.earliestStart(
-        operationStart?.startTimestamp,
-        startTime,
-      ),
+      parentId,
+      startTimestamp: observedStart,
     });
+    this.observeAncestorStart(parentId, observedStart);
     const attemptSpan = this.startSpan(
       spanName,
       {
@@ -800,7 +863,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     const key = this.getAttemptKey(info.id, info.attempt);
     const attemptSpan = this.spanMap.get(key);
     if (attemptSpan) {
-      const endTime = info.endTimestamp ?? this.liveTimestamp();
+      const endTime = info.endTimestamp ?? this.logicalTimestamp();
       attemptSpan.setAttribute("durable.attempt.outcome", info.outcome);
       if (info.outcome === "FAILED") {
         attemptSpan.setStatus({
