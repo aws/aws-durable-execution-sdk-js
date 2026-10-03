@@ -29,17 +29,21 @@ function nanoseconds(time: HrTime): bigint {
   return BigInt(time[0]) * 1_000_000_000n + BigInt(time[1]);
 }
 
-function expectChildOf(child: ReadableSpan, parent: ReadableSpan): void {
+function expectChildOf(
+  child: ReadableSpan,
+  parent: ReadableSpan,
+  userClockPrecision = 0n,
+): void {
   expect(child.parentSpanContext?.spanId).toBe(parent.spanContext().spanId);
   expect(child.spanContext().traceId).toBe(parent.spanContext().traceId);
+  // SDK hierarchy stays strict. Ordinary user spans use the conformance
+  // contract's existing 1 ms precision for both boundaries of their wall clock.
   expect(nanoseconds(child.startTime)).toBeGreaterThanOrEqual(
-    nanoseconds(parent.startTime),
+    nanoseconds(parent.startTime) - userClockPrecision,
   );
-  // Default OTel spans start on the millisecond wall clock and end using a
-  // monotonic duration. Retain conformance's existing 1 ms rounding allowance.
   expect(
     nanoseconds(child.endTime) - nanoseconds(parent.endTime),
-  ).toBeLessThanOrEqual(1_000_000n);
+  ).toBeLessThanOrEqual(userClockPrecision);
 }
 
 describe.each([
@@ -242,7 +246,7 @@ describe.each([
         );
         expect(parents).toHaveLength(1);
         expect(parents[0].name).toBe(expectedParent(child));
-        expectChildOf(child, parents[0]);
+        expectChildOf(child, parents[0], 1_000_000n);
       }
       const wait = spans
         .filter((span) => span.name === "suspended-wait")
@@ -352,9 +356,9 @@ describe.each([10, -10])(
     ])(
       "preserves elapsed time through a %i ms wall step at %f ms wall fraction, then reanchors on resume",
       async (wallStep, wallFraction) => {
-        // Exercise both rounding directions: a whole-ms anchor must not give
-        // SDK starts more precision than default user starts; a fractional
-        // anchor must not truncate a user's tail beyond the existing 1 ms.
+        // Exercise both rounding directions while SDK starts and ends share
+        // one precision. Default user spans retain only the existing 1 ms
+        // allowance; all SDK relationships and ordering remain exact.
         wallMillis = epoch + wallFraction;
         const historicalStart = new Date(epoch - 120_000);
         const info: InvocationInfo = {
@@ -429,13 +433,18 @@ describe.each([10, -10])(
         const invocation = find("Invocation");
         const user = find("user-before-wall-step");
         expect(nanoseconds(user.duration)).toBe(50_250_000n);
-        expectChildOf(user, attempt);
-        expect(nanoseconds(attempt.duration)).toBe(50_750_000n);
+        expectChildOf(user, attempt, 1_000_000n);
+        // SDK siblings must remain strictly ordered even inside one wall-ms
+        // tick. User-clock rounding tolerance must not leak into SDK ordering.
+        expect(
+          nanoseconds(find("after-step").startTime),
+        ).toBeGreaterThanOrEqual(nanoseconds(attempt.endTime));
+        expect(nanoseconds(attempt.duration)).toBe(50_250_000n);
         expect(nanoseconds(invocation.duration)).toBe(54_000_000n);
         expect(nanoseconds(find("after-step").startTime)).toBe(
-          BigInt(epoch + 50) * 1_000_000n,
+          BigInt(epoch) * 1_000_000n + 50_750_000n,
         );
-        expect(nanoseconds(find("after-step").duration)).toBe(4_000_000n);
+        expect(nanoseconds(find("after-step").duration)).toBe(3_250_000n);
         // Every recordException path must export a real in-bounds event,
         // including the immediately-ended continuation after the wall step.
         for (const span of [
@@ -512,7 +521,11 @@ describe.each([10, -10])(
             : SpanStatusCode.OK,
         );
         expect(find("Workflow").status.code).toBe(second.status.code);
-        expectChildOf(find("user-after-resume"), find("step attempt 2"));
+        expectChildOf(
+          find("user-after-resume"),
+          find("step attempt 2"),
+          1_000_000n,
+        );
         for (const name of [
           "context",
           "step",

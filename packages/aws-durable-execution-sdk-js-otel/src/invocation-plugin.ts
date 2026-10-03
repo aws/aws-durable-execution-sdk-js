@@ -215,7 +215,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
           "durable.execution.arn": info.executionArn,
           "durable.invocation.first": info.isFirstInvocation,
         },
-        startTime: this.liveStartTimestamp(),
+        startTime: this.liveTimestamp(),
       },
       invocationParentContext,
     );
@@ -401,18 +401,6 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     return clock.epochMillis + (otperformance.now() - clock.monotonicMillis);
   }
 
-  private liveStartTimestamp(): number {
-    // Default user spans start on whole wall-clock milliseconds. Keep that
-    // precision for SDK starts so an immediate child cannot precede its parent
-    // merely due to rounding. Ends retain elapsed-time precision, like OTel,
-    // rather than truncating a user's fractional-millisecond tail.
-    const clock = this.invocationClock!;
-    return (
-      clock.epochMillis +
-      Math.floor(otperformance.now() - clock.monotonicMillis)
-    );
-  }
-
   private resetInvocationState(): void {
     this.invocationClock = undefined;
     this.spanMap.clear();
@@ -566,7 +554,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
             {
               attributes,
               links: this.workflowLinks(),
-              startTime: this.liveStartTimestamp(),
+              startTime: this.liveTimestamp(),
             },
             parentContext,
           ),
@@ -590,7 +578,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
             info.subType === "WaitForCondition"
               ? this.workflowLinks()
               : this.replayLinks(info.id),
-          startTime: this.liveStartTimestamp(),
+          startTime: this.liveTimestamp(),
         },
         parentContext,
       );
@@ -730,7 +718,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
           // deterministic on the execution trace, so the segments of one logical
           // operation stay correlated across invocations.
           links: this.replayLinks(info.id),
-          startTime: this.liveStartTimestamp(),
+          startTime: this.liveTimestamp(),
         },
         parentContext,
       );
@@ -790,7 +778,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       spanName,
       {
         attributes,
-        startTime: this.liveStartTimestamp(),
+        startTime: this.liveTimestamp(),
       },
       parentContext,
     );
