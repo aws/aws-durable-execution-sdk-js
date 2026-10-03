@@ -7,6 +7,8 @@ import {
   UpdateFunctionConfigurationCommand,
   PublishVersionCommand,
   PutFunctionScalingConfigCommand,
+  DeleteFunctionCommand,
+  LastUpdateStatusReasonCode,
   ResourceNotFoundException,
   ResourceConflictException,
 } from "@aws-sdk/client-lambda";
@@ -169,6 +171,7 @@ describe("deployment retries", () => {
         return normal(command);
       });
       await deploy();
+      expect(commands(CreateFunctionCommand)).toHaveLength(1);
       expect(commands(UpdateFunctionCodeCommand)).toHaveLength(1);
       expect(commands(UpdateFunctionConfigurationCommand)).toHaveLength(1);
       expect(commands(PublishVersionCommand)).toHaveLength(1);
@@ -178,7 +181,7 @@ describe("deployment retries", () => {
     },
   );
 
-  test("refreshes configuration after a successful create when a later update must retry", async () => {
+  test("retries scaling without repeating a completed create, update, or publish", async () => {
     const normal = send.getMockImplementation()!;
     let scalingAttempts = 0;
     send.mockImplementation(async (command) => {
@@ -192,10 +195,164 @@ describe("deployment retries", () => {
     });
     await deploy();
     expect(commands(CreateFunctionCommand)).toHaveLength(1);
-    expect(commands(UpdateFunctionCodeCommand)).toHaveLength(1);
-    expect(commands(UpdateFunctionConfigurationCommand)).toHaveLength(1);
+    expect(commands(UpdateFunctionCodeCommand)).toHaveLength(0);
+    expect(commands(UpdateFunctionConfigurationCommand)).toHaveLength(0);
+    expect(commands(PublishVersionCommand)).toHaveLength(1);
     expect(scalingAttempts).toBe(2);
   });
+  test.each([false, true])(
+    "stops after ten post-publish read failures without replaying deployment (existing=%s)",
+    async (existing) => {
+      const normal = send.getMockImplementation()!;
+      const throttled = throttle();
+      let polls = 0;
+      send.mockImplementation(async (command) => {
+        if (existing && command instanceof GetFunctionCommand) return {};
+        if (
+          command instanceof GetFunctionConfigurationCommand &&
+          command.input.FunctionName?.endsWith(":$LATEST.PUBLISHED") &&
+          ++polls <= 10
+        ) {
+          throw throttled;
+        }
+        return normal(command);
+      });
+      const result = main().then(
+        () => undefined,
+        (error: Error) => error,
+      );
+      await jest.runAllTimersAsync();
+      expect(await result).toEqual(new Error("Deployment exited with failure"));
+      expect(exit).toHaveBeenCalledWith(1);
+      expect(console.error).toHaveBeenCalledWith(
+        "Deployment failed:",
+        throttled,
+      );
+      expect(polls).toBe(10);
+      expect(commands(CreateFunctionCommand)).toHaveLength(existing ? 0 : 1);
+      expect(commands(UpdateFunctionCodeCommand)).toHaveLength(
+        existing ? 1 : 0,
+      );
+      expect(commands(UpdateFunctionConfigurationCommand)).toHaveLength(
+        existing ? 1 : 0,
+      );
+      expect(commands(PublishVersionCommand)).toHaveLength(1);
+      expect(commands(PutFunctionScalingConfigCommand)).toHaveLength(0);
+    },
+  );
+
+  test("stops after ten scaling throttles without repeating earlier phases", async () => {
+    const normal = send.getMockImplementation()!;
+    const throttled = throttle();
+    let attempts = 0;
+    send.mockImplementation(async (command) => {
+      if (
+        command instanceof PutFunctionScalingConfigCommand &&
+        ++attempts <= 10
+      ) {
+        throw throttled;
+      }
+      return normal(command);
+    });
+    const result = main().then(
+      () => undefined,
+      (error: Error) => error,
+    );
+    await jest.runAllTimersAsync();
+    expect(await result).toEqual(new Error("Deployment exited with failure"));
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(console.error).toHaveBeenCalledWith("Deployment failed:", throttled);
+    expect(attempts).toBe(10);
+    expect(commands(CreateFunctionCommand)).toHaveLength(1);
+    expect(commands(UpdateFunctionCodeCommand)).toHaveLength(0);
+    expect(commands(UpdateFunctionConfigurationCommand)).toHaveLength(0);
+    expect(commands(PublishVersionCommand)).toHaveLength(1);
+  });
+
+  test("retries capacity recovery deletion without repeating create or update", async () => {
+    const normal = send.getMockImplementation()!;
+    let publications = 0;
+    let deletions = 0;
+    send.mockImplementation(async (command) => {
+      if (command instanceof PublishVersionCommand) publications++;
+      if (command instanceof DeleteFunctionCommand) {
+        if (++deletions === 1) throw throttle();
+      }
+      if (
+        command instanceof GetFunctionConfigurationCommand &&
+        command.input.FunctionName?.endsWith(":$LATEST.PUBLISHED") &&
+        publications === 1
+      ) {
+        if (deletions === 2) {
+          throw new ResourceNotFoundException({
+            message: "Published version deleted",
+            $metadata: {},
+          });
+        }
+        return {
+          ...configuration,
+          LastUpdateStatus: "Failed",
+          LastUpdateStatusReasonCode:
+            LastUpdateStatusReasonCode.CapacityProviderScalingLimitExceeded,
+        };
+      }
+      return normal(command);
+    });
+    await deploy();
+    expect(deletions).toBe(2);
+    expect(publications).toBe(2);
+    expect(commands(CreateFunctionCommand)).toHaveLength(1);
+    expect(commands(UpdateFunctionCodeCommand)).toHaveLength(0);
+    expect(commands(UpdateFunctionConfigurationCommand)).toHaveLength(0);
+    expect(commands(PutFunctionScalingConfigCommand)).toHaveLength(1);
+  });
+
+  test("fails after both capacity recovery attempts instead of reporting success", async () => {
+    const normal = send.getMockImplementation()!;
+    let published = false;
+    send.mockImplementation(async (command) => {
+      if (command instanceof PublishVersionCommand) published = true;
+      if (command instanceof DeleteFunctionCommand) published = false;
+      if (
+        command instanceof GetFunctionConfigurationCommand &&
+        command.input.FunctionName?.endsWith(":$LATEST.PUBLISHED")
+      ) {
+        if (!published)
+          throw new ResourceNotFoundException({
+            message: "Deleted",
+            $metadata: {},
+          });
+        return {
+          ...configuration,
+          LastUpdateStatus: "Failed",
+          LastUpdateStatusReason: "capacity exhausted",
+          LastUpdateStatusReasonCode:
+            LastUpdateStatusReasonCode.CapacityProviderScalingLimitExceeded,
+        };
+      }
+      return normal(command);
+    });
+    const result = main().then(
+      () => undefined,
+      (error: Error) => error,
+    );
+    await jest.runAllTimersAsync();
+    expect(await result).toEqual(new Error("Deployment exited with failure"));
+    expect(commands(CreateFunctionCommand)).toHaveLength(1);
+    expect(commands(PublishVersionCommand)).toHaveLength(2);
+    expect(commands(DeleteFunctionCommand)).toHaveLength(2);
+    expect(commands(PutFunctionScalingConfigCommand)).toHaveLength(0);
+    expect(console.error).toHaveBeenCalledWith(
+      "Deployment failed:",
+      expect.objectContaining({
+        message: expect.stringContaining("capacity exhausted"),
+      }),
+    );
+    expect(console.log).not.toHaveBeenCalledWith(
+      expect.stringContaining("Successfully deployed"),
+    );
+  });
+
   test("does not retry or hide a permanent configuration error", async () => {
     const normal = send.getMockImplementation()!;
     const denied = Object.assign(new Error("Not authorized"), {
