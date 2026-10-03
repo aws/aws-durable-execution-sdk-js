@@ -111,11 +111,18 @@ async function runHandler<
     executionStartTimestamp: initialExecutionEvent?.StartTimestamp ?? undefined,
   };
 
+  const xRayTraceId = (context as Context & { xRayTraceId?: string })
+    .xRayTraceId;
+  // New runtimes expose the carrier even when this invocation has no header.
+  // Preserve that authority instead of falling back to another invocation's env.
+  const hasInvocationTraceCarrier =
+    xRayTraceId !== undefined || "xRayTraceId" in context;
   const invocationInfo: InvocationInfo = {
     ...invocationBaseInfo,
     isFirstInvocation:
       durableExecutionMode === DurableExecutionMode.ExecutionMode,
     updatedOperations,
+    ...(hasInvocationTraceCarrier ? { xRayTraceId: xRayTraceId ?? "" } : {}),
   };
   await plugin.onInvocationStart?.(invocationInfo);
 
