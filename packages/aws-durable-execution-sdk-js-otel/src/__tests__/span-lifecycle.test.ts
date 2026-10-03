@@ -551,29 +551,20 @@ describe("ExecutionOtelPlugin deferred operation spans", () => {
     const plugin = new InvocationDriver(createExecutionOtelPluginFactory({}));
 
     await plugin.onInvocationStart(makeInvocationInfo());
-    const beforeStart = Date.now();
     await plugin.onOperationStart(
       makeOperationInfo({ name: "missing-start-time" }),
     );
-    const afterStart = Date.now();
-
-    const operationStarts = (
-      plugin.current as unknown as {
-        operationStarts: Map<string, { startTimestamp?: Date }>;
-      }
-    ).operationStarts;
-    const capturedStart = operationStarts.get("op-1")?.startTimestamp;
-    expect(capturedStart).toBeInstanceOf(Date);
-    expect(capturedStart!.getTime()).toBeGreaterThanOrEqual(beforeStart);
-    expect(capturedStart!.getTime()).toBeLessThanOrEqual(afterStart);
-
-    const attemptStart = new Date(capturedStart!.getTime() + 1_000);
-    const attemptEnd = new Date(capturedStart!.getTime() + 2_000);
+    // Separate the observed start from the later attempt/end so capturing the
+    // fallback only at operation end cannot accidentally pass containment.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const attemptStart = new Date();
     const attemptInfo = makeAttemptInfo({
       name: "missing-start-time",
       startTimestamp: attemptStart,
     });
     await plugin.onOperationAttemptStart(attemptInfo);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const attemptEnd = new Date();
     await plugin.onOperationAttemptEnd({
       ...attemptInfo,
       outcome: "SUCCEEDED" as any,
@@ -593,6 +584,7 @@ describe("ExecutionOtelPlugin deferred operation spans", () => {
     expect(operation).toBeDefined();
     expect(attempt).toBeDefined();
     expectSpanInside(attempt, operation);
+    expectSpanInside(operation, named(exporter, "Invocation")[0]);
   });
 
   it("exports exactly one operation span for a WAIT that suspends then resumes", async () => {

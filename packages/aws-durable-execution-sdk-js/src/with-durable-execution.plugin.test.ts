@@ -124,6 +124,27 @@ describe("plugin hooks", () => {
     }
   });
 
+  it.each([undefined, null, ""])(
+    "keeps an available runtime carrier authoritative when it returns %s",
+    async (value) => {
+      const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
+        plugins: [factoryFor(plugin)],
+      });
+      const carrier = jest.fn(() => value);
+      const runtimeContext = Object.assign(
+        Object.create(
+          Object.defineProperty({}, "xRayTraceId", { get: carrier }),
+        ),
+        mockContext,
+      );
+      await handler(mockEvent, runtimeContext);
+      expect(plugin.onInvocationStart).toHaveBeenLastCalledWith(
+        expect.objectContaining({ xRayTraceId: "" }),
+      );
+      expect(carrier).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it("calls onInvocationStart with isFirstInvocation=true on first invocation", async () => {
     const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
       plugins: [factoryFor(plugin)],

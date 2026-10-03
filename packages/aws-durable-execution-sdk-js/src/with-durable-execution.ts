@@ -95,12 +95,16 @@ async function runHandler<
 
   const xRayTraceId = (context as Context & { xRayTraceId?: string })
     .xRayTraceId;
+  // New runtimes expose the carrier even when this invocation has no header.
+  // Preserve that authority instead of falling back to another invocation's env.
+  const hasInvocationTraceCarrier =
+    xRayTraceId !== undefined || "xRayTraceId" in context;
   const invocationInfo: InvocationInfo = {
     ...invocationBaseInfo,
     isFirstInvocation:
       durableExecutionMode === DurableExecutionMode.ExecutionMode,
     updatedOperations,
-    ...(xRayTraceId === undefined ? {} : { xRayTraceId }),
+    ...(hasInvocationTraceCarrier ? { xRayTraceId: xRayTraceId ?? "" } : {}),
   };
 
   // One plugin instance per configured factory, per invocation, held only in this

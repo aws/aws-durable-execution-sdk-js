@@ -16,6 +16,7 @@ import type {
   SpanContext,
   Context,
   Link,
+  HrTime,
 } from "@opentelemetry/api";
 import {
   context,
@@ -41,6 +42,13 @@ import {
   createPluginFactory,
   OtelPluginEnvironment,
 } from "./otel-plugin-environment";
+import { ExternalCompletions } from "./external-completions";
+import { millisToHrTime, timeInputToHrTime } from "@opentelemetry/core";
+import {
+  captureInvocationClock,
+  readInvocationClock,
+  type InvocationClock,
+} from "./invocation-clock";
 
 import { PLUGIN_REGISTRATION } from "./plugin-registration";
 
@@ -77,15 +85,20 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   private readonly reportedExecutionStart: Date | undefined;
   /**
    * What the terminal Workflow span is backdated to: the reported execution
-   * start, or this instance's creation time. Taken here rather than at
-   * onInvocationEnd, where `new Date()` would land after the span's own end time.
+   * start, or this invocation's clock anchor when it was not reported.
    */
-  private readonly workflowStartTime: Date;
+  private get workflowStartTime(): Date {
+    return (
+      this.reportedExecutionStart ?? new Date(this.invocationClock!.epochMillis)
+    );
+  }
 
   // Non-recording context carrying the deterministic Workflow identity; the real
   // span is created+ended once, at the terminal invocation (issue #831).
   private workflowSpan: Span | undefined;
   private invocationSpan: Span | undefined;
+  private invocationClock: InvocationClock | undefined;
+  private latestObservedTimestamp: HrTime | undefined;
   // Holds only recording ATTEMPT spans; operation spans are deferred (see
   // operationContexts), never recording between start and end.
   private readonly spanMap = new Map<string, Span>();
@@ -95,7 +108,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   // Naming/timing captured at start, reused when onOperationEnd omits them.
   private readonly operationStarts = new Map<
     string,
-    { name?: string; subType?: string; startTimestamp?: Date }
+    { name?: string; subType?: string; startTimestamp?: Date | HrTime }
   >();
   private executionTraceId = "";
   private executionTraceFlags: number = 0;
@@ -106,6 +119,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   private executionAncestor: SpanContext | undefined;
 
   private tracingEnabled = false;
+  private readonly externalCompletions = new ExternalCompletions();
 
   /**
    * @param environment - State that belongs to the execution environment: the
@@ -127,13 +141,14 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   ) {
     this.executionArn = info.executionArn;
     this.reportedExecutionStart = info.executionStartTimestamp;
-    this.workflowStartTime = info.executionStartTimestamp ?? new Date();
   }
 
   async onInvocationStart(info: InvocationInfo): Promise<void> {
     if (!this.environment.ensureTracingEnabled(PLUGIN_NAME)) {
       return;
     }
+
+    this.invocationClock = captureInvocationClock();
 
     // 1. Extract trace context via context extractor (same as InvocationOtelPlugin)
     const extractedContext = this.environment.contextExtractor(info);
@@ -234,11 +249,15 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       {
         kind: SpanKind.INTERNAL,
         attributes: invocationAttributes,
+        // Use the sampled wall boundary, before initialization and user work.
+        // A fractional live start can follow a Date in the same millisecond.
+        startTime: millisToHrTime(this.invocationClock.epochMillis),
       },
       invocationParentContext,
     );
     // A failed extractor or span setup leaves later hooks inert for this instance.
     this.tracingEnabled = true;
+    this.externalCompletions.observe(info.updatedOperations);
   }
 
   wrapInvocation(
@@ -255,6 +274,18 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     if (!this.tracingEnabled) {
       return;
     }
+
+    // Prefer normal lifecycle hooks, which preserve live parent scopes. Before
+    // returning, export any fresh completion the workflow did not reach. A
+    // later resume may label it replay even though it has never been exported.
+    for (const operation of this.externalCompletions.pending.values()) {
+      await this.onOperationEnd({ ...operation, isReplay: false });
+    }
+
+    // Backend operation dates remain authoritative. Do not let a fractional
+    // local clock end this invocation before a boundary it actually observed.
+    this.observeTimestamp(this.liveTimestamp());
+    const endTime = this.latestObservedTimestamp!;
 
     // 1. Always end and export Invocation_Span
     if (this.invocationSpan) {
@@ -279,7 +310,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       }
       // RETRYING: leave status UNSET (default)
 
-      this.invocationSpan.end();
+      this.invocationSpan.end(endTime);
     }
 
     // 2. Terminal invocation ONLY: create and end the one real Workflow_Span,
@@ -348,8 +379,8 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       } else {
         workflowSpan.setStatus({ code: SpanStatusCode.OK });
       }
-      workflowSpan.end();
-      syntheticRootSpan?.end();
+      workflowSpan.end(endTime);
+      syntheticRootSpan?.end(endTime);
     }
     // Non-terminal (PENDING/RETRYING): no real Workflow_Span or synthetic root is created, so
     // nothing to end — the identity was only ever a non-recording context.
@@ -360,7 +391,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     // there is nothing else to release.
     for (const span of this.spanMap.values()) {
       if (span.isRecording()) {
-        span.end();
+        span.end(endTime);
       }
     }
 
@@ -379,6 +410,24 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         );
       }
     }
+  }
+
+  private liveTimestamp(): HrTime {
+    return readInvocationClock(this.invocationClock!);
+  }
+
+  /** Keep only this invocation's latest emitted/observed SDK boundary. */
+  private observeTimestamp<T extends Date | HrTime>(timestamp: T): T {
+    const time = timeInputToHrTime(timestamp);
+    const latest = this.latestObservedTimestamp;
+    if (
+      !latest ||
+      time[0] > latest[0] ||
+      (time[0] === latest[0] && time[1] > latest[1])
+    ) {
+      this.latestObservedTimestamp = time;
+    }
+    return timestamp;
   }
 
   private startSpan(
@@ -461,7 +510,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     // backend start timestamp, so capture the hook time as the fallback. Keep
     // the earliest observation if the same operation starts again on replay.
     const existingStart = this.operationStarts.get(info.id);
-    const observedStart = info.startTimestamp ?? new Date();
+    const observedStart = info.startTimestamp ?? this.liveTimestamp();
     this.operationStarts.set(info.id, {
       name: info.name ?? existingStart?.name,
       subType: info.subType ?? existingStart?.subType,
@@ -498,17 +547,10 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     this.operationContexts.delete(info.id);
     this.operationStarts.delete(info.id);
 
-    // External completions are emitted when first observed. Later successful
-    // invocations replaying the stored outcome must not export it again.
-    // Redelivery after an interrupted invocation still has isReplay=false and
-    // can re-export the same deterministic span for recovery.
-    if (
-      info.isReplay &&
-      (info.type === "WAIT" ||
-        info.type === "INVOKE" ||
-        info.type === "CHAINED_INVOKE" ||
-        info.type === "CALLBACK")
-    ) {
+    // Updates and traversal can report the same completion in either order.
+    // The set is reset each invocation so failed-invocation redelivery remains
+    // eligible, while normal replay never exports a completion a second time.
+    if (this.externalCompletions.shouldSkip(info)) {
       return;
     }
 
@@ -545,10 +587,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
     // Earliest known start, so the span never begins after its own attempt/child
     // spans (created earlier at start).
-    const startTime = this.earliestStart(
-      started?.startTimestamp,
-      info.startTimestamp,
-    );
+    const startTime =
+      this.earliestStart(started?.startTimestamp, info.startTimestamp) ??
+      this.liveTimestamp();
 
     const operationSpanId = deriveSpanIdFromOperationId(
       info.id,
@@ -562,17 +603,19 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       () =>
         this.startSpan(
           spanName,
-          { attributes, startTime, links },
+          { attributes, startTime: this.observeTimestamp(startTime), links },
           parentContext,
         ),
     );
 
+    // Reuse the same logical completion for the error event and the span end.
+    const endTime = info.endTimestamp ?? this.liveTimestamp();
     if (info.error) {
       span.setStatus({
         code: SpanStatusCode.ERROR,
         message: info.error.message,
       });
-      span.recordException(info.error);
+      span.recordException(info.error, endTime);
     } else if (info.status === "SUCCEEDED") {
       // Stamp explicit OK ONLY on a SUCCEEDED terminal status. Terminal
       // FAILURE statuses (TIMED_OUT/STOPPED/FAILED/CANCELLED) can arrive with
@@ -581,20 +624,25 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       span.setStatus({ code: SpanStatusCode.OK });
     }
 
-    span.end(info.endTimestamp);
+    span.end(this.observeTimestamp(endTime));
+    this.externalCompletions.markExported(info);
   }
 
   /**
    * The parent context for an operation or attempt span: the parent operation's
-   * deterministic placeholder context when known, otherwise the deferred
-   * Workflow span's context so the span still hangs off the execution trace.
+   * deterministic identity, or the Workflow identity for a top-level operation.
+   * A completion notification can arrive without traversing its parent in this
+   * invocation (for example, a completed child context skipped during replay).
    */
   private resolveOperationParentContext(parentId: string | undefined): Context {
     if (parentId) {
-      const parentContext = this.operationContexts.get(parentId);
-      if (parentContext) {
-        return trace.setSpanContext(context.active(), parentContext);
-      }
+      const parentContext = this.operationContexts.get(parentId) ?? {
+        traceId: this.executionTraceId,
+        spanId: deriveSpanIdFromOperationId(parentId, this.executionArn),
+        traceFlags: this.executionTraceFlags,
+        isRemote: false,
+      };
+      return trace.setSpanContext(context.active(), parentContext);
     }
     const workflowContext = this.workflowSpan?.spanContext();
     if (workflowContext) {
@@ -605,16 +653,21 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
   /** The earlier of two timestamps, ignoring undefined; undefined only when both are. */
   private earliestStart(
-    a: Date | undefined,
-    b: Date | undefined,
-  ): Date | undefined {
+    a: Date | HrTime | undefined,
+    b: Date | HrTime | undefined,
+  ): Date | HrTime | undefined {
     if (!a) {
       return b;
     }
     if (!b) {
       return a;
     }
-    return a.getTime() <= b.getTime() ? a : b;
+    const first = timeInputToHrTime(a);
+    const second = timeInputToHrTime(b);
+    return first[0] < second[0] ||
+      (first[0] === second[0] && first[1] <= second[1])
+      ? a
+      : b;
   }
 
   private getAttemptKey(id: string, attempt: number): string {
@@ -647,11 +700,22 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
     const links = this.buildInvocationLinks();
 
+    const startTime = info.startTimestamp ?? this.liveTimestamp();
+    // A backend attempt Date can precede a fractional local operation fallback.
+    // Keep its actual observed boundary when the deferred parent is exported.
+    const operationStart = this.operationStarts.get(info.id);
+    this.operationStarts.set(info.id, {
+      ...operationStart,
+      startTimestamp: this.earliestStart(
+        operationStart?.startTimestamp,
+        startTime,
+      ),
+    });
     const attemptSpan = this.startSpan(
       spanName,
       {
         attributes,
-        startTime: info.startTimestamp,
+        startTime: this.observeTimestamp(startTime),
         links,
       },
       parentContext,
@@ -682,6 +746,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     const key = this.getAttemptKey(info.id, info.attempt);
     const attemptSpan = this.spanMap.get(key);
     if (attemptSpan) {
+      const endTime = info.endTimestamp ?? this.liveTimestamp();
       attemptSpan.setAttribute("durable.attempt.outcome", info.outcome);
       if (info.outcome === "FAILED") {
         attemptSpan.setStatus({
@@ -689,19 +754,21 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
           message: info.error?.message ?? "Attempt failed",
         });
         if (info.error) {
-          attemptSpan.recordException(info.error);
+          attemptSpan.recordException(info.error, endTime);
         }
       } else {
         // Non-failed attempt: stamp explicit OK (matches Python OTel #604).
         attemptSpan.setStatus({ code: SpanStatusCode.OK });
       }
-      attemptSpan.end(info.endTimestamp);
+      attemptSpan.end(this.observeTimestamp(endTime));
       this.spanMap.delete(key);
     }
   }
 
-  async onOperationChange(_info: OperationChangeInfo): Promise<void> {
-    // No-op — same as InvocationOtelPlugin
+  async onOperationChange(info: OperationChangeInfo): Promise<void> {
+    if (this.tracingEnabled) {
+      this.externalCompletions.observe(info.updatedOperations);
+    }
   }
 
   enrichLogContext(): Record<string, string | number | boolean> | undefined {

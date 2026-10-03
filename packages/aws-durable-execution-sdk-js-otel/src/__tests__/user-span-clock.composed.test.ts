@@ -11,7 +11,7 @@ import {
   trace,
 } from "@opentelemetry/api";
 import type { HrTime } from "@opentelemetry/api";
-import { otperformance } from "@opentelemetry/core";
+import { otperformance, timeInputToHrTime } from "@opentelemetry/core";
 import {
   InMemorySpanExporter,
   NodeTracerProvider,
@@ -356,17 +356,174 @@ describe.each([10, -10])(
     });
 
     it.each([
-      [-60_000, 0],
-      [-60_000, 0.75],
-      [60_000, 0],
-      [60_000, 0.75],
+      { stalls: [0], side: "after", reads: 1, residual: 0 },
+      { stalls: [20, 0], side: "after", reads: 2, residual: 0 },
+      { stalls: [20, 10, 0], side: "after", reads: 3, residual: 0 },
+      { stalls: [20, 0], side: "before", reads: 2, residual: 0 },
+      { stalls: [40, 10, 30], side: "after", reads: 3, residual: 5 },
+      { stalls: [40, 10, 30], side: "before", reads: 3, residual: -5 },
     ])(
-      "preserves elapsed time through a %i ms wall step at %f ms wall fraction, then reanchors on resume",
-      async (wallStep, wallFraction) => {
+      "bounds clock sampling with stalls $stalls ms $side the wall read",
+      async ({ stalls, side, reads, residual }) => {
+        let sampling = true;
+        let wallReads = 0;
+        let monotonicReads = 0;
+        let sampledWallReads = 0;
+        let sampledMonotonicReads = 0;
+        jest.spyOn(Date, "now").mockImplementation(() => {
+          const stall = sampling ? (stalls[wallReads++] ?? 100) : 0;
+          if (side === "before") advance(stall);
+          const value = Math.floor(wallMillis);
+          if (side === "after") advance(stall);
+          return value;
+        });
+        Object.defineProperty(otperformance, "now", {
+          configurable: true,
+          value: () => {
+            if (sampling) monotonicReads++;
+            return monotonicMillis;
+          },
+        });
+        factory = createInvocationOtelPluginFactory({
+          contextExtractor: () => {
+            sampling = false;
+            sampledWallReads = wallReads;
+            sampledMonotonicReads = monotonicReads;
+            return undefined;
+          },
+        });
+        const info: InvocationInfo = {
+          executionArn:
+            "arn:aws:lambda:us-east-1:123456789012:durable-execution:fn:1:clock-sampling",
+          executionStartTimestamp: new Date(epoch - 120_000),
+          requestId: "sampling",
+          isFirstInvocation: true,
+          executionInput: {},
+          operations: {},
+          updatedOperations: {},
+        };
+        const operation: OperationInfo = {
+          id: "sampled-step",
+          type: "STEP",
+          name: "sampled-step",
+          isReplay: false,
+        };
+        const attempt: AttemptInfo = { ...operation, attempt: 1 };
+        const userTracer = trace.getTracer("sampling-user");
+        plugin = factory.createPlugin(info);
+        await plugin.onInvocationStart(info);
+        await plugin.wrapInvocation(info, async () => {
+          const handlerSpan = userTracer.startSpan("user-handler");
+          advance(2);
+          handlerSpan.end();
+          await plugin.onOperationStart(operation);
+          await plugin.onOperationAttemptStart(attempt);
+          await plugin.wrapOperationAttemptFn(attempt, async () => {
+            const userSpan = userTracer.startSpan("user-later-attempt");
+            advance(2);
+            userSpan.end();
+          });
+          await plugin.onOperationAttemptEnd({
+            ...attempt,
+            outcome: "SUCCEEDED",
+          });
+          await plugin.onOperationEnd({ ...operation, status: "SUCCEEDED" });
+          return { Status: InvocationStatus.SUCCEEDED };
+        });
+        await plugin.onInvocationEnd({ ...info, status: "SUCCEEDED" });
+        const invocation = find("Invocation");
+        const step = find("sampled-step");
+        const sdkAttempt = find("sampled-step attempt 1");
+        const user = find("user-later-attempt");
+        // A stalled anchor otherwise contaminates even later, unstalled spans.
+        // When every bounded sample stalls, retain the smallest window: its
+        // midpoint has a 5 ms residual here, not the first/last window's 20/15.
+        expect(
+          nanoseconds(user.endTime) - nanoseconds(sdkAttempt.endTime),
+        ).toBe(BigInt(residual) * 1_000_000n);
+        if (residual === 0) {
+          expectChildOf(find("user-handler"), invocation, 1_000_000n);
+          expectChildOf(user, sdkAttempt, 1_000_000n);
+        }
+        expectChildOf(sdkAttempt, step);
+        expectChildOf(step, invocation);
+        expectChildOf(invocation, find("DurableExecutionRoot"));
+        expect(nanoseconds(invocation.duration)).toBe(4_000_000n);
+        // No unbounded retry if every attempt is interrupted. A stall can
+        // delay any individual read; this bounds reads, not scheduler latency.
+        expect(sampledWallReads).toBe(reads);
+        expect(sampledMonotonicReads).toBe(reads * 2);
+      },
+    );
+
+    it("anchors an omitted execution start before a millisecond rollover", async () => {
+      jest.useFakeTimers({ now: epoch, doNotFake: ["performance"] });
+      try {
+        factory = createInvocationOtelPluginFactory({
+          contextExtractor: () => {
+            // Date advances by one integer millisecond while only a fraction
+            // elapses since the invocation's wall/monotonic clock was sampled.
+            monotonicMillis += 0.25;
+            jest.setSystemTime(epoch + 1);
+            return undefined;
+          },
+        });
+        const info: InvocationInfo = {
+          executionArn:
+            "arn:aws:lambda:us-east-1:123456789012:durable-execution:fn:1:clock-rollover",
+          requestId: "rollover",
+          isFirstInvocation: true,
+          executionInput: {},
+          operations: {},
+          updatedOperations: {},
+        };
+        plugin = factory.createPlugin(info);
+        await plugin.onInvocationStart(info);
+        monotonicMillis += 1;
+        await plugin.onInvocationEnd({
+          ...info,
+          status: InvocationStatus.SUCCEEDED,
+        });
+        const spans = exporter.getFinishedSpans();
+        const invocation = spans.find((span) => span.name === "Invocation")!;
+        const workflow = spans.find((span) => span.name === "Workflow")!;
+        const root = spans.find(
+          (span) => span.name === "DurableExecutionRoot",
+        )!;
+        expect(nanoseconds(workflow.startTime)).toBeLessThanOrEqual(
+          nanoseconds(invocation.startTime),
+        );
+        expectChildOf(invocation, root);
+        expectChildOf(workflow, root);
+        expect(nanoseconds(workflow.endTime)).toBeGreaterThanOrEqual(
+          nanoseconds(workflow.startTime),
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it.each(
+      [-60_000, 0, 60_000].flatMap((wallStep) =>
+        [0, 0.75].flatMap((wallFraction) =>
+          [false, true].map((freshFactory) => ({
+            wallStep,
+            wallFraction,
+            freshFactory,
+          })),
+        ),
+      ),
+    )(
+      "preserves absolute timestamps through a $wallStep ms wall step at $wallFraction ms wall fraction (fresh factory on resume: $freshFactory)",
+      async ({ wallStep, wallFraction, freshFactory }) => {
         // Exercise both rounding directions while SDK starts and ends share
         // one precision. Default user spans retain only the existing 1 ms
         // allowance; all SDK relationships and ordering remain exact.
         wallMillis = epoch + wallFraction;
+        const starts = jest.spyOn(
+          provider.getTracer("aws-durable-execution-sdk-js"),
+          "startSpan",
+        );
         const historicalStart = new Date(epoch - 120_000);
         const info: InvocationInfo = {
           executionArn:
@@ -490,6 +647,13 @@ describe.each([10, -10])(
           requestId: "resumed",
           isFirstInvocation: false,
         };
+        if (freshFactory) {
+          // Another execution environment creates its own factory. Every
+          // invocation receives a fresh instance under the SDK 3.x contract.
+          factory = createInvocationOtelPluginFactory({
+            contextExtractor: () => undefined,
+          });
+        }
         plugin = factory.createPlugin(resumed);
         await plugin.onInvocationStart(resumed);
         await plugin.onOperationStart({ ...childInfo, isReplay: true });
@@ -535,6 +699,17 @@ describe.each([10, -10])(
           find("step attempt 2"),
           1_000_000n,
         );
+        const resumedContext = exporter
+          .getFinishedSpans()
+          .filter((span) => span.name === "context")
+          .at(-1)!;
+        const resumedStep = exporter
+          .getFinishedSpans()
+          .filter((span) => span.name === "step")
+          .at(-1)!;
+        expectChildOf(resumedContext, second);
+        expectChildOf(resumedStep, resumedContext);
+        expectChildOf(find("step attempt 2"), resumedStep);
         for (const name of [
           "context",
           "step",
@@ -559,6 +734,29 @@ describe.each([10, -10])(
         expect(find("Workflow").spanContext().spanId).toBe(
           deriveWorkflowSpanId(info.executionArn),
         );
+        expectChildOf(find("Workflow"), find("DurableExecutionRoot"));
+        expectChildOf(second, find("DurableExecutionRoot"));
+        if (wallStep >= 0) {
+          // With comparable clocks the terminal root contains both invocations,
+          // including when the plugin is recreated on resume.
+          expectChildOf(invocation, find("DurableExecutionRoot"));
+        }
+        for (const [index, [, options]] of starts.mock.calls.entries()) {
+          const span = starts.mock.results[index].value;
+          const exported = exporter
+            .getFinishedSpans()
+            .find(
+              (finished) =>
+                finished.spanContext().spanId === span.spanContext().spanId,
+            )!;
+          // The public TimeInput converter and the real tracer must agree on
+          // the absolute timestamp. They use different numeric heuristics:
+          // core compares to timeOrigin; SpanImpl compares to performance.now().
+          // A backward wall step must not make one interpretation add an epoch.
+          expect(timeInputToHrTime(options!.startTime!)).toEqual(
+            exported.startTime,
+          );
+        }
         for (const span of exporter.getFinishedSpans()) {
           for (const event of span.events) {
             expect(nanoseconds(event.time)).toBeGreaterThanOrEqual(

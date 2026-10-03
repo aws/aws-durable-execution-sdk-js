@@ -96,6 +96,18 @@ describe("xRayContextExtractor", () => {
     expect(result?.sampling).toBe("NOT_SAMPLED");
   });
 
+  it.each([undefined, null])(
+    "does not use stale environment data for an available empty carrier (%s)",
+    (value) => {
+      process.env._X_AMZN_TRACE_ID =
+        "Root=1-aaaaaaaa-aaaaaaaaaaaaaaaaaaaaaaaa;Parent=aaaaaaaaaaaaaaaa;Sampled=1";
+      const info = Object.defineProperty({ ...baseInfo }, "xRayTraceId", {
+        value,
+      });
+      expect(xRayContextExtractor(info)).toBeUndefined();
+    },
+  );
+
   it("maps a missing Sampled field to UNDECIDED", () => {
     process.env._X_AMZN_TRACE_ID =
       "Root=1-5759e988-bd862e3fe1be46a994272793;Parent=53995c3f42cd8ad8";

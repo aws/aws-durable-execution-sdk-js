@@ -31,6 +31,83 @@ describe("installed core compatibility for invocation-local headers", () => {
     expect(current.validateInstalledPeers().status).toBe(0);
   });
 
+  it("accepts all authoritative carrier values with exact optional properties", () => {
+    for (const fixture of [current]) {
+      const result = fixture.typecheckConsumer(
+        `
+import { deriveExecutionTraceId } from '@aws/durable-execution-sdk-js-otel';
+declare const runtimeHeader: string | undefined;
+const environment = { _X_AMZN_TRACE_ID: 'stale' };
+const arn = 'arn:execution:types';
+deriveExecutionTraceId(environment, arn, undefined, { xRayTraceId: runtimeHeader });
+deriveExecutionTraceId(environment, arn, undefined, { xRayTraceId: undefined });
+deriveExecutionTraceId(environment, arn, undefined, { xRayTraceId: null });
+deriveExecutionTraceId(environment, arn, undefined, { xRayTraceId: '' });
+deriveExecutionTraceId(environment, arn, undefined, {});
+deriveExecutionTraceId(environment, arn);
+`,
+        true,
+        // Released core logger declarations have unrelated exact-optional errors.
+        // Check real consumer calls; existing strict declaration tests stay enabled.
+        true,
+      );
+      expect(result.output).toBe("");
+      expect(result.status).toBe(0);
+    }
+  });
+
+  it.each(["ExecutionOtelPlugin", "InvocationOtelPlugin"])(
+    "preserves absent-carrier fallback and isolates empty carriers with installed %s",
+    (view) => {
+      const probe = `${invocationFixture}
+(async () => {
+  const rows = [];
+  for (const availability of ['absent', 'undefined', 'null', 'empty']) {
+    const exporter = new InMemorySpanExporter();
+    let provider;
+    const config = { tracerProviderFactory: ids => provider = new NodeTracerProvider({ idGenerator: ids(), sampler: new AlwaysOnSampler(), spanProcessors: [new SimpleSpanProcessor(exporter)] }) };
+    const modern = typeof otel.create${view}Factory === 'function';
+    const plugin = modern ? otel.create${view}Factory(config) : new otel.${view}(config);
+    let seen;
+    const observer = { onInvocationStart: async info => { seen = info; } };
+    const handler = core.withDurableExecution(async () => 'ok', { plugins: [modern ? { createPlugin: () => observer } : observer, plugin] });
+    const runtimeContext = { ...lambdaContext };
+    if (availability !== 'absent') Object.defineProperty(runtimeContext, 'xRayTraceId', { get: () => availability === 'undefined' ? undefined : availability === 'null' ? null : '' });
+    const result = await handler(event, runtimeContext);
+    rows.push({ availability, result: result.Status, carrierPresent: 'xRayTraceId' in seen, carrier: seen.xRayTraceId ?? null, traceIds: [...new Set(exporter.getFinishedSpans().map(span => span.spanContext().traceId))] });
+    await provider.shutdown();
+  }
+  process.stdout.write(JSON.stringify(rows));
+})().catch(error => { console.error(error); process.exitCode = 1; });`;
+      for (const fixture of [previous, current]) {
+        const rows = fixture.run<
+          Array<{
+            availability: string;
+            result: string;
+            carrierPresent: boolean;
+            carrier: string | null;
+            traceIds: string[];
+          }>
+        >(probe, {
+          _X_AMZN_TRACE_ID:
+            "Root=1-aaaaaaaa-aaaaaaaaaaaaaaaaaaaaaaaa;Parent=aaaaaaaaaaaaaaaa;Sampled=1",
+        });
+        expect(rows).toHaveLength(4);
+        for (const row of rows) {
+          expect(row.result).toBe("SUCCEEDED");
+          expect(row.traceIds).toHaveLength(1);
+          const authoritativeEmpty =
+            fixture === current && row.availability !== "absent";
+          expect(row.carrierPresent).toBe(authoritativeEmpty);
+          expect(row.carrier).toBe(authoritativeEmpty ? "" : null);
+          if (authoritativeEmpty)
+            expect(row.traceIds[0]).not.toBe("a".repeat(32));
+          else expect(row.traceIds[0]).toBe("a".repeat(32));
+        }
+      }
+    },
+  );
+
   it.each(["ExecutionOtelPlugin", "InvocationOtelPlugin"])(
     "proves the installed %s sees sampling/header metadata only with the new core",
     (view) => {
