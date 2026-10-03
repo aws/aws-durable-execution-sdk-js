@@ -13,7 +13,11 @@ import {
   ResourceNotFoundException,
   ResourceConflictException,
 } from "@aws-sdk/client-lambda";
-import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs";
+import {
+  CloudWatchLogsClient,
+  CreateLogGroupCommand,
+  PutRetentionPolicyCommand,
+} from "@aws-sdk/client-cloudwatch-logs";
 import { main } from "../deploy-lambda";
 
 let mockUseCapacityProvider = true;
@@ -80,6 +84,7 @@ const conflict = () =>
 // are replaced. No credentials or Lambda resources are used by these tests.
 describe("deployment retries", () => {
   let send: jest.Mock;
+  let logSend: jest.Mock;
   let exit: jest.SpyInstance;
 
   beforeEach(() => {
@@ -112,8 +117,9 @@ describe("deployment retries", () => {
       return {};
     });
     (LambdaClient as unknown as jest.Mock).mockImplementation(() => ({ send }));
+    logSend = jest.fn().mockResolvedValue({});
     (CloudWatchLogsClient as unknown as jest.Mock).mockImplementation(() => ({
-      send: jest.fn().mockResolvedValue({}),
+      send: logSend,
     }));
   });
 
@@ -320,8 +326,9 @@ describe("deployment retries", () => {
     expect(scalingAttempts).toBe(2);
   });
   test.each([false, true])(
-    "stops after ten post-publish read failures without replaying deployment (existing=%s)",
+    "stops at the readiness deadline without replaying deployment (existing=%s)",
     async (existing) => {
+      jest.spyOn(Math, "random").mockReturnValue(0);
       const normal = send.getMockImplementation()!;
       const throttled = throttle();
       let polls = 0;
@@ -329,13 +336,14 @@ describe("deployment retries", () => {
         if (existing && command instanceof GetFunctionCommand) return {};
         if (
           command instanceof GetFunctionConfigurationCommand &&
-          command.input.FunctionName?.endsWith(":$LATEST.PUBLISHED") &&
-          ++polls <= 10
+          command.input.FunctionName?.endsWith(":$LATEST.PUBLISHED")
         ) {
+          polls++;
           throw throttled;
         }
         return normal(command);
       });
+      const startedAt = Date.now();
       const result = main().then(
         () => undefined,
         (error: Error) => error,
@@ -347,7 +355,10 @@ describe("deployment retries", () => {
         "Deployment failed:",
         throttled,
       );
-      expect(polls).toBe(10);
+      // The 900s phase window replaces the former ten-read inner budget.
+      // Backoff starts reads at 0, 1, 3, 7, 15, 31, then every 20s through 891s.
+      expect(polls).toBe(49);
+      expect(Date.now() - startedAt).toBe(900_000);
       expect(commands(CreateFunctionCommand)).toHaveLength(existing ? 0 : 1);
       expect(commands(UpdateFunctionCodeCommand)).toHaveLength(
         existing ? 1 : 0,
@@ -470,6 +481,265 @@ describe("deployment retries", () => {
     expect(console.log).not.toHaveBeenCalledWith(
       expect.stringContaining("Successfully deployed"),
     );
+  });
+
+  describe("shared polling budgets", () => {
+    const phases = [
+      {
+        phase: "runtime pin",
+        attempts: 300,
+        throttledReads: 19,
+        mixedReads: 28,
+      },
+      { phase: "readiness", attempts: 900, throttledReads: 49, mixedReads: 83 },
+      { phase: "deletion", attempts: 120, throttledReads: 10, mixedReads: 14 },
+    ] as const;
+    type Phase = (typeof phases)[number]["phase"];
+    const pending = {
+      ...configuration,
+      State: "Pending",
+      LastUpdateStatus: "InProgress",
+    };
+
+    beforeEach(() => {
+      // Make exponential backoff timings exact; the phase deadline also bounds jitter.
+      jest.spyOn(Math, "random").mockReturnValue(0);
+    });
+
+    function mockPoll(phase: Phase, read: (attempt: number) => unknown) {
+      const normal = send.getMockImplementation()!;
+      let polls = 0;
+      let publications = 0;
+      let deleting = false;
+      send.mockImplementation(async (command) => {
+        if (command instanceof PublishVersionCommand) {
+          publications++;
+          deleting = false;
+        }
+        if (command instanceof DeleteFunctionCommand) deleting = true;
+        if (command instanceof GetFunctionConfigurationCommand) {
+          const qualified =
+            command.input.FunctionName?.endsWith(":$LATEST.PUBLISHED");
+          if (
+            (phase === "runtime pin" && !qualified) ||
+            (phase === "readiness" && qualified) ||
+            (phase === "deletion" && qualified && deleting)
+          ) {
+            return read(++polls);
+          }
+          if (phase === "deletion" && qualified && publications === 1) {
+            return {
+              ...configuration,
+              LastUpdateStatus: "Failed",
+              LastUpdateStatusReasonCode:
+                LastUpdateStatusReasonCode.CapacityProviderScalingLimitExceeded,
+            };
+          }
+        }
+        return normal(command);
+      });
+      return () => polls;
+    }
+
+    async function runDeployment() {
+      const result = main().then(
+        () => undefined,
+        (error: Error) => error,
+      );
+      await jest.runAllTimersAsync();
+      return result;
+    }
+
+    function expectIsolatedFailure(
+      phase: Phase,
+      result: Error | undefined,
+      error: Error,
+    ) {
+      if (phase === "runtime pin") {
+        // Runtime pinning remains best effort; its failure must not repeat the pin.
+        expect(result).toBeUndefined();
+        expect(exit).not.toHaveBeenCalled();
+        expect(console.error).toHaveBeenCalledWith(
+          "Failed to pin Managed Instances runtime for deploy-regression:",
+          error,
+        );
+      } else {
+        expect(result).toEqual(new Error("Deployment exited with failure"));
+        expect(exit).toHaveBeenCalledWith(1);
+        expect(console.error).toHaveBeenCalledWith(
+          "Deployment failed:",
+          error instanceof ResourceConflictException
+            ? expect.objectContaining({ cause: error })
+            : error,
+        );
+      }
+      expect(console.error).toHaveBeenCalledTimes(1);
+      expect(commands(CreateFunctionCommand)).toHaveLength(1);
+      expect(commands(UpdateFunctionCodeCommand)).toHaveLength(0);
+      expect(commands(UpdateFunctionConfigurationCommand)).toHaveLength(0);
+      expect(commands(PutRuntimeManagementConfigCommand)).toHaveLength(1);
+      expect(commands(PublishVersionCommand)).toHaveLength(1);
+      expect(commands(DeleteFunctionCommand)).toHaveLength(
+        phase === "deletion" ? 1 : 0,
+      );
+      expect(commands(PutFunctionScalingConfigCommand)).toHaveLength(
+        phase === "runtime pin" ? 1 : 0,
+      );
+      expect(
+        logSend.mock.calls.map(([command]) => command.constructor),
+      ).toEqual([CreateLogGroupCommand, PutRetentionPolicyCommand]);
+      expect(logSend.mock.calls[1][0].input).toEqual({
+        logGroupName: "/aws/lambda/deploy-regression",
+        retentionInDays: 7,
+      });
+    }
+
+    test.each(phases)(
+      "does not reset the $phase deadline after nine throttles and a Pending response",
+      async ({ phase, attempts, mixedReads }) => {
+        const throttled = throttle();
+        const polls = mockPoll(phase, (attempt) => {
+          if (attempt % 10 !== 0) throw throttled;
+          return pending;
+        });
+        const startedAt = Date.now();
+        const result = await runDeployment();
+        // Nine throttles sleep 111s, then Pending sleeps 1s. Every cycle uses
+        // the same 300s/900s/120s window, including the final partial cycle.
+        expect(polls()).toBe(mixedReads);
+        expect(Date.now() - startedAt).toBe(attempts * 1000);
+        expectIsolatedFailure(phase, result, throttled);
+      },
+    );
+
+    test.each(phases)(
+      "exhausts the $phase deadline on persistent throttling",
+      async ({ phase, attempts, throttledReads }) => {
+        const throttled = throttle();
+        const polls = mockPoll(phase, () => {
+          throw throttled;
+        });
+        const startedAt = Date.now();
+        const result = await runDeployment();
+        // Reads start at 0, 1, 3, 7, 15, 31, then every 20 seconds.
+        expect(polls()).toBe(throttledReads);
+        expect(Date.now() - startedAt).toBe(attempts * 1000);
+        expectIsolatedFailure(phase, result, throttled);
+      },
+    );
+
+    test.each(phases)(
+      "counts every conflicting read toward the $phase attempt limit",
+      async ({ phase, attempts }) => {
+        const conflicted = conflict();
+        const polls = mockPoll(phase, () => {
+          throw conflicted;
+        });
+        const startedAt = Date.now();
+        const result = await runDeployment();
+        expect(polls()).toBe(attempts);
+        expect(Date.now() - startedAt).toBe((attempts - 1) * 1000);
+        expectIsolatedFailure(phase, result, conflicted);
+      },
+    );
+
+    test.each(phases)(
+      "immediately propagates permanent $phase read errors",
+      async ({ phase }) => {
+        const denied = Object.assign(new Error("Not authorized"), {
+          name: "AccessDeniedException",
+        });
+        const polls = mockPoll(phase, () => {
+          throw denied;
+        });
+        const result = await runDeployment();
+        expect(polls()).toBe(1);
+        expectIsolatedFailure(phase, result, denied);
+      },
+    );
+
+    test("counts time spent reading toward readiness without starting another read", async () => {
+      const polls = mockPoll("readiness", () => {
+        jest.setSystemTime(Date.now() + 900_000);
+        return pending;
+      });
+      const startedAt = Date.now();
+      const result = await runDeployment();
+      expect(polls()).toBe(1);
+      expect(Date.now() - startedAt).toBe(900_000);
+      expectIsolatedFailure(
+        "readiness",
+        result,
+        new Error("Max retries exceeded"),
+      );
+    });
+
+    test("caps throttle jitter at the readiness deadline", async () => {
+      jest.spyOn(Math, "random").mockReturnValue(0.999);
+      const throttled = throttle();
+      const polls = mockPoll("readiness", () => {
+        throw throttled;
+      });
+      const startedAt = Date.now();
+      const result = await runDeployment();
+      expect(polls()).toBe(48);
+      expect(Date.now() - startedAt).toBe(900_000);
+      expectIsolatedFailure("readiness", result, throttled);
+    });
+
+    test("accepts readiness on the last allowed poll without republishing", async () => {
+      const polls = mockPoll("readiness", (attempt) =>
+        attempt < 900 ? pending : configuration,
+      );
+      await deploy();
+      expect(polls()).toBe(900);
+      expect(commands(CreateFunctionCommand)).toHaveLength(1);
+      expect(commands(PublishVersionCommand)).toHaveLength(1);
+      expect(commands(PutFunctionScalingConfigCommand)).toHaveLength(1);
+    });
+
+    test("retries deletion reads until NotFound before the one allowed recovery publish", async () => {
+      const polls = mockPoll("deletion", (attempt) => {
+        if (attempt === 1) throw throttle();
+        if (attempt === 2) return pending;
+        if (attempt === 3) throw conflict();
+        throw new ResourceNotFoundException({
+          message: "Published version deleted",
+          $metadata: {},
+        });
+      });
+      await deploy();
+      expect(polls()).toBe(4);
+      expect(commands(CreateFunctionCommand)).toHaveLength(1);
+      expect(commands(UpdateFunctionCodeCommand)).toHaveLength(0);
+      expect(commands(UpdateFunctionConfigurationCommand)).toHaveLength(0);
+      expect(commands(PutRuntimeManagementConfigCommand)).toHaveLength(1);
+      expect(commands(PublishVersionCommand)).toHaveLength(2);
+      expect(commands(DeleteFunctionCommand)).toHaveLength(1);
+      expect(commands(PutFunctionScalingConfigCommand)).toHaveLength(1);
+    });
+  });
+
+  test("keeps the standalone initial read limited to ten attempts", async () => {
+    const normal = send.getMockImplementation()!;
+    const throttled = throttle();
+    send.mockImplementation(async (command) => {
+      if (command instanceof GetFunctionCommand) return {};
+      if (command instanceof GetFunctionConfigurationCommand) throw throttled;
+      return normal(command);
+    });
+    const result = main().then(
+      () => undefined,
+      (error: Error) => error,
+    );
+    await jest.runAllTimersAsync();
+    expect(await result).toEqual(new Error("Deployment exited with failure"));
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(console.error).toHaveBeenCalledWith("Deployment failed:", throttled);
+    expect(commands(GetFunctionConfigurationCommand)).toHaveLength(10);
+    expect(commands(CreateFunctionCommand)).toHaveLength(0);
+    expect(commands(UpdateFunctionCodeCommand)).toHaveLength(0);
+    expect(commands(PublishVersionCommand)).toHaveLength(0);
   });
 
   test("does not retry or hide a permanent configuration error", async () => {
