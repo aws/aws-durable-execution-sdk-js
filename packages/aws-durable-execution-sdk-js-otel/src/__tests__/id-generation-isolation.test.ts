@@ -81,7 +81,9 @@ function pluginFor(
   factory: DurableInstrumentationPluginFactory,
   info: InvocationInfo,
 ): DurableInstrumentationPlugin {
-  return factory.createPlugin(info);
+  const plugin = factory.createPlugin(info);
+  if (!plugin) throw new Error("Expected a plugin for this invocation");
+  return plugin;
 }
 
 describe.each([

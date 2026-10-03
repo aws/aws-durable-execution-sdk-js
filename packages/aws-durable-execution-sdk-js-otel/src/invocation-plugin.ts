@@ -1,6 +1,5 @@
 import type {
   DurableInstrumentationPlugin,
-  DurableInstrumentationPluginFactory,
   InvocationInfo,
   InvocationEndInfo,
   OperationInfo,
@@ -880,9 +879,9 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
  *
  * @param config - Plugin configuration, applied once to the shared environment.
  */
-export function createInvocationOtelPluginFactory(
-  config?: OtelPluginConfig,
-): DurableInstrumentationPluginFactory<InvocationOtelPlugin> {
+export function createInvocationOtelPluginFactory(config?: OtelPluginConfig): {
+  createPlugin(info: InvocationInfo): InvocationOtelPlugin;
+} {
   return Object.assign(
     createPluginFactory(
       config,

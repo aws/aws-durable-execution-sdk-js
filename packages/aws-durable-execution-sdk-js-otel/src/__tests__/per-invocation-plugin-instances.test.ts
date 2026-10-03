@@ -149,7 +149,9 @@ function sdkInvocation(
   executionArn: string,
 ): Invocation {
   const info = invocationInfo(executionArn);
-  return invocationOver(factory.createPlugin(info), info);
+  const plugin = factory.createPlugin(info);
+  if (!plugin) throw new Error("Expected a plugin for this invocation");
+  return invocationOver(plugin, info);
 }
 
 const spansNamed = (spans: readonly ReadableSpan[], name: string) =>

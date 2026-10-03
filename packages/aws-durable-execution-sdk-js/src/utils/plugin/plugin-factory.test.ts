@@ -214,9 +214,9 @@ describe("createInvocationPluginRunner", () => {
       const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
         onInvocationStart: jest.fn(),
       };
-      const factory = {
+      const factory: DurableInstrumentationPluginFactory = {
         createPlugin: () => value,
-      } as unknown as DurableInstrumentationPluginFactory;
+      };
 
       const runner = createInvocationPluginRunner(
         [factory, { createPlugin: () => plugin }],
@@ -229,6 +229,34 @@ describe("createInvocationPluginRunner", () => {
       expect(plugin.onInvocationStart).toHaveBeenCalledTimes(1);
     },
   );
+
+  it("can skip one invocation and create a typed plugin for the next", async () => {
+    const calls: string[] = [];
+    const factory: DurableInstrumentationPluginFactory<{
+      onInvocationStart(info: InvocationInfo): Promise<void>;
+    }> = {
+      createPlugin(info) {
+        if (info.isFirstInvocation) return null;
+        return {
+          async onInvocationStart(startInfo) {
+            calls.push(startInfo.requestId);
+          },
+        };
+      },
+    };
+    const resumedInfo = {
+      ...invocationInfo,
+      requestId: "req-resumed",
+      isFirstInvocation: false,
+    };
+
+    expect(createInvocationPluginRunner([factory], invocationInfo)).toEqual({});
+    await createInvocationPluginRunner(
+      [factory],
+      resumedInfo,
+    ).onInvocationStart?.(resumedInfo);
+    expect(calls).toEqual(["req-resumed"]);
+  });
 
   it("merges enrichLogContext across factory plugins", () => {
     const runner = createInvocationPluginRunner(

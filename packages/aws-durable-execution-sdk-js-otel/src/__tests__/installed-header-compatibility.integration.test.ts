@@ -31,6 +31,30 @@ describe("installed core compatibility for invocation-local headers", () => {
     expect(current.validateInstalledPeers().status).toBe(0);
   });
 
+  it("accepts nullish v2 factories while bundled OTel factories keep concrete results", () => {
+    const result = current.typecheckConsumer(`
+import {
+  withDurableExecution,
+  type DurableInstrumentationPluginFactory,
+  type InvocationInfo,
+} from '@aws/durable-execution-sdk-js';
+import {
+  createExecutionOtelPluginFactory,
+  createInvocationOtelPluginFactory,
+} from '@aws/durable-execution-sdk-js-otel';
+const empty: DurableInstrumentationPluginFactory = { createPlugin: () => undefined };
+const conditional: DurableInstrumentationPluginFactory = {
+  createPlugin: info => info.isFirstInvocation ? null : { onInvocationStart: async () => {} },
+};
+withDurableExecution(async () => 'ok', { plugins: [empty, conditional] });
+declare const info: InvocationInfo;
+createExecutionOtelPluginFactory().createPlugin(info).onInvocationStart(info);
+createInvocationOtelPluginFactory().createPlugin(info).onInvocationStart(info);
+`);
+    expect(result.output).toBe("");
+    expect(result.status).toBe(0);
+  });
+
   it("accepts all authoritative carrier values with exact optional properties", () => {
     for (const fixture of [current]) {
       const result = fixture.typecheckConsumer(

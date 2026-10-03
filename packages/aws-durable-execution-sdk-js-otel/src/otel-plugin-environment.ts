@@ -1,6 +1,5 @@
 import type {
   DurableInstrumentationPlugin,
-  DurableInstrumentationPluginFactory,
   InvocationInfo,
 } from "@aws/durable-execution-sdk-js";
 import type { Tracer, TracerProvider } from "@opentelemetry/api";
@@ -156,7 +155,7 @@ export function createPluginFactory<
     environment: OtelPluginEnvironment,
     info: InvocationInfo,
   ) => Plugin,
-): DurableInstrumentationPluginFactory<Plugin> {
+): { createPlugin(info: InvocationInfo): Plugin } {
   let environment: OtelPluginEnvironment | undefined;
   let environmentError: unknown;
   let attempted = false;

@@ -23,6 +23,9 @@ createTests<{ first: CarrierObservation; resumed: CarrierObservation }>({
           expect(captured.runtimeHeader).toEqual(expect.any(String));
           expect(captured.runtimeHeader).not.toBe("");
         }
+        // The ordinary runtime may supply only the environment carrier.
+        if (captured.extracted)
+          expect(captured.traceId).toBe(captured.extracted.traceId);
         if (captured.runtimeHeader) {
           const fields = Object.fromEntries(
             captured.runtimeHeader

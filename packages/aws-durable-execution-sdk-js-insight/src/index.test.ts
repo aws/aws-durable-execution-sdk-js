@@ -5,7 +5,6 @@ import type {
   WorkflowInsightRecord,
 } from "./types";
 import type {
-  DurableInstrumentationPluginFactory,
   InvocationEndInfo,
   InvocationInfo,
   OperationChangeInfo,
@@ -20,7 +19,7 @@ import { runInNewContext } from "node:vm";
  * returns. Tests that drive several executions through one environment therefore
  * build one instance per execution from a single factory.
  */
-type PluginFactory = DurableInstrumentationPluginFactory;
+type PluginFactory = ReturnType<typeof workflowInsight>;
 
 const ARN =
   "arn:aws:lambda:us-east-1:123456789012:function:fn:1/durable-execution/exec-1/inv-1";

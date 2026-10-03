@@ -318,9 +318,10 @@ export interface DurableInstrumentationPluginFactory<
    * @param info - The invocation the returned instance will observe. This is
    * the same object {@link DurableInstrumentationPlugin.onInvocationStart}
    * receives.
-   * @returns The plugin instance serving this invocation, and no other.
+   * @returns The plugin instance serving this invocation, and no other, or
+   * `null` or `undefined` to skip instrumentation for this invocation.
    */
-  createPlugin(info: InvocationInfo): Plugin;
+  createPlugin(info: InvocationInfo): Plugin | null | undefined;
 }
 
 /**

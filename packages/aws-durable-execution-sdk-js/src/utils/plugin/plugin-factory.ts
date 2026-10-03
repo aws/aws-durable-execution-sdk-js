@@ -33,7 +33,7 @@ export function createInvocationPluginRunner(
   const plugins: DurableInstrumentationPlugin[] = [];
 
   for (const factory of factories) {
-    let plugin: DurableInstrumentationPlugin | undefined;
+    let plugin: DurableInstrumentationPlugin | null | undefined;
     try {
       plugin = factory.createPlugin(info);
     } catch {

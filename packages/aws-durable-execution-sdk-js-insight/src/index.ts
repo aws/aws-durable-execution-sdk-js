@@ -1,6 +1,5 @@
 import type {
   DurableInstrumentationPlugin,
-  DurableInstrumentationPluginFactory,
   InvocationInfo,
   InvocationEndInfo,
   OperationChangeInfo,
@@ -1036,9 +1035,9 @@ class WorkflowInsightInvocation
  *
  * @experimental This function is experimental and may change in future releases.
  */
-export function workflowInsight(
-  config: WorkflowInsightConfig,
-): DurableInstrumentationPluginFactory {
+export function workflowInsight(config: WorkflowInsightConfig): {
+  createPlugin(info: InvocationInfo): DurableInstrumentationPlugin;
+} {
   const content = config.content;
   const overridesByName = new Map<string, OperationOverride>();
   for (const override of content?.operations?.overrides ?? []) {
