@@ -591,6 +591,20 @@ The package also exports the `ContextExtractor`, `ContextExtractorResult`,
 `ExecutionTraceEnvironment`, `IdGeneratorFactory`, `TracerProviderFactory`, and
 `OtelPluginConfig` types.
 
+### External completions and replay
+
+Both views retain terminal wait, invoke, and callback notifications received at
+invocation start or in checkpoint responses. If workflow traversal does not
+reach a completed operation before suspending or returning, its completion is
+exported at invocation end. Supplied operation timestamps, parent identity,
+status, and error details are preserved in the execution view; the invocation
+view completes the live segment or emits a linked continuation.
+
+Notifications and operation-end hooks are deduplicated within each invocation.
+Normal replay does not re-export stored external completions. Deduplication is
+not persisted: redelivery after a failed invocation can export the completion
+again, as required for recovery.
+
 ## Verification and Troubleshooting
 
 After deployment:

@@ -43,6 +43,7 @@ import type { OtelPluginConfig } from "./otel-plugin-config";
 import { createTracerProvider } from "./otel-plugin-provider";
 import { tryInstallGlobalIdGenerator } from "./global-id-generator";
 import { DurableSampler, tryInstallDurableSampler } from "./global-sampler";
+import { ExternalCompletions } from "./external-completions";
 
 const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
 
@@ -98,6 +99,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   private globalIdGeneratorInstalled: boolean;
   private durableSampler: DurableSampler | undefined;
   private tracingEnabled = false;
+  private readonly externalCompletions = new ExternalCompletions();
 
   // Workflow span name (configurable)
   private readonly workflowSpanName: string;
@@ -253,6 +255,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       },
       invocationParentContext,
     );
+    this.externalCompletions.observe(info.updatedOperations);
   }
 
   wrapInvocation(
@@ -269,6 +272,13 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     if (!this.tracingEnabled) {
       this.resetInvocationState();
       return;
+    }
+
+    // Prefer normal lifecycle hooks, which preserve live parent scopes. Before
+    // returning, export any fresh completion the workflow did not reach. A
+    // later resume may label it replay even though it has never been exported.
+    for (const operation of this.externalCompletions.pending.values()) {
+      await this.onOperationEnd({ ...operation, isReplay: false });
     }
 
     // 1. Always end and export Invocation_Span
@@ -422,6 +432,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   private resetInvocationState(): void {
+    this.externalCompletions.clear();
     this.spanMap.clear();
     this.operationContexts.clear();
     this.operationStarts.clear();
@@ -552,17 +563,10 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     this.operationContexts.delete(info.id);
     this.operationStarts.delete(info.id);
 
-    // External completions are emitted when first observed. Later successful
-    // invocations replaying the stored outcome must not export it again.
-    // Redelivery after an interrupted invocation still has isReplay=false and
-    // can re-export the same deterministic span for recovery.
-    if (
-      info.isReplay &&
-      (info.type === "WAIT" ||
-        info.type === "INVOKE" ||
-        info.type === "CHAINED_INVOKE" ||
-        info.type === "CALLBACK")
-    ) {
+    // Updates and traversal can report the same completion in either order.
+    // The set is reset each invocation so failed-invocation redelivery remains
+    // eligible, while normal replay never exports a completion a second time.
+    if (this.externalCompletions.shouldSkip(info)) {
       return;
     }
 
@@ -626,7 +630,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         code: SpanStatusCode.ERROR,
         message: info.error.message,
       });
-      span.recordException(info.error);
+      // A deferred completion keeps its historical interval. Record the error
+      // at that completion time too; undefined preserves OTel's live fallback.
+      span.recordException(info.error, info.endTimestamp);
     } else if (info.status === "SUCCEEDED") {
       // Stamp explicit OK ONLY on a SUCCEEDED terminal status. Terminal
       // FAILURE statuses (TIMED_OUT/STOPPED/FAILED/CANCELLED) can arrive with
@@ -636,19 +642,24 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     }
 
     span.end(info.endTimestamp);
+    this.externalCompletions.markExported(info);
   }
 
   /**
    * The parent context for an operation or attempt span: the parent operation's
-   * deterministic placeholder context when known, otherwise the deferred
-   * Workflow span's context so the span still hangs off the execution trace.
+   * deterministic identity, or the Workflow identity for a top-level operation.
+   * A completion notification can arrive without traversing its parent in this
+   * invocation (for example, a completed child context skipped during replay).
    */
   private resolveOperationParentContext(parentId: string | undefined): Context {
     if (parentId) {
-      const parentContext = this.operationContexts.get(parentId);
-      if (parentContext) {
-        return trace.setSpanContext(context.active(), parentContext);
-      }
+      const parentContext = this.operationContexts.get(parentId) ?? {
+        traceId: this.executionTraceId,
+        spanId: deriveSpanIdFromOperationId(parentId, this.executionArn),
+        traceFlags: this.executionTraceFlags,
+        isRemote: false,
+      };
+      return trace.setSpanContext(context.active(), parentContext);
     }
     const workflowContext = this.workflowSpan?.spanContext();
     if (workflowContext) {
@@ -754,8 +765,10 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     }
   }
 
-  async onOperationChange(_info: OperationChangeInfo): Promise<void> {
-    // No-op — same as InvocationOtelPlugin
+  async onOperationChange(info: OperationChangeInfo): Promise<void> {
+    if (this.tracingEnabled) {
+      this.externalCompletions.observe(info.updatedOperations);
+    }
   }
 
   enrichLogContext(): Record<string, string | number | boolean> | undefined {
