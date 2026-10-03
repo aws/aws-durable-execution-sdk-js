@@ -295,9 +295,19 @@ async function getCurrentConfiguration(
   const command = new GetFunctionConfigurationCommand({
     FunctionName: functionName,
   });
+  // Reads inside the create/update phase share that phase's retry budget.
+  return lambdaClient.send(command);
+}
+
+async function getCurrentConfigurationWithRetry(
+  lambdaClient: LambdaClient,
+  functionName: string,
+): Promise<GetFunctionConfigurationCommandOutput> {
   // Retry the read in place: restarting deployment after a throttled poll can
   // recreate or republish a function that is already being provisioned.
-  return retryOnConflict(() => lambdaClient.send(command));
+  return retryOnConflict(() =>
+    getCurrentConfiguration(lambdaClient, functionName),
+  );
 }
 
 async function ensureLogGroupRetention(functionName: string): Promise<void> {
@@ -370,7 +380,7 @@ async function pinCapacityProviderRuntime(
     // flight fails with "An update is in progress for resource ...". Wait for the
     // function to settle before entering the separate publication phase.
     await runWithRetry(
-      () => getCurrentConfiguration(lambdaClient, functionName),
+      () => getCurrentConfigurationWithRetry(lambdaClient, functionName),
       (config) => {
         if (
           config.LastUpdateStatus === LastUpdateStatus.Failed ||
@@ -619,7 +629,10 @@ export async function main(): Promise<void> {
 
     // Handle function deletion if configuration changes require it (outside retry logic)
     if (functionExists) {
-      currentConfig = await getCurrentConfiguration(lambdaClient, functionName);
+      currentConfig = await getCurrentConfigurationWithRetry(
+        lambdaClient,
+        functionName,
+      );
       if (!!currentConfig.DurableConfig !== !!exampleConfig.durableConfig) {
         console.log("Deleting function since durability changed");
         functionExists = false;
@@ -689,8 +702,8 @@ export async function main(): Promise<void> {
               console.log(
                 "Function already exists (created concurrently); switching to update",
               );
-              // The conflict already proves existence. If this read exhausts
-              // its retry budget, the update path refreshes configuration.
+              // Record existence before reading so a throttled read retries
+              // the update path with fresh configuration.
               functionExists = true;
               currentConfig = await getCurrentConfiguration(
                 lambdaClient,
@@ -755,7 +768,7 @@ export async function main(): Promise<void> {
 
           const result = await runWithRetry(
             async () => {
-              return getCurrentConfiguration(
+              return getCurrentConfigurationWithRetry(
                 lambdaClient,
                 functionWithQualifier,
               );
@@ -837,7 +850,7 @@ export async function main(): Promise<void> {
           await runWithRetry(
             async () => {
               try {
-                await getCurrentConfiguration(
+                await getCurrentConfigurationWithRetry(
                   lambdaClient,
                   functionWithQualifier,
                 );
