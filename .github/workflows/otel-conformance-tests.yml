@@ -82,7 +82,7 @@ jobs:
       resource_prefix: js
       sdk_repository: aws/aws-durable-execution-sdk-js
       sdk_ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      conformance_test_ref: ${{ inputs.conformance_test_ref || 'e1ab203b351035412e149744b4fc6eada4ea335c' }}
+      conformance_test_ref: ${{ inputs.conformance_test_ref || 'a628f5589bbf067a441696c792ab3023c0d0899b' }}
       checkout_sdk: true
       # Build the handlers from this repo's checked-out package instead of the conformance
       # repo's bundled examples/javascript. Path is relative to the conformance workspace,
