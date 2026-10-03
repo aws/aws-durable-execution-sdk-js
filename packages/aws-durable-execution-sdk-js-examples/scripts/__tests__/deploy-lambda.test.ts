@@ -18,6 +18,7 @@ import {
   CreateLogGroupCommand,
   PutRetentionPolicyCommand,
 } from "@aws-sdk/client-cloudwatch-logs";
+import { getEventListeners } from "node:events";
 import { main } from "../deploy-lambda";
 
 let mockUseCapacityProvider = true;
@@ -506,48 +507,73 @@ describe("deployment retries", () => {
       jest.spyOn(Math, "random").mockReturnValue(0);
     });
 
-    function mockPoll(phase: Phase, read: (attempt: number) => unknown) {
+    function mockPoll(
+      phase: Phase,
+      read: (attempt: number, abortSignal?: AbortSignal) => unknown,
+    ) {
       const normal = send.getMockImplementation()!;
       let polls = 0;
       let publications = 0;
       let deleting = false;
-      send.mockImplementation(async (command) => {
-        if (command instanceof PublishVersionCommand) {
-          publications++;
-          deleting = false;
-        }
-        if (command instanceof DeleteFunctionCommand) deleting = true;
-        if (command instanceof GetFunctionConfigurationCommand) {
-          const qualified =
-            command.input.FunctionName?.endsWith(":$LATEST.PUBLISHED");
-          if (
-            (phase === "runtime pin" && !qualified) ||
-            (phase === "readiness" && qualified) ||
-            (phase === "deletion" && qualified && deleting)
-          ) {
-            return read(++polls);
+      send.mockImplementation(
+        async (command, options?: { abortSignal?: AbortSignal }) => {
+          if (command instanceof PublishVersionCommand) {
+            publications++;
+            deleting = false;
           }
-          if (phase === "deletion" && qualified && publications === 1) {
-            return {
-              ...configuration,
-              LastUpdateStatus: "Failed",
-              LastUpdateStatusReasonCode:
-                LastUpdateStatusReasonCode.CapacityProviderScalingLimitExceeded,
-            };
+          if (command instanceof DeleteFunctionCommand) deleting = true;
+          if (command instanceof GetFunctionConfigurationCommand) {
+            const qualified =
+              command.input.FunctionName?.endsWith(":$LATEST.PUBLISHED");
+            if (
+              (phase === "runtime pin" && !qualified) ||
+              (phase === "readiness" && qualified) ||
+              (phase === "deletion" && qualified && deleting)
+            ) {
+              return read(++polls, options?.abortSignal);
+            }
+            if (phase === "deletion" && qualified && publications === 1) {
+              return {
+                ...configuration,
+                LastUpdateStatus: "Failed",
+                LastUpdateStatusReasonCode:
+                  LastUpdateStatusReasonCode.CapacityProviderScalingLimitExceeded,
+              };
+            }
           }
-        }
-        return normal(command);
-      });
+          return normal(command);
+        },
+      );
       return () => polls;
     }
 
     async function runDeployment() {
+      let settled = false;
       const result = main().then(
-        () => undefined,
-        (error: Error) => error,
+        () => {
+          settled = true;
+          return undefined;
+        },
+        (error: Error) => {
+          settled = true;
+          return error;
+        },
       );
       await jest.runAllTimersAsync();
+      // Fail deterministically if a read remains stuck after all budget timers fire.
+      expect(settled).toBe(true);
+      expect(jest.getTimerCount()).toBe(0);
       return result;
+    }
+
+    function ready(phase: Phase) {
+      if (phase === "deletion") {
+        throw new ResourceNotFoundException({
+          message: "Published version deleted",
+          $metadata: {},
+        });
+      }
+      return configuration;
     }
 
     function expectIsolatedFailure(
@@ -649,18 +675,25 @@ describe("deployment retries", () => {
         const denied = Object.assign(new Error("Not authorized"), {
           name: "AccessDeniedException",
         });
-        const polls = mockPoll(phase, () => {
+        let readSignal: AbortSignal | undefined;
+        const polls = mockPoll(phase, (_, signal) => {
+          readSignal = signal;
           throw denied;
         });
+        const startedAt = performance.now();
         const result = await runDeployment();
         expect(polls()).toBe(1);
+        expect(performance.now() - startedAt).toBe(0);
         expectIsolatedFailure(phase, result, denied);
+        expect(readSignal?.aborted).toBe(false);
+        expect(getEventListeners(readSignal!, "abort")).toHaveLength(0);
       },
     );
 
     test("counts time spent reading toward readiness without starting another read", async () => {
       const polls = mockPoll("readiness", () => {
-        jest.setSystemTime(Date.now() + 900_000);
+        // Advance elapsed time, rather than only changing the wall clock.
+        jest.advanceTimersByTime(900_000);
         return pending;
       });
       const startedAt = Date.now();
@@ -673,6 +706,158 @@ describe("deployment retries", () => {
         new Error("Max retries exceeded"),
       );
     });
+
+    test.each(phases)(
+      "bounds an abort-ignoring $phase read and ignores its later completion",
+      async ({ phase, attempts }) => {
+        let complete!: () => void;
+        const response = new Promise<void>((resolve) => {
+          complete = resolve;
+        });
+        let readSignal: AbortSignal | undefined;
+        const polls = mockPoll(phase, (_, signal) => {
+          readSignal = signal;
+          return response.then(() => ready(phase));
+        });
+        const startedAt = performance.now();
+        const result = await runDeployment();
+        expect(polls()).toBe(1);
+        expect(performance.now() - startedAt).toBe(attempts * 1000);
+        expect(readSignal?.aborted).toBe(true);
+        expect(readSignal?.reason).toEqual(new Error("Max retries exceeded"));
+        expectIsolatedFailure(phase, result, new Error("Max retries exceeded"));
+
+        complete();
+        await jest.runAllTimersAsync();
+        expect(polls()).toBe(1);
+        expectIsolatedFailure(phase, result, new Error("Max retries exceeded"));
+        expect(jest.getTimerCount()).toBe(0);
+        expect(getEventListeners(readSignal!, "abort")).toHaveLength(0);
+      },
+    );
+
+    test.each(phases)(
+      "aborts an in-flight $phase request without leaking its abort error",
+      async ({ phase, attempts }) => {
+        const aborted = jest.fn();
+        let readSignal: AbortSignal | undefined;
+        const polls = mockPoll(phase, (_, signal) => {
+          readSignal = signal;
+          return new Promise<never>((_, reject) => {
+            signal?.addEventListener(
+              "abort",
+              () => {
+                aborted();
+                reject(
+                  Object.assign(new Error("Request aborted"), {
+                    name: "AbortError",
+                  }),
+                );
+              },
+              { once: true },
+            );
+          });
+        });
+        const startedAt = performance.now();
+        const result = await runDeployment();
+        expect(polls()).toBe(1);
+        expect(performance.now() - startedAt).toBe(attempts * 1000);
+        expect(aborted).toHaveBeenCalledTimes(1);
+        expectIsolatedFailure(phase, result, new Error("Max retries exceeded"));
+        expect(getEventListeners(readSignal!, "abort")).toHaveLength(0);
+      },
+    );
+
+    test.each(
+      phases.flatMap((phase) => [
+        { ...phase, lateByMs: 0 },
+        { ...phase, lateByMs: 1 },
+      ]),
+    )(
+      "rejects $phase success $lateByMs ms beyond expiry even before the timeout callback runs",
+      async ({ phase, attempts, lateByMs }) => {
+        const clock = jest.spyOn(performance, "now").mockReturnValue(0);
+        let readSignal: AbortSignal | undefined;
+        const polls = mockPoll(phase, (_, signal) => {
+          readSignal = signal;
+          // Model a response completing after an event-loop stall, before the
+          // overdue timeout callback gets a chance to run.
+          clock.mockReturnValue(attempts * 1000 + lateByMs);
+          return ready(phase);
+        });
+        const result = await runDeployment();
+        expect(polls()).toBe(1);
+        expect(readSignal?.aborted).toBe(true);
+        expectIsolatedFailure(phase, result, new Error("Max retries exceeded"));
+      },
+    );
+
+    test.each(phases)(
+      "uses only the remaining $phase budget for a stalled retry and preserves the last error",
+      async ({ phase, attempts }) => {
+        const throttled = throttle();
+        const readSignals: Array<AbortSignal | undefined> = [];
+        const polls = mockPoll(phase, (attempt, signal) => {
+          readSignals.push(signal);
+          if (attempt === 1) throw throttled;
+          return new Promise<never>(() => {});
+        });
+        const startedAt = performance.now();
+        const result = await runDeployment();
+        expect(polls()).toBe(2);
+        expect(performance.now() - startedAt).toBe(attempts * 1000);
+        expect(readSignals[0]?.aborted).toBe(false);
+        expect(readSignals[1]?.aborted).toBe(true);
+        expect(readSignals[1]?.reason).toBe(throttled);
+        expectIsolatedFailure(phase, result, throttled);
+      },
+    );
+
+    test.each(
+      phases.flatMap((phase) => [
+        { ...phase, clockStepMs: -3_600_000 },
+        { ...phase, clockStepMs: 3_600_000 },
+      ]),
+    )(
+      "keeps the $phase deadline when wall time steps $clockStepMs ms during retry sleep",
+      async ({ phase, attempts, throttledReads, clockStepMs }) => {
+        const throttled = throttle();
+        const polls = mockPoll(phase, (attempt) => {
+          if (attempt === 1) {
+            setTimeout(() => jest.setSystemTime(Date.now() + clockStepMs), 500);
+          }
+          throw throttled;
+        });
+        const startedAt = performance.now();
+        const result = await runDeployment();
+        expect(polls()).toBe(throttledReads);
+        expect(performance.now() - startedAt).toBe(attempts * 1000);
+        expectIsolatedFailure(phase, result, throttled);
+      },
+    );
+
+    test.each(phases)(
+      "clears the $phase request timeout after timely success",
+      async ({ phase }) => {
+        let readSignal: AbortSignal | undefined;
+        const polls = mockPoll(phase, (_, signal) => {
+          readSignal = signal;
+          return ready(phase);
+        });
+        const startedAt = performance.now();
+        const result = await runDeployment();
+        expect(result).toBeUndefined();
+        expect(exit).not.toHaveBeenCalled();
+        expect(polls()).toBe(1);
+        expect(performance.now() - startedAt).toBe(0);
+        expect(readSignal?.aborted).toBe(false);
+        expect(getEventListeners(readSignal!, "abort")).toHaveLength(0);
+        expect(commands(CreateFunctionCommand)).toHaveLength(1);
+        expect(commands(PublishVersionCommand)).toHaveLength(
+          phase === "deletion" ? 2 : 1,
+        );
+      },
+    );
 
     test("caps throttle jitter at the readiness deadline", async () => {
       jest.spyOn(Math, "random").mockReturnValue(0.999);
