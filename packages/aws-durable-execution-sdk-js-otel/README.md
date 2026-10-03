@@ -238,6 +238,12 @@ Open operation spans are ended at the invocation boundary and retain
 `durable.operation.status=STARTED`. When an operation completes in a later
 invocation, the plugin emits a continuation span in that invocation.
 
+Live span boundaries use explicit millisecond wall-clock timestamps, matching
+the start clock used by ordinary OpenTelemetry user spans. This avoids mixing
+the process performance clock's epoch with the current wall clock. Open spans
+share one end timestamp at invocation cleanup; Workflow and synthetic root
+spans retain their backdated execution start.
+
 Because the original span context is not checkpointed, replayed `STEP` and
 `CONTEXT` spans and cross-invocation continuation spans use new provider IDs.
 They correlate through two links: the real exported `Workflow` span, and the

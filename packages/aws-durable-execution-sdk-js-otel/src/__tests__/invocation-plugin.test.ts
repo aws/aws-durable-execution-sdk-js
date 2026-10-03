@@ -683,7 +683,7 @@ describe("InvocationOtelPlugin", () => {
   });
 
   describe("operation span timing envelope", () => {
-    it("uses a shared monotonic clock so nested spans stay strictly contained", async () => {
+    it("uses explicit wall-clock boundaries so nested SDK spans stay strictly contained", async () => {
       const wallClockStart = Date.now();
       let wallClockCalls = 0;
       const dateNow = jest
