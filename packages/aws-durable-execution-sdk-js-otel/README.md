@@ -243,11 +243,23 @@ once at invocation start, then advanced by elapsed `performance.now()` time.
 This matches ordinary OpenTelemetry spans' current wall-clock epoch without
 letting a wall-clock adjustment collapse or inflate live SDK span durations.
 Starts and ends retain the same elapsed-time precision so sequential SDK spans
-cannot overlap merely because a start was rounded down. Default user spans have
+cannot overlap merely because a start was rounded down. These boundaries use
+explicit OTel `HrTime` values to avoid numeric `TimeInput` ambiguity between
+epoch milliseconds and elapsed process time. Default user spans have
 whole-millisecond starts; portable conformance allows their existing 1 ms
 rounding difference. Open spans share one end timestamp at
 invocation cleanup. Each resumed invocation takes a fresh anchor; Workflow and
 synthetic root spans retain their historical execution start.
+
+The terminal Workflow and synthetic root use the historical execution start and
+the terminal invocation's local completion time. Their timestamp interval cannot
+be guaranteed to enclose spans from other invocations after a backward clock
+adjustment or clock skew between containers. The plugin cannot reconstruct a
+prior container's clock or already exported span boundaries from the execution
+start timestamp. Retaining execution clocks in process memory across invocations
+would make results depend on container reuse without solving clock skew between
+containers. Live SDK span hierarchy within each invocation still shares one
+monotonic clock.
 
 An ordinary user span opened after a wall-clock adjustment takes the adjusted
 wall time from its provider. Its timestamps can therefore fall outside a parent

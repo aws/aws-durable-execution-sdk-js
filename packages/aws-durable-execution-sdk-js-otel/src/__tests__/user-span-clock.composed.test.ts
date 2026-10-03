@@ -11,7 +11,7 @@ import {
   trace,
 } from "@opentelemetry/api";
 import type { HrTime } from "@opentelemetry/api";
-import { otperformance } from "@opentelemetry/core";
+import { otperformance, timeInputToHrTime } from "@opentelemetry/core";
 import {
   InMemorySpanExporter,
   NodeTracerProvider,
@@ -348,18 +348,27 @@ describe.each([10, -10])(
       propagation.disable();
     });
 
-    it.each([
-      [-60_000, 0],
-      [-60_000, 0.75],
-      [60_000, 0],
-      [60_000, 0.75],
-    ])(
-      "preserves elapsed time through a %i ms wall step at %f ms wall fraction, then reanchors on resume",
-      async (wallStep, wallFraction) => {
+    it.each(
+      [-60_000, 0, 60_000].flatMap((wallStep) =>
+        [0, 0.75].flatMap((wallFraction) =>
+          [false, true].map((freshPlugin) => ({
+            wallStep,
+            wallFraction,
+            freshPlugin,
+          })),
+        ),
+      ),
+    )(
+      "preserves absolute timestamps through a $wallStep ms wall step at $wallFraction ms wall fraction (fresh plugin on resume: $freshPlugin)",
+      async ({ wallStep, wallFraction, freshPlugin }) => {
         // Exercise both rounding directions while SDK starts and ends share
         // one precision. Default user spans retain only the existing 1 ms
         // allowance; all SDK relationships and ordering remain exact.
         wallMillis = epoch + wallFraction;
+        const starts = jest.spyOn(
+          provider.getTracer("aws-durable-execution-sdk-js"),
+          "startSpan",
+        );
         const historicalStart = new Date(epoch - 120_000);
         const info: InvocationInfo = {
           executionArn:
@@ -482,6 +491,13 @@ describe.each([10, -10])(
           requestId: "resumed",
           isFirstInvocation: false,
         };
+        if (freshPlugin) {
+          // A resumed invocation can load a new plugin in another container.
+          // No previous invocation's live clock or exported spans are available.
+          plugin = new InvocationOtelPlugin({
+            contextExtractor: () => undefined,
+          });
+        }
         await plugin.onInvocationStart(resumed);
         await plugin.onOperationStart({ ...childInfo, isReplay: true });
         await plugin.onOperationStart({ ...operation, isReplay: true });
@@ -526,6 +542,17 @@ describe.each([10, -10])(
           find("step attempt 2"),
           1_000_000n,
         );
+        const resumedContext = exporter
+          .getFinishedSpans()
+          .filter((span) => span.name === "context")
+          .at(-1)!;
+        const resumedStep = exporter
+          .getFinishedSpans()
+          .filter((span) => span.name === "step")
+          .at(-1)!;
+        expectChildOf(resumedContext, second);
+        expectChildOf(resumedStep, resumedContext);
+        expectChildOf(find("step attempt 2"), resumedStep);
         for (const name of [
           "context",
           "step",
@@ -550,6 +577,29 @@ describe.each([10, -10])(
         expect(find("Workflow").spanContext().spanId).toBe(
           deriveWorkflowSpanId(info.executionArn),
         );
+        expectChildOf(find("Workflow"), find("DurableExecutionRoot"));
+        expectChildOf(second, find("DurableExecutionRoot"));
+        if (wallStep >= 0) {
+          // With comparable clocks the terminal root contains both invocations,
+          // including when the plugin is recreated on resume.
+          expectChildOf(invocation, find("DurableExecutionRoot"));
+        }
+        for (const [index, [, options]] of starts.mock.calls.entries()) {
+          const span = starts.mock.results[index].value;
+          const exported = exporter
+            .getFinishedSpans()
+            .find(
+              (finished) =>
+                finished.spanContext().spanId === span.spanContext().spanId,
+            )!;
+          // The public TimeInput converter and the real tracer must agree on
+          // the absolute timestamp. They use different numeric heuristics:
+          // core compares to timeOrigin; SpanImpl compares to performance.now().
+          // A backward wall step must not make one interpretation add an epoch.
+          expect(timeInputToHrTime(options!.startTime!)).toEqual(
+            exported.startTime,
+          );
+        }
         for (const span of exporter.getFinishedSpans()) {
           for (const event of span.events) {
             expect(nanoseconds(event.time)).toBeGreaterThanOrEqual(
