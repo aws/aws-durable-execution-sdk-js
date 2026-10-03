@@ -43,6 +43,8 @@ createTests<{ first: CarrierObservation; resumed: CarrierObservation }>({
             );
         }
       }
+      // Both runtime headers must keep one durable execution on one trace.
+      expect(resumed.traceId).toBe(first.traceId);
       expect(result.getOperations()).toHaveLength(3);
       expect(
         runner.getOperation("capture-initial-carrier").getStepDetails()?.result,

@@ -113,6 +113,7 @@ export function canonicalTraceId(
  * @param environment - Environment containing the optional X-Ray trace header
  * @param executionArn - The durable execution ARN
  * @param executionStartTimestamp - Stable start time of the durable execution
+ * @param invocation - Optional invocation-local runtime carrier
  * @returns The 32-character lowercase hexadecimal execution trace ID
  */
 export function deriveExecutionTraceId(

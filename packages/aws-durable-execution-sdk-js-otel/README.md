@@ -527,7 +527,6 @@ const span = generator.withIds(
 deriveTraceIdFromArn(
   executionArn: string,
   executionStartTimestamp?: Date,
-  invocation?: { readonly xRayTraceId?: string },
 ): string;
 
 deriveTraceIdFromXRayRoot(xRayRoot: string): string | undefined;
@@ -536,6 +535,7 @@ deriveExecutionTraceId(
   environment: ExecutionTraceEnvironment,
   executionArn: string,
   executionStartTimestamp?: Date,
+  invocation?: { readonly xRayTraceId?: string },
 ): string;
 
 deriveWorkflowSpanId(executionArn: string): string;
