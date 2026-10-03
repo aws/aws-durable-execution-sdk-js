@@ -15,6 +15,7 @@ import type {
   Span,
   SpanContext,
   Link,
+  HrTime,
 } from "@opentelemetry/api";
 import {
   context,
@@ -25,7 +26,7 @@ import {
   isSpanContextValid,
   TraceFlags,
 } from "@opentelemetry/api";
-import { otperformance } from "@opentelemetry/core";
+import { millisToHrTime, otperformance } from "@opentelemetry/core";
 import { SamplingDecision } from "@opentelemetry/sdk-trace-node";
 import {
   DeterministicIdGenerator,
@@ -396,9 +397,13 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     return false;
   }
 
-  private liveTimestamp(): number {
+  private liveTimestamp(): HrTime {
     const clock = this.invocationClock!;
-    return clock.epochMillis + (otperformance.now() - clock.monotonicMillis);
+    // A numeric TimeInput can also mean performance.now(). Use an explicit
+    // absolute time so OTel never infers a relative clock after a wall step.
+    return millisToHrTime(
+      clock.epochMillis + (otperformance.now() - clock.monotonicMillis),
+    );
   }
 
   private resetInvocationState(): void {
