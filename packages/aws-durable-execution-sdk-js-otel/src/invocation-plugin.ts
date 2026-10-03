@@ -658,7 +658,13 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       if (stackIndex !== -1) {
         this.spanStack.splice(stackIndex, 1);
       }
-    } else if (!info.isReplay) {
+    } else if (
+      !info.isReplay ||
+      this.externalCompletions.pending.has(info.id)
+    ) {
+      // A fresh checkpoint completion can be replay-marked: updated IDs were
+      // captured before this invocation received the update. Export it while
+      // its child parent is still active, without changing the SDK's info.
       // Operation was started in a prior invocation — create Continuation_Span
       const spanName = info.name ?? info.type;
 
