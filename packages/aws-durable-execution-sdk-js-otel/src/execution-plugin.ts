@@ -733,13 +733,22 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
     const links = this.buildInvocationLinks();
 
+    const startTime = info.startTimestamp ?? this.liveTimestamp();
+    // A backend attempt Date can precede a fractional local operation fallback.
+    // Keep its actual observed boundary when the deferred parent is exported.
+    const operationStart = this.operationStarts.get(info.id);
+    this.operationStarts.set(info.id, {
+      ...operationStart,
+      startTimestamp: this.earliestStart(
+        operationStart?.startTimestamp,
+        startTime,
+      ),
+    });
     const attemptSpan = this.startSpan(
       spanName,
       {
         attributes,
-        startTime: this.observeTimestamp(
-          info.startTimestamp ?? this.liveTimestamp(),
-        ),
+        startTime: this.observeTimestamp(startTime),
         links,
       },
       parentContext,
