@@ -1,15 +1,7 @@
+import * as sdk from "@aws/durable-execution-sdk-js";
 import {
-  CallbackError,
-  CallbackExternalError,
-  CallbackSubmitterError,
-  CallbackTimeoutError,
-  ChildContextError,
   type DurableContext,
   DurableOperationError,
-  InvokeError,
-  PromiseCombinatorError,
-  StepError,
-  WaitForConditionError,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import {
@@ -387,28 +379,30 @@ describe("MicroVM errors", () => {
   });
 
   it("passes through every SDK error type that fromErrorObject rebuilds as its own class", () => {
-    const classes = [
-      StepError,
-      CallbackError,
-      CallbackExternalError,
-      CallbackTimeoutError,
-      CallbackSubmitterError,
-      InvokeError,
-      ChildContextError,
-      WaitForConditionError,
-      PromiseCombinatorError,
-    ];
-    const types = classes.map((ErrorClass) => new ErrorClass("m").errorType);
+    // The list comes from the SDK's exports, not from this test. So the test
+    // fails when fromErrorObject starts or stops rebuilding a type.
+    const rebuiltTypes = Object.values(sdk)
+      .filter(
+        (value): value is typeof DurableOperationError =>
+          typeof value === "function" &&
+          value.prototype instanceof DurableOperationError,
+      )
+      .filter((ErrorClass) => {
+        const rebuilt = DurableOperationError.fromErrorObject({
+          ErrorType: ErrorClass.name,
+          ErrorMessage: "m",
+        });
+        return (
+          rebuilt.constructor === ErrorClass &&
+          rebuilt.errorType === ErrorClass.name
+        );
+      })
+      .map((ErrorClass) => ErrorClass.name);
 
-    expect([...SDK_ERROR_TYPES].sort()).toEqual([...types].sort());
-    for (const type of SDK_ERROR_TYPES) {
-      const rebuilt = DurableOperationError.fromErrorObject({
-        ErrorType: type,
-        ErrorMessage: "m",
-      });
-      expect(rebuilt.errorType).toBe(type);
-      expect(rebuilt.cause?.name).toBe(type);
-    }
+    expect([...SDK_ERROR_TYPES].sort()).toEqual(rebuiltTypes.sort());
+    // fromErrorObject rebuilds BatchCompletionError as StepError. So the
+    // session wraps it, like any other type that the SDK does not rebuild.
+    expect(rebuiltTypes).not.toContain("BatchCompletionError");
   });
 
   it("keeps the CallbackSubmitterError of a failed waitForCallback submitter in a session", async () => {

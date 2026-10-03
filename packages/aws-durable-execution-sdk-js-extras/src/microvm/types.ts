@@ -341,7 +341,10 @@ export interface MicrovmSession {
    * @throws \{MicrovmJobFailedError\} When the job handler in the MicroVM
    * throws.
    * @throws \{MicrovmTimeoutError\} When the job or its heartbeat times out.
-   * @throws \{MicrovmNotRunningError\} When the session's MicroVM has ended.
+   * @throws \{MicrovmNotRunningError\} When the session's MicroVM has ended,
+   * and the session checks the MicroVM state before each job. It checks with
+   * `autoSuspendOnIdle: true` or an `idlePolicy`. Otherwise an ended MicroVM
+   * fails the job with {@link MicrovmDeliveryError} after the retries.
    * @throws \{MicrovmDeliveryError\} When the request fails after all
    * retries, or the route rejects the job.
    * @throws \{TypeError\} When `context` is not a durable context, or
