@@ -25,6 +25,7 @@ import {
   isSpanContextValid,
   TraceFlags,
 } from "@opentelemetry/api";
+import { otperformance } from "@opentelemetry/core";
 import { SamplingDecision } from "@opentelemetry/sdk-trace-node";
 import {
   DeterministicIdGenerator,
@@ -66,6 +67,9 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   private readonly enrichLogger: boolean;
 
   // Per-invocation state
+  private invocationClock:
+    | { epochMillis: number; monotonicMillis: number }
+    | undefined;
   private spanMap: Map<string, Span> = new Map();
   private spanStack: Span[] = [];
   private invocationSpan: Span | undefined;
@@ -122,6 +126,14 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     if (!this.tracingEnabled) {
       return;
     }
+
+    // Match the epoch/elapsed-time model of an ordinary OTel span, but share
+    // this anchor across all live spans in the invocation. Never use the
+    // process timeOrigin: it can differ from the current wall-clock epoch.
+    this.invocationClock = {
+      epochMillis: Date.now(),
+      monotonicMillis: otperformance.now(),
+    };
 
     // 1. Store the execution ARN
     this.executionArn = info.executionArn;
@@ -203,7 +215,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
           "durable.execution.arn": info.executionArn,
           "durable.invocation.first": info.isFirstInvocation,
         },
-        startTime: Date.now(),
+        startTime: this.liveStartTimestamp(),
       },
       invocationParentContext,
     );
@@ -228,7 +240,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       return;
     }
 
-    const endTime = Date.now();
+    const endTime = this.liveTimestamp();
 
     // 1. End all spans in the stack in reverse order
     while (this.spanStack.length > 0) {
@@ -384,7 +396,25 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     return false;
   }
 
+  private liveTimestamp(): number {
+    const clock = this.invocationClock!;
+    return clock.epochMillis + (otperformance.now() - clock.monotonicMillis);
+  }
+
+  private liveStartTimestamp(): number {
+    // Default user spans start on whole wall-clock milliseconds. Keep that
+    // precision for SDK starts so an immediate child cannot precede its parent
+    // merely due to rounding. Ends retain elapsed-time precision, like OTel,
+    // rather than truncating a user's fractional-millisecond tail.
+    const clock = this.invocationClock!;
+    return (
+      clock.epochMillis +
+      Math.floor(otperformance.now() - clock.monotonicMillis)
+    );
+  }
+
   private resetInvocationState(): void {
+    this.invocationClock = undefined;
     this.spanMap.clear();
     this.spanStack = [];
     this.invocationSpan = undefined;
@@ -480,13 +510,11 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       return;
     }
 
-    // Use explicit wall-clock timestamps for live spans. OTel's default user
-    // spans start at Date.now(); performance.timeOrigin + performance.now()
-    // can drift from that clock and put a user's child before its SDK parent.
-    // Explicit end times also avoid independently anchored monotonic durations
-    // for SDK spans; invocation cleanup shares one end time for open spans.
-    // Durable timestamps can predate this invocation and are used only for
-    // the backdated Workflow and synthetic execution root starts.
+    // All live spans use the invocation's wall-anchored monotonic clock, so
+    // wall-clock adjustments cannot collapse or inflate their durations.
+    // Invocation cleanup shares one end time for open spans. Durable timestamps
+    // can predate this invocation and are used only for the backdated Workflow
+    // and synthetic execution root starts.
     const deterministicSpanId = deriveSpanIdFromOperationId(
       info.id,
       this.executionArn,
@@ -538,7 +566,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
             {
               attributes,
               links: this.workflowLinks(),
-              startTime: Date.now(),
+              startTime: this.liveStartTimestamp(),
             },
             parentContext,
           ),
@@ -554,7 +582,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         {
           attributes,
           links: this.replayLinks(info.id),
-          startTime: Date.now(),
+          startTime: this.liveStartTimestamp(),
         },
         parentContext,
       );
@@ -629,13 +657,13 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
           code: SpanStatusCode.ERROR,
           message: info.error.message,
         });
-        span.recordException(info.error);
+        span.recordException(info.error, this.liveTimestamp());
       } else if (info.status === "SUCCEEDED") {
         span.setStatus({ code: SpanStatusCode.OK });
       }
 
       // End the span
-      span.end(Date.now());
+      span.end(this.liveTimestamp());
 
       // Remove from map
       this.spanMap.delete(info.id);
@@ -694,7 +722,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
           // deterministic on the execution trace, so the segments of one logical
           // operation stay correlated across invocations.
           links: this.replayLinks(info.id),
-          startTime: Date.now(),
+          startTime: this.liveStartTimestamp(),
         },
         parentContext,
       );
@@ -710,13 +738,13 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
           code: SpanStatusCode.ERROR,
           message: info.error.message,
         });
-        continuationSpan.recordException(info.error);
+        continuationSpan.recordException(info.error, this.liveTimestamp());
       } else if (info.status === "SUCCEEDED") {
         continuationSpan.setStatus({ code: SpanStatusCode.OK });
       }
 
       // Immediately end
-      continuationSpan.end(Date.now());
+      continuationSpan.end(this.liveTimestamp());
     }
   }
 
@@ -754,7 +782,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       spanName,
       {
         attributes,
-        startTime: Date.now(),
+        startTime: this.liveStartTimestamp(),
       },
       parentContext,
     );
@@ -792,13 +820,13 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
           message: info.error?.message ?? "Attempt failed",
         });
         if (info.error) {
-          attemptSpan.recordException(info.error);
+          attemptSpan.recordException(info.error, this.liveTimestamp());
         }
       } else {
         // Non-failed attempt: stamp explicit OK (matches Python OTel #604).
         attemptSpan.setStatus({ code: SpanStatusCode.OK });
       }
-      attemptSpan.end(Date.now());
+      attemptSpan.end(this.liveTimestamp());
       this.spanMap.delete(key);
     }
   }

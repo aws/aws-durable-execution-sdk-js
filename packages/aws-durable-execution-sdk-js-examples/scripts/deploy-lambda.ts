@@ -265,8 +265,39 @@ async function retryOnConflict<T>(
   throw new Error("Max retries exceeded");
 }
 
+async function readBeforeDeadline<T>(
+  operation: (abortSignal: AbortSignal) => Promise<T>,
+  deadline: number,
+  timeoutError: unknown,
+): Promise<T> {
+  const remainingMs = deadline - performance.now();
+  if (remainingMs <= 0) throw timeoutError;
+
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        // Settle the deadline first so an SDK AbortError cannot replace the
+        // last transient failure. Race also bounds clients that ignore abort.
+        reject(timeoutError);
+        controller.abort(timeoutError);
+      }, Math.ceil(remainingMs));
+    });
+    const result = await Promise.race([operation(controller.signal), timeout]);
+    // A blocked event loop can deliver a late response before the timer runs.
+    if (performance.now() >= deadline) {
+      controller.abort(timeoutError);
+      throw timeoutError;
+    }
+    return result;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function runWithRetry<T>(
-  operation: () => Promise<T>,
+  operation: (abortSignal: AbortSignal) => Promise<T>,
   checkOperationResult: (result: T) => {
     shouldRetry?: boolean;
     reason: string;
@@ -277,18 +308,22 @@ async function runWithRetry<T>(
   // Preserve the one-second polling window as a deadline shared by reads and
   // backoff. A successful Pending read must not start a new retry budget.
   const pollIntervalMs = 1000;
-  const deadline = Date.now() + maxAttempts * pollIntervalMs;
+  const deadline = performance.now() + maxAttempts * pollIntervalMs;
   let consecutiveErrors = 0;
   let lastError: unknown;
   for (
     let attempt = 0;
-    attempt < maxAttempts && Date.now() < deadline;
+    attempt < maxAttempts && performance.now() < deadline;
     attempt++
   ) {
     let delayMs = pollIntervalMs;
     let reason: string;
     try {
-      const result = await operation();
+      const result = await readBeforeDeadline(
+        operation,
+        deadline,
+        lastError ?? new Error("Max retries exceeded"),
+      );
       const operationResult = checkOperationResult(result);
       if (!operationResult.shouldRetry) {
         console.log(`Stopped retrying. Reason: ${operationResult.reason}`);
@@ -310,7 +345,7 @@ async function runWithRetry<T>(
       delayMs = baseDelayMs + Math.floor(Math.random() * 250);
       reason = `Transient Lambda control-plane error: ${(error as Error).message}`;
     }
-    const remainingMs = deadline - Date.now();
+    const remainingMs = deadline - performance.now();
     if (attempt === maxAttempts - 1 || remainingMs <= 0) break;
     console.log(`Retrying: ${reason}. ${attempt + 1}/${maxAttempts} attempts`);
     await new Promise((resolve) =>
@@ -323,12 +358,13 @@ async function runWithRetry<T>(
 async function getCurrentConfiguration(
   lambdaClient: LambdaClient,
   functionName: string,
+  abortSignal?: AbortSignal,
 ): Promise<GetFunctionConfigurationCommandOutput> {
   const command = new GetFunctionConfigurationCommand({
     FunctionName: functionName,
   });
   // Reads inside a deployment phase or poll share that phase's retry budget.
-  return lambdaClient.send(command);
+  return lambdaClient.send(command, { abortSignal });
 }
 
 async function getCurrentConfigurationWithRetry(
@@ -411,7 +447,8 @@ async function pinCapacityProviderRuntime(
     // flight fails with "An update is in progress for resource ...". Wait for the
     // function to settle before entering the separate publication phase.
     await runWithRetry(
-      () => getCurrentConfiguration(lambdaClient, functionName),
+      (abortSignal) =>
+        getCurrentConfiguration(lambdaClient, functionName, abortSignal),
       (config) => {
         if (
           config.LastUpdateStatus === LastUpdateStatus.Failed ||
@@ -798,10 +835,11 @@ export async function main(): Promise<void> {
           const functionWithQualifier = `${functionName}:${qualifier}`;
 
           const result = await runWithRetry(
-            async () => {
+            async (abortSignal) => {
               return getCurrentConfiguration(
                 lambdaClient,
                 functionWithQualifier,
+                abortSignal,
               );
             },
             (currentConfiguration) => {
@@ -879,11 +917,12 @@ export async function main(): Promise<void> {
 
           console.log("Waiting for function to be deleted");
           await runWithRetry(
-            async () => {
+            async (abortSignal) => {
               try {
                 await getCurrentConfiguration(
                   lambdaClient,
                   functionWithQualifier,
+                  abortSignal,
                 );
                 return true;
               } catch (err) {
