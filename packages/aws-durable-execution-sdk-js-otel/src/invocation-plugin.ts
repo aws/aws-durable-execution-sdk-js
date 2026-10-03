@@ -25,7 +25,6 @@ import {
   isSpanContextValid,
   TraceFlags,
 } from "@opentelemetry/api";
-import { hrTime } from "@opentelemetry/core";
 import { SamplingDecision } from "@opentelemetry/sdk-trace-node";
 import {
   DeterministicIdGenerator,
@@ -204,7 +203,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
           "durable.execution.arn": info.executionArn,
           "durable.invocation.first": info.isFirstInvocation,
         },
-        startTime: hrTime(),
+        startTime: Date.now(),
       },
       invocationParentContext,
     );
@@ -229,7 +228,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       return;
     }
 
-    const endTime = hrTime();
+    const endTime = Date.now();
 
     // 1. End all spans in the stack in reverse order
     while (this.spanStack.length > 0) {
@@ -481,12 +480,13 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       return;
     }
 
-    // Operation, continuation, and attempt spans use explicit monotonic
-    // timestamps rather than durable start/end timestamps. Durable timestamps
-    // can predate this invocation, while letting each span use the tracer's
-    // default timestamp can give it an independent wall-clock anchor. A shared
-    // monotonic clock keeps children inside their parent timing envelopes.
-    // Only the parentless Workflow span keeps a backdated start.
+    // Use explicit wall-clock timestamps for live spans. OTel's default user
+    // spans start at Date.now(); performance.timeOrigin + performance.now()
+    // can drift from that clock and put a user's child before its SDK parent.
+    // Explicit end times also avoid independently anchored monotonic durations
+    // for SDK spans; invocation cleanup shares one end time for open spans.
+    // Durable timestamps can predate this invocation and are used only for
+    // the backdated Workflow and synthetic execution root starts.
     const deterministicSpanId = deriveSpanIdFromOperationId(
       info.id,
       this.executionArn,
@@ -538,7 +538,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
             {
               attributes,
               links: this.workflowLinks(),
-              startTime: hrTime(),
+              startTime: Date.now(),
             },
             parentContext,
           ),
@@ -549,20 +549,12 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       // to the reproducible Workflow span, and links back to the initial logical
       // operation span (deterministic on the execution trace) so the segments
       // stay correlated across invocations.
-      //
-      // WaitForCondition is modeled differently by the OTel conformance
-      // contract: the resumed operation span keeps only its Workflow link, while
-      // the non-terminal first polling attempt links back to the first operation
-      // span once it is known to have completed successfully.
       span = this.startSpan(
         spanName,
         {
           attributes,
-          links:
-            info.subType === "WaitForCondition"
-              ? this.workflowLinks()
-              : this.replayLinks(info.id),
-          startTime: hrTime(),
+          links: this.replayLinks(info.id),
+          startTime: Date.now(),
         },
         parentContext,
       );
@@ -643,7 +635,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       }
 
       // End the span
-      span.end(hrTime());
+      span.end(Date.now());
 
       // Remove from map
       this.spanMap.delete(info.id);
@@ -702,7 +694,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
           // deterministic on the execution trace, so the segments of one logical
           // operation stay correlated across invocations.
           links: this.replayLinks(info.id),
-          startTime: hrTime(),
+          startTime: Date.now(),
         },
         parentContext,
       );
@@ -724,7 +716,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       }
 
       // Immediately end
-      continuationSpan.end(hrTime());
+      continuationSpan.end(Date.now());
     }
   }
 
@@ -762,7 +754,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       spanName,
       {
         attributes,
-        startTime: hrTime(),
+        startTime: Date.now(),
       },
       parentContext,
     );
@@ -792,7 +784,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     const key = this.attemptSpanKey(info.id, info.attempt);
     const attemptSpan = this.spanMap.get(key);
     if (attemptSpan) {
-      attemptSpan.addLinks(this.attemptLinks(info));
+      attemptSpan.addLinks(this.workflowLinks());
       attemptSpan.setAttribute("durable.attempt.outcome", info.outcome);
       if (info.outcome === "FAILED") {
         attemptSpan.setStatus({
@@ -806,7 +798,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         // Non-failed attempt: stamp explicit OK (matches Python OTel #604).
         attemptSpan.setStatus({ code: SpanStatusCode.OK });
       }
-      attemptSpan.end(hrTime());
+      attemptSpan.end(Date.now());
       this.spanMap.delete(key);
     }
   }
@@ -863,17 +855,6 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     }
     links.push(...this.workflowLinks());
     return links;
-  }
-
-  private attemptLinks(info: AttemptEndInfo): Link[] {
-    if (
-      info.subType === "WaitForCondition" &&
-      info.attempt === 1 &&
-      info.outcome === "SUCCEEDED"
-    ) {
-      return this.replayLinks(info.id);
-    }
-    return this.workflowLinks();
   }
 
   private attemptSpanKey(operationId: string, attempt: number): string {
