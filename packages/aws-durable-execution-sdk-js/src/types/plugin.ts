@@ -144,7 +144,11 @@ export interface InvocationBaseInfo {
  * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface InvocationInfo extends InvocationBaseInfo {
-  /** Invocation-local X-Ray header supplied by the Lambda runtime (including LMI). */
+  /**
+   * Invocation-local X-Ray header supplied by the Lambda runtime (including LMI).
+   * An empty string means the runtime exposes the carrier but has no header;
+   * omission preserves legacy environment fallback when no carrier is available.
+   */
   xRayTraceId?: string;
   isFirstInvocation: boolean;
   /**

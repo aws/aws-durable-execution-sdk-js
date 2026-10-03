@@ -556,8 +556,11 @@ environment and an optional fourth invocation-context argument. Only
 `_X_AMZN_TRACE_ID` is read from the environment, preserving existing callers even
 if they have an unrelated variable named `xRayTraceId`. On Managed Instances,
 pass `{ xRayTraceId: context.xRayTraceId }` as the fourth argument; that local
-header takes precedence. A present but invalid local header suppresses the
-environment carrier and uses the ARN-and-start-time fallback.
+carrier takes precedence, including when its value is empty, `undefined`, or
+`null`. A present carrier with no usable header suppresses the environment
+carrier and uses the ARN-and-start-time fallback. Omit the property only when
+that runtime capability is unavailable; old cores and contexts without the
+property retain their environment fallback.
 When no valid Root is available, pass the same execution start timestamp as the
 plugin; omit it only when it is unavailable to both callers.
 `deriveWorkflowSpanId` hashes `workflow:<execution ARN>`,

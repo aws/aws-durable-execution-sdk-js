@@ -13,6 +13,7 @@ import {
 } from "@opentelemetry/sdk-trace-node";
 import { ExecutionOtelPlugin } from "../execution-plugin";
 import { InvocationOtelPlugin } from "../invocation-plugin";
+import { deriveExecutionTraceId } from "../execution-trace-context";
 
 it.each([ExecutionOtelPlugin, InvocationOtelPlugin])(
   "%p uses invocation-local trace and sampling through the public wrapper",
@@ -138,5 +139,110 @@ it.each([ExecutionOtelPlugin, InvocationOtelPlugin])(
       context.disable();
       trace.disable();
     }
+  },
+);
+
+describe.each([ExecutionOtelPlugin, InvocationOtelPlugin])(
+  "%p runtime carrier availability",
+  (Plugin) => {
+    it.each(["absent", "undefined", "null", "empty"])(
+      "preserves carrier authority for %s through the public wrapper",
+      async (availability) => {
+        const previousHeader = process.env._X_AMZN_TRACE_ID;
+        const staleTrace = "a".repeat(32);
+        process.env._X_AMZN_TRACE_ID =
+          "Root=1-aaaaaaaa-aaaaaaaaaaaaaaaaaaaaaaaa;Parent=aaaaaaaaaaaaaaaa;Sampled=1";
+        const exporter = new InMemorySpanExporter();
+        let provider: NodeTracerProvider | undefined;
+        try {
+          const plugin = new Plugin({
+            tracerProviderFactory: (ids) => {
+              provider = new NodeTracerProvider({
+                idGenerator: ids(),
+                sampler: new AlwaysOnSampler(),
+                spanProcessors: [new SimpleSpanProcessor(exporter)],
+              });
+              return provider;
+            },
+          });
+          let seen: InvocationInfo | undefined;
+          const handler = withDurableExecution(async () => "ok", {
+            plugins: [
+              {
+                onInvocationStart: async (info) => {
+                  seen = info;
+                },
+              },
+              plugin,
+            ],
+          });
+          const arn = `arn:execution:carrier-${availability}`;
+          const start = new Date("2026-01-01T00:00:00Z");
+          const event = new DurableExecutionInvocationInputWithClient(
+            {
+              DurableExecutionArn: arn,
+              CheckpointToken: "token",
+              InitialExecutionState: {
+                Operations: [
+                  {
+                    Id: "execution",
+                    Type: "EXECUTION",
+                    Status: "STARTED",
+                    StartTimestamp: start,
+                    ExecutionDetails: { InputPayload: "{}" },
+                  },
+                ],
+              },
+            },
+            {
+              checkpoint: jest.fn(() => {
+                throw new Error("unexpected checkpoint");
+              }),
+              getExecutionState: jest.fn(() => {
+                throw new Error("unexpected state request");
+              }),
+            },
+          );
+          const runtimeContext = {
+            awsRequestId: `request-${availability}`,
+            getRemainingTimeInMillis: () => 30000,
+          };
+          if (availability !== "absent") {
+            Object.defineProperty(runtimeContext, "xRayTraceId", {
+              value:
+                availability === "undefined"
+                  ? undefined
+                  : availability === "null"
+                    ? null
+                    : "",
+            });
+          }
+          expect(await handler(event, runtimeContext as LambdaContext)).toEqual(
+            { Status: "SUCCEEDED", Result: '"ok"' },
+          );
+          if (availability === "absent")
+            expect(seen).not.toHaveProperty("xRayTraceId");
+          else expect(seen?.xRayTraceId).toBe("");
+          const spans = exporter.getFinishedSpans();
+          expect(spans.length).toBeGreaterThan(0);
+          const expected =
+            availability === "absent"
+              ? staleTrace
+              : deriveExecutionTraceId({}, arn, start);
+          expect(
+            new Set(spans.map((span) => span.spanContext().traceId)),
+          ).toEqual(new Set([expected]));
+          expect(deriveExecutionTraceId(process.env, arn, start, seen)).toBe(
+            expected,
+          );
+        } finally {
+          await provider?.shutdown();
+          if (previousHeader === undefined) delete process.env._X_AMZN_TRACE_ID;
+          else process.env._X_AMZN_TRACE_ID = previousHeader;
+          context.disable();
+          trace.disable();
+        }
+      },
+    );
   },
 );

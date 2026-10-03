@@ -85,6 +85,24 @@ describe("canonicalTraceId", () => {
 });
 
 describe("deriveExecutionTraceId", () => {
+  it.each([undefined, null])(
+    "honors an available empty carrier in the public helper (%s)",
+    (value) => {
+      const invocation = Object.defineProperty({}, "xRayTraceId", { value });
+      expect(
+        deriveExecutionTraceId(
+          {
+            _X_AMZN_TRACE_ID:
+              "Root=1-aaaaaaaa-aaaaaaaaaaaaaaaaaaaaaaaa;Sampled=1",
+          },
+          ARN,
+          START,
+          invocation,
+        ),
+      ).toBe(deriveTraceIdFromArn(ARN, START));
+    },
+  );
+
   it("does not reinterpret a legacy environment variable named xRayTraceId", () => {
     const environment = {
       _X_AMZN_TRACE_ID: "Root=1-5759e988-bd862e3fe1be46a994272793;Sampled=1",
