@@ -1,0 +1,195 @@
+import {
+  type DurableContext,
+  DurablePromise,
+} from "@aws/durable-execution-sdk-js";
+import {
+  createJobCallback,
+  createScope,
+  deliverJob,
+  fitsRunHook,
+  jobDocument,
+  launch,
+  type OperationScope,
+  terminate,
+  validateBaseConfig,
+  validateRequest,
+} from "./shared";
+import { inStage, microvmErrorMapper } from "./errors";
+import { MicrovmOperationSubType } from "./subtypes";
+import type { MicrovmConfig, MicrovmRunHookPayload } from "./types";
+
+/**
+ * Runs one job in a new AWS Lambda MicroVM and returns the job's result.
+ *
+ * @remarks
+ * The operation creates its durable operations inside one child context named
+ * `name`:
+ *
+ * 1. `<name>.callback` creates a durable callback. The service generates the
+ *    callback ID, and the SDK checkpoints it. So the ID is unique to this call
+ *    and stays the same on every replay.
+ * 2. `<name>.launch` calls RunMicrovm. The client token is the SHA-256 hex
+ *    digest of the callback ID. So a retried or replayed launch returns the
+ *    same MicroVM instead of starting a second one.
+ * 3. The operation picks the delivery. A job whose `run` hook payload fits in
+ *    4096 Unicode code points goes in the launch request, and the MicroVM
+ *    receives it in the `run` hook. A larger job, or any job with
+ *    `config.request.path`, goes over HTTP: `<name>.request` POSTs it after
+ *    the launch.
+ * 4. The child context waits on the callback. The invocation ends while it
+ *    waits, so no Lambda compute is billed. The MicroVM completes the callback
+ *    with its result or its failure.
+ * 5. `<name>.terminate` calls TerminateMicrovm. It runs after success,
+ *    failure, and timeout alike.
+ *
+ * Each durable operation records a subtype from
+ * {@link MicrovmOperationSubType}: `Microvm` on the child context, and
+ * `MicrovmCallback`, `MicrovmLaunch`, `MicrovmRequest`, and `MicrovmTerminate`
+ * on the operations inside it.
+ *
+ * The operation sets no idle policy. The idle policy counts only inbound
+ * traffic through the MicroVM endpoint. A job receives no inbound traffic
+ * after its delivery. So an idle policy would suspend the MicroVM in the
+ * middle of the job.
+ *
+ * A terminate failure does not fail the operation. The job result is already
+ * recorded when terminate runs, and `maximumDurationInSeconds` bounds how long
+ * the MicroVM can keep running. So the operation logs a warning and returns
+ * the job's outcome.
+ *
+ * Pass the context that the call runs in, such as a child context or a
+ * `map` item's context:
+ * ```typescript
+ * export const handler = withDurableExecution(async (event, context) =>
+ *   microvm(context, "build", { repo }, config),
+ * );
+ * ```
+ *
+ * @param context - The context to create the durable operations in.
+ * @param name - The child context name. It also prefixes the inner
+ * operation names.
+ * @param input - The job input. It must be JSON-serializable, and it must be
+ * the same on every replay. Its size selects the delivery.
+ * @param config - The MicroVM, delivery, and callback configuration.
+ * @returns The value that the MicroVM passed to
+ * `SendDurableExecutionCallbackSuccess`, parsed as JSON.
+ * @throws \{TypeError\} When `name`, `imageIdentifier`, `executionRoleArn`, or
+ * `request` is invalid.
+ * @throws \{RangeError\} When `timeout` is not between 1 second and 8 hours,
+ * or `request.retryWindow` is not between 1 second and 10 minutes.
+ * @throws \{MicrovmLaunchError\} When `RunMicrovm` fails after all retries.
+ * @throws \{MicrovmDeliveryError\} When HTTP delivery fails after all retries,
+ * or the route rejects the job.
+ * @throws \{MicrovmJobFailedError\} When the MicroVM reports a failure.
+ * @throws \{MicrovmTimeoutError\} When no result or heartbeat arrives in time.
+ *
+ * @public
+ *
+ * @experimental This function is experimental and may be changed or removed in future releases.
+ */
+export function microvm<TOutput = unknown, TInput = unknown>(
+  context: DurableContext,
+  name: string,
+  input: TInput,
+  config: MicrovmConfig,
+): DurablePromise<TOutput> {
+  let timeoutSeconds: number;
+  let scope: OperationScope;
+  try {
+    timeoutSeconds = validateBaseConfig(name, config);
+    if (config.request !== undefined) {
+      validateRequest(name, config.request);
+    }
+    scope = createScope(context, name, config);
+  } catch (error) {
+    return new DurablePromise<TOutput>(() => Promise.reject(error));
+  }
+
+  const request = config.request;
+
+  return context.runInChildContext<TOutput>(
+    name,
+    async (child) => {
+      const [result, callbackId] = await createJobCallback<TOutput>(
+        child,
+        name,
+        config.timeout,
+        config.heartbeatTimeout,
+      );
+      const job = jobDocument(callbackId, input, config.heartbeatTimeout);
+
+      // The operation can deliver the job to the MicroVM in two ways:
+      //
+      // 1. Run hook. The job goes in the RunMicrovm request as the
+      //    `runHookPayload`. Lambda passes the payload to the worker's `run`
+      //    lifecycle hook when the MicroVM starts. The MicroVM receives no
+      //    inbound request, so it gets the NO_INGRESS connector.
+      // 2. HTTP. The RunMicrovm request carries no job. After the launch, a
+      //    request step POSTs the job to the MicroVM's endpoint. So the
+      //    MicroVM needs an ingress connector and an endpoint.
+      //
+      // The run hook is preferred. It opens no ingress, and it needs no
+      // extra durable step. HTTP is used in two cases:
+      //
+      // 1. The caller set `request.path`. The worker runs a run hook job with
+      //    its `handler`, not a route. So a job for a route must go over HTTP.
+      // 2. The payload is larger than the run hook limit. RunMicrovm rejects
+      //    an oversized payload with ValidationException. The default retry
+      //    strategy does not retry that error, because the same payload
+      //    fails the same way. So the operation would fail with
+      //    MicrovmLaunchError. So the size is checked here, before the
+      //    launch. See fitsRunHook.
+      //
+      // The size check measures the whole payload, and the payload contains
+      // the callback ID. So the choice runs after createCallback. The choice
+      // is deterministic: the callback ID comes from the checkpoint on
+      // replay, and the input must be the same on every replay. So every
+      // replay picks the same delivery as the first attempt.
+      const withJob = JSON.stringify({
+        version: 1,
+        region: scope.region,
+        job,
+      } satisfies MicrovmRunHookPayload<TInput>);
+      const overHttp = request?.path !== undefined || !fitsRunHook(withJob);
+      // The worker rejects a run hook payload without `version` and
+      // `region`. So the HTTP delivery still sends those two fields, and
+      // omits only the job.
+      const runHookPayload = overHttp
+        ? JSON.stringify({
+            version: 1,
+            region: scope.region,
+          } satisfies MicrovmRunHookPayload<TInput>)
+        : withJob;
+
+      const launched = await inStage(name, "launch", () =>
+        launch(child, scope, {
+          tokenSource: callbackId,
+          timeoutSeconds,
+          defaultIngress: overHttp ? "ALL_INGRESS" : "NO_INGRESS",
+          runHookPayload,
+          delivery: overHttp ? "http" : "run-hook",
+        }),
+      );
+
+      try {
+        // Replay computes `overHttp` again from the current input and
+        // config. A deploy between the launch and a replay can change both.
+        // The launch step's result comes from the checkpoint on replay, and
+        // it records the delivery that the launch prepared for. So the
+        // operation follows the launch's delivery, not the new computation.
+        if (launched.delivery === "http") {
+          await inStage(name, "delivery", () =>
+            deliverJob(child, scope, name, launched, request ?? {}, job),
+          );
+        }
+        return await inStage(name, "job", () => result);
+      } finally {
+        await terminate(child, scope, launched.microvmId);
+      }
+    },
+    {
+      subType: MicrovmOperationSubType.MICROVM,
+      errorMapper: microvmErrorMapper(name),
+    },
+  );
+}
