@@ -145,6 +145,55 @@ describe("deployment retries", () => {
       .filter((command) => command instanceof type);
   }
 
+  test.each([false, true])(
+    "retries a throttled existence probe before selecting create or update (exists=%s)",
+    async (exists) => {
+      const normal = send.getMockImplementation()!;
+      let probes = 0;
+      send.mockImplementation(async (command) => {
+        if (command instanceof GetFunctionCommand) {
+          if (++probes <= 2) throw throttle();
+          if (exists) return {};
+        }
+        return normal(command);
+      });
+      await deploy();
+      expect(commands(GetFunctionCommand)).toHaveLength(3);
+      expect(commands(CreateFunctionCommand)).toHaveLength(exists ? 0 : 1);
+      expect(commands(UpdateFunctionCodeCommand)).toHaveLength(exists ? 1 : 0);
+      expect(commands(UpdateFunctionConfigurationCommand)).toHaveLength(
+        exists ? 1 : 0,
+      );
+      expect(commands(PublishVersionCommand)).toHaveLength(1);
+    },
+  );
+
+  test.each([
+    { error: throttle(), attempts: 10 },
+    {
+      error: Object.assign(new Error("Not authorized"), {
+        name: "AccessDeniedException",
+      }),
+      attempts: 1,
+    },
+  ])(
+    "bounds existence probes and preserves the error before any deployment ($error.name)",
+    async ({ error, attempts }) => {
+      send.mockRejectedValue(error);
+      const result = main().then(
+        () => undefined,
+        (failure: Error) => failure,
+      );
+      await jest.runAllTimersAsync();
+      expect(await result).toEqual(new Error("Deployment exited with failure"));
+      expect(exit).toHaveBeenCalledWith(1);
+      expect(console.error).toHaveBeenCalledWith("Deployment failed:", error);
+      expect(commands(GetFunctionCommand)).toHaveLength(attempts);
+      expect(send).toHaveBeenCalledTimes(attempts);
+      expect(logSend).not.toHaveBeenCalled();
+    },
+  );
+
   test("retries a throttled readiness poll without recreating or republishing", async () => {
     const normal = send.getMockImplementation()!;
     let polls = 0;
