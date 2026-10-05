@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import { ExecutionStatus } from "@aws/durable-execution-sdk-js-testing";
 import { createTests } from "../../../utils/test-helper";
+import { expectMicrovmTerminated } from "../../shared/microvm-test-helpers";
 import { handler } from "./microvm-run-job";
 
 createTests({
@@ -19,6 +20,10 @@ createTests({
         sha256: createHash("sha256").update(text).digest("hex"),
         microvmId: expect.any(String),
       });
+
+      await expectMicrovmTerminated(
+        (execution.getResult() as { microvmId: string }).microvmId,
+      );
 
       // A job can finish before the invocation that waits for it ends. The
       // invocation then continues, and the execution has one invocation

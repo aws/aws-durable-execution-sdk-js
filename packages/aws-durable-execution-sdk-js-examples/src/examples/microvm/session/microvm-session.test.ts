@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { ExecutionStatus } from "@aws/durable-execution-sdk-js-testing";
 import { createTests } from "../../../utils/test-helper";
+import { expectMicrovmTerminated } from "../../shared/microvm-test-helpers";
 import { handler } from "./microvm-session";
 
 createTests({
@@ -25,6 +26,8 @@ createTests({
       expect(result.value).toBe(`written-by-${key}`);
       expect(result.writtenBy).toBe(result.sessionMicrovmId);
       expect(result.readBy).toBe(result.sessionMicrovmId);
+
+      await expectMicrovmTerminated(result.sessionMicrovmId);
 
       // A job can finish before the invocation that waits for it ends. The
       // invocation then continues, and the execution has one invocation
