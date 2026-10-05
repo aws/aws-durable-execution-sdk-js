@@ -83,6 +83,7 @@ export const config: ExampleConfig = {
 
   Both functions are deployed with automatically generated names (the capacity provider version gets a `-CapacityProvider` suffix) and both are tested during integration runs. This ensures your durable function works correctly in both standard Lambda and managed instance environments. If you don't need managed instance testing, simply omit this configuration option.
 - `localOnly`: (Default: false) Run the example's tests with `LocalDurableTestRunner` only. The example is left out of the SAM template, so it is never deployed, and its tests are skipped under `NODE_ENV=integration`. Use it for examples that depend on local-runner features, such as `pauseExecution()` in `src/examples/pause-resume/`.
+- `usesMicrovm`: (Default: false) The example runs a job in a Lambda MicroVM, as in `src/examples/microvm/`. The integration test builds the MicroVM image from `microvm-image/` with `scripts/ensure-microvm-image.ts`, and sets `MICROVM_IMAGE_ARN` and `MICROVM_EXECUTION_ROLE_ARN` on the function. A SAM template generated without `--microvm-image-arn` leaves the example out. Pair it with `cloudOnly: true` in `createTests`, because the local runner cannot launch a MicroVM.
 
 ### 3. Create the Test File
 
@@ -180,6 +181,7 @@ createTests({
   tests: TestCallback<ResultType>;                 // Test definitions
   invocationType?: InvocationType;                  // Optional: 'RequestResponse' | 'Event'
   localRunnerConfig?: LocalDurableTestRunnerSetupParameters; // Optional local test config
+  cloudOnly?: boolean;                              // Optional: skip the local run
 });
 ```
 
