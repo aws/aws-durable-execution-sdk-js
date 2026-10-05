@@ -224,8 +224,11 @@ export interface DurableInstrumentationPlugin {
    * Omit the hook or return undefined for no metadata. The collector isolates
    * plugin failures and keeps the first non-null value for each supported field.
    *
-   * Groundwork only: the invoke START path does not consume this hook until
-   * the public Lambda service models and backend support propagation fields.
+   * Called only when preparing a new invoke START, before checkpoint serialization.
+   * Replaying a persisted START does not call the hook. An uncommitted START can
+   * call it again on retry, so implementations must use the stable input identity
+   * and avoid side effects. Transport requires the Lambda model and backend to
+   * support ChainedInvokeOptions.XAmznTraceId.
    */
   providePropagationMetadata?(
     input: PropagationInput,

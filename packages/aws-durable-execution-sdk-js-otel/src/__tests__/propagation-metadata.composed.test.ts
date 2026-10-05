@@ -3,6 +3,18 @@ import type {
   InvocationInfo,
   PropagationInput,
 } from "@aws/durable-execution-sdk-js";
+import {
+  withDurableExecution,
+  DurableExecutionInvocationInputWithClient,
+  OperationType,
+  OperationStatus,
+} from "@aws/durable-execution-sdk-js";
+import type {
+  CheckpointDurableExecutionRequest,
+  DurableExecutionClient,
+  WireOperation,
+} from "@aws/durable-execution-sdk-js";
+import type { Context } from "aws-lambda";
 import { context, trace, ROOT_CONTEXT, TraceFlags } from "@opentelemetry/api";
 import {
   AlwaysOnSampler,
@@ -127,6 +139,132 @@ describe.each([ExecutionOtelPlugin, InvocationOtelPlugin])(
           expect(span.spanContext().traceFlags & 1).toBe(1);
         }
         started.mockRestore();
+      },
+    );
+
+    it.each(["SAMPLED", "NOT_SAMPLED", undefined] as const)(
+      "carries each actual invoke span identity through a batched public START (%s)",
+      async (sampling) => {
+        const plugin = make(sampling);
+        const requests: CheckpointDurableExecutionRequest[] = [];
+        const operations: WireOperation[] = [
+          {
+            Id: "execution",
+            Type: OperationType.EXECUTION,
+            Status: OperationStatus.STARTED,
+            StartTimestamp: info.executionStartTimestamp,
+            ExecutionDetails: { InputPayload: "{}" },
+          },
+        ];
+        const client: DurableExecutionClient = {
+          async getExecutionState() {
+            return { Operations: operations };
+          },
+          async checkpoint(request) {
+            requests.push(JSON.parse(JSON.stringify(request)));
+            return {
+              CheckpointToken: "next",
+              NewExecutionState: {
+                Operations: (request.Updates ?? []).map((update) => ({
+                  Id: update.Id,
+                  Type: update.Type,
+                  Name: update.Name,
+                  ParentId: update.ParentId,
+                  SubType: update.SubType,
+                  Status: OperationStatus.SUCCEEDED,
+                  StartTimestamp: info.executionStartTimestamp,
+                  EndTimestamp: new Date("2026-01-01T00:00:01Z"),
+                  ChainedInvokeDetails: { Result: update.Payload },
+                })),
+              },
+            };
+          },
+        };
+        const lambdaContext: Context = {
+          awsRequestId: "req",
+          getRemainingTimeInMillis: () => 0,
+          callbackWaitsForEmptyEventLoop: false,
+          functionName: "parent",
+          functionVersion: "1",
+          invokedFunctionArn: "parent:1",
+          memoryLimitInMB: "128",
+          logGroupName: "group",
+          logStreamName: "stream",
+          done() {},
+          fail() {},
+          succeed() {},
+        };
+        const handler = withDurableExecution(
+          async (_, ctx) => {
+            const first = ctx.invoke(
+              "first",
+              "first:1",
+              { item: 1 },
+              { tenantId: "tenant" },
+            );
+            const second = ctx.invoke("second", "second:1", { item: 2 });
+            return [await first, await second];
+          },
+          { plugins: [plugin] },
+        );
+        const result = await handler(
+          new DurableExecutionInvocationInputWithClient(
+            {
+              DurableExecutionArn: info.executionArn,
+              CheckpointToken: "token",
+              InitialExecutionState: { Operations: operations },
+            },
+            client,
+          ),
+          lambdaContext,
+        );
+        expect(result).toMatchObject({
+          Status: "SUCCEEDED",
+          Result: '[{"item":1},{"item":2}]',
+        });
+        expect(requests).toHaveLength(1);
+        const updates = requests[0].Updates!;
+        expect(updates).toHaveLength(2);
+        const spans = exporter.getFinishedSpans();
+        const headers = updates.map((update) =>
+          parseXRayTraceHeader(update.ChainedInvokeOptions?.XAmznTraceId),
+        );
+        expect(headers[0]?.parentSpanId).not.toBe(headers[1]?.parentSpanId);
+        for (const [i, update] of updates.entries()) {
+          const parsed = headers[i];
+          expect(parsed?.parentSpanId).toBe(
+            deriveSpanIdFromOperationId(update.Id!, info.executionArn),
+          );
+          expect(parsed?.sampling).toBe(
+            sampling === "NOT_SAMPLED" ? "NOT_SAMPLED" : "SAMPLED",
+          );
+          if (sampling) expect(parsed?.traceId).toBe(upstreamTrace);
+          expect(update.Payload).toBe(JSON.stringify({ item: i + 1 }));
+          expect(update.ChainedInvokeOptions?.FunctionName).toBe(
+            `${i === 0 ? "first" : "second"}:1`,
+          );
+          expect(update.ChainedInvokeOptions?.TenantId).toBe(
+            i === 0 ? "tenant" : undefined,
+          );
+          if (sampling !== "NOT_SAMPLED") {
+            const span = spans.find((span) => span.name === update.Name)!;
+            expect(parsed?.parentSpanId).toBe(span.spanContext().spanId);
+            expect(parsed?.traceId).toBe(span.spanContext().traceId);
+          }
+        }
+        expect(spans.map((span) => span.name).sort()).toEqual(
+          sampling === "NOT_SAMPLED"
+            ? []
+            : sampling === undefined
+              ? [
+                  "DurableExecutionRoot",
+                  "Invocation",
+                  "Workflow",
+                  "first",
+                  "second",
+                ]
+              : ["Invocation", "Workflow", "first", "second"],
+        );
       },
     );
 

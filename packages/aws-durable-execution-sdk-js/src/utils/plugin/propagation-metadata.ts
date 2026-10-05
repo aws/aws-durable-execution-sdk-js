@@ -60,6 +60,8 @@ export function collectPropagationMetadata(
       if (value == null) continue;
       if (typeof value !== "string")
         throw new TypeError("xAmznTraceId must be a string");
+      // Ignore an empty contribution without rewriting nonblank opaque headers.
+      if (value.trim().length === 0) continue;
       if (xAmznTraceId === undefined) {
         xAmznTraceId = value;
         firstPlugin = identity;

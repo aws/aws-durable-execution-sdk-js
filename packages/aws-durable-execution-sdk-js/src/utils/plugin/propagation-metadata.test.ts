@@ -100,7 +100,7 @@ describe("propagation metadata collector", () => {
     });
   });
 
-  it("merges only supported members and treats null/undefined as absent", () => {
+  it("merges only supported members and treats null/undefined/blank as absent", () => {
     const result = collect([
       {
         providePropagationMetadata: () =>
@@ -116,10 +116,11 @@ describe("propagation metadata collector", () => {
           baggage: "ignored",
         }),
       },
+      { providePropagationMetadata: () => ({ xAmznTraceId: " \t\n" }) },
       { providePropagationMetadata: () => ({ xAmznTraceId: "later" }) },
     ]);
-    expect(result).toEqual({ xAmznTraceId: "" });
-    expect(warning).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ xAmznTraceId: "later" });
+    expect(warning).not.toHaveBeenCalled();
   });
 
   it.each([
