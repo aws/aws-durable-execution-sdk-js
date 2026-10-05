@@ -47,8 +47,9 @@ const POLL_INTERVAL_MS = 10_000;
 const BUILD_TIMEOUT_MS = 20 * 60_000;
 
 // GetMicrovmImage reports an image as missing for a short time after
-// CreateMicrovmImage returns. A test run saw this for one 10-second poll. A create in that time would fail on the
-// duplicate name. So the script waits this long before it creates again.
+// CreateMicrovmImage returns. A test run saw this for one 10-second poll.
+// A create in that time would fail on the duplicate name. So the script
+// waits this long before it creates again.
 const CREATE_VISIBILITY_MS = 60_000;
 
 // The worker answers the ready hook at image build and the run hook at each
@@ -297,43 +298,29 @@ async function bundle(
   return { zip: readFileSync(zipPath), hash };
 }
 
-async function main() {
-  const args = process.argv.slice(2);
-  const outputPath = getArgValue(args, "--output");
-  if (!outputPath) {
-    throw new Error("--output is required");
-  }
+export interface ImageServiceDeps {
+  microvms: Pick<LambdaMicrovmsClient, "send">;
+  s3: Pick<S3Client, "send">;
+  name: string;
+  imageArn: string;
+  bucket: string;
+  key: string;
+  zip: Buffer;
+  settings: ImageSettings;
+}
 
-  const region = requireEnv("AWS_REGION");
-  const account = requireEnv("TEST_ACCOUNT_ID");
-  const bucket =
-    process.env.MICROVM_ARTIFACT_BUCKET ??
-    `microvm-image-artifacts-${account}-${region}`;
-  const executionRoleArn =
-    process.env.MICROVM_EXECUTION_ROLE_ARN ??
-    `arn:aws:iam::${account}:role/microvm-execution`;
-  const settings: ImageSettings = {
-    baseImageArn: `arn:aws:lambda:${region}:aws:microvm-image:al2023-1`,
-    buildRoleArn:
-      process.env.MICROVM_IMAGE_BUILD_ROLE_ARN ??
-      `arn:aws:iam::${account}:role/microvm-image-build`,
-    // The build pulls the Node.js base image from Amazon ECR Public.
-    egressNetworkConnectors: [
-      `arn:aws:lambda:${region}:aws:network-connector:aws-network-connector:INTERNET_EGRESS`,
-    ],
-    hooks: IMAGE_HOOKS,
-  };
-
-  warnOnCustomLambdaEndpoint(region);
-
-  const { zip, hash } = await bundle(settings);
-  const name = `${IMAGE_NAME_PREFIX}-${hash}`;
-  // GetMicrovmImage accepts only the image ARN, not the name.
-  const imageArn = `arn:aws:lambda:${region}:${account}:microvm-image:${name}`;
-  const client = new LambdaMicrovmsClient({ region });
-  const s3 = new S3Client({ region });
-  const key = `examples/${name}.zip`;
-
+/** Creates the {@link ImageService} that calls S3 and the MicroVMs API. */
+export function createImageService(deps: ImageServiceDeps): ImageService {
+  const {
+    microvms: client,
+    s3,
+    name,
+    imageArn,
+    bucket,
+    key,
+    zip,
+    settings,
+  } = deps;
   const service: ImageService = {
     get: async () => {
       try {
@@ -399,11 +386,71 @@ async function main() {
       }
     },
     delete: async () => {
-      await client.send(
-        new DeleteMicrovmImageCommand({ imageIdentifier: imageArn }),
-      );
+      try {
+        await client.send(
+          new DeleteMicrovmImageCommand({ imageIdentifier: imageArn }),
+        );
+      } catch (error) {
+        // The integration tests of several Node.js versions can see the same
+        // failed image and delete it at the same time. The later delete then
+        // fails, because the image is gone or is being deleted. The poll
+        // loop handles both states. So the run carries on when the image is
+        // missing or DELETING after the error.
+        const image = await service.get();
+        if (image === undefined || image.state === "DELETING") {
+          console.log(`MicroVM image ${name} was deleted by another run`);
+          return;
+        }
+        throw error;
+      }
     },
   };
+  return service;
+}
+
+async function main() {
+  const args = process.argv.slice(2);
+  const outputPath = getArgValue(args, "--output");
+  if (!outputPath) {
+    throw new Error("--output is required");
+  }
+
+  const region = requireEnv("AWS_REGION");
+  const account = requireEnv("TEST_ACCOUNT_ID");
+  const bucket =
+    process.env.MICROVM_ARTIFACT_BUCKET ??
+    `microvm-image-artifacts-${account}-${region}`;
+  const executionRoleArn =
+    process.env.MICROVM_EXECUTION_ROLE_ARN ??
+    `arn:aws:iam::${account}:role/microvm-execution`;
+  const settings: ImageSettings = {
+    baseImageArn: `arn:aws:lambda:${region}:aws:microvm-image:al2023-1`,
+    buildRoleArn:
+      process.env.MICROVM_IMAGE_BUILD_ROLE_ARN ??
+      `arn:aws:iam::${account}:role/microvm-image-build`,
+    // The build pulls the Node.js base image from Amazon ECR Public.
+    egressNetworkConnectors: [
+      `arn:aws:lambda:${region}:aws:network-connector:aws-network-connector:INTERNET_EGRESS`,
+    ],
+    hooks: IMAGE_HOOKS,
+  };
+
+  warnOnCustomLambdaEndpoint(region);
+
+  const { zip, hash } = await bundle(settings);
+  const name = `${IMAGE_NAME_PREFIX}-${hash}`;
+  // GetMicrovmImage accepts only the image ARN, not the name.
+  const imageArn = `arn:aws:lambda:${region}:${account}:microvm-image:${name}`;
+  const service = createImageService({
+    microvms: new LambdaMicrovmsClient({ region }),
+    s3: new S3Client({ region }),
+    name,
+    imageArn,
+    bucket,
+    key: `examples/${name}.zip`,
+    zip,
+    settings,
+  });
 
   await ensureImage(service, { name });
 
