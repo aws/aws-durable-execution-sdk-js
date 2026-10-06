@@ -554,11 +554,23 @@ OpenTelemetry trace ID and returns `undefined` for invalid input.
 `deriveExecutionTraceId` applies the default plugin precedence to an explicit
 environment and an optional fourth invocation-context argument. Only
 `_X_AMZN_TRACE_ID` is read from the environment, preserving existing callers even
-if they have an unrelated variable named `xRayTraceId`. On Managed Instances,
-pass `{ xRayTraceId: context.xRayTraceId }` as the fourth argument; that local
-carrier takes precedence, including when its value is empty, `undefined`, or
-`null`. A present carrier with no usable header suppresses the environment
-carrier and uses the ARN-and-start-time fallback. The durable wrapper treats a
+if they have an unrelated variable named `xRayTraceId`. In `onInvocationStart(info)`,
+pass the `InvocationInfo` snapshot from the coordinated core version as the fourth
+argument. Passing the snapshot preserves whether the carrier property exists;
+do not manufacture `{ xRayTraceId: undefined }` when that capability is absent.
+
+```typescript
+const traceId = deriveExecutionTraceId(
+  process.env,
+  info.executionArn,
+  info.executionStartTimestamp,
+  info,
+);
+```
+
+An available local carrier takes precedence, including when its value is empty,
+`undefined`, or `null`. A present carrier with no usable header suppresses the
+environment carrier and uses the ARN-and-start-time fallback. The durable wrapper treats a
 failing runtime getter or presence check as an empty carrier, preventing optional
 metadata failures from aborting the handler or adopting a stale process header.
 It does not inspect this carrier when no plugins are configured. Omit the property
