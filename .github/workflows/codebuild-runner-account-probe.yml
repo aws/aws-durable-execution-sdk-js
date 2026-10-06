@@ -81,6 +81,41 @@ env:
     if sudo install -d -o runner -g probe-user "$tmp/x" 2>&1; then echo "install -o runner: ok"; else echo "install -o runner: FAILED"; fi
     if sudo chown "$me:probe-user" "$tmp" 2>&1; then echo "chown $me:probe-user: ok"; else echo "chown $me:probe-user: FAILED"; fi
 
+  # Mirrors what llrt-cloud-test.js does with Docker (build a busybox-based
+  # image for linux/amd64, then the image would be pushed with credentials from
+  # `aws ecr get-login-password`). The push needs the test role, which the OIDC
+  # trust policy only grants to pull_request / main / tag subjects, so the probe
+  # stops at build + run and only checks the aws CLI is present.
+  DOCKER_PROBE_SCRIPT: |
+    set -u
+    section() { printf '\n== %s\n' "$1"; }
+
+    section "docker client / daemon"
+    command -v docker || { echo "docker: absent"; exit 1; }
+    docker version --format 'client {{.Client.Version}} server {{.Server.Version}}' || { echo "docker daemon: unreachable"; exit 1; }
+    docker info --format 'driver={{.Driver}} cgroup={{.CgroupDriver}} rootless={{.SecurityOptions}}' || true
+    docker buildx version 2>/dev/null || echo "buildx: absent"
+
+    section "aws cli (used for ecr get-login-password / sts in the real test)"
+    command -v aws && aws --version || echo "aws cli: absent"
+
+    section "build a linux/amd64 busybox image the way the llrt test does"
+    work="$(mktemp -d)"
+    printf 'echo hello from probe\n' > "$work/handler.sh"
+    cat > "$work/Dockerfile" <<'EOF'
+    FROM --platform=linux/amd64 busybox
+    WORKDIR /var/task/
+    COPY handler.sh ./
+    RUN chmod +x /var/task/handler.sh
+    CMD [ "sh", "/var/task/handler.sh" ]
+    EOF
+    time docker build --platform linux/amd64 -t codebuild-probe:1 "$work"
+
+    section "run the built image"
+    docker run --rm codebuild-probe:1
+    docker run --rm codebuild-probe:1 uname -m
+    docker image inspect codebuild-probe:1 --format 'arch={{.Architecture}} os={{.Os}} size={{.Size}}'
+
 jobs:
   codebuild-default:
     name: codebuild (project default)
@@ -89,6 +124,8 @@ jobs:
     steps:
       - name: Probe runner account
         run: bash -c "$PROBE_SCRIPT"
+      - name: Probe docker
+        run: bash -c "$DOCKER_PROBE_SCRIPT"
 
   github-hosted:
     name: ubuntu-latest (control)
@@ -96,3 +133,5 @@ jobs:
     steps:
       - name: Probe runner account
         run: bash -c "$PROBE_SCRIPT"
+      - name: Probe docker
+        run: bash -c "$DOCKER_PROBE_SCRIPT"
