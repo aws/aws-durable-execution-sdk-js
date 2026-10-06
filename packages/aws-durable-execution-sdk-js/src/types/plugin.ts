@@ -146,8 +146,9 @@ export interface InvocationBaseInfo {
 export interface InvocationInfo extends InvocationBaseInfo {
   /**
    * Invocation-local X-Ray header supplied by the Lambda runtime (including LMI).
-   * An empty string means the runtime exposes the carrier but has no header;
-   * omission preserves legacy environment fallback when no carrier is available.
+   * An empty string means the runtime exposes the carrier but has no header,
+   * or the optional carrier could not be safely read. Omission preserves legacy
+   * environment fallback when no carrier is available.
    */
   xRayTraceId?: string;
   isFirstInvocation: boolean;

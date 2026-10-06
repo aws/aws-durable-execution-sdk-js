@@ -558,7 +558,11 @@ if they have an unrelated variable named `xRayTraceId`. On Managed Instances,
 pass `{ xRayTraceId: context.xRayTraceId }` as the fourth argument; that local
 carrier takes precedence, including when its value is empty, `undefined`, or
 `null`. A present carrier with no usable header suppresses the environment
-carrier and uses the ARN-and-start-time fallback. Omit the property only when
+carrier and uses the ARN-and-start-time fallback. The durable wrapper treats a
+failing runtime getter or presence check as an empty carrier, preventing optional
+metadata failures from aborting the handler or adopting a stale process header.
+It does not inspect this carrier when no plugins are configured. Omit the property
+only when
 that runtime capability is unavailable; old cores and contexts without the
 property retain their environment fallback.
 When no valid Root is available, pass the same execution start timestamp as the

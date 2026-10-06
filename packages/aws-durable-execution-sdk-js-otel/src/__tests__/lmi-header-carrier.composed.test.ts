@@ -145,7 +145,14 @@ it.each([ExecutionOtelPlugin, InvocationOtelPlugin])(
 describe.each([ExecutionOtelPlugin, InvocationOtelPlugin])(
   "%p runtime carrier availability",
   (Plugin) => {
-    it.each(["absent", "undefined", "null", "empty"])(
+    it.each([
+      "absent",
+      "undefined",
+      "null",
+      "empty",
+      "throwing-getter",
+      "throwing-has",
+    ])(
       "preserves carrier authority for %s through the public wrapper",
       async (availability) => {
         const previousHeader = process.env._X_AMZN_TRACE_ID;
@@ -203,11 +210,36 @@ describe.each([ExecutionOtelPlugin, InvocationOtelPlugin])(
               }),
             },
           );
-          const runtimeContext = {
+          let runtimeContext = {
             awsRequestId: `request-${availability}`,
             getRemainingTimeInMillis: () => 30000,
           };
-          if (availability !== "absent") {
+          let reads = 0;
+          let hasChecks = 0;
+          if (availability === "throwing-getter") {
+            Object.defineProperty(runtimeContext, "xRayTraceId", {
+              get() {
+                reads++;
+                throw new Error("optional runtime header unavailable");
+              },
+            });
+          } else if (availability === "throwing-has") {
+            runtimeContext = new Proxy(runtimeContext, {
+              get(target, key, receiver) {
+                if (key === "xRayTraceId") reads++;
+                return Reflect.get(target, key, receiver);
+              },
+              has(target, key) {
+                if (key === "xRayTraceId") {
+                  hasChecks++;
+                  throw new Error(
+                    "optional runtime carrier lookup unavailable",
+                  );
+                }
+                return Reflect.has(target, key);
+              },
+            });
+          } else if (availability !== "absent") {
             Object.defineProperty(runtimeContext, "xRayTraceId", {
               value:
                 availability === "undefined"
@@ -220,6 +252,13 @@ describe.each([ExecutionOtelPlugin, InvocationOtelPlugin])(
           expect(await handler(event, runtimeContext as LambdaContext)).toEqual(
             { Status: "SUCCEEDED", Result: '"ok"' },
           );
+          if (
+            availability === "throwing-getter" ||
+            availability === "throwing-has"
+          ) {
+            expect(reads).toBe(1);
+            expect(hasChecks).toBe(availability === "throwing-has" ? 1 : 0);
+          }
           if (availability === "absent")
             expect(seen).not.toHaveProperty("xRayTraceId");
           else expect(seen?.xRayTraceId).toBe("");
