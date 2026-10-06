@@ -1,0 +1,98 @@
+name: CodeBuild runner account probe
+
+# Temporary probe: records which account the CodeBuild-hosted runner executes
+# as, whether the GitHub-hosted `runner` account and /home/runner exist, where
+# GITHUB_WORKSPACE lives, and what a freshly created unprivileged user can see
+# (sudoers env_keep behaviour, credential endpoint, root process environ).
+# Run side by side on the CodeBuild project default and on ubuntu-latest.
+# Not for merge.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/codebuild-runner-account-probe.yml
+
+permissions: {}
+
+env:
+  PROBE_SCRIPT: |
+    set -u
+    section() { printf '\n== %s\n' "$1"; }
+
+    section "invoking account"
+    id
+    echo "HOME=$HOME"
+    echo "whoami=$(whoami)"
+
+    section "runner account / home"
+    getent passwd runner || echo "no 'runner' user in passwd"
+    getent group runner || echo "no 'runner' group"
+    ls -ld /home/runner 2>&1 || true
+
+    section "workspace location and parent chain"
+    echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+    echo "RUNNER_TEMP=${RUNNER_TEMP:-unset}"
+    echo "RUNNER_TOOL_CACHE=${RUNNER_TOOL_CACHE:-unset}"
+    namei -l "$GITHUB_WORKSPACE" || true
+
+    section "sudo"
+    if sudo -n true 2>/dev/null; then echo "passwordless sudo: yes"; else echo "passwordless sudo: no"; fi
+    command -v visudo >/dev/null && echo "visudo: present" || echo "visudo: absent"
+    command -v setfacl >/dev/null && echo "setfacl: present" || echo "setfacl: absent"
+
+    section "ambient AWS credential plumbing (names only, no values)"
+    env | awk -F= '/^AWS_CONTAINER_CREDENTIALS|^AWS_CONTAINER_AUTHORIZATION|^ECS_CONTAINER_METADATA|^AWS_EXECUTION_ENV|^CODEBUILD_/ {print $1}' | sort || true
+    curl -s -m 3 -o /dev/null -w 'cred endpoint 169.254.170.2: http %{http_code}\n' http://169.254.170.2/ || echo "cred endpoint 169.254.170.2: unreachable"
+    curl -s -m 3 -o /dev/null -w 'imds 169.254.169.254: http %{http_code}\n' http://169.254.169.254/latest/meta-data/ || echo "imds 169.254.169.254: unreachable"
+
+    if ! sudo -n true 2>/dev/null; then
+      echo; echo "no sudo: skipping unprivileged-user experiments"; exit 0
+    fi
+
+    section "sudoers env_keep: does 'Defaults:runner' match the invoker?"
+    export PROBE_KEEP_RUNNER=via-runner-rule PROBE_KEEP_SELF=via-self-rule
+    sudo useradd -m probe-user
+    me="$(id -un)"
+    printf 'Defaults:runner env_keep += "PROBE_KEEP_RUNNER"\nDefaults:%s env_keep += "PROBE_KEEP_SELF"\n' "$me" | sudo tee /etc/sudoers.d/probe >/dev/null
+    sudo chmod 0440 /etc/sudoers.d/probe
+    sudo visudo -cf /etc/sudoers.d/probe || true
+    sudo -u probe-user env | grep -E '^PROBE_KEEP_RUNNER=' || echo "PROBE_KEEP_RUNNER: dropped (Defaults:runner did not match invoker '$me')"
+    sudo -u probe-user env | grep -E '^PROBE_KEEP_SELF=' || echo "PROBE_KEEP_SELF: dropped"
+
+    section "as probe-user: what can it reach?"
+    sudo -u probe-user env GITHUB_WORKSPACE="$GITHUB_WORKSPACE" bash -c '
+      id
+      env | awk -F= "/^AWS_CONTAINER|^AWS_ACCESS|^AWS_SECRET|^AWS_SESSION/ {print \$1}" | sort
+      env | grep -q "^AWS_CONTAINER" || echo "no AWS_CONTAINER_* vars inherited"
+      curl -s -m 3 -o /dev/null -w "cred endpoint 169.254.170.2: http %{http_code}\n" http://169.254.170.2/ || echo "cred endpoint 169.254.170.2: unreachable"
+      curl -s -m 3 -o /dev/null -w "imds 169.254.169.254: http %{http_code}\n" http://169.254.169.254/latest/meta-data/ || echo "imds 169.254.169.254: unreachable"
+      if cat /proc/1/environ >/dev/null 2>&1; then echo "CAN read /proc/1/environ"; else echo "cannot read /proc/1/environ"; fi
+      ppid=$(ps -o ppid= -p $$ | tr -d " ")
+      if cat /proc/$ppid/environ >/dev/null 2>&1; then echo "CAN read parent (sudo) environ"; else echo "cannot read parent (sudo) environ"; fi
+      if test -x "$GITHUB_WORKSPACE"; then echo "workspace traversable: yes"; else echo "workspace traversable: no"; fi
+      if test -r "$GITHUB_WORKSPACE"; then echo "workspace readable: yes"; else echo "workspace readable: no"; fi
+      if test -x /home/runner 2>/dev/null; then echo "/home/runner traversable: yes"; else echo "/home/runner traversable: no or absent"; fi
+    '
+
+    section "chown to the literal runner account (what the scripts do today)"
+    tmp="$(mktemp -d)"
+    if sudo chown runner:probe-user "$tmp" 2>&1; then echo "chown runner:probe-user: ok"; else echo "chown runner:probe-user: FAILED"; fi
+    if sudo install -d -o runner -g probe-user "$tmp/x" 2>&1; then echo "install -o runner: ok"; else echo "install -o runner: FAILED"; fi
+    if sudo chown "$me:probe-user" "$tmp" 2>&1; then echo "chown $me:probe-user: ok"; else echo "chown $me:probe-user: FAILED"; fi
+
+jobs:
+  codebuild-default:
+    name: codebuild (project default)
+    runs-on:
+      - codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Probe runner account
+        run: bash -c "$PROBE_SCRIPT"
+
+  github-hosted:
+    name: ubuntu-latest (control)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe runner account
+        run: bash -c "$PROBE_SCRIPT"
