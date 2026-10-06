@@ -1,0 +1,30 @@
+name: CodeBuild Codex review probe
+
+# Temporary probe: runs the real Codex review (aws/aws-durable-execution-ci
+# codex-review.yml from the ci/runs-on-input branch) on the CodeBuild project
+# default runner. The normal entry workflow only accepts pull_request_target /
+# issue_comment events, which read the default branch's workflow files, so a
+# pull request cannot exercise the CodeBuild path through it; this caller
+# bypasses the entry and feeds the inputs resolve_review would compute. The
+# review it produces lands on this PR. Not for merge.
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/codebuild-codex-review-probe.yml
+
+permissions: {}
+
+jobs:
+  codex-review:
+    permissions:
+      contents: write
+      id-token: write
+      pull-requests: write
+    uses: aws/aws-durable-execution-ci/.github/workflows/codex-review.yml@d901b2f1a50731f46bb791b7cae6cbe7f56ae917
+    with:
+      runs-on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
+      pull-request-number: ${{ format('{0}', github.event.pull_request.number) }}
+      base-sha: ${{ github.event.pull_request.base.sha }}
+      head-sha: ${{ github.event.pull_request.head.sha }}
+    secrets: inherit
