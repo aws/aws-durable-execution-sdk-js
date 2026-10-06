@@ -26,7 +26,7 @@ jobs:
     permissions:
       contents: read
       id-token: write # Required for AWS credentials
-    runs-on: ubuntu-latest
+    runs-on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v7
 
@@ -68,7 +68,7 @@ jobs:
 
   jest-integration-test:
     needs: deploy
-    runs-on: ubuntu-latest
+    runs-on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
     name: Jest Integration Tests
     permissions:
       contents: read
