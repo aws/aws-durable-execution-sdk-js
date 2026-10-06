@@ -93,18 +93,28 @@ async function runHandler<
     executionStartTimestamp: initialExecutionEvent?.StartTimestamp ?? undefined,
   };
 
-  const xRayTraceId = (context as Context & { xRayTraceId?: string })
-    .xRayTraceId;
-  // New runtimes expose the carrier even when this invocation has no header.
-  // Preserve that authority instead of falling back to another invocation's env.
-  const hasInvocationTraceCarrier =
-    xRayTraceId !== undefined || "xRayTraceId" in context;
+  let runtimeTraceInfo: Pick<InvocationInfo, "xRayTraceId"> = {};
+  // Factories need the same safe carrier snapshot as invocation hooks. Without
+  // any configured factory, optional instrumentation metadata is never read.
+  if (pluginFactories.length > 0) {
+    try {
+      const xRayTraceId = (context as Context & { xRayTraceId?: string })
+        .xRayTraceId;
+      if (xRayTraceId !== undefined || "xRayTraceId" in context) {
+        runtimeTraceInfo = { xRayTraceId: xRayTraceId ?? "" };
+      }
+    } catch {
+      // Optional runtime getters/proxies must not fail the handler or cause
+      // another invocation's process-wide header to be used as a fallback.
+      runtimeTraceInfo = { xRayTraceId: "" };
+    }
+  }
   const invocationInfo: InvocationInfo = {
     ...invocationBaseInfo,
     isFirstInvocation:
       durableExecutionMode === DurableExecutionMode.ExecutionMode,
     updatedOperations,
-    ...(hasInvocationTraceCarrier ? { xRayTraceId: xRayTraceId ?? "" } : {}),
+    ...runtimeTraceInfo,
   };
 
   // One plugin instance per configured factory, per invocation, held only in this
