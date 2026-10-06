@@ -373,13 +373,16 @@ export interface MicrovmWorkerListener {
  *   because a suspend hook that runs past its timeout terminates the
  *   MicroVM. It then refuses jobs with HTTP 503, as after its own suspend,
  *   until the `resume` hook or for 30 seconds. Running jobs freeze with the
- *   MicroVM, and continue after a resume.
+ *   MicroVM, and continue after a resume. A `run` hook job that arrives
+ *   during the refusal starts when the refusal ends, because the durable
+ *   function cannot deliver it again.
  * - `terminate`: Lambda is about to end the MicroVM, after TerminateMicrovm
  *   or at the end of `maximumDurationInSeconds`. The listener aborts each
  *   running job's `context.signal` and fails its callback with
  *   {@link MicrovmTerminatedError}. So the durable function fails the job at
  *   once. It answers HTTP 200 when the reports end, or after 5 seconds. From
- *   then on it refuses jobs with HTTP 503. Lambda does not call the hook
+ *   then on it refuses jobs with HTTP 503, and fails the callback of a
+ *   `run` hook job instead of starting it. Lambda does not call the hook
  *   when it terminates a suspended MicroVM, because the process is frozen.
  *
  * The listener acts on these two hooks only when the request carries
@@ -487,6 +490,10 @@ export function createMicrovmWorkerListener<
   >();
   // The jobs whose handlers have settled and whose outcome is being reported.
   const reporting = new Set<string>();
+  // Run hook jobs that arrived while the worker refused jobs for a suspend.
+  // The durable function cannot deliver a run hook job again, so the worker
+  // starts it when the refusal ends, instead of refusing it.
+  const deferred: { job: MicrovmJobDocument<TInput>; region: string }[] = [];
   let closed = false;
 
   const track = (work: Promise<void>): void => {
@@ -551,8 +558,18 @@ export function createMicrovmWorkerListener<
       return;
     }
     suspending = false;
+    startDeferredJobs();
     startIdleTime();
   };
+
+  /** Starts the run hook jobs that arrived during a refusal. */
+  function startDeferredJobs(): void {
+    for (const { job, region } of deferred.splice(0)) {
+      if (options.handler) {
+        startJob(options.handler, job, region);
+      }
+    }
+  }
 
   async function suspendSelf(
     region: string,
@@ -574,6 +591,7 @@ export function createMicrovmWorkerListener<
         error: describe(error),
       });
       suspending = false;
+      startDeferredJobs();
       return;
     }
     logger.info("suspending the idle MicroVM", {
@@ -600,6 +618,7 @@ export function createMicrovmWorkerListener<
           clearTimeout(graceTimer);
           graceTimer = undefined;
           suspending = false;
+          startDeferredJobs();
         }
         return;
       }
@@ -725,6 +744,16 @@ export function createMicrovmWorkerListener<
       reports.push(report);
       failed++;
     }
+    for (const { job, region } of deferred.splice(0)) {
+      const report = failCallback(
+        new MicrovmTerminatedError(),
+        job.callbackId,
+        region,
+      );
+      track(report);
+      reports.push(report);
+      failed++;
+    }
     if (failed > 0) {
       logger.warn("failing running jobs: the MicroVM is terminating", {
         microvmId,
@@ -787,6 +816,36 @@ export function createMicrovmWorkerListener<
     if (job && isKnownJob(job.callbackId)) {
       logger.warn("duplicate job ignored", { microvmId });
       respond(response, 200, {});
+      return;
+    }
+
+    // The body is read before these checks. So a suspend or terminate hook
+    // can arrive while the body of this request is still being read.
+    if (job && options.handler && terminating) {
+      // The job could not finish. The durable function cannot deliver a run
+      // hook job again, so the worker fails its callback, as for a job that
+      // was running when the terminate hook arrived.
+      logger.info("run hook job not started: the MicroVM is terminating", {
+        microvmId,
+      });
+      respond(response, 200, {});
+      track(
+        failCallback(
+          new MicrovmTerminatedError(),
+          job.callbackId,
+          payload.region,
+        ),
+      );
+      return;
+    }
+    if (job && options.handler && suspending) {
+      // A job started now would freeze with the MicroVM. The worker starts it
+      // when the refusal ends.
+      logger.info("run hook job deferred: the MicroVM is suspending", {
+        microvmId,
+      });
+      respond(response, 200, {});
+      deferred.push({ job, region: payload.region });
       return;
     }
 

@@ -108,6 +108,7 @@ On the `suspend` hook the worker:
 1. Answers HTTP 200 at once. A suspend hook that ran past its timeout terminated the MicroVM instead of suspending it.
 2. Refuses every job with HTTP 503, as after its own suspend. A job accepted now would freeze with the MicroVM. The refusal ends when the `resume` hook arrives, or after 30 seconds.
 3. Leaves running jobs alone. They freeze with the MicroVM, and continue after a resume.
+4. Defers a job from a `run` hook whose body was still arriving. The durable function cannot deliver a `run` hook job again, so the worker does not refuse it. It starts the job when the refusal ends.
 
 Lambda called the hook after `SuspendMicrovm` from outside, after the worker's own `SuspendMicrovm`, and when the idle policy suspended the MicroVM.
 
@@ -116,7 +117,7 @@ On the `terminate` hook the worker:
 1. Aborts each running job's `context.signal` with a `MicrovmTerminatedError`, and stops its heartbeats.
 2. Fails each running job's callback with that error. The durable function receives `MicrovmTerminatedError` as the error type.
 3. Answers HTTP 200 when the reports end, or after 5 seconds. A report took 20 to 1,700 milliseconds in testing.
-4. Refuses every later job with HTTP 503, and never suspends the MicroVM again.
+4. Refuses every later job with HTTP 503, and never suspends the MicroVM again. A job from a `run` hook whose body was still arriving is not started. Its callback fails with `MicrovmTerminatedError`, as does a job deferred by an earlier `suspend` hook.
 
 Lambda called the hook after `TerminateMicrovm` on a running MicroVM, and at the end of `maximumDurationInSeconds`. It did not call the hook when it terminated a suspended MicroVM, after `TerminateMicrovm` or at the end of the idle policy's `suspendedDurationSeconds`. The process is frozen then. A job of such a MicroVM fails at its heartbeat timeout or its timeout.
 
