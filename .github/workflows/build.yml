@@ -29,7 +29,15 @@ env:
 jobs:
   lint-commits:
     # Note: To re-run `lint-commits` after fixing the PR title, close-and-reopen the PR.
-    runs-on: ubuntu-latest
+    #
+    # Jobs run on the CodeBuild-hosted runner in the JS testing account (EC2
+    # compute, Ubuntu standard image; the label must match the CodeBuild project
+    # name). Pull requests from forks are routed to GitHub-hosted runners. This
+    # expression is routing, not a trust boundary: a pull_request runs the PR's
+    # own workflow file, so the fork boundary is the repository's approval
+    # setting for fork workflows. The same expression is used by every job below
+    # and by the reusable workflows this one calls.
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || format('codebuild-github-actions-runner-{0}-{1}', github.run_id, github.run_attempt) }}
     steps:
       - uses: actions/checkout@v7
       - name: Use Node.js 22.x
@@ -55,7 +63,7 @@ jobs:
     # is a required check -- and keeping these parallel means a PR with a lint error
     # still gets real test results in the same run.
     needs: lint-commits
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || format('codebuild-github-actions-runner-{0}-{1}', github.run_id, github.run_attempt) }}
     steps:
       - uses: actions/checkout@v7
       - name: Use Node.js 22.x
@@ -91,7 +99,7 @@ jobs:
   # the renderer is typechecked at all.
   insight-hosts:
     needs: lint-commits
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || format('codebuild-github-actions-runner-{0}-{1}', github.run_id, github.run_attempt) }}
     steps:
       - uses: actions/checkout@v7
       - name: Use Node.js 22.x
