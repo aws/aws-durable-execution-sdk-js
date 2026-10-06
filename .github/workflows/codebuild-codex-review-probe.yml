@@ -5,18 +5,56 @@ name: CodeBuild Codex review probe
 # default runner. The normal entry workflow only accepts pull_request_target /
 # issue_comment events, which read the default branch's workflow files, so a
 # pull request cannot exercise the CodeBuild path through it; this caller
-# bypasses the entry and feeds the inputs resolve_review would compute. The
-# review it produces lands on this PR. Not for merge.
+# bypasses the entry and feeds the inputs resolve_review would compute.
+#
+# Triggered on push rather than pull_request: the ai-pr-review-runtime
+# environment has a branch policy, and pull_request jobs run on the synthetic
+# ref refs/pull/N/merge, which can never match one. A push to this branch runs
+# on refs/heads/<branch>, which the temporary policy entry allows.
+# The review it produces lands on PR #968. Not for merge.
 
 on:
-  pull_request:
+  push:
+    branches:
+      - ci/codebuild-runner-account-probe
     paths:
       - .github/workflows/codebuild-codex-review-probe.yml
 
 permissions: {}
 
+env:
+  PROBE_PR: "968"
+
 jobs:
+  resolve:
+    runs-on:
+      - codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
+    permissions:
+      pull-requests: read
+    outputs:
+      number: ${{ steps.pr.outputs.number }}
+      base-sha: ${{ steps.pr.outputs.base }}
+      head-sha: ${{ steps.pr.outputs.head }}
+    steps:
+      - id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          base="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PROBE_PR}" --jq .base.sha)"
+          head="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PROBE_PR}" --jq .head.sha)"
+          if [[ "$head" != "$GITHUB_SHA" ]]; then
+            echo "::error::PR #${PROBE_PR} head ${head} is not the pushed commit ${GITHUB_SHA}"
+            exit 1
+          fi
+          {
+            echo "number=${PROBE_PR}"
+            echo "base=${base}"
+            echo "head=${head}"
+          } >> "$GITHUB_OUTPUT"
+
   codex-review:
+    needs: resolve
     permissions:
       contents: write
       id-token: write
@@ -24,7 +62,7 @@ jobs:
     uses: aws/aws-durable-execution-ci/.github/workflows/codex-review.yml@d901b2f1a50731f46bb791b7cae6cbe7f56ae917
     with:
       runs-on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
-      pull-request-number: ${{ format('{0}', github.event.pull_request.number) }}
-      base-sha: ${{ github.event.pull_request.base.sha }}
-      head-sha: ${{ github.event.pull_request.head.sha }}
+      pull-request-number: ${{ needs.resolve.outputs.number }}
+      base-sha: ${{ needs.resolve.outputs.base-sha }}
+      head-sha: ${{ needs.resolve.outputs.head-sha }}
     secrets: inherit
