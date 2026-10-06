@@ -298,6 +298,50 @@ The `Invocation` span may still nest under a same-trace ambient handler span —
 see [Invocation parent](#invocation-parent) — without changing the execution
 ancestor the `Workflow` span joins.
 
+### Synthetic root export lifecycle
+
+When fallback tracing is sampled and the backend supplies `executionStartTimestamp`,
+both views create and end `DurableExecutionRoot` during the first invocation's
+start hook. Its start and end are both that backend timestamp, so it is a
+zero-duration identity anchor. The normal invocation-boundary flush can export it
+before a `PENDING` or `RETRYING` invocation returns. If the execution is later
+stopped or times out while suspended, no further SDK hook is required to create
+that already-ended ancestor.
+
+A terminal invocation also exports the same anchor as a recovery copy, unless
+it was already created in that invocation. Thus an execution that completes in
+its first invocation emits one copy; first-invocation retries can emit further
+copies, intermediate resumes do not, and a later terminal invocation emits a
+backup. This backup covers a first invocation that never reached its flush.
+The SDK-owned span fields are identical when the execution's trace identity,
+backend start timestamp and instrumentation configuration remain stable. The
+anchor has no terminal status, request ID or execution duration; `Workflow`
+continues to carry the duration and outcome.
+
+Resources belong to the configured provider. Resource attributes such as
+`faas.instance` can differ across execution environments even for identical
+anchor span content; backends may retain whichever resource accompanies their
+chosen copy. Span processors that enrich these spans must likewise avoid
+invocation-varying span fields when relying on identity-based deduplication.
+Export delivery and flushing remain the provider/layer's responsibility. The
+plugin awaits `forceFlush()` when its provider exposes it, but a killed invocation
+or a failed export cannot guarantee delivery; this is not exactly-once export.
+
+If a caller omits `executionStartTimestamp`, the plugin retains terminal-only
+synthetic-root materialization with its existing timestamp fallback. It does not
+invent a wall-clock-based early anchor. These callers do not get the early-anchor
+or identical-timestamp guarantee; the backend timestamp must be consistently
+supplied to enable that contract. Complete propagated remote parents are never
+materialized by the SDK, and explicit `NOT_SAMPLED` executions emit no root.
+
+Sampling is still resolved once per invocation. Explicit upstream decisions or
+a deterministic trace-based policy (for example a ratio sampler) keep the anchor
+and terminal `Workflow` decisions consistent across resumes. A non-deterministic
+custom sampler can select the first and terminal invocation differently, leaving
+an anchor without a sampled `Workflow`, or sampling only the terminal invocation
+and its backup anchor. This change does not persist sampling decisions or add a
+second sampler query for the anchor.
+
 ### Workflow identity and lifecycle
 
 `Workflow` is an `INTERNAL` span that **joins the execution trace** by parenting
@@ -317,7 +361,7 @@ The plugins carry the same `Workflow` span identity on each invocation as a
 non-recording span context, and create the single recording `Workflow` span only
 when the execution reaches `SUCCEEDED` or `FAILED`, backdated to the execution
 start. `PENDING` and `RETRYING` invocations create no recording `Workflow` span,
-so none is ever left unended, and exactly one `Workflow` root is exported for the
+so none is ever left unended, and one terminal `Workflow` span is exported for the
 durable execution while intermediate invocation spans export normally. The
 non-recording context carries the execution's sampling decision, so operations
 under it are sampled consistently with the eventual root. In-flight attempt spans

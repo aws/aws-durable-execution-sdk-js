@@ -93,6 +93,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   // start and reused when the real span is created at terminal.
   private executionAncestor: SpanContext | undefined;
   private executionStartTimestamp: Date | undefined;
+  // Only a backend timestamp can define a retry-stable, zero-duration anchor.
+  private syntheticRootAnchorTimestamp: Date | undefined;
+  private syntheticRootMaterialized = false;
 
   private readonly usesGlobalProvider: boolean;
   private globalIdGeneratorInstalled: boolean;
@@ -193,10 +196,13 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     // carries the execution sampled bit so a parent-based sampler stays
     // consistent with the eventual root.
     this.executionAncestor = execTraceContext.executionAncestor;
+    // Snapshot the Date: another hook must not be able to alter a later copy
+    // of this invocation's anchor by mutating the input object.
+    this.syntheticRootAnchorTimestamp = info.executionStartTimestamp
+      ? new Date(info.executionStartTimestamp.getTime())
+      : undefined;
     this.executionStartTimestamp =
-      info.executionStartTimestamp ??
-      this.executionStartTimestamp ??
-      new Date();
+      this.syntheticRootAnchorTimestamp ?? new Date();
     this.workflowSpan = trace.wrapSpanContext({
       traceId: this.executionTraceId,
       spanId: workflowSpanId,
@@ -253,6 +259,12 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       },
       invocationParentContext,
     );
+
+    // End the anchor before user code runs. The invocation-boundary
+    // flush can send it even when this invocation subsequently suspends/retries.
+    if (info.isFirstInvocation && this.syntheticRootAnchorTimestamp) {
+      this.createSyntheticRoot()?.end(this.syntheticRootAnchorTimestamp);
+    }
   }
 
   wrapInvocation(
@@ -310,29 +322,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       this.executionAncestor &&
       (info.status === "SUCCEEDED" || info.status === "FAILED")
     ) {
-      // A synthetic ancestor is SDK-owned and therefore must be exported.
-      // Materialize it only on terminal completion, alongside the one real
-      // Workflow span, so wait/resume and retries do not emit conflicting copies.
-      const syntheticRootSpan = this.executionAncestor.isRemote
-        ? undefined
-        : this.idGenerator.withIds(
-            {
-              traceId: this.executionTraceId,
-              spanId: this.executionAncestor.spanId,
-            },
-            () =>
-              this.startSpan(
-                "DurableExecutionRoot",
-                {
-                  kind: SpanKind.INTERNAL,
-                  attributes: {
-                    "durable.execution.synthetic_root": true,
-                  },
-                  startTime: this.executionStartTimestamp ?? new Date(),
-                },
-                ROOT_CONTEXT,
-              ),
-          );
+      // Re-export the identical stable anchor as a terminal backup. A first
+      // invocation that also terminates has already materialized it above.
+      const syntheticRootSpan = this.createSyntheticRoot();
 
       const workflowSpanId = deriveWorkflowSpanId(this.executionArn);
       const executionAncestorContext = trace.setSpanContext(
@@ -364,10 +356,10 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         workflowSpan.setStatus({ code: SpanStatusCode.OK });
       }
       workflowSpan.end();
-      syntheticRootSpan?.end();
+      syntheticRootSpan?.end(this.syntheticRootAnchorTimestamp);
     }
-    // Non-terminal (PENDING/RETRYING): no real Workflow_Span or synthetic root is created, so
-    // nothing to end — the identity was only ever a non-recording context.
+    // PENDING/RETRYING never materializes Workflow. The first invocation may
+    // already have ended its stable synthetic anchor; resumes add no copy.
 
     // 3. End any attempt span still open (safeguard against a leak on a
     // non-terminal invocation, issue #831). Operation placeholders have no
@@ -394,6 +386,40 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
     // 5. Clear per-invocation state
     this.resetInvocationState();
+  }
+
+  /** Creates at most one SDK-owned root per invocation; the caller ends it. */
+  private createSyntheticRoot(): Span | undefined {
+    if (
+      this.syntheticRootMaterialized ||
+      this.executionSamplingDecision !== SamplingDecision.RECORD_AND_SAMPLED ||
+      !this.executionAncestor ||
+      this.executionAncestor.isRemote
+    ) {
+      return undefined;
+    }
+
+    const span = this.idGenerator.withIds(
+      {
+        traceId: this.executionTraceId,
+        spanId: this.executionAncestor.spanId,
+      },
+      () =>
+        this.startSpan(
+          "DurableExecutionRoot",
+          {
+            kind: SpanKind.INTERNAL,
+            attributes: { "durable.execution.synthetic_root": true },
+            startTime:
+              this.syntheticRootAnchorTimestamp ??
+              this.executionStartTimestamp ??
+              new Date(),
+          },
+          ROOT_CONTEXT,
+        ),
+    );
+    this.syntheticRootMaterialized = true;
+    return span;
   }
 
   private ensureGlobalIdGeneratorInstalled(): boolean {
@@ -429,6 +455,8 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     this.invocationSpan = undefined;
     this.executionAncestor = undefined;
     this.executionStartTimestamp = undefined;
+    this.syntheticRootAnchorTimestamp = undefined;
+    this.syntheticRootMaterialized = false;
     this.executionArn = "";
     this.executionTraceId = "";
     this.executionTraceFlags = 0;

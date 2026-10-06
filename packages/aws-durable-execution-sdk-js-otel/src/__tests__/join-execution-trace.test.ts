@@ -177,7 +177,7 @@ describe("Execution trace joining", () => {
       },
     );
 
-    it("does not export a synthetic root before terminal completion", async () => {
+    it("exports the first anchor and repeats it at terminal completion", async () => {
       const plugin = makePlugin({ contextExtractor: () => undefined });
 
       await plugin.onInvocationStart(makeInvocationInfo());
@@ -189,7 +189,7 @@ describe("Execution trace joining", () => {
         exporter
           .getFinishedSpans()
           .filter((span) => span.name === "DurableExecutionRoot"),
-      ).toHaveLength(0);
+      ).toHaveLength(1);
       expect(
         exporter.getFinishedSpans().filter((span) => span.name === "Workflow"),
       ).toHaveLength(0);
@@ -208,7 +208,7 @@ describe("Execution trace joining", () => {
         exporter
           .getFinishedSpans()
           .filter((span) => span.name === "DurableExecutionRoot"),
-      ).toHaveLength(1);
+      ).toHaveLength(2);
     });
 
     it("does not emit a stray synthetic root for explicit Sampled=0 fallback", async () => {
