@@ -737,15 +737,11 @@ export function createMicrovmWorkerListener<
   async function handleTerminateHook(response: ServerResponse): Promise<void> {
     terminating = true;
     stopIdleTime();
-    // A job whose handler has settled reports its own outcome. A run hook
-    // whose body is still arriving can name a job, and then fails its
-    // callback. The answer waits for both.
-    const reports: Promise<void>[] = [
-      ...[...jobs]
-        .filter(([callbackId]) => reporting.has(callbackId))
-        .map(([, run]) => run),
-      ...runHooks,
-    ];
+    // A job whose handler has settled reports its own outcome. The answer
+    // waits for that report too.
+    const reports: Promise<void>[] = [...jobs]
+      .filter(([callbackId]) => reporting.has(callbackId))
+      .map(([, run]) => run);
     let failed = 0;
     for (const [callbackId, job] of active) {
       // Removed first, so that a second terminate hook reports nothing again.
@@ -775,17 +771,30 @@ export function createMicrovmWorkerListener<
         jobs: failed,
       });
     }
-    if (reports.length > 0) {
-      let timer: NodeJS.Timeout | undefined;
-      await Promise.race([
-        Promise.allSettled(reports),
-        new Promise((resolve) => {
-          timer = setTimeout(resolve, TERMINATE_REPORT_BUDGET_MS);
-          timer.unref();
-        }),
-      ]);
-      clearTimeout(timer);
+    // A run hook whose body is still arriving can name a job, and then fails
+    // its callback. A run hook can also begin while the worker waits here.
+    // So the wait reads the set of run hooks again after each round, until
+    // it is empty or the budget ends.
+    let timer: NodeJS.Timeout | undefined;
+    let budgetEnded = false;
+    const budget = new Promise<void>((resolve) => {
+      timer = setTimeout(() => {
+        budgetEnded = true;
+        resolve();
+      }, TERMINATE_REPORT_BUDGET_MS);
+      timer.unref();
+    });
+    for (;;) {
+      const pending = [...reports, ...runHooks];
+      if (pending.length === 0 || budgetEnded) {
+        break;
+      }
+      await Promise.race([Promise.allSettled(pending), budget]);
+      // The reports have settled, unless the budget ended. A settled run hook
+      // has left the set, so the next round waits only for new ones.
+      reports.length = 0;
     }
+    clearTimeout(timer);
     respond(response, 200, {});
   }
 

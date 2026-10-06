@@ -511,6 +511,36 @@ describe("suspend and terminate hooks", () => {
       ]);
     });
 
+    it("waits for a run hook that begins while the terminate hook waits", async () => {
+      const worker = start();
+      // An HTTP job can arrive before the run hook. Its report holds the
+      // terminate answer open while the run hook begins.
+      expect(await job(worker, "cb-http")).toBe(202);
+      lambda.hold = true;
+
+      const terminated = hook(worker, "terminate").then((status) => ({
+        status,
+        completionsAtAnswer: [...lambda.completions],
+      }));
+      await advance(100);
+      const run = await startSlowCall(
+        worker,
+        `${HOOK_PATH_PREFIX}run`,
+        runWithJob,
+      );
+      lambda.hold = false;
+      lambda.finish();
+      await advance(100);
+      expect(await run.finish()).toBe(200);
+      const { status, completionsAtAnswer } = await terminated;
+
+      expect(status).toBe(200);
+      expect(completionsAtAnswer.map((c) => c.callbackId).sort()).toEqual([
+        "cb-http",
+        "cb-run",
+      ]);
+    });
+
     it("answers the terminate hook after 5 seconds when the run hook body never ends", async () => {
       const worker = start();
       await startSlowCall(worker, `${HOOK_PATH_PREFIX}run`, runWithJob);
