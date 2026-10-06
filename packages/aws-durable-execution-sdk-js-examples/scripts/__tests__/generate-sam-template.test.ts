@@ -30,6 +30,17 @@ jest.mock("fs", () => ({
           RetentionPeriodInDays: 30,
         },
       },
+      {
+        name: "MicroVM Run Job",
+        description: "Runs one job in a Lambda MicroVM",
+        path: "aws-durable-execution-sdk-js/packages/aws-durable-execution-sdk-js-examples/src/examples/microvm/run-job/microvm-run-job.ts",
+        handler: "microvm-run-job.handler",
+        durableConfig: {
+          ExecutionTimeout: 900,
+          RetentionPeriodInDays: 7,
+        },
+        usesMicrovm: true,
+      },
     ]),
   ),
 }));
@@ -199,6 +210,35 @@ describe("generate-sam-template", () => {
         LogGroupName: "/aws/lambda/StepswithRetry-24x-NodeJS",
         RetentionInDays: 7,
       });
+    });
+
+    test("leaves out a MicroVM example when no image is given", () => {
+      const template = generateTemplate();
+
+      expect(template.Resources.HelloWorld).toBeDefined();
+      expect(template.Resources.MicrovmRunJob).toBeUndefined();
+    });
+
+    test("sets the MicroVM image and role on a MicroVM example", () => {
+      const template = generateTemplate({
+        microvmImageArn:
+          "arn:aws:lambda:us-east-1:123456789012:microvm-image:sdk-js-examples-abc",
+        microvmExecutionRoleArn:
+          "arn:aws:iam::123456789012:role/microvm-execution",
+      });
+
+      expect(
+        template.Resources.MicrovmRunJob.Properties.Environment.Variables,
+      ).toMatchObject({
+        MICROVM_IMAGE_ARN:
+          "arn:aws:lambda:us-east-1:123456789012:microvm-image:sdk-js-examples-abc",
+        MICROVM_EXECUTION_ROLE_ARN:
+          "arn:aws:iam::123456789012:role/microvm-execution",
+      });
+      expect(
+        template.Resources.HelloWorld.Properties.Environment.Variables
+          .MICROVM_IMAGE_ARN,
+      ).toBeUndefined();
     });
   });
 });

@@ -40,6 +40,13 @@ export interface ExampleConfig {
    * The example will still run locally and on other runtimes not listed here.
    */
   excludeRuntimes?: string[];
+  /**
+   * If true, the example runs a job in a Lambda MicroVM. The integration test
+   * builds the MicroVM image and sets `MICROVM_IMAGE_ARN` and
+   * `MICROVM_EXECUTION_ROLE_ARN` on the function. A SAM template generated
+   * without an image leaves the example out.
+   */
+  usesMicrovm?: boolean;
 }
 
 export type ExamplesWithConfig = ExampleConfig & {
