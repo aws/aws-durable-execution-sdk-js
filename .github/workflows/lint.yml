@@ -28,7 +28,7 @@ jobs:
   # from three to one. A different toolchain does not require a different job -- it
   # requires one extra build step, below.
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || format('codebuild-github-actions-runner-{0}-{1}', github.run_id, github.run_attempt) }}
     steps:
       - uses: actions/checkout@v7
         with:
