@@ -37,6 +37,8 @@ interface TemplateOptions {
   functionNameMap?: Record<string, FunctionNameConfig>;
   lambdaEndpoint?: string;
   lambdaExecutionRoleArn?: string;
+  microvmExecutionRoleArn?: string;
+  microvmImageArn?: string;
   outputTemplateFile?: string;
   runtime?: string;
   skipVerboseLogging?: boolean;
@@ -124,6 +126,12 @@ function createFunctionResource(
     environmentVariables.AWS_ENDPOINT_URL_LAMBDA = lambdaEndpoint;
   }
 
+  if (catalog.usesMicrovm) {
+    environmentVariables.MICROVM_IMAGE_ARN = options.microvmImageArn!;
+    environmentVariables.MICROVM_EXECUTION_ROLE_ARN =
+      options.microvmExecutionRoleArn!;
+  }
+
   const functionResource: Record<string, any> = {
     Type: "AWS::Serverless::Function",
     Properties: {
@@ -201,6 +209,12 @@ function generateTemplate(options: TemplateOptions | boolean = {}) {
     Resources: {},
   };
   const manageLogGroups = !!normalizedOptions.functionNameMap;
+  // A MicroVM example needs an image. Without one, its function would fail
+  // on every invocation, so the template leaves it out.
+  const hasMicrovmImage = !!(
+    normalizedOptions.microvmImageArn &&
+    normalizedOptions.microvmExecutionRoleArn
+  );
 
   if (!normalizedOptions.lambdaExecutionRoleArn) {
     template.Resources.DurableFunctionRole = {
@@ -247,8 +261,13 @@ function generateTemplate(options: TemplateOptions | boolean = {}) {
   // Generate resources for each example file
   examplesCatalog
     .filter(
-      (catalog: { excludeRuntimes?: string[]; localOnly?: boolean }) =>
+      (catalog: {
+        excludeRuntimes?: string[];
+        localOnly?: boolean;
+        usesMicrovm?: boolean;
+      }) =>
         !catalog.localOnly &&
+        (!catalog.usesMicrovm || hasMicrovmImage) &&
         !catalog.excludeRuntimes?.includes(normalizedOptions.runtime ?? "22.x"),
     )
     .forEach((catalog: { name: string; handler: string }) => {
@@ -311,6 +330,8 @@ function getMainOptions(args: string[]): TemplateOptions {
     lambdaExecutionRoleArn:
       getArgValue(args, "--lambda-execution-role-arn") ??
       process.env.LAMBDA_EXECUTION_ROLE_ARN,
+    microvmExecutionRoleArn: getArgValue(args, "--microvm-execution-role-arn"),
+    microvmImageArn: getArgValue(args, "--microvm-image-arn"),
     outputTemplateFile: getArgValue(args, "--output-template-file"),
     runtime: getArgValue(args, "--runtime") ?? "22.x",
     skipVerboseLogging: args.includes("--skip-verbose-logging"),
