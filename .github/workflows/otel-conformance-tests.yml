@@ -64,6 +64,7 @@ on:
 concurrency:
   group: otel-conformance
   cancel-in-progress: false
+  queue: max
 
 permissions: {}
 
