@@ -1,0 +1,214 @@
+name: CI toolkit scripts probe
+
+# Temporary probe: runs the model-user preparation scripts from
+# aws/aws-durable-execution-ci (ci/runs-on-input branch) as the real job
+# account on the CodeBuild project default (root) and on ubuntu-latest
+# (runner), then mirrors each workflow's `env -i` launch with a stub binary
+# to show which variables reach the model process. One job per script,
+# because each script re-owns the workspace for its own user. Not for merge.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/ci-toolkit-scripts-probe.yml
+
+permissions:
+  contents: read
+
+env:
+  TOOLKIT_REPO: aws/aws-durable-execution-ci
+  TOOLKIT_REF: d901b2f1a50731f46bb791b7cae6cbe7f56ae917
+  # Fake credentials: values only have to survive the launch intact.
+  AWS_ACCESS_KEY_ID: PROBE-ACCESS-KEY
+  AWS_SECRET_ACCESS_KEY: PROBE-SECRET
+  AWS_SESSION_TOKEN: PROBE-SESSION
+  AWS_REGION: us-west-2
+  AWS_DEFAULT_REGION: us-west-2
+  PROBE_LEAK: must-not-reach-the-model
+
+  PROBE_SCRIPT: |
+    set -euo pipefail
+    section() { printf '\n== %s\n' "$1"; }
+    expect_has() { if grep -qx "$1" "$2"; then echo "ok   $1"; else echo "FAIL missing: $1"; exit 1; fi; }
+    expect_not() { if grep -q "$1" "$2"; then echo "FAIL leaked: $1"; exit 1; else echo "ok   absent: $1"; fi; }
+
+    section "job account"
+    id; echo "HOME=$HOME"; echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+
+    case "$PROBE_TARGET" in
+      claude-review)
+        section "prepare_ai_review_user.sh claude-review"
+        # Stub the pinned action layout run_claude_isolated.sh expects.
+        action="$GITHUB_WORKSPACE/.stub-claude-action"
+        install -d "$action/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64" "$action/bin"
+        printf '#!/bin/sh\nenv | sort\n' > "$action/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude"
+        printf '#!/bin/sh\nexit 0\n' > "$action/bin/bun"
+        chmod 755 "$action/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude" "$action/bin/bun"
+        time bash .ai-review-toolkit/scripts/prepare_ai_review_user.sh claude-review
+        sudo -u claude-review test -r "$GITHUB_WORKSPACE/README.md" && echo "ok   claude-review reads workspace README"
+        sudo -u claude-review test -d /home/claude-review/.claude && echo "ok   private .claude dir"
+        sudo -u claude-review test -d /home/claude-review/tmp && echo "ok   private tmp dir"
+        if sudo -u claude-review test -r "$HOME"; then echo "note claude-review CAN read job HOME $HOME"; else echo "ok   claude-review cannot read job HOME $HOME"; fi
+        getfacl -p "$(dirname "$GITHUB_WORKSPACE")" 2>/dev/null | grep -E '^user:claude-review' || echo "note no ACL needed on $(dirname "$GITHUB_WORKSPACE")"
+
+        section "run_claude_isolated.sh with stub claude (what the model sees)"
+        export GITHUB_ACTION_PATH="$action"
+        export CLAUDE_CODE_USE_BEDROCK=1 CLAUDE_CODE_ENTRYPOINT=probe
+        out="$(mktemp)"
+        bash .ai-review-toolkit/scripts/run_claude_isolated.sh > "$out"
+        expect_has "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID" "$out"
+        expect_has "AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN" "$out"
+        expect_has "CLAUDE_CODE_USE_BEDROCK=1" "$out"
+        expect_has "HOME=/home/claude-review" "$out"
+        expect_has "USER=claude-review" "$out"
+        expect_has "AWS_EC2_METADATA_DISABLED=true" "$out"
+        expect_not "PROBE_LEAK" "$out"
+        expect_not "AWS_BEARER_TOKEN_BEDROCK" "$out"
+        expect_not "GITHUB_" "$out"
+        expect_not "AWS_CONTAINER" "$out"
+        echo "model env var count: $(wc -l < "$out")"
+        ;;
+
+      codex-review)
+        section "prepare_ai_review_user.sh codex-review"
+        time bash .ai-review-toolkit/scripts/prepare_ai_review_user.sh codex-review
+        sudo -u codex-review test -r "$GITHUB_WORKSPACE/README.md" && echo "ok   codex-review reads workspace README"
+        sudo -u codex-review test -d /home/codex-review/.codex && echo "ok   private .codex dir"
+        if sudo -u codex-review test -w "$GITHUB_WORKSPACE/README.md"; then echo "FAIL codex-review can write workspace"; exit 1; else echo "ok   workspace read-only for codex-review"; fi
+
+        section "codex-review.yml launch with /usr/bin/env as the model"
+        out="$(mktemp)"
+        sudo -u codex-review -- env -i \
+          AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+          AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+          AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN" \
+          AWS_REGION="$AWS_REGION" \
+          AWS_DEFAULT_REGION="$AWS_DEFAULT_REGION" \
+          AWS_EC2_METADATA_DISABLED=true \
+          CODEX_HOME=/home/codex-review/.codex \
+          HOME=/home/codex-review \
+          LANG=C.UTF-8 \
+          LOGNAME=codex-review \
+          PATH="$PATH" \
+          SHELL=/bin/bash \
+          USER=codex-review \
+          /usr/bin/timeout --signal=TERM --kill-after=30s 20m \
+          /usr/bin/env | sort > "$out"
+        expect_has "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID" "$out"
+        expect_has "CODEX_HOME=/home/codex-review/.codex" "$out"
+        expect_has "USER=codex-review" "$out"
+        expect_not "PROBE_LEAK" "$out"
+        expect_not "GITHUB_" "$out"
+        expect_not "AWS_CONTAINER" "$out"
+        echo "model env var count: $(wc -l < "$out")"
+        ;;
+
+      summary)
+        section "prepare_ai_summary_user.sh"
+        time bash .notification-toolkit/scripts/prepare_ai_summary_user.sh
+        if sudo -u codex-summary test -r "$GITHUB_WORKSPACE/README.md"; then echo "FAIL codex-summary can read workspace"; exit 1; else echo "ok   workspace hidden from codex-summary"; fi
+        sudo -u codex-summary test -d /home/codex-summary/.codex && echo "ok   private .codex dir"
+        echo "userns_clone=$(sysctl -n kernel.unprivileged_userns_clone 2>/dev/null || echo n/a) apparmor_restrict=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo n/a)"
+
+        section "notify.yml launch with /usr/bin/env as the model"
+        out="$(mktemp)"
+        sudo -u codex-summary -- env -i \
+          AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+          AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+          AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN" \
+          AWS_REGION="$AWS_REGION" \
+          AWS_DEFAULT_REGION="$AWS_DEFAULT_REGION" \
+          AWS_EC2_METADATA_DISABLED=true \
+          CODEX_HOME=/home/codex-summary/.codex \
+          HOME=/home/codex-summary \
+          LANG=C.UTF-8 \
+          LOGNAME=codex-summary \
+          PATH="$PATH" \
+          SHELL=/bin/bash \
+          USER=codex-summary \
+          /usr/bin/timeout --signal=TERM --kill-after=15s 2m \
+          /usr/bin/env | sort > "$out"
+        expect_has "AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID" "$out"
+        expect_has "USER=codex-summary" "$out"
+        expect_not "PROBE_LEAK" "$out"
+        expect_not "GITHUB_" "$out"
+        echo "model env var count: $(wc -l < "$out")"
+        ;;
+
+      implementation)
+        section "prepare_codex_implementation_user.sh"
+        time bash .ai-review-toolkit/scripts/prepare_codex_implementation_user.sh
+        sudo -u codex-implement test -r "$GITHUB_WORKSPACE/.git/HEAD" && echo "ok   codex-implement reads .git/HEAD"
+        sudo -u codex-implement env HOME=/home/codex-implement GIT_OPTIONAL_LOCKS=0 git -C "$GITHUB_WORKSPACE" rev-parse --short HEAD && echo "ok   git rev-parse as codex-implement"
+        sudo -u codex-implement touch "$GITHUB_WORKSPACE/probe-write" && echo "ok   worktree writable"
+        if sudo -u codex-implement touch "$GITHUB_WORKSPACE/.git/probe-write" 2>/dev/null; then echo "FAIL .git writable by codex-implement"; exit 1; else echo "ok   .git read-only for codex-implement"; fi
+        stat -c 'workspace mode=%a owner=%U:%G' "$GITHUB_WORKSPACE"
+        stat -c '.git      mode=%a owner=%U:%G' "$GITHUB_WORKSPACE/.git"
+        ;;
+
+      *) echo "unknown PROBE_TARGET=$PROBE_TARGET"; exit 2 ;;
+    esac
+    echo; echo "PROBE OK: $PROBE_TARGET"
+
+jobs:
+  codebuild:
+    name: codebuild / ${{ matrix.target }}
+    runs-on:
+      - codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [claude-review, codex-review, summary, implementation]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check out CI toolkit (review/implementation layout)
+        if: matrix.target != 'summary'
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ env.TOOLKIT_REPO }}
+          ref: ${{ env.TOOLKIT_REF }}
+          path: .ai-review-toolkit
+          sparse-checkout: scripts
+      - name: Check out CI toolkit (notification layout)
+        if: matrix.target == 'summary'
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ env.TOOLKIT_REPO }}
+          ref: ${{ env.TOOLKIT_REF }}
+          path: .notification-toolkit
+          sparse-checkout: scripts
+      - name: Run ${{ matrix.target }} preparation as the job account
+        env:
+          PROBE_TARGET: ${{ matrix.target }}
+        run: bash -c "$PROBE_SCRIPT"
+
+  github-hosted:
+    name: ubuntu-latest / ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [claude-review, codex-review, summary, implementation]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check out CI toolkit (review/implementation layout)
+        if: matrix.target != 'summary'
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ env.TOOLKIT_REPO }}
+          ref: ${{ env.TOOLKIT_REF }}
+          path: .ai-review-toolkit
+          sparse-checkout: scripts
+      - name: Check out CI toolkit (notification layout)
+        if: matrix.target == 'summary'
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ env.TOOLKIT_REPO }}
+          ref: ${{ env.TOOLKIT_REF }}
+          path: .notification-toolkit
+          sparse-checkout: scripts
+      - name: Run ${{ matrix.target }} preparation as the job account
+        env:
+          PROBE_TARGET: ${{ matrix.target }}
+        run: bash -c "$PROBE_SCRIPT"
