@@ -76,8 +76,11 @@ jobs:
       actions: write
       contents: read
       id-token: write
-    uses: aws/aws-durable-execution-conformance-tests/.github/workflows/opentelemetry-orchestrator.yml@a628f5589bbf067a441696c792ab3023c0d0899b
+    uses: aws/aws-durable-execution-conformance-tests/.github/workflows/opentelemetry-orchestrator.yml@3542852f918f515d7c6a53af1eb0d5aa83d1eb1e
     with:
+      # CodeBuild-hosted runner in the JavaScript testing account; the label must
+      # match the CodeBuild project name.
+      runs_on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
       language: javascript
       resource_prefix: js
       sdk_repository: aws/aws-durable-execution-sdk-js

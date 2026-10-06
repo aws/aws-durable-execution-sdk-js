@@ -12,8 +12,11 @@ jobs:
       contents: write
       id-token: write
       pull-requests: write
-    uses: aws/aws-durable-execution-ci/.github/workflows/ai-pr-review.yml@d6b017da14385908951d23e26c790b28a4e5f9f0
+    uses: aws/aws-durable-execution-ci/.github/workflows/ai-pr-review.yml@d901b2f1a50731f46bb791b7cae6cbe7f56ae917
     with:
+      # CodeBuild-hosted runner in the JavaScript testing account; the label must
+      # match the CodeBuild project name.
+      runs-on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
       prompt-path: .github/prompts/ai-pr-review.md
       run-claude: false
     secrets: inherit
