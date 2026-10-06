@@ -55,8 +55,8 @@ jobs:
   conformance:
     name: conformance (${{ matrix.suite }})
     needs: discover_suites
-    # CodeBuild-hosted runner in the JS testing account (Lambda compute, 8 GB,
-    # nodejs24 image). Each matrix entry gets its own runner; the label must
+    # CodeBuild-hosted runner in the JS testing account (EC2 compute, Ubuntu
+    # standard image). Each matrix entry gets its own runner; the label must
     # match the CodeBuild project name exactly.
     runs-on:
       - codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
