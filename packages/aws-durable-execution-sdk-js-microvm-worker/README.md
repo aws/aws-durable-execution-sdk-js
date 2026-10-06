@@ -25,7 +25,7 @@ await startMicrovmWorker<{ repo: string }, { passed: boolean }>({
 });
 ```
 
-The worker needs `handler`, `routes`, or both. A handler's resolved value becomes the result of `microvm(context, ...)` in the durable function. A rejection fails that call with the error's name and message, cut to 256 and 8,192 characters. The stack is not sent, like the core SDK, so the image's file paths stay out of the durable execution history. `context.signal` is aborted when the durable function stops waiting, for example after a heartbeat timeout. The handler should then stop its work.
+The worker needs `handler`, `routes`, or both. A handler's resolved value becomes the result of `microvm(context, ...)` in the durable function. A rejection fails that call with the error's name and message, cut to 256 and 8,192 characters. The stack is not sent, like the core SDK, so the image's file paths stay out of the durable execution history. `context.signal` is aborted when the durable function stops waiting, for example after a heartbeat timeout, and when Lambda calls the `terminate` hook. The handler should then stop its work.
 
 ## Image configuration
 
@@ -41,7 +41,11 @@ The image needs these hook settings in `CreateMicrovmImage`:
       "run": "ENABLED",
       "runTimeoutInSeconds": 10,
       "resume": "ENABLED",
-      "resumeTimeoutInSeconds": 10
+      "resumeTimeoutInSeconds": 10,
+      "suspend": "ENABLED",
+      "suspendTimeoutInSeconds": 10,
+      "terminate": "ENABLED",
+      "terminateTimeoutInSeconds": 10
     },
     "microvmImageHooks": { "ready": "ENABLED" }
   }
@@ -50,6 +54,8 @@ The image needs these hook settings in `CreateMicrovmImage`:
 
 - The `run` hook delivers the job, or tells the worker that jobs arrive over HTTP. So it must be enabled.
 - The `resume` hook tells a session's worker that its MicroVM runs again after a suspend. It is optional, and recommended for sessions (see below).
+- The `suspend` hook tells the worker that Lambda is about to freeze the MicroVM. The worker then refuses new jobs until the `resume` hook. It is optional, and recommended for sessions.
+- The `terminate` hook tells the worker that Lambda is about to end the MicroVM. The worker then fails the callback of each running job, so the durable function fails the job at once instead of at its heartbeat timeout or its timeout. It is optional, and recommended. Give it at least 10 seconds: the worker reports before it answers, for at most 5 seconds. A hook timeout left unset ended the hook after about 2 seconds in testing.
 - The service requires the `ready` hook whenever a lifecycle hook is enabled. The worker answers it with HTTP 200.
 - `port` must match the worker's port. `startMicrovmWorker` listens on 8080 by default, which is also the port the MicroVM endpoint forwards to. Pass another port as its second argument.
 
@@ -92,6 +98,29 @@ It creates a Lambda client for each job, after the job arrives, not at image bui
 An error in a custom `logger` or in `createClient` never ends the worker process. The worker drops a failed log line, including one from an async logger whose promise rejects, and logs a job whose client it could not create. An error value that cannot be read, such as one whose `message` getter throws, is still reported as a failure. A handler's `abort` listener on `context.signal` must not throw: Node treats that as an uncaught exception.
 
 A document that does not match the contract gets HTTP 400. If the document named a callback, the worker also fails that callback, so the durable function fails at once instead of at its timeout. A result over 256 KB is reported as a failure, because the callback API does not accept it.
+
+## Suspend and terminate hooks
+
+Lambda waits for the answer to a `suspend` or `terminate` hook, up to the hook's timeout. The network and the execution role's credentials work while the hook runs. These facts come from probes in us-east-1 (`e2e/probe-lifecycle.mjs` in the extras package).
+
+On the `suspend` hook the worker:
+
+1. Answers HTTP 200 at once. A suspend hook that ran past its timeout terminated the MicroVM instead of suspending it.
+2. Refuses every job with HTTP 503, as after its own suspend. A job accepted now would freeze with the MicroVM. The refusal ends when the `resume` hook arrives, or after 30 seconds.
+3. Leaves running jobs alone. They freeze with the MicroVM, and continue after a resume.
+
+Lambda called the hook after `SuspendMicrovm` from outside, after the worker's own `SuspendMicrovm`, and when the idle policy suspended the MicroVM.
+
+On the `terminate` hook the worker:
+
+1. Aborts each running job's `context.signal` with a `MicrovmTerminatedError`, and stops its heartbeats.
+2. Fails each running job's callback with that error. The durable function receives `MicrovmTerminatedError` as the error type.
+3. Answers HTTP 200 when the reports end, or after 5 seconds. A report took 20 to 1,700 milliseconds in testing.
+4. Refuses every later job with HTTP 503, and never suspends the MicroVM again.
+
+Lambda called the hook after `TerminateMicrovm` on a running MicroVM, and at the end of `maximumDurationInSeconds`. It did not call the hook when it terminated a suspended MicroVM, after `TerminateMicrovm` or at the end of the idle policy's `suspendedDurationSeconds`. The process is frozen then. A job of such a MicroVM fails at its heartbeat timeout or its timeout.
+
+The MicroVM endpoint forwards a request to a hook path from any caller that holds an auth token for the MicroVM. Lambda's own hook calls carried `Host: localhost:8080` and no `x-amzn-requestid` header. A forwarded request carried the endpoint's host name and an `x-amzn-requestid` header. So the worker acts on `suspend` and `terminate` only when the request has a `localhost`, `127.0.0.1`, or `[::1]` host and no `x-amzn-requestid`. It answers any other request to these hooks with 200, and logs a warning. The Lambda documentation does not state these headers. If Lambda changed them, the worker would ignore these two hooks, as it did before it acted on them. The `run` and `resume` hooks do not use the check, because a false rejection there would lose jobs.
 
 ## Permissions
 

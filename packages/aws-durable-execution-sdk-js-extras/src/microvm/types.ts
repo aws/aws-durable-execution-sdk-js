@@ -186,12 +186,18 @@ export interface MicrovmSessionConfig extends MicrovmBaseConfig {
    * default {@link autoSuspendIdleTime}.
    *
    * The timeout does not limit the handler or its jobs. Each job's callback
-   * waits for that job's own `timeout`. So a job that is still running when
-   * the MicroVM ends waits until its own timeout, unless it has a
-   * `heartbeatTimeout`. For example, a session with a 1-hour timeout starts
-   * a job with an 8-hour timeout at 0:58. The service terminates the MicroVM
-   * at about 1:05. Without a heartbeat timeout, the job fails at 8:58. So set
-   * a `heartbeatTimeout` on every `vm.invoke`.
+   * waits for that job's own `timeout`. For example, a session with a 1-hour
+   * timeout starts a job with an 8-hour timeout at 0:58. The service
+   * terminates the MicroVM at about 1:05.
+   *
+   * - When the image enables the `terminate` hook, the worker fails the job
+   *   at about 1:05 with a `MicrovmTerminatedError`.
+   * - Lambda does not call the hook for a suspended MicroVM, or when the
+   *   image disables it. The job then fails at its `heartbeatTimeout`, or at
+   *   8:58 without one.
+   *
+   * So enable the `terminate` hook in the image, and set a
+   * `heartbeatTimeout` on every `vm.invoke`.
    */
   timeout: Duration;
 
@@ -295,7 +301,8 @@ export interface MicrovmInvokeOptions extends MicrovmRequestConfig {
    *
    * The session's `timeout` does not shorten it. The session's MicroVM ends
    * at the session `timeout` plus 5 minutes. A job still running then fails
-   * only at this timeout, or earlier at its {@link heartbeatTimeout}.
+   * at once when the image enables the `terminate` hook. Otherwise it fails
+   * at this timeout, or earlier at its {@link heartbeatTimeout}.
    */
   timeout: Duration;
 
@@ -306,8 +313,9 @@ export interface MicrovmInvokeOptions extends MicrovmRequestConfig {
    * includes a resume of a suspended MicroVM. Keep it longer than a resume
    * plus the delivery, for example 30 seconds.
    *
-   * Set it on every job. It is the only way that a job fails soon after its
-   * MicroVM ends, for example at the end of the session's lifetime.
+   * Set it on every job. A MicroVM that ends while suspended, or whose image
+   * disables the `terminate` hook, reports nothing. The heartbeat timeout is
+   * then the only way that the job fails soon after the MicroVM ends.
    */
   heartbeatTimeout?: Duration;
 }
