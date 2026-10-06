@@ -380,7 +380,8 @@ export interface MicrovmWorkerListener {
  *   or at the end of `maximumDurationInSeconds`. The listener aborts each
  *   running job's `context.signal` and fails its callback with
  *   {@link MicrovmTerminatedError}. So the durable function fails the job at
- *   once. It answers HTTP 200 when the reports end, or after 5 seconds. From
+ *   once. It answers HTTP 200 when the reports end, or after 5 seconds. The
+ *   answer also waits for a `run` hook request still in flight. From
  *   then on it refuses jobs with HTTP 503, and fails the callback of a
  *   `run` hook job instead of starting it. Lambda does not call the hook
  *   when it terminates a suspended MicroVM, because the process is frozen.
@@ -494,6 +495,10 @@ export function createMicrovmWorkerListener<
   // The durable function cannot deliver a run hook job again, so the worker
   // starts it when the refusal ends, instead of refusing it.
   const deferred: { job: MicrovmJobDocument<TInput>; region: string }[] = [];
+  // Run hook requests that are still being handled, including the report
+  // of a job that a terminate hook stopped. The terminate hook waits for
+  // them, because Lambda can end the MicroVM as soon as it gets the answer.
+  const runHooks = new Set<Promise<void>>();
   let closed = false;
 
   const track = (work: Promise<void>): void => {
@@ -661,7 +666,13 @@ export function createMicrovmWorkerListener<
     if (path.startsWith(HOOK_PATH_PREFIX) && request.method === "POST") {
       const hook = path.slice(HOOK_PATH_PREFIX.length);
       if (hook === "run") {
-        await handleRunHook(request, response);
+        const work = handleRunHook(request, response);
+        runHooks.add(work);
+        try {
+          await work;
+        } finally {
+          runHooks.delete(work);
+        }
         return;
       }
       if (
@@ -726,11 +737,15 @@ export function createMicrovmWorkerListener<
   async function handleTerminateHook(response: ServerResponse): Promise<void> {
     terminating = true;
     stopIdleTime();
-    // A job whose handler has settled reports its own outcome. The answer
-    // waits for that report too.
-    const reports: Promise<void>[] = [...jobs]
-      .filter(([callbackId]) => reporting.has(callbackId))
-      .map(([, run]) => run);
+    // A job whose handler has settled reports its own outcome. A run hook
+    // whose body is still arriving can name a job, and then fails its
+    // callback. The answer waits for both.
+    const reports: Promise<void>[] = [
+      ...[...jobs]
+        .filter(([callbackId]) => reporting.has(callbackId))
+        .map(([, run]) => run),
+      ...runHooks,
+    ];
     let failed = 0;
     for (const [callbackId, job] of active) {
       // Removed first, so that a second terminate hook reports nothing again.
@@ -829,13 +844,15 @@ export function createMicrovmWorkerListener<
         microvmId,
       });
       respond(response, 200, {});
-      track(
-        failCallback(
-          new MicrovmTerminatedError(),
-          job.callbackId,
-          payload.region,
-        ),
+      const report = failCallback(
+        new MicrovmTerminatedError(),
+        job.callbackId,
+        payload.region,
       );
+      track(report);
+      // The terminate hook waits for this request. So the report must end
+      // before the request does.
+      await report;
       return;
     }
     if (job && options.handler && suspending) {

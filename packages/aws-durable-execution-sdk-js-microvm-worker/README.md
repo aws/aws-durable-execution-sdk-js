@@ -116,7 +116,7 @@ On the `terminate` hook the worker:
 
 1. Aborts each running job's `context.signal` with a `MicrovmTerminatedError`, and stops its heartbeats.
 2. Fails each running job's callback with that error. The durable function receives `MicrovmTerminatedError` as the error type.
-3. Answers HTTP 200 when the reports end, or after 5 seconds. A report took 20 to 1,700 milliseconds in testing.
+3. Answers HTTP 200 when the reports end, or after 5 seconds. A report took 20 to 1,700 milliseconds in testing. The answer also waits for a `run` hook request whose body is still arriving, and for the failure report of its job. Lambda can end the MicroVM as soon as it gets the answer, so a report sent after it can be lost.
 4. Refuses every later job with HTTP 503, and never suspends the MicroVM again. A job from a `run` hook whose body was still arriving is not started. Its callback fails with `MicrovmTerminatedError`, as does a job deferred by an earlier `suspend` hook.
 
 Lambda called the hook after `TerminateMicrovm` on a running MicroVM, and at the end of `maximumDurationInSeconds`. It did not call the hook when it terminated a suspended MicroVM, after `TerminateMicrovm` or at the end of the idle policy's `suspendedDurationSeconds`. The process is frozen then. A job of such a MicroVM fails at its heartbeat timeout or its timeout.

@@ -489,12 +489,19 @@ describe("suspend and terminate hooks", () => {
         runWithJob,
       );
 
-      expect(await hook(worker, "terminate")).toBe(200);
+      // Lambda can end the MicroVM as soon as the terminate hook answers. So
+      // the failure must be reported before that answer.
+      const terminated = hook(worker, "terminate").then((status) => ({
+        status,
+        completionsAtAnswer: [...lambda.completions],
+      }));
+      await advance(1_000);
       expect(await run.finish()).toBe(200);
-      await worker.idle();
+      const { status, completionsAtAnswer } = await terminated;
 
+      expect(status).toBe(200);
       expect(signals.has("cb-run")).toBe(false);
-      expect(lambda.completions).toEqual([
+      expect(completionsAtAnswer).toEqual([
         {
           kind: "failure",
           callbackId: "cb-run",
@@ -502,6 +509,32 @@ describe("suspend and terminate hooks", () => {
           message: "the MicroVM was terminated while the job ran",
         },
       ]);
+    });
+
+    it("answers the terminate hook after 5 seconds when the run hook body never ends", async () => {
+      const worker = start();
+      await startSlowCall(worker, `${HOOK_PATH_PREFIX}run`, runWithJob);
+
+      let status = 0;
+      void hook(worker, "terminate").then((code) => {
+        status = code;
+      });
+      await advance(4_999);
+      expect(status).toBe(0);
+      await advance(1);
+      expect(status).toBe(200);
+    });
+
+    it("answers the terminate hook at once when no run hook is in flight", async () => {
+      const worker = start();
+      await runHook(worker);
+
+      let status = 0;
+      void hook(worker, "terminate").then((code) => {
+        status = code;
+      });
+      await advance(0);
+      expect(status).toBe(200);
     });
 
     it("starts the job after the resume hook when the suspend hook came first", async () => {
