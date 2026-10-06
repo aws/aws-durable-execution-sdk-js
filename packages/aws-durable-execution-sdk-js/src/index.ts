@@ -150,6 +150,7 @@ export {
   DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION,
   DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION,
   RegisteredDurableInstrumentationPlugin,
+  RegisteredDurableInstrumentationPluginType,
   DurableInstrumentationPlugin,
   DurableInstrumentationPluginProvider,
   DurableInstrumentationPluginType,

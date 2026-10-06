@@ -560,6 +560,97 @@ describe("legacy unrelated registration properties", () => {
   });
 });
 
+describe("static exclusive plugin registration", () => {
+  class First implements DurableInstrumentationPlugin {
+    static readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION] = {
+      exclusiveGroup: "views",
+    };
+    async onInvocationStart(): Promise<void> {}
+  }
+  class Second implements DurableInstrumentationPlugin {
+    static readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION] = {
+      exclusiveGroup: "views",
+    };
+    async onInvocationStart(): Promise<void> {}
+  }
+
+  it.each([false, true])(
+    "rejects dynamic and mixed conflicts before any selected factory runs (reverse=%s)",
+    async (reverse) => {
+      const [A, B] = reverse ? [Second, First] : [First, Second];
+      for (const mixed of [false, true]) {
+        const unrelated = jest.fn(() => new ExplicitPlugin());
+        const first = jest.fn(() => new A());
+        const second = jest.fn(() => new B());
+        const modules = {
+          unrelated: moduleFor(providerFor(ExplicitPlugin, unrelated)),
+          first: moduleFor(providerFor(A, first)),
+          second: moduleFor(providerFor(B, second)),
+        };
+        await expect(
+          loadConfiguredPlugins(mixed ? [new A()] : [], {
+            environment: {
+              DURABLE_EXECUTION_PLUGINS: mixed
+                ? "unrelated,second"
+                : "unrelated,first,second",
+            },
+            importModule: async (specifier) =>
+              modules[specifier as keyof typeof modules],
+          }),
+        ).rejects.toThrow(/Plugins '(First|Second)' and '(First|Second)'/);
+        expect(unrelated).not.toHaveBeenCalled();
+        expect(first).not.toHaveBeenCalled();
+        expect(second).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it("inherits exclusivity and names the actual subclasses", async () => {
+    class CustomFirst extends First {}
+    class CustomSecond extends Second {}
+    await expect(
+      loadConfiguredPlugins([new CustomFirst(), new CustomSecond()], {
+        environment: {},
+      }),
+    ).rejects.toThrow("Plugins 'CustomFirst' and 'CustomSecond'");
+  });
+
+  it("validates actual subclasses returned by broader provider declarations", async () => {
+    class Base implements DurableInstrumentationPlugin {
+      async onInvocationStart(): Promise<void> {}
+    }
+    class A extends Base {
+      static readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION] = {
+        exclusiveGroup: "views",
+      };
+    }
+    class B extends A {}
+    const modules = {
+      first: moduleFor(providerFor(Base, () => new A())),
+      second: moduleFor(providerFor(Base, () => new B())),
+    };
+    await expect(
+      loadConfiguredPlugins([], {
+        environment: { DURABLE_EXECUTION_PLUGINS: "first,second" },
+        importModule: async (specifier) =>
+          modules[specifier as keyof typeof modules],
+      }),
+    ).rejects.toThrow("Plugins 'A' and 'B'");
+  });
+
+  it("constructs each valid dynamic plugin once and retains its instance", async () => {
+    const plugin = new First();
+    const create = jest.fn(() => plugin);
+    const result = await loadConfiguredPlugins([], {
+      environment: { DURABLE_EXECUTION_PLUGINS: "first" },
+      importModule: async () => moduleFor(providerFor(First, create)),
+    });
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(result).toEqual([plugin]);
+    expect(result[0]).toBe(plugin);
+  });
+});
+
 it("does not probe symbol getters on legacy plugins that did not opt into registration metadata", async () => {
   const legacy = new Proxy(
     { async onInvocationStart() {} },

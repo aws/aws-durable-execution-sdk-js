@@ -145,4 +145,52 @@ describe("bundled OTel view registration", () => {
       }
     },
   );
+
+  it.each([false, true])(
+    "rejects dynamic conflicts without constructing plugins or mutating the global tracer (reverse=%s)",
+    async (reverse) => {
+      const provider = new NodeTracerProvider({
+        spanProcessors: [new SimpleSpanProcessor(exporter)],
+      });
+      providers.push(provider);
+      trace.setGlobalTracerProvider(provider);
+      const tracer = provider.getTracer("aws-durable-execution-sdk-js");
+      const sampler = Reflect.get(tracer, "_sampler");
+      const idGenerator = Reflect.get(tracer, "_idGenerator");
+      const classes = reverse
+        ? [InvocationOtelPlugin, ExecutionOtelPlugin]
+        : [ExecutionOtelPlugin, InvocationOtelPlugin];
+      const factories = classes.map((Plugin) => jest.fn(() => new Plugin()));
+      await expect(
+        loadConfiguredPlugins([], {
+          environment: { DURABLE_EXECUTION_PLUGINS: "first,second" },
+          importModule: async (specifier) => {
+            const i = specifier === "first" ? 0 : 1;
+            return {
+              durableExecutionPluginProvider: {
+                pluginApiVersion: 1,
+                pluginType: classes[i],
+                createPlugin: factories[i],
+              },
+            };
+          },
+        }),
+      ).rejects.toThrow(/mutually exclusive/);
+      expect(Reflect.get(tracer, "_sampler")).toBe(sampler);
+      expect(Reflect.get(tracer, "_idGenerator")).toBe(idGenerator);
+      for (const factory of factories) expect(factory).not.toHaveBeenCalled();
+      expect(exporter.getFinishedSpans()).toHaveLength(0);
+      expect(context.active()).toBe(ROOT_CONTEXT);
+    },
+  );
+
+  it("uses inherited static metadata and the concrete bundled subclass names", async () => {
+    class CustomExecution extends ExecutionOtelPlugin {}
+    class CustomInvocation extends InvocationOtelPlugin {}
+    await expect(
+      loadConfiguredPlugins([make(CustomExecution), make(CustomInvocation)], {
+        environment: {},
+      }),
+    ).rejects.toThrow("Plugins 'CustomExecution' and 'CustomInvocation'");
+  });
 });

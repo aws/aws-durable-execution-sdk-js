@@ -315,7 +315,25 @@ export const DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION = Symbol.for(
   "aws.lambda.durable.instrumentation.plugin-registration",
 );
 
-/** @experimental Optional registration protocol, separate from the hook interface. */
+/**
+ * Static registration metadata, available before a provider factory runs.
+ * Subclasses inherit the group; diagnostics use their concrete constructor name.
+ * @experimental
+ */
+export type RegisteredDurableInstrumentationPluginType<
+  Plugin extends DurableInstrumentationPlugin = DurableInstrumentationPlugin,
+> = DurableInstrumentationPluginType<Plugin> & {
+  readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: {
+    readonly exclusiveGroup?: string;
+  };
+};
+
+/**
+ * Instance registration metadata retained for compatibility. Prefer static metadata
+ * on RegisteredDurableInstrumentationPluginType so conflicts can be rejected
+ * before environment-selected factories run.
+ * @experimental
+ */
 export interface RegisteredDurableInstrumentationPlugin
   extends DurableInstrumentationPlugin {
   readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: {

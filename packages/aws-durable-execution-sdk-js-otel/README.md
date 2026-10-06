@@ -647,6 +647,15 @@ plugin metadata. The later core 3 factory migration is a separate major release.
 
 Registration metadata uses the namespaced symbol
 `Symbol.for("aws.lambda.durable.instrumentation.plugin-registration")`.
+The bundled views declare it on their constructors, so the core can validate
+all selected provider types before calling any environment-selected factory.
+Conflicting dynamic views therefore do not install sampler or ID-generator
+wrappers on the global tracer. Subclasses inherit the exclusive group and are
+identified by their actual constructor names in diagnostics. Explicit instances
+have already been constructed by the application before registration; validation
+cannot undo that construction. Existing instance metadata remains supported and
+returned instances are checked too, including subclasses returned by providers
+that declare a broader base type.
 The base hook interface stays unchanged, and ordinary properties such as a
 custom plugin's `registration` field are not interpreted by the SDK. This keeps
 existing valid plugin classes and generic hook dispatchers source-compatible.
