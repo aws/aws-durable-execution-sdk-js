@@ -70,11 +70,26 @@ describe.each([
   const spans = () =>
     exporter.getFinishedSpans().filter((span) => span.name === "external");
 
-  it.each(["WAIT", "INVOKE", "CHAINED_INVOKE", "CALLBACK"])(
-    "flushes a %s completion delivered during shutdown and deduplicates later hooks",
-    async (type) => {
+  it.each(
+    ["WAIT", "INVOKE", "CHAINED_INVOKE", "CALLBACK"].flatMap((type) =>
+      [false, true].map((started) => ({ type, started })),
+    ),
+  )(
+    "flushes a $type completion during shutdown (started=$started) and deduplicates later hooks",
+    async ({ type, started: operationStarted }) => {
       const current = createPlugin();
       await current.onInvocationStart(invocation);
+      if (operationStarted)
+        await current.onOperationStart({
+          ...operation,
+          type,
+          status: "STARTED",
+          endTimestamp: undefined,
+        });
+      const completed = () =>
+        spans().filter(
+          (span) => span.attributes["durable.operation.status"] === "SUCCEEDED",
+        );
       let unblock!: () => void;
       let flushing!: () => void;
       const blocked = new Promise<void>((resolve) => {
@@ -93,7 +108,7 @@ describe.each([
         .mockImplementation(async () => {
           activeFlushes++;
           maximumActiveFlushes = Math.max(maximumActiveFlushes, activeFlushes);
-          flushed.push(spans().length);
+          flushed.push(completed().length);
           if (flushed.length === 1) {
             flushing();
             await blocked;
@@ -113,7 +128,7 @@ describe.each([
       });
       unblock();
       await Promise.all([ending, changed]);
-      expect(spans()).toHaveLength(1);
+      expect(completed()).toHaveLength(1);
       expect(flushed).toContain(1);
       expect(maximumActiveFlushes).toBe(1);
       await current.onOperationChange({
@@ -121,24 +136,37 @@ describe.each([
         updatedOperations: { external: completion },
       });
       await current.onOperationEnd(completion);
-      expect(spans()).toHaveLength(1);
+      expect(completed()).toHaveLength(1);
       flush.mockRestore();
     },
   );
 
-  it("exports and flushes a fresh completion delivered after shutdown", async () => {
-    const current = createPlugin();
-    await current.onInvocationStart(invocation);
-    await current.onInvocationEnd({ ...invocation, status: "RETRYING" });
-    const flush = jest.spyOn(providers[0], "forceFlush");
-    await current.onOperationChange({
-      ...invocation,
-      updatedOperations: { external: operation },
-    });
-    expect(spans()).toHaveLength(1);
-    expect(flush).toHaveBeenCalled();
-    flush.mockRestore();
-  });
+  it.each([false, true])(
+    "exports and flushes a fresh completion after shutdown (started=%s)",
+    async (operationStarted) => {
+      const current = createPlugin();
+      await current.onInvocationStart(invocation);
+      if (operationStarted)
+        await current.onOperationStart({
+          ...operation,
+          status: "STARTED",
+          endTimestamp: undefined,
+        });
+      await current.onInvocationEnd({ ...invocation, status: "RETRYING" });
+      const flush = jest.spyOn(providers[0], "forceFlush");
+      await current.onOperationChange({
+        ...invocation,
+        updatedOperations: { external: operation },
+      });
+      expect(
+        spans().filter(
+          (span) => span.attributes["durable.operation.status"] === "SUCCEEDED",
+        ),
+      ).toHaveLength(1);
+      expect(flush).toHaveBeenCalled();
+      flush.mockRestore();
+    },
+  );
 
   it.each(["WAIT", "INVOKE", "CHAINED_INVOKE", "CALLBACK"])(
     "preserves %s update fields/status/errors without traversal, with normal-replay dedup and retry redelivery",

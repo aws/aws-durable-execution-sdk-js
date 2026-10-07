@@ -591,8 +591,9 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       return;
     }
 
-    if (this.spanMap.has(info.id)) {
-      // Operation was started in this invocation
+    if (!this.invocationEnded && this.spanMap.has(info.id)) {
+      // Complete a live segment. Shutdown may already have ended a segment
+      // started in this invocation; a late completion then needs a continuation.
       const span = this.spanMap.get(info.id)!;
 
       // Finalize the operation status from the core-supplied terminal status.
@@ -648,7 +649,8 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       // A fresh checkpoint completion can be replay-marked: updated IDs were
       // captured before this invocation received the update. Export it while
       // its child parent is still active, without changing the SDK's info.
-      // Operation was started in a prior invocation — create Continuation_Span
+      // The initial segment belongs to an earlier invocation or has already
+      // ended during shutdown — create a linked Continuation_Span.
       const spanName = info.name ?? info.type;
 
       // Resolve parent span: use parentId from map (e.g. the CONTEXT span for
