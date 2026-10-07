@@ -352,7 +352,13 @@ export interface RegisteredDurableInstrumentationPlugin
   };
 }
 
-/** @experimental Factory registration is checked without constructing a plugin. */
+/**
+ * Factory registration is checked without constructing a plugin. Every declared
+ * group on the factory's prototype chain applies; an own declaration adds a
+ * constraint rather than replacing an inherited one. Diagnostics retain the
+ * nearest declared registration name.
+ * @experimental
+ */
 export interface RegisteredDurableInstrumentationPluginFactory
   extends DurableInstrumentationPluginFactory {
   readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: RegisteredDurableInstrumentationPlugin[typeof DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION];

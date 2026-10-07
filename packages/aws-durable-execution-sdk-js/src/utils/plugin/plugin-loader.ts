@@ -218,24 +218,58 @@ function isPluginFactory(
   );
 }
 
+type FactoryRegistration =
+  RegisteredDurableInstrumentationPluginFactory[typeof DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION];
+
+function getRegistrations(
+  plugin: DurableInstrumentationPluginFactory,
+): readonly FactoryRegistration[] {
+  if (!(DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION in plugin)) return [];
+  const registrations: FactoryRegistration[] = [];
+  const visited = new Set<unknown>();
+  // Factories are objects or functions. Their own metadata adds a constraint
+  // without hiding declarations inherited through their prototype chain.
+  for (
+    let current: unknown = plugin;
+    current !== null &&
+    (typeof current === "object" || typeof current === "function") &&
+    !visited.has(current);
+    current = Object.getPrototypeOf(current)
+  ) {
+    visited.add(current);
+    if (!Object.hasOwn(current, DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION))
+      continue;
+    const registration = Reflect.get(
+      current,
+      DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION,
+      plugin,
+    ) as FactoryRegistration | undefined;
+    if (registration) registrations.push(registration);
+  }
+  return registrations;
+}
+
 function validateExclusiveGroups(
   plugins: readonly DurableInstrumentationPluginFactory[],
 ): void {
   const groups = new Map<string, string>();
   for (const plugin of plugins) {
-    if (!(DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION in plugin)) continue;
-    const registration = (
-      plugin as Partial<RegisteredDurableInstrumentationPluginFactory>
-    )[DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION];
-    const group = registration?.exclusiveGroup;
-    if (!group) continue;
-    const previous = groups.get(group);
-    if (previous !== undefined) {
-      throw new PluginLoadError(
-        `Plugins '${previous}' and '${registration.name}' are mutually exclusive in group '${group}'. Configure only one.`,
-      );
+    const registrations = getRegistrations(plugin);
+    const [nearest] = registrations;
+    if (!nearest) continue;
+    const registeredGroups = new Set<string>();
+    for (const registration of registrations) {
+      const group = registration.exclusiveGroup;
+      if (!group || registeredGroups.has(group)) continue;
+      registeredGroups.add(group);
+      const previous = groups.get(group);
+      if (previous !== undefined) {
+        throw new PluginLoadError(
+          `Plugins '${previous}' and '${nearest.name}' are mutually exclusive in group '${group}'. Configure only one.`,
+        );
+      }
+      groups.set(group, nearest.name);
     }
-    groups.set(group, registration.name);
   }
 }
 

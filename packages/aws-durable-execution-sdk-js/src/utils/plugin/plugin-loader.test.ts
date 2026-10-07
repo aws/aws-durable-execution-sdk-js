@@ -861,6 +861,73 @@ describe("exclusive factory registration", () => {
     };
   }
 
+  it.each(["explicit", "environment", "mixed"] as const)(
+    "retains inherited groups when a factory declares its own group (%s)",
+    async (registration) => {
+      const base = view("base view");
+      const derived = Object.create(base, {
+        [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: {
+          value: { name: "derived view", exclusiveGroup: "own group" },
+        },
+      }) as typeof base;
+      for (const group of ["views", "own group"]) {
+        const other = view("other view", group);
+        for (const entries of [
+          [derived, other],
+          [other, derived],
+        ]) {
+          const explicitCount =
+            registration === "explicit" ? 2 : registration === "mixed" ? 1 : 0;
+          const modules = Object.fromEntries(
+            entries.map((factory, i) => [`view-${i}`, moduleFor(factory)]),
+          );
+          await expect(
+            loadConfiguredPlugins(entries.slice(0, explicitCount), {
+              environment: {
+                DURABLE_EXECUTION_PLUGINS: entries
+                  .slice(explicitCount)
+                  .map((_, i) => `view-${i + explicitCount}`)
+                  .join(","),
+              },
+              importModule: async (specifier) => modules[specifier],
+            }),
+          ).rejects.toThrow(
+            /(derived view.*other view|other view.*derived view).*Configure only one/,
+          );
+        }
+        expect(other.createPlugin).not.toHaveBeenCalled();
+      }
+      expect(base.createPlugin).not.toHaveBeenCalled();
+    },
+  );
+
+  it("deduplicates inherited groups within one factory and preserves getter receivers", async () => {
+    const createPlugin = jest.fn(() => new FirstDynamicPlugin());
+    const receivers: unknown[] = [];
+    const base = {
+      createPlugin,
+      name: "base",
+      get [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]() {
+        receivers.push(this);
+        return { name: this.name, exclusiveGroup: "views" };
+      },
+    };
+    const derived = Object.create(base, {
+      name: { value: "derived getter view" },
+      [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: {
+        value: { name: "derived getter view", exclusiveGroup: "views" },
+      },
+    }) as typeof base;
+    await expect(
+      loadConfiguredPlugins([derived], { environment: {} }),
+    ).resolves.toEqual([derived]);
+    expect(receivers).toEqual([derived]);
+    await expect(
+      loadConfiguredPlugins([derived, view("other")], { environment: {} }),
+    ).rejects.toThrow("derived getter view");
+    expect(createPlugin).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])(
     "rejects explicit, environment and mixed conflicts without constructing plugins (reverse=%s)",
     async (reverse) => {

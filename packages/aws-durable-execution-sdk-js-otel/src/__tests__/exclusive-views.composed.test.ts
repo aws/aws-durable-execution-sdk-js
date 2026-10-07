@@ -6,6 +6,7 @@ import {
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
 import {
+  DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION,
   InvocationStatus,
   type InvocationInfo,
 } from "@aws/durable-execution-sdk-js";
@@ -94,6 +95,34 @@ describe("bundled OTel view registration", () => {
       }
     },
   );
+  it.each([false, true])(
+    "retains the bundled view group on derived factories (reverse=%s)",
+    async (reverse) => {
+      const baseFactories = [
+        make(createExecutionOtelPluginFactory),
+        make(createInvocationOtelPluginFactory),
+      ];
+      const derived = baseFactories.map(
+        (factory, i) =>
+          Object.create(factory, {
+            [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: {
+              value: {
+                name: `derived view ${i}`,
+                exclusiveGroup: `own group ${i}`,
+              },
+            },
+          }) as typeof factory,
+      );
+      const entries = reverse ? derived.reverse() : derived;
+      await expect(
+        loadConfiguredPlugins(entries, { environment: {} }),
+      ).rejects.toThrow("durable-opentelemetry-view");
+      expect(providers).toHaveLength(0);
+      expect(exporter.getFinishedSpans()).toHaveLength(0);
+      expect(context.active()).toBe(ROOT_CONTEXT);
+    },
+  );
+
   it.each([
     createExecutionOtelPluginFactory,
     createInvocationOtelPluginFactory,

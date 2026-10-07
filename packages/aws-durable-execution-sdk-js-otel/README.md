@@ -763,3 +763,13 @@ The old handler-lifetime `createPlugin()` contract is not silently treated as a
 per-invocation factory. Custom factories must return a fresh plugin for every
 `createPlugin(info)` call; process-owned tracer providers may remain shared.
 This required migration belongs to the core 3.x major release only.
+
+
+Factory registration metadata uses the namespaced symbol
+`Symbol.for("aws.lambda.durable.instrumentation.plugin-registration")`.
+Every own declaration along a registered factory's prototype chain contributes
+an exclusive group. A derived factory can add its own group but cannot mask a
+bundled view's inherited group. Repeating a group within one factory does not
+count as a second registration, and inherited metadata getters receive the
+concrete factory as their receiver. Validation runs before any `createPlugin`
+call; ordinary unmarked properties are not interpreted as metadata.

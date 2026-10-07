@@ -13,13 +13,16 @@ function viewProbe(views: string[], explicitCount: number): string {
   const views = ${JSON.stringify(views)};
   process.env.DURABLE_EXECUTION_PLUGINS = views.slice(${explicitCount}).map(view => '@aws/durable-execution-sdk-js-otel/otel-' + (view === 'ExecutionOtelPlugin' ? 'execution' : 'invocation')).join(',');
   let handlerCalls = 0;
+  const tracer = provider.getTracer('aws-durable-execution-sdk-js');
+  const samplerBefore = tracer._sampler;
+  const idGeneratorBefore = tracer._idGenerator;
   const handler = core.withDurableExecution(async () => { handlerCalls++; return 'ok'; }, {
     plugins: [...views.slice(0, ${explicitCount}).map(view => otel['create' + view + 'Factory']()), {createPlugin: () => ({})}],
   });
   let result, error;
   try { result = await handler(event, lambdaContext); }
   catch (caught) { error = { name: caught.name, message: caught.message }; }
-  const output = { result, error, handlerCalls, spanNames: exporter.getFinishedSpans().map(span => span.name), corePath: require.resolve('@aws/durable-execution-sdk-js') };
+  const output = { result, error, handlerCalls, samplerUnchanged: tracer._sampler === samplerBefore, idGeneratorUnchanged: tracer._idGenerator === idGeneratorBefore, spanNames: exporter.getFinishedSpans().map(span => span.name), corePath: require.resolve('@aws/durable-execution-sdk-js') };
   await provider.shutdown();
   process.stdout.write(JSON.stringify(output));
 })().catch(error => { console.error(error); process.exitCode = 1; });`;
@@ -34,6 +37,8 @@ type ProbeResult = {
   handlerCalls: number;
   spanNames: string[];
   corePath: string;
+  samplerUnchanged: boolean;
+  idGeneratorUnchanged: boolean;
 };
 
 describe("installed core compatibility for exclusive OTel views", () => {
@@ -81,6 +86,8 @@ describe("installed core compatibility for exclusive OTel views", () => {
       );
       expect(newResult.handlerCalls).toBe(0);
       expect(newResult.spanNames).toEqual([]);
+      expect(newResult.samplerUnchanged).toBe(true);
+      expect(newResult.idGeneratorUnchanged).toBe(true);
     },
     10000,
   );
