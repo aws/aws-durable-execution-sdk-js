@@ -955,6 +955,23 @@ describe("exclusive factory registration", () => {
     },
   );
 
+  it("rejects explicit conflicts before importing any configured module", async () => {
+    const first = view("first view");
+    const second = view("second view");
+    const importModule = jest.fn(async () =>
+      moduleFor(view("metrics", "metrics")),
+    );
+    await expect(
+      loadConfiguredPlugins([first, second], {
+        environment: { DURABLE_EXECUTION_PLUGINS: "metrics" },
+        importModule,
+      }),
+    ).rejects.toThrow("mutually exclusive");
+    expect(importModule).not.toHaveBeenCalled();
+    expect(first.createPlugin).not.toHaveBeenCalled();
+    expect(second.createPlugin).not.toHaveBeenCalled();
+  });
+
   it("accepts zero/single views and unrelated factories without eager creation", async () => {
     const first = view("first view");
     const second = view("second view");

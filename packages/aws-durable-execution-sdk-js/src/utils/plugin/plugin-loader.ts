@@ -378,8 +378,8 @@ export async function loadConfiguredPlugins(
   );
   const environment = options.environment ?? process.env;
   const specifiers = parseConfiguredSpecifiers(environment);
+  validateExclusiveGroups(plugins);
   if (specifiers.length === 0) {
-    validateExclusiveGroups(plugins);
     return plugins;
   }
 
