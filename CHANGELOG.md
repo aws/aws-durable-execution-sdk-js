@@ -102,6 +102,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the session opts in with `autoSuspendOnIdle: true`.
   The extras package requires core SDK 2.6.0 or later.
 
+- The MicroVM worker acts on the `suspend` and `terminate` lifecycle hooks, when the image enables
+  them. On `terminate` it fails the callback of each running job with `MicrovmTerminatedError`,
+  so the `microvm` operation fails at once with a `MicrovmJobFailedError` instead of at the
+  job's heartbeat timeout or its timeout. It answers the hook after the reports end, or after 5
+  seconds. On `suspend` it refuses new jobs with HTTP 503 until the `resume` hook, or for 30
+  seconds. The worker acts on `suspend`, `terminate`, and `resume` only for requests with a local
+  `Host` and no `x-amzn-requestid` header, as Lambda's own hook calls carry. It ignores a request
+  that the MicroVM endpoint forwarded to one of these hook paths.
+
 ## [2.3.1]
 
 ### Fixed

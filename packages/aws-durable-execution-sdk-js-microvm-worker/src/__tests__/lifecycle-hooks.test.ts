@@ -3,7 +3,7 @@ import type {
   IncomingMessage,
   ServerResponse,
 } from "node:http";
-import { PassThrough, Readable } from "node:stream";
+import { PassThrough } from "node:stream";
 import {
   LambdaClient,
   SendDurableExecutionCallbackFailureCommand,
@@ -11,24 +11,18 @@ import {
   SendDurableExecutionCallbackSuccessCommand,
 } from "@aws-sdk/client-lambda";
 import {
-  type LambdaMicrovmsClient,
-  SuspendMicrovmCommand,
-} from "@aws-sdk/client-lambda-microvms";
-import {
   createMicrovmWorkerListener,
   HOOK_PATH_PREFIX,
   type MicrovmWorkerListener,
   MicrovmTerminatedError,
 } from "..";
-
-/** The headers of Lambda's own hook calls, as measured in us-east-1. */
-const LAMBDA_HEADERS: IncomingHttpHeaders = { host: "localhost:8080" };
-
-/** The headers of a request that the MicroVM endpoint forwarded. */
-const FORWARDED_HEADERS: IncomingHttpHeaders = {
-  host: "7ed0892b.lambda-microvm.us-east-1.on.aws",
-  "x-amzn-requestid": "6f1c0e0a-0000-4000-8000-000000000000",
-};
+import {
+  advance,
+  call,
+  FakeMicrovmsClient,
+  FORWARDED_HEADERS,
+  LAMBDA_HEADERS,
+} from "./helpers";
 
 type Completion =
   | { kind: "success"; callbackId: string }
@@ -46,14 +40,24 @@ type Completion =
 class FakeLambdaClient {
   readonly completions: Completion[] = [];
   hold = false;
+  /** Answers every heartbeat with this error. */
+  heartbeatError: Error | undefined;
+  /** Answers every completion with this error. */
+  completionError: Error | undefined;
   private pending: (() => void)[] = [];
 
   async send(command: unknown): Promise<unknown> {
     if (command instanceof SendDurableExecutionCallbackHeartbeatCommand) {
+      if (this.heartbeatError) {
+        throw this.heartbeatError;
+      }
       return {};
     }
     if (this.hold) {
       await new Promise<void>((resolve) => this.pending.push(resolve));
+    }
+    if (this.completionError) {
+      throw this.completionError;
     }
     if (command instanceof SendDurableExecutionCallbackSuccessCommand) {
       this.completions.push({
@@ -89,73 +93,6 @@ class FakeLambdaClient {
     return this as unknown as LambdaClient;
   }
 }
-
-/**
- * Records SuspendMicrovm calls. With `hold`, each call stays pending until
- * `finish()`, and then fails with `failure` when it is set.
- */
-class FakeMicrovmsClient {
-  readonly suspended: string[] = [];
-  failure: Error | undefined;
-  hold = false;
-  private pending: (() => void) | undefined;
-
-  async send(command: unknown): Promise<unknown> {
-    if (!(command instanceof SuspendMicrovmCommand)) {
-      throw new Error("unexpected command");
-    }
-    this.suspended.push(command.input.microvmIdentifier as string);
-    if (this.hold) {
-      await new Promise<void>((resolve) => {
-        this.pending = resolve;
-      });
-    }
-    if (this.failure) {
-      throw this.failure;
-    }
-    return {};
-  }
-
-  finish(): void {
-    this.pending?.();
-    this.pending = undefined;
-  }
-
-  asClient(): LambdaMicrovmsClient {
-    return this as unknown as LambdaMicrovmsClient;
-  }
-}
-
-/** Sends one request to the listener, and resolves with the status. */
-const call = (
-  target: MicrovmWorkerListener,
-  path: string,
-  body: unknown,
-  headers: IncomingHttpHeaders = LAMBDA_HEADERS,
-): Promise<number> =>
-  new Promise((resolve) => {
-    const request = Object.assign(
-      Readable.from([Buffer.from(JSON.stringify(body))]),
-      { url: path, method: "POST", headers },
-    );
-    let status = 0;
-    const response = {
-      headersSent: false,
-      writeHead(code: number) {
-        status = code;
-        this.headersSent = true;
-        return this;
-      },
-      end() {
-        resolve(status);
-        return this;
-      },
-    };
-    target.listener(
-      request as unknown as IncomingMessage,
-      response as unknown as ServerResponse,
-    );
-  });
 
 /**
  * Starts a request whose body arrives in two parts. The listener has read
@@ -205,10 +142,6 @@ const startSlowCall = async (
   };
 };
 
-/** Advances fake time, and lets the promises that it releases settle. */
-const advance = (ms: number): Promise<void> =>
-  jest.advanceTimersByTimeAsync(ms);
-
 describe("suspend and terminate hooks", () => {
   let target: MicrovmWorkerListener | undefined;
   let lambda: FakeLambdaClient;
@@ -242,7 +175,11 @@ describe("suspend and terminate hooks", () => {
     jest.useRealTimers();
   });
 
-  const start = (warn: jest.Mock = jest.fn()): MicrovmWorkerListener => {
+  const start = (
+    warn: jest.Mock = jest.fn(),
+    info: jest.Mock = jest.fn(),
+    error: jest.Mock = jest.fn(),
+  ): MicrovmWorkerListener => {
     target = createMicrovmWorkerListener({
       handler: (_input, context) => {
         signals.set(context.callbackId, context.signal);
@@ -260,7 +197,7 @@ describe("suspend and terminate hooks", () => {
       },
       createClient: () => lambda.asClient(),
       createMicrovmsClient: () => microvms.asClient(),
-      logger: { info: () => {}, warn, error: () => {} },
+      logger: { info, warn, error },
     });
     return target;
   };
@@ -311,13 +248,13 @@ describe("suspend and terminate hooks", () => {
           kind: "failure",
           callbackId: "cb-1",
           errorType: "MicrovmTerminatedError",
-          message: "the MicroVM was terminated while the job ran",
+          message: "the MicroVM was terminated before the job finished",
         },
         {
           kind: "failure",
           callbackId: "cb-2",
           errorType: "MicrovmTerminatedError",
-          message: "the MicroVM was terminated while the job ran",
+          message: "the MicroVM was terminated before the job finished",
         },
       ]);
       expect(signals.get("cb-1")?.aborted).toBe(true);
@@ -431,6 +368,51 @@ describe("suspend and terminate hooks", () => {
       expect(answers).toEqual([]);
       await advance(1);
       expect(answers.sort()).toEqual(["first", "second"]);
+    });
+
+    it("reports nothing for a job whose callback a heartbeat found gone", async () => {
+      const worker = start();
+      await runHook(worker);
+      lambda.heartbeatError = Object.assign(new Error("timed out"), {
+        name: "CallbackTimeoutException",
+      });
+      // A heartbeat timeout makes the worker send a heartbeat at once.
+      await call(worker, "/job", {
+        version: 1,
+        region: "us-east-1",
+        callbackId: "cb-gone",
+        input: {},
+        heartbeatTimeoutSeconds: 30,
+      });
+      await advance(0);
+      expect(signals.get("cb-gone")?.aborted).toBe(true);
+
+      expect(await hook(worker, "terminate")).toBe(200);
+      await advance(0);
+
+      expect(lambda.completions).toEqual([]);
+    });
+
+    it("logs a failure report that the service refuses as terminal at info, not error", async () => {
+      const info = jest.fn();
+      const error = jest.fn();
+      const worker = start(jest.fn(), info, error);
+      await runHook(worker);
+      await job(worker, "cb-1");
+      lambda.completionError = Object.assign(new Error("already complete"), {
+        name: "InvalidParameterValueException",
+      });
+
+      await hook(worker, "terminate");
+
+      expect(info).toHaveBeenCalledWith(
+        "the callback no longer accepts a failure",
+        expect.anything(),
+      );
+      expect(error).not.toHaveBeenCalledWith(
+        "could not fail the callback",
+        expect.anything(),
+      );
     });
 
     it("answers at once when no job runs", async () => {
@@ -547,7 +529,7 @@ describe("suspend and terminate hooks", () => {
           kind: "failure",
           callbackId: "cb-run",
           errorType: "MicrovmTerminatedError",
-          message: "the MicroVM was terminated while the job ran",
+          message: "the MicroVM was terminated before the job finished",
         },
       ]);
     });
@@ -823,6 +805,18 @@ describe("suspend and terminate hooks", () => {
       ]);
     });
 
+    it("keeps refusing jobs after a forwarded resume", async () => {
+      const worker = start();
+      await runHook(worker);
+      await hook(worker, "suspend");
+
+      expect(await hook(worker, "resume", FORWARDED_HEADERS)).toBe(200);
+      expect(await job(worker, "cb-1")).toBe(503);
+
+      await hook(worker, "resume");
+      expect(await job(worker, "cb-1")).toBe(202);
+    });
+
     it("ignores a forwarded request", async () => {
       const worker = start();
       await runHook(worker);
@@ -913,41 +907,34 @@ describe("a failure report whose client cannot be closed", () => {
       .mockImplementation(() => {
         throw new Error("destroy failed");
       });
-    const unhandled: unknown[] = [];
-    const onUnhandled = (reason: unknown): void => {
-      unhandled.push(reason);
-    };
-    process.on("unhandledRejection", onUnhandled);
+    // Jest fails the test on an unhandled rejection. A listener on
+    // `process` here would not see it, because each test file gets its own
+    // copy of `process`.
     const error = jest.fn();
-    try {
-      const worker = createMicrovmWorkerListener({
-        handler: async () => "done",
-        logger: { info: () => {}, warn: () => {}, error },
-      });
-      const status = await call(worker, `${HOOK_PATH_PREFIX}run`, {
-        microvmId: "mvm-1",
-        runHookPayload: JSON.stringify({
-          version: 99,
-          region: "us-east-1",
-          job: { callbackId: "cb-invalid", input: {} },
-        }),
-      });
-      await worker.idle();
-      // Unhandled rejections are reported after the microtask queue drains.
-      await new Promise((resolve) => setImmediate(resolve));
-      await new Promise((resolve) => setImmediate(resolve));
+    const worker = createMicrovmWorkerListener({
+      handler: async () => "done",
+      logger: { info: () => {}, warn: () => {}, error },
+    });
+    const status = await call(worker, `${HOOK_PATH_PREFIX}run`, {
+      microvmId: "mvm-1",
+      runHookPayload: JSON.stringify({
+        version: 99,
+        region: "us-east-1",
+        job: { callbackId: "cb-invalid", input: {} },
+      }),
+    });
+    await worker.idle();
+    // Let a rejection that nothing handles reach Jest before the test ends.
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
 
-      expect(status).toBe(400);
-      expect(destroy).toHaveBeenCalled();
-      expect(unhandled).toEqual([]);
-      expect(error).toHaveBeenCalledWith(
-        "could not close the Lambda client",
-        expect.objectContaining({
-          error: expect.objectContaining({ message: "destroy failed" }),
-        }),
-      );
-    } finally {
-      process.off("unhandledRejection", onUnhandled);
-    }
+    expect(status).toBe(400);
+    expect(destroy).toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith(
+      "could not close the Lambda client",
+      expect.objectContaining({
+        error: expect.objectContaining({ message: "destroy failed" }),
+      }),
+    );
   });
 });
