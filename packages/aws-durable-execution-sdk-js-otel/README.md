@@ -710,6 +710,13 @@ view completes the live segment or emits a linked continuation.
 
 Notifications and operation-end hooks are deduplicated within each invocation.
 Normal replay does not re-export stored external completions. Deduplication is
+invocation-local. Shutdown serializes completion export and provider flushing,
+and drains again when updates arrive during a flush. A change hook received
+after shutdown also awaits export and flushing of its fresh completions. This
+does not guarantee delivery of notifications after the Lambda environment has
+stopped running, or successful export when the configured provider fails.
+
+Export acknowledgement is
 not persisted: redelivery after a failed invocation can export the completion
 again, as required for recovery.
 

@@ -128,6 +128,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
   private tracingEnabled = false;
   private readonly externalCompletions = new ExternalCompletions();
+  private invocationEnded = false;
 
   /**
    * @param environment - State that belongs to the execution environment: the
@@ -405,6 +406,18 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     }
 
     // 4. Always flush TracerProvider at invocation boundaries
+    this.invocationEnded = true;
+    await this.flushExternalCompletions();
+  }
+
+  private flushExternalCompletions(): Promise<void> {
+    return this.externalCompletions.drainAndFlush(
+      (operation) => this.onOperationEnd({ ...operation, isReplay: false }),
+      () => this.flushTracerProvider(),
+    );
+  }
+
+  private async flushTracerProvider(): Promise<void> {
     if ("forceFlush" in this.environment.tracerProvider) {
       try {
         await (
@@ -830,6 +843,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   async onOperationChange(info: OperationChangeInfo): Promise<void> {
     if (this.tracingEnabled) {
       this.externalCompletions.observe(info.updatedOperations);
+      if (this.invocationEnded && this.externalCompletions.pending.size > 0) {
+        await this.flushExternalCompletions();
+      }
     }
   }
 

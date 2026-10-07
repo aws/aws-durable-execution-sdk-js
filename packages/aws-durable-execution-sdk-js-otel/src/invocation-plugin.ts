@@ -86,6 +86,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
 
   private tracingEnabled = false;
   private readonly externalCompletions = new ExternalCompletions();
+  private invocationEnded = false;
 
   // Per-invocation state
   private invocationClock: InvocationClock | undefined;
@@ -372,6 +373,18 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     // nothing to end — the identity was only ever a non-recording context.
 
     // 4. Force flush the tracer provider
+    this.invocationEnded = true;
+    await this.flushExternalCompletions();
+  }
+
+  private flushExternalCompletions(): Promise<void> {
+    return this.externalCompletions.drainAndFlush(
+      (operation) => this.onOperationEnd({ ...operation, isReplay: false }),
+      () => this.flushTracerProvider(),
+    );
+  }
+
+  private async flushTracerProvider(): Promise<void> {
     if ("forceFlush" in this.environment.tracerProvider) {
       try {
         await (
@@ -796,6 +809,9 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   async onOperationChange(info: OperationChangeInfo): Promise<void> {
     if (this.tracingEnabled) {
       this.externalCompletions.observe(info.updatedOperations);
+      if (this.invocationEnded && this.externalCompletions.pending.size > 0) {
+        await this.flushExternalCompletions();
+      }
     }
   }
 
