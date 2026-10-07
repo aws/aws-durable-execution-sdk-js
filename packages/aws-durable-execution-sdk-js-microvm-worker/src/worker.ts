@@ -499,6 +499,9 @@ export function createMicrovmWorkerListener<
   // of a job that a terminate hook stopped. The terminate hook waits for
   // them, because Lambda can end the MicroVM as soon as it gets the answer.
   const runHooks = new Set<Promise<void>>();
+  // Callback failure reports in flight, from every place that fails a
+  // callback. The terminate hook waits for them for the same reason.
+  const callbackReports = new Set<Promise<void>>();
   let closed = false;
 
   const track = (work: Promise<void>): void => {
@@ -772,9 +775,10 @@ export function createMicrovmWorkerListener<
       });
     }
     // A run hook whose body is still arriving can name a job, and then fails
-    // its callback. A run hook can also begin while the worker waits here.
-    // So the wait reads the set of run hooks again after each round, until
-    // it is empty or the budget ends.
+    // its callback. An invalid run hook or job request fails its callback in
+    // the background. Either can begin while the worker waits here. So the
+    // wait reads both sets again after each round, until both are empty or
+    // the budget ends.
     let timer: NodeJS.Timeout | undefined;
     let budgetEnded = false;
     const budget = new Promise<void>((resolve) => {
@@ -785,13 +789,14 @@ export function createMicrovmWorkerListener<
       timer.unref();
     });
     for (;;) {
-      const pending = [...reports, ...runHooks];
+      const pending = [...reports, ...runHooks, ...callbackReports];
       if (pending.length === 0 || budgetEnded) {
         break;
       }
       await Promise.race([Promise.allSettled(pending), budget]);
       // The reports have settled, unless the budget ended. A settled run hook
-      // has left the set, so the next round waits only for new ones.
+      // or report has left its set, so the next round waits only for new
+      // ones.
       reports.length = 0;
     }
     clearTimeout(timer);
@@ -962,7 +967,22 @@ export function createMicrovmWorkerListener<
     }
   }
 
-  async function failCallback(
+  /**
+   * Fails a callback. The report stays in {@link callbackReports} until it
+   * ends, so that a terminate hook does not answer before it.
+   */
+  function failCallback(
+    error: Error,
+    callbackId: string,
+    region: string,
+  ): Promise<void> {
+    const report = sendFailure(error, callbackId, region);
+    callbackReports.add(report);
+    void report.finally(() => callbackReports.delete(report));
+    return report;
+  }
+
+  async function sendFailure(
     error: Error,
     callbackId: string,
     region: string,

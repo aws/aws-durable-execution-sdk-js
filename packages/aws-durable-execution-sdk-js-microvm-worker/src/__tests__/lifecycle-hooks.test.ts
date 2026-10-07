@@ -80,6 +80,11 @@ class FakeLambdaClient {
     }
   }
 
+  /** Lets only the oldest held completion end. */
+  finishFirst(): void {
+    this.pending.shift()?.();
+  }
+
   asClient(): LambdaClient {
     return this as unknown as LambdaClient;
   }
@@ -539,6 +544,109 @@ describe("suspend and terminate hooks", () => {
         "cb-http",
         "cb-run",
       ]);
+    });
+
+    describe("an invalid request's failure report", () => {
+      // The version is unknown, so the request is rejected. The callback ID
+      // is still readable, so the worker fails that callback.
+      const invalidRunHook = {
+        microvmId: "mvm-1",
+        runHookPayload: JSON.stringify({
+          version: 99,
+          region: "us-east-1",
+          job: { callbackId: "cb-invalid", input: {} },
+        }),
+      };
+      const invalidJob = {
+        version: 99,
+        region: "us-east-1",
+        callbackId: "cb-invalid",
+        input: {},
+      };
+
+      const terminateAfter = async (
+        worker: MicrovmWorkerListener,
+        send: () => Promise<number>,
+      ) => {
+        lambda.hold = true;
+        expect(await send()).toBe(400);
+        let answer: { status: number; completions: Completion[] } | undefined;
+        void hook(worker, "terminate").then((status) => {
+          answer = { status, completions: [...lambda.completions] };
+        });
+        return () => answer;
+      };
+
+      it.each([
+        ["a run hook", `${HOOK_PATH_PREFIX}run`, invalidRunHook],
+        ["a job request", "/job", invalidJob],
+      ])(
+        "from %s holds the terminate answer until it ends",
+        async (_name, path, body) => {
+          const worker = start();
+          if (path === "/job") {
+            await runHook(worker);
+          }
+          const answer = await terminateAfter(worker, () =>
+            call(worker, path, body),
+          );
+
+          await advance(1_000);
+          expect(answer()).toBeUndefined();
+
+          lambda.finish();
+          await advance(0);
+          expect(answer()?.status).toBe(200);
+          expect(answer()?.completions).toEqual([
+            expect.objectContaining({
+              kind: "failure",
+              callbackId: "cb-invalid",
+            }),
+          ]);
+        },
+      );
+
+      it("holds the terminate answer for at most 5 seconds", async () => {
+        const worker = start();
+        const answer = await terminateAfter(worker, () =>
+          call(worker, `${HOOK_PATH_PREFIX}run`, invalidRunHook),
+        );
+
+        await advance(4_999);
+        expect(answer()).toBeUndefined();
+        await advance(1);
+        expect(answer()?.status).toBe(200);
+      });
+
+      it("that begins while the terminate hook waits holds the answer", async () => {
+        const worker = start();
+        await runHook(worker);
+        expect(await job(worker, "cb-http")).toBe(202);
+        lambda.hold = true;
+        let answer: { status: number; completions: Completion[] } | undefined;
+        void hook(worker, "terminate").then((status) => {
+          answer = { status, completions: [...lambda.completions] };
+        });
+        await advance(100);
+
+        expect(await call(worker, "/job", invalidJob)).toBe(400);
+        // The running job's report ends. The invalid request's report still
+        // runs, so the answer must wait.
+        lambda.finishFirst();
+        await advance(0);
+        expect(lambda.completions.map((c) => c.callbackId)).toEqual([
+          "cb-http",
+        ]);
+        expect(answer).toBeUndefined();
+
+        lambda.finish();
+        await advance(0);
+        expect(answer?.status).toBe(200);
+        expect(answer?.completions.map((c) => c.callbackId).sort()).toEqual([
+          "cb-http",
+          "cb-invalid",
+        ]);
+      });
     });
 
     it("answers the terminate hook after 5 seconds when the run hook body never ends", async () => {
