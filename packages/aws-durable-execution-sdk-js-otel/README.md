@@ -228,11 +228,19 @@ When an operation or attempt timestamp is absent, both its start and end use
 checkpoint millisecond precision correlated to the same captured monotonic clock.
 Wall-tick observations refine the phase only within the original sample's
 uncertainty interval; wall-clock adjustments outside that interval are ignored.
-These local fallbacks cannot precede an SDK timestamp already observed during
-the invocation. This preserves sequential ordering across coarse checkpoint
-Dates and local fallback times; sub-millisecond logical durations can be zero.
+Fallback completions include SDK timestamps already observed during the
+invocation. Fallback starts honor those boundaries only within the captured
+clock's sampling uncertainty and whole-millisecond precision. This preserves
+ordering across compatible coarse checkpoint Dates and local fallbacks without
+letting an unrelated future backend completion force a local start arbitrarily
+ahead of application spans. Sub-millisecond logical durations can be zero.
 Provided Dates are preserved, and error events use the same completion timestamp
 as their span. The physical Invocation clock retains its elapsed-time precision.
+
+If a backend timestamp is genuinely ahead of the local clock, preserving that
+timestamp, strict ordering between sequential SDK spans, and containment of
+independently timed user spans cannot all be guaranteed. The local-start bound
+does not normalize those clock domains or rewrite backend Dates or user spans.
 
 While a containing context is still active, its deferred start also includes
 the earliest start observed from its children and their attempts. This preserves

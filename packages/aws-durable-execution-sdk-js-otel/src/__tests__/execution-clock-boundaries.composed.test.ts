@@ -437,6 +437,129 @@ describe.each(["global", "factory"] as const)(
       inside(ancestor, spans.find((s) => s.name === "Invocation")!);
     });
 
+    it.each(["context", "attempt", "end-only"] as const)(
+      "keeps a missing %s start near the local clock after a future backend end",
+      async (kind) => {
+        await plugin.onInvocationStart(info(true));
+        const previous: OperationInfo = {
+          id: "previous",
+          name: "previous",
+          type: "STEP",
+          isReplay: false,
+          startTimestamp: new Date(epoch),
+        };
+        await plugin.onOperationStart(previous);
+        advance(1);
+        const backendEnd = new Date(epoch + 5);
+        await plugin.onOperationEnd({
+          ...previous,
+          status: "SUCCEEDED",
+          endTimestamp: backendEnd,
+        });
+        const localStart = Date.now();
+        const next: OperationInfo = {
+          id: "after-future",
+          name: "after-future",
+          type:
+            kind === "context"
+              ? "CONTEXT"
+              : kind === "attempt"
+                ? "STEP"
+                : "WAIT",
+          isReplay: kind === "context",
+        };
+        const userCode = async () => {
+          const user = trace
+            .getTracer("future-backend-user")
+            .startSpan("ordinary-user");
+          advance(2);
+          user.end();
+        };
+        if (kind !== "end-only") await plugin.onOperationStart(next);
+        if (kind === "context") {
+          await plugin.wrapChildContextFn(next, userCode);
+        } else if (kind === "attempt") {
+          const attempt: AttemptInfo = { ...next, attempt: 1 };
+          await plugin.onOperationAttemptStart(attempt);
+          await plugin.wrapOperationAttemptFn(attempt, userCode);
+          await plugin.onOperationAttemptEnd({
+            ...attempt,
+            outcome: "SUCCEEDED",
+          });
+        }
+        await plugin.onOperationEnd({ ...next, status: "SUCCEEDED" });
+        await plugin.onInvocationEnd({ ...info(true), status: "SUCCEEDED" });
+        const spans = exporter.getFinishedSpans();
+        const previousSpan = spans.find((s) => s.name === "previous")!;
+        const parent = spans.find(
+          (s) =>
+            s.name ===
+            (kind === "attempt" ? "after-future attempt 1" : "after-future"),
+        )!;
+        expect(nanos(previousSpan.endTime)).toBe(
+          BigInt(backendEnd.getTime()) * 1_000_000n,
+        );
+        // A supplied future date stays authoritative for completion, but must
+        // not push an unrelated local start beyond Date's precision interval.
+        expect(nanos(parent.startTime)).toBeGreaterThanOrEqual(
+          BigInt(localStart) * 1_000_000n,
+        );
+        expect(nanos(parent.startTime)).toBeLessThanOrEqual(
+          BigInt(localStart + 1) * 1_000_000n,
+        );
+        inside(parent, spans.find((s) => s.name === "Invocation")!);
+        if (kind !== "end-only") {
+          const user = spans.find((s) => s.name === "ordinary-user")!;
+          expect(user.parentSpanContext?.spanId).toBe(
+            parent.spanContext().spanId,
+          );
+          expect(nanos(user.startTime) + 1_000_000n).toBeGreaterThanOrEqual(
+            nanos(parent.startTime),
+          );
+          expect(nanos(user.endTime) - 1_000_000n).toBeLessThanOrEqual(
+            nanos(parent.endTime),
+          );
+        }
+      },
+    );
+
+    it("keeps a coarse checkpoint before the next local start after wall rollback", async () => {
+      wall = epoch + 0.75;
+      await plugin.onInvocationStart(info(true));
+      const previous: OperationInfo = {
+        id: "before-rollback",
+        name: "before-rollback",
+        type: "STEP",
+        isReplay: false,
+        startTimestamp: new Date(epoch),
+      };
+      await plugin.onOperationStart(previous);
+      advance(0.725);
+      await plugin.onOperationEnd({
+        ...previous,
+        status: "SUCCEEDED",
+        endTimestamp: new Date(Math.floor(wall)),
+      });
+      wall -= 60_000;
+      const next: OperationInfo = {
+        id: "after-rollback",
+        name: "after-rollback",
+        type: "CONTEXT",
+        isReplay: true,
+      };
+      await plugin.onOperationStart(next);
+      advance(2);
+      await plugin.onOperationEnd({ ...next, status: "SUCCEEDED" });
+      await plugin.onInvocationEnd({ ...info(true), status: "SUCCEEDED" });
+      const spans = exporter.getFinishedSpans();
+      const previousSpan = spans.find((s) => s.name === "before-rollback")!;
+      const nextSpan = spans.find((s) => s.name === "after-rollback")!;
+      expect(nanos(nextSpan.startTime)).toBeGreaterThanOrEqual(
+        nanos(previousSpan.endTime),
+      );
+      inside(nextSpan, spans.find((s) => s.name === "Invocation")!);
+    });
+
     it.each(["operation start", "attempt start", "operation end"])(
       "carries a coarse child Date into active ancestors at %s",
       async (observedAt) => {

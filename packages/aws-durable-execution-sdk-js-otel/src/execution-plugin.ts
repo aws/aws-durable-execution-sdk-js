@@ -51,6 +51,7 @@ import {
 } from "@opentelemetry/core";
 import {
   captureInvocationClock,
+  invocationStartUpperBound,
   readInvocationClock,
   type InvocationClock,
 } from "./invocation-clock";
@@ -471,7 +472,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     return readInvocationClock(this.invocationClock!);
   }
 
-  private logicalTimestamp(): HrTime {
+  private logicalTimestamp(boundStart = false): HrTime {
     const before = hrTimeToMilliseconds(this.liveTimestamp());
     const wallMillis = Date.now();
     const after = this.liveTimestamp();
@@ -484,13 +485,20 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       wallMillis <= Math.ceil(hrTimeToMilliseconds(after) + uncertainty);
     // Checkpoints use whole milliseconds. Use that precision for both logical
     // boundaries so a fractional fallback cannot overtake the next Date.
-    // Already observed SDK timestamps also bound subsequent local fallbacks.
+    // Observed SDK timestamps bound fallback completions. A local start must
+    // also remain within this invocation clock's sampling/quantization range.
     this.observeTimestamp(
       correlated
         ? millisToHrTime(wallMillis)
         : [after[0], Math.floor(after[1] / 1_000_000) * 1_000_000],
     );
-    return this.latestObservedTimestamp!;
+    const latest = this.latestObservedTimestamp!;
+    if (!boundStart) return latest;
+    const upper = invocationStartUpperBound(this.invocationClock!, after);
+    return latest[0] > upper[0] ||
+      (latest[0] === upper[0] && latest[1] > upper[1])
+      ? upper
+      : latest;
   }
 
   /** Keep only this invocation's latest emitted/observed SDK boundary. */
@@ -586,7 +594,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     // backend start timestamp, so capture the hook time as the fallback. Keep
     // the earliest observation if the same operation starts again on replay.
     const existingStart = this.operationStarts.get(info.id);
-    const observedStart = info.startTimestamp ?? this.logicalTimestamp();
+    const observedStart = info.startTimestamp ?? this.logicalTimestamp(true);
     const startTimestamp = this.earliestStart(
       existingStart?.startTimestamp,
       observedStart,
@@ -663,7 +671,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     // spans (created earlier at start).
     const startTime =
       this.earliestStart(started?.startTimestamp, info.startTimestamp) ??
-      this.logicalTimestamp();
+      this.logicalTimestamp(true);
     this.observeAncestorStart(info.parentId ?? started?.parentId, startTime);
 
     const operationSpanId = deriveSpanIdFromOperationId(
@@ -792,7 +800,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
     const links = this.buildInvocationLinks();
 
-    const startTime = info.startTimestamp ?? this.logicalTimestamp();
+    const startTime = info.startTimestamp ?? this.logicalTimestamp(true);
     // A backend attempt Date can precede a fractional local operation fallback.
     // Keep its actual observed boundary when the deferred parent is exported.
     const operationStart = this.operationStarts.get(info.id);
