@@ -77,8 +77,9 @@ jobs:
       actions: write
       contents: read
       id-token: write
-    uses: aws/aws-durable-execution-conformance-tests/.github/workflows/opentelemetry-orchestrator.yml@a628f5589bbf067a441696c792ab3023c0d0899b
+    uses: aws/aws-durable-execution-conformance-tests/.github/workflows/opentelemetry-orchestrator.yml@3542852f918f515d7c6a53af1eb0d5aa83d1eb1e
     with:
+      runs_on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
       language: javascript
       resource_prefix: js
       sdk_repository: aws/aws-durable-execution-sdk-js
@@ -90,11 +91,8 @@ jobs:
       # where this repo is checked out at .build/durable-sdk.
       examples_dir: .build/durable-sdk/packages/aws-durable-execution-sdk-js-conformance-tests-otel
       setup_command: |
-        export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
-        source "$NVM_DIR/nvm.sh"
-        nvm install 22
-        nvm use 22
-        node --version
+        bash "$SDK_CHECKOUT/.github/workflows/scripts/setup-node22.test.sh"
+        source "$SDK_CHECKOUT/.github/workflows/scripts/setup-node22.sh"
       # Unlike the conformance repo's examples/javascript, this package consumes the SDK and
       # the OTel plugin as workspace siblings, so there is no tarball install step: a root
       # npm ci links them and building them in place is enough.
