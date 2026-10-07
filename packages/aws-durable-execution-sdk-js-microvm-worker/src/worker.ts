@@ -102,12 +102,15 @@ const SUSPEND_GRACE_MS = 30_000;
 const TERMINATE_REPORT_BUDGET_MS = 5_000;
 
 /**
- * The error that the worker reports for a job that was running when Lambda
- * called the `terminate` hook. The job's `context.signal` is aborted with it.
+ * The error that the worker reports for a job that the `terminate` hook
+ * stopped: a job that was running, a `run` hook job whose body arrived after
+ * the hook, and a `run` hook job that a `suspend` hook deferred. A running
+ * job's `context.signal` is aborted with it.
  *
- * The durable function receives its name as the error type. So the job fails
- * at once with this name, instead of at its heartbeat timeout or its
- * timeout.
+ * The worker reports it as the callback's error type. The `microvm`
+ * operation in the durable function then fails at once with a
+ * `MicrovmJobFailedError` whose message contains `(MicrovmTerminatedError)`,
+ * instead of at the job's heartbeat timeout or its timeout.
  *
  * @public
  *
@@ -117,7 +120,7 @@ export class MicrovmTerminatedError extends Error {
   override readonly name = "MicrovmTerminatedError";
 
   constructor() {
-    super("the MicroVM was terminated while the job ran");
+    super("the MicroVM was terminated before the job finished");
   }
 }
 
@@ -136,10 +139,17 @@ export class MicrovmTerminatedError extends Error {
  *    the caller set.
  *
  * The Lambda documentation does not state either behavior. So the worker
- * uses this check only for the `suspend` and `terminate` hooks. If Lambda
- * changed its headers, the worker would ignore those two hooks, which is what
- * it did before it acted on them. The `run` hook does not use the check,
- * because a false rejection there would lose every job.
+ * uses this check only where a false rejection costs little:
+ *
+ * - `suspend` and `terminate`: the worker would ignore them, which is what
+ *   it did before it acted on them.
+ * - `resume`: the refusal after a suspend would end after its 30-second
+ *   limit instead of at once. A forwarded `resume` in the time between a
+ *   suspend hook and the freeze would otherwise end the refusal early, and a
+ *   job accepted then would freeze with the MicroVM.
+ *
+ * The `run` hook does not use the check, because a false rejection there
+ * would lose every job.
  */
 function isLambdaHookCall(request: IncomingMessage): boolean {
   const headers = request.headers ?? {};
@@ -168,7 +178,7 @@ export interface MicrovmJobContext {
   /**
    * Aborted when the durable function stops accepting the result, for example
    * after a callback or heartbeat timeout, while the handler runs. The worker
-   * learns this from a heartbeat answer, so the signal fires only when the
+   * learns this from a heartbeat answer, so this case fires only when the
    * job has a heartbeat timeout and a heartbeat reaches the service after
    * the callback ended. The handler should then stop its work. The worker
    * stops aborting the signal once it has seen the handler's promise settle,
@@ -381,15 +391,18 @@ export interface MicrovmWorkerListener {
  *   running job's `context.signal` and fails its callback with
  *   {@link MicrovmTerminatedError}. So the durable function fails the job at
  *   once. It answers HTTP 200 when the reports end, or after 5 seconds. The
- *   answer also waits for a `run` hook request still in flight. From
+ *   answer also waits for jobs that report their own outcome, for `run` hook
+ *   requests in flight, and for the failure reports of invalid requests.
+ *   From
  *   then on it refuses jobs with HTTP 503, and fails the callback of a
  *   `run` hook job instead of starting it. Lambda does not call the hook
  *   when it terminates a suspended MicroVM, because the process is frozen.
  *
- * The listener acts on these two hooks only when the request carries
- * `Host: localhost` and no `x-amzn-requestid` header, as Lambda's own calls
- * do. A request that a caller of the MicroVM endpoint sent to a hook path
- * gets HTTP 200 and is ignored.
+ * The listener acts on these two hooks, and on `resume`, only when the
+ * request's `Host` is `localhost`, `127.0.0.1`, or `[::1]`, with any port,
+ * and it has no `x-amzn-requestid` header, as Lambda's own calls do. A
+ * request that a caller of the MicroVM endpoint sent to one of these hook
+ * paths gets HTTP 200 and is ignored.
  *
  * Every other lifecycle hook gets HTTP 200. This includes the `ready` image
  * hook, which the service requires whenever the `run` hook is enabled. Other
@@ -681,11 +694,12 @@ export function createMicrovmWorkerListener<
         return;
       }
       if (
-        (hook === "suspend" || hook === "terminate") &&
+        (hook === "suspend" || hook === "terminate" || hook === "resume") &&
         !isLambdaHookCall(request)
       ) {
         // A caller of the endpoint, not Lambda, sent this request. Acting on
-        // it would refuse or fail jobs that Lambda did not stop.
+        // it would refuse or fail jobs that Lambda did not stop, or accept
+        // jobs while the MicroVM is about to freeze.
         logger.warn("lifecycle hook ignored: it did not come from Lambda", {
           hook,
           microvmId,
@@ -765,6 +779,11 @@ export function createMicrovmWorkerListener<
     for (const [callbackId, job] of active) {
       // Removed first, so that a second terminate hook reports nothing again.
       active.delete(callbackId);
+      if (job.controller.signal.aborted) {
+        // A heartbeat found the callback gone, and aborted the signal. A
+        // report would fail with the same terminal error.
+        continue;
+      }
       const error = new MicrovmTerminatedError();
       job.controller.abort(error);
       const report = job.heartbeats
@@ -878,10 +897,9 @@ export function createMicrovmWorkerListener<
         job.callbackId,
         payload.region,
       );
+      // failCallback records the report in callbackReports, and the
+      // terminate hook waits for that set.
       track(report);
-      // The terminate hook waits for this request. So the report must end
-      // before the request does.
-      await report;
       return;
     }
     if (job && options.handler && suspending) {
@@ -1011,9 +1029,17 @@ export function createMicrovmWorkerListener<
       reporter = reporterFor(callbackId, region);
       await reporter.fail(error);
     } catch (reportError) {
-      logger.error("could not fail the callback", {
-        error: describe(reportError),
-      });
+      if (isTerminalCallbackError(reportError)) {
+        // The callback has already ended, for example at its timeout. The
+        // durable function no longer waits for this report.
+        logger.info("the callback no longer accepts a failure", {
+          error: describe(reportError),
+        });
+      } else {
+        logger.error("could not fail the callback", {
+          error: describe(reportError),
+        });
+      }
     } finally {
       // A client whose destroy() throws must not reject the report. Callers
       // await it, and the terminate hook waits for it.
