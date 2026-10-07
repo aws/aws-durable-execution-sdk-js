@@ -50,6 +50,16 @@ env:
     show uv --version
     ls -d /root/.pyenv/versions/* /opt/hostedtoolcache/Python/* 2>/dev/null | head -8
 
+    section "rust"
+    show rustup --version
+    show cargo --version
+    show rustc --version
+    echo "CARGO_HOME=${CARGO_HOME:-unset} RUSTUP_HOME=${RUSTUP_HOME:-unset}"
+    ls -d /root/.cargo /root/.rustup /usr/local/cargo /usr/local/rustup 2>/dev/null
+    rustup toolchain list 2>/dev/null | head -5
+    section "disk"
+    df -h / /codebuild 2>/dev/null | head -4
+
     section "other"
     show go version
     show aws --version
