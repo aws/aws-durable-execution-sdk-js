@@ -1,0 +1,73 @@
+name: CodeBuild runner toolchain probe
+
+# Temporary probe: what Node.js, Java and Python toolchains the CodeBuild
+# project default image exposes to a job, compared with ubuntu-latest. Needed
+# to write runner-agnostic setup_command values for the OTel conformance
+# shells. Not for merge.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/codebuild-toolchain-probe.yml
+
+permissions: {}
+
+env:
+  PROBE_SCRIPT: |
+    set -u
+    section() { printf '\n== %s\n' "$1"; }
+    show() { if command -v "$1" >/dev/null 2>&1; then printf '%-14s %s -> ' "$1" "$(command -v "$1")"; "$@" 2>&1 | head -1; else printf '%-14s absent\n' "$1"; fi; }
+
+    section "account / home / image"
+    id -un; echo "HOME=$HOME"; grep -E '^(PRETTY_NAME|VERSION_ID)=' /etc/os-release
+    echo "CODEBUILD_BUILD_IMAGE=${CODEBUILD_BUILD_IMAGE:-unset}"
+
+    section "node"
+    show node --version
+    show npm --version
+    show n --version
+    show nvm --version
+    echo "NVM_DIR=${NVM_DIR:-unset}  N_PREFIX=${N_PREFIX:-unset}"
+    for d in "$HOME/.nvm" /usr/local/n /root/.n /usr/local/lib/nodejs /opt/nodejs; do [ -e "$d" ] && echo "exists: $d" && ls "$d" 2>/dev/null | head -5; done
+    ls -d /root/.nvm/versions/node/* /home/*/.nvm/versions/node/* 2>/dev/null | head
+    ls -d /usr/local/n/versions/node/* 2>/dev/null | head
+    # Every node binary on disk, with version
+    for n in $(ls -d /usr/local/bin/node /usr/bin/node /root/.n/bin/node /usr/local/n/versions/node/*/bin/node /root/.nvm/versions/node/*/bin/node /home/*/.nvm/versions/node/*/bin/node /opt/hostedtoolcache/node/*/x64/bin/node 2>/dev/null); do printf '  %s -> ' "$n"; "$n" --version; done
+
+    section "java"
+    show java -version
+    show javac -version
+    show mvn --version
+    env | grep -E '^JAVA_HOME' | sort || echo "no JAVA_HOME* variables"
+    ls -d /usr/lib/jvm/* /opt/hostedtoolcache/Java_*/* /usr/local/jdk* /root/.sdkman 2>/dev/null | head -12
+
+    section "python"
+    show python3 --version
+    show pyenv --version
+    show uv --version
+    ls -d /root/.pyenv/versions/* /opt/hostedtoolcache/Python/* 2>/dev/null | head -8
+
+    section "other"
+    show go version
+    show aws --version
+    show sam --version
+    show gh --version
+    show docker --version
+    echo "RUNNER_TOOL_CACHE=${RUNNER_TOOL_CACHE:-unset}"; ls "${RUNNER_TOOL_CACHE:-/nonexistent}" 2>/dev/null | head
+
+jobs:
+  codebuild:
+    name: codebuild (project default)
+    runs-on:
+      - codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Probe toolchains
+        run: bash -c "$PROBE_SCRIPT"
+
+  github-hosted:
+    name: ubuntu-latest (control)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe toolchains
+        run: bash -c "$PROBE_SCRIPT"
