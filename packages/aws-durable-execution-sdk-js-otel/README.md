@@ -363,9 +363,12 @@ case direct samplers may make their normal span-level decisions.
 ### Context extractors
 
 The default `xRayContextExtractor` parses `Root`, `Parent`, and `Sampled`
-independently from `_X_AMZN_TRACE_ID`, rejecting an all-zero (invalid) `Root` or
-`Parent`. The durable backend keeps the X-Ray `Root` stable for every invocation
-of one execution, so its trace ID anchors the whole execution. The package also
+independently from the invocation's `info.xRayTraceId` carrier, falling back to
+`_X_AMZN_TRACE_ID` only when that property is absent. A present but empty or
+invalid carrier suppresses the environment fallback. The extractor rejects an
+all-zero (invalid) `Root` or `Parent`. The durable backend keeps the X-Ray `Root`
+stable for every invocation of one execution, so its trace ID anchors the whole
+execution. The package also
 exports `w3cClientContextExtractor`, which reads W3C `traceparent` data from
 `context.clientContext.custom.traceparent`.
 
@@ -590,17 +593,25 @@ Wrapper-style instrumentation can create spans on the same execution trace and
 refer to the same Workflow span without copying the plugin's derivations:
 
 ```typescript
+import type { DurableInstrumentationPlugin } from "@aws/durable-execution-sdk-js";
 import {
   deriveExecutionTraceId,
   deriveWorkflowSpanId,
 } from "@aws/durable-execution-sdk-js-otel";
 
-const executionTraceId = deriveExecutionTraceId(
-  process.env,
-  executionArn,
-  executionStartTimestamp,
-);
-const workflowSpanId = deriveWorkflowSpanId(executionArn);
+const customInstrumentation: DurableInstrumentationPlugin = {
+  async wrapInvocation(info, next) {
+    const executionTraceId = deriveExecutionTraceId(
+      process.env,
+      info.executionArn,
+      info.executionStartTimestamp,
+      info,
+    );
+    const workflowSpanId = deriveWorkflowSpanId(info.executionArn);
+    // Use these IDs in your custom instrumentation around next().
+    return next();
+  },
+};
 ```
 
 ### Context Extractors
