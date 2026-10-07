@@ -56,6 +56,8 @@ import {
   type InvocationClock,
 } from "./invocation-clock";
 
+import { PLUGIN_REGISTRATION } from "./plugin-registration";
+
 const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
 
 /**
@@ -72,6 +74,10 @@ const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
  * onOperationEnd, so nothing is left un-ended across invocations (issue #831).
  */
 export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
+  private static readonly [PLUGIN_REGISTRATION] = {
+    exclusiveGroup: "durable-opentelemetry-view",
+  } as const;
+
   // Shared utilities (reused from existing package)
   private idGenerator: DeterministicIdGenerator;
   private readonly contextExtractor: ContextExtractor;

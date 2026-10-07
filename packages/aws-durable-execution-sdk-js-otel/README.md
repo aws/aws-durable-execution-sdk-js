@@ -183,6 +183,13 @@ needed.
 
 ## Choosing a Plugin
 
+Configure exactly one durable OTel view: `ExecutionOtelPlugin` for a workflow
+view, or `InvocationOtelPlugin` for an invocation view. Registering both (or
+registering one view twice) raises `PluginLoadError` before invocation hooks
+run. This applies to explicit `plugins`, `DURABLE_EXECUTION_PLUGINS`, and any
+combination of the two. Other instrumentation plugins can run alongside the
+selected view.
+
 ### `ExecutionOtelPlugin`
 
 Use this plugin for a workflow-centered view. Operations and attempts are
@@ -700,3 +707,35 @@ remote parent, or a synthetic execution root).
 ## License
 
 Apache-2.0
+
+## Core compatibility
+
+OTel 1.2 preserves valid core 2.4–2.x registrations, including separate
+OTel-only Lambda layers. Its core peer is optional (`>=2.4.0 <3.0.0`), and the
+dynamic provider contract remains version 1. Existing on-demand environment
+carrier behavior remains available on older cores; upgrading the plugin alone
+does not add fields to the invocation metadata those cores supply.
+
+The new invocation-local LMI carrier and core registration exclusivity require
+the coordinated core 2.7 / OTel 1.2 pair. Upgrade both for those capabilities.
+Older core/plugin combinations do not gain those guarantees. The two OTel views
+remain an unsupported combination, and the updated core rejects it with updated
+plugin metadata. The later core 3 factory migration is a separate major release.
+
+Registration metadata uses the namespaced symbol
+`Symbol.for("aws.lambda.durable.instrumentation.plugin-registration")`.
+The bundled views declare it on their constructors, so the core can validate
+all selected provider types before calling any environment-selected factory.
+Conflicting dynamic views therefore do not install sampler or ID-generator
+wrappers on the global tracer. Subclasses retain all inherited static exclusive
+groups; declaring their own static metadata adds a constraint and cannot replace
+an inherited one. Repeating a group within one constructor chain does not count
+as a second plugin registration. Subclasses are identified by their actual
+constructor names in diagnostics. Explicit instances
+have already been constructed by the application before registration; validation
+cannot undo that construction. Existing instance metadata remains supported and
+returned instances are checked too, including subclasses returned by providers
+that declare a broader base type.
+The base hook interface stays unchanged, and ordinary properties such as a
+custom plugin's `registration` field are not interpreted by the SDK. This keeps
+existing valid plugin classes and generic hook dispatchers source-compatible.
