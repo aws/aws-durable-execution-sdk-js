@@ -317,7 +317,9 @@ export const DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION = Symbol.for(
 
 /**
  * Static registration metadata, available before a provider factory runs.
- * Subclasses inherit the group; diagnostics use their concrete constructor name.
+ * Subclasses retain every group declared by their constructor ancestors. An own
+ * declaration adds a constraint rather than replacing inherited constraints.
+ * Diagnostics use the concrete constructor name.
  * @experimental
  */
 export type RegisteredDurableInstrumentationPluginType<

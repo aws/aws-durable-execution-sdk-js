@@ -265,11 +265,12 @@ function createPlugin(
   return plugin;
 }
 
-function getRegistration(
+type PluginRegistration =
+  RegisteredDurableInstrumentationPlugin[typeof DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION];
+
+function getRegistrations(
   plugin: DurableInstrumentationPlugin | DurableInstrumentationPluginType,
-):
-  | RegisteredDurableInstrumentationPlugin[typeof DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]
-  | undefined {
+): readonly PluginRegistration[] {
   const pluginType =
     typeof plugin === "function"
       ? plugin
@@ -278,15 +279,38 @@ function getRegistration(
     typeof pluginType === "function" &&
     DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION in pluginType
   ) {
-    const registration = (
-      pluginType as Partial<RegisteredDurableInstrumentationPluginType>
-    )[DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION];
-    if (registration) {
-      return {
-        name: pluginType.name || "(anonymous)",
-        exclusiveGroup: registration.exclusiveGroup,
-      };
+    const concreteType = pluginType as DurableInstrumentationPluginType;
+    const registrations: PluginRegistration[] = [];
+    const visited = new Set<unknown>();
+    let name: string | undefined;
+    // A subclass may add a constraint, but cannot replace a base constraint.
+    // Only inspect declarations of the opt-in symbol; ordinary properties and
+    // unmarked callbacks are not registration metadata.
+    for (
+      let current: unknown = pluginType;
+      typeof current === "function" && !visited.has(current);
+      current = Object.getPrototypeOf(current)
+    ) {
+      visited.add(current);
+      if (!Object.hasOwn(current, DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION))
+        continue;
+      // Preserve the concrete constructor as the receiver for inherited getters.
+      const registration = Reflect.get(
+        current,
+        DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION,
+        pluginType,
+      ) as
+        | RegisteredDurableInstrumentationPluginType[typeof DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]
+        | undefined;
+      if (registration) {
+        name ??= concreteType.name || "(anonymous)";
+        registrations.push({
+          name,
+          exclusiveGroup: registration.exclusiveGroup,
+        });
+      }
     }
+    if (registrations.length > 0) return registrations;
   }
 
   // Keep existing instance metadata working. Only declared static metadata can
@@ -295,11 +319,12 @@ function getRegistration(
     typeof plugin !== "function" &&
     DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION in plugin
   ) {
-    return (plugin as Partial<RegisteredDurableInstrumentationPlugin>)[
-      DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION
-    ];
+    const registration = (
+      plugin as Partial<RegisteredDurableInstrumentationPlugin>
+    )[DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION];
+    return registration ? [registration] : [];
   }
-  return undefined;
+  return [];
 }
 
 function validateExclusiveGroups(
@@ -310,16 +335,19 @@ function validateExclusiveGroups(
 ): void {
   const groups = new Map<string, string>();
   for (const plugin of plugins) {
-    const registration = getRegistration(plugin);
-    const group = registration?.exclusiveGroup;
-    if (!group) continue;
-    const previous = groups.get(group);
-    if (previous !== undefined) {
-      throw new PluginLoadError(
-        `Plugins '${previous}' and '${registration.name}' are mutually exclusive in group '${group}'. Configure only one.`,
-      );
+    const registeredGroups = new Set<string>();
+    for (const registration of getRegistrations(plugin)) {
+      const group = registration.exclusiveGroup;
+      if (!group || registeredGroups.has(group)) continue;
+      registeredGroups.add(group);
+      const previous = groups.get(group);
+      if (previous !== undefined) {
+        throw new PluginLoadError(
+          `Plugins '${previous}' and '${registration.name}' are mutually exclusive in group '${group}'. Configure only one.`,
+        );
+      }
+      groups.set(group, registration.name);
     }
-    groups.set(group, registration.name);
   }
 }
 

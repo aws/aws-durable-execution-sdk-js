@@ -558,6 +558,15 @@ describe("legacy unrelated registration properties", () => {
       loadConfiguredPlugins(plugins, { environment: {} }),
     ).resolves.toEqual(plugins);
   });
+
+  it("does not call an unmarked registration callback", async () => {
+    const registration = jest.fn(() => ({ exclusiveGroup: "views" }));
+    const plugin = { registration, async onInvocationStart() {} };
+    await expect(
+      loadConfiguredPlugins([plugin, plugin], { environment: {} }),
+    ).resolves.toEqual([plugin, plugin]);
+    expect(registration).not.toHaveBeenCalled();
+  });
 });
 
 describe("static exclusive plugin registration", () => {
@@ -613,6 +622,105 @@ describe("static exclusive plugin registration", () => {
         environment: {},
       }),
     ).rejects.toThrow("Plugins 'CustomFirst' and 'CustomSecond'");
+  });
+
+  it.each([false, true])(
+    "retains inherited constraints when a subclass declares its own group (reverse=%s)",
+    async (reverse) => {
+      class RegroupedFirst extends First {
+        static readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION] = {
+          exclusiveGroup: "custom",
+        };
+      }
+      const classes = reverse
+        ? [Second, RegroupedFirst]
+        : [RegroupedFirst, Second];
+      for (const explicitCount of [0, 1, 2]) {
+        const factories = classes.map((Plugin) => jest.fn(() => new Plugin()));
+        await expect(
+          loadConfiguredPlugins(
+            classes.slice(0, explicitCount).map((Plugin) => new Plugin()),
+            {
+              environment: {
+                DURABLE_EXECUTION_PLUGINS: ["first", "second"]
+                  .slice(explicitCount)
+                  .join(","),
+              },
+              importModule: async (specifier) => {
+                const i = specifier === "first" ? 0 : 1;
+                return moduleFor(providerFor(classes[i], factories[i]));
+              },
+            },
+          ),
+        ).rejects.toThrow("group 'views'");
+        for (const factory of factories) expect(factory).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it("enforces added groups throughout the constructor chain", async () => {
+    class Middle extends First {
+      static readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION] = {
+        exclusiveGroup: "middle",
+      };
+    }
+    class Leaf extends Middle {
+      static readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION] = {
+        exclusiveGroup: "leaf",
+      };
+    }
+    const plugin = new Leaf();
+    await expect(
+      loadConfiguredPlugins([plugin], { environment: {} }),
+    ).resolves.toEqual([plugin]);
+    for (const exclusiveGroup of ["views", "middle", "leaf"]) {
+      const other = {
+        async onInvocationStart() {},
+        [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: {
+          name: "other",
+          exclusiveGroup,
+        },
+      };
+      await expect(
+        loadConfiguredPlugins([plugin, other], { environment: {} }),
+      ).rejects.toThrow(`group '${exclusiveGroup}'`);
+    }
+  });
+
+  it("deduplicates repeated inherited groups within one registration", async () => {
+    class Repeated extends First {
+      static readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION] = {
+        exclusiveGroup: "views",
+      };
+    }
+    const plugin = new Repeated();
+    await expect(
+      loadConfiguredPlugins([plugin], { environment: {} }),
+    ).resolves.toEqual([plugin]);
+    await expect(
+      loadConfiguredPlugins([plugin, plugin], { environment: {} }),
+    ).rejects.toThrow("group 'views'");
+  });
+
+  it("preserves the concrete receiver of inherited metadata getters", async () => {
+    class Base implements DurableInstrumentationPlugin {
+      static get [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]() {
+        // biome-ignore lint/complexity/noThisInStatic: This checks the concrete receiver of inherited metadata getters.
+        return { exclusiveGroup: `getter:${this.name}` };
+      }
+      async onInvocationStart() {}
+    }
+    class Child extends Base {}
+    const other = {
+      async onInvocationStart() {},
+      [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: {
+        name: "other",
+        exclusiveGroup: "getter:Child",
+      },
+    };
+    await expect(
+      loadConfiguredPlugins([new Child(), other], { environment: {} }),
+    ).rejects.toThrow("group 'getter:Child'");
   });
 
   it("validates actual subclasses returned by broader provider declarations", async () => {

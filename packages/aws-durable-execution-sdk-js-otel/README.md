@@ -650,8 +650,11 @@ Registration metadata uses the namespaced symbol
 The bundled views declare it on their constructors, so the core can validate
 all selected provider types before calling any environment-selected factory.
 Conflicting dynamic views therefore do not install sampler or ID-generator
-wrappers on the global tracer. Subclasses inherit the exclusive group and are
-identified by their actual constructor names in diagnostics. Explicit instances
+wrappers on the global tracer. Subclasses retain all inherited static exclusive
+groups; declaring their own static metadata adds a constraint and cannot replace
+an inherited one. Repeating a group within one constructor chain does not count
+as a second plugin registration. Subclasses are identified by their actual
+constructor names in diagnostics. Explicit instances
 have already been constructed by the application before registration; validation
 cannot undo that construction. Existing instance metadata remains supported and
 returned instances are checked too, including subclasses returned by providers

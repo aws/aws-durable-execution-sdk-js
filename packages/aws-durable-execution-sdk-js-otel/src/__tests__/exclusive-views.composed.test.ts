@@ -6,6 +6,7 @@ import {
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
 import {
+  DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION,
   InvocationStatus,
   type InvocationInfo,
 } from "@aws/durable-execution-sdk-js";
@@ -193,4 +194,52 @@ describe("bundled OTel view registration", () => {
       }),
     ).rejects.toThrow("Plugins 'CustomExecution' and 'CustomInvocation'");
   });
+
+  it.each([false, true])(
+    "rejects regrouped OTel subclasses before factory side effects (reverse=%s)",
+    async (reverse) => {
+      class RegroupedExecution extends ExecutionOtelPlugin {
+        static readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION] = {
+          exclusiveGroup: "application-execution",
+        };
+      }
+      class RegroupedInvocation extends InvocationOtelPlugin {
+        static readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION] = {
+          exclusiveGroup: "application-invocation",
+        };
+      }
+      const provider = new NodeTracerProvider({
+        spanProcessors: [new SimpleSpanProcessor(exporter)],
+      });
+      providers.push(provider);
+      trace.setGlobalTracerProvider(provider);
+      const tracer = provider.getTracer("aws-durable-execution-sdk-js");
+      const sampler = Reflect.get(tracer, "_sampler");
+      const idGenerator = Reflect.get(tracer, "_idGenerator");
+      const classes = reverse
+        ? [RegroupedInvocation, RegroupedExecution]
+        : [RegroupedExecution, RegroupedInvocation];
+      const factories = classes.map((Plugin) => jest.fn(() => new Plugin()));
+      await expect(
+        loadConfiguredPlugins([], {
+          environment: { DURABLE_EXECUTION_PLUGINS: "first,second" },
+          importModule: async (specifier) => {
+            const i = specifier === "first" ? 0 : 1;
+            return {
+              durableExecutionPluginProvider: {
+                pluginApiVersion: 1,
+                pluginType: classes[i],
+                createPlugin: factories[i],
+              },
+            };
+          },
+        }),
+      ).rejects.toThrow("group 'durable-opentelemetry-view'");
+      for (const factory of factories) expect(factory).not.toHaveBeenCalled();
+      expect(Reflect.get(tracer, "_sampler")).toBe(sampler);
+      expect(Reflect.get(tracer, "_idGenerator")).toBe(idGenerator);
+      expect(exporter.getFinishedSpans()).toHaveLength(0);
+      expect(context.active()).toBe(ROOT_CONTEXT);
+    },
+  );
 });
