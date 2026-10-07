@@ -91,12 +91,23 @@ jobs:
       # repo's bundled examples/javascript. Path is relative to the conformance workspace,
       # where this repo is checked out at .build/durable-sdk.
       examples_dir: .build/durable-sdk/packages/aws-durable-execution-sdk-js-conformance-tests-otel
+      # Node 22 on either runner image: GitHub-hosted runners ship nvm, the
+      # CodeBuild standard image ships `n` with Node 22 preinstalled. Fail if
+      # neither yields Node 22 rather than building against whatever is on PATH.
       setup_command: |
-        export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
-        source "$NVM_DIR/nvm.sh"
-        nvm install 22
-        nvm use 22
+        if [ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; then
+          export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+          source "$NVM_DIR/nvm.sh"
+          nvm install 22
+          nvm use 22
+        elif command -v n >/dev/null 2>&1; then
+          n 22
+        fi
         node --version
+        case "$(node --version)" in
+          v22.*) ;;
+          *) echo "The runner does not provide Node 22"; exit 1 ;;
+        esac
       # Unlike the conformance repo's examples/javascript, this package consumes the SDK and
       # the OTel plugin as workspace siblings, so there is no tarball install step: a root
       # npm ci links them and building them in place is enough.
