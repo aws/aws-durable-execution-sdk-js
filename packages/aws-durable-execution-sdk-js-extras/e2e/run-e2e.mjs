@@ -275,6 +275,12 @@ const IMAGE_HOOKS = {
     // own suspend.
     resume: "ENABLED",
     resumeTimeoutInSeconds: 10,
+    // The worker refuses jobs from this hook until the resume hook.
+    suspend: "ENABLED",
+    suspendTimeoutInSeconds: 10,
+    // The worker fails the callbacks of running jobs before it answers.
+    terminate: "ENABLED",
+    terminateTimeoutInSeconds: 10,
   },
   // The service requires the ready hook whenever a lifecycle hook is
   // enabled. The worker answers it with 200 once it is listening.
@@ -463,6 +469,42 @@ const SCENARIOS = [
       );
       // The heartbeat timeout (15 s) must end the wait, not the 900 s callback timeout.
       assert(elapsedSeconds < 300, `took ${elapsedSeconds}s`);
+    },
+  },
+  {
+    // The runner terminates the MicroVM while the job runs. The worker's
+    // terminate hook then fails the job's callback. So the execution fails
+    // at once, long before the 5-minute heartbeat timeout.
+    id: "terminated",
+    event: {
+      scenario: "single",
+      job: { mode: "succeed", sleepSeconds: 600, label: "terminated" },
+      timeoutSeconds: 900,
+      heartbeatTimeoutSeconds: 300,
+    },
+    terminateAfterSeconds: 30,
+    expect: ({ execution, terminatedAfterSeconds, elapsedSeconds }) => {
+      assert(execution.Status === "FAILED", `status ${execution.Status}`);
+      assert(
+        execution.Error?.ErrorType === "MicrovmJobFailedError",
+        `error type ${execution.Error?.ErrorType}`,
+      );
+      assert(
+        JSON.stringify(execution.Error ?? {}).includes(
+          "MicrovmTerminatedError",
+        ),
+        `error ${JSON.stringify(execution.Error)}`,
+      );
+      assert(
+        terminatedAfterSeconds !== undefined,
+        "the runner did not terminate the MicroVM",
+      );
+      // The poll interval is 5 seconds, and the durable function needs an
+      // invocation to record the failure.
+      assert(
+        elapsedSeconds - terminatedAfterSeconds < 60,
+        `failed ${elapsedSeconds - terminatedAfterSeconds} s after the terminate`,
+      );
     },
   },
   {
@@ -768,6 +810,8 @@ async function runScenario(functionArn, scenario, runId) {
   let execution;
   // The distinct MicroVM states seen while the execution runs, in order.
   const observedStates = [];
+  // Seconds after the start at which the runner terminated the MicroVM.
+  let terminatedAfterSeconds;
   for (;;) {
     execution = aws([
       "lambda",
@@ -777,6 +821,23 @@ async function runScenario(functionArn, scenario, runId) {
     ]);
     if (execution.Status !== "RUNNING") {
       break;
+    }
+    if (
+      scenario.terminateAfterSeconds !== undefined &&
+      terminatedAfterSeconds === undefined &&
+      (Date.now() - started) / 1000 >= scenario.terminateAfterSeconds
+    ) {
+      const microvmId = launchedMicrovmId(executionArn);
+      if (microvmId) {
+        aws([
+          "lambda-microvms",
+          "terminate-microvm",
+          "--microvm-identifier",
+          microvmId,
+        ]);
+        terminatedAfterSeconds = Math.round((Date.now() - started) / 1000);
+        log(`${scenario.id}: terminated ${microvmId}`);
+      }
     }
     if (scenario.observeMicrovm) {
       const state = observeMicrovmState(executionArn);
@@ -835,9 +896,30 @@ async function runScenario(functionArn, scenario, runId) {
     microvmIds,
     microvmStates,
     observedStates,
+    terminatedAfterSeconds,
     operationNames,
     subTypes,
   };
+}
+
+/** Returns the ID of the execution's launched MicroVM, once it has one. */
+function launchedMicrovmId(executionArn) {
+  const history = aws(
+    [
+      "lambda",
+      "get-durable-execution-history",
+      "--durable-execution-arn",
+      executionArn,
+      "--include-execution-data",
+    ],
+    { allowFailure: true },
+  );
+  const launch = (history?.Events ?? []).find(
+    (e) => e.EventType === "StepSucceeded" && /\.launch$/.test(e.Name ?? ""),
+  );
+  return launch
+    ? JSON.parse(launch.StepSucceededDetails?.Result?.Payload ?? "{}").microvmId
+    : undefined;
 }
 
 /** Returns the state of the execution's launched MicroVM, once it has one. */
