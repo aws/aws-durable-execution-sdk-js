@@ -99,6 +99,8 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   // Deterministic non-recording placeholders for in-flight operations; the real
   // span is created+ended once in onOperationEnd. Children/attempts parent onto it.
   private operationContexts: Map<string, SpanContext>;
+  // Distinguish an immutable parent exported here from one skipped on replay.
+  private readonly endedOperationIds = new Set<string>();
   // Naming/timing captured at start, reused when onOperationEnd omits them.
   private operationStarts: Map<
     string,
@@ -471,6 +473,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     this.latestObservedTimestamp = undefined;
     this.spanMap.clear();
     this.operationContexts.clear();
+    this.endedOperationIds.clear();
     this.operationStarts.clear();
     this.workflowSpan = undefined;
     this.invocationSpan = undefined;
@@ -722,6 +725,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     }
 
     span.end(this.observeTimestamp(endTime));
+    this.endedOperationIds.add(info.id);
     this.externalCompletions.markExported(info);
   }
 
@@ -730,9 +734,11 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
    * deterministic identity, or the Workflow identity for a top-level operation.
    * A completion notification can arrive without traversing its parent in this
    * invocation (for example, a completed child context skipped during replay).
+   * A parent ended in this invocation cannot contain a later completion; attach
+   * that completion to Workflow instead of recreating its ended context.
    */
   private resolveOperationParentContext(parentId: string | undefined): Context {
-    if (parentId) {
+    if (parentId && !this.endedOperationIds.has(parentId)) {
       const parentContext = this.operationContexts.get(parentId) ?? {
         traceId: this.executionTraceId,
         spanId: deriveSpanIdFromOperationId(parentId, this.executionArn),

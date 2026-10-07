@@ -244,6 +244,75 @@ describe.each([
   );
 
   it.each([false, true])(
+    "parents a late completion to the workflow after its child context ends (failure=%s)",
+    async (fails) => {
+      const live = gate();
+      const release = gate();
+      const starts: InvocationInfo[] = [];
+      const childBody = jest.fn(async (child: DurableContext) => {
+        await child.createCallback("external");
+        return "submitted";
+      });
+      const handler = withDurableExecution(
+        async (_, ctx) => {
+          const result = await ctx.runInChildContext("scope", childBody);
+          await ctx.step("saved", async () => {
+            live.open();
+            await release.opened;
+            return "saved";
+          });
+          return result;
+        },
+        {
+          plugins: [
+            plugin,
+            {
+              async onInvocationStart(info) {
+                starts.push(info);
+              },
+            },
+          ],
+        },
+      );
+      const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+      const execution = runner.run();
+      await live.opened;
+      const external = runner.getOperation("external");
+      await external.waitForData(WaitingOperationStatus.STARTED);
+      if (fails)
+        await external.sendCallbackFailure({
+          ErrorMessage: "external failure",
+          ErrorType: "ExternalError",
+        });
+      else await external.sendCallbackSuccess("external result");
+      release.open();
+      const result = await execution;
+      expect(result.getStatus()).toBe("SUCCEEDED");
+      expect(childBody).toHaveBeenCalledTimes(1);
+      expect(starts).toHaveLength(1);
+      const finished = exporter.getFinishedSpans();
+      const child = finished.find((span) => span.name === "scope")!;
+      const completed = finished.filter(
+        (span) =>
+          span.name === "external" &&
+          span.attributes["durable.operation.status"] ===
+            (fails ? "FAILED" : "SUCCEEDED"),
+      );
+      expect(completed).toHaveLength(1);
+      if (view === "execution") {
+        const workflow = finished.find((span) => span.name === "Workflow")!;
+        expect(completed[0].parentSpanContext?.spanId).toBe(
+          workflow.spanContext().spanId,
+        );
+        expect(completed[0].parentSpanContext?.spanId).not.toBe(
+          child.spanContext().spanId,
+        );
+      }
+    },
+    30000,
+  );
+
+  it.each([false, true])(
     "exports a resume update inside a completed child skipped by replay (failure=%s)",
     async (fails) => {
       const live = gate();
