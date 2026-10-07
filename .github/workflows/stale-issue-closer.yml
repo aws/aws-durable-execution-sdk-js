@@ -14,7 +14,10 @@ jobs:
     permissions:
       contents: read
       issues: write
-    uses: aws/aws-durable-execution-ci/.github/workflows/stale-issue-closer.yml@48b3b4349f7d00a6212b9d959427bd7df81ea99d
+    uses: aws/aws-durable-execution-ci/.github/workflows/stale-issue-closer.yml@d901b2f1a50731f46bb791b7cae6cbe7f56ae917
     with:
+      # CodeBuild-hosted runner in the JavaScript testing account; the label must
+      # match the CodeBuild project name.
+      runs-on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
       days-until-close: 14
       close-reason: not_planned
