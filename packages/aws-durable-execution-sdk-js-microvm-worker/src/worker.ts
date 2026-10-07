@@ -502,6 +502,8 @@ export function createMicrovmWorkerListener<
   // Callback failure reports in flight, from every place that fails a
   // callback. The terminate hook waits for them for the same reason.
   const callbackReports = new Set<Promise<void>>();
+  // The work of the first terminate hook. Every later one waits for it too.
+  let termination: Promise<void> | undefined;
   let closed = false;
 
   const track = (work: Promise<void>): void => {
@@ -738,6 +740,20 @@ export function createMicrovmWorkerListener<
    * waits for the reports, for at most {@link TERMINATE_REPORT_BUDGET_MS}.
    */
   async function handleTerminateHook(response: ServerResponse): Promise<void> {
+    // A second terminate hook can arrive while the first one waits. The
+    // first one has already taken the running jobs out of the map, so the
+    // second would find nothing to wait for and answer early. So every
+    // terminate hook waits for the same work.
+    termination ??= terminate();
+    await termination;
+    respond(response, 200, {});
+  }
+
+  /**
+   * Stops the running jobs, fails their callbacks, and waits for the
+   * reports. Runs once per listener.
+   */
+  async function terminate(): Promise<void> {
     terminating = true;
     stopIdleTime();
     // A job whose handler has settled reports its own outcome. The answer
@@ -800,7 +816,6 @@ export function createMicrovmWorkerListener<
       reports.length = 0;
     }
     clearTimeout(timer);
-    respond(response, 200, {});
   }
 
   async function handleRunHook(
@@ -978,7 +993,11 @@ export function createMicrovmWorkerListener<
   ): Promise<void> {
     const report = sendFailure(error, callbackId, region);
     callbackReports.add(report);
-    void report.finally(() => callbackReports.delete(report));
+    const remove = (): void => {
+      callbackReports.delete(report);
+    };
+    // Both callbacks are handled, so this chain cannot reject unhandled.
+    void report.then(remove, remove);
     return report;
   }
 
@@ -996,7 +1015,15 @@ export function createMicrovmWorkerListener<
         error: describe(reportError),
       });
     } finally {
-      reporter?.close();
+      // A client whose destroy() throws must not reject the report. Callers
+      // await it, and the terminate hook waits for it.
+      try {
+        reporter?.close();
+      } catch (closeError) {
+        logger.error("could not close the Lambda client", {
+          error: describe(closeError),
+        });
+      }
     }
   }
 

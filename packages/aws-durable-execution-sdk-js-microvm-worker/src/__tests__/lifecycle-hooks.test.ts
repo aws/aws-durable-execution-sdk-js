@@ -5,7 +5,7 @@ import type {
 } from "node:http";
 import { PassThrough, Readable } from "node:stream";
 import {
-  type LambdaClient,
+  LambdaClient,
   SendDurableExecutionCallbackFailureCommand,
   SendDurableExecutionCallbackHeartbeatCommand,
   SendDurableExecutionCallbackSuccessCommand,
@@ -395,6 +395,42 @@ describe("suspend and terminate hooks", () => {
       expect(lambda.completions).toEqual([
         { kind: "success", callbackId: "cb-1" },
       ]);
+    });
+
+    it("holds a second, concurrent hook until the first one's reports end", async () => {
+      lambda.hold = true;
+      const worker = start();
+      await runHook(worker);
+      await job(worker, "cb-1");
+
+      // Both hooks arrive together. The first one has taken the job out of
+      // the map before its report is registered.
+      const answers: string[] = [];
+      void hook(worker, "terminate").then(() => answers.push("first"));
+      void hook(worker, "terminate").then(() => answers.push("second"));
+      await advance(1_000);
+      expect(answers).toEqual([]);
+
+      lambda.finish();
+      await advance(0);
+      expect(answers.sort()).toEqual(["first", "second"]);
+      expect(lambda.completions).toHaveLength(1);
+    });
+
+    it("answers a concurrent hook after 5 seconds too", async () => {
+      lambda.hold = true;
+      const worker = start();
+      await runHook(worker);
+      await job(worker, "cb-1");
+
+      const answers: string[] = [];
+      void hook(worker, "terminate").then(() => answers.push("first"));
+      await advance(2_000);
+      void hook(worker, "terminate").then(() => answers.push("second"));
+      await advance(2_999);
+      expect(answers).toEqual([]);
+      await advance(1);
+      expect(answers.sort()).toEqual(["first", "second"]);
     });
 
     it("answers at once when no job runs", async () => {
@@ -857,5 +893,61 @@ describe("suspend and terminate hooks", () => {
       await advance(5_000);
       expect(await job(worker, "cb-1")).toBe(202);
     });
+  });
+});
+
+describe("a failure report whose client cannot be closed", () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("neither rejects unhandled nor holds the request", async () => {
+    // The worker creates and destroys the default client itself. A destroy
+    // that throws must not turn into an unhandled rejection, which would end
+    // the worker process.
+    jest
+      .spyOn(LambdaClient.prototype, "send")
+      .mockImplementation(async () => ({}));
+    const destroy = jest
+      .spyOn(LambdaClient.prototype, "destroy")
+      .mockImplementation(() => {
+        throw new Error("destroy failed");
+      });
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandled);
+    const error = jest.fn();
+    try {
+      const worker = createMicrovmWorkerListener({
+        handler: async () => "done",
+        logger: { info: () => {}, warn: () => {}, error },
+      });
+      const status = await call(worker, `${HOOK_PATH_PREFIX}run`, {
+        microvmId: "mvm-1",
+        runHookPayload: JSON.stringify({
+          version: 99,
+          region: "us-east-1",
+          job: { callbackId: "cb-invalid", input: {} },
+        }),
+      });
+      await worker.idle();
+      // Unhandled rejections are reported after the microtask queue drains.
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(status).toBe(400);
+      expect(destroy).toHaveBeenCalled();
+      expect(unhandled).toEqual([]);
+      expect(error).toHaveBeenCalledWith(
+        "could not close the Lambda client",
+        expect.objectContaining({
+          error: expect.objectContaining({ message: "destroy failed" }),
+        }),
+      );
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
   });
 });
