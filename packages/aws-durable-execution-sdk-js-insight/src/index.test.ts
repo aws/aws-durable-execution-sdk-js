@@ -1453,7 +1453,7 @@ describe("flush serialization", () => {
     }
   }
 
-  it("never overlaps a flush() with an export(), and flushes at most once per invocation", async () => {
+  it("never overlaps a flush() with an export(), and coalesces settled invocation ends", async () => {
     const exporter = new OverlapTrackingExporter(20);
     const factory = workflowInsight({
       exporters: [exporter],
@@ -1469,7 +1469,7 @@ describe("flush serialization", () => {
     expect(exporter.flushDuringExport).toBe(0);
     expect(exporter.exportDuringFlush).toBe(0);
     expect(exporter.maxInExport).toBe(1);
-    // The settled cadence: at most one flush per sampled-in invocation end, and
+    // Without late updates: at most one flush per sampled-in invocation end, and
     // overlapping ends may share one. So every record is covered by a flush that
     // started after it was exported, but the call count is bounded above by the
     // number of invocations, not equal to it.
@@ -1552,8 +1552,8 @@ describe("flush serialization", () => {
     );
 
     expect(exports).toBe(n);
-    // At most one flush per end is the contract; the point of the front-loading
-    // is that a burst costs a small constant instead. Measured on this machine:
+    // No late updates arrive here; front-loading lets these settled ends share
+    // a small number of flushes. Measured on this machine:
     // one flush and ~100 ms, against six flushes and ~260 ms without the
     // front-loading. The bound allows two, because a request made after the
     // batch was taken is served by the next turn rather than this one.

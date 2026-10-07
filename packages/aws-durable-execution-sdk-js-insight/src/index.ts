@@ -419,9 +419,9 @@ interface ExportSlot {
  * scheduler, no matter how many executions the environment hosts. {@link flush}
  * requests run on the same pump, so a flush never overlaps an export either;
  * they are served as a batch, and the records a {@link drain} is waiting for are
- * exported first, so a burst of invocation ends costs one flush rather than one
- * each. The scheduler therefore belongs to the execution environment, not to an
- * invocation: it lives in `workflowInsight`'s closure and is shared by every
+ * exported first, so a burst of invocation ends can share a flush. Late updates
+ * can require further rounds. The scheduler belongs to the execution
+ * environment, not to an invocation: it lives in `workflowInsight`'s closure and is shared by every
  * plugin instance the factory hands out, because serializing exporter calls is
  * only meaningful across executions. Serialization is per scheduler, not per
  * exporter object: two `workflowInsight()` calls each build their own, so an
