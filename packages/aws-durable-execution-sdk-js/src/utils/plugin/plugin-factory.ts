@@ -22,7 +22,9 @@ import { createPluginRunner } from "./plugin-runner";
  *
  * A `createPlugin` that throws, or that hands back nothing, is contained the way
  * a failing plugin hook is contained: that plugin sits out this invocation and
- * the remaining plugins keep their relative order and behaviour.
+ * the remaining plugins keep their relative order and behaviour. Factories are
+ * synchronous; unsupported Promise-like results are skipped, with rejections
+ * observed so a JavaScript factory result cannot leak an unhandled rejection.
  *
  * @internal
  */
@@ -36,6 +38,15 @@ export function createInvocationPluginRunner(
     let plugin: DurableInstrumentationPlugin | null | undefined;
     try {
       plugin = factory.createPlugin(info);
+      if (
+        plugin != null &&
+        typeof (plugin as { then?: unknown }).then === "function"
+      ) {
+        // Do not wait for or dispatch an async result: the factory contract is
+        // synchronous. Still observe failures from untyped JavaScript providers.
+        void Promise.resolve(plugin).catch(() => undefined);
+        continue;
+      }
     } catch {
       // Swallowed for the same reason hook errors are: instrumentation must not
       // decide whether an execution runs.

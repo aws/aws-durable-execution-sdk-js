@@ -182,6 +182,90 @@ describe("createInvocationPluginRunner", () => {
     ).resolves.toEqual(succeededOutput);
   });
 
+  it("contains a rejecting async factory and still runs the invocation", async () => {
+    // JavaScript providers are not constrained by the synchronous TS contract.
+    const factory = {
+      async createPlugin() {
+        await Promise.resolve();
+        throw new Error("async factory bug");
+      },
+    } as unknown as DurableInstrumentationPluginFactory;
+    const start = jest.fn();
+    const runner = createInvocationPluginRunner(
+      [factory, { createPlugin: () => ({ onInvocationStart: start }) }],
+      invocationInfo,
+    );
+
+    await runner.onInvocationStart?.(invocationInfo);
+    const execute = jest.fn().mockResolvedValue(succeededOutput);
+    await expect(
+      runner.wrapInvocation?.(invocationInfo, execute) ?? execute(),
+    ).resolves.toEqual(succeededOutput);
+    // Give Node an unhandled-rejection turn; the SDK must observe the rejection.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips fulfilled promises rather than treating them as plugin instances", async () => {
+    const start = jest.fn();
+    const promise = Object.assign(
+      Promise.resolve({ onInvocationStart: start }),
+      { onInvocationStart: start },
+    );
+    const runner = createInvocationPluginRunner(
+      [{ createPlugin: () => promise }],
+      invocationInfo,
+    );
+
+    expect(runner).toEqual({});
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it("observes a rejecting thenable without dispatching its hooks", async () => {
+    const start = jest.fn();
+    const then = jest.fn(
+      (_resolve: (value: unknown) => void, reject: (error: Error) => void) =>
+        reject(new Error("thenable factory bug")),
+    );
+    const runner = createInvocationPluginRunner(
+      [{ createPlugin: () => ({ then, onInvocationStart: start }) }],
+      invocationInfo,
+    );
+
+    expect(runner).toEqual({});
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(then).toHaveBeenCalledTimes(1);
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it("contains a throwing then getter and keeps the remaining plugins", async () => {
+    const invalidStart = jest.fn();
+    const invalid = Object.defineProperty(
+      { onInvocationStart: invalidStart },
+      // biome-ignore lint/suspicious/noThenProperty: This malformed thenable intentionally exercises the isolation boundary.
+      "then",
+      {
+        get: () => {
+          throw new Error("then getter bug");
+        },
+      },
+    );
+    const start = jest.fn();
+    const runner = createInvocationPluginRunner(
+      [
+        { createPlugin: () => invalid },
+        { createPlugin: () => ({ onInvocationStart: start }) },
+      ],
+      invocationInfo,
+    );
+
+    await runner.onInvocationStart?.(invocationInfo);
+    expect(invalidStart).not.toHaveBeenCalled();
+    expect(start).toHaveBeenCalledTimes(1);
+  });
+
   it("recovers on the next invocation after a factory throws once", async () => {
     const plugin: jest.Mocked<DurableInstrumentationPlugin> = {
       onInvocationStart: jest.fn(),

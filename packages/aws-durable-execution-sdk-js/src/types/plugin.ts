@@ -282,7 +282,9 @@ export interface DurableInstrumentationPlugin {
  * Errors thrown by `createPlugin` are contained exactly like errors thrown by a
  * plugin hook: the invocation proceeds without that plugin and the execution
  * outcome is unaffected. The same holds for a `createPlugin` that returns
- * nothing.
+ * nothing. Factories must return synchronously. Promise-like results are
+ * unsupported and skipped; their rejections are observed to preserve error
+ * isolation for JavaScript providers.
  *
  * A package that supports environment-based plugin loading exports one of these
  * factories as `durableExecutionPluginProvider`; the SDK loads only the modules
@@ -313,7 +315,7 @@ export interface DurableInstrumentationPluginFactory<
   Plugin extends DurableInstrumentationPlugin = DurableInstrumentationPlugin,
 > {
   /**
-   * Creates the plugin instance for the described invocation.
+   * Synchronously creates the plugin instance for the described invocation.
    *
    * @param info - The invocation the returned instance will observe. This is
    * the same object {@link DurableInstrumentationPlugin.onInvocationStart}

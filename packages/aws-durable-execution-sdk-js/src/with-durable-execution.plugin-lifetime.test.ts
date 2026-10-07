@@ -410,6 +410,26 @@ describe("environment-configured providers", () => {
     });
     expect(initializeExecutionContext).not.toHaveBeenCalled();
   });
+
+  it("contains async provider rejections across invocations", async () => {
+    loadFromProvider({
+      async createPlugin() {
+        await Promise.resolve();
+        throw new Error("async provider factory bug");
+      },
+    });
+    const userHandler = jest.fn().mockResolvedValue({ ok: true });
+    const handler = withDurableExecution(userHandler);
+
+    for (let invocation = 0; invocation < 2; invocation++) {
+      await expect(handler(mockEvent, mockContext)).resolves.toMatchObject({
+        Status: InvocationStatus.SUCCEEDED,
+        Result: JSON.stringify({ ok: true }),
+      });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+    expect(userHandler).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("explicit plugins entries are validated like providers", () => {
