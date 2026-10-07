@@ -147,6 +147,8 @@ jobs:
 
       - name: Clean up capacity provider functions
         env:
+          # Cleanup can outlast a short control-plane throttling burst.
+          AWS_MAX_ATTEMPTS: "8"
           LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_EVENT_NUMBER: ${{ github.event.number }}
