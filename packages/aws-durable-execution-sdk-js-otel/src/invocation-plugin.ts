@@ -44,6 +44,8 @@ import { createTracerProvider } from "./otel-plugin-provider";
 import { tryInstallGlobalIdGenerator } from "./global-id-generator";
 import { DurableSampler, tryInstallDurableSampler } from "./global-sampler";
 
+import { PLUGIN_REGISTRATION } from "./plugin-registration";
+
 const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
 
 /**
@@ -54,6 +56,10 @@ const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
  * durable execution.
  */
 export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
+  private static readonly [PLUGIN_REGISTRATION] = {
+    exclusiveGroup: "durable-opentelemetry-view",
+  } as const;
+
   private tracerProvider: TracerProvider;
   private tracer: Tracer;
   private idGenerator: DeterministicIdGenerator;
