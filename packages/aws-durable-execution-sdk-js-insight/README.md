@@ -1501,7 +1501,7 @@ The plugin hooks into the durable execution lifecycle:
 
 Exports are **coalesced**: if updates arrive faster than the exporter can handle, intermediate snapshots are dropped (each record is a complete snapshot, so the latest one supersedes all earlier ones). This prevents overlapping export calls and keeps overhead minimal.
 
-A checkpoint change received after a nonterminal (`PENDING` or `RETRYING`) invocation end still awaits its own export and buffered-exporter flush before the change hook resolves. Terminal execution ends continue to reject later RUNNING snapshots. This wait does not keep a Lambda environment running after it returns or guarantee delivery after the environment freezes.
+In on-change mode, a sampled-in checkpoint change received after a nonterminal (`PENDING` or `RETRYING`) invocation end still awaits its own export and buffered-exporter flush before the change hook resolves. Terminal execution ends continue to reject later RUNNING snapshots. This wait does not keep a Lambda environment running after it returns or guarantee delivery after the environment freezes.
 
 Exporter errors **never fail the execution**. If an exporter throws, the error is swallowed and other exporters still receive the record.
 
