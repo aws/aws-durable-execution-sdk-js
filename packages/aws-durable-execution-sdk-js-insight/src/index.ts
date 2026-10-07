@@ -1,5 +1,6 @@
 import type {
   DurableInstrumentationPlugin,
+  DurableInstrumentationPluginFactory,
   InvocationInfo,
   InvocationEndInfo,
   OperationChangeInfo,
@@ -1084,5 +1085,5 @@ export function workflowInsight(config: WorkflowInsightConfig): {
   return {
     createPlugin: (info: InvocationInfo) =>
       new WorkflowInsightInvocation(env, info),
-  };
+  } satisfies DurableInstrumentationPluginFactory;
 }
