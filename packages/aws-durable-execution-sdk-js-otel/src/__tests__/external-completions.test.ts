@@ -141,6 +141,90 @@ describe.each([
     },
   );
 
+  it.each(["PENDING", "SUCCEEDED"] as const)(
+    "keeps enclosing spans open for completion arriving during first flush (%s)",
+    async (status) => {
+      let now = end.getTime() + 10000;
+      const originalNow = Object.getOwnPropertyDescriptor(otperformance, "now");
+      const originalOrigin = Object.getOwnPropertyDescriptor(
+        otperformance,
+        "timeOrigin",
+      );
+      const origin = now - 100;
+      const wallClock = jest.spyOn(Date, "now").mockImplementation(() => now);
+      Object.defineProperty(otperformance, "now", {
+        configurable: true,
+        value: () => now - origin,
+      });
+      Object.defineProperty(otperformance, "timeOrigin", {
+        configurable: true,
+        value: origin,
+      });
+      try {
+        const current = createPlugin();
+        await current.onInvocationStart(invocation);
+        let unblock!: () => void;
+        let flushing!: () => void;
+        const blocked = new Promise<void>((resolve) => {
+          unblock = resolve;
+        });
+        const started = new Promise<void>((resolve) => {
+          flushing = resolve;
+        });
+        const originalFlush = providers[0].forceFlush.bind(providers[0]);
+        let calls = 0;
+        const flush = jest
+          .spyOn(providers[0], "forceFlush")
+          .mockImplementation(async () => {
+            if (++calls === 1) {
+              flushing();
+              await blocked;
+            }
+            await originalFlush();
+          });
+        const ending = current.onInvocationEnd({ ...invocation, status });
+        await started;
+        now += 25;
+        const changed = current.onOperationChange({
+          ...invocation,
+          updatedOperations: {
+            external: {
+              ...operation,
+              parentId: undefined,
+              endTimestamp: new Date(now),
+            },
+          },
+        });
+        unblock();
+        await Promise.all([ending, changed]);
+        const child = spans()[0];
+        const enclosing = exporter
+          .getFinishedSpans()
+          .find(
+            (span) =>
+              span.spanContext().spanId === child.parentSpanContext?.spanId,
+          );
+        if (view === "invocation" || status === "SUCCEEDED") {
+          expect(enclosing).toBeDefined();
+          expect(nanoseconds(child.endTime)).toBeLessThanOrEqual(
+            nanoseconds(enclosing!.endTime),
+          );
+        }
+        flush.mockRestore();
+      } finally {
+        wallClock.mockRestore();
+        for (const [name, descriptor] of [
+          ["now", originalNow],
+          ["timeOrigin", originalOrigin],
+        ] as const) {
+          if (descriptor)
+            Object.defineProperty(otperformance, name, descriptor);
+          else Reflect.deleteProperty(otperformance, name);
+        }
+      }
+    },
+  );
+
   it.each([false, true])(
     "exports and flushes a fresh completion after shutdown (started=%s)",
     async (operationStarted) => {

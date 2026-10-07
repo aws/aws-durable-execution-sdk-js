@@ -249,9 +249,13 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       return;
     }
 
-    // Prefer normal lifecycle hooks, which preserve live parent scopes. Before
-    // returning, export any fresh completion the workflow did not reach. A
-    // later resume may label it replay even though it has never been exported.
+    // Keep enclosing spans open while pending completions are exported and
+    // flushed. Checkpoint updates received during that flush are drained before
+    // their parent timestamps become immutable.
+    await this.flushExternalCompletions();
+
+    // Drain updates delivered in the microtask handoff after the flush settles.
+    // No await separates the final empty check from ending the enclosing spans.
     for (const operation of this.externalCompletions.pending.values()) {
       await this.onOperationEnd({ ...operation, isReplay: false });
     }

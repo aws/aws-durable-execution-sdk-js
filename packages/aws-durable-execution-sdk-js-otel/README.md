@@ -710,9 +710,17 @@ view completes the live segment or emits a linked continuation.
 
 Notifications and operation-end hooks are deduplicated within each invocation.
 Normal replay does not re-export stored external completions. Deduplication is
-invocation-local. Shutdown serializes completion export and provider flushing,
-and drains again when updates arrive during a flush. A change hook received
-after shutdown also awaits export and flushing of its fresh completions. This
+invocation-local. Shutdown first drains and flushes fresh completions while the
+enclosing spans remain open, draining again for updates received during that
+flush. It then ends the enclosing spans and performs a final serialized flush.
+Even with no new updates this uses two flush passes, so provider flush latency
+contributes twice to shutdown. Updates received during the final flush or after
+shutdown are still exported and flushed, but their immutable enclosing spans
+cannot be extended: containment is not guaranteed for those late arrivals.
+Their original timestamps, IDs, sampling decisions and deduplication remain
+unchanged; this does not introduce additional roots or a new trace topology. A
+change hook received after shutdown also awaits export and flushing of its fresh
+completions. This
 does not guarantee delivery of notifications after the Lambda environment has
 stopped running, or successful export when the configured provider fails.
 

@@ -227,7 +227,8 @@ describe.each([
         expect(
           soleSpanFor(exporter.getFinishedSpans(), "Workflow", ARN_B),
         ).toBeDefined();
-        expect(flush).toHaveBeenCalledTimes(1);
+        // Flush completions before ending parents, then flush the ended parents.
+        expect(flush).toHaveBeenCalledTimes(2);
       } finally {
         await tracerProvider?.shutdown();
       }
