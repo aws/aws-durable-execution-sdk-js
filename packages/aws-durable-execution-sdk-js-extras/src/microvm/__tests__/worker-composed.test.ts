@@ -73,7 +73,12 @@ class FakeService {
       this.calls.push("resume");
       this.state = "RUNNING";
       if (this.sendResumeHook && this.listener) {
-        await send(this.listener, `${HOOK_PATH_PREFIX}resume`, {});
+        await send(
+          this.listener,
+          `${HOOK_PATH_PREFIX}resume`,
+          {},
+          LAMBDA_HOOK_HEADERS,
+        );
       }
       return {};
     }
@@ -94,18 +99,29 @@ class FakeService {
   }
 }
 
-/** Sends one request straight to the listener, and resolves with the status. */
+/**
+ * The headers of Lambda's own hook calls, as measured in us-east-1. The
+ * worker acts on the `resume` hook only for a local Host without a request ID.
+ */
+const LAMBDA_HOOK_HEADERS = { host: "localhost:8080" };
+
+/**
+ * Sends one request straight to the listener, and resolves with the status.
+ * A job request comes through the endpoint, so it carries no Lambda hook
+ * headers by default.
+ */
 function send(
   listener: MicrovmWorkerListener,
   path: string,
   body: unknown,
+  headers: Record<string, string> = {},
 ): Promise<number> {
   return new Promise((resolve) => {
     const request = Object.assign(
       Readable.from([
         Buffer.from(typeof body === "string" ? body : JSON.stringify(body)),
       ]),
-      { url: path, method: "POST", headers: {} },
+      { url: path, method: "POST", headers },
     );
     let status = 0;
     const response = {
@@ -236,14 +252,19 @@ describe("the request step against the real worker listener", () => {
     );
 
   const runHook = () =>
-    send(listener, `${HOOK_PATH_PREFIX}run`, {
-      microvmId: "mvm-1",
-      runHookPayload: JSON.stringify({
-        version: 1,
-        region: REGION,
-        autoSuspendIdleSeconds: IDLE_SECONDS,
-      }),
-    });
+    send(
+      listener,
+      `${HOOK_PATH_PREFIX}run`,
+      {
+        microvmId: "mvm-1",
+        runHookPayload: JSON.stringify({
+          version: 1,
+          region: REGION,
+          autoSuspendIdleSeconds: IDLE_SECONDS,
+        }),
+      },
+      LAMBDA_HOOK_HEADERS,
+    );
 
   /** Advances fake time in steps until `promise` settles. */
   async function settle<T>(promise: Promise<T>, maxMs: number): Promise<T> {
@@ -275,9 +296,14 @@ describe("the request step against the real worker listener", () => {
     // The service suspends the MicroVM. The next state check after a 503
     // finds it SUSPENDED and resumes it. The resume hook ends the refusal.
     service.finishSuspend();
+    const suspendedAt = Date.now();
 
     await settle(delivery, 60_000);
     await listener.idle();
+
+    // Without the resume hook, the refusal would last 30 seconds after the
+    // suspend call returned. The next test covers that fallback.
+    expect(Date.now() - suspendedAt).toBeLessThan(30_000);
 
     expect(statuses.at(-1)).toBe(202);
     expect(service.calls).toContain("get:SUSPENDED");
