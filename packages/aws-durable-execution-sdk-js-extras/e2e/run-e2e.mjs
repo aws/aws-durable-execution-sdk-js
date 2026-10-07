@@ -474,7 +474,9 @@ const SCENARIOS = [
   {
     // The runner terminates the MicroVM while the job runs. The worker's
     // terminate hook then fails the job's callback. So the execution fails
-    // at once, long before the 5-minute heartbeat timeout.
+    // at once, long before the 5-minute heartbeat timeout. The runner waits
+    // until the MicroVM has been RUNNING for 5 seconds, so that the worker
+    // has received the job before the terminate.
     id: "terminated",
     event: {
       scenario: "single",
@@ -482,7 +484,7 @@ const SCENARIOS = [
       timeoutSeconds: 900,
       heartbeatTimeoutSeconds: 300,
     },
-    terminateAfterSeconds: 30,
+    terminateAfterRunningSeconds: 5,
     expect: ({ execution, terminatedAfterSeconds, elapsedSeconds }) => {
       assert(execution.Status === "FAILED", `status ${execution.Status}`);
       assert(
@@ -812,6 +814,8 @@ async function runScenario(functionArn, scenario, runId) {
   const observedStates = [];
   // Seconds after the start at which the runner terminated the MicroVM.
   let terminatedAfterSeconds;
+  // When the runner first saw the MicroVM RUNNING.
+  let runningSince;
   for (;;) {
     execution = aws([
       "lambda",
@@ -823,12 +827,23 @@ async function runScenario(functionArn, scenario, runId) {
       break;
     }
     if (
-      scenario.terminateAfterSeconds !== undefined &&
-      terminatedAfterSeconds === undefined &&
-      (Date.now() - started) / 1000 >= scenario.terminateAfterSeconds
+      scenario.terminateAfterRunningSeconds !== undefined &&
+      terminatedAfterSeconds === undefined
     ) {
+      // The launch step records only that RunMicrovm returned. The MicroVM
+      // can still be booting then, and a terminate before the worker has the
+      // job would end in the heartbeat timeout instead.
       const microvmId = launchedMicrovmId(executionArn);
-      if (microvmId) {
+      const state = microvmId ? microvmState(microvmId) : undefined;
+      if (state === "RUNNING") {
+        runningSince ??= Date.now();
+      }
+      if (
+        microvmId &&
+        runningSince !== undefined &&
+        (Date.now() - runningSince) / 1000 >=
+          scenario.terminateAfterRunningSeconds
+      ) {
         aws([
           "lambda-microvms",
           "terminate-microvm",
@@ -922,32 +937,19 @@ function launchedMicrovmId(executionArn) {
     : undefined;
 }
 
-/** Returns the state of the execution's launched MicroVM, once it has one. */
-function observeMicrovmState(executionArn) {
-  const history = aws(
-    [
-      "lambda",
-      "get-durable-execution-history",
-      "--durable-execution-arn",
-      executionArn,
-      "--include-execution-data",
-    ],
-    { allowFailure: true },
-  );
-  const launch = (history?.Events ?? []).find(
-    (e) => e.EventType === "StepSucceeded" && /\.launch$/.test(e.Name ?? ""),
-  );
-  if (!launch) {
-    return undefined;
-  }
-  const { microvmId } = JSON.parse(
-    launch.StepSucceededDetails?.Result?.Payload ?? "{}",
-  );
+/** Returns the MicroVM's state, or NOT_FOUND. */
+function microvmState(microvmId) {
   const vm = aws(
     ["lambda-microvms", "get-microvm", "--microvm-identifier", microvmId],
     { allowFailure: true },
   );
   return vm?.state ?? "NOT_FOUND";
+}
+
+/** Returns the state of the execution's launched MicroVM, once it has one. */
+function observeMicrovmState(executionArn) {
+  const microvmId = launchedMicrovmId(executionArn);
+  return microvmId ? microvmState(microvmId) : undefined;
 }
 
 function findExecutionArn(functionArn, name) {
