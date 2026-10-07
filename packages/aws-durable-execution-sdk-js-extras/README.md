@@ -304,11 +304,12 @@ With `autoSuspendOnIdle: true`, the MicroVM's execution role needs `lambda:Suspe
 
 ## End-to-end test
 
-`e2e/run-e2e.mjs` deploys a durable function and a MicroVM image to a real AWS account and runs twelve scenarios:
+`e2e/run-e2e.mjs` deploys a durable function and a MicroVM image to a real AWS account and runs thirteen scenarios by default:
 
 - A job that succeeds with heartbeats. Its small input goes in the `run` hook.
 - A job that fails.
 - A MicroVM that crashes. The heartbeat timeout must end the wait.
+- A MicroVM that the runner terminates 5 seconds after it is `RUNNING`, during a 600-second job. The worker's `terminate` hook must fail the job within a minute, long before its 300-second heartbeat timeout.
 - Two jobs in a `map`.
 - A job with a 10 KB input and no route. It must go over HTTP to the worker's `handler`.
 - A job on a named route with a 10 KB input.
@@ -318,7 +319,9 @@ With `autoSuspendOnIdle: true`, the MicroVM's execution role needs `lambda:Suspe
 - A session whose second job reads a file that its first job wrote, with a durable wait between them.
 - A session whose last job reads a value that its first job kept in memory, with two durable waits between them. Its idle time is 10 seconds, so the worker suspends the MicroVM during the first wait. The runner polls the MicroVM state and requires `SUSPENDED`.
 
-It checks the execution status, the operation history, and that every MicroVM ends `TERMINATED`.
+It checks the execution status, the operation history, and that every MicroVM ends `TERMINATED`. Two more scenarios, `long-job` and `idle-probe`, take minutes and answer design questions. They run only when `E2E_SCENARIOS` names them.
+
+`e2e/probe-lifecycle.mjs` records when Lambda calls the `suspend` and `terminate` hooks, and which headers the hook calls and forwarded requests carry. It needs the roles and the bucket that `run-e2e.mjs` creates, so run that first.
 
 ```bash
 npm run build -w packages/aws-durable-execution-sdk-js \
