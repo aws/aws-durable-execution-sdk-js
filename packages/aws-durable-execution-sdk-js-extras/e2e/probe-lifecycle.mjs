@@ -11,16 +11,24 @@
 // 3. Whether the network and the credentials work during the hook, and
 //    whether Lambda waits for the hook's answer before it acts.
 // 4. Which Host and x-amzn-requestid headers Lambda's hook calls carry.
+// 5. Whether the endpoint still rejects a forwarded request that sets
+//    `Host: localhost`, and still replaces a caller-set x-amzn-requestid.
+//    The worker's check of Lambda's hook calls depends on both.
 //
 // The image runs e2e/lifecycle-probe-app.mjs, which logs every request. The
 // probe reads those lines from the MicroVM's log stream. Every MicroVM the
 // probe starts is terminated before it exits.
+//
+// Prerequisites: run e2e/run-e2e.mjs once in the account first. It creates
+// the dex-microvm-e2e-build and dex-microvm-e2e-microvm roles and the
+// dex-microvm-e2e-<account>-<region> bucket, which this probe uses.
 //
 // Usage: AWS_REGION=us-east-1 node e2e/probe-lifecycle.mjs
 //   [PROBE_SCENARIOS=terminate,max-duration,suspend-resume,...]
 
 import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
+import { request as httpsRequest } from "node:https";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -246,6 +254,49 @@ async function postToMicrovm(vm, path) {
   return response.status;
 }
 
+/**
+ * POSTs to the MicroVM endpoint with headers that fetch() does not let a
+ * caller set, such as Host. TLS still names the endpoint.
+ */
+async function postWithHeaders(vm, path, headers) {
+  const { authToken } = await microvms.send(
+    new CreateMicrovmAuthTokenCommand({
+      microvmIdentifier: vm.microvmId,
+      expirationInMinutes: 5,
+      allowedPorts: [{ port: 8080 }],
+    }),
+  );
+  const host = vm.endpoint.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  return new Promise((resolve, reject) => {
+    const req = httpsRequest(
+      {
+        host,
+        servername: host,
+        path,
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...authToken,
+          ...headers,
+        },
+        timeout: 20_000,
+      },
+      (response) => {
+        let body = "";
+        response.on("data", (chunk) => {
+          body += chunk;
+        });
+        response.on("end", () =>
+          resolve({ status: response.statusCode, body: body.slice(0, 200) }),
+        );
+      },
+    );
+    req.on("timeout", () => req.destroy(new Error("timeout")));
+    req.on("error", reject);
+    req.end("{}");
+  });
+}
+
 const SCENARIOS = {
   // TerminateMicrovm on a running MicroVM.
   terminate: async (image, account) => {
@@ -338,6 +389,32 @@ const SCENARIOS = {
         ),
       });
     });
+    await call(timeline, "TerminateMicrovm", () => terminate(vm.microvmId));
+    await watch(vm.microvmId, ["TERMINATED", "NOT_FOUND"], 90_000, timeline);
+    return { microvmId: vm.microvmId, timeline };
+  },
+  // Forwarded requests that try to look like Lambda's own hook calls. The
+  // endpoint must reject the first, and must replace the request ID of the
+  // second. The app's log lines show what reached it.
+  "forwarded-spoofed": async (image, account) => {
+    const timeline = [];
+    const vm = await run(image, account);
+    await watch(vm.microvmId, ["RUNNING"], 120_000, timeline);
+    await sleep(5_000);
+    const hookPath = "/aws/lambda-microvms/runtime/v1/resume";
+    for (const [name, headers] of [
+      ["Host: localhost:8080", { host: "localhost:8080" }],
+      ["Host: localhost", { host: "localhost" }],
+      ["Host: 127.0.0.1:8080", { host: "127.0.0.1:8080" }],
+      ["x-amzn-requestid: caller-set", { "x-amzn-requestid": "caller-set" }],
+    ]) {
+      await call(timeline, `POST resume hook path with ${name}`, async () => {
+        timeline.push({
+          spoof: name,
+          ...(await postWithHeaders(vm, hookPath, headers)),
+        });
+      });
+    }
     await call(timeline, "TerminateMicrovm", () => terminate(vm.microvmId));
     await watch(vm.microvmId, ["TERMINATED", "NOT_FOUND"], 90_000, timeline);
     return { microvmId: vm.microvmId, timeline };
