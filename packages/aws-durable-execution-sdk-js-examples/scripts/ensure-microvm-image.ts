@@ -55,7 +55,10 @@ const CREATE_VISIBILITY_MS = 60_000;
 // The worker answers the ready hook at image build and the run hook at each
 // launch. The service requires the ready hook whenever a lifecycle hook is
 // enabled. The resume hook lets a session's worker accept jobs again after it
-// suspended its own MicroVM.
+// suspended its own MicroVM. On the suspend hook the worker refuses new jobs,
+// and on the terminate hook it fails the callbacks of running jobs. A
+// terminate hook gets 10 seconds, because the worker reports before it
+// answers.
 const IMAGE_HOOKS: Hooks = {
   port: 8080,
   microvmHooks: {
@@ -63,6 +66,10 @@ const IMAGE_HOOKS: Hooks = {
     runTimeoutInSeconds: 10,
     resume: "ENABLED",
     resumeTimeoutInSeconds: 10,
+    suspend: "ENABLED",
+    suspendTimeoutInSeconds: 10,
+    terminate: "ENABLED",
+    terminateTimeoutInSeconds: 10,
   },
   microvmImageHooks: { ready: "ENABLED", readyTimeoutInSeconds: 60 },
 };
