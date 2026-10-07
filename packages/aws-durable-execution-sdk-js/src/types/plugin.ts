@@ -338,3 +338,41 @@ export interface DurableInstrumentationPluginProvider<
  */
 export type CustomerFnResult = unknown;
 export type CustomerFn = () => CustomerFnResult;
+
+/**
+ * Opt-in registration metadata key. Ordinary plugin properties remain untouched.
+ * Symbol.for keeps the protocol shared across application and Lambda-layer copies.
+ * @experimental
+ */
+export const DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION = Symbol.for(
+  "aws.lambda.durable.instrumentation.plugin-registration",
+);
+
+/**
+ * Static registration metadata, available before a provider factory runs.
+ * Subclasses retain every group declared by their constructor ancestors. An own
+ * declaration adds a constraint rather than replacing inherited constraints.
+ * Diagnostics use the concrete constructor name.
+ * @experimental
+ */
+export type RegisteredDurableInstrumentationPluginType<
+  Plugin extends DurableInstrumentationPlugin = DurableInstrumentationPlugin,
+> = DurableInstrumentationPluginType<Plugin> & {
+  readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: {
+    readonly exclusiveGroup?: string;
+  };
+};
+
+/**
+ * Instance registration metadata retained for compatibility. Prefer static metadata
+ * on RegisteredDurableInstrumentationPluginType so conflicts can be rejected
+ * before environment-selected factories run.
+ * @experimental
+ */
+export interface RegisteredDurableInstrumentationPlugin
+  extends DurableInstrumentationPlugin {
+  readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: {
+    readonly name: string;
+    readonly exclusiveGroup?: string;
+  };
+}
