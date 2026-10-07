@@ -1494,12 +1494,14 @@ The same pattern applies — the lifecycle handler reads the event and writes to
 
 The plugin hooks into the durable execution lifecycle:
 
-1. **`onInvocationStart`** — records execution start time
-2. **`onOperationChange`** — (on-change mode) schedules export of a RUNNING snapshot
-3. **`onInvocationEnd`** — schedules export of the snapshot, gated by `emitMode`: on terminal SUCCEEDED/FAILED (`on-complete`), FAILED only (`on-failure`), or every update including in-flight RUNNING snapshots (`on-change`)
-4. **`wrapInvocation`** — drains all pending exports before the Lambda returns
+1. **Factory creation** — captures the invocation's execution start time, input and sampling decision in its own plugin instance
+2. **`onInvocationStart`** — (on-change mode) schedules an initial RUNNING snapshot
+3. **`onOperationChange`** — (on-change mode) schedules export of a RUNNING snapshot
+4. **`onInvocationEnd`** — schedules export of the snapshot, gated by `emitMode`: on terminal SUCCEEDED/FAILED (`on-complete`), FAILED only (`on-failure`), or every update including in-flight RUNNING snapshots (`on-change`), then drains and flushes the invocation's records before returning
 
 Exports are **coalesced**: if updates arrive faster than the exporter can handle, intermediate snapshots are dropped (each record is a complete snapshot, so the latest one supersedes all earlier ones). This prevents overlapping export calls and keeps overhead minimal.
+
+A checkpoint change received after a nonterminal (`PENDING` or `RETRYING`) invocation end still awaits its own export and buffered-exporter flush before the change hook resolves. Terminal execution ends continue to reject later RUNNING snapshots. This wait does not keep a Lambda environment running after it returns or guarantee delivery after the environment freezes.
 
 Exporter errors **never fail the execution**. If an exporter throws, the error is swallowed and other exporters still receive the record.
 

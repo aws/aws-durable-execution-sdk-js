@@ -2026,6 +2026,37 @@ describe("late nonterminal checkpoint updates", () => {
   };
 
   it.each(["PENDING", "RETRYING"] as const)(
+    "flushes a buffered change after the %s end hook has returned",
+    async (status) => {
+      const buffered: WorkflowInsightRecord[] = [];
+      const delivered: WorkflowInsightRecord[] = [];
+      const exporter: InsightExporter = {
+        async export(record) {
+          buffered.push(record);
+        },
+        async flush() {
+          delivered.push(...buffered.splice(0));
+        },
+      };
+      const arn = arnFor(`after-end-${status}`);
+      const plugin = workflowInsight({
+        exporters: [exporter],
+        emitMode: "on-change",
+      }).createPlugin(startFor(arn));
+      await plugin.onInvocationEnd?.(endFor(arn, { status }));
+      await plugin.onOperationChange?.(
+        changeFor(arn, {
+          a: op({ id: "a", name: "late-step", status: "SUCCEEDED" }),
+        }),
+      );
+      expect(
+        delivered.at(-1)?.operations.map((operation) => operation.name),
+      ).toEqual(["late-step"]);
+      expect(buffered).toEqual([]);
+    },
+  );
+
+  it.each(["PENDING", "RETRYING"] as const)(
     "drains a change arriving while %s is exporting",
     async (status) => {
       const entered = deferred();

@@ -817,6 +817,8 @@ class WorkflowInsightInvocation
    * RUNNING.
    */
   private closed = false;
+  /** The end hook has drained its records; later nonterminal updates must flush. */
+  private invocationEnded = false;
   /**
    * Counts the hook frames that have started building a record on this
    * instance. Incremented immediately before a build, never decremented.
@@ -998,6 +1000,9 @@ class WorkflowInsightInvocation
           // flush took its buffer snapshot before that update was scheduled.
         } while (this.outstanding || this.buildRevision !== flushedRevision);
       }
+      // No await separates the final empty check from this flag. A change
+      // delivered after that boundary owns its own drain and flush below.
+      this.invocationEnded = true;
     }
   }
 
@@ -1019,6 +1024,10 @@ class WorkflowInsightInvocation
         input: this.cachedInput,
       }),
     );
+    if (this.invocationEnded) {
+      await this.env.scheduler.drain(this);
+      await this.env.scheduler.flush();
+    }
   }
 }
 
