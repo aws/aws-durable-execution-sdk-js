@@ -66,6 +66,7 @@ jobs:
     concurrency:
       group: conformance-stack-${{ matrix.suite }}
       cancel-in-progress: false
+      queue: max
     strategy:
       fail-fast: false
       matrix:
