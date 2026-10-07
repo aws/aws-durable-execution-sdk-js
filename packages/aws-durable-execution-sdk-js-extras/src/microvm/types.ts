@@ -190,8 +190,9 @@ export interface MicrovmSessionConfig extends MicrovmBaseConfig {
    * timeout starts a job with an 8-hour timeout at 0:58. The service
    * terminates the MicroVM at about 1:05.
    *
-   * - When the image enables the `terminate` hook, the worker fails the job
-   *   at about 1:05 with a `MicrovmTerminatedError`.
+   * - When the image enables the `terminate` hook, the job fails at about
+   *   1:05 with a `MicrovmJobFailedError` whose message contains
+   *   `(MicrovmTerminatedError)`.
    * - Lambda does not call the hook for a suspended MicroVM, or when the
    *   image disables it. The job then fails at its `heartbeatTimeout`, or at
    *   8:58 without one.
