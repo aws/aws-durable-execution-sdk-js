@@ -7,7 +7,9 @@ name: CodeBuild runner toolchain probe
 
 on:
   workflow_dispatch:
-  pull_request:
+  push:
+    branches:
+      - ci/codebuild-runner-account-probe
     paths:
       - .github/workflows/codebuild-toolchain-probe.yml
 
