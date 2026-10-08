@@ -245,6 +245,21 @@ Open operation spans are ended at the invocation boundary and retain
 `durable.operation.status=STARTED`. When an operation completes in a later
 invocation, the plugin emits a continuation span in that invocation.
 
+Live invocation-view span boundaries and exception events use a wall-clock
+origin captured with `Date.now()` at invocation start, advanced by monotonic
+elapsed time. This matches the clock model of ordinary `tracer.startSpan()`
+spans instead of using the process-wide `performance.timeOrigin`. Absolute
+`HrTime` tuples keep epoch milliseconds distinct from relative performance time.
+Each resumed invocation captures its own anchor. Supplied execution-start
+Dates used to backdate Workflow and synthetic roots are preserved; execution-view
+timestamp handling is unchanged.
+
+The wall and monotonic reads are not atomic. Sampling delay, millisecond wall
+precision, later wall-clock adjustments, and clocks on different machines can
+still disagree. The plugin does not rewrite backend Dates or user spans, retain
+a clock high-water mark across invocations, or promise simultaneous strict
+ordering and complete containment across arbitrary clock skew.
+
 Because the original span context is not checkpointed, replayed `STEP` and
 `CONTEXT` spans and cross-invocation continuation spans use new provider IDs.
 They correlate through two links: the real exported `Workflow` span, and the
