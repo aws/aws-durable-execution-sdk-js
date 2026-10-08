@@ -79,14 +79,14 @@ jobs:
       actions: write
       contents: read
       id-token: write
-    uses: aws/aws-durable-execution-conformance-tests/.github/workflows/opentelemetry-orchestrator.yml@f5855f2d0f60be996973173cf479c3567f83e30f
+    uses: aws/aws-durable-execution-conformance-tests/.github/workflows/opentelemetry-orchestrator.yml@fb95e20acb0b9b10f5fc032ac521a4fd45efdd73
     with:
       runs_on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
       language: javascript
       resource_prefix: js
       sdk_repository: aws/aws-durable-execution-sdk-js
       sdk_ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      conformance_test_ref: ${{ inputs.conformance_test_ref || '6182cee00ed33ce01e0579066fb31096f988817f' }}
+      conformance_test_ref: ${{ inputs.conformance_test_ref || 'fb95e20acb0b9b10f5fc032ac521a4fd45efdd73' }}
       checkout_sdk: true
       # Build the handlers from this repo's checked-out package instead of the conformance
       # repo's bundled examples/javascript. Path is relative to the conformance workspace,
