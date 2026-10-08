@@ -687,6 +687,15 @@ Older core/plugin combinations do not gain those guarantees. The two OTel views
 remain an unsupported combination, and the updated core rejects it with updated
 plugin metadata. The later core 3 factory migration is a separate major release.
 
+Instrumentation error details are optional even for failed operations. The core
+metadata correction for an empty callback error payload no longer invents an
+error object. API-v1 plugins that previously used only `OperationInfo.error`
+presence as a failure signal should use `OperationInfo.status` instead (and
+`AttemptEndInfo.outcome` for an attempt). Missing error details do not imply a
+successful operation; supplied partial or explicitly empty detail fields are
+retained. This does not change the provider/hook shape, callback rejection,
+persisted error payload, or replay identity.
+
 Registration metadata uses the namespaced symbol
 `Symbol.for("aws.lambda.durable.instrumentation.plugin-registration")`.
 The bundled views declare it on their constructors, so the core can validate
