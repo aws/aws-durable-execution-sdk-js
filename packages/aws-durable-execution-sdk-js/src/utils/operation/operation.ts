@@ -34,9 +34,19 @@ export function toOperationInfo(operation?: Operation): OperationInfo {
       operation?.CallbackDetails?.Result ??
       operation?.ContextDetails?.Result ??
       operation?.ChainedInvokeDetails?.Result,
-    error: errorObject
-      ? DurableOperationError.fromErrorObject(errorObject)
-      : undefined,
+    // Empty wire error objects carry no error details. Keep present values
+    // (including empty strings/arrays) and unknown fields for compatibility.
+    error:
+      errorObject &&
+      Object.entries(errorObject).some(
+        ([field, value]) =>
+          value !== undefined ||
+          !["ErrorType", "ErrorMessage", "ErrorData", "StackTrace"].includes(
+            field,
+          ),
+      )
+        ? DurableOperationError.fromErrorObject(errorObject)
+        : undefined,
     attempt: operation?.StepDetails?.Attempt,
     isReplay: false,
   };

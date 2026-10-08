@@ -106,7 +106,9 @@ export const createCallbackPromise = <T>(
     await plugin.onOperationEnd?.({
       ...operationInfo,
       isReplay: false,
-      error: callbackError,
+      // Keep synthesized caller failures out of backend error metadata when
+      // the callback completed without error details.
+      error: operationInfo.error ? callbackError : undefined,
     });
 
     throw callbackError;

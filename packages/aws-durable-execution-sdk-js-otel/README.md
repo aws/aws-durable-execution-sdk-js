@@ -494,6 +494,13 @@ Operation and attempt errors are recorded as exception events when an error
 object is available. Workflow and Invocation failures set an `ERROR` status and
 status message without recording an exception event.
 
+An external callback failure with no error details leaves the callback leaf
+`UNSET`; an empty wire error object does not synthesize a plugin error. Explicit
+partial details, including empty strings or an empty stack trace, still count as
+provided error information. The callback promise continues to reject with the
+same callback error, so its enclosing context or invocation may record its own
+failure. Checkpoint payloads, operation status, and replay behavior are unchanged.
+
 ## Log Correlation
 
 When `enrichLogger` is enabled, durable log records receive the currently
