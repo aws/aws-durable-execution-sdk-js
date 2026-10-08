@@ -220,33 +220,6 @@ ID on the execution trace**. Because there is one span per logical operation,
 no cross-invocation link is needed to stitch it together — unlike
 `InvocationOtelPlugin` below.
 
-Invocation timing uses a sampled wall-clock start and monotonic elapsed time.
-At cleanup, its end is extended only when an operation or attempt timestamp
-observed during that invocation is later. This keeps authoritative backend
-boundaries inside the invocation without adding a fixed padding interval or
-rewriting historical operation dates. Open attempts use the logical cleanup
-time; Invocation and terminal roots use the physical cleanup time. The
-observation is cleared at every invocation boundary;
-it does not reconstruct other invocations' clocks. Logical operations spanning
-a suspension retain their original start, which can precede the invocation
-where they complete.
-
-When an operation or attempt timestamp is absent, both its start and end use
-checkpoint millisecond precision correlated to the same captured monotonic clock.
-Wall-tick observations refine the phase only within the original sample's
-uncertainty interval; wall-clock adjustments outside that interval are ignored.
-These local fallbacks cannot precede an SDK timestamp already observed during
-the invocation. This preserves sequential ordering across coarse checkpoint
-Dates and local fallback times; sub-millisecond logical durations can be zero.
-Provided Dates are preserved, and error events use the same completion timestamp
-as their span. The physical Invocation clock retains its elapsed-time precision.
-
-While a containing context is still active, its deferred start also includes
-the earliest start observed from its children and their attempts. This preserves
-provided timestamp objects and does not round or pad them. Ancestor tracking
-stops at ended or unknown parents and is cleared at each invocation boundary;
-provided completion timestamps are unchanged.
-
 ### `InvocationOtelPlugin`
 
 Use this plugin for an invocation-centered view. Operations and attempts are
@@ -272,41 +245,26 @@ Open operation spans are ended at the invocation boundary and retain
 `durable.operation.status=STARTED`. When an operation completes in a later
 invocation, the plugin emits a continuation span in that invocation.
 
-Live span boundaries and exception events share a clock anchored to `Date.now()`
-once at invocation start, then advanced by elapsed `performance.now()` time.
-This matches ordinary OpenTelemetry spans' current wall-clock epoch without
-letting a wall-clock adjustment collapse or inflate live SDK span durations.
-Starts and ends retain the same elapsed-time precision so sequential SDK spans
-cannot overlap merely because a start was rounded down. These boundaries use
-explicit OTel `HrTime` values to avoid numeric `TimeInput` ambiguity between
-epoch milliseconds and elapsed process time. Default user spans have
-whole-millisecond starts; portable conformance allows their existing 1 ms
-rounding difference. Open spans share one end timestamp at
-invocation cleanup. Each resumed invocation takes a fresh anchor; Workflow and
-synthetic root spans retain their historical execution start.
+Live invocation-view span boundaries and exception events use a wall-clock
+origin captured with `Date.now()` at invocation start, advanced by monotonic
+elapsed time. This matches the clock model of ordinary `tracer.startSpan()`
+spans instead of using the process-wide `performance.timeOrigin`. Absolute
+`HrTime` tuples keep epoch milliseconds distinct from relative performance time.
+Each resumed invocation captures its own anchor. Supplied execution-start
+Dates used to backdate Workflow and synthetic roots are preserved; execution-view
+provided timestamps are retained without adding cross-clock boundary compensation.
 
-The anchor brackets the wall-clock read with monotonic reads. It takes at most
-three samples, stopping at a sub-millisecond interval and otherwise choosing the
-smallest interval's midpoint. This reduces offsets from an interrupted sample;
-it does not make the clocks atomic. If every sample is interrupted, the retained
-interval still has uncertainty, in addition to wall-clock rounding. The bound
-limits sampling work, not scheduler/GC pauses, and does not change how the
-application's provider samples its own spans.
+The wall and monotonic reads are not atomic. Sampling delay, millisecond wall
+precision, later wall-clock adjustments, and clocks on different machines can
+still disagree. The plugin does not rewrite backend Dates or user spans, retain
+a clock high-water mark across invocations, or promise simultaneous strict
+ordering and complete containment across arbitrary clock skew.
 
-The terminal Workflow and synthetic root use the historical execution start and
-the terminal invocation's local completion time. Their timestamp interval cannot
-be guaranteed to enclose spans from other invocations after a backward clock
-adjustment or clock skew between containers. The plugin cannot reconstruct a
-prior container's clock or already exported span boundaries from the execution
-start timestamp. Retaining execution clocks in process memory across invocations
-would make results depend on container reuse without solving clock skew between
-containers. Live SDK span hierarchy within each invocation still shares one
-monotonic clock.
-
-An ordinary user span opened after a wall-clock adjustment takes the adjusted
-wall time from its provider. Its timestamps can therefore fall outside a parent
-opened before that adjustment, even though both measure durations monotonically.
-The plugin does not change the application's provider or rewrite user spans.
+Independently of the invocation clock origin, execution-view operation and attempt
+exception events use the supplied backend end timestamp when one is available,
+just as their span end does. Recording the event at local receipt time can place
+it after the backend-ended span. Missing end timestamps retain the normal tracer
+default; this does not add rounding or cross-clock ordering policies.
 
 Because the original span context is not checkpointed, replayed `STEP` and
 `CONTEXT` spans and cross-invocation continuation spans use new provider IDs.
