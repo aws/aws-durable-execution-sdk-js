@@ -1,81 +1,61 @@
-import { invocationStartUpperBound } from "../invocation-clock";
+import { otperformance } from "@opentelemetry/core";
+import {
+  captureInvocationClock,
+  readInvocationClock,
+} from "../invocation-clock";
 
-describe("invocation start upper bound", () => {
-  const seconds = 1_700_000_000;
-  it.each([
-    {
-      name: "exact integer",
-      after: 1_000_000,
-      window: 0,
-      carry: 0,
-      upper: 1_000_000,
-    },
-    {
-      name: "fractional millisecond",
-      after: 1_250_000,
-      window: 0,
-      carry: 0,
-      upper: 2_000_000,
-    },
-    {
-      name: "nonzero window at an integer",
-      after: 1_000_000,
-      window: 1,
-      carry: 0,
-      upper: 2_000_000,
-    },
-    {
-      name: "fraction plus uncertainty reaches an integer",
-      after: 1_250_000,
-      window: 1.5,
-      carry: 0,
-      upper: 2_000_000,
-    },
-    {
-      name: "fraction plus uncertainty passes an integer",
-      after: 1_750_000,
-      window: 1,
-      carry: 0,
-      upper: 3_000_000,
-    },
-    {
-      name: "small uncertainty is not lost in the epoch",
-      after: 1_000_000,
-      window: 0.0002,
-      carry: 0,
-      upper: 2_000_000,
-    },
-    {
-      name: "exact second rollover",
-      after: 999_750_000,
-      window: 0.5,
-      carry: 1,
-      upper: 0,
-    },
-    {
-      name: "fractional second rollover",
-      after: 999_750_000,
-      window: 1,
-      carry: 1,
-      upper: 1_000_000,
-    },
-    {
-      name: "nanosecond edge reaches next second",
-      after: 999_999_999,
-      window: 0.000002,
-      carry: 1,
-      upper: 0,
-    },
-  ])("$name", ({ after, window, carry, upper }) => {
-    expect(
-      invocationStartUpperBound(
-        {
-          epochMillis: seconds * 1000,
-          monotonicMillis: 100,
-          sampleWindowMillis: window,
-        },
-        [seconds, after],
-      ),
-    ).toEqual([seconds + carry, upper]);
+describe("per-invocation wall origin and monotonic elapsed time", () => {
+  let wall: number;
+  let monotonic: number;
+  let descriptor: PropertyDescriptor | undefined;
+  beforeEach(() => {
+    wall = 1_700_000_000_000;
+    monotonic = 100;
+    jest.spyOn(Date, "now").mockImplementation(() => wall);
+    descriptor = Object.getOwnPropertyDescriptor(otperformance, "now");
+    Object.defineProperty(otperformance, "now", {
+      configurable: true,
+      value: () => monotonic,
+    });
+  });
+  afterEach(() => {
+    jest.restoreAllMocks();
+    if (descriptor) Object.defineProperty(otperformance, "now", descriptor);
+    else Reflect.deleteProperty(otperformance, "now");
+  });
+
+  it("returns absolute HrTime with elapsed milliseconds converted to nanoseconds", () => {
+    const clock = captureInvocationClock();
+    monotonic += 1250.25;
+    expect(readInvocationClock(clock)).toEqual([1_700_000_001, 250_250_000]);
+  });
+
+  it("does not resample wall time while advancing one invocation", () => {
+    const clock = captureInvocationClock();
+    wall -= 60_000;
+    monotonic += 25;
+    expect(readInvocationClock(clock)).toEqual([1_700_000_000, 25_000_000]);
+    wall += 120_000;
+    monotonic += 25;
+    expect(readInvocationClock(clock)).toEqual([1_700_000_000, 50_000_000]);
+    expect(Date.now).toHaveBeenCalledTimes(1);
+  });
+
+  it("captures a fresh wall origin for a subsequent invocation", () => {
+    const first = captureInvocationClock();
+    wall -= 10_000;
+    monotonic += 500;
+    const resumed = captureInvocationClock();
+    monotonic += 25;
+    expect(readInvocationClock(resumed)).toEqual([1_699_999_990, 25_000_000]);
+    expect(readInvocationClock(first)).toEqual([1_700_000_000, 525_000_000]);
+  });
+
+  it("returns an absolute tuple even when the wall epoch is smaller than performance.now", () => {
+    wall = 1000;
+    monotonic = 100_000;
+    const clock = captureInvocationClock();
+    monotonic += 0.5;
+    expect(readInvocationClock(clock)).toEqual([1, 500_000]);
   });
 });
