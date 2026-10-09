@@ -94,6 +94,71 @@ describe("ConcurrencyController - Replay Mode", () => {
     expect(mockParentContext.runInChildContext).toHaveBeenCalledTimes(2);
   });
 
+  it("keeps undefined successful items in order when rebuilding a summarized replay", async () => {
+    const items = [0, 1, 2, 3].map((index) => ({
+      id: `item-${index}`,
+      data: index,
+      index,
+    }));
+    const executor = jest.fn();
+    const entityId = "parent-step";
+    const summary = JSON.stringify({
+      type: "MapResult",
+      totalCount: 4,
+      successCount: 4,
+      failureCount: 0,
+      completionReason: "ALL_COMPLETED",
+      status: "SUCCEEDED",
+    });
+
+    mockExecutionContext.getStepData.mockImplementation((id: string) => {
+      if (id === entityId) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.SUCCEEDED,
+          ContextDetails: { Result: summary },
+        };
+      }
+      if (items.some((item) => `${entityId}-${item.index + 1}` === id)) {
+        return {
+          Id: id,
+          Type: OperationType.CONTEXT,
+          StartTimestamp: new Date(),
+          Status: OperationStatus.SUCCEEDED,
+        };
+      }
+      return undefined;
+    });
+    mockParentContext.runInChildContext.mockImplementation(
+      (nameOrFn, fnOrConfig) => {
+        const fn = typeof nameOrFn === "function" ? nameOrFn : fnOrConfig;
+        return new DurablePromise(async () => await (fn as any)({} as any));
+      },
+    );
+    executor
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(10)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(30);
+
+    const result = await controller.executeItems(
+      items,
+      executor,
+      mockParentContext,
+      {},
+      DurableExecutionMode.ReplaySucceededContext,
+      entityId,
+      mockExecutionContext,
+    );
+
+    expect(result.successCount).toBe(4);
+    expect(result.succeeded().map((item) => item.index)).toEqual([0, 1, 2, 3]);
+    expect(result.getResults()).toStrictEqual([undefined, 10, undefined, 30]);
+    expect(mockParentContext.runInChildContext).toHaveBeenCalledTimes(4);
+  });
+
   it("does not rebuild a virtual item that was mid-flight, when only its first operation succeeded", async () => {
     // Regression cover for terminality-by-first-operation being unsound.
     //

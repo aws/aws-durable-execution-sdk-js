@@ -13,14 +13,14 @@ export class MockBatchResult<R> implements BatchResult<R> {
   succeeded(): Array<BatchItem<R> & { result: R }> {
     return this.all.filter(
       (item): item is BatchItem<R> & { result: R } =>
-        item.status === BatchItemStatus.SUCCEEDED && item.result !== undefined,
+        item.status === BatchItemStatus.SUCCEEDED,
     );
   }
 
   failed(): Array<BatchItem<R> & { error: ChildContextError }> {
     return this.all.filter(
       (item): item is BatchItem<R> & { error: ChildContextError } =>
-        item.status === BatchItemStatus.FAILED && item.error !== undefined,
+        item.status === BatchItemStatus.FAILED,
     );
   }
 
