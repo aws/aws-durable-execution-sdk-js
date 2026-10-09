@@ -298,8 +298,17 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     // Prefer normal lifecycle hooks, which preserve live parent scopes. Before
     // returning, export any fresh completion the workflow did not reach. A
     // later resume may label it replay even though it has never been exported.
+    const terminal = info.status === "SUCCEEDED" || info.status === "FAILED";
     for (const operation of this.externalCompletions.pending.values()) {
-      await this.onOperationEnd({ ...operation, isReplay: false });
+      // A terminal handler can abandon an unawaited child. Its still-open
+      // placeholder will be discarded below, so it cannot parent this export.
+      const parentId =
+        terminal &&
+        operation.parentId &&
+        this.operationContexts.has(operation.parentId)
+          ? undefined
+          : operation.parentId;
+      await this.onOperationEnd({ ...operation, parentId, isReplay: false });
     }
     // 1. Always end and export Invocation_Span
     if (this.invocationSpan) {

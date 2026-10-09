@@ -312,6 +312,102 @@ describe.each([
     30000,
   );
 
+  it("exports a terminal deferred completion without an abandoned child placeholder parent", async () => {
+    const live = gate();
+    const release = gate();
+    const changes: OperationChangeInfo[] = [];
+    const ends: OperationEndInfo[] = [];
+    const childBody = jest.fn(async (child: DurableContext) => {
+      const [external] = await child.createCallback("external");
+      const [blocker] = await child.createCallback("still-open");
+      await blocker;
+      return await external;
+    });
+    const step = jest.fn(async () => {
+      live.open();
+      await release.opened;
+      return "saved";
+    });
+    const handler = withDurableExecution(
+      async (_, ctx) => {
+        // Deliberately unawaited: the handler may return while this child is open.
+        ctx.runInChildContext("scope", childBody);
+        await ctx.step("saved", step);
+        return "handler finished";
+      },
+      {
+        plugins: [
+          plugin,
+          {
+            async onOperationChange(info) {
+              changes.push(info);
+            },
+            async onOperationEnd(info) {
+              ends.push(info);
+            },
+          },
+        ],
+      },
+    );
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+    const execution = runner.run();
+    await live.opened;
+    const external = runner.getOperation("external");
+    await external.waitForData(WaitingOperationStatus.STARTED);
+    await runner
+      .getOperation("still-open")
+      .waitForData(WaitingOperationStatus.STARTED);
+    await external.sendCallbackSuccess("external result");
+    release.open();
+    const result = await execution;
+    expect(result.getStatus()).toBe("SUCCEEDED");
+    expect(result.getResult()).toBe("handler finished");
+    expect(childBody).toHaveBeenCalledTimes(1);
+    expect(step).toHaveBeenCalledTimes(1);
+    expect(ends.some((info) => info.name === "scope")).toBe(false);
+    const update = changes
+      .flatMap((info) => Object.values(info.updatedOperations))
+      .find((info) => info.name === "external" && info.status === "SUCCEEDED")!;
+    expect(update).toBeDefined();
+    expect(update.parentId).toBeDefined();
+    const finished = exporter.getFinishedSpans();
+    const completed = finished.filter(
+      (span) =>
+        span.name === "external" &&
+        span.attributes["durable.operation.status"] === "SUCCEEDED",
+    );
+    expect(completed).toHaveLength(1);
+    expect(completed[0].status.code).toBe(SpanStatusCode.OK);
+    expect(
+      finished.some(
+        (span) =>
+          span.spanContext().spanId === completed[0].parentSpanContext?.spanId,
+      ),
+    ).toBe(true);
+    if (view === "execution") {
+      expect(finished.some((span) => span.name === "scope")).toBe(false);
+      const workflow = finished.find((span) => span.name === "Workflow")!;
+      expect(completed[0].parentSpanContext?.spanId).toBe(
+        workflow.spanContext().spanId,
+      );
+      expect(completed[0].spanContext().spanId).toBe(
+        deriveSpanIdFromOperationId(
+          update.id,
+          completed[0].attributes["durable.execution.arn"] as string,
+        ),
+      );
+    } else {
+      // The invocation view closes its recording child segment at this boundary.
+      expect(
+        finished.some(
+          (span) =>
+            span.spanContext().spanId ===
+            completed[0].parentSpanContext?.spanId,
+        ),
+      ).toBe(true);
+    }
+  }, 30000);
+
   it.each([false, true])(
     "exports a resume update inside a completed child skipped by replay (failure=%s)",
     async (fails) => {

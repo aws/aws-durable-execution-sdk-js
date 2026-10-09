@@ -705,6 +705,12 @@ For a named `waitForCallback`, a deferred inner callback recovers its derived
 skips that branch. This does not change checkpointed names, operation identity,
 parent identity, or the source notification; explicit names remain unchanged.
 
+At a terminal invocation boundary, the execution view parents a deferred
+completion to `Workflow` if its direct parent is still an open local placeholder
+that will be discarded. It does not invent a completion or span for that
+abandoned context. Pending or retrying invocations retain the parent identity
+because a later invocation can still complete and export that context.
+
 Notifications and operation-end hooks are deduplicated within each invocation.
 Normal replay does not re-export stored external completions. Deduplication is
 not persisted: redelivery after a failed invocation can export the completion

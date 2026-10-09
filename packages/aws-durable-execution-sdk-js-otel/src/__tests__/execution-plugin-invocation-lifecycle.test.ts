@@ -15,8 +15,13 @@ import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
 import type {
   InvocationInfo,
   InvocationEndInfo,
+  OperationInfo,
 } from "@aws/durable-execution-sdk-js";
 import { ExecutionOtelPlugin } from "../execution-plugin";
+import {
+  deriveSpanIdFromOperationId,
+  deriveWorkflowSpanId,
+} from "../deterministic-id-generator";
 import type { TracerProviderFactory } from "../otel-plugin-config";
 
 const TEST_ARN =
@@ -101,6 +106,59 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     context.disable();
     propagation.disable();
   });
+
+  it.each(["SUCCEEDED", "FAILED", "PENDING", "RETRYING"] as const)(
+    "uses Workflow only for abandoned deferred parents at the %s invocation boundary",
+    async (status) => {
+      const plugin = new ExecutionOtelPlugin({
+        tracerProviderFactory,
+        contextExtractor: () => undefined,
+      });
+      const start = makeInvocationInfo();
+      const parent: OperationInfo = {
+        id: "open-parent",
+        name: "open-parent",
+        type: "CONTEXT",
+        subType: "RunInChildContext",
+        status: "STARTED",
+        isReplay: false,
+      };
+      const completion: OperationInfo = Object.freeze({
+        id: "external",
+        name: "external",
+        type: "CALLBACK",
+        status: "SUCCEEDED",
+        parentId: parent.id,
+        startTimestamp: new Date("2024-01-01T00:00:01Z"),
+        endTimestamp: new Date("2024-01-01T00:00:02Z"),
+        isReplay: false,
+      });
+      await plugin.onInvocationStart(start);
+      await plugin.onOperationStart(parent);
+      await plugin.onOperationChange({
+        ...start,
+        operations: { [parent.id]: parent, [completion.id]: completion },
+        updatedOperations: { [completion.id]: completion },
+      });
+      await plugin.onInvocationEnd(makeInvocationEndInfo({ status }));
+      const span = findSpan(exporter, "external")!;
+      expect(span).toBeDefined();
+      const terminal = status === "SUCCEEDED" || status === "FAILED";
+      expect(span.parentSpanContext?.spanId).toBe(
+        terminal
+          ? deriveWorkflowSpanId(TEST_ARN)
+          : deriveSpanIdFromOperationId(parent.id, TEST_ARN),
+      );
+      expect(findSpan(exporter, "open-parent")).toBeUndefined();
+      expect(span.spanContext().spanId).toBe(
+        deriveSpanIdFromOperationId(completion.id, TEST_ARN),
+      );
+      expect(span.attributes["durable.operation.status"]).toBe("SUCCEEDED");
+      expect(completion.parentId).toBe(parent.id);
+      if (terminal) expect(findSpan(exporter, "Workflow")).toBeDefined();
+      else expect(findSpan(exporter, "Workflow")).toBeUndefined();
+    },
+  );
 
   describe("Invocation_Span provider behavior", () => {
     it("creates an Invocation span as child of ambient context with the global provider", async () => {
