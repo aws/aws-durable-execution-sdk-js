@@ -11,8 +11,8 @@ import {
   NodeTracerProvider,
   type ReadableSpan,
 } from "@opentelemetry/sdk-trace-node";
-import { ExecutionOtelPlugin } from "../execution-plugin";
-import { InvocationOtelPlugin } from "../invocation-plugin";
+import { createExecutionOtelPluginFactory } from "../execution-plugin";
+import { createInvocationOtelPluginFactory } from "../invocation-plugin";
 
 // Capture ended span content when it crosses the exporter boundary. Resource
 // ownership is unchanged; the SDK-owned span body must match on re-export.
@@ -75,19 +75,20 @@ beforeAll(() =>
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
 it.each(
-  [ExecutionOtelPlugin, InvocationOtelPlugin].flatMap((Plugin) =>
-    [false, true].map((failFirstExport) => ({
-      Plugin,
-      view: Plugin.name,
-      failFirstExport,
-    })),
+  [createExecutionOtelPluginFactory, createInvocationOtelPluginFactory].flatMap(
+    (createFactory) =>
+      [false, true].map((failFirstExport) => ({
+        createFactory,
+        view: createFactory.name,
+        failFirstExport,
+      })),
   ),
 )(
   "$view anchors public SDK resumes before terminal completion (first export lost=$failFirstExport)",
-  async ({ Plugin, failFirstExport }) => {
+  async ({ createFactory, failFirstExport }) => {
     const exporter = new RecordingExporter(failFirstExport);
     let provider: NodeTracerProvider | undefined;
-    const plugin = new Plugin({
+    const factory = createFactory({
       contextExtractor: () => undefined,
       tracerProviderFactory: (createIdGenerator) => {
         provider = new NodeTracerProvider({
@@ -120,11 +121,13 @@ it.each(
       },
       {
         plugins: [
-          plugin,
+          factory,
           {
-            onInvocationStart: async (info: InvocationInfo) => {
-              firstInvocations.push(info.isFirstInvocation);
-            },
+            createPlugin: (info: InvocationInfo) => ({
+              onInvocationStart: async () => {
+                firstInvocations.push(info.isFirstInvocation);
+              },
+            }),
           },
         ],
       },

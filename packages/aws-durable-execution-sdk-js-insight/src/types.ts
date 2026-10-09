@@ -74,6 +74,55 @@ export interface ContentConfig {
  */
 export interface InsightExporter {
   export(record: WorkflowInsightRecord): Promise<void>;
+  /**
+   * Delivers whatever this exporter has buffered but not yet sent.
+   *
+   * Optional: implement it only if the exporter buffers records rather than
+   * sending each one from {@link InsightExporter.export | export}.
+   *
+   * - Called at sampled-in invocation end, after that invocation's own queued
+   *   records have been handed to every exporter. Late nonterminal updates can
+   *   require another export-and-flush round before the same end returns;
+   *   exporters must support repeated calls for one invocation. A sampled-in
+   *   invocation end that emits no record (an `emitMode` that skips this status)
+   *   still flushes. An execution that is sampled out neither exports nor
+   *   flushes.
+   * - Serialized with other flush calls and
+   *   {@link InsightExporter.export | export} across plugin instances created
+   *   by the same `workflowInsight()` factory. Separate factories have separate
+   *   schedulers, even if they share an exporter object.
+   * - May cover records belonging to other executions running in the same
+   *   environment, so it is not a per-execution barrier. Invocation ends that
+   *   overlap may also *share* one flush: each of them has already handed its
+   *   own record to every exporter before the shared flush starts, so one flush
+   *   covers those records. Without late updates, the number of flush calls can
+   *   therefore be lower than the number of invocation ends.
+   * - Must return promptly. No invocation waiting on this flush can return until
+   *   it settles, so a slow flush is billed to the customer — not only to the
+   *   invocation that asked for it, but to every concurrent invocation whose end
+   *   is waiting on the same flush.
+   * - Sharing the flush also shares the exports that precede it. Records are
+   *   handed to {@link InsightExporter.export | export} one at a time, and every
+   *   record a concurrent invocation end is waiting for is exported before the
+   *   shared flush starts. In a settled burst with no late updates, those ends
+   *   return once the last export and the shared flush have settled. The time an
+   *   {@link InsightExporter.export | export} call takes therefore multiplies by
+   *   the number of executions ending concurrently in the environment, and each
+   *   of those executions pays the whole product, not its own share: with 20
+   *   concurrent ends, a 10 ms export and a 30 ms flush cost every one of the 20
+   *   about 250 ms — 20 exports and one flush — rather than the 40 ms a single
+   *   end would pay alone. Delivering every record is the intended trade — a
+   *   record dropped for latency is a record the customer cannot get back — but
+   *   an exporter whose `export` is slow should buffer in memory and do its
+   *   sending work in `flush`, which can be shared across the burst. Updates
+   *   arriving during that flush can require another round before return.
+   * - Failures are isolated: a rejection or a synchronous throw is swallowed —
+   *   never propagated into the execution, and never able to stop another
+   *   exporter from flushing. A failure does not itself trigger a retry; later
+   *   updates can still require another flush. The plugin logs each failure as a
+   *   `[workflow-insight]` warning; an exporter that needs more than a log line
+   *   must handle the failure itself.
+   */
   flush?(): Promise<void>;
   /**
    * Maximum serialized record size, in bytes, this exporter will emit. When a

@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import { context, isSpanContextValid, trace } from "@opentelemetry/api";
+
 import {
   DurableContext,
   DurableExecutionHandler,
@@ -9,8 +11,8 @@ import {
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
 import {
-  ExecutionOtelPlugin,
-  InvocationOtelPlugin,
+  createExecutionOtelPluginFactory,
+  createInvocationOtelPluginFactory,
 } from "@aws/durable-execution-sdk-js-otel";
 
 export interface ScenarioEvent {
@@ -23,10 +25,14 @@ type Workflow<TResult> = (
   context: DurableContext,
 ) => Promise<TResult>;
 
-const plugin =
+// One factory per module load, shared by every handler in the bundle: the
+// tracer provider and exporter it holds belong to the execution environment,
+// while the SDK calls the factory's `createPlugin` once per invocation to build
+// that invocation's plugin instance.
+const pluginFactory =
   process.env.OTEL_PLUGIN_MODE === "execution"
-    ? new ExecutionOtelPlugin()
-    : new InvocationOtelPlugin();
+    ? createExecutionOtelPluginFactory()
+    : createInvocationOtelPluginFactory();
 
 export function createScenarioHandler<TResult>(
   expectedScenario: string,
@@ -39,13 +45,13 @@ export function createScenarioHandler<TResult>(
     requireScenario(event, expectedScenario);
     return workflow(event, context);
   };
-  return withDurableExecution(handler, { plugins: [plugin] });
+  return withDurableExecution(handler, { plugins: [pluginFactory] });
 }
 
 export function createTargetHandler<TResult>(
   workflow: Workflow<TResult>,
 ): DurableLambdaHandler {
-  return withDurableExecution(workflow, { plugins: [plugin] });
+  return withDurableExecution(workflow, { plugins: [pluginFactory] });
 }
 
 export function longDelaySeconds(event: ScenarioEvent): number {
@@ -62,4 +68,20 @@ function requireScenario(event: ScenarioEvent, expected: string): void {
       `Expected scenario ${expected}, received ${String(event.scenario)}`,
     );
   }
+}
+
+/** Observe the context supplied by the SDK; never install or repair a parent. */
+export function recordUserFunctionSpan(callback: string): void {
+  const active = trace.getSpan(context.active())?.spanContext();
+  if (!active || !isSpanContextValid(active)) {
+    throw new Error(
+      `No valid active span context in user function ${callback}`,
+    );
+  }
+  const span = trace
+    .getTracer("durable-conformance-user-functions")
+    .startSpan(`conformance.${callback}`, {
+      attributes: { "conformance.callback": callback },
+    });
+  span.end();
 }

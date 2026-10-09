@@ -5,6 +5,7 @@ import {
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
 import type { IdGenerator } from "@opentelemetry/sdk-trace-node";
+import type { InvocationInfo } from "@aws/durable-execution-sdk-js";
 import { DeterministicIdGenerator } from "../deterministic-id-generator";
 import { createTracerProvider } from "../otel-plugin-provider";
 
@@ -114,17 +115,21 @@ describe("ExecutionOtelPlugin provider resolution", () => {
     });
     globalProvider.register();
 
-    const { ExecutionOtelPlugin } = await import("../execution-plugin");
-    const plugin = new ExecutionOtelPlugin();
-
-    await plugin.onInvocationStart({
+    const { createExecutionOtelPluginFactory } = await import(
+      "../execution-plugin"
+    );
+    // The factory the SDK calls once per invocation, with that invocation's info.
+    const info: InvocationInfo = {
       requestId: "req-1",
       executionArn: "arn:aws:states:us-east-1:123456789012:execution:sm:exec-1",
       isFirstInvocation: true,
       executionInput: {},
       operations: {},
       updatedOperations: {},
-    });
+    };
+    const plugin = createExecutionOtelPluginFactory().createPlugin(info);
+
+    await plugin.onInvocationStart(info);
     await plugin.onInvocationEnd({
       requestId: "req-1",
       executionArn: "arn:aws:states:us-east-1:123456789012:execution:sm:exec-1",
@@ -147,19 +152,22 @@ describe("ExecutionOtelPlugin provider resolution", () => {
     });
     globalProvider.register();
 
-    const { ExecutionOtelPlugin } = await import("../execution-plugin");
-    const plugin = new ExecutionOtelPlugin();
+    const { createExecutionOtelPluginFactory } = await import(
+      "../execution-plugin"
+    );
     const executionArn =
       "arn:aws:states:us-east-1:123456789012:execution:sm:exec-2";
-
-    await plugin.onInvocationStart({
+    const info: InvocationInfo = {
       requestId: "req-2",
       executionArn,
       isFirstInvocation: true,
       executionInput: {},
       operations: {},
       updatedOperations: {},
-    });
+    };
+    const plugin = createExecutionOtelPluginFactory().createPlugin(info);
+
+    await plugin.onInvocationStart(info);
     await plugin.onInvocationEnd({
       requestId: "req-2",
       executionArn,

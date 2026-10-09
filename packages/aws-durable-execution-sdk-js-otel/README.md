@@ -31,9 +31,12 @@ npm install @aws/durable-execution-sdk-js-otel \
             @opentelemetry/sdk-trace-node
 ```
 
-The package requires Node.js 22 or later. Exporters, span processors,
-propagators, resources, and library instrumentation are application or ADOT
-responsibilities.
+OTel 2.x requires Node.js 22 or later and core SDK 3.x (`>=3.0.0 <4.0.0`).
+Register a factory in `plugins`; earlier cores do not implement this contract.
+Upgrade the core and OTel packages together. Existing core 2.x deployments can
+continue using their compatible OTel 1.x package until that migration.
+Exporters, span processors, propagators, resources, and library instrumentation
+are application or ADOT responsibilities.
 
 ## Quick Start
 
@@ -42,20 +45,36 @@ required:
 
 ```typescript
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
-import { ExecutionOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
-
-const plugin = new ExecutionOtelPlugin();
+import { createExecutionOtelPluginFactory } from "@aws/durable-execution-sdk-js-otel";
 
 export const handler = withDurableExecution(
   async (event, context) => {
     return context.step("process", async () => process(event));
   },
-  { plugins: [plugin] },
+  { plugins: [createExecutionOtelPluginFactory()] },
 );
 ```
 
-Use `InvocationOtelPlugin` instead when operations should appear under each
-Lambda invocation rather than under the durable Workflow.
+`plugins` takes plugin *factories*. A factory is an object with a
+`createPlugin(info)` method, not a callable. The SDK calls `createPlugin` once per
+invocation and dispatches only that invocation's hooks to the plugin it returns.
+Everything expensive — the tracer provider resolution, the deterministic ID
+generator installation, the sampler wrapper — is resolved once, on the first
+invocation, and shared by every plugin the factory creates. The execution
+identity, the spans and the operation maps are per-invocation, which is what
+keeps two executions running concurrently in one execution environment (routine
+under Lambda Managed Instances) from overwriting each other.
+
+Use `createInvocationOtelPluginFactory()` instead when operations should appear
+under each Lambda invocation rather than under the durable Workflow.
+
+Register one OTel view. The core rejects conflicting explicit, environment, or
+mixed factory registrations with `PluginLoadError` before constructing any plugin.
+Unrelated factories remain supported. The bundled factories advertise their
+exclusive group through
+`Symbol.for("aws.lambda.durable.instrumentation.plugin-registration")`;
+custom factories can opt in through `RegisteredDurableInstrumentationPluginFactory`.
+Registration metadata stays separate from the invocation hooks.
 
 ## Provider Setup
 
@@ -84,10 +103,10 @@ This private-field integration is isolated behind runtime shape and assignment
 checks. It does not change IDs for unrelated spans, including spans created
 concurrently or with the same instrumentation scope.
 
-If the plugin is constructed before the SDK provider is globally registered,
-its initial tracer may be a proxy without `_idGenerator`. At each invocation
-start, the plugin re-resolves the global provider until a compatible SDK tracer
-is available. When installation still fails:
+If the shared environment is built before the SDK provider is globally
+registered, its initial tracer may be a proxy without `_idGenerator`. At each
+invocation start, the plugin re-resolves the global provider until a compatible
+SDK tracer is available. When installation still fails:
 
 - plugin telemetry and log enrichment are disabled for that invocation;
 - a warning is emitted;
@@ -100,17 +119,19 @@ generator through the supported provider constructor API.
 ### Application-Owned Provider
 
 `tracerProviderFactory` receives a function that creates the plugin's
-deterministic ID wrapper. The factory is called during plugin construction.
+deterministic ID wrapper. It is called once, when the first invocation builds the
+shared environment — not when `createInvocationOtelPluginFactory` is called, so a
+factory created at module scope resolves no provider and installs nothing.
 
 ```typescript
-import { InvocationOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+import { createInvocationOtelPluginFactory } from "@aws/durable-execution-sdk-js-otel";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import {
   NodeTracerProvider,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
 
-const plugin = new InvocationOtelPlugin({
+const pluginFactory = createInvocationOtelPluginFactory({
   tracerProviderFactory: (createIdGenerator) => {
     const provider = new NodeTracerProvider({
       idGenerator: createIdGenerator(),
@@ -176,10 +197,11 @@ points use SDK types only, and the SDK peer dependency is optional so package
 installation does not add a second copy. At runtime, the plugin is loaded and
 driven by the SDK instance bundled with the function.
 
-Dynamic providers construct plugins with default configuration, so they
-require a compatible globally registered SDK provider. Use code-based
-registration when `tracerProviderFactory` or other custom configuration is
-needed.
+Each entry point exports `durableExecutionPluginProvider`, the factory whose
+`createPlugin` the SDK calls once per invocation. Dynamic providers use default
+configuration, so they require a compatible globally registered SDK provider. Use
+code-based registration when `tracerProviderFactory` or other custom
+configuration is needed.
 
 ## Choosing a Plugin
 
@@ -220,6 +242,33 @@ ID on the execution trace**. Because there is one span per logical operation,
 no cross-invocation link is needed to stitch it together — unlike
 `InvocationOtelPlugin` below.
 
+Invocation timing uses a sampled wall-clock start and monotonic elapsed time.
+At cleanup, its end is extended only when an operation or attempt timestamp
+observed during that invocation is later. This keeps authoritative backend
+boundaries inside the invocation without adding a fixed padding interval or
+rewriting historical operation dates. Open attempts use the logical cleanup
+time; Invocation and terminal roots use the physical cleanup time. The
+observation is cleared at every invocation boundary;
+it does not reconstruct other invocations' clocks. Logical operations spanning
+a suspension retain their original start, which can precede the invocation
+where they complete.
+
+When an operation or attempt timestamp is absent, both its start and end use
+checkpoint millisecond precision correlated to the same captured monotonic clock.
+Wall-tick observations refine the phase only within the original sample's
+uncertainty interval; wall-clock adjustments outside that interval are ignored.
+These local fallbacks cannot precede an SDK timestamp already observed during
+the invocation. This preserves sequential ordering across coarse checkpoint
+Dates and local fallback times; sub-millisecond logical durations can be zero.
+Provided Dates are preserved, and error events use the same completion timestamp
+as their span. The physical Invocation clock retains its elapsed-time precision.
+
+While a containing context is still active, its deferred start also includes
+the earliest start observed from its children and their attempts. This preserves
+provided timestamp objects and does not round or pad them. Ancestor tracking
+stops at ended or unknown parents and is cleared at each invocation boundary;
+provided completion timestamps are unchanged.
+
 ### `InvocationOtelPlugin`
 
 Use this plugin for an invocation-centered view. Operations and attempts are
@@ -245,20 +294,41 @@ Open operation spans are ended at the invocation boundary and retain
 `durable.operation.status=STARTED`. When an operation completes in a later
 invocation, the plugin emits a continuation span in that invocation.
 
-Live invocation-view span boundaries and exception events use a wall-clock
-origin captured with `Date.now()` at invocation start, advanced by monotonic
-elapsed time. This matches the clock model of ordinary `tracer.startSpan()`
-spans instead of using the process-wide `performance.timeOrigin`. Absolute
-`HrTime` tuples keep epoch milliseconds distinct from relative performance time.
-Each resumed invocation captures its own anchor. Supplied execution-start
-Dates used to backdate Workflow and synthetic roots are preserved; execution-view
-timestamp handling is unchanged.
+Live span boundaries and exception events share a clock anchored to `Date.now()`
+once at invocation start, then advanced by elapsed `performance.now()` time.
+This matches ordinary OpenTelemetry spans' current wall-clock epoch without
+letting a wall-clock adjustment collapse or inflate live SDK span durations.
+Starts and ends retain the same elapsed-time precision so sequential SDK spans
+cannot overlap merely because a start was rounded down. These boundaries use
+explicit OTel `HrTime` values to avoid numeric `TimeInput` ambiguity between
+epoch milliseconds and elapsed process time. Default user spans have
+whole-millisecond starts; portable conformance allows their existing 1 ms
+rounding difference. Open spans share one end timestamp at
+invocation cleanup. Each resumed invocation takes a fresh anchor; Workflow and
+synthetic root spans retain their historical execution start.
 
-The wall and monotonic reads are not atomic. Sampling delay, millisecond wall
-precision, later wall-clock adjustments, and clocks on different machines can
-still disagree. The plugin does not rewrite backend Dates or user spans, retain
-a clock high-water mark across invocations, or promise simultaneous strict
-ordering and complete containment across arbitrary clock skew.
+The anchor brackets the wall-clock read with monotonic reads. It takes at most
+three samples, stopping at a sub-millisecond interval and otherwise choosing the
+smallest interval's midpoint. This reduces offsets from an interrupted sample;
+it does not make the clocks atomic. If every sample is interrupted, the retained
+interval still has uncertainty, in addition to wall-clock rounding. The bound
+limits sampling work, not scheduler/GC pauses, and does not change how the
+application's provider samples its own spans.
+
+The terminal Workflow and synthetic root use the historical execution start and
+the terminal invocation's local completion time. Their timestamp interval cannot
+be guaranteed to enclose spans from other invocations after a backward clock
+adjustment or clock skew between containers. The plugin cannot reconstruct a
+prior container's clock or already exported span boundaries from the execution
+start timestamp. Retaining execution clocks in process memory across invocations
+would make results depend on container reuse without solving clock skew between
+containers. Live SDK span hierarchy within each invocation still shares one
+monotonic clock.
+
+An ordinary user span opened after a wall-clock adjustment takes the adjusted
+wall time from its provider. Its timestamps can therefore fall outside a parent
+opened before that adjustment, even though both measure durations monotonically.
+The plugin does not change the application's provider or rewrite user spans.
 
 Because the original span context is not checkpointed, replayed `STEP` and
 `CONTEXT` spans and cross-invocation continuation spans use new provider IDs.
@@ -558,7 +628,7 @@ Disable enrichment when another logging integration already injects equivalent
 fields:
 
 ```typescript
-const plugin = new ExecutionOtelPlugin({
+const pluginFactory = createExecutionOtelPluginFactory({
   enrichLogger: false,
 });
 ```
@@ -570,12 +640,21 @@ attempt span.
 
 ## Public API
 
-### Plugins
+### Plugin Factories
 
 ```typescript
-new ExecutionOtelPlugin(config?: OtelPluginConfig);
-new InvocationOtelPlugin(config?: OtelPluginConfig);
+createExecutionOtelPluginFactory(
+  config?: OtelPluginConfig,
+): DurableInstrumentationPluginFactory;
+
+createInvocationOtelPluginFactory(
+  config?: OtelPluginConfig,
+): DurableInstrumentationPluginFactory;
 ```
+
+Pass the result in `DurableExecutionConfig.plugins`. The plugin classes
+themselves are not exported: an instance belongs to one invocation and is built
+by the factory from that invocation's `InvocationInfo`.
 
 ### Provider Types
 
@@ -617,6 +696,7 @@ deriveExecutionTraceId(
   environment: ExecutionTraceEnvironment,
   executionArn: string,
   executionStartTimestamp?: Date,
+  invocation?: { readonly xRayTraceId?: string | null | undefined },
 ): string;
 
 deriveWorkflowSpanId(executionArn: string): string;
@@ -633,11 +713,17 @@ deriveSpanIdFromOperationId(
 `deriveTraceIdFromXRayRoot` converts a valid X-Ray `Root` value to an
 OpenTelemetry trace ID and returns `undefined` for invalid input.
 `deriveExecutionTraceId` applies the default plugin precedence to an explicit
-environment: a valid `_X_AMZN_TRACE_ID` `Root` wins, otherwise it uses the same
-ARN-and-start-time fallback as the plugins. Pass `process.env` in Lambda or a
-plain object in tests. When no valid X-Ray Root is available, pass the same
-execution start timestamp supplied to the plugin; omit it only when it is
-unavailable to both callers.
+environment and an optional fourth invocation-context argument. Only
+`_X_AMZN_TRACE_ID` is read from the environment, preserving existing callers even
+if they have an unrelated variable named `xRayTraceId`. On Managed Instances,
+pass `{ xRayTraceId: context.xRayTraceId }` as the fourth argument; that local
+carrier takes precedence, including when its value is empty, `undefined`, or
+`null`. A present carrier with no usable header suppresses the environment
+carrier and uses the ARN-and-start-time fallback. Omit the property only when
+that runtime capability is unavailable; old cores and contexts without the
+property retain their environment fallback.
+When no valid Root is available, pass the same execution start timestamp as the
+plugin; omit it only when it is unavailable to both callers.
 `deriveWorkflowSpanId` hashes `workflow:<execution ARN>`,
 `deriveExecutionRootSpanId` hashes `execution-root:<execution ARN>` (a distinct
 namespace so the synthetic root never collides with the Workflow or operation
@@ -673,6 +759,35 @@ The package also exports the `ContextExtractor`, `ContextExtractorResult`,
 `ExecutionTraceEnvironment`, `IdGeneratorFactory`, `TracerProviderFactory`, and
 `OtelPluginConfig` types.
 
+### External completions and replay
+
+Both views retain terminal wait, invoke, and callback notifications received at
+invocation start or in checkpoint responses. If workflow traversal does not
+reach a completed operation before suspending or returning, its completion is
+exported at invocation end. Supplied operation timestamps, parent identity,
+status, and error details are preserved in the execution view; the invocation
+view completes the live segment or emits a linked continuation.
+
+Notifications and operation-end hooks are deduplicated within each invocation.
+Normal replay does not re-export stored external completions. Deduplication is
+invocation-local. Shutdown first drains and flushes fresh completions while the
+enclosing spans remain open, draining again for updates received during that
+flush. It then ends the enclosing spans and performs a final serialized flush.
+Even with no new updates this uses two flush passes, so provider flush latency
+contributes twice to shutdown. Updates received during the final flush or after
+shutdown are still exported and flushed, but their immutable enclosing spans
+cannot be extended: containment is not guaranteed for those late arrivals.
+Their original timestamps, IDs, sampling decisions and deduplication remain
+unchanged; this does not introduce additional roots or a new trace topology. A
+change hook received after shutdown also awaits export and flushing of its fresh
+completions. This
+does not guarantee delivery of notifications after the Lambda environment has
+stopped running, or successful export when the configured provider fails.
+
+Export acknowledgement is
+not persisted: redelivery after a failed invocation can export the completion
+again, as required for recovery.
+
 ## Verification and Troubleshooting
 
 After deployment:
@@ -706,34 +821,23 @@ remote parent, or a synthetic execution root).
 
 Apache-2.0
 
-## Core compatibility
+## Migration from the v1 provider contract
 
-OTel 1.2 preserves valid core 2.4–2.x registrations, including separate
-OTel-only Lambda layers. Its core peer is optional (`>=2.4.0 <3.0.0`), and the
-dynamic provider contract remains version 1. Existing on-demand environment
-carrier behavior remains available on older cores; upgrading the plugin alone
-does not add fields to the invocation metadata those cores supply.
+With core 3.x, legacy providers declaring `pluginApiVersion` fail with
+`PluginLoadError` for explicit and environment registration. Upgrade the OTel
+package/layer to the compatible 2.x factory implementation and use
+`createExecutionOtelPluginFactory` or `createInvocationOtelPluginFactory`.
+The old handler-lifetime `createPlugin()` contract is not silently treated as a
+per-invocation factory. Custom factories must return a fresh plugin for every
+`createPlugin(info)` call; process-owned tracer providers may remain shared.
+This required migration belongs to the core 3.x major release only.
 
-The new invocation-local LMI carrier and core registration exclusivity require
-the coordinated core 2.7 / OTel 1.2 pair. Upgrade both for those capabilities.
-Older core/plugin combinations do not gain those guarantees. The two OTel views
-remain an unsupported combination, and the updated core rejects it with updated
-plugin metadata. The later core 3 factory migration is a separate major release.
 
-Registration metadata uses the namespaced symbol
+Factory registration metadata uses the namespaced symbol
 `Symbol.for("aws.lambda.durable.instrumentation.plugin-registration")`.
-The bundled views declare it on their constructors, so the core can validate
-all selected provider types before calling any environment-selected factory.
-Conflicting dynamic views therefore do not install sampler or ID-generator
-wrappers on the global tracer. Subclasses retain all inherited static exclusive
-groups; declaring their own static metadata adds a constraint and cannot replace
-an inherited one. Repeating a group within one constructor chain does not count
-as a second plugin registration. Subclasses are identified by their actual
-constructor names in diagnostics. Explicit instances
-have already been constructed by the application before registration; validation
-cannot undo that construction. Existing instance metadata remains supported and
-returned instances are checked too, including subclasses returned by providers
-that declare a broader base type.
-The base hook interface stays unchanged, and ordinary properties such as a
-custom plugin's `registration` field are not interpreted by the SDK. This keeps
-existing valid plugin classes and generic hook dispatchers source-compatible.
+Every own declaration along a registered factory's prototype chain contributes
+an exclusive group. A derived factory can add its own group but cannot mask a
+bundled view's inherited group. Repeating a group within one factory does not
+count as a second registration, and inherited metadata getters receive the
+concrete factory as their receiver. Validation runs before any `createPlugin`
+call; ordinary unmarked properties are not interpreted as metadata.

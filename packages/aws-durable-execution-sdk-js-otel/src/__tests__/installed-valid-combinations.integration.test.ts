@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import {
   InstalledCoreFixture,
@@ -7,37 +7,48 @@ import {
 
 const header =
   "Root=1-5759e988-bd862e3fe1be46a994272793;Parent=53995c3f42cd8ad8;Sampled=1";
-const combinations = (["minimum", "previous", "current"] as const).flatMap(
-  (core) => [false, true].map((previousPlugin) => ({ core, previousPlugin })),
-);
+// Released 2.x/1.x configurations remain controls; the major uses the new pair.
+const combinations = [
+  { core: "minimum", previousPlugin: true },
+  { core: "previous", previousPlugin: true },
+  { core: "current", previousPlugin: false },
+] as const;
 
 describe.each(combinations)(
-  "valid installed on-demand configuration: core=$core previousPlugin=$previousPlugin",
+  "installed supported pair: core=$core oldPlugin=$previousPlugin",
   ({ core, previousPlugin }) => {
     let fixture: InstalledCoreFixture;
     beforeAll(() => {
       fixture = new InstalledCoreFixture(core, { previousPlugin });
     }, 30000);
     afterAll(() => fixture?.cleanup());
-    it("keeps package peers and the public TypeScript registration compatible", () => {
+    it("accepts package peers and strict public declaration consumers", () => {
       expect(fixture.peerAccepted).toBe(true);
       expect(fixture.coreRequired).toBe(false);
-      const peers = fixture.validateInstalledPeers();
-      expect(peers.output).not.toContain("invalid:");
-      expect(peers.status).toBe(0);
-      const types = fixture.typecheckConsumer(`
-      import { withDurableExecution } from '@aws/durable-execution-sdk-js';
+      expect(fixture.validateInstalledPeers().status).toBe(0);
+      const registrations = previousPlugin
+        ? `
       import { ExecutionOtelPlugin, InvocationOtelPlugin } from '@aws/durable-execution-sdk-js-otel';
-      withDurableExecution(async () => 'ok', { plugins: [new ExecutionOtelPlugin()] });
-      withDurableExecution(async () => 'ok', { plugins: [new InvocationOtelPlugin()] });
-      class LegacyPlugin { registration = 42; async onInvocationStart() {} }
-      withDurableExecution(async () => 'ok', { plugins: [new LegacyPlugin()] });
-    `);
-      expect(types.output).toBe("");
-      expect(types.status).toBe(0);
+      withDurableExecution(async () => 'ok', {plugins:[new ExecutionOtelPlugin()]});
+      withDurableExecution(async () => 'ok', {plugins:[new InvocationOtelPlugin()]});
+      class CustomPlugin { registration=42; async onInvocationStart() {} }
+      withDurableExecution(async () => 'ok', {plugins:[new CustomPlugin()]});
+    `
+        : `
+      import { createExecutionOtelPluginFactory, createInvocationOtelPluginFactory } from '@aws/durable-execution-sdk-js-otel';
+      withDurableExecution(async () => 'ok', {plugins:[createExecutionOtelPluginFactory()]});
+      withDurableExecution(async () => 'ok', {plugins:[createInvocationOtelPluginFactory()]});
+      class CustomFactory { registration=42; createPlugin() {return {async onInvocationStart() {}};} }
+      withDurableExecution(async () => 'ok', {plugins:[new CustomFactory()]});
+    `;
+      const result = fixture.typecheckConsumer(
+        `import {withDurableExecution} from '@aws/durable-execution-sdk-js'; ${registrations}`,
+      );
+      expect(result.output).toBe("");
+      expect(result.status).toBe(0);
     }, 30000);
     it.each(["ExecutionOtelPlugin", "InvocationOtelPlugin"])(
-      "preserves %s and the environment carrier",
+      "records %s through the supported registration API",
       (view) => {
         const result = fixture.run<{
           status: string;
@@ -47,18 +58,26 @@ describe.each(combinations)(
           otelPath: string;
         }>(
           `${invocationFixture}
-(async () => {
-  const exporter = new InMemorySpanExporter(); let provider;
-  const plugin = new otel.${view}({ tracerProviderFactory: ids => provider = new NodeTracerProvider({ idGenerator: ids(), spanProcessors: [new SimpleSpanProcessor(exporter)] }) });
-  const response = await core.withDurableExecution(async () => 'ok', { plugins: [plugin, { onInvocationStart: async () => {}, get registration() { throw new Error('ordinary property must not be read'); } }] })(event, lambdaContext);
-  const spans = exporter.getFinishedSpans();
-  const result = { status: response.Status, names: spans.map(s => s.name).sort(), traceIds: spans.map(s => s.spanContext().traceId), corePath: require.resolve('@aws/durable-execution-sdk-js'), otelPath: require.resolve('@aws/durable-execution-sdk-js-otel') };
-  await provider.shutdown(); process.stdout.write(JSON.stringify(result));
-})().catch(error => { console.error(error); process.exitCode = 1; });`,
+(async()=>{
+ const exporter=new InMemorySpanExporter(); let provider;
+ const config={tracerProviderFactory:ids=>provider=new NodeTracerProvider({idGenerator:ids(),spanProcessors:[new SimpleSpanProcessor(exporter)]})};
+ const plugin=${previousPlugin ? `new otel.${view}(config)` : `otel.create${view}Factory(config)`};
+ const observer={onInvocationStart:async()=>{}};
+ const extra=${previousPlugin ? "observer" : "{createPlugin:()=>observer}"};
+ Object.defineProperty(extra,'registration',{get(){throw new Error('ordinary property must not be read');}});
+ const result=await core.withDurableExecution(async()=> 'ok',{plugins:[plugin,extra]})(event,lambdaContext);
+ const spans=exporter.getFinishedSpans();
+ const output={status:result.Status,names:spans.map(s=>s.name).sort(),traceIds:spans.map(s=>s.spanContext().traceId),corePath:require.resolve('@aws/durable-execution-sdk-js'),otelPath:require.resolve('@aws/durable-execution-sdk-js-otel')};
+ await provider.shutdown(); process.stdout.write(JSON.stringify(output));
+})().catch(e=>{console.error(e);process.exitCode=1;});`,
           { _X_AMZN_TRACE_ID: header },
         );
-        expect(result.corePath).toContain(fixture.applicationDirectory);
-        expect(result.otelPath).toContain(fixture.applicationDirectory);
+        expect(realpathSync(result.corePath)).toContain(
+          realpathSync(fixture.applicationDirectory),
+        );
+        expect(realpathSync(result.otelPath)).toContain(
+          realpathSync(fixture.applicationDirectory),
+        );
         expect(result.status).toBe("SUCCEEDED");
         expect(result.names).toEqual(["Invocation", "Workflow"]);
         expect(new Set(result.traceIds)).toEqual(
@@ -69,16 +88,19 @@ describe.each(combinations)(
   },
 );
 
-describe.each(["previous", "current"] as const)(
-  "OTel-only layer with %s application core",
-  (core) => {
+describe.each([false, true])(
+  "major core with separate layer: oldPlugin=%s",
+  (previousPlugin) => {
     let fixture: InstalledCoreFixture;
     beforeAll(() => {
-      fixture = new InstalledCoreFixture(core, { layer: true });
+      fixture = new InstalledCoreFixture("current", {
+        previousPlugin,
+        layer: true,
+      });
     }, 30000);
     afterAll(() => fixture?.cleanup());
     it.each(["execution", "invocation"])(
-      "loads the %s provider from a separate tree with the original API version",
+      "loads or rejects the %s provider at the declared migration boundary",
       (view) => {
         expect(
           existsSync(
@@ -98,27 +120,65 @@ describe.each(["previous", "current"] as const)(
         ).toBe(false);
         const result = fixture.run<{
           status: string;
+          error?: { ErrorType: string; ErrorMessage: string };
+          calls: number;
           names: string[];
           providerPath: string;
-          version: number;
         }>(
           `${invocationFixture}
-(async () => {
-  const exporter = new InMemorySpanExporter();
-  const provider = new NodeTracerProvider({ spanProcessors: [new SimpleSpanProcessor(exporter)] }); provider.register();
-  const specifier = '@aws/durable-execution-sdk-js-otel/otel-${view}';
-  process.env.DURABLE_EXECUTION_PLUGINS = specifier;
-  const response = await core.withDurableExecution(async () => 'ok')(event, lambdaContext);
-  const result = { status: response.Status, names: exporter.getFinishedSpans().map(s => s.name).sort(), providerPath: require.resolve(specifier), version: require(specifier).durableExecutionPluginProvider.pluginApiVersion };
-  await provider.shutdown(); process.stdout.write(JSON.stringify(result));
-})().catch(error => { console.error(error); process.exitCode = 1; });`,
+(async()=>{
+ const exporter=new InMemorySpanExporter();const provider=new NodeTracerProvider({spanProcessors:[new SimpleSpanProcessor(exporter)]});provider.register();
+ const specifier='@aws/durable-execution-sdk-js-otel/otel-${view}';process.env.DURABLE_EXECUTION_PLUGINS=specifier;
+ let calls=0;const result=await core.withDurableExecution(async()=>{calls++;return 'ok';})(event,lambdaContext);
+ const output={status:result.Status,error:result.Error,calls,names:exporter.getFinishedSpans().map(s=>s.name).sort(),providerPath:require.resolve(specifier)};
+ await provider.shutdown();process.stdout.write(JSON.stringify(output));
+})().catch(e=>{console.error(e);process.exitCode=1;});`,
           { _X_AMZN_TRACE_ID: header },
         );
-        expect(result.providerPath).toContain(fixture.layerDirectory);
-        expect(result.version).toBe(1);
-        expect(result.status).toBe("SUCCEEDED");
-        expect(result.names).toEqual(["Invocation", "Workflow"]);
+        expect(realpathSync(result.providerPath)).toContain(
+          realpathSync(fixture.layerDirectory!),
+        );
+        expect(result.status).toBe(previousPlugin ? "FAILED" : "SUCCEEDED");
+        expect(result.calls).toBe(previousPlugin ? 0 : 1);
+        expect(result.names).toEqual(
+          previousPlugin ? [] : ["Invocation", "Workflow"],
+        );
+        if (previousPlugin) {
+          expect(result.error?.ErrorType).toBe("PluginLoadError");
+          expect(result.error?.ErrorMessage).toContain("legacy v1");
+        }
       },
     );
   },
 );
+
+describe("published legacy provider in explicit major registration", () => {
+  let fixture: InstalledCoreFixture;
+  beforeAll(() => {
+    fixture = new InstalledCoreFixture("current", { previousPlugin: true });
+  }, 30000);
+  afterAll(() => fixture?.cleanup());
+  it.each(["execution", "invocation"])(
+    "rejects explicit published %s provider before calling it",
+    (view) => {
+      const result = fixture.run<{
+        status: string;
+        type: string;
+        handlerCalls: number;
+        factoryCalls: number;
+      }>(`${invocationFixture}
+(async()=>{
+ const legacy=require('@aws/durable-execution-sdk-js-otel/otel-${view}').durableExecutionPluginProvider;
+ const create=legacy.createPlugin;let factoryCalls=0,handlerCalls=0;legacy.createPlugin=()=>{factoryCalls++;return create();};
+ const response=await core.withDurableExecution(async()=>{handlerCalls++;return 'ok';},{plugins:[legacy]})(event,lambdaContext);
+ process.stdout.write(JSON.stringify({status:response.Status,type:response.Error?.ErrorType,handlerCalls,factoryCalls}));
+})().catch(e=>{console.error(e);process.exitCode=1;});`);
+      expect(result).toEqual({
+        status: "FAILED",
+        type: "PluginLoadError",
+        handlerCalls: 0,
+        factoryCalls: 0,
+      });
+    },
+  );
+});

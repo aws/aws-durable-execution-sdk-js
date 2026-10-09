@@ -2,7 +2,7 @@
 import {
   DurableContext,
   withDurableExecution,
-  DurableInstrumentationPlugin,
+  DurableInstrumentationPluginFactory,
 } from "@aws/durable-execution-sdk-js";
 
 const PLUGIN = "CONFPLUGIN";
@@ -11,45 +11,46 @@ function isWait(type?: string): boolean {
   return (type || "").toUpperCase() === "WAIT";
 }
 
-function makePlugin(): DurableInstrumentationPlugin {
-  let executionArn = "";
-  const emit = (rec: Record<string, unknown>): void => {
-    process.stdout.write(
-      JSON.stringify({ ...rec, durableExecutionArn: executionArn }) + "\n",
-    );
-  };
+const makePlugin: DurableInstrumentationPluginFactory = {
+  createPlugin: (invocation) => {
+    const emit = (rec: Record<string, unknown>): void => {
+      process.stdout.write(
+        JSON.stringify({
+          ...rec,
+          durableExecutionArn: invocation.executionArn,
+        }) + "\n",
+      );
+    };
 
-  return {
-    async onInvocationStart(info): Promise<void> {
-      executionArn = info.executionArn;
-    },
-    // Correlate by stable wait name because branch event ids are
-    // nondeterministic under concurrency.
-    async onOperationStart(info): Promise<void> {
-      if (!isWait(info.type)) return;
-      emit({
-        plugin: PLUGIN,
-        hook: "operation-start",
-        type: (info.type || "").toUpperCase(),
-        name: info.name,
-        replay: info.isReplay,
-        // Non-terminal at hook time, from the hook info's own operation state
-        // (no end timestamp yet) — no cross-invocation state.
-        pending: info.endTimestamp == null,
-      });
-    },
-    async onOperationEnd(info): Promise<void> {
-      if (!isWait(info.type)) return;
-      emit({
-        plugin: PLUGIN,
-        hook: "operation-end",
-        type: (info.type || "").toUpperCase(),
-        name: info.name,
-        status: info.status,
-      });
-    },
-  };
-}
+    return {
+      // Correlate by stable wait name because branch event ids are
+      // nondeterministic under concurrency.
+      async onOperationStart(info): Promise<void> {
+        if (!isWait(info.type)) return;
+        emit({
+          plugin: PLUGIN,
+          hook: "operation-start",
+          type: (info.type || "").toUpperCase(),
+          name: info.name,
+          replay: info.isReplay,
+          // Non-terminal at hook time, from the hook info's own operation state
+          // (no end timestamp yet) — no cross-invocation state.
+          pending: info.endTimestamp == null,
+        });
+      },
+      async onOperationEnd(info): Promise<void> {
+        if (!isWait(info.type)) return;
+        emit({
+          plugin: PLUGIN,
+          hook: "operation-end",
+          type: (info.type || "").toUpperCase(),
+          name: info.name,
+          status: info.status,
+        });
+      },
+    };
+  },
+};
 
 export const handler = withDurableExecution(
   async (_event: any, context: DurableContext) => {
@@ -73,5 +74,5 @@ export const handler = withDurableExecution(
     );
     return results.getResults();
   },
-  { plugins: [makePlugin()] },
+  { plugins: [makePlugin] },
 );

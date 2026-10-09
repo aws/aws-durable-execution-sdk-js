@@ -47,12 +47,14 @@ it.each([
       {
         plugins: [
           {
-            async onInvocationStart(info) {
-              starts.push(info);
-            },
-            async onOperationEnd(info) {
-              if (info.name === "external") ends.push(info);
-            },
+            createPlugin: () => ({
+              async onInvocationStart(info) {
+                starts.push(info);
+              },
+              async onOperationEnd(info) {
+                if (info.name === "external") ends.push(info);
+              },
+            }),
           },
         ],
       },

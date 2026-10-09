@@ -1,9 +1,9 @@
 import { PluginLoadError } from "../../errors/plugin-load-error/plugin-load-error";
 import {
-  DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION,
-  DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION,
   DurableInstrumentationPlugin,
-  DurableInstrumentationPluginProvider,
+  DurableInstrumentationPluginFactory,
+  DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION,
+  InvocationInfo,
 } from "../../types/plugin";
 import {
   createDefaultModuleImporter,
@@ -17,15 +17,20 @@ class ExplicitPlugin implements DurableInstrumentationPlugin {}
 class FirstDynamicPlugin implements DurableInstrumentationPlugin {}
 class SecondDynamicPlugin implements DurableInstrumentationPlugin {}
 
-function providerFor<Plugin extends DurableInstrumentationPlugin>(
-  pluginType: abstract new (...args: never[]) => Plugin,
+const invocationInfo: InvocationInfo = {
+  requestId: "req-1",
+  executionArn: "arn:test",
+  isFirstInvocation: true,
+  executionInput: {},
+  operations: {},
+  updatedOperations: {},
+};
+
+/** A provider export: the factory the SDK calls once per invocation. */
+function factoryFor<Plugin extends DurableInstrumentationPlugin>(
   createPlugin: () => Plugin,
-): DurableInstrumentationPluginProvider<Plugin> {
-  return {
-    pluginApiVersion: DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION,
-    pluginType,
-    createPlugin,
-  };
+): DurableInstrumentationPluginFactory<Plugin> {
+  return { createPlugin: () => createPlugin() };
 }
 
 function moduleFor(provider: unknown): Record<string, unknown> {
@@ -130,49 +135,45 @@ describe("createDefaultModuleImporter", () => {
 });
 
 describe("loadConfiguredPlugins", () => {
-  it("preserves explicit plugins without importing modules when configuration is unset", async () => {
-    const explicitPlugin = new ExplicitPlugin();
+  it("preserves explicit factories without importing modules when configuration is unset", async () => {
+    const explicitFactory = factoryFor(() => new ExplicitPlugin());
     const importModule = jest.fn();
 
-    const result = await loadConfiguredPlugins([explicitPlugin], {
+    const result = await loadConfiguredPlugins([explicitFactory], {
       environment: {},
       importModule,
     });
 
-    expect(result).toEqual([explicitPlugin]);
+    expect(result).toEqual([explicitFactory]);
     expect(importModule).not.toHaveBeenCalled();
   });
 
   it("treats a blank environment variable as disabled", async () => {
-    const explicitPlugin = new ExplicitPlugin();
+    const explicitFactory = factoryFor(() => new ExplicitPlugin());
     const importModule = jest.fn();
 
-    const result = await loadConfiguredPlugins([explicitPlugin], {
+    const result = await loadConfiguredPlugins([explicitFactory], {
       environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "  " },
       importModule,
     });
 
-    expect(result).toEqual([explicitPlugin]);
+    expect(result).toEqual([explicitFactory]);
     expect(importModule).not.toHaveBeenCalled();
   });
 
-  it("loads configured providers in order after explicit plugins", async () => {
-    const explicitPlugin = new ExplicitPlugin();
-    const firstPlugin = new FirstDynamicPlugin();
-    const secondPlugin = new SecondDynamicPlugin();
+  it("loads configured providers in order after explicit factories", async () => {
+    const explicitFactory = factoryFor(() => new ExplicitPlugin());
+    const firstFactory = factoryFor(() => new FirstDynamicPlugin());
+    const secondFactory = factoryFor(() => new SecondDynamicPlugin());
     const modules: Record<string, unknown> = {
-      "@example/first": moduleFor(
-        providerFor(FirstDynamicPlugin, () => firstPlugin),
-      ),
-      "@example/second/provider": moduleFor(
-        providerFor(SecondDynamicPlugin, () => secondPlugin),
-      ),
+      "@example/first": moduleFor(firstFactory),
+      "@example/second/provider": moduleFor(secondFactory),
     };
     const importModule = jest.fn(
       async (specifier: string): Promise<unknown> => modules[specifier],
     );
 
-    const result = await loadConfiguredPlugins([explicitPlugin], {
+    const result = await loadConfiguredPlugins([explicitFactory], {
       environment: {
         [PLUGIN_ENVIRONMENT_VARIABLE]:
           " @example/first, @example/second/provider ",
@@ -184,20 +185,19 @@ describe("loadConfiguredPlugins", () => {
       ["@example/first"],
       ["@example/second/provider"],
     ]);
-    expect(result).toEqual([explicitPlugin, firstPlugin, secondPlugin]);
+    expect(result).toEqual([explicitFactory, firstFactory, secondFactory]);
   });
 
-  it("keeps explicit and dynamic instances of the same plugin type additive", async () => {
-    const explicitPlugin = new FirstDynamicPlugin();
-    const dynamicPlugin = new FirstDynamicPlugin();
+  it("keeps explicit and dynamic factories for the same plugin type additive", async () => {
+    const explicitFactory = factoryFor(() => new FirstDynamicPlugin());
+    const dynamicFactory = factoryFor(() => new FirstDynamicPlugin());
 
-    const result = await loadConfiguredPlugins([explicitPlugin], {
+    const result = await loadConfiguredPlugins([explicitFactory], {
       environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/first" },
-      importModule: async () =>
-        moduleFor(providerFor(FirstDynamicPlugin, () => dynamicPlugin)),
+      importModule: async () => moduleFor(dynamicFactory),
     });
 
-    expect(result).toEqual([explicitPlugin, dynamicPlugin]);
+    expect(result).toEqual([explicitFactory, dynamicFactory]);
   });
 
   it.each(["first,", ",first", "first,,second"])(
@@ -307,50 +307,43 @@ describe("loadConfiguredPlugins", () => {
   });
 
   it("loads the provider from a CommonJS default namespace", async () => {
-    const plugin = new FirstDynamicPlugin();
-    const provider = providerFor(FirstDynamicPlugin, () => plugin);
+    const factory = factoryFor(() => new FirstDynamicPlugin());
 
     const result = await loadConfiguredPlugins([], {
       environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
       importModule: async () => ({
-        default: { [PLUGIN_PROVIDER_EXPORT]: provider },
+        default: { [PLUGIN_PROVIDER_EXPORT]: factory },
       }),
     });
 
-    expect(result).toEqual([plugin]);
+    expect(result).toEqual([factory]);
   });
 
   it("accepts duplicate ESM and CommonJS views of the same provider export", async () => {
-    const plugin = new FirstDynamicPlugin();
-    const provider = providerFor(FirstDynamicPlugin, () => plugin);
+    const factory = factoryFor(() => new FirstDynamicPlugin());
 
     const result = await loadConfiguredPlugins([], {
       environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
       importModule: async () => ({
-        [PLUGIN_PROVIDER_EXPORT]: provider,
-        default: { [PLUGIN_PROVIDER_EXPORT]: provider },
+        [PLUGIN_PROVIDER_EXPORT]: factory,
+        default: { [PLUGIN_PROVIDER_EXPORT]: factory },
       }),
     });
 
-    expect(result).toEqual([plugin]);
+    expect(result).toEqual([factory]);
   });
 
   it("rejects conflicting ESM and CommonJS provider exports", async () => {
-    const directProvider = providerFor(
-      FirstDynamicPlugin,
-      () => new FirstDynamicPlugin(),
-    );
-    const nestedProvider = providerFor(
-      SecondDynamicPlugin,
-      () => new SecondDynamicPlugin(),
-    );
-
     await expect(
       loadConfiguredPlugins([], {
         environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
         importModule: async () => ({
-          [PLUGIN_PROVIDER_EXPORT]: directProvider,
-          default: { [PLUGIN_PROVIDER_EXPORT]: nestedProvider },
+          [PLUGIN_PROVIDER_EXPORT]: factoryFor(() => new FirstDynamicPlugin()),
+          default: {
+            [PLUGIN_PROVIDER_EXPORT]: factoryFor(
+              () => new SecondDynamicPlugin(),
+            ),
+          },
         }),
       }),
     ).rejects.toThrow(
@@ -358,103 +351,43 @@ describe("loadConfiguredPlugins", () => {
     );
   });
 
-  it("rejects a non-object provider", async () => {
+  it.each([
+    { desc: "a plugin instance", provider: new FirstDynamicPlugin() },
+    { desc: "an object without the method", provider: { create: () => ({}) } },
+    { desc: "a string", provider: "not a provider" },
+    { desc: "null", provider: null },
+  ])("rejects a provider export that is $desc", async ({ provider }) => {
     await expect(
       loadConfiguredPlugins([], {
         environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
-        importModule: async () => moduleFor("not a provider"),
+        importModule: async () => moduleFor(provider),
       }),
     ).rejects.toThrow(
-      "Plugin module '@example/plugin' exports an invalid provider; expected an object.",
+      "Plugin provider '@example/plugin' must be an object with a 'createPlugin(info)' method that creates a plugin for one invocation",
     );
   });
 
-  it("rejects incompatible provider API versions", async () => {
+  it("rejects a provider export whose createPlugin is not callable", async () => {
     await expect(
       loadConfiguredPlugins([], {
         environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
-        importModule: async () =>
-          moduleFor({
-            ...providerFor(FirstDynamicPlugin, () => new FirstDynamicPlugin()),
-            pluginApiVersion: DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION + 1,
-          }),
+        importModule: async () => moduleFor({ createPlugin: "nope" }),
       }),
     ).rejects.toThrow(
-      `supports version ${DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION}`,
+      "Plugin provider '@example/plugin' must be an object with a 'createPlugin(info)' method",
     );
   });
 
-  it.each([undefined, null, "FirstDynamicPlugin", (): undefined => undefined])(
-    "rejects invalid plugin type %p",
-    async (pluginType) => {
-      await expect(
-        loadConfiguredPlugins([], {
-          environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
-          importModule: async () =>
-            moduleFor({
-              pluginApiVersion: DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION,
-              pluginType,
-              createPlugin: () => new FirstDynamicPlugin(),
-            }),
-        }),
-      ).rejects.toThrow(
-        "Plugin provider '@example/plugin' must declare a constructable 'pluginType'.",
-      );
-    },
-  );
-
-  it("rejects a provider without a factory", async () => {
+  it("names what the provider export was instead of a factory", async () => {
     await expect(
       loadConfiguredPlugins([], {
         environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
-        importModule: async () =>
-          moduleFor({
-            pluginApiVersion: DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION,
-            pluginType: FirstDynamicPlugin,
-          }),
-      }),
-    ).rejects.toThrow(
-      "Plugin provider '@example/plugin' must define a 'createPlugin' factory function.",
-    );
-  });
-
-  it("wraps provider construction failures", async () => {
-    const constructionError = new Error("missing configuration");
-
-    await expect(
-      loadConfiguredPlugins([], {
-        environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
-        importModule: async () =>
-          moduleFor(
-            providerFor(FirstDynamicPlugin, (): FirstDynamicPlugin => {
-              throw constructionError;
-            }),
-          ),
+        importModule: async () => moduleFor({}),
       }),
     ).rejects.toMatchObject({
       name: "PluginLoadError",
-      message: expect.stringContaining(
-        "Plugin provider '@example/plugin' failed to create its plugin",
-      ),
-      cause: constructionError,
+      message: expect.stringContaining("but it is an object."),
     });
-  });
-
-  it("rejects a plugin that does not match the declared type", async () => {
-    await expect(
-      loadConfiguredPlugins([], {
-        environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
-        importModule: async () =>
-          moduleFor(
-            providerFor(
-              FirstDynamicPlugin,
-              () => new SecondDynamicPlugin() as unknown as FirstDynamicPlugin,
-            ),
-          ),
-      }),
-    ).rejects.toThrow(
-      "declared plugin type 'FirstDynamicPlugin' but created 'SecondDynamicPlugin'",
-    );
   });
 
   it("uses PluginLoadError for configuration failures", async () => {
@@ -466,40 +399,547 @@ describe("loadConfiguredPlugins", () => {
   });
 });
 
-describe("exclusive plugin registration", () => {
-  class First implements DurableInstrumentationPlugin {
-    async onInvocationStart(): Promise<void> {}
-    readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION] = {
-      name: "first view",
-      exclusiveGroup: "views",
-    };
+describe("loadConfiguredPlugins returns factories, not plugins", () => {
+  const loadProvider = async (
+    provider: unknown,
+  ): Promise<DurableInstrumentationPluginFactory[]> =>
+    loadConfiguredPlugins([], {
+      environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
+      importModule: async () => moduleFor(provider),
+    });
+
+  it("does not construct a plugin while loading a provider", async () => {
+    const createPlugin = jest.fn(() => new FirstDynamicPlugin());
+    const factory = { createPlugin };
+
+    const [loaded] = await loadProvider(factory);
+
+    expect(createPlugin).not.toHaveBeenCalled();
+    expect(loaded).toBe(factory);
+  });
+
+  it("returns the provider export itself, so each call yields a new instance", async () => {
+    const created: FirstDynamicPlugin[] = [];
+    const [factory] = await loadProvider({
+      createPlugin: () => {
+        const plugin = new FirstDynamicPlugin();
+        created.push(plugin);
+        return plugin;
+      },
+    });
+
+    factory.createPlugin(invocationInfo);
+    factory.createPlugin(invocationInfo);
+
+    expect(created).toHaveLength(2);
+    expect(created[0]).not.toBe(created[1]);
+  });
+
+  it("passes the invocation info straight through to createPlugin", async () => {
+    const createPlugin = jest.fn(() => new FirstDynamicPlugin());
+    const [loaded] = await loadProvider({ createPlugin });
+
+    loaded.createPlugin(invocationInfo);
+
+    expect(createPlugin).toHaveBeenCalledWith(invocationInfo);
+  });
+
+  it("lets a failing createPlugin throw when it runs instead of at load time", async () => {
+    const constructionError = new Error("missing configuration");
+
+    const [factory] = await loadProvider({
+      createPlugin: (): FirstDynamicPlugin => {
+        throw constructionError;
+      },
+    });
+
+    expect(() => factory.createPlugin(invocationInfo)).toThrow(
+      constructionError,
+    );
+  });
+});
+
+describe("loadConfiguredPlugins validates explicit entries", () => {
+  // Same rule as the provider path: an entry the SDK could never get an instance
+  // from is a configuration mistake, reported once at load time rather than
+  // swallowed on every invocation.
+  const loadExplicit = async (
+    ...entries: unknown[]
+  ): Promise<DurableInstrumentationPluginFactory[]> =>
+    loadConfiguredPlugins(entries as DurableInstrumentationPluginFactory[], {
+      environment: {},
+    });
+
+  it.each([
+    {
+      desc: "a plugin instance",
+      entry: new ExplicitPlugin(),
+      named: "an object",
+    },
+    { desc: "a string", entry: "not a factory", named: "a string" },
+    { desc: "null", entry: null, named: "null" },
+    { desc: "undefined", entry: undefined, named: "undefined" },
+  ])("rejects an explicit entry that is $desc", async ({ entry, named }) => {
+    await expect(loadExplicit(entry)).rejects.toMatchObject({
+      name: "PluginLoadError",
+      message: expect.stringContaining(
+        "Plugin at plugins[0] must be an object with a 'createPlugin(info)' " +
+          "method that creates a plugin for one invocation, but it is " +
+          `${named}. ` +
+          "Pass a factory such as `{ createPlugin: (info) => new MyPlugin() }`.",
+      ),
+    });
+  });
+
+  it("names the position of the offending entry", async () => {
+    const factory = factoryFor(() => new ExplicitPlugin());
+
+    await expect(
+      loadExplicit(factory, factory, new ExplicitPlugin()),
+    ).rejects.toThrow("Plugin at plugins[2] must be an object");
+  });
+
+  it("fails an invalid explicit entry before any module is imported", async () => {
+    const importModule = jest.fn();
+
+    await expect(
+      loadConfiguredPlugins(
+        [
+          new ExplicitPlugin() as unknown as DurableInstrumentationPluginFactory,
+        ],
+        {
+          environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
+          importModule,
+        },
+      ),
+    ).rejects.toBeInstanceOf(PluginLoadError);
+    expect(importModule).not.toHaveBeenCalled();
+  });
+
+  it("accepts a factory entry and calls it no earlier than the provider path does", async () => {
+    const createPlugin = jest.fn(() => new ExplicitPlugin());
+    const factory = { createPlugin };
+
+    const [loaded] = await loadExplicit(factory);
+
+    expect(loaded).toBe(factory);
+    expect(createPlugin).not.toHaveBeenCalled();
+  });
+});
+
+describe("loadConfiguredPlugins rejects a class where a factory belongs", () => {
+  // `plugins: [MyPlugin]` is close enough to correct to look right, and a class
+  // is callable, so it would reach the per-invocation call and throw "Class
+  // constructor cannot be invoked without 'new'" — once per invocation,
+  // swallowed each time, leaving the plugin absent with nothing said about why.
+  // A class carries no `createPlugin`, so the shape test rejects it at load time
+  // on both paths instead.
+  const shapeMessage =
+    "must be an object with a 'createPlugin(info)' method that creates a " +
+    "plugin for one invocation, but it is a function.";
+
+  it("rejects a class passed directly in plugins, naming its position", async () => {
+    await expect(
+      loadConfiguredPlugins(
+        [ExplicitPlugin as unknown as DurableInstrumentationPluginFactory],
+        { environment: {} },
+      ),
+    ).rejects.toMatchObject({
+      name: "PluginLoadError",
+      message: expect.stringContaining(`Plugin at plugins[0] ${shapeMessage}`),
+    });
+  });
+
+  it("names the position of the class among valid factories", async () => {
+    const factory = factoryFor(() => new ExplicitPlugin());
+
+    await expect(
+      loadConfiguredPlugins(
+        [
+          factory,
+          factory,
+          ExplicitPlugin as unknown as DurableInstrumentationPluginFactory,
+        ],
+        { environment: {} },
+      ),
+    ).rejects.toThrow(`Plugin at plugins[2] ${shapeMessage}`);
+  });
+
+  it("fails a class in plugins before any module is imported", async () => {
+    const importModule = jest.fn();
+
+    await expect(
+      loadConfiguredPlugins(
+        [ExplicitPlugin as unknown as DurableInstrumentationPluginFactory],
+        {
+          environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
+          importModule,
+        },
+      ),
+    ).rejects.toBeInstanceOf(PluginLoadError);
+    expect(importModule).not.toHaveBeenCalled();
+  });
+
+  it("rejects a class exported as a provider, naming the specifier", async () => {
+    await expect(
+      loadConfiguredPlugins([], {
+        environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
+        importModule: async () => moduleFor(FirstDynamicPlugin),
+      }),
+    ).rejects.toMatchObject({
+      name: "PluginLoadError",
+      message: expect.stringContaining(
+        `Plugin provider '@example/plugin' ${shapeMessage}`,
+      ),
+    });
+  });
+
+  it("rejects a subclass of a plugin", async () => {
+    await expect(
+      loadConfiguredPlugins(
+        [
+          class Sub extends ExplicitPlugin {} as unknown as DurableInstrumentationPluginFactory,
+        ],
+        { environment: {} },
+      ),
+    ).rejects.toThrow(`Plugin at plugins[0] ${shapeMessage}`);
+  });
+
+  it("tells the caller what shape to pass instead", async () => {
+    await expect(
+      loadConfiguredPlugins(
+        [ExplicitPlugin as unknown as DurableInstrumentationPluginFactory],
+        { environment: {} },
+      ),
+    ).rejects.toThrow(
+      "Pass a factory such as `{ createPlugin: (info) => new MyPlugin() }`.",
+    );
+  });
+
+  it("does not call the entry to find out that it is not a factory", async () => {
+    // Calling a class throws, and a check that relied on the throw would run
+    // arbitrary constructor code for every legitimate factory.
+    let constructed = 0;
+    class CountingPlugin implements DurableInstrumentationPlugin {
+      constructor() {
+        constructed += 1;
+      }
+    }
+
+    await expect(
+      loadConfiguredPlugins(
+        [CountingPlugin as unknown as DurableInstrumentationPluginFactory],
+        { environment: {} },
+      ),
+    ).rejects.toBeInstanceOf(PluginLoadError);
+    expect(constructed).toBe(0);
+  });
+});
+
+describe("loadConfiguredPlugins rejects a bare function where a factory belongs", () => {
+  // A factory is an object with a `createPlugin` method. A bare
+  // `(info) => plugin` function has no such member, so it is rejected on both
+  // paths: there is no shape that both contracts satisfy, and a caller carrying
+  // the older form learns at load time rather than at the first hook.
+  const callableShapes: Array<{ desc: string; entry: unknown }> = [
+    { desc: "an arrow function", entry: () => new ExplicitPlugin() },
+    {
+      desc: "a function expression",
+      entry: (): ExplicitPlugin => new ExplicitPlugin(),
+    },
+    {
+      desc: "a bound function",
+      entry: function make(): ExplicitPlugin {
+        return new ExplicitPlugin();
+      }.bind(null),
+    },
+    {
+      desc: "a callable object carrying unrelated members",
+      entry: Object.assign(() => new ExplicitPlugin(), { label: "callable" }),
+    },
+  ];
+
+  it.each(callableShapes)("rejects $desc in plugins", async ({ entry }) => {
+    await expect(
+      loadConfiguredPlugins([entry as DurableInstrumentationPluginFactory], {
+        environment: {},
+      }),
+    ).rejects.toThrow(
+      "Plugin at plugins[0] must be an object with a 'createPlugin(info)' method",
+    );
+  });
+
+  it.each(callableShapes)(
+    "rejects $desc as a provider export",
+    async ({ entry }) => {
+      await expect(
+        loadConfiguredPlugins([], {
+          environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
+          importModule: async () => moduleFor(entry),
+        }),
+      ).rejects.toThrow(
+        "Plugin provider '@example/plugin' must be an object with a 'createPlugin(info)' method",
+      );
+    },
+  );
+});
+
+describe("loadConfiguredPlugins accepts every legitimate factory shape", () => {
+  // The check is a property lookup for a callable `createPlugin`, so every value
+  // the type accepts has to survive it — including the shapes that keep the
+  // method somewhere other than on the object itself.
+  class FactoryClass {
+    createPlugin(): ExplicitPlugin {
+      return new ExplicitPlugin();
+    }
   }
-  class Second implements DurableInstrumentationPlugin {
-    async onInvocationStart(): Promise<void> {}
-    readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION] = {
-      name: "second view",
-      exclusiveGroup: "views",
-    };
-  }
-  const factories = [() => new First(), () => new Second()];
-  it.each([false, true])(
-    "rejects explicit, dynamic and mixed conflicts (reverse=%s)",
-    async (reverse) => {
-      const [first, second] = reverse ? [...factories].reverse() : factories;
-      const modules = {
-        first: moduleFor(
-          providerFor(first().constructor as typeof First, first),
-        ),
-        second: moduleFor(
-          providerFor(second().constructor as typeof Second, second),
-        ),
+
+  const shapes: Array<{ desc: string; entry: unknown }> = [
+    {
+      desc: "an object literal with a method",
+      entry: {
+        createPlugin(): ExplicitPlugin {
+          return new ExplicitPlugin();
+        },
+      },
+    },
+    {
+      desc: "an object with an arrow property",
+      entry: { createPlugin: (): ExplicitPlugin => new ExplicitPlugin() },
+    },
+    {
+      desc: "a class instance whose method is on the prototype",
+      entry: new FactoryClass(),
+    },
+    {
+      desc: "an object inheriting the method from another factory",
+      entry: Object.create({
+        createPlugin: (): ExplicitPlugin => new ExplicitPlugin(),
+      }),
+    },
+    {
+      desc: "a function carrying the method as a property",
+      entry: Object.assign(function legacy(): void {}, {
+        createPlugin: (): ExplicitPlugin => new ExplicitPlugin(),
+      }),
+    },
+    {
+      desc: "a factory carrying unrelated members",
+      entry: {
+        createPlugin: (): ExplicitPlugin => new ExplicitPlugin(),
+        label: "factory",
+      },
+    },
+  ];
+
+  it.each(shapes)("accepts $desc in plugins", async ({ entry }) => {
+    const result = await loadConfiguredPlugins(
+      [entry as DurableInstrumentationPluginFactory],
+      { environment: {} },
+    );
+
+    expect(result).toEqual([entry]);
+    expect(result[0].createPlugin(invocationInfo)).toBeInstanceOf(
+      ExplicitPlugin,
+    );
+  });
+
+  it.each(shapes)("accepts $desc as a provider export", async ({ entry }) => {
+    const result = await loadConfiguredPlugins([], {
+      environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
+      importModule: async () => moduleFor(entry),
+    });
+
+    expect(result).toEqual([entry]);
+  });
+});
+
+describe("describeValue names what an invalid entry was", () => {
+  it("reports an array as an array, not as an object", async () => {
+    // `typeof [] === "object"`, so without a dedicated case the message would
+    // call an array an object.
+    await expect(
+      loadConfiguredPlugins([], {
+        environment: { [PLUGIN_ENVIRONMENT_VARIABLE]: "@example/plugin" },
+        importModule: async () =>
+          moduleFor([factoryFor(() => new ExplicitPlugin())]),
+      }),
+    ).rejects.toMatchObject({
+      name: "PluginLoadError",
+      message: expect.stringContaining("but it is an array."),
+    });
+  });
+});
+
+describe("SDK 3.x legacy provider migration", () => {
+  it.each(["explicit", "environment"] as const)(
+    "rejects declared v1 providers in %s registration without calling them",
+    async (registration) => {
+      const createPlugin = jest.fn(() => new FirstDynamicPlugin());
+      const legacy = {
+        pluginApiVersion: 1,
+        pluginType: FirstDynamicPlugin,
+        createPlugin,
       };
+      const loaded =
+        registration === "explicit"
+          ? loadConfiguredPlugins([legacy], { environment: {} })
+          : loadConfiguredPlugins(undefined, {
+              environment: { DURABLE_EXECUTION_PLUGINS: "@example/legacy-v1" },
+              importModule: async () => moduleFor(legacy),
+            });
+      await expect(loaded).rejects.toMatchObject({
+        name: "PluginLoadError",
+        message: expect.stringContaining("legacy v1 provider contract"),
+      });
+      await expect(loaded).rejects.toThrow("createPlugin(info)");
+      await expect(loaded).rejects.toThrow("fresh plugin for each invocation");
+      expect(createPlugin).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["explicit", "environment"] as const)(
+    "recognizes legacy metadata whose removed version import is undefined (%s)",
+    async (registration) => {
+      const createPlugin = jest.fn(() => new FirstDynamicPlugin());
+      const legacy = {
+        pluginApiVersion: undefined,
+        pluginType: FirstDynamicPlugin,
+        createPlugin,
+      };
+      const loaded =
+        registration === "explicit"
+          ? loadConfiguredPlugins([legacy], { environment: {} })
+          : loadConfiguredPlugins(undefined, {
+              environment: { DURABLE_EXECUTION_PLUGINS: "@example/legacy-v1" },
+              importModule: async () => ({ default: moduleFor(legacy) }),
+            });
+      await expect(loaded).rejects.toBeInstanceOf(PluginLoadError);
+      expect(createPlugin).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not call a legacy metadata getter while rejecting its declared contract", async () => {
+    const getter = jest.fn(() => {
+      throw new Error("should not run");
+    });
+    const legacy = Object.defineProperty(
+      { createPlugin: () => new FirstDynamicPlugin() },
+      "pluginApiVersion",
+      { get: getter },
+    );
+    await expect(
+      loadConfiguredPlugins([legacy], { environment: {} }),
+    ).rejects.toThrow("legacy v1 provider contract");
+    expect(getter).not.toHaveBeenCalled();
+  });
+
+  it("accepts a migrated factory and creates fresh instances for separate invocations", async () => {
+    const createPlugin = jest.fn(() => new FirstDynamicPlugin());
+    const [factory] = await loadConfiguredPlugins([{ createPlugin }], {
+      environment: {},
+    });
+    expect(createPlugin).not.toHaveBeenCalled();
+    const first = factory.createPlugin(invocationInfo);
+    const secondInfo = {
+      ...invocationInfo,
+      requestId: "next-request",
+      isFirstInvocation: false,
+    };
+    const second = factory.createPlugin(secondInfo);
+    expect(first).not.toBe(second);
+    expect(createPlugin).toHaveBeenNthCalledWith(1, invocationInfo);
+    expect(createPlugin).toHaveBeenNthCalledWith(2, secondInfo);
+  });
+});
+
+describe("exclusive factory registration", () => {
+  function view(name: string, exclusiveGroup = "views") {
+    return {
+      createPlugin: jest.fn(() => new FirstDynamicPlugin()),
+      [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: { name, exclusiveGroup },
+    };
+  }
+
+  it.each(["explicit", "environment", "mixed"] as const)(
+    "retains inherited groups when a factory declares its own group (%s)",
+    async (registration) => {
+      const base = view("base view");
+      const derived = Object.create(base, {
+        [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: {
+          value: { name: "derived view", exclusiveGroup: "own group" },
+        },
+      }) as typeof base;
+      for (const group of ["views", "own group"]) {
+        const other = view("other view", group);
+        for (const entries of [
+          [derived, other],
+          [other, derived],
+        ]) {
+          const explicitCount =
+            registration === "explicit" ? 2 : registration === "mixed" ? 1 : 0;
+          const modules = Object.fromEntries(
+            entries.map((factory, i) => [`view-${i}`, moduleFor(factory)]),
+          );
+          await expect(
+            loadConfiguredPlugins(entries.slice(0, explicitCount), {
+              environment: {
+                DURABLE_EXECUTION_PLUGINS: entries
+                  .slice(explicitCount)
+                  .map((_, i) => `view-${i + explicitCount}`)
+                  .join(","),
+              },
+              importModule: async (specifier) => modules[specifier],
+            }),
+          ).rejects.toThrow(
+            /(derived view.*other view|other view.*derived view).*Configure only one/,
+          );
+        }
+        expect(other.createPlugin).not.toHaveBeenCalled();
+      }
+      expect(base.createPlugin).not.toHaveBeenCalled();
+    },
+  );
+
+  it("deduplicates inherited groups within one factory and preserves getter receivers", async () => {
+    const createPlugin = jest.fn(() => new FirstDynamicPlugin());
+    const receivers: unknown[] = [];
+    const base = {
+      createPlugin,
+      name: "base",
+      get [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]() {
+        receivers.push(this);
+        return { name: this.name, exclusiveGroup: "views" };
+      },
+    };
+    const derived = Object.create(base, {
+      name: { value: "derived getter view" },
+      [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: {
+        value: { name: "derived getter view", exclusiveGroup: "views" },
+      },
+    }) as typeof base;
+    await expect(
+      loadConfiguredPlugins([derived], { environment: {} }),
+    ).resolves.toEqual([derived]);
+    expect(receivers).toEqual([derived]);
+    await expect(
+      loadConfiguredPlugins([derived, view("other")], { environment: {} }),
+    ).rejects.toThrow("derived getter view");
+    expect(createPlugin).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])(
+    "rejects explicit, environment and mixed conflicts without constructing plugins (reverse=%s)",
+    async (reverse) => {
+      const views = [view("first view"), view("second view")];
+      const [first, second] = reverse ? [...views].reverse() : views;
+      const modules = { first: moduleFor(first), second: moduleFor(second) };
       const importModule = async (specifier: string) =>
         modules[specifier as keyof typeof modules];
       for (const [explicit, configured] of [
-        [[first(), second()], ""],
+        [[first, second], ""],
         [[], "first,second"],
-        [[first()], "second"],
+        [[first], "second"],
       ] as const) {
         await expect(
           loadConfiguredPlugins(explicit, {
@@ -509,267 +949,84 @@ describe("exclusive plugin registration", () => {
         ).rejects.toThrow(
           /Plugins '(first|second) view' and '(first|second) view'.*Configure only one/,
         );
+        expect(first.createPlugin).not.toHaveBeenCalled();
+        expect(second.createPlugin).not.toHaveBeenCalled();
       }
     },
   );
-  it("allows no view, either single view, and unrelated plugins", async () => {
-    for (const plugins of [
+
+  it("rejects explicit conflicts before importing any configured module", async () => {
+    const first = view("first view");
+    const second = view("second view");
+    const importModule = jest.fn(async () =>
+      moduleFor(view("metrics", "metrics")),
+    );
+    await expect(
+      loadConfiguredPlugins([first, second], {
+        environment: { DURABLE_EXECUTION_PLUGINS: "metrics" },
+        importModule,
+      }),
+    ).rejects.toThrow("mutually exclusive");
+    expect(importModule).not.toHaveBeenCalled();
+    expect(first.createPlugin).not.toHaveBeenCalled();
+    expect(second.createPlugin).not.toHaveBeenCalled();
+  });
+
+  it("accepts zero/single views and unrelated factories without eager creation", async () => {
+    const first = view("first view");
+    const second = view("second view");
+    const metrics = view("metrics", "metrics");
+    const unrelated = { createPlugin: () => new ExplicitPlugin() };
+    for (const factories of [
       [],
-      [new First()],
-      [new Second()],
-      [new First(), new ExplicitPlugin()],
-      [
-        new First(),
-        {
-          async onInvocationStart() {},
-          [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: {
-            name: "metrics",
-            exclusiveGroup: "metrics",
-          },
-        },
-      ],
+      [first],
+      [second],
+      [first, unrelated],
+      [first, metrics],
     ]) {
       await expect(
-        loadConfiguredPlugins(plugins, { environment: {} }),
-      ).resolves.toEqual(plugins);
+        loadConfiguredPlugins(factories, { environment: {} }),
+      ).resolves.toEqual(factories);
     }
+    expect(first.createPlugin).not.toHaveBeenCalled();
+    expect(second.createPlugin).not.toHaveBeenCalled();
+    expect(metrics.createPlugin).not.toHaveBeenCalled();
   });
-  it("rejects two registrations of the same view", async () => {
-    await expect(
-      loadConfiguredPlugins([new First(), new First()], { environment: {} }),
-    ).rejects.toThrow(PluginLoadError);
-  });
-});
 
-describe("legacy unrelated registration properties", () => {
-  it("does not interpret or read an ordinary registration field", async () => {
-    class LegacyPlugin implements DurableInstrumentationPlugin {
-      registration = 42;
-      async onInvocationStart() {}
-    }
+  it("rejects the same registered view twice", async () => {
+    const factory = view("first view");
+    await expect(
+      loadConfiguredPlugins([factory, factory], { environment: {} }),
+    ).rejects.toBeInstanceOf(PluginLoadError);
+    expect(factory.createPlugin).not.toHaveBeenCalled();
+  });
+
+  it("ignores ordinary registration properties and unadvertised symbol getters", async () => {
     const getter = {
-      async onInvocationStart() {},
+      createPlugin: () => new ExplicitPlugin(),
       get registration(): never {
-        throw new Error("not SDK metadata");
+        throw new Error("ordinary property");
       },
     };
-    const plugins = [new LegacyPlugin(), getter];
-    await expect(
-      loadConfiguredPlugins(plugins, { environment: {} }),
-    ).resolves.toEqual(plugins);
-  });
-
-  it("does not call an unmarked registration callback", async () => {
-    const registration = jest.fn(() => ({ exclusiveGroup: "views" }));
-    const plugin = { registration, async onInvocationStart() {} };
-    await expect(
-      loadConfiguredPlugins([plugin, plugin], { environment: {} }),
-    ).resolves.toEqual([plugin, plugin]);
-    expect(registration).not.toHaveBeenCalled();
-  });
-});
-
-describe("static exclusive plugin registration", () => {
-  class First implements DurableInstrumentationPlugin {
-    static readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION] = {
-      exclusiveGroup: "views",
-    };
-    async onInvocationStart(): Promise<void> {}
-  }
-  class Second implements DurableInstrumentationPlugin {
-    static readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION] = {
-      exclusiveGroup: "views",
-    };
-    async onInvocationStart(): Promise<void> {}
-  }
-
-  it.each([false, true])(
-    "rejects dynamic and mixed conflicts before any selected factory runs (reverse=%s)",
-    async (reverse) => {
-      const [A, B] = reverse ? [Second, First] : [First, Second];
-      for (const mixed of [false, true]) {
-        const unrelated = jest.fn(() => new ExplicitPlugin());
-        const first = jest.fn(() => new A());
-        const second = jest.fn(() => new B());
-        const modules = {
-          unrelated: moduleFor(providerFor(ExplicitPlugin, unrelated)),
-          first: moduleFor(providerFor(A, first)),
-          second: moduleFor(providerFor(B, second)),
-        };
-        await expect(
-          loadConfiguredPlugins(mixed ? [new A()] : [], {
-            environment: {
-              DURABLE_EXECUTION_PLUGINS: mixed
-                ? "unrelated,second"
-                : "unrelated,first,second",
-            },
-            importModule: async (specifier) =>
-              modules[specifier as keyof typeof modules],
-          }),
-        ).rejects.toThrow(/Plugins '(First|Second)' and '(First|Second)'/);
-        expect(unrelated).not.toHaveBeenCalled();
-        expect(first).not.toHaveBeenCalled();
-        expect(second).not.toHaveBeenCalled();
-      }
-    },
-  );
-
-  it("inherits exclusivity and names the actual subclasses", async () => {
-    class CustomFirst extends First {}
-    class CustomSecond extends Second {}
-    await expect(
-      loadConfiguredPlugins([new CustomFirst(), new CustomSecond()], {
-        environment: {},
-      }),
-    ).rejects.toThrow("Plugins 'CustomFirst' and 'CustomSecond'");
-  });
-
-  it.each([false, true])(
-    "retains inherited constraints when a subclass declares its own group (reverse=%s)",
-    async (reverse) => {
-      class RegroupedFirst extends First {
-        static readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION] = {
-          exclusiveGroup: "custom",
-        };
-      }
-      const classes = reverse
-        ? [Second, RegroupedFirst]
-        : [RegroupedFirst, Second];
-      for (const explicitCount of [0, 1, 2]) {
-        const factories = classes.map((Plugin) => jest.fn(() => new Plugin()));
-        await expect(
-          loadConfiguredPlugins(
-            classes.slice(0, explicitCount).map((Plugin) => new Plugin()),
-            {
-              environment: {
-                DURABLE_EXECUTION_PLUGINS: ["first", "second"]
-                  .slice(explicitCount)
-                  .join(","),
-              },
-              importModule: async (specifier) => {
-                const i = specifier === "first" ? 0 : 1;
-                return moduleFor(providerFor(classes[i], factories[i]));
-              },
-            },
-          ),
-        ).rejects.toThrow("group 'views'");
-        for (const factory of factories) expect(factory).not.toHaveBeenCalled();
-      }
-    },
-  );
-
-  it("enforces added groups throughout the constructor chain", async () => {
-    class Middle extends First {
-      static readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION] = {
-        exclusiveGroup: "middle",
-      };
-    }
-    class Leaf extends Middle {
-      static readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION] = {
-        exclusiveGroup: "leaf",
-      };
-    }
-    const plugin = new Leaf();
-    await expect(
-      loadConfiguredPlugins([plugin], { environment: {} }),
-    ).resolves.toEqual([plugin]);
-    for (const exclusiveGroup of ["views", "middle", "leaf"]) {
-      const other = {
-        async onInvocationStart() {},
-        [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: {
-          name: "other",
-          exclusiveGroup,
+    const proxy = new Proxy(
+      { createPlugin: () => new ExplicitPlugin() },
+      {
+        get(target, property, receiver) {
+          if (typeof property === "symbol") throw new Error("unknown symbol");
+          return Reflect.get(target, property, receiver);
         },
-      };
-      await expect(
-        loadConfiguredPlugins([plugin, other], { environment: {} }),
-      ).rejects.toThrow(`group '${exclusiveGroup}'`);
-    }
-  });
-
-  it("deduplicates repeated inherited groups within one registration", async () => {
-    class Repeated extends First {
-      static readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION] = {
-        exclusiveGroup: "views",
-      };
-    }
-    const plugin = new Repeated();
-    await expect(
-      loadConfiguredPlugins([plugin], { environment: {} }),
-    ).resolves.toEqual([plugin]);
-    await expect(
-      loadConfiguredPlugins([plugin, plugin], { environment: {} }),
-    ).rejects.toThrow("group 'views'");
-  });
-
-  it("preserves the concrete receiver of inherited metadata getters", async () => {
-    class Base implements DurableInstrumentationPlugin {
-      static get [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]() {
-        // biome-ignore lint/complexity/noThisInStatic: This checks the concrete receiver of inherited metadata getters.
-        return { exclusiveGroup: `getter:${this.name}` };
-      }
-      async onInvocationStart() {}
-    }
-    class Child extends Base {}
-    const other = {
-      async onInvocationStart() {},
-      [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: {
-        name: "other",
-        exclusiveGroup: "getter:Child",
       },
-    };
-    await expect(
-      loadConfiguredPlugins([new Child(), other], { environment: {} }),
-    ).rejects.toThrow("group 'getter:Child'");
+    );
+    const factories = [
+      { createPlugin: () => new ExplicitPlugin(), registration: 42 },
+      getter,
+      proxy,
+    ];
+    const loaded = await loadConfiguredPlugins(factories, { environment: {} });
+    expect(loaded).toHaveLength(factories.length);
+    // Compare identities without Jest itself probing the guarded symbol getter.
+    expect(loaded.every((factory, index) => factory === factories[index])).toBe(
+      true,
+    );
   });
-
-  it("validates actual subclasses returned by broader provider declarations", async () => {
-    class Base implements DurableInstrumentationPlugin {
-      async onInvocationStart(): Promise<void> {}
-    }
-    class A extends Base {
-      static readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION] = {
-        exclusiveGroup: "views",
-      };
-    }
-    class B extends A {}
-    const modules = {
-      first: moduleFor(providerFor(Base, () => new A())),
-      second: moduleFor(providerFor(Base, () => new B())),
-    };
-    await expect(
-      loadConfiguredPlugins([], {
-        environment: { DURABLE_EXECUTION_PLUGINS: "first,second" },
-        importModule: async (specifier) =>
-          modules[specifier as keyof typeof modules],
-      }),
-    ).rejects.toThrow("Plugins 'A' and 'B'");
-  });
-
-  it("constructs each valid dynamic plugin once and retains its instance", async () => {
-    const plugin = new First();
-    const create = jest.fn(() => plugin);
-    const result = await loadConfiguredPlugins([], {
-      environment: { DURABLE_EXECUTION_PLUGINS: "first" },
-      importModule: async () => moduleFor(providerFor(First, create)),
-    });
-    expect(create).toHaveBeenCalledTimes(1);
-    expect(result).toEqual([plugin]);
-    expect(result[0]).toBe(plugin);
-  });
-});
-
-it("does not probe symbol getters on legacy plugins that did not opt into registration metadata", async () => {
-  const legacy = new Proxy(
-    { async onInvocationStart() {} },
-    {
-      get(target, property, receiver) {
-        if (typeof property === "symbol")
-          throw new Error("unsupported symbol getter");
-        return Reflect.get(target, property, receiver);
-      },
-    },
-  );
-  const result = await loadConfiguredPlugins([legacy], { environment: {} });
-  expect(result[0]).toBe(legacy);
 });
