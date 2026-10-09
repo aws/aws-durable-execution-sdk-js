@@ -159,12 +159,19 @@ afterEach(async () => {
 
 describe("InvocationOtelPlugin", () => {
   describe("onInvocationStart", () => {
-    it("creates an invocation span with durable.execution.arn attribute", async () => {
-      const info = makeInvocationInfo();
+    it("creates a resumed invocation and its ARN-correlated anchor before terminal completion", async () => {
+      const info = makeInvocationInfo({ isFirstInvocation: false });
       await plugin.onInvocationStart(info);
+      const anchor = findSpan("DurableExecutionRoot");
+      expect(anchor).toBeDefined();
+      expect(anchor!.attributes["durable.execution.arn"]).toBe(TEST_ARN);
+      expect(anchor!.startTime).toEqual(anchor!.endTime);
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
       const spans = getExportedSpans();
+      expect(
+        spans.filter((span) => span.name === "DurableExecutionRoot"),
+      ).toHaveLength(1);
       const invocationSpan = findSpan("Invocation");
       expect(invocationSpan).toBeDefined();
       expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(
