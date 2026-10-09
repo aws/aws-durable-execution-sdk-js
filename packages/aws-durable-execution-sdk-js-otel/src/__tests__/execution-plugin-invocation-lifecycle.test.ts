@@ -160,6 +160,115 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     },
   );
 
+  it.each([
+    ["SUCCEEDED", "STARTED", true],
+    ["STARTED", "STARTED", false],
+    ["SUCCEEDED", "SUCCEEDED", false],
+    [undefined, "STARTED", false],
+  ] as const)(
+    "uses history only to recognize an unfinished parent below a completed ancestor (%s/%s)",
+    async (ancestorStatus, parentStatus, abandoned) => {
+      const plugin = new ExecutionOtelPlugin({
+        tracerProviderFactory,
+        contextExtractor: () => undefined,
+      });
+      const parent: OperationInfo = {
+        id: "skipped-parent",
+        name: "named",
+        type: "CONTEXT",
+        subType: "WaitForCallback",
+        status: parentStatus,
+        parentId: "scope",
+        isReplay: true,
+      };
+      const ancestor: OperationInfo = {
+        id: "scope",
+        name: "scope",
+        type: "CONTEXT",
+        status: ancestorStatus,
+        isReplay: true,
+      };
+      const completion: OperationInfo = Object.freeze({
+        id: "external",
+        name: "named-callback",
+        type: "CALLBACK",
+        parentId: parent.id,
+        status: "SUCCEEDED",
+        isReplay: false,
+      });
+      const operations = {
+        [parent.id]: parent,
+        [ancestor.id]: ancestor,
+        [completion.id]: completion,
+      };
+      await plugin.onInvocationStart(
+        makeInvocationInfo({
+          operations,
+          updatedOperations: { [completion.id]: completion },
+        }),
+      );
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: "PENDING", operations }),
+      );
+      const span = findSpan(exporter, "named-callback")!;
+      expect(span.parentSpanContext?.spanId).toBe(
+        abandoned
+          ? deriveWorkflowSpanId(TEST_ARN)
+          : deriveSpanIdFromOperationId(parent.id, TEST_ARN),
+      );
+      expect(findSpan(exporter, "named")).toBeUndefined();
+      expect(completion.parentId).toBe(parent.id);
+    },
+  );
+
+  it("drains a queued completion before its live context ends without a duplicate at invocation end", async () => {
+    const plugin = new ExecutionOtelPlugin({
+      tracerProviderFactory,
+      contextExtractor: () => undefined,
+    });
+    const start = makeInvocationInfo();
+    const parent: OperationInfo = {
+      id: "parent",
+      name: "parent",
+      type: "CONTEXT",
+      status: "STARTED",
+      isReplay: false,
+    };
+    const completion: OperationInfo = Object.freeze({
+      id: "external",
+      name: "external",
+      type: "CALLBACK",
+      parentId: parent.id,
+      status: "SUCCEEDED",
+      isReplay: false,
+    });
+    await plugin.onInvocationStart(start);
+    await plugin.onOperationStart(parent);
+    await plugin.onOperationChange({
+      ...start,
+      operations: { parent, external: completion },
+      updatedOperations: { external: completion },
+    });
+    await plugin.onOperationEnd({ ...parent, status: "SUCCEEDED" });
+    const exportedAtParentEnd = exporter
+      .getFinishedSpans()
+      .map((span) => span.name);
+    expect(exportedAtParentEnd).toEqual([
+      "DurableExecutionRoot",
+      "external",
+      "parent",
+    ]);
+    await plugin.onInvocationEnd(makeInvocationEndInfo());
+    const span = findSpan(exporter, "external")!;
+    expect(span.parentSpanContext?.spanId).toBe(
+      deriveSpanIdFromOperationId(parent.id, TEST_ARN),
+    );
+    expect(
+      exporter.getFinishedSpans().filter((span) => span.name === "external"),
+    ).toHaveLength(1);
+    expect(completion.parentId).toBe(parent.id);
+  });
+
   describe("Invocation_Span provider behavior", () => {
     it("creates an Invocation span as child of ambient context with the global provider", async () => {
       const plugin = new ExecutionOtelPlugin();

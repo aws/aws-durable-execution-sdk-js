@@ -303,9 +303,10 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       // A terminal handler can abandon an unawaited child. Its still-open
       // placeholder will be discarded below, so it cannot parent this export.
       const parentId =
-        terminal &&
-        operation.parentId &&
-        this.operationContexts.has(operation.parentId)
+        (terminal &&
+          operation.parentId &&
+          this.operationContexts.has(operation.parentId)) ||
+        this.hasAbandonedParent(operation.parentId, info.operations)
           ? undefined
           : operation.parentId;
       await this.onOperationEnd({ ...operation, parentId, isReplay: false });
@@ -607,6 +608,16 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       return;
     }
 
+    // A queued external completion can precede its live context's end even
+    // when traversal never awaited it. Export it while that parent is open.
+    if (info.type === "CONTEXT" && !info.isReplay) {
+      for (const child of this.externalCompletions.pending.values()) {
+        if (child.parentId === info.id) {
+          await this.onOperationEnd({ ...child, isReplay: false });
+        }
+      }
+    }
+
     // Release placeholders even when this is a previously observed completion.
     const started = this.operationStarts.get(info.id);
     this.operationContexts.delete(info.id);
@@ -719,6 +730,36 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       return trace.setSpanContext(context.active(), workflowContext);
     }
     return context.active();
+  }
+
+  private hasAbandonedParent(
+    parentId: string | undefined,
+    operations: Record<string, OperationInfo> = {},
+  ): boolean {
+    const parent = parentId ? operations[parentId] : undefined;
+    if (
+      parent?.type !== "CONTEXT" ||
+      !["STARTED", "READY", "PENDING"].includes(parent.status ?? "")
+    )
+      return false;
+
+    // Replay skips a completed context and all of its body. An unfinished
+    // descendant below it cannot later materialize its execution-view span.
+    const visited = new Set([parent.id]);
+    let ancestorId = parent.parentId;
+    while (ancestorId && !visited.has(ancestorId)) {
+      visited.add(ancestorId);
+      const ancestor = operations[ancestorId];
+      if (ancestor?.type !== "CONTEXT") return false;
+      if (
+        ["SUCCEEDED", "FAILED", "TIMED_OUT", "STOPPED", "CANCELLED"].includes(
+          ancestor.status ?? "",
+        )
+      )
+        return true;
+      ancestorId = ancestor.parentId;
+    }
+    return false;
   }
 
   private earliestStart(

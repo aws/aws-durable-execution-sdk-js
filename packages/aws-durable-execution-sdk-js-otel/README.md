@@ -709,7 +709,16 @@ At a terminal invocation boundary, the execution view parents a deferred
 completion to `Workflow` if its direct parent is still an open local placeholder
 that will be discarded. It does not invent a completion or span for that
 abandoned context. Pending or retrying invocations retain the parent identity
-because a later invocation can still complete and export that context.
+because a later invocation can still complete and export that context. An
+exception is an unfinished parent below a known completed context in checkpoint
+history: replay skips that whole branch, so its deferred completion also uses
+`Workflow`. Missing or inconclusive ancestry is not treated as proof of abandonment.
+
+A completion notification already queued when its live context ends is exported
+before that context closes, preserving its OTel parent. Notifications delivered
+after the end hook retain the existing late-parent fallback; this does not add
+clock comparisons, retime supplied timestamps, or guarantee arbitrary cross-clock
+containment.
 
 Notifications and operation-end hooks are deduplicated within each invocation.
 Normal replay does not re-export stored external completions. Deduplication is

@@ -49,13 +49,16 @@ describe("operation plugin error metadata", () => {
     },
     { FutureDetail: "preserve" },
     { FutureDetail: undefined },
-  ])("retains provided error information (%j)", (error) => {
-    const operation = callback(error as ErrorObject);
-    expect(toOperationInfo(operation).error).toBeInstanceOf(
-      DurableOperationError,
-    );
-    expect(operation.CallbackDetails?.Error).toBe(error);
-  });
+  ])(
+    "retains existing conversion for nonempty or unrecognized error shapes (%j)",
+    (error) => {
+      const operation = callback(error as ErrorObject);
+      expect(toOperationInfo(operation).error).toBeInstanceOf(
+        DurableOperationError,
+      );
+      expect(operation.CallbackDetails?.Error).toBe(error);
+    },
+  );
 
   it.each(["StepDetails", "ContextDetails", "ChainedInvokeDetails"] as const)(
     "does not invent error metadata for empty %s",

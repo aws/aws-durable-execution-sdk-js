@@ -34,8 +34,9 @@ export function toOperationInfo(operation?: Operation): OperationInfo {
       operation?.CallbackDetails?.Result ??
       operation?.ContextDetails?.Result ??
       operation?.ChainedInvokeDetails?.Result,
-    // Empty wire error objects carry no error details. Keep present values
-    // (including empty strings/arrays) and unknown fields for compatibility.
+    // Normalize only empty or known-undefined wire errors. Present values and
+    // unrecognized shapes retain the existing converter behavior; this does not
+    // add support for exposing arbitrary unknown fields on the resulting Error.
     error:
       errorObject &&
       Object.entries(errorObject).some(

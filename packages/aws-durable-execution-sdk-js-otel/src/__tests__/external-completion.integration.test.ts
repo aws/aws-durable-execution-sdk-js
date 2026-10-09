@@ -312,6 +312,85 @@ describe.each([
     30000,
   );
 
+  it("retains a completed callback's parent when its notification precedes the context end", async () => {
+    const live = gate();
+    const release = gate();
+    const changes: OperationChangeInfo[] = [];
+    const ends: OperationEndInfo[] = [];
+    const deliveryOrder: string[] = [];
+    const childBody = jest.fn(async (child: DurableContext) => {
+      await child.createCallback("external");
+      await child.step("inside", async () => {
+        live.open();
+        await release.opened;
+        return "saved";
+      });
+      return "submitted";
+    });
+    const handler = withDurableExecution(
+      async (_, ctx) => ctx.runInChildContext("scope", childBody),
+      {
+        plugins: [
+          plugin,
+          {
+            async onOperationChange(info) {
+              changes.push(info);
+              if (
+                Object.values(info.updatedOperations).some(
+                  (operation) =>
+                    operation.name === "external" &&
+                    operation.status === "SUCCEEDED",
+                )
+              )
+                deliveryOrder.push("callback-update");
+            },
+            async onOperationEnd(info) {
+              ends.push(info);
+              if (info.name === "scope") deliveryOrder.push("context-end");
+            },
+          },
+        ],
+      },
+    );
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+    const execution = runner.run();
+    await live.opened;
+    const external = runner.getOperation("external");
+    await external.waitForData(WaitingOperationStatus.STARTED);
+    await external.sendCallbackSuccess("external result");
+    await external.waitForData(WaitingOperationStatus.COMPLETED);
+    release.open();
+    const result = await execution;
+    expect(result.getStatus()).toBe("SUCCEEDED");
+    expect(result.getResult()).toBe("submitted");
+    expect(childBody).toHaveBeenCalledTimes(1);
+    const completion = changes
+      .flatMap((info) => Object.values(info.updatedOperations))
+      .find((info) => info.name === "external" && info.status === "SUCCEEDED")!;
+    const parentEnd = ends.find((info) => info.name === "scope")!;
+    expect(completion).toBeDefined();
+    expect(parentEnd).toBeDefined();
+    expect(completion.parentId).toBe(parentEnd.id);
+    expect(completion.endTimestamp).toBeDefined();
+    // The local engine omits the context's optional backend EndTimestamp.
+    // Observe the real notification/end-hook ordering, without inventing one.
+    expect(deliveryOrder.indexOf("callback-update")).toBeGreaterThanOrEqual(0);
+    expect(deliveryOrder.indexOf("callback-update")).toBeLessThan(
+      deliveryOrder.indexOf("context-end"),
+    );
+    const finished = exporter.getFinishedSpans();
+    const child = finished.find((span) => span.name === "scope")!;
+    const completed = finished.filter(
+      (span) =>
+        span.name === "external" &&
+        span.attributes["durable.operation.status"] === "SUCCEEDED",
+    );
+    expect(completed).toHaveLength(1);
+    expect(completed[0].parentSpanContext?.spanId).toBe(
+      child.spanContext().spanId,
+    );
+  }, 30000);
+
   it("exports a terminal deferred completion without an abandoned child placeholder parent", async () => {
     const live = gate();
     const release = gate();

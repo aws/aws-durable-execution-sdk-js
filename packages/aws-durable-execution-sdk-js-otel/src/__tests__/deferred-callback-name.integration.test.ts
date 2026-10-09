@@ -140,6 +140,15 @@ it.each([ExecutionOtelPlugin, InvocationOtelPlugin])(
         "named-callback",
       );
       expect(terminal[0].parentSpanContext).toBeDefined();
+      expect(
+        exporter
+          .getFinishedSpans()
+          .some(
+            (span) =>
+              span.spanContext().spanId ===
+              terminal[0].parentSpanContext?.spanId,
+          ),
+      ).toBe(true);
       expect(terminal[0].spanContext().traceId).toMatch(/^[a-f0-9]{32}$/);
     } finally {
       release();
