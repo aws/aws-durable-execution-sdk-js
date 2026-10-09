@@ -320,6 +320,66 @@ The `Invocation` span may still nest under a same-trace ambient handler span —
 see [Invocation parent](#invocation-parent) — without changing the execution
 ancestor the `Workflow` span joins.
 
+### Synthetic root export lifecycle
+
+When fallback tracing is sampled, the backend supplies `executionStartTimestamp`,
+and the configured SDK tracer allows the durable sampler wrapper to be installed,
+both views create and end `DurableExecutionRoot` during each invocation's start
+hook. Its start and end are both that backend timestamp. The normal
+invocation-boundary flush can export it before a `PENDING` or `RETRYING` invocation
+returns. A retry with checkpoint history or an intermediate resume can therefore
+recover an earlier missing export, including when tracing became available only
+after the first invocation. Recovery requires a later sampled invocation to
+actually deliver its copy; stopping or timing out before any successful delivery
+can still leave the execution without an exported root. This policy does not rely
+on `isFirstInvocation`: a retry after checkpointed work runs in replay mode, while
+an attempt without that history can still be identified as the first invocation.
+
+Each sampled invocation emits at most one anchor: a terminal invocation does not
+emit a second copy if its start hook already created one. Additional copies on
+resumes are intentional, allowing consumers to deduplicate by trace ID and span ID.
+The SDK-owned span fields are identical when the execution's trace identity,
+backend start timestamp and instrumentation configuration remain stable. The
+anchor carries `durable.execution.arn`, but no terminal status, request ID or
+execution duration; `Workflow` continues to carry the duration and outcome.
+`DurableExecutionRoot` is a zero-duration identity span: its descendants end after
+it, which some trace viewers or containment validators may flag.
+
+A forwarding tracer that hides the configured sampler retains the existing
+terminal-only root creation path. Creating an early root through that tracer would
+query the hidden sampler independently and could sample a root after dropping its
+Invocation child. The plugin does not add that early sampler call; the underlying
+provider still controls sampling, and these tracers do not receive early-anchor
+recovery. A terminal backup can recover a missing first export only if a sampled
+terminal invocation actually runs and delivers it.
+
+Resources belong to the configured provider. Resource attributes such as
+`faas.instance` can differ across execution environments even for identical
+anchor span content; backends may retain whichever resource accompanies their
+chosen copy. Span processors that enrich these spans must likewise avoid
+invocation-varying span fields when relying on identity-based deduplication.
+Export delivery and flushing remain the provider/layer's responsibility. The
+plugin awaits `forceFlush()` when its provider exposes it, but a killed invocation
+or a failed export cannot guarantee delivery; this is not exactly-once export.
+
+If a caller omits `executionStartTimestamp`, the plugin retains terminal-only
+synthetic-root materialization with its existing timestamp fallback. It does not
+invent a wall-clock-based early anchor. These callers do not get the early-anchor
+or identical-timestamp guarantee; the backend timestamp must be consistently
+supplied to enable that contract. Complete propagated remote parents are never
+materialized by the SDK. With the durable sampler wrapper installed, explicit
+`NOT_SAMPLED` executions emit no root.
+
+With the durable sampler wrapper installed, sampling is resolved once per
+invocation and the anchor reuses that decision without a second sampler query.
+Explicit upstream decisions or a deterministic trace-based policy (for example a
+ratio sampler) keep anchor and terminal `Workflow` decisions consistent across
+resumes. A non-deterministic custom sampler can select different invocations,
+leaving an anchor without a sampled terminal `Workflow`. Decisions are not
+persisted. These once-per-invocation guarantees do not apply to an opaque tracer:
+its provider can query its sampler independently for each span, including the
+existing terminal root; the early-anchor path is skipped to preserve that baseline.
+
 ### Workflow identity and lifecycle
 
 `Workflow` is an `INTERNAL` span that **joins the execution trace** by parenting
@@ -339,7 +399,7 @@ The plugins carry the same `Workflow` span identity on each invocation as a
 non-recording span context, and create the single recording `Workflow` span only
 when the execution reaches `SUCCEEDED` or `FAILED`, backdated to the execution
 start. `PENDING` and `RETRYING` invocations create no recording `Workflow` span,
-so none is ever left unended, and exactly one `Workflow` root is exported for the
+so none is ever left unended, and one terminal `Workflow` span is exported for the
 durable execution while intermediate invocation spans export normally. The
 non-recording context carries the execution's sampling decision, so operations
 under it are sampled consistently with the eventual root. In-flight attempt spans
