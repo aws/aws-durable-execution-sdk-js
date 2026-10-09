@@ -695,6 +695,16 @@ exported at invocation end. Supplied operation timestamps, parent identity,
 status, and error details are preserved in the execution view; the invocation
 view completes the live segment or emits a linked continuation.
 
+A failed invoke still rejects with `InvokeError` when backend error details are
+absent. Its telemetry retains the absent error metadata in live, resumed, and
+deferred delivery, rather than inventing an exception. Provided error details
+continue through the existing metadata converter.
+
+For a named `waitForCallback`, a deferred inner callback recovers its derived
+`<name>-callback` display name from a known `WaitForCallback` parent when replay
+skips that branch. This does not change checkpointed names, operation identity,
+parent identity, or the source notification; explicit names remain unchanged.
+
 Notifications and operation-end hooks are deduplicated within each invocation.
 Normal replay does not re-export stored external completions. Deduplication is
 not persisted: redelivery after a failed invocation can export the completion

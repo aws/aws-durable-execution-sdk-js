@@ -234,7 +234,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       },
       invocationParentContext,
     );
-    this.externalCompletions.observe(info.updatedOperations);
+    this.externalCompletions.observe(info.updatedOperations, info.operations);
 
     // Each sampled invocation can recover an earlier undelivered anchor. An
     // opaque tracer retains terminal-only creation: without the sampler wrapper,
@@ -873,7 +873,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
 
   async onOperationChange(info: OperationChangeInfo): Promise<void> {
     if (this.tracingEnabled) {
-      this.externalCompletions.observe(info.updatedOperations);
+      this.externalCompletions.observe(info.updatedOperations, info.operations);
     }
   }
 

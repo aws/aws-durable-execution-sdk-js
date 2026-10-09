@@ -306,9 +306,6 @@ export const createInvokeHandler = (
       await plugin.onOperationEnd?.({
         ...operationInfo,
         isReplay: false,
-        error: invokeError?.ErrorMessage
-          ? new Error(invokeError.ErrorMessage)
-          : new Error("Invoke failed"),
       });
 
       if (invokeError) {

@@ -10,6 +10,7 @@ import {
   NodeTracerProvider,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
+import { ExternalCompletions } from "../external-completions";
 import { ExecutionOtelPlugin } from "../execution-plugin";
 import { InvocationOtelPlugin } from "../invocation-plugin";
 import { deriveSpanIdFromOperationId } from "../deterministic-id-generator";
@@ -354,5 +355,64 @@ describe.each([
     await current.onInvocationEnd({ ...invocation, status: "PENDING" });
     expect(spans()).toHaveLength(1);
     expect(spans()[0].status.code).toBe(SpanStatusCode.UNSET);
+  });
+});
+
+describe("deferred callback display metadata", () => {
+  it("derives a missing name from its known WaitForCallback parent without changing source metadata or export deduplication", () => {
+    const pending = new ExternalCompletions();
+    const raw = Object.freeze({ ...operation, name: undefined });
+    const parent = Object.freeze({
+      ...operation,
+      id: "parent",
+      type: "CONTEXT",
+      subType: "WaitForCallback",
+      name: "approval",
+    });
+    pending.observe({ external: raw }, { parent, external: raw });
+    expect(pending.pending.get("external")).toEqual({
+      ...raw,
+      name: "approval-callback",
+    });
+    expect(raw.name).toBeUndefined();
+    expect(pending.pending.get("external")!.startTimestamp).toBe(
+      raw.startTimestamp,
+    );
+    pending.markExported(raw);
+    pending.observe({ external: raw }, { parent });
+    expect(pending.pending.size).toBe(0);
+    expect(pending.shouldSkip({ ...raw, isReplay: true })).toBe(true);
+  });
+
+  it("preserves explicit callback names and leaves unrelated or unknown parents unchanged", () => {
+    const parent = {
+      ...operation,
+      id: "parent",
+      type: "CONTEXT",
+      subType: "WaitForCallback",
+      name: "approval",
+    };
+    for (const name of ["explicit", ""]) {
+      const pending = new ExternalCompletions();
+      const raw = { ...operation, name };
+      pending.observe({ external: raw }, { parent });
+      expect(pending.pending.get("external")).toBe(raw);
+    }
+    const parentHistories: Array<Record<string, OperationInfo>> = [
+      {},
+      { parent: { ...parent, subType: "RunInChildContext" } },
+      { parent: { ...parent, type: "STEP" } },
+      { parent: { ...parent, name: undefined } },
+    ];
+    for (const parents of parentHistories) {
+      const pending = new ExternalCompletions();
+      const raw = { ...operation, name: undefined };
+      pending.observe({ external: raw }, parents);
+      expect(pending.pending.get("external")).toBe(raw);
+    }
+    const pending = new ExternalCompletions();
+    const wait = { ...operation, type: "WAIT", name: undefined };
+    pending.observe({ external: wait }, { parent });
+    expect(pending.pending.get("external")).toBe(wait);
   });
 });
