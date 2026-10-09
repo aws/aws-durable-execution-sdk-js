@@ -322,23 +322,36 @@ ancestor the `Workflow` span joins.
 
 ### Synthetic root export lifecycle
 
-When fallback tracing is sampled and the backend supplies `executionStartTimestamp`,
-both views create and end `DurableExecutionRoot` during the first invocation's
-start hook. Its start and end are both that backend timestamp, so it is a
-zero-duration identity anchor. The normal invocation-boundary flush can export it
-before a `PENDING` or `RETRYING` invocation returns. If the execution is later
-stopped or times out while suspended, no further SDK hook is required to create
-that already-ended ancestor.
+When fallback tracing is sampled, the backend supplies `executionStartTimestamp`,
+and the configured SDK tracer allows the durable sampler wrapper to be installed,
+both views create and end `DurableExecutionRoot` during each invocation's start
+hook. Its start and end are both that backend timestamp. The normal
+invocation-boundary flush can export it before a `PENDING` or `RETRYING` invocation
+returns. A retry with checkpoint history or an intermediate resume can therefore
+recover an earlier missing export, including when tracing became available only
+after the first invocation. Recovery requires a later sampled invocation to
+actually deliver its copy; stopping or timing out before any successful delivery
+can still leave the execution without an exported root. This policy does not rely
+on `isFirstInvocation`: a retry after checkpointed work runs in replay mode, while
+an attempt without that history can still be identified as the first invocation.
 
-A terminal invocation also exports the same anchor as a recovery copy, unless
-it was already created in that invocation. Thus an execution that completes in
-its first invocation emits one copy; first-invocation retries can emit further
-copies, intermediate resumes do not, and a later terminal invocation emits a
-backup. This backup covers a first invocation that never reached its flush.
+Each sampled invocation emits at most one anchor: a terminal invocation does not
+emit a second copy if its start hook already created one. Additional copies on
+resumes are intentional, allowing consumers to deduplicate by trace ID and span ID.
 The SDK-owned span fields are identical when the execution's trace identity,
 backend start timestamp and instrumentation configuration remain stable. The
-anchor has no terminal status, request ID or execution duration; `Workflow`
-continues to carry the duration and outcome.
+anchor carries `durable.execution.arn`, but no terminal status, request ID or
+execution duration; `Workflow` continues to carry the duration and outcome.
+`DurableExecutionRoot` is a zero-duration identity span: its descendants end after
+it, which some trace viewers or containment validators may flag.
+
+A forwarding tracer that hides the configured sampler retains the existing
+terminal-only root creation path. Creating an early root through that tracer would
+query the hidden sampler independently and could sample a root after dropping its
+Invocation child. The plugin does not add that early sampler call; the underlying
+provider still controls sampling, and these tracers do not receive early-anchor
+recovery. A terminal backup can recover a missing first export only if a sampled
+terminal invocation actually runs and delivers it.
 
 Resources belong to the configured provider. Resource attributes such as
 `faas.instance` can differ across execution environments even for identical
@@ -354,15 +367,18 @@ synthetic-root materialization with its existing timestamp fallback. It does not
 invent a wall-clock-based early anchor. These callers do not get the early-anchor
 or identical-timestamp guarantee; the backend timestamp must be consistently
 supplied to enable that contract. Complete propagated remote parents are never
-materialized by the SDK, and explicit `NOT_SAMPLED` executions emit no root.
+materialized by the SDK. With the durable sampler wrapper installed, explicit
+`NOT_SAMPLED` executions emit no root.
 
-Sampling is still resolved once per invocation. Explicit upstream decisions or
-a deterministic trace-based policy (for example a ratio sampler) keep the anchor
-and terminal `Workflow` decisions consistent across resumes. A non-deterministic
-custom sampler can select the first and terminal invocation differently, leaving
-an anchor without a sampled `Workflow`, or sampling only the terminal invocation
-and its backup anchor. This change does not persist sampling decisions or add a
-second sampler query for the anchor.
+With the durable sampler wrapper installed, sampling is resolved once per
+invocation and the anchor reuses that decision without a second sampler query.
+Explicit upstream decisions or a deterministic trace-based policy (for example a
+ratio sampler) keep anchor and terminal `Workflow` decisions consistent across
+resumes. A non-deterministic custom sampler can select different invocations,
+leaving an anchor without a sampled terminal `Workflow`. Decisions are not
+persisted. These once-per-invocation guarantees do not apply to an opaque tracer:
+its provider can query its sampler independently for each span, including the
+existing terminal root; the early-anchor path is skipped to preserve that baseline.
 
 ### Workflow identity and lifecycle
 

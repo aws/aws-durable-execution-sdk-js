@@ -233,9 +233,10 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       invocationParentContext,
     );
 
-    // End the anchor before user code runs. The invocation-boundary
-    // flush can send it even when this invocation subsequently suspends/retries.
-    if (info.isFirstInvocation && this.syntheticRootAnchorTimestamp) {
+    // Each sampled invocation can recover an earlier undelivered anchor. An
+    // opaque tracer retains terminal-only creation: without the sampler wrapper,
+    // an early anchor would independently query its hidden sampler again.
+    if (this.durableSampler && this.syntheticRootAnchorTimestamp) {
       this.createSyntheticRoot()?.end(this.syntheticRootAnchorTimestamp);
     }
   }
@@ -316,8 +317,8 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       this.executionAncestor &&
       (info.status === "SUCCEEDED" || info.status === "FAILED")
     ) {
-      // Re-export the identical stable anchor as a terminal backup. A first
-      // invocation that also terminates has already materialized it above.
+      // Keep terminal-only fallback for providers without an early anchor.
+      // An anchor already materialized in this invocation is not emitted twice.
       const syntheticRootSpan = this.createSyntheticRoot();
 
       const workflowSpanId = deriveWorkflowSpanId(this.executionArn);
@@ -352,8 +353,8 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       workflowSpan.end(endTime);
       syntheticRootSpan?.end(this.syntheticRootAnchorTimestamp ?? endTime);
     }
-    // PENDING/RETRYING never materializes Workflow. The first invocation may
-    // already have ended its stable synthetic anchor; resumes add no copy.
+    // PENDING/RETRYING never materializes Workflow. A sampled invocation may
+    // already have ended its stable synthetic anchor before customer code ran.
 
     // 4. Force flush the tracer provider
     if ("forceFlush" in this.tracerProvider) {
@@ -391,7 +392,10 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
           "DurableExecutionRoot",
           {
             kind: SpanKind.INTERNAL,
-            attributes: { "durable.execution.synthetic_root": true },
+            attributes: {
+              "durable.execution.synthetic_root": true,
+              "durable.execution.arn": this.executionArn,
+            },
             startTime:
               this.syntheticRootAnchorTimestamp ??
               this.executionStartTimestamp ??

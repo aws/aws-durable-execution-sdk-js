@@ -85,7 +85,10 @@ function assertAnchor(span: ReadableSpan) {
   expect(span.endTime).toEqual(expectedTime);
   expect(span.duration).toEqual([0, 0]);
   expect(span.status).toEqual({ code: SpanStatusCode.UNSET });
-  expect(span.attributes).toEqual({ "durable.execution.synthetic_root": true });
+  expect(span.attributes).toEqual({
+    "durable.execution.synthetic_root": true,
+    "durable.execution.arn": ARN,
+  });
 }
 
 describe.each(
@@ -101,6 +104,7 @@ describe.each(
       sampler?: Sampler;
       extractor?: ContextExtractor;
       instance?: string;
+      opaqueSampler?: boolean;
     } = {},
   ) {
     const exporter = new InMemorySpanExporter();
@@ -123,6 +127,20 @@ describe.each(
           ],
         });
         providers.push(provider);
+        if (options.opaqueSampler) {
+          return {
+            getTracer: (
+              ...args: Parameters<NodeTracerProvider["getTracer"]>
+            ) => {
+              const tracer = provider.getTracer(...args);
+              return {
+                startSpan: tracer.startSpan.bind(tracer),
+                startActiveSpan: tracer.startActiveSpan.bind(tracer),
+              };
+            },
+            forceFlush: () => provider.forceFlush(),
+          };
+        }
         return provider;
       },
     });
@@ -133,6 +151,138 @@ describe.each(
     trace.disable();
     context.disable();
     propagation.disable();
+  });
+
+  it("correlates every anchor with its execution ARN", async () => {
+    const { plugin, exporter } = session();
+    const info = start();
+    await plugin.onInvocationStart(info);
+    await plugin.onInvocationEnd(end(info, "PENDING"));
+    expect(roots(exporter)[0].attributes["durable.execution.arn"]).toBe(ARN);
+  });
+
+  it("preserves baseline sampler calls for opaque forwarding tracers", async () => {
+    const shouldSample = jest.fn(() => ({
+      decision: SamplingDecision.RECORD_AND_SAMPLED,
+    }));
+    const { plugin, exporter } = session({
+      opaqueSampler: true,
+      sampler: { shouldSample, toString: () => "opaque always on" },
+    });
+    const calls: number[] = [];
+    for (const [isFirstInvocation, status] of [
+      [true, "PENDING"],
+      [false, "PENDING"],
+      [false, "SUCCEEDED"],
+    ] as const) {
+      const before = shouldSample.mock.calls.length;
+      const info = start({ isFirstInvocation });
+      await plugin.onInvocationStart(info);
+      await plugin.onInvocationEnd(end(info, status));
+      calls.push(shouldSample.mock.calls.length - before);
+    }
+    expect(calls).toEqual([1, 1, 3]);
+    expect(roots(exporter)).toHaveLength(1);
+  });
+
+  it("does not export a lone early root when an opaque sampler drops Invocation", async () => {
+    let calls = 0;
+    const { plugin, exporter } = session({
+      opaqueSampler: true,
+      sampler: {
+        shouldSample: () => ({
+          decision:
+            ++calls === 1
+              ? SamplingDecision.NOT_RECORD
+              : SamplingDecision.RECORD_AND_SAMPLED,
+        }),
+        toString: () => "opaque reject first",
+      },
+    });
+    const info = start();
+    await plugin.onInvocationStart(info);
+    await plugin.onInvocationEnd(end(info, "PENDING"));
+    expect(exporter.getFinishedSpans()).toHaveLength(0);
+    expect(calls).toBe(1);
+  });
+
+  it("anchors an invocation sampled only in the middle of an execution", async () => {
+    let calls = 0;
+    const { plugin, exporter } = session({
+      sampler: {
+        shouldSample: () => ({
+          decision:
+            ++calls === 2
+              ? SamplingDecision.RECORD_AND_SAMPLED
+              : SamplingDecision.NOT_RECORD,
+        }),
+        toString: () => "middle only",
+      },
+    });
+    const emitted: number[] = [];
+    for (const [isFirstInvocation, status] of [
+      [true, "PENDING"],
+      [false, "PENDING"],
+      [false, "SUCCEEDED"],
+    ] as const) {
+      const before = roots(exporter).length;
+      const info = start({ isFirstInvocation });
+      await plugin.onInvocationStart(info);
+      await plugin.onInvocationEnd(end(info, status));
+      emitted.push(roots(exporter).length - before);
+    }
+    expect(emitted).toEqual([0, 1, 0]);
+    expect(calls).toBe(3);
+    const invocation = exporter
+      .getFinishedSpans()
+      .find((span) => span.name === "Invocation")!;
+    expect(invocation.parentSpanContext?.spanId).toBe(
+      roots(exporter)[0].spanContext().spanId,
+    );
+  });
+
+  it("recovers an unflushed first anchor on a replay-mode suspension", async () => {
+    const lost = session({ batch: true });
+    await lost.plugin.onInvocationStart(start());
+    expect(lost.exporter.getFinishedSpans()).toHaveLength(0);
+    // The first process is lost before its end hook/flush. The retry has checkpoints.
+    const resumed = session({ batch: true });
+    const info = start({
+      isFirstInvocation: false,
+      requestId: "retry-with-history",
+    });
+    await resumed.plugin.onInvocationStart(info);
+    await resumed.plugin.onInvocationEnd(end(info, "PENDING"));
+    expect(lost.exporter.getFinishedSpans()).toHaveLength(0);
+    expect(roots(resumed.exporter)).toHaveLength(1);
+    expect(workflows(resumed.exporter)).toHaveLength(0);
+    // No terminal invocation is needed before a later service-side stop/timeout.
+  });
+
+  it("anchors a resume after a late-registered global provider", async () => {
+    const plugin = new Plugin({ contextExtractor: () => undefined });
+    const warning = jest.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const first = start();
+      await plugin.onInvocationStart(first);
+      await plugin.onInvocationEnd(end(first, "PENDING"));
+      const exporter = new InMemorySpanExporter();
+      const provider = new NodeTracerProvider({
+        spanProcessors: [new SimpleSpanProcessor(exporter)],
+      });
+      providers.push(provider);
+      provider.register();
+      const info = start({
+        isFirstInvocation: false,
+        requestId: "provider-now-ready",
+      });
+      await plugin.onInvocationStart(info);
+      await plugin.onInvocationEnd(end(info, "PENDING"));
+      expect(roots(exporter)).toHaveLength(1);
+      expect(workflows(exporter)).toHaveLength(0);
+    } finally {
+      warning.mockRestore();
+    }
   });
 
   it.each(["PENDING", "RETRYING"] as const)(
@@ -191,9 +341,7 @@ describe.each(
       });
       await plugin.onInvocationStart(info);
       await plugin.onInvocationEnd(end(info, stage.status));
-      expect(roots(exporter)).toHaveLength(
-        stage.first || stage.status === "FAILED" ? 1 : 0,
-      );
+      expect(roots(exporter)).toHaveLength(1);
       copies.push(...roots(exporter));
       if (stage.status === "FAILED") {
         expect(workflows(exporter)[0].parentSpanContext?.spanId).toBe(
@@ -202,14 +350,14 @@ describe.each(
         expect(workflows(exporter)[0].status.code).toBe(SpanStatusCode.ERROR);
       }
     }
-    expect(copies).toHaveLength(3);
+    expect(copies).toHaveLength(4);
     for (const span of copies) {
       assertAnchor(span);
       expect(contents(span)).toEqual(contents(copies[0]));
     }
     expect(
       copies.map((span) => span.resource.attributes["faas.instance"]),
-    ).toEqual(["one", "two", "four"]);
+    ).toEqual(["one", "two", "three", "four"]);
   });
 
   it("uses a terminal backup when the first invocation never reached its flush", async () => {

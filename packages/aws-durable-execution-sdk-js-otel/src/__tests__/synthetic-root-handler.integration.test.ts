@@ -1,6 +1,9 @@
-import { withDurableExecution } from "@aws/durable-execution-sdk-js";
+import {
+  withDurableExecution,
+  type InvocationInfo,
+} from "@aws/durable-execution-sdk-js";
 import { LocalDurableTestRunner } from "@aws/durable-execution-sdk-js-testing";
-import type { ExportResult } from "@opentelemetry/core";
+import { ExportResultCode, type ExportResult } from "@opentelemetry/core";
 import {
   AlwaysOnSampler,
   BatchSpanProcessor,
@@ -42,11 +45,25 @@ type SpanSnapshot = ReturnType<typeof snapshot>;
 
 class RecordingExporter extends InMemorySpanExporter {
   readonly batches: SpanSnapshot[][] = [];
+  private failNextExport: boolean;
+
+  constructor(failFirstExport = false) {
+    super();
+    this.failNextExport = failFirstExport;
+  }
 
   override export(
     spans: ReadableSpan[],
     resultCallback: (result: ExportResult) => void,
   ): void {
+    if (this.failNextExport) {
+      this.failNextExport = false;
+      resultCallback({
+        code: ExportResultCode.FAILED,
+        error: new Error("first export lost"),
+      });
+      return;
+    }
     this.batches.push(spans.map(snapshot));
     super.export(spans, resultCallback);
   }
@@ -57,10 +74,18 @@ beforeAll(() =>
 );
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
-it.each([ExecutionOtelPlugin, InvocationOtelPlugin])(
-  "%p flushes the first anchor before PENDING and preserves it through public wait/resume",
-  async (Plugin) => {
-    const exporter = new RecordingExporter();
+it.each(
+  [ExecutionOtelPlugin, InvocationOtelPlugin].flatMap((Plugin) =>
+    [false, true].map((failFirstExport) => ({
+      Plugin,
+      view: Plugin.name,
+      failFirstExport,
+    })),
+  ),
+)(
+  "$view anchors public SDK resumes before terminal completion (first export lost=$failFirstExport)",
+  async ({ Plugin, failFirstExport }) => {
+    const exporter = new RecordingExporter(failFirstExport);
     let provider: NodeTracerProvider | undefined;
     const plugin = new Plugin({
       contextExtractor: () => undefined,
@@ -82,6 +107,7 @@ it.each([ExecutionOtelPlugin, InvocationOtelPlugin])(
       },
     });
     let stepCalls = 0;
+    const firstInvocations: boolean[] = [];
     const handler = withDurableExecution(
       async (_event, context) => {
         const result = await context.step("work-once", async () => {
@@ -89,9 +115,19 @@ it.each([ExecutionOtelPlugin, InvocationOtelPlugin])(
           return { value: "stored result" };
         });
         await context.wait("suspend", { seconds: 1 });
+        await context.wait("suspend-again", { seconds: 1 });
         return result;
       },
-      { plugins: [plugin] },
+      {
+        plugins: [
+          plugin,
+          {
+            onInvocationStart: async (info: InvocationInfo) => {
+              firstInvocations.push(info.isFirstInvocation);
+            },
+          },
+        ],
+      },
     );
     const returned: { status: string; batches: SpanSnapshot[][] }[] = [];
     const runner = new LocalDurableTestRunner({
@@ -112,30 +148,49 @@ it.each([ExecutionOtelPlugin, InvocationOtelPlugin])(
       expect(stepCalls).toBe(1);
       expect(returned[0].status).toBe("PENDING");
       expect(returned.at(-1)?.status).toBe("SUCCEEDED");
+      expect(firstInvocations[0]).toBe(true);
+      expect(firstInvocations.slice(1).every((first) => !first)).toBe(true);
+      const suspended = returned.filter(
+        (invocation) => invocation.status === "PENDING",
+      );
+      expect(suspended.length).toBeGreaterThanOrEqual(2);
 
       const atFirstReturn = returned[0].batches.flat();
       const firstRoots = atFirstReturn.filter(
         (span) => span.name === "DurableExecutionRoot",
       );
-      expect(firstRoots).toHaveLength(1);
-      const firstRoot = firstRoots[0];
-      expect(firstRoot.ended).toBe(true);
-      expect(firstRoot.startTime).toEqual(firstRoot.endTime);
-      expect(firstRoot.duration).toEqual([0, 0]);
-      expect(firstRoot.parentSpanId).toBeUndefined();
-      expect(atFirstReturn.some((span) => span.name === "Invocation")).toBe(
-        true,
-      );
-      expect(
-        atFirstReturn.filter((span) => span.name === "Workflow"),
-      ).toHaveLength(0);
-
+      expect(firstRoots).toHaveLength(failFirstExport ? 0 : 1);
+      if (!failFirstExport) {
+        expect(atFirstReturn.some((span) => span.name === "Invocation")).toBe(
+          true,
+        );
+      }
       const allExported = exporter.batches.flat();
       const roots = allExported.filter(
         (span) => span.name === "DurableExecutionRoot",
       );
-      expect(roots).toHaveLength(2);
-      expect(roots[1]).toEqual(firstRoot);
+      const firstRoot = roots[0];
+      expect(firstRoot.ended).toBe(true);
+      expect(firstRoot.startTime).toEqual(firstRoot.endTime);
+      expect(firstRoot.duration).toEqual([0, 0]);
+      expect(firstRoot.parentSpanId).toBeUndefined();
+      expect(
+        atFirstReturn.filter((span) => span.name === "Workflow"),
+      ).toHaveLength(0);
+
+      // Check the real second PENDING boundary, before any terminal SDK hook.
+      // This remains useful even if the service subsequently stops the execution.
+      const beforeTerminal = suspended[1].batches.flat();
+      const recoveredRoots = beforeTerminal.filter(
+        (span) => span.name === "DurableExecutionRoot",
+      );
+      expect(recoveredRoots).toHaveLength(failFirstExport ? 1 : 2);
+      expect(firstRoot.attributes["durable.execution.arn"]).toBeDefined();
+      expect(
+        beforeTerminal.filter((span) => span.name === "Workflow"),
+      ).toHaveLength(0);
+      expect(roots).toHaveLength(returned.length - Number(failFirstExport));
+      for (const root of roots) expect(root).toEqual(firstRoot);
       const workflows = allExported.filter((span) => span.name === "Workflow");
       expect(workflows).toHaveLength(1);
       const workflow = workflows[0];
