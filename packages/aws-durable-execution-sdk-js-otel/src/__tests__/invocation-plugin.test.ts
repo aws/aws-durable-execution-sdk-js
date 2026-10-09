@@ -2620,137 +2620,146 @@ describe("InvocationOtelPlugin", () => {
       expect(attemptSpan!.events).toHaveLength(0);
     });
 
-    it("waitForCondition links its resumed operation to the initial segment", async () => {
-      // Two invocations of one execution, so one instance each out of a shared
-      // factory: the resumed segment has to find its way back to the first
-      // operation span through the deterministic ID, not through leftover state.
-      const factory = createInvocationOtelPluginFactory({
-        tracerProviderFactory,
-      });
-      const firstInfo = makeInvocationInfo();
-      const plugin = factory.createPlugin(firstInfo);
-      await plugin.onInvocationStart(firstInfo);
-      await plugin.onOperationStart(
-        makeOperationInfo({
-          id: "cond-1",
-          type: "STEP",
-          subType: "WaitForCondition",
-          name: "otel-condition",
-        }),
-      );
-      await plugin.onOperationAttemptStart(
-        makeAttemptInfo({
-          id: "cond-1",
-          type: "STEP",
-          subType: "WaitForCondition",
-          name: "otel-condition",
-          attempt: 1,
-        }),
-      );
-      await plugin.onOperationAttemptEnd(
-        makeAttemptEndInfo({
-          id: "cond-1",
-          type: "STEP",
-          subType: "WaitForCondition",
-          name: "otel-condition",
-          attempt: 1,
-          outcome: "SUCCEEDED" as any,
-        }),
-      );
-      await plugin.onInvocationEnd(
-        makeInvocationEndInfo({ status: "PENDING" as any }),
-      );
+    it.each(["configured", "global"] as const)(
+      "waitForCondition links its resumed operation to the initial segment (%s provider)",
+      async (providerMode) => {
+        // Two invocations of one execution, so one instance each out of a shared
+        // factory: the resumed segment has to find its way back to the first
+        // operation span through the deterministic ID, not through leftover state.
+        const factory = createInvocationOtelPluginFactory(
+          providerMode === "global" ? undefined : { tracerProviderFactory },
+        );
+        const firstInfo = makeInvocationInfo();
+        const plugin = factory.createPlugin(firstInfo);
+        await plugin.onInvocationStart(firstInfo);
+        await plugin.onOperationStart(
+          makeOperationInfo({
+            id: "cond-1",
+            type: "STEP",
+            subType: "WaitForCondition",
+            name: "otel-condition",
+          }),
+        );
+        await plugin.onOperationAttemptStart(
+          makeAttemptInfo({
+            id: "cond-1",
+            type: "STEP",
+            subType: "WaitForCondition",
+            name: "otel-condition",
+            attempt: 1,
+          }),
+        );
+        await plugin.onOperationAttemptEnd(
+          makeAttemptEndInfo({
+            id: "cond-1",
+            type: "STEP",
+            subType: "WaitForCondition",
+            name: "otel-condition",
+            attempt: 1,
+            outcome: "SUCCEEDED" as any,
+          }),
+        );
+        await plugin.onInvocationEnd(
+          makeInvocationEndInfo({ status: "PENDING" as any }),
+        );
 
-      const secondInfo = makeInvocationInfo({ isFirstInvocation: false });
-      const resumed = factory.createPlugin(secondInfo);
-      await resumed.onInvocationStart(secondInfo);
-      await resumed.onOperationStart(
-        makeOperationInfo({
-          id: "cond-1",
-          type: "STEP",
-          subType: "WaitForCondition",
-          name: "otel-condition",
-          isReplay: true,
-        }),
-      );
-      await resumed.onOperationAttemptStart(
-        makeAttemptInfo({
-          id: "cond-1",
-          type: "STEP",
-          subType: "WaitForCondition",
-          name: "otel-condition",
-          attempt: 2,
-        }),
-      );
-      await resumed.onOperationAttemptEnd(
-        makeAttemptEndInfo({
-          id: "cond-1",
-          type: "STEP",
-          subType: "WaitForCondition",
-          name: "otel-condition",
-          attempt: 2,
-          outcome: "SUCCEEDED" as any,
-        }),
-      );
-      await resumed.onOperationEnd(
-        makeOperationEndInfo({
-          id: "cond-1",
-          type: "STEP",
-          subType: "WaitForCondition",
-          name: "otel-condition",
-          isReplay: false,
-          status: "SUCCEEDED" as any,
-          attempt: 2,
-        }),
-      );
-      await resumed.onInvocationEnd(makeInvocationEndInfo());
+        const secondInfo = makeInvocationInfo({ isFirstInvocation: false });
+        const resumed = factory.createPlugin(secondInfo);
+        await resumed.onInvocationStart(secondInfo);
+        await resumed.onOperationStart(
+          makeOperationInfo({
+            id: "cond-1",
+            type: "STEP",
+            subType: "WaitForCondition",
+            name: "otel-condition",
+            isReplay: true,
+          }),
+        );
+        await resumed.onOperationAttemptStart(
+          makeAttemptInfo({
+            id: "cond-1",
+            type: "STEP",
+            subType: "WaitForCondition",
+            name: "otel-condition",
+            attempt: 2,
+          }),
+        );
+        await resumed.onOperationAttemptEnd(
+          makeAttemptEndInfo({
+            id: "cond-1",
+            type: "STEP",
+            subType: "WaitForCondition",
+            name: "otel-condition",
+            attempt: 2,
+            outcome: "SUCCEEDED" as any,
+          }),
+        );
+        await resumed.onOperationEnd(
+          makeOperationEndInfo({
+            id: "cond-1",
+            type: "STEP",
+            subType: "WaitForCondition",
+            name: "otel-condition",
+            isReplay: false,
+            status: "SUCCEEDED" as any,
+            attempt: 2,
+          }),
+        );
+        await resumed.onInvocationEnd(makeInvocationEndInfo());
 
-      const workflowSpan = findSpan("Workflow");
-      const firstOperationSpan = getExportedSpans().find(
-        (s) =>
-          s.name === "otel-condition" &&
-          s.attributes["durable.operation.status"] === "STARTED",
-      );
-      const firstAttemptSpan = findSpan("otel-condition attempt 1");
-      const resumedOperationSpan = getExportedSpans().find(
-        (s) =>
-          s.name === "otel-condition" &&
-          s.attributes["durable.operation.status"] === "SUCCEEDED",
-      );
-      const secondAttemptSpan = findSpan("otel-condition attempt 2");
+        const workflowSpan = findSpan("Workflow");
+        const firstOperationSpan = getExportedSpans().find(
+          (s) =>
+            s.name === "otel-condition" &&
+            s.attributes["durable.operation.status"] === "STARTED",
+        );
+        const firstAttemptSpan = findSpan("otel-condition attempt 1");
+        const resumedOperationSpan = getExportedSpans().find(
+          (s) =>
+            s.name === "otel-condition" &&
+            s.attributes["durable.operation.status"] === "SUCCEEDED",
+        );
+        const secondAttemptSpan = findSpan("otel-condition attempt 2");
 
-      expect(workflowSpan).toBeDefined();
-      expect(firstOperationSpan).toBeDefined();
-      expect(firstAttemptSpan).toBeDefined();
-      expect(resumedOperationSpan).toBeDefined();
-      expect(secondAttemptSpan).toBeDefined();
+        expect(workflowSpan).toBeDefined();
+        expect(firstOperationSpan).toBeDefined();
+        expect(firstAttemptSpan).toBeDefined();
+        expect(resumedOperationSpan).toBeDefined();
+        expect(secondAttemptSpan).toBeDefined();
 
-      // The first attempt belongs to the initial operation; it is not a
-      // continuation. Both attempts correlate directly to Workflow only.
-      expect(firstAttemptSpan!.links).toHaveLength(1);
-      expect(firstAttemptSpan!.links[0].context.spanId).toBe(
-        workflowSpan!.spanContext().spanId,
-      );
+        // The first attempt belongs to the initial operation; it is not a
+        // continuation. Both attempts correlate directly to Workflow only.
+        expect(firstAttemptSpan!.links).toHaveLength(1);
+        expect(firstAttemptSpan!.links[0].context.spanId).toBe(
+          workflowSpan!.spanContext().spanId,
+        );
+        expect(firstAttemptSpan!.parentSpanContext?.spanId).toBe(
+          firstOperationSpan!.spanContext().spanId,
+        );
 
-      // The resumed operation is the distinct continuation of the initial
-      // logical operation, so it owns the cross-invocation link (case 9).
-      expect(resumedOperationSpan!.spanContext().spanId).not.toBe(
-        firstOperationSpan!.spanContext().spanId,
-      );
-      expect(resumedOperationSpan!.links).toHaveLength(2);
-      expect(resumedOperationSpan!.links[0].context).toEqual(
-        expect.objectContaining({
-          traceId: firstOperationSpan!.spanContext().traceId,
-          spanId: firstOperationSpan!.spanContext().spanId,
-        }),
-      );
-      expect(resumedOperationSpan!.links[1].context.spanId).toBe(
-        workflowSpan!.spanContext().spanId,
-      );
-      expect(secondAttemptSpan!.links).toHaveLength(1);
-      expect(secondAttemptSpan!.links[0].context.spanId).toBe(
-        workflowSpan!.spanContext().spanId,
-      );
-    });
+        // The resumed operation is the distinct continuation of the initial
+        // logical operation, so it owns the cross-invocation link (case 9).
+        expect(resumedOperationSpan!.spanContext().spanId).not.toBe(
+          firstOperationSpan!.spanContext().spanId,
+        );
+        expect(resumedOperationSpan!.links).toHaveLength(2);
+        expect(resumedOperationSpan!.links[0].context).toEqual(
+          expect.objectContaining({
+            traceId: firstOperationSpan!.spanContext().traceId,
+            spanId: firstOperationSpan!.spanContext().spanId,
+          }),
+        );
+        expect(resumedOperationSpan!.links[1].context.spanId).toBe(
+          workflowSpan!.spanContext().spanId,
+        );
+        expect(secondAttemptSpan!.parentSpanContext?.spanId).toBe(
+          resumedOperationSpan!.spanContext().spanId,
+        );
+        expect(secondAttemptSpan!.links).toHaveLength(1);
+        expect(secondAttemptSpan!.links[0].context.spanId).toBe(
+          workflowSpan!.spanContext().spanId,
+        );
+      },
+    );
   });
 });
