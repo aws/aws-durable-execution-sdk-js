@@ -50,8 +50,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the real answer:
   - A completion whose earlier attempt reached the service, although its answer was lost, failed
     on the retry instead of counting as delivered. The worker then logged that the outcome could
-    not be reported. The warning now says "already complete or timed out", because the one code
-    covers both.
+    not be reported. It now logs a warning that names both cases the code covers: an earlier
+    attempt delivered the outcome, or the callback timed out first. A callback that really timed
+    out is now a warning where it was an error. The durable function sees the timeout either way.
   - A heartbeat that met the completion while it was in flight logged "the callback no longer
     accepts heartbeats". It is no longer logged.
 

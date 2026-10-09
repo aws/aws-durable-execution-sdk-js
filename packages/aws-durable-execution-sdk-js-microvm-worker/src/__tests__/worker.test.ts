@@ -579,7 +579,7 @@ describe("CallbackReporter", () => {
       await jest.advanceTimersByTimeAsync(30_000);
       await expect(done).resolves.toBeUndefined();
       expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining("probably reported the outcome"),
+        expect.stringContaining("or the callback timed out first"),
         expect.objectContaining({ callbackId: "cb-1", attempt: 2 }),
       );
     } finally {
@@ -660,7 +660,7 @@ describe("CallbackReporter", () => {
     });
     await expect(target.succeed("ok")).resolves.toBeUndefined();
     expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining("probably reported the outcome"),
+      expect.stringContaining("or the callback timed out first"),
       expect.anything(),
     );
     expect(client.sent).toEqual([]);
