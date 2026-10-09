@@ -101,6 +101,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   // The execution ancestor the terminal Workflow span parents onto. Resolved at
   // invocation start and reused when the real span is created at terminal.
   private executionAncestor: SpanContext | undefined;
+  private syntheticRootMaterialized = false;
   private executionTraceId: string = "";
   private executionTraceFlags: number = 0;
   private executionSamplingDecision: SamplingDecision =
@@ -125,7 +126,11 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     info: InvocationInfo,
   ) {
     this.executionArn = info.executionArn;
-    this.reportedExecutionStart = info.executionStartTimestamp;
+    // Snapshot the backend Date so later hooks cannot retime this invocation's
+    // retry-stable root anchor or terminal Workflow by mutating the input.
+    this.reportedExecutionStart = info.executionStartTimestamp
+      ? new Date(info.executionStartTimestamp.getTime())
+      : undefined;
   }
 
   async onInvocationStart(info: InvocationInfo): Promise<void> {
@@ -220,6 +225,13 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       },
       invocationParentContext,
     );
+
+    // Each sampled invocation can recover an earlier undelivered anchor. An
+    // opaque tracer retains terminal-only creation: without the sampler wrapper,
+    // an early anchor would independently query its hidden sampler again.
+    if (this.environment.durableSampler && this.reportedExecutionStart) {
+      this.createSyntheticRoot()?.end(this.reportedExecutionStart);
+    }
 
     // Set last, so `tracingEnabled` means what every later hook reads it to mean:
     // this invocation's trace identity is resolved. Setting it at the top left a
@@ -317,29 +329,9 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       this.executionAncestor &&
       (info.status === "SUCCEEDED" || info.status === "FAILED")
     ) {
-      // A synthetic ancestor is SDK-owned and therefore must be exported.
-      // Materialize it only on terminal completion, alongside the one real
-      // Workflow span, so wait/resume and retries do not emit conflicting copies.
-      const syntheticRootSpan = this.executionAncestor.isRemote
-        ? undefined
-        : this.environment.idGenerator.withIds(
-            {
-              traceId: this.executionTraceId,
-              spanId: this.executionAncestor.spanId,
-            },
-            () =>
-              this.startSpan(
-                "DurableExecutionRoot",
-                {
-                  kind: SpanKind.INTERNAL,
-                  attributes: {
-                    "durable.execution.synthetic_root": true,
-                  },
-                  startTime: this.workflowStartTime,
-                },
-                ROOT_CONTEXT,
-              ),
-          );
+      // Keep terminal-only fallback for providers without an early anchor.
+      // An anchor already materialized in this invocation is not emitted twice.
+      const syntheticRootSpan = this.createSyntheticRoot();
 
       const workflowSpanId = deriveWorkflowSpanId(this.executionArn);
       const executionAncestorContext = trace.setSpanContext(
@@ -371,10 +363,10 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         workflowSpan.setStatus({ code: SpanStatusCode.OK });
       }
       workflowSpan.end(endTime);
-      syntheticRootSpan?.end(endTime);
+      syntheticRootSpan?.end(this.reportedExecutionStart ?? endTime);
     }
-    // Non-terminal (PENDING/RETRYING): no real Workflow span or synthetic root is created, so
-    // nothing to end — the identity was only ever a non-recording context.
+    // PENDING/RETRYING never materializes Workflow. A sampled invocation may
+    // already have ended its stable synthetic anchor before customer code ran.
 
     // 4. Force flush the tracer provider
     this.invocationEnded = true;
@@ -400,6 +392,40 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         // Gracefully handle flush errors
       }
     }
+  }
+
+  /** Creates at most one SDK-owned root per invocation; the caller ends it. */
+  private createSyntheticRoot(): Span | undefined {
+    if (
+      this.syntheticRootMaterialized ||
+      this.executionSamplingDecision !== SamplingDecision.RECORD_AND_SAMPLED ||
+      !this.executionAncestor ||
+      this.executionAncestor.isRemote
+    ) {
+      return undefined;
+    }
+
+    const span = this.environment.idGenerator.withIds(
+      {
+        traceId: this.executionTraceId,
+        spanId: this.executionAncestor.spanId,
+      },
+      () =>
+        this.startSpan(
+          "DurableExecutionRoot",
+          {
+            kind: SpanKind.INTERNAL,
+            attributes: {
+              "durable.execution.synthetic_root": true,
+              "durable.execution.arn": this.executionArn,
+            },
+            startTime: this.workflowStartTime,
+          },
+          ROOT_CONTEXT,
+        ),
+    );
+    this.syntheticRootMaterialized = true;
+    return span;
   }
 
   private liveTimestamp(): HrTime {

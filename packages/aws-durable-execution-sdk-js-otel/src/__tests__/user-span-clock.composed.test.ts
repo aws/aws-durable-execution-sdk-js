@@ -49,6 +49,19 @@ function expectChildOf(
   ).toBeLessThanOrEqual(userClockPrecision);
 }
 
+// A backend-timestamped synthetic root is a zero-duration identity anchor;
+// temporal containment continues to apply to the live SDK and user spans.
+function expectAnchoredTo(child: ReadableSpan, root: ReadableSpan): void {
+  expect(child.parentSpanContext?.spanId).toBe(root.spanContext().spanId);
+  expect(child.spanContext().traceId).toBe(root.spanContext().traceId);
+  expect(root.parentSpanContext).toBeUndefined();
+  expect(root.endTime).toEqual(root.startTime);
+  expect(root.duration).toEqual([0, 0]);
+  expect(root.attributes["durable.execution.arn"]).toBe(
+    child.attributes["durable.execution.arn"],
+  );
+}
+
 describe.each([
   ["invocation", createInvocationOtelPluginFactory],
   ["execution", createExecutionOtelPluginFactory],
@@ -318,9 +331,9 @@ describe.each([10, -10])(
           new SimpleSpanProcessor(exporter),
           {
             onStart(span) {
-              // Terminal roots are materialized after cleanup captures its
-              // end time. Advance the clock during their creation so a late
-              // event timestamp cannot silently pass the boundary assertions.
+              // The synthetic anchor now materializes at invocation start;
+              // Workflow still materializes after cleanup captures its end.
+              // Advance both to exercise initialization time and late events.
               if (
                 span.name === "Workflow" ||
                 span.name === "DurableExecutionRoot"
@@ -447,8 +460,12 @@ describe.each([10, -10])(
         }
         expectChildOf(sdkAttempt, step);
         expectChildOf(step, invocation);
-        expectChildOf(invocation, find("DurableExecutionRoot"));
-        expect(nanoseconds(invocation.duration)).toBe(4_000_000n);
+        expectAnchoredTo(invocation, find("DurableExecutionRoot"));
+        expect(nanoseconds(find("DurableExecutionRoot").startTime)).toBe(
+          BigInt(epoch - 120_000) * 1_000_000n,
+        );
+        // Four ms of user work plus one ms during early anchor creation.
+        expect(nanoseconds(invocation.duration)).toBe(5_000_000n);
         // No unbounded retry if every attempt is interrupted. A stall can
         // delay any individual read; this bounds reads, not scheduler latency.
         expect(sampledWallReads).toBe(reads);
@@ -605,9 +622,10 @@ describe.each([10, -10])(
           nanoseconds(find("after-step").startTime),
         ).toBeGreaterThanOrEqual(nanoseconds(attempt.endTime));
         expect(nanoseconds(attempt.duration)).toBe(50_250_000n);
-        expect(nanoseconds(invocation.duration)).toBe(54_000_000n);
+        // Include the processor's 1 ms at early anchor creation.
+        expect(nanoseconds(invocation.duration)).toBe(55_000_000n);
         expect(nanoseconds(find("after-step").startTime)).toBe(
-          BigInt(epoch) * 1_000_000n + 50_750_000n,
+          BigInt(epoch) * 1_000_000n + 51_750_000n,
         );
         expect(nanoseconds(find("after-step").duration)).toBe(3_250_000n);
         // Every recordException path must export a real in-bounds event,
@@ -638,7 +656,7 @@ describe.each([10, -10])(
           );
         }
         expect(find("Workflow")).toBeUndefined();
-        expect(find("DurableExecutionRoot")).toBeUndefined();
+        expectAnchoredTo(invocation, find("DurableExecutionRoot"));
 
         advance(1_000);
         const resumedAt = Date.now();
@@ -687,7 +705,7 @@ describe.each([10, -10])(
         expect(nanoseconds(second.startTime)).toBe(
           BigInt(resumedAt) * 1_000_000n,
         );
-        expect(nanoseconds(second.duration)).toBe(25_500_000n);
+        expect(nanoseconds(second.duration)).toBe(26_500_000n);
         expect(second.status.code).toBe(
           terminalStatus === "FAILED"
             ? SpanStatusCode.ERROR
@@ -710,12 +728,7 @@ describe.each([10, -10])(
         expectChildOf(resumedContext, second);
         expectChildOf(resumedStep, resumedContext);
         expectChildOf(find("step attempt 2"), resumedStep);
-        for (const name of [
-          "context",
-          "step",
-          "Workflow",
-          "DurableExecutionRoot",
-        ]) {
+        for (const name of ["context", "step", "Workflow"]) {
           const span = exporter
             .getFinishedSpans()
             .filter((span) => span.name === name)
@@ -726,21 +739,25 @@ describe.each([10, -10])(
           const spans = exporter
             .getFinishedSpans()
             .filter((span) => span.name === name);
-          expect(spans).toHaveLength(1);
-          expect(nanoseconds(spans[0].startTime)).toBe(
-            BigInt(historicalStart.getTime()) * 1_000_000n,
-          );
+          expect(spans).toHaveLength(name === "Workflow" ? 1 : 2);
+          for (const span of spans) {
+            expect(nanoseconds(span.startTime)).toBe(
+              BigInt(historicalStart.getTime()) * 1_000_000n,
+            );
+            if (name === "DurableExecutionRoot") {
+              expectAnchoredTo(second, span);
+              expect(span.spanContext()).toEqual(spans[0].spanContext());
+            }
+          }
         }
         expect(find("Workflow").spanContext().spanId).toBe(
           deriveWorkflowSpanId(info.executionArn),
         );
-        expectChildOf(find("Workflow"), find("DurableExecutionRoot"));
-        expectChildOf(second, find("DurableExecutionRoot"));
-        if (wallStep >= 0) {
-          // With comparable clocks the terminal root contains both invocations,
-          // including when the plugin is recreated on resume.
-          expectChildOf(invocation, find("DurableExecutionRoot"));
-        }
+        expectAnchoredTo(find("Workflow"), find("DurableExecutionRoot"));
+        expectAnchoredTo(second, find("DurableExecutionRoot"));
+        // Both invocations retain the anchor identity even across wall steps
+        // and when another execution environment creates the resume's factory.
+        expectAnchoredTo(invocation, find("DurableExecutionRoot"));
         for (const [index, [, options]] of starts.mock.calls.entries()) {
           const span = starts.mock.results[index].value;
           const exported = exporter

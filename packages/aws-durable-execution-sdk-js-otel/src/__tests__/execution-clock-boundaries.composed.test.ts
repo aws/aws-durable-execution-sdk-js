@@ -787,12 +787,31 @@ describe.each(["global", "factory"] as const)(
         }
         const spans = exporter.getFinishedSpans();
         const last = spans.filter((s) => s.name === "Invocation").at(-1)!;
-        for (const name of ["Workflow", "DurableExecutionRoot"]) {
-          const span = spans.find((s) => s.name === name)!;
-          expect(nanos(span.startTime)).toBe(
+        const workflow = spans.find((s) => s.name === "Workflow")!;
+        expect(nanos(workflow.startTime)).toBe(
+          BigInt(executionStart.getTime()) * 1_000_000n,
+        );
+        expect(workflow.endTime).toEqual(last.endTime);
+        // Synthetic roots are retry-stable identity anchors, not enclosing
+        // execution intervals. Every sampled invocation repeats the same anchor.
+        const roots = spans.filter((s) => s.name === "DurableExecutionRoot");
+        expect(roots).toHaveLength(2);
+        for (const root of roots) {
+          expect(nanos(root.startTime)).toBe(
             BigInt(executionStart.getTime()) * 1_000_000n,
           );
-          expect(span.endTime).toEqual(last.endTime);
+          expect(root.endTime).toEqual(root.startTime);
+          expect(root.duration).toEqual([0, 0]);
+          expect(root.spanContext()).toEqual(roots[0].spanContext());
+          expect(root.attributes["durable.execution.arn"]).toBe(
+            info(true).executionArn,
+          );
+          expect(workflow.parentSpanContext?.spanId).toBe(
+            root.spanContext().spanId,
+          );
+          expect(last.parentSpanContext?.spanId).toBe(
+            root.spanContext().spanId,
+          );
         }
         expect(
           nanos(spans.find((s) => s.name === "historic-wait")!.startTime),
