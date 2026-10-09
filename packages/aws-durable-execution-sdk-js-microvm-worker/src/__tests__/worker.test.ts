@@ -167,6 +167,24 @@ describe("parseRunHookRequest", () => {
     expect((error as InvalidRunHookPayloadError).callbackId).toBeUndefined();
   });
 
+  it("keeps the parser's error as the cause of a payload that is not JSON", () => {
+    let error: unknown;
+    try {
+      parseRunHookRequest({
+        microvmId: "mvm-1",
+        runHookPayload:
+          '{"version": 1, "region": "us-east-1", "job": {"callbackId": "x" "input": 1}}',
+      });
+    } catch (e) {
+      error = e;
+    }
+    expect(error).toBeInstanceOf(InvalidRunHookPayloadError);
+    const cause = (error as Error).cause;
+    expect(cause).toBeInstanceOf(SyntaxError);
+    // Node's parser names where the payload went wrong.
+    expect((cause as Error).message).toContain("position 64");
+  });
+
   it("keeps the job's callback ID and Region when the MicroVM ID is empty", () => {
     let error: unknown;
     try {
@@ -537,10 +555,15 @@ describe("CallbackReporter", () => {
         return calls === 1
           ? new Promise(() => {})
           : Promise.reject(
-              Object.assign(new Error("callback already complete"), {
-                name: "InvalidParameterValueException",
-                $metadata: { httpStatusCode: 400 },
-              }),
+              Object.assign(
+                new Error(
+                  "The callback is either timed out or already completed",
+                ),
+                {
+                  name: "CallbackTimeoutException",
+                  $metadata: { httpStatusCode: 400 },
+                },
+              ),
             );
       });
       const warn = jest.fn();
@@ -594,10 +617,13 @@ describe("CallbackReporter", () => {
       const client = new FakeLambdaClient();
       client.failures = [
         first,
-        Object.assign(new Error("callback already complete"), {
-          name: "InvalidParameterValueException",
-          $metadata: { httpStatusCode: 400 },
-        }),
+        Object.assign(
+          new Error("The callback is either timed out or already completed"),
+          {
+            name: "CallbackTimeoutException",
+            $metadata: { httpStatusCode: 400 },
+          },
+        ),
       ];
       const done = reporter(client).succeed("ok");
       if (delivered) {
@@ -617,10 +643,13 @@ describe("CallbackReporter", () => {
         name: "TooManyRequestsException",
         $metadata: { httpStatusCode: 429, attempts: 2 },
       }),
-      Object.assign(new Error("callback already complete"), {
-        name: "InvalidParameterValueException",
-        $metadata: { httpStatusCode: 400 },
-      }),
+      Object.assign(
+        new Error("The callback is either timed out or already completed"),
+        {
+          name: "CallbackTimeoutException",
+          $metadata: { httpStatusCode: 400 },
+        },
+      ),
     ];
     const target = new CallbackReporter({
       callbackId: "cb-1",
@@ -740,10 +769,13 @@ describe("CallbackReporter", () => {
   it("treats 'already complete' after an SDK-internal retry as delivered", async () => {
     const client = new FakeLambdaClient();
     client.failures = [
-      Object.assign(new Error("callback already complete"), {
-        name: "InvalidParameterValueException",
-        $metadata: { httpStatusCode: 400, attempts: 2 },
-      }),
+      Object.assign(
+        new Error("The callback is either timed out or already completed"),
+        {
+          name: "CallbackTimeoutException",
+          $metadata: { httpStatusCode: 400, attempts: 2 },
+        },
+      ),
     ];
     await expect(reporter(client).succeed("ok")).resolves.toBeUndefined();
   });
@@ -751,13 +783,35 @@ describe("CallbackReporter", () => {
   it("reports 'already complete' on the first attempt as a failure", async () => {
     const client = new FakeLambdaClient();
     client.failures = [
-      Object.assign(new Error("callback already complete"), {
+      Object.assign(
+        new Error("The callback is either timed out or already completed"),
+        {
+          name: "CallbackTimeoutException",
+          $metadata: { httpStatusCode: 400 },
+        },
+      ),
+    ];
+    await expect(reporter(client).succeed("ok")).rejects.toThrow(
+      "already complete",
+    );
+  });
+
+  it("does not count an invalid callback ID after an uncertain attempt as delivered", async () => {
+    // The service answers InvalidParameterValueException for a callback ID
+    // that it does not know. That says nothing about an earlier attempt.
+    const client = new FakeLambdaClient();
+    client.failures = [
+      Object.assign(new Error("boom"), {
+        name: "ServiceException",
+        $metadata: { httpStatusCode: 500 },
+      }),
+      Object.assign(new Error("Invalid callback id"), {
         name: "InvalidParameterValueException",
         $metadata: { httpStatusCode: 400 },
       }),
     ];
     await expect(reporter(client).succeed("ok")).rejects.toThrow(
-      "already complete",
+      "Invalid callback id",
     );
   });
 
@@ -1109,10 +1163,11 @@ describe("heartbeat interval", () => {
     });
 
     it.each<[string, string, boolean]>([
-      // The completion landed while the heartbeat was in flight: no log.
-      ["already complete", "InvalidParameterValueException", false],
-      // The callback is really gone: the answer is logged.
-      ["a timed-out callback", "CallbackTimeoutException", true],
+      // The completion landed while the heartbeat was in flight: the
+      // service answers that the callback is closed. No log.
+      ["a closed callback", "CallbackTimeoutException", false],
+      // The callback ID is not valid: the answer is logged.
+      ["an invalid callback ID", "InvalidParameterValueException", true],
     ])(
       "does not abort the handler's signal for %s after the handler returned",
       async (_label, errorName, logged) => {

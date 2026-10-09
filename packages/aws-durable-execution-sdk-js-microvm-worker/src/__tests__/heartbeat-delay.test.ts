@@ -33,14 +33,30 @@ describe("heartbeatDelayMs", () => {
 
 describe("heartbeatCallTimeoutMs", () => {
   it.each([
-    [333, 166],
-    [1_000, 500],
-    [8_000, 4_000],
-    [15 * 60 * 1_000, 7.5 * 60 * 1_000],
+    [333, 111],
+    [1_000, 333],
+    [9_000, 3_000],
+    [15 * 60 * 1_000, 5 * 60 * 1_000],
   ])(
     "gives an interval of %p ms a call timeout of %p ms",
     (interval, expected) => {
       expect(heartbeatCallTimeoutMs(interval)).toBe(expected);
+    },
+  );
+
+  // The service times the heartbeat timeout from when it receives a call,
+  // which can be at the call's start. So the worst gap with two failures in
+  // a row counts the whole last good call, both failed calls with their
+  // retry waits, the wait after the good call, and the whole next good call.
+  it.each([300, 1_000, 2_000, 4_000, 10_000, 60_000, 15 * 60 * 1_000])(
+    "keeps two failures in a row within the heartbeat timeout for an interval of %p ms",
+    (interval) => {
+      const call = heartbeatCallTimeoutMs(interval);
+      const longestWait = heartbeatDelayMs(interval, () => 0);
+      const longestRetryWait = heartbeatRetryDelayMs(interval, () => 0);
+      const gap = call + longestWait + 2 * (call + longestRetryWait) + call;
+      // The heartbeat timeout is at least three intervals.
+      expect(gap).toBeLessThan(3 * interval);
     },
   );
 });
