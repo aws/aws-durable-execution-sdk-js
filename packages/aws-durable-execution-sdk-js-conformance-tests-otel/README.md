@@ -28,13 +28,22 @@ lands.
 
 ## Coverage
 
-Three suites, 44 requirements:
+Three suites, 56 requirements:
 
 | Suite               | Requirements             | What it pins down                                                                                                                                                                                                          |
 | ------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `otel-invocation`   | `otel-invocation-1..20`  | The spans a single invocation emits: steps, attempts, retries, waits, callbacks, child contexts (including virtual ones, which emit a span without checkpointing a context), parallel, map, and the failure shape of each. |
-| `otel-execution`    | `otel-execution-1..20`   | The same scenarios seen as one execution spanning many invocations — parentage has to hold across suspend and resume.                                                                                                      |
+| `otel-invocation`   | `otel-invocation-1..26`  | The spans a single invocation emits: steps, attempts, retries, waits, callbacks, child contexts (including virtual ones, which emit a span without checkpointing a context), parallel, map, and the failure shape of each. |
+| `otel-execution`    | `otel-execution-1..26`   | The same scenarios seen as one execution spanning many invocations — parentage has to hold across suspend and resume.                                                                                                      |
 | `otel-long-running` | `otel-long-running-1..4` | Long durable delays, retry backoff, callbacks, and chained invokes, where the trace has to stay coherent over hours.                                                                                                       |
+
+Cases25 and26 exercise external callback completion. Case25 reuses the real
+case17 failure handler with an omitted error payload; the shared driver waits
+for a completed invocation before sending it. Case26 uses a direct callback,
+a checkpointed observation step, and two callback barriers. The driver completes
+each callback only after its creating invocation has completed, so subsequent
+replays are controlled by execution history rather than guessed timer delays.
+The direct target is traversed again on replay, exposing duplicate terminal
+exports that a completed wait-for-callback container can otherwise hide.
 
 ## Layout
 

@@ -43,6 +43,7 @@ import type { OtelPluginConfig } from "./otel-plugin-config";
 import { createTracerProvider } from "./otel-plugin-provider";
 import { tryInstallGlobalIdGenerator } from "./global-id-generator";
 import { DurableSampler, tryInstallDurableSampler } from "./global-sampler";
+import { ExternalCompletions } from "./external-completions";
 
 import { PLUGIN_REGISTRATION } from "./plugin-registration";
 
@@ -85,6 +86,8 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   // Deterministic non-recording placeholders for in-flight operations; the real
   // span is created+ended once in onOperationEnd. Children/attempts parent onto it.
   private operationContexts: Map<string, SpanContext>;
+  // Distinguish an immutable parent exported here from one skipped on replay.
+  private readonly endedOperationIds = new Set<string>();
   // Naming/timing captured at start, reused when onOperationEnd omits them.
   private operationStarts: Map<
     string,
@@ -107,6 +110,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   private globalIdGeneratorInstalled: boolean;
   private durableSampler: DurableSampler | undefined;
   private tracingEnabled = false;
+  private readonly externalCompletions = new ExternalCompletions();
 
   // Workflow span name (configurable)
   private readonly workflowSpanName: string;
@@ -265,6 +269,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       },
       invocationParentContext,
     );
+    this.externalCompletions.observe(info.updatedOperations, info.operations);
 
     // Each sampled invocation can recover an earlier undelivered anchor. An
     // opaque tracer retains terminal-only creation: without the sampler wrapper,
@@ -290,6 +295,22 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       return;
     }
 
+    // Prefer normal lifecycle hooks, which preserve live parent scopes. Before
+    // returning, export any fresh completion the workflow did not reach. A
+    // later resume may label it replay even though it has never been exported.
+    const terminal = info.status === "SUCCEEDED" || info.status === "FAILED";
+    for (const operation of this.externalCompletions.pending.values()) {
+      // A terminal handler can abandon an unawaited child. Its still-open
+      // placeholder will be discarded below, so it cannot parent this export.
+      const parentId =
+        (terminal &&
+          operation.parentId &&
+          this.operationContexts.has(operation.parentId)) ||
+        this.hasAbandonedParent(operation.parentId, info.operations)
+          ? undefined
+          : operation.parentId;
+      await this.onOperationEnd({ ...operation, parentId, isReplay: false });
+    }
     // 1. Always end and export Invocation_Span
     if (this.invocationSpan) {
       this.invocationSpan.setAttribute(
@@ -458,8 +479,10 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   private resetInvocationState(): void {
+    this.externalCompletions.clear();
     this.spanMap.clear();
     this.operationContexts.clear();
+    this.endedOperationIds.clear();
     this.operationStarts.clear();
     this.workflowSpan = undefined;
     this.invocationSpan = undefined;
@@ -585,11 +608,27 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       return;
     }
 
-    // The only place an operation span is created: start+end it here under its
-    // deterministic ID, so it is exported exactly once even across suspend/resume.
+    // A queued external completion can precede its live context's end even
+    // when traversal never awaited it. Export it while that parent is open.
+    if (info.type === "CONTEXT" && !info.isReplay) {
+      for (const child of this.externalCompletions.pending.values()) {
+        if (child.parentId === info.id) {
+          await this.onOperationEnd({ ...child, isReplay: false });
+        }
+      }
+    }
+
+    // Release placeholders even when this is a previously observed completion.
     const started = this.operationStarts.get(info.id);
     this.operationContexts.delete(info.id);
     this.operationStarts.delete(info.id);
+
+    // Updates and traversal can report the same completion in either order.
+    // The set is reset each invocation so failed-invocation redelivery remains
+    // eligible, while normal replay never exports a completion a second time.
+    if (this.externalCompletions.shouldSkip(info)) {
+      return;
+    }
 
     // The end event may omit name/subType; fall back to what start captured.
     const name = info.name ?? started?.name;
@@ -646,12 +685,15 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         ),
     );
 
+    // Preserve the backend completion on both the exception and the span end.
+    // When absent, use the tracer's existing default timestamp behavior.
+    const endTime = info.endTimestamp;
     if (info.error) {
       span.setStatus({
         code: SpanStatusCode.ERROR,
         message: info.error.message,
       });
-      span.recordException(info.error);
+      span.recordException(info.error, endTime);
     } else if (info.status === "SUCCEEDED") {
       // Stamp explicit OK ONLY on a SUCCEEDED terminal status. Terminal
       // FAILURE statuses (TIMED_OUT/STOPPED/FAILED/CANCELLED) can arrive with
@@ -660,20 +702,28 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       span.setStatus({ code: SpanStatusCode.OK });
     }
 
-    span.end(info.endTimestamp);
+    span.end(endTime);
+    this.endedOperationIds.add(info.id);
+    this.externalCompletions.markExported(info);
   }
 
   /**
    * The parent context for an operation or attempt span: the parent operation's
-   * deterministic placeholder context when known, otherwise the deferred
-   * Workflow span's context so the span still hangs off the execution trace.
+   * deterministic identity, or the Workflow identity for a top-level operation.
+   * A completion notification can arrive without traversing its parent in this
+   * invocation (for example, a completed child context skipped during replay).
+   * A parent ended in this invocation cannot contain a later completion; attach
+   * that completion to Workflow instead of recreating its ended context.
    */
   private resolveOperationParentContext(parentId: string | undefined): Context {
-    if (parentId) {
-      const parentContext = this.operationContexts.get(parentId);
-      if (parentContext) {
-        return trace.setSpanContext(context.active(), parentContext);
-      }
+    if (parentId && !this.endedOperationIds.has(parentId)) {
+      const parentContext = this.operationContexts.get(parentId) ?? {
+        traceId: this.executionTraceId,
+        spanId: deriveSpanIdFromOperationId(parentId, this.executionArn),
+        traceFlags: this.executionTraceFlags,
+        isRemote: false,
+      };
+      return trace.setSpanContext(context.active(), parentContext);
     }
     const workflowContext = this.workflowSpan?.spanContext();
     if (workflowContext) {
@@ -682,7 +732,36 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     return context.active();
   }
 
-  /** The earlier of two timestamps, ignoring undefined; undefined only when both are. */
+  private hasAbandonedParent(
+    parentId: string | undefined,
+    operations: Record<string, OperationInfo> = {},
+  ): boolean {
+    const parent = parentId ? operations[parentId] : undefined;
+    if (
+      parent?.type !== "CONTEXT" ||
+      !["STARTED", "READY", "PENDING"].includes(parent.status ?? "")
+    )
+      return false;
+
+    // Replay skips a completed context and all of its body. An unfinished
+    // descendant below it cannot later materialize its execution-view span.
+    const visited = new Set([parent.id]);
+    let ancestorId = parent.parentId;
+    while (ancestorId && !visited.has(ancestorId)) {
+      visited.add(ancestorId);
+      const ancestor = operations[ancestorId];
+      if (ancestor?.type !== "CONTEXT") return false;
+      if (
+        ["SUCCEEDED", "FAILED", "TIMED_OUT", "STOPPED", "CANCELLED"].includes(
+          ancestor.status ?? "",
+        )
+      )
+        return true;
+      ancestorId = ancestor.parentId;
+    }
+    return false;
+  }
+
   private earliestStart(
     a: Date | undefined,
     b: Date | undefined,
@@ -761,6 +840,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     const key = this.getAttemptKey(info.id, info.attempt);
     const attemptSpan = this.spanMap.get(key);
     if (attemptSpan) {
+      const endTime = info.endTimestamp;
       attemptSpan.setAttribute("durable.attempt.outcome", info.outcome);
       if (info.outcome === "FAILED") {
         attemptSpan.setStatus({
@@ -768,19 +848,21 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
           message: info.error?.message ?? "Attempt failed",
         });
         if (info.error) {
-          attemptSpan.recordException(info.error);
+          attemptSpan.recordException(info.error, endTime);
         }
       } else {
         // Non-failed attempt: stamp explicit OK (matches Python OTel #604).
         attemptSpan.setStatus({ code: SpanStatusCode.OK });
       }
-      attemptSpan.end(info.endTimestamp);
+      attemptSpan.end(endTime);
       this.spanMap.delete(key);
     }
   }
 
-  async onOperationChange(_info: OperationChangeInfo): Promise<void> {
-    // No-op — same as InvocationOtelPlugin
+  async onOperationChange(info: OperationChangeInfo): Promise<void> {
+    if (this.tracingEnabled) {
+      this.externalCompletions.observe(info.updatedOperations, info.operations);
+    }
   }
 
   enrichLogContext(): Record<string, string | number | boolean> | undefined {

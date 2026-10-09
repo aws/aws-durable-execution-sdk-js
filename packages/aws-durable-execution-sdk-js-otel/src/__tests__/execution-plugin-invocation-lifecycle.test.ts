@@ -15,8 +15,13 @@ import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
 import type {
   InvocationInfo,
   InvocationEndInfo,
+  OperationInfo,
 } from "@aws/durable-execution-sdk-js";
 import { ExecutionOtelPlugin } from "../execution-plugin";
+import {
+  deriveSpanIdFromOperationId,
+  deriveWorkflowSpanId,
+} from "../deterministic-id-generator";
 import type { TracerProviderFactory } from "../otel-plugin-config";
 
 const TEST_ARN =
@@ -100,6 +105,168 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     trace.disable();
     context.disable();
     propagation.disable();
+  });
+
+  it.each(["SUCCEEDED", "FAILED", "PENDING", "RETRYING"] as const)(
+    "uses Workflow only for abandoned deferred parents at the %s invocation boundary",
+    async (status) => {
+      const plugin = new ExecutionOtelPlugin({
+        tracerProviderFactory,
+        contextExtractor: () => undefined,
+      });
+      const start = makeInvocationInfo();
+      const parent: OperationInfo = {
+        id: "open-parent",
+        name: "open-parent",
+        type: "CONTEXT",
+        subType: "RunInChildContext",
+        status: "STARTED",
+        isReplay: false,
+      };
+      const completion: OperationInfo = Object.freeze({
+        id: "external",
+        name: "external",
+        type: "CALLBACK",
+        status: "SUCCEEDED",
+        parentId: parent.id,
+        startTimestamp: new Date("2024-01-01T00:00:01Z"),
+        endTimestamp: new Date("2024-01-01T00:00:02Z"),
+        isReplay: false,
+      });
+      await plugin.onInvocationStart(start);
+      await plugin.onOperationStart(parent);
+      await plugin.onOperationChange({
+        ...start,
+        operations: { [parent.id]: parent, [completion.id]: completion },
+        updatedOperations: { [completion.id]: completion },
+      });
+      await plugin.onInvocationEnd(makeInvocationEndInfo({ status }));
+      const span = findSpan(exporter, "external")!;
+      expect(span).toBeDefined();
+      const terminal = status === "SUCCEEDED" || status === "FAILED";
+      expect(span.parentSpanContext?.spanId).toBe(
+        terminal
+          ? deriveWorkflowSpanId(TEST_ARN)
+          : deriveSpanIdFromOperationId(parent.id, TEST_ARN),
+      );
+      expect(findSpan(exporter, "open-parent")).toBeUndefined();
+      expect(span.spanContext().spanId).toBe(
+        deriveSpanIdFromOperationId(completion.id, TEST_ARN),
+      );
+      expect(span.attributes["durable.operation.status"]).toBe("SUCCEEDED");
+      expect(completion.parentId).toBe(parent.id);
+      if (terminal) expect(findSpan(exporter, "Workflow")).toBeDefined();
+      else expect(findSpan(exporter, "Workflow")).toBeUndefined();
+    },
+  );
+
+  it.each([
+    ["SUCCEEDED", "STARTED", true],
+    ["STARTED", "STARTED", false],
+    ["SUCCEEDED", "SUCCEEDED", false],
+    [undefined, "STARTED", false],
+  ] as const)(
+    "uses history only to recognize an unfinished parent below a completed ancestor (%s/%s)",
+    async (ancestorStatus, parentStatus, abandoned) => {
+      const plugin = new ExecutionOtelPlugin({
+        tracerProviderFactory,
+        contextExtractor: () => undefined,
+      });
+      const parent: OperationInfo = {
+        id: "skipped-parent",
+        name: "named",
+        type: "CONTEXT",
+        subType: "WaitForCallback",
+        status: parentStatus,
+        parentId: "scope",
+        isReplay: true,
+      };
+      const ancestor: OperationInfo = {
+        id: "scope",
+        name: "scope",
+        type: "CONTEXT",
+        status: ancestorStatus,
+        isReplay: true,
+      };
+      const completion: OperationInfo = Object.freeze({
+        id: "external",
+        name: "named-callback",
+        type: "CALLBACK",
+        parentId: parent.id,
+        status: "SUCCEEDED",
+        isReplay: false,
+      });
+      const operations = {
+        [parent.id]: parent,
+        [ancestor.id]: ancestor,
+        [completion.id]: completion,
+      };
+      await plugin.onInvocationStart(
+        makeInvocationInfo({
+          operations,
+          updatedOperations: { [completion.id]: completion },
+        }),
+      );
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: "PENDING", operations }),
+      );
+      const span = findSpan(exporter, "named-callback")!;
+      expect(span.parentSpanContext?.spanId).toBe(
+        abandoned
+          ? deriveWorkflowSpanId(TEST_ARN)
+          : deriveSpanIdFromOperationId(parent.id, TEST_ARN),
+      );
+      expect(findSpan(exporter, "named")).toBeUndefined();
+      expect(completion.parentId).toBe(parent.id);
+    },
+  );
+
+  it("drains a queued completion before its live context ends without a duplicate at invocation end", async () => {
+    const plugin = new ExecutionOtelPlugin({
+      tracerProviderFactory,
+      contextExtractor: () => undefined,
+    });
+    const start = makeInvocationInfo();
+    const parent: OperationInfo = {
+      id: "parent",
+      name: "parent",
+      type: "CONTEXT",
+      status: "STARTED",
+      isReplay: false,
+    };
+    const completion: OperationInfo = Object.freeze({
+      id: "external",
+      name: "external",
+      type: "CALLBACK",
+      parentId: parent.id,
+      status: "SUCCEEDED",
+      isReplay: false,
+    });
+    await plugin.onInvocationStart(start);
+    await plugin.onOperationStart(parent);
+    await plugin.onOperationChange({
+      ...start,
+      operations: { parent, external: completion },
+      updatedOperations: { external: completion },
+    });
+    await plugin.onOperationEnd({ ...parent, status: "SUCCEEDED" });
+    const exportedAtParentEnd = exporter
+      .getFinishedSpans()
+      .map((span) => span.name);
+    expect(exportedAtParentEnd).toEqual([
+      "DurableExecutionRoot",
+      "external",
+      "parent",
+    ]);
+    await plugin.onInvocationEnd(makeInvocationEndInfo());
+    const span = findSpan(exporter, "external")!;
+    expect(span.parentSpanContext?.spanId).toBe(
+      deriveSpanIdFromOperationId(parent.id, TEST_ARN),
+    );
+    expect(
+      exporter.getFinishedSpans().filter((span) => span.name === "external"),
+    ).toHaveLength(1);
+    expect(completion.parentId).toBe(parent.id);
   });
 
   describe("Invocation_Span provider behavior", () => {

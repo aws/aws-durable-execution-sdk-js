@@ -252,13 +252,19 @@ spans instead of using the process-wide `performance.timeOrigin`. Absolute
 `HrTime` tuples keep epoch milliseconds distinct from relative performance time.
 Each resumed invocation captures its own anchor. Supplied execution-start
 Dates used to backdate Workflow and synthetic roots are preserved; execution-view
-timestamp handling is unchanged.
+provided timestamps are retained without adding cross-clock boundary compensation.
 
 The wall and monotonic reads are not atomic. Sampling delay, millisecond wall
 precision, later wall-clock adjustments, and clocks on different machines can
 still disagree. The plugin does not rewrite backend Dates or user spans, retain
 a clock high-water mark across invocations, or promise simultaneous strict
 ordering and complete containment across arbitrary clock skew.
+
+Independently of the invocation clock origin, execution-view operation and attempt
+exception events use the supplied backend end timestamp when one is available,
+just as their span end does. Recording the event at local receipt time can place
+it after the backend-ended span. Missing end timestamps retain the normal tracer
+default; this does not add rounding or cross-clock ordering policies.
 
 Because the original span context is not checkpointed, replayed `STEP` and
 `CONTEXT` spans and cross-invocation continuation spans use new provider IDs.
@@ -548,6 +554,13 @@ Operation and attempt errors are recorded as exception events when an error
 object is available. Workflow and Invocation failures set an `ERROR` status and
 status message without recording an exception event.
 
+An external callback failure with no error details leaves the callback leaf
+`UNSET`; an empty wire error object does not synthesize a plugin error. Explicit
+partial details, including empty strings or an empty stack trace, still count as
+provided error information. The callback promise continues to reject with the
+same callback error, so its enclosing context or invocation may record its own
+failure. Checkpoint payloads, operation status, and replay behavior are unchanged.
+
 ## Log Correlation
 
 When `enrichLogger` is enabled, durable log records receive the currently
@@ -673,6 +686,45 @@ The package also exports the `ContextExtractor`, `ContextExtractorResult`,
 `ExecutionTraceEnvironment`, `IdGeneratorFactory`, `TracerProviderFactory`, and
 `OtelPluginConfig` types.
 
+### External completions and replay
+
+Both views retain terminal wait, invoke, and callback notifications received at
+invocation start or in checkpoint responses. If workflow traversal does not
+reach a completed operation before suspending or returning, its completion is
+exported at invocation end. Supplied operation timestamps, parent identity,
+status, and error details are preserved in the execution view; the invocation
+view completes the live segment or emits a linked continuation.
+
+A failed invoke still rejects with `InvokeError` when backend error details are
+absent. Its telemetry retains the absent error metadata in live, resumed, and
+deferred delivery, rather than inventing an exception. Provided error details
+continue through the existing metadata converter.
+
+For a named `waitForCallback`, a deferred inner callback recovers its derived
+`<name>-callback` display name from a known `WaitForCallback` parent when replay
+skips that branch. This does not change checkpointed names, operation identity,
+parent identity, or the source notification; explicit names remain unchanged.
+
+At a terminal invocation boundary, the execution view parents a deferred
+completion to `Workflow` if its direct parent is still an open local placeholder
+that will be discarded. It does not invent a completion or span for that
+abandoned context. Pending or retrying invocations retain the parent identity
+because a later invocation can still complete and export that context. An
+exception is an unfinished parent below a known completed context in checkpoint
+history: replay skips that whole branch, so its deferred completion also uses
+`Workflow`. Missing or inconclusive ancestry is not treated as proof of abandonment.
+
+A completion notification already queued when its live context ends is exported
+before that context closes, preserving its OTel parent. Notifications delivered
+after the end hook retain the existing late-parent fallback; this does not add
+clock comparisons, retime supplied timestamps, or guarantee arbitrary cross-clock
+containment.
+
+Notifications and operation-end hooks are deduplicated within each invocation.
+Normal replay does not re-export stored external completions. Deduplication is
+not persisted: redelivery after a failed invocation can export the completion
+again, as required for recovery.
+
 ## Verification and Troubleshooting
 
 After deployment:
@@ -719,6 +771,15 @@ the coordinated core 2.7 / OTel 1.2 pair. Upgrade both for those capabilities.
 Older core/plugin combinations do not gain those guarantees. The two OTel views
 remain an unsupported combination, and the updated core rejects it with updated
 plugin metadata. The later core 3 factory migration is a separate major release.
+
+Instrumentation error details are optional even for failed operations. The core
+metadata correction for an empty callback error payload no longer invents an
+error object. API-v1 plugins that previously used only `OperationInfo.error`
+presence as a failure signal should use `OperationInfo.status` instead (and
+`AttemptEndInfo.outcome` for an attempt). Missing error details do not imply a
+successful operation; supplied partial or explicitly empty detail fields are
+retained. This does not change the provider/hook shape, callback rejection,
+persisted error payload, or replay identity.
 
 Registration metadata uses the namespaced symbol
 `Symbol.for("aws.lambda.durable.instrumentation.plugin-registration")`.

@@ -1,6 +1,10 @@
 import { createInvokeHandler } from "./invoke-handler";
 import { ExecutionContext } from "../../types";
-import { OperationStatus } from "../../types/wire";
+import { OperationStatus, type ErrorObject } from "../../types/wire";
+import {
+  InvokeError,
+  DurableOperationError,
+} from "../../errors/durable-error/durable-error";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
 
@@ -168,6 +172,87 @@ describe("InvokeHandler - plugin hooks", () => {
       expect.objectContaining({ isReplay: false, error: expect.any(Error) }),
     );
   });
+
+  it.each([
+    undefined,
+    {},
+    {
+      ErrorType: undefined,
+      ErrorMessage: undefined,
+      ErrorData: undefined,
+      StackTrace: undefined,
+    },
+    { ErrorType: "" },
+    { StackTrace: [] },
+    {
+      ErrorType: "RemoteFailure",
+      ErrorMessage: "remote failed",
+      ErrorData: "detail",
+      StackTrace: ["remote frame"],
+    },
+  ] satisfies Array<ErrorObject | undefined>)(
+    "preserves backend error metadata in the live failure hook (%j) without changing the caller error",
+    async (error) => {
+      const failed = {
+        Id: "backend-invoke",
+        Type: "CHAINED_INVOKE",
+        Name: "backend-name",
+        Status: OperationStatus.FAILED,
+        ChainedInvokeDetails: { Error: error },
+      };
+      const original = structuredClone(failed);
+      (mockContext.getStepData as jest.Mock)
+        .mockReturnValueOnce(undefined)
+        .mockReturnValueOnce(undefined)
+        .mockReturnValue(failed);
+      const handler = createInvokeHandler(
+        mockContext,
+        mockCheckpoint,
+        mockCreateStepId,
+        undefined,
+        jest.fn(),
+        undefined,
+        mockPlugin,
+      );
+      const caught = await handler("test-function", {}).catch(
+        (failure) => failure,
+      );
+      expect(caught).toBeInstanceOf(InvokeError);
+      if (!(caught instanceof InvokeError)) throw caught;
+      expect(caught.message).toBe(error?.ErrorMessage || "Invoke failed");
+      expect(caught.errorData).toBe(error?.ErrorData);
+      expect(mockPlugin.onOperationEnd).toHaveBeenCalledTimes(1);
+      const info = (
+        mockPlugin.onOperationEnd as jest.MockedFunction<
+          NonNullable<DurableInstrumentationPlugin["onOperationEnd"]>
+        >
+      ).mock.calls[0][0];
+      expect(info).toMatchObject({
+        id: "backend-invoke",
+        name: "backend-name",
+        type: "CHAINED_INVOKE",
+        status: "FAILED",
+        isReplay: false,
+      });
+      if (
+        !error ||
+        Object.values(error).every((value) => value === undefined)
+      ) {
+        expect(info.error).toBeUndefined();
+      } else {
+        expect(info.error).toBeInstanceOf(DurableOperationError);
+        expect(info.error).toMatchObject({
+          errorData: error.ErrorData,
+          cause: expect.objectContaining({
+            name: error.ErrorType || "Error",
+            message: error.ErrorMessage || "",
+            stack: error.StackTrace?.join("\n"),
+          }),
+        });
+      }
+      expect(failed).toEqual(original);
+    },
+  );
 
   it("should not throw when plugin hooks are undefined", async () => {
     (mockContext.getStepData as jest.Mock).mockReturnValue({

@@ -58,6 +58,7 @@ on:
         description: Optional conformance test commit SHA or branch name
         required: false
         type: string
+        default: "75987d46a915bc37409eed3ea9c3617a924c9756"
 
 # One run at a time for the whole repository, queued rather than cancelled. The
 # orchestrator's stacks are named per (language, backend, suite) and are persistent, so two
@@ -79,14 +80,14 @@ jobs:
       actions: write
       contents: read
       id-token: write
-    uses: aws/aws-durable-execution-conformance-tests/.github/workflows/opentelemetry-orchestrator.yml@f18bd0b5f28c5c90e288d0fb8bca08a849b51863
+    uses: aws/aws-durable-execution-conformance-tests/.github/workflows/opentelemetry-orchestrator.yml@bdb4f1cd0f9252c1aaa978bb8b341b71f2b9d9dc
     with:
       runs_on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
       language: javascript
       resource_prefix: js
       sdk_repository: aws/aws-durable-execution-sdk-js
       sdk_ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      conformance_test_ref: ${{ inputs.conformance_test_ref || 'a628f5589bbf067a441696c792ab3023c0d0899b' }}
+      conformance_test_ref: ${{ inputs.conformance_test_ref || '75987d46a915bc37409eed3ea9c3617a924c9756' }}
       checkout_sdk: true
       # Build the handlers from this repo's checked-out package instead of the conformance
       # repo's bundled examples/javascript. Path is relative to the conformance workspace,
