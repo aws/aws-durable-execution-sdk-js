@@ -28,7 +28,7 @@
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/node": "^20.0.0",
-    "electron": "^32.3.3",
+    "electron": "^44.7.0",
     "electron-builder": "26.15.3",
     "esbuild": "^0.24.0",
     "jest": "^30.5.1",
@@ -38,7 +38,7 @@
   "build": {
     "appId": "com.amazon.aws.durable-execution-sdk-js-insight-desktop",
     "productName": "Workflow Insight Explorer",
-    "electronVersion": "32.3.3",
+    "electronVersion": "44.7.0",
     "directories": {
       "output": "release"
     },
