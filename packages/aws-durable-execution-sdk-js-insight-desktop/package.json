@@ -23,16 +23,16 @@
   },
   "dependencies": {
     "@aws/durable-execution-sdk-js-insight-core": "0.1.0-alpha.0",
-    "node-llama-cpp": "^3.18.1"
+    "node-llama-cpp": "^3.22.1"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
-    "@types/node": "^20.0.0",
+    "@types/node": "^20.19.43",
     "electron": "^32.3.3",
     "electron-builder": "26.15.3",
-    "esbuild": "^0.24.0",
-    "jest": "^30.5.1",
-    "ts-jest": "^29.4.12",
+    "esbuild": "^0.28.2",
+    "jest": "^30.5.2",
+    "ts-jest": "^29.4.14",
     "typescript": "^6.0.3"
   },
   "build": {
