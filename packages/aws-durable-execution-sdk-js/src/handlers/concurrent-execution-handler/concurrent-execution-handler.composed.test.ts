@@ -2,6 +2,35 @@ import { createTestDurableContext } from "../../testing/create-test-durable-cont
 import { BatchItemStatus, DurableLogger, DurableContext } from "../../types";
 
 describe("ConcurrentExecutionHandler Composed Tests", () => {
+  it("keeps undefined successes from real local map and parallel paths", async () => {
+    const { context } = createTestDurableContext();
+
+    const mapped = await context.map(
+      "map-undefined-results",
+      [0, 1, 2, 3],
+      async (_childContext, item) => (item % 2 === 0 ? undefined : item * 10),
+    );
+    expect(mapped.all.map((item) => item.status)).toEqual([
+      BatchItemStatus.SUCCEEDED,
+      BatchItemStatus.SUCCEEDED,
+      BatchItemStatus.SUCCEEDED,
+      BatchItemStatus.SUCCEEDED,
+    ]);
+    expect(mapped.successCount).toBe(4);
+    expect(mapped.succeeded()).toHaveLength(4);
+    expect(mapped.getResults()).toStrictEqual([undefined, 10, undefined, 30]);
+
+    const parallel = await context.parallel("parallel-undefined-results", [
+      async () => undefined,
+      async () => 10,
+      async () => undefined,
+      async () => 30,
+    ]);
+    expect(parallel.successCount).toBe(4);
+    expect(parallel.succeeded()).toHaveLength(4);
+    expect(parallel.getResults()).toStrictEqual([undefined, 10, undefined, 30]);
+  });
+
   it("should execute items concurrently with real DurableContext", async () => {
     const { context } = createTestDurableContext();
 
