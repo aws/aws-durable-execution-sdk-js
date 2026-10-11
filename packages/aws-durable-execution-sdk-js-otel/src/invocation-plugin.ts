@@ -48,6 +48,7 @@ import type { OtelPluginConfig } from "./otel-plugin-config";
 import { createTracerProvider } from "./otel-plugin-provider";
 import { tryInstallGlobalIdGenerator } from "./global-id-generator";
 import { DurableSampler, tryInstallDurableSampler } from "./global-sampler";
+import { ExternalCompletions } from "./external-completions";
 
 import { PLUGIN_REGISTRATION } from "./plugin-registration";
 
@@ -74,6 +75,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   private globalIdGeneratorInstalled: boolean;
   private durableSampler: DurableSampler | undefined;
   private tracingEnabled = false;
+  private readonly externalCompletions = new ExternalCompletions();
   private readonly workflowSpanName: string;
   private readonly enrichLogger: boolean;
 
@@ -232,6 +234,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       },
       invocationParentContext,
     );
+    this.externalCompletions.observe(info.updatedOperations);
 
     // Each sampled invocation can recover an earlier undelivered anchor. An
     // opaque tracer retains terminal-only creation: without the sampler wrapper,
@@ -260,6 +263,11 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       return;
     }
 
+    // Prefer normal lifecycle hooks. Flush fresh external completions before
+    // cleanup even when the workflow deferred reading them until another replay.
+    for (const operation of this.externalCompletions.pending.values()) {
+      await this.onOperationEnd({ ...operation, isReplay: false });
+    }
     const endTime = this.liveTimestamp();
 
     // 1. End all spans in the stack in reverse order
@@ -438,6 +446,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   private resetInvocationState(): void {
+    this.externalCompletions.clear();
     this.invocationClock = undefined;
     this.spanMap.clear();
     this.spanStack = [];
@@ -638,14 +647,10 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       return;
     }
 
-    // Skip span creation for WAIT, INVOKE, CHAINED_INVOKE, and CALLBACK operations on replay
-    if (
-      info.isReplay &&
-      (info.type === "WAIT" ||
-        info.type === "INVOKE" ||
-        info.type === "CHAINED_INVOKE" ||
-        info.type === "CALLBACK")
-    ) {
+    // Updates and traversal can report the same completion in either order.
+    // The set is reset each invocation so failed-invocation redelivery remains
+    // eligible, while normal replay never exports a completion a second time.
+    if (this.externalCompletions.shouldSkip(info)) {
       return;
     }
 
@@ -699,7 +704,13 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       if (stackIndex !== -1) {
         this.spanStack.splice(stackIndex, 1);
       }
-    } else if (!info.isReplay) {
+    } else if (
+      !info.isReplay ||
+      this.externalCompletions.pending.has(info.id)
+    ) {
+      // A fresh checkpoint completion can be replay-marked: updated IDs were
+      // captured before this invocation received the update. Export it while
+      // its child parent is still active, without changing the SDK's info.
       // Operation was started in a prior invocation — create Continuation_Span
       const spanName = info.name ?? info.type;
 
@@ -772,6 +783,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       // Immediately end
       continuationSpan.end(this.liveTimestamp());
     }
+    this.externalCompletions.markExported(info);
   }
 
   async onOperationAttemptStart(info: AttemptInfo): Promise<void> {
@@ -857,8 +869,10 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     }
   }
 
-  async onOperationChange(_info: OperationChangeInfo): Promise<void> {
-    // No-op for this plugin
+  async onOperationChange(info: OperationChangeInfo): Promise<void> {
+    if (this.tracingEnabled) {
+      this.externalCompletions.observe(info.updatedOperations);
+    }
   }
 
   enrichLogContext(): Record<string, string | number | boolean> | undefined {
