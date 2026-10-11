@@ -358,67 +358,114 @@ export class LambdaLogExporter implements InsightExporter {
 /**
  * Serializes record exports so that, at most, one export runs at a time.
  *
- * Each {@link WorkflowInsightRecord} is a complete snapshot of the execution,
- * so a newer record fully supersedes any record still waiting to be exported.
- * While an export is in flight, additional updates are coalesced into a single
- * "pending" slot — intermediate records are dropped because the latest one
- * already contains all of their information. This prevents overlapping
- * `export()` calls when updates arrive faster than the exporter can keep up.
+ * Each {@link WorkflowInsightRecord} is a complete snapshot of one execution,
+ * so a newer record for the *same* execution fully supersedes any record of
+ * that execution still waiting to be exported. While an export is in flight,
+ * further updates are coalesced per execution ARN — intermediate snapshots of
+ * an execution are dropped because its latest one already contains all of
+ * their information. Records of different executions never replace each
+ * other: one plugin instance may serve several executions at once (the local
+ * test runtime, or any host that handles more than one invocation per
+ * process), and each execution's snapshot must reach the exporters.
+ *
+ * Pending records are exported oldest-execution-first. A re-scheduled ARN keeps
+ * its place in line, so an execution emitting rapid updates cannot starve the
+ * others.
  */
 class ExportScheduler {
   private inFlight: Promise<void> | undefined;
-  private pending: WorkflowInsightRecord | undefined;
+  /** Latest pending record per execution ARN, in first-scheduled order. */
+  private readonly pending = new Map<string, WorkflowInsightRecord>();
+  /** ARN whose record is currently being exported, if any. */
+  private exporting: string | undefined;
+  /** `drain()` callers waiting for a given ARN to be fully exported. */
+  private readonly waiters = new Map<string, Array<() => void>>();
 
   constructor(private readonly exporters: InsightExporter[]) {}
 
   /**
-   * Queue the latest record for export. If an export is already running, the
-   * record is held in the pending slot (replacing any earlier pending record)
-   * and exported once the in-flight export completes.
+   * Queue the latest record of an execution for export. If a record for the
+   * same execution is already pending it is replaced (the new snapshot
+   * supersedes it); records of other executions are left untouched.
    */
   schedule(record: WorkflowInsightRecord): void {
-    this.pending = record;
+    // Map.set on an existing key keeps the key's original insertion position.
+    this.pending.set(record.executionArn, record);
     if (this.inFlight === undefined) {
       this.inFlight = this.pump();
     }
   }
 
   /**
-   * Wait for any in-flight and pending exports to complete. Safe to call when
-   * idle. Used before the invocation returns to guarantee the final record is
-   * delivered (exports are otherwise fire-and-forget).
+   * Wait until no record of the given execution is pending or in flight. Safe
+   * to call when idle. Used before the invocation returns to guarantee that
+   * execution's final record is delivered (exports are otherwise
+   * fire-and-forget). Does not wait on other executions' exports.
    */
-  async drain(): Promise<void> {
-    while (this.inFlight !== undefined) {
-      await this.inFlight;
+  drain(executionArn: string): Promise<void> {
+    if (!this.pending.has(executionArn) && this.exporting !== executionArn) {
+      return Promise.resolve();
     }
+    return new Promise<void>((resolve) => {
+      const list = this.waiters.get(executionArn);
+      if (list) {
+        list.push(resolve);
+      } else {
+        this.waiters.set(executionArn, [resolve]);
+      }
+    });
+  }
+
+  private settle(executionArn: string): void {
+    const list = this.waiters.get(executionArn);
+    if (!list) return;
+    this.waiters.delete(executionArn);
+    for (const resolve of list) resolve();
   }
 
   private async pump(): Promise<void> {
     try {
-      // Drain the pending slot until no newer record has arrived. The check and
-      // the reset below run synchronously between awaits, so no update is lost.
-      while (this.pending !== undefined) {
-        const record = this.pending;
-        this.pending = undefined;
-        // allSettled so one failing/slow exporter never blocks or fails the others,
-        // and an export error never propagates into the execution. Each exporter
-        // gets a copy truncated to its own maxRecordSizeBytes (no-op when unset),
-        // measured against the exact shape that exporter emits (its `render`).
-        await Promise.allSettled(
-          this.exporters.map((exporter) =>
-            exporter.export(
-              truncateRecord(
-                record,
-                exporter.maxRecordSizeBytes,
-                exporter.render?.bind(exporter),
+      // Export until nothing is pending. Taking the oldest entry and removing
+      // it happen synchronously before the await, so a record scheduled for
+      // that ARN mid-export lands as a fresh pending entry and is picked up
+      // next.
+      while (this.pending.size > 0) {
+        const [executionArn, record] = this.pending.entries().next().value as [
+          string,
+          WorkflowInsightRecord,
+        ];
+        this.pending.delete(executionArn);
+        this.exporting = executionArn;
+        try {
+          // allSettled so one failing/slow exporter never blocks or fails the
+          // others, and an export error never propagates into the execution.
+          // Each exporter gets a copy truncated to its own maxRecordSizeBytes
+          // (no-op when unset), measured against the exact shape that exporter
+          // emits (its `render`).
+          await Promise.allSettled(
+            this.exporters.map((exporter) =>
+              exporter.export(
+                truncateRecord(
+                  record,
+                  exporter.maxRecordSizeBytes,
+                  exporter.render?.bind(exporter),
+                ),
               ),
             ),
-          ),
-        );
+          );
+        } finally {
+          this.exporting = undefined;
+          // A newer record for this ARN may have arrived during the export; its
+          // waiters are released only once that one has been exported too.
+          if (!this.pending.has(executionArn)) this.settle(executionArn);
+        }
       }
     } finally {
       this.inFlight = undefined;
+      // Nothing is pending or in flight, so no waiter can still be owed work.
+      for (const executionArn of Array.from(this.waiters.keys())) {
+        this.settle(executionArn);
+      }
     }
   }
 }
@@ -556,10 +603,11 @@ export function workflowInsight(
       }
     },
 
-    // wrapInvocation is the only hook the SDK awaits. We use it to drain the
-    // export queue before the invocation returns, guaranteeing the final
-    // record (scheduled by onInvocationEnd, which runs inside fn) is delivered.
-    // The drain runs in `finally` so it also covers the throwing/retry paths.
+    // wrapInvocation is the only hook the SDK awaits. We use it to drain this
+    // execution's export queue before the invocation returns, guaranteeing the
+    // final record (scheduled by onInvocationEnd, which runs inside fn) is
+    // delivered. The drain runs in `finally` so it also covers the
+    // throwing/retry paths.
     async wrapInvocation(
       info: InvocationInfo,
       fn: () => Promise<DurableExecutionInvocationOutput>,
@@ -571,7 +619,7 @@ export function workflowInsight(
         // Sampled-out executions never schedule a record, so there is nothing
         // to drain or flush — skip the work entirely.
         if (state.sampledIn) {
-          await scheduler.drain();
+          await scheduler.drain(info.executionArn);
           await flushAll(exporters);
         }
       }
