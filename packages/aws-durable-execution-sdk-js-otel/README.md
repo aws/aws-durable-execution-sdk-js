@@ -706,6 +706,57 @@ remote parent, or a synthetic execution root).
 
 Apache-2.0
 
+## Chained-invoke propagation (draft; model/backend dependent)
+
+When preparing a new `context.invoke()` START, the SDK calls the optional
+`providePropagationMetadata(input)` hook after assigning the operation identity
+and before serializing the checkpoint. The readonly input contains
+`executionArn`, `operationId`, optional `parentOperationId`, and
+`targetFunctionName`. The SDK places the collected `xAmznTraceId` in the flat
+`ChainedInvokeOptions.XAmznTraceId` wire member, separately for each operation
+in a batched checkpoint. Function name, tenant, payload and operation identity
+are unchanged; the SDK does not inject tracing fields into user payloads.
+
+Both OTel views encode the resolved execution trace ID as `Root`, the calling
+CHAINED_INVOKE operation span ID as `Parent`, and the resolved sampling decision
+as `Sampled`, including `Sampled=0`. Producing metadata does not create an extra
+span or use an unrelated active span. For example, existing plugin registration
+also covers both calls here:
+
+```typescript
+const first = context.invoke("first", "first-function:1", { item: 1 });
+const second = context.invoke("second", "second-function:1", { item: 2 });
+return context.promise.all([first, second]);
+```
+
+The dispatcher calls providers synchronously with a frozen input snapshot.
+The first non-null supported value wins; identical values do not conflict.
+Later different values generate a warning with both plugin identities and a
+conflict count. Invalid results and ordinary plugin failures are isolated.
+Blank or whitespace-only headers are ignored so later providers can contribute;
+nonblank values remain opaque and are not trimmed or parsed by the core SDK.
+With no plugin, an absent hook or no returned value, the wire member is omitted
+and the backend's existing tracing fallback applies.
+
+Replaying a persisted START, including a pending or completed invoke, does not
+call the hook or send another START. A failed, uncommitted START can collect
+metadata again when the invocation is retried. Providers must therefore use the
+stable identity, avoid side effects, and not assume exactly-once callbacks.
+
+The SDK-owned field and START integration are implemented in this draft, but
+end-to-end transmission **requires a generated Lambda model with the new field
+and the backend rollout**. The pinned `@aws-sdk/client-lambda` 3.1014.0 lacks
+`XAmznTraceId`: the unchanged wire-model parity guard fails type checking and
+the normal Lambda serializer drops the member. The serializer regression test
+intentionally fails with that model rather than bypassing serialization or
+skipping the assertion. This draft must remain unmerged until those dependency
+checks pass; deployed parent/child topology still needs validation after rollout.
+
+The design also adds `DistributedMapOptions.XAmznTraceId` to a future service
+model. This SDK currently has no distributed-map options or START API; its
+`map` and `parallel` APIs use CONTEXT operations. They are not distributed-map
+transport paths, and this change does not introduce a new operation API or
+invent the future Source/Processor/Destination structures.
 ## Core compatibility
 
 OTel 1.2 preserves valid core 2.4–2.x registrations, including separate

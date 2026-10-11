@@ -185,6 +185,15 @@ export const createInvokeHandler = (
           context.durableExecutionArn,
         );
 
+        // Collect only for a new START. A persisted START keeps its original
+        // propagation context on replay; an uncommitted attempt may recompute.
+        const metadata = plugin.providePropagationMetadata?.({
+          executionArn: context.durableExecutionArn,
+          operationId: opInfo.id,
+          parentOperationId: opInfo.parentId,
+          targetFunctionName: funcId,
+        });
+
         await checkpoint.checkpoint(stepId, {
           Id: stepId,
           ParentId: parentId,
@@ -196,6 +205,9 @@ export const createInvokeHandler = (
           ChainedInvokeOptions: {
             FunctionName: funcId,
             ...(config?.tenantId && { TenantId: config.tenantId }),
+            ...(metadata?.xAmznTraceId !== undefined && {
+              XAmznTraceId: metadata.xAmznTraceId,
+            }),
           },
         });
         stepData = context.getStepData(stepId);

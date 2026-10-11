@@ -257,6 +257,8 @@ export interface ChainedInvokeOptions {
   FunctionName: string | undefined;
   /** Tenant the invoked execution should run under, when using tenant isolation. */
   TenantId?: string | undefined;
+  /** X-Ray trace header for the calling operation, when supplied by instrumentation. */
+  XAmznTraceId?: string | undefined;
 }
 
 /**

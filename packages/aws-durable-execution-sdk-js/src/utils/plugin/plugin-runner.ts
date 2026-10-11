@@ -5,12 +5,14 @@ import {
   InvocationEndInfo,
   InvocationInfo,
   OperationChangeInfo,
+  PropagationInput,
   OperationEndInfo,
   OperationInfo,
   CustomerFnResult,
   CustomerFn,
 } from "../../types/plugin";
 import { DurableExecutionInvocationOutput } from "../../types/core";
+import { collectPropagationMetadata } from "./propagation-metadata";
 
 type CallbackResult = unknown;
 type CallbackFn = () => CallbackResult;
@@ -22,6 +24,7 @@ type PluginInfo =
   | AttemptEndInfo
   | AttemptInfo
   | OperationChangeInfo
+  | PropagationInput
   | undefined;
 type PluginWrapperHookFn = (
   info: PluginInfo,
@@ -145,6 +148,8 @@ export function createPluginRunner(
   };
 
   return {
+    providePropagationMetadata: (input) =>
+      collectPropagationMetadata(plugins, input),
     onInvocationStart: (info: InvocationInfo): Promise<void> =>
       run("onInvocationStart", info),
     wrapInvocation: (
