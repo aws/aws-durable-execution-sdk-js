@@ -124,18 +124,29 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
       expect(workflowSpan).toBeDefined();
     });
 
-    it("shares one execution trace with an application-owned provider when no ambient span exists", async () => {
+    it("shares one resumed execution trace and exports its ARN-correlated anchor before terminal completion", async () => {
       const plugin = new ExecutionOtelPlugin({
         tracerProviderFactory,
       });
 
-      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationStart(
+        makeInvocationInfo({ isFirstInvocation: false }),
+      );
+      const anchor = findSpan(exporter, "DurableExecutionRoot");
+      expect(anchor).toBeDefined();
+      expect(anchor!.attributes["durable.execution.arn"]).toBe(TEST_ARN);
+      expect(anchor!.startTime).toEqual(anchor!.endTime);
       await plugin.onInvocationEnd(
         makeInvocationEndInfo({ status: "SUCCEEDED" as any }),
       );
 
       const invocationSpan = findSpan(exporter, "Invocation");
       const workflowSpan = findSpan(exporter, "Workflow");
+      expect(
+        getExportedSpans(exporter).filter(
+          (span) => span.name === "DurableExecutionRoot",
+        ),
+      ).toHaveLength(1);
       expect(invocationSpan).toBeDefined();
       expect(workflowSpan).toBeDefined();
       // With no propagated context and no ambient span, a synthetic execution

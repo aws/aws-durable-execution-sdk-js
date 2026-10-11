@@ -11,6 +11,7 @@ on:
 concurrency:
   group: runtime-${{ inputs.node-version }}-integ
   cancel-in-progress: false
+  queue: max
 
 env:
   # The desktop app's `electron` devDependency has an install script that
