@@ -15,5 +15,5 @@ module.exports = {
   // the CPU. Jest's default worker count is CPUs - 1, which assumes CPU-bound
   // tests. So the default leaves the runner mostly idle. A fixed count runs
   // more test files against Lambda at the same time.
-  maxWorkers: 8,
+  maxWorkers: 16,
 };
