@@ -2,6 +2,9 @@
   "name": "insight-vscode-webview-ui",
   "private": true,
   "version": "0.0.0",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "node build.mjs",
     "watch": "node build.mjs --watch"
