@@ -9,7 +9,7 @@
     "directory": "packages/aws-durable-execution-sdk-js-insight-mcp"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12.0"
   },
   "bin": {
     "durable-insight-mcp": "dist/server.js"

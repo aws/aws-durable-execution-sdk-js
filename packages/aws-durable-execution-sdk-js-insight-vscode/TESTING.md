@@ -6,7 +6,7 @@ Workflow Insight data in CloudWatch Logs.
 ## Prerequisites
 
 - VS Code ≥ 1.90
-- Node.js ≥ 22
+- Node.js ≥ 22.12
 - AWS credentials with access to:
   - `logs:StartQuery`, `logs:GetQueryResults` on the target log group
   - `bedrock:InvokeModel` on the chosen model/inference profile
