@@ -41,5 +41,7 @@ jobs:
           path: .
       - name: Install dependencies
         run: npm ci
+      - name: Report runner resources
+        run: node -e 'const os=require("os"); console.log(`availableParallelism=${os.availableParallelism()} totalmemGiB=${(os.totalmem()/2**30).toFixed(1)}`)'
       - name: Run tests
         run: npm run test
