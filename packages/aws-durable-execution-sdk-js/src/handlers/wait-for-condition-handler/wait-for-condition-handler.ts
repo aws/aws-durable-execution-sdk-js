@@ -174,26 +174,41 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
         stepData = context.getStepData(stepId);
 
         // Get current state
-        let currentState: T;
-        if (
+        const checkpointData =
           stepData?.Status === OperationStatus.STARTED ||
           stepData?.Status === OperationStatus.READY
-        ) {
-          const checkpointData = stepData.StepDetails?.Result;
-          if (checkpointData) {
-            currentState = await safeDeserialize(
-              serdes,
-              checkpointData,
-              stepId,
-              name,
-              context.terminationManager,
-              context.durableExecutionArn,
-            );
-          } else {
-            currentState = config.initialState;
-          }
+            ? stepData.StepDetails?.Result
+            : undefined;
+
+        let currentState: T;
+        if (checkpointData) {
+          currentState = await safeDeserialize(
+            serdes,
+            checkpointData,
+            stepId,
+            name,
+            context.terminationManager,
+            context.durableExecutionArn,
+          );
         } else {
-          currentState = config.initialState;
+          // Round-trip initialState through the serdes so the first check sees
+          // the same shape as a check that resumes from a checkpoint.
+          const serializedInitialState = await safeSerialize(
+            serdes,
+            config.initialState,
+            stepId,
+            name,
+            context.terminationManager,
+            context.durableExecutionArn,
+          );
+          currentState = await safeDeserialize(
+            serdes,
+            serializedInitialState,
+            stepId,
+            name,
+            context.terminationManager,
+            context.durableExecutionArn,
+          );
         }
 
         const currentAttempt = (stepData?.StepDetails?.Attempt ?? 0) + 1;
@@ -314,7 +329,16 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
               stepId,
               OperationLifecycleState.COMPLETED,
             );
-            return deserializedState;
+            // waitStrategy is user code and may have mutated deserializedState.
+            // Return the value that was checkpointed, as a replay would.
+            return await safeDeserialize(
+              serdes,
+              serializedState,
+              stepId,
+              name,
+              context.terminationManager,
+              context.durableExecutionArn,
+            );
           }
 
           const nextAttemptDelaySeconds = durationToSeconds(decision.delay);
