@@ -13,7 +13,7 @@
   },
   "engines": {
     "vscode": "^1.90.0",
-    "node": ">=20"
+    "node": ">=22.12.0"
   },
   "categories": [
     "Other"
@@ -270,15 +270,15 @@
   },
   "dependencies": {
     "@aws/durable-execution-sdk-js-insight-core": "0.1.0-alpha.0",
-    "node-llama-cpp": "^3.18.1"
+    "node-llama-cpp": "^3.22.1"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
-    "@types/node": "^20.0.0",
-    "@types/vscode": "^1.90.0",
-    "esbuild": "^0.24.0",
-    "jest": "^30.5.1",
-    "ts-jest": "^29.4.12",
+    "@types/node": "^20.19.43",
+    "@types/vscode": "^1.140.0",
+    "esbuild": "^0.28.2",
+    "jest": "^30.5.2",
+    "ts-jest": "^29.4.14",
     "typescript": "^6.0.3"
   },
   "jest": {
