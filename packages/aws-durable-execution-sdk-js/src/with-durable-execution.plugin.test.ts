@@ -96,12 +96,57 @@ describe("plugin hooks", () => {
     };
   });
 
+  it("forwards each runtime X-Ray header to invocation hooks on initial and resumed calls", async () => {
+    const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
+      plugins: [plugin],
+    });
+    for (const mode of [
+      DurableExecutionMode.ExecutionMode,
+      DurableExecutionMode.ReplayMode,
+    ]) {
+      (initializeExecutionContext as jest.Mock).mockResolvedValue({
+        executionContext: mockExecutionContext,
+        checkpointToken: TEST_CONSTANTS.CHECKPOINT_TOKEN,
+        durableExecutionMode: mode,
+      });
+      const xRayTraceId = `Root=1-5759e988-bd862e3fe1be46a994272793;Parent=53995c3f42cd8ad8;Sampled=0`;
+      await handler(mockEvent, { ...mockContext, xRayTraceId } as Context);
+      expect(plugin.onInvocationStart).toHaveBeenLastCalledWith(
+        expect.objectContaining({ xRayTraceId }),
+      );
+    }
+  });
+
+  it.each([undefined, null, ""])(
+    "keeps an available runtime carrier authoritative when it returns %s",
+    async (value) => {
+      const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
+        plugins: [plugin],
+      });
+      const carrier = jest.fn(() => value);
+      const runtimeContext = Object.assign(
+        Object.create(
+          Object.defineProperty({}, "xRayTraceId", { get: carrier }),
+        ),
+        mockContext,
+      );
+      await handler(mockEvent, runtimeContext);
+      expect(plugin.onInvocationStart).toHaveBeenLastCalledWith(
+        expect.objectContaining({ xRayTraceId: "" }),
+      );
+      expect(carrier).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it("calls onInvocationStart with isFirstInvocation=true on first invocation", async () => {
     const handler = withDurableExecution(jest.fn().mockResolvedValue({}), {
       plugins: [plugin],
     });
     await handler(mockEvent, mockContext);
 
+    expect(
+      jest.mocked(plugin.onInvocationStart!).mock.calls[0][0],
+    ).not.toHaveProperty("xRayTraceId");
     expect(plugin.onInvocationStart).toHaveBeenCalledWith({
       requestId: "req-123",
       executionArn: "arn:test",

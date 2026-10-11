@@ -111,11 +111,29 @@ async function runHandler<
     executionStartTimestamp: initialExecutionEvent?.StartTimestamp ?? undefined,
   };
 
+  let runtimeTraceInfo: Pick<InvocationInfo, "xRayTraceId"> = {};
+  // The no-plugin runner is empty. A configured plugin produces this composite
+  // hook even when it only implements wrapInvocation, so it still gets the carrier.
+  if (plugin.onInvocationStart) {
+    try {
+      const xRayTraceId = (context as Context & { xRayTraceId?: string })
+        .xRayTraceId;
+      // Presence is authoritative, including an available but empty carrier.
+      if (xRayTraceId !== undefined || "xRayTraceId" in context) {
+        runtimeTraceInfo = { xRayTraceId: xRayTraceId ?? "" };
+      }
+    } catch {
+      // Optional runtime getters/proxies must not fail the handler. A failed
+      // read must not adopt another invocation's process-wide trace header.
+      runtimeTraceInfo = { xRayTraceId: "" };
+    }
+  }
   const invocationInfo: InvocationInfo = {
     ...invocationBaseInfo,
     isFirstInvocation:
       durableExecutionMode === DurableExecutionMode.ExecutionMode,
     updatedOperations,
+    ...runtimeTraceInfo,
   };
   await plugin.onInvocationStart?.(invocationInfo);
 

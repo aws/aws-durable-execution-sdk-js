@@ -445,9 +445,12 @@ case direct samplers may make their normal span-level decisions.
 ### Context extractors
 
 The default `xRayContextExtractor` parses `Root`, `Parent`, and `Sampled`
-independently from `_X_AMZN_TRACE_ID`, rejecting an all-zero (invalid) `Root` or
-`Parent`. The durable backend keeps the X-Ray `Root` stable for every invocation
-of one execution, so its trace ID anchors the whole execution. The package also
+independently from the invocation's `info.xRayTraceId` carrier, falling back to
+`_X_AMZN_TRACE_ID` only when that property is absent. A present but empty or
+invalid carrier suppresses the environment fallback. The extractor rejects an
+all-zero (invalid) `Root` or `Parent`. The durable backend keeps the X-Ray `Root`
+stable for every invocation of one execution, so its trace ID anchors the whole
+execution. The package also
 exports `w3cClientContextExtractor`, which reads W3C `traceparent` data from
 `context.clientContext.custom.traceparent`.
 
@@ -617,6 +620,7 @@ deriveExecutionTraceId(
   environment: ExecutionTraceEnvironment,
   executionArn: string,
   executionStartTimestamp?: Date,
+  invocation?: { readonly xRayTraceId?: string | null | undefined },
 ): string;
 
 deriveWorkflowSpanId(executionArn: string): string;
@@ -633,11 +637,33 @@ deriveSpanIdFromOperationId(
 `deriveTraceIdFromXRayRoot` converts a valid X-Ray `Root` value to an
 OpenTelemetry trace ID and returns `undefined` for invalid input.
 `deriveExecutionTraceId` applies the default plugin precedence to an explicit
-environment: a valid `_X_AMZN_TRACE_ID` `Root` wins, otherwise it uses the same
-ARN-and-start-time fallback as the plugins. Pass `process.env` in Lambda or a
-plain object in tests. When no valid X-Ray Root is available, pass the same
-execution start timestamp supplied to the plugin; omit it only when it is
-unavailable to both callers.
+environment and an optional fourth invocation-context argument. Only
+`_X_AMZN_TRACE_ID` is read from the environment, preserving existing callers even
+if they have an unrelated variable named `xRayTraceId`. In `onInvocationStart(info)`,
+pass the `InvocationInfo` snapshot from the coordinated core version as the fourth
+argument. Passing the snapshot preserves whether the carrier property exists;
+do not manufacture `{ xRayTraceId: undefined }` when that capability is absent.
+
+```typescript
+const traceId = deriveExecutionTraceId(
+  process.env,
+  info.executionArn,
+  info.executionStartTimestamp,
+  info,
+);
+```
+
+An available local carrier takes precedence, including when its value is empty,
+`undefined`, or `null`. A present carrier with no usable header suppresses the
+environment carrier and uses the ARN-and-start-time fallback. The durable wrapper treats a
+failing runtime getter or presence check as an empty carrier, preventing optional
+metadata failures from aborting the handler or adopting a stale process header.
+It does not inspect this carrier when no plugins are configured. Omit the property
+only when
+that runtime capability is unavailable; old cores and contexts without the
+property retain their environment fallback.
+When no valid Root is available, pass the same execution start timestamp as the
+plugin; omit it only when it is unavailable to both callers.
 `deriveWorkflowSpanId` hashes `workflow:<execution ARN>`,
 `deriveExecutionRootSpanId` hashes `execution-root:<execution ARN>` (a distinct
 namespace so the synthetic root never collides with the Workflow or operation
@@ -649,17 +675,25 @@ Wrapper-style instrumentation can create spans on the same execution trace and
 refer to the same Workflow span without copying the plugin's derivations:
 
 ```typescript
+import type { DurableInstrumentationPlugin } from "@aws/durable-execution-sdk-js";
 import {
   deriveExecutionTraceId,
   deriveWorkflowSpanId,
 } from "@aws/durable-execution-sdk-js-otel";
 
-const executionTraceId = deriveExecutionTraceId(
-  process.env,
-  executionArn,
-  executionStartTimestamp,
-);
-const workflowSpanId = deriveWorkflowSpanId(executionArn);
+const customInstrumentation: DurableInstrumentationPlugin = {
+  async wrapInvocation(info, next) {
+    const executionTraceId = deriveExecutionTraceId(
+      process.env,
+      info.executionArn,
+      info.executionStartTimestamp,
+      info,
+    );
+    const workflowSpanId = deriveWorkflowSpanId(info.executionArn);
+    // Use these IDs in your custom instrumentation around next().
+    return next();
+  },
+};
 ```
 
 ### Context Extractors
