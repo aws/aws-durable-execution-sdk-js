@@ -334,3 +334,88 @@ Resources:
       DurableConfig:
         RetentionPeriodInDays: 7
         ExecutionTimeout: 300
+  PluginInvocationInfoShape:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-19"]
+    Properties:
+      CodeUri: ./dist
+      Handler: plugin_invocation_info_shape.handler
+      Description: Invocation-start and invocation-end hook info carries the full invocation field set
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  PluginOperationInfoShape:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-20"]
+    Properties:
+      CodeUri: ./dist
+      Handler: plugin_operation_info_shape.handler
+      Description: Operation-start and operation-end hook info carries the full operation field set
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  PluginAttemptInfoShape:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-21"]
+    Properties:
+      CodeUri: ./dist
+      Handler: plugin_attempt_info_shape.handler
+      Description: Attempt-start and attempt-end hook info carries the full attempt field set
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  PluginOperationChangeShape:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-22"]
+    Properties:
+      CodeUri: ./dist
+      Handler: plugin_operation_change_shape.handler
+      Description: Operation-change hook info carries full operation items in the delta and full map
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
+  PluginContextInfoShape:
+    Type: AWS::Serverless::Function
+    Metadata:
+      SkipBuild: "True"
+    TestingMetadata:
+      TestDescription: ["10-23"]
+    Properties:
+      CodeUri: ./dist
+      Handler: plugin_context_info_shape.handler
+      Description: Context operations expose subType tokens and user-function hooks expose the children-replay indicator
+      Role:
+        Fn::GetAtt:
+        - DurableFunctionRole
+        - Arn
+      DurableConfig:
+        RetentionPeriodInDays: 7
+        ExecutionTimeout: 300
