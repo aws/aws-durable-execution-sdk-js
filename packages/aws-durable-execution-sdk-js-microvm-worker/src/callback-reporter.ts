@@ -23,16 +23,34 @@ const MAX_ERROR_MESSAGE_CHARS = 8 * 1024;
 const MAX_ERROR_TYPE_CHARS = 256;
 
 /**
+ * The error name that the callback APIs return for a callback that is
+ * closed.
+ *
+ * The service returns it, with the message "The callback is either timed out
+ * or already completed", for each of these cases, measured in us-west-2:
+ *
+ * 1. The callback is already complete, with a success or a failure.
+ * 2. The callback or its heartbeat timed out.
+ * 3. The durable execution has stopped.
+ *
+ * So this one name cannot tell an outcome that was delivered from one that
+ * was lost.
+ *
+ * @internal
+ */
+export const CLOSED_CALLBACK_ERROR_NAME = "CallbackTimeoutException";
+
+/**
  * Error names that mean the callback can no longer be completed.
  *
- * `CallbackTimeoutException` means the callback or its heartbeat timed out.
- * `InvalidParameterValueException` means the service does not accept the
- * callback ID, for example because the callback is already complete.
- * `ResourceNotFoundException` means the callback does not exist. A later
- * attempt fails the same way, so none of them is retried.
+ * {@link CLOSED_CALLBACK_ERROR_NAME} means the callback is closed.
+ * `InvalidParameterValueException` means the callback ID is not valid: the
+ * service answers "Invalid callback id" for a malformed ID or an ID that it
+ * does not know. `ResourceNotFoundException` means the callback does not
+ * exist. A later attempt fails the same way, so none of them is retried.
  */
 const TERMINAL_ERROR_NAMES: ReadonlySet<string> = new Set([
-  "CallbackTimeoutException",
+  CLOSED_CALLBACK_ERROR_NAME,
   "InvalidParameterValueException",
   "ResourceNotFoundException",
 ]);
@@ -490,8 +508,8 @@ export class CallbackReporter {
    * @throws \{ResultSerializationError\} When the result cannot be serialized
    * as JSON. No call is made in that case either.
    * @throws The last error when every attempt fails: a service error, or a
-   * `TimeoutError` or `AbortError` when the last attempt got no answer. An
-   * "already complete" answer after an attempt without an answer resolves
+   * `TimeoutError` or `AbortError` when the last attempt got no answer. A
+   * "closed callback" answer after an attempt without an answer resolves
    * with a warning instead.
    */
   async succeed(result: unknown): Promise<void> {
@@ -525,8 +543,8 @@ export class CallbackReporter {
    * like the core SDK, because it would expose the image's file paths in the
    * durable execution history.
    * @throws The last error when every attempt fails: a service error, or a
-   * `TimeoutError` or `AbortError` when the last attempt got no answer. An
-   * "already complete" answer after an attempt without an answer resolves
+   * `TimeoutError` or `AbortError` when the last attempt got no answer. A
+   * "closed callback" answer after an attempt without an answer resolves
    * with a warning instead.
    */
   async fail(error: unknown): Promise<void> {
@@ -565,14 +583,17 @@ export class CallbackReporter {
    * 5 attempts. A permanent error, such as a terminal callback error or
    * `AccessDeniedException`, is returned at once.
    *
-   * One exception: `InvalidParameterValueException` ("already complete")
-   * after an attempt that ended without an answer, or after an SDK-internal
-   * retry, most likely means that an earlier try delivered the outcome. The
-   * call then warns and resolves.
+   * One exception: {@link CLOSED_CALLBACK_ERROR_NAME} after an attempt that
+   * ended without an answer, or after an SDK-internal retry, most likely
+   * means that an earlier try delivered the outcome. The call then warns and
+   * resolves. The same name also means that the callback timed out. The
+   * worker cannot tell the two cases apart, so the warning names both. The
+   * durable function already has the outcome in both cases: the delivered
+   * one, or the timeout. So a warning, not an error, is logged.
    */
   private async withRetry(call: () => Promise<unknown>): Promise<void> {
     // Set when an attempt failed without showing whether the service applied
-    // it. A later "already complete" answer then most likely means that the
+    // it. A later "closed callback" answer then most likely means that the
     // earlier attempt delivered the outcome.
     let uncertain = false;
     for (let attempt = 1; ; attempt++) {
@@ -585,11 +606,10 @@ export class CallbackReporter {
         // retry is uncertain in the same way.
         if (
           (uncertain || (sdkAttemptsOf(error) ?? 1) > 1) &&
-          safeGet(() => (error as Error).name) ===
-            "InvalidParameterValueException"
+          safeGet(() => (error as Error).name) === CLOSED_CALLBACK_ERROR_NAME
         ) {
           this.warn(
-            "the callback is already complete. An earlier attempt whose answer never arrived probably reported the outcome.",
+            "the callback is closed. The service gives the same answer for a callback that is already complete and for one that timed out. So either an earlier attempt whose answer never arrived reported the outcome, or the callback timed out first. The durable function has the outcome in both cases.",
             { callbackId: this.callbackId, attempt },
           );
           return;

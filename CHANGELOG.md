@@ -42,6 +42,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The MicroVM worker in `@aws/durable-execution-sdk-js-microvm-worker` treated
+  `InvalidParameterValueException` as the answer for a callback that is already complete. The
+  service answers `CallbackTimeoutException` ("The callback is either timed out or already
+  completed") for a callback that is already complete, timed out, or whose execution stopped.
+  `InvalidParameterValueException` means a malformed or unknown callback ID. So two checks missed
+  the real answer:
+  - A completion whose earlier attempt reached the service, although its answer was lost, failed
+    on the retry instead of counting as delivered. The worker then logged that the outcome could
+    not be reported. It now logs a warning that names both cases the code covers: an earlier
+    attempt delivered the outcome, or the callback timed out first. A callback that really timed
+    out is now a warning where it was an error. The durable function sees the timeout either way.
+  - A heartbeat that met the completion while it was in flight logged "the callback no longer
+    accepts heartbeats". It is no longer logged.
+
+- A MicroVM worker job could reach its heartbeat timeout after two failed heartbeats in a row.
+  Each heartbeat call could take half the interval. The service times the heartbeat timeout from
+  when it receives a call, which can be at the call's start. So the worst gap was 3.5 intervals,
+  above the 3-interval timeout. Each call now ends after a third of the interval, and the worst
+  gap is about 2.83 intervals. The Python worker measured a 32.39-second gap against a 30-second
+  heartbeat timeout before the same change.
+
+- An `InvalidRunHookPayloadError` for a `runHookPayload` that is not JSON now keeps the parser's
+  `SyntaxError` as its `cause`. Its message names the position of the error.
+
 - An oversized result could keep the invocation running until the Lambda timeout. The SDK
   checkpoints a result over the response size limit after the handler returns, and waited for
   that checkpoint alone. When an earlier checkpoint in the queue failed, or was answered without a
