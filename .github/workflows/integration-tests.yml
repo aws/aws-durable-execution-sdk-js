@@ -103,9 +103,6 @@ jobs:
         run: |
           npm ci
 
-      - name: Report runner resources
-        run: node -e 'const os=require("os"); console.log(`availableParallelism=${os.availableParallelism()} totalmemGiB=${(os.totalmem()/2**30).toFixed(1)}`)'
-
       - name: Run Jest integration tests
         env:
           LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
