@@ -587,9 +587,10 @@ export class CallbackReporter {
    * ended without an answer, or after an SDK-internal retry, most likely
    * means that an earlier try delivered the outcome. The call then warns and
    * resolves. The same name also means that the callback timed out. The
-   * worker cannot tell the two cases apart, so the warning names both. The
-   * durable function already has the outcome in both cases: the delivered
-   * one, or the timeout. So a warning, not an error, is logged.
+   * worker cannot tell the two cases apart, so the warning names both. In
+   * both cases the durable function no longer waits for this callback: it
+   * has the delivered outcome, or the timeout. So a warning, not an error,
+   * is logged.
    */
   private async withRetry(call: () => Promise<unknown>): Promise<void> {
     // Set when an attempt failed without showing whether the service applied
@@ -609,7 +610,7 @@ export class CallbackReporter {
           safeGet(() => (error as Error).name) === CLOSED_CALLBACK_ERROR_NAME
         ) {
           this.warn(
-            "the callback is closed. The service gives the same answer for a callback that is already complete and for one that timed out. So either an earlier attempt whose answer never arrived reported the outcome, or the callback timed out first. The durable function has the outcome in both cases.",
+            "the callback is closed. The service gives the same answer for a callback that is already complete and for one that timed out. So either an earlier attempt whose answer never arrived reported the outcome, or the callback timed out first. The durable function no longer waits for this callback in either case.",
             { callbackId: this.callbackId, attempt },
           );
           return;
