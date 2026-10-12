@@ -17,5 +17,7 @@ module.exports = {
   // took about 276 s. With 16 workers it took about 58 s.
   // With 24 workers the Lambda API returned TooManyRequestsException, and
   // bail stopped the run. So do not raise this without checking throttling.
-  maxWorkers: 16,
+  // Other AWS accounts can have lower quotas than the CI account. So the
+  // override applies only in CI, and local runs keep Jest's default.
+  ...(process.env.CI ? { maxWorkers: 16 } : {}),
 };
