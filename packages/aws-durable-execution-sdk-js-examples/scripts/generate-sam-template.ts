@@ -367,7 +367,7 @@ function main() {
       lineWidth: -1, // No line wrapping
       noRefs: true,
       sortKeys: false,
-      quotingType: '"',
+      quoteStyle: "double",
     });
 
     const templatePath =
