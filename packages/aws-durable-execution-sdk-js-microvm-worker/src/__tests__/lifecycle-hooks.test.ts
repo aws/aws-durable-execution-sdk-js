@@ -399,9 +399,10 @@ describe("suspend and terminate hooks", () => {
       const worker = start(jest.fn(), info, error);
       await runHook(worker);
       await job(worker, "cb-1");
-      lambda.completionError = Object.assign(new Error("already complete"), {
-        name: "InvalidParameterValueException",
-      });
+      lambda.completionError = Object.assign(
+        new Error("The callback is either timed out or already completed"),
+        { name: "CallbackTimeoutException" },
+      );
 
       await hook(worker, "terminate");
 
