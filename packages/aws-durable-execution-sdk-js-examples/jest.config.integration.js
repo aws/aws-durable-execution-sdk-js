@@ -13,7 +13,9 @@ module.exports = {
   bail: true,
   // Each integration test spends most of its time waiting on Lambda, not on
   // the CPU. Jest's default worker count is CPUs - 1, which assumes CPU-bound
-  // tests. So the default leaves the runner mostly idle. A fixed count runs
-  // more test files against Lambda at the same time.
-  maxWorkers: 24,
+  // tests. On the 4-CPU CI runner that ran 3 files at a time, and the suite
+  // took about 276 s. With 16 workers it took about 58 s.
+  // With 24 workers the Lambda API returned TooManyRequestsException, and
+  // bail stopped the run. So do not raise this without checking throttling.
+  maxWorkers: 16,
 };
