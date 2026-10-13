@@ -1,12 +1,31 @@
 # AWS Durable Execution ESLint Plugin
 
-ESLint rules that catch mistakes which break replay in AWS Lambda durable functions.
+ESLint rules for AWS Lambda durable functions. They report code that breaks replay.
 
-A durable function runs again from the start each time it resumes. The SDK skips
-the steps that already finished and returns their saved results. Code that behaves
-differently on the second run, such as a random value or a variable changed inside
-a step, gives different results on replay. These rules report that code while you
-write it.
+## How replay works
+
+A durable function works by replay. When an execution continues after a wait, a
+callback, a retry, or a failure, Lambda runs your handler again from the beginning.
+The SDK then walks through the code up to the point where the previous run stopped:
+
+- At a step that already finished, the SDK returns the step's saved result. It does
+  not run the step's function again.
+- At the first operation that has not finished, the SDK runs it and saves its result.
+
+So the code inside a step runs when the step executes, and the code outside the
+steps runs again on every replay.
+
+**The code outside a step must be deterministic.** The SDK identifies each durable
+operation by its position: the first operation called on a context, the second, and
+so on. On replay it matches each call to the saved operation at the same position.
+Given the same saved results, your code must make the same calls in the same order.
+Anything that can give a different answer the second time belongs inside a step.
+That includes the current time, random numbers, UUIDs, and API calls whose results
+change.
+
+Two rules in this plugin protect this requirement: `no-non-deterministic-outside-step`
+and `no-closure-in-durable-operations`. A third rule, `no-nested-durable-operations`,
+checks how durable operations are nested.
 
 ## Requirements
 
@@ -125,15 +144,19 @@ deprecated and remains only so that code which reads its `rules` keeps working.
 
 All three rules are in `flat/recommended` as errors.
 
-| Rule                                                                      | What it reports                                                      |
-| ------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| [`no-nested-durable-operations`](#no-nested-durable-operations)           | A durable operation that uses the same context as the one running it |
-| [`no-closure-in-durable-operations`](#no-closure-in-durable-operations)   | A variable from an outer scope that a durable operation changes      |
-| [`no-non-deterministic-outside-step`](#no-non-deterministic-outside-step) | Random values, the current time and UUIDs outside a step             |
+| Rule                                                                      | What it reports                                                           |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| [`no-nested-durable-operations`](#no-nested-durable-operations)           | A durable operation started on the context of the operation it runs in    |
+| [`no-closure-in-durable-operations`](#no-closure-in-durable-operations)   | A variable declared outside a step that the step changes                  |
+| [`no-non-deterministic-outside-step`](#no-non-deterministic-outside-step) | Non-deterministic code outside a step, such as the time and random values |
 
 ### `no-nested-durable-operations`
 
 Prevents using the same context object inside its own durable operation.
+
+A step is one unit of work, and it cannot contain other durable operations. To group
+operations, run them in a child context with `runInChildContext`, and call them on
+the child context.
 
 Checked operations: `step`, `wait`, `waitForCallback`, `waitForCondition`,
 `parallel`, `map` and `runInChildContext`.
@@ -190,6 +213,11 @@ check.
 Prevents modifying closure variables inside durable operations. Reading closure
 variables is allowed.
 
+The function of a step does not run again on replay, so a change it makes to a
+variable outside the step does not happen on replay. The code after the step then
+sees a different value than it saw on the first run, which makes that code
+non-deterministic. To pass a value out of a step, return it from the step.
+
 Checked operations: `step`, `runInChildContext`, `waitForCondition` and
 `waitForCallback`.
 
@@ -202,7 +230,7 @@ const handler = withDurableExecution(
     const result = await context.runInChildContext(
       async (childContext: DurableContext) => {
         const stepResult = await childContext.step(async () => {
-          // Error: Modifying 'a' from outer scope causes replay inconsistency
+          // Error: this step does not run again on replay, so this change to 'a' is lost
           a = a + 1;
           return "child step completed";
         });
@@ -254,9 +282,9 @@ const handler = withDurableExecution(
 
 ### `no-non-deterministic-outside-step`
 
-Requires code that gives a different answer on each run to run inside a step. The
-SDK saves a step's result, so a replay reads the saved value. Code outside a step
-runs again on every replay and produces a new value.
+Requires non-deterministic code to run inside a step. Code outside a step runs
+again on every replay, so it has to give the same answer each time. A step's result
+is saved, so a replay reads the saved value instead of running the call again.
 
 The rule reports these calls when they are written outside a step callback:
 
@@ -276,7 +304,7 @@ the helper is outside a step.
 ```javascript
 const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
-    // Error: both values change on every replay
+    // Error: this code runs again on every replay, and both values change
     const orderId = crypto.randomUUID();
     const startedAt = Date.now();
 
@@ -305,28 +333,34 @@ const handler = withDurableExecution(
 
 ## Why These Rules?
 
-### No Nested Durable Operations
+Replay runs the code outside the steps once on the first run, and again on every
+replay. The SDK can resume an execution correctly only if each run makes the same
+durable calls in the same order. The first two rules below protect that requirement.
+The third protects the structure of nested operations.
 
-Nesting durable operations with the same context object can cause runtime errors
-and unexpected behavior in AWS Lambda durable functions. This rule helps catch
-these issues at development time.
+### No Non-Deterministic Code Outside a Step
+
+Code that reads the clock or generates a random value gives a different answer on
+each run. If it runs outside a step, a replay can compute a different value than
+the first run did. A later `if` statement can then take another branch, and the code
+makes different durable calls than the ones the SDK saved. Wrapping the call in a
+step saves its result, so every replay reads the same value.
 
 ### No Closure in Durable Operations
 
-During replay, durable functions skip already-executed steps. If a closure variable
-is modified inside a step, the modification won't occur during replay, causing
-different outcomes between initial execution and replay. This leads to
-non-deterministic behavior and potential bugs.
+A step's function does not run again on replay. If it changes a variable outside
+the step, the first run sees the change and a replay does not. The code after the
+step then works with different values on the two runs. Return the value from the
+step instead, because the SDK saves what a step returns.
 
 Reading closure variables is safe because it doesn't change state. Only mutations
 (assignments, increments, decrements) are problematic.
 
-### No Non-Deterministic Code Outside a Step
+### No Nested Durable Operations
 
-A replay runs the code between steps again. If that code reads the clock or
-generates a random value, the replay sees a different value than the first run. A
-later step can then take a different path from the one the saved results describe.
-Wrapping the call in a step saves its result, so every replay reads the same value.
+A durable operation that uses the same context as the operation it runs in can cause
+runtime errors and unexpected behavior. The SDK expects grouped work to run in a
+child context. This rule helps catch these issues at development time.
 
 ## License
 

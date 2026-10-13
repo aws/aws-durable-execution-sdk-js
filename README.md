@@ -23,7 +23,7 @@ Build **resilient, long-running AWS Lambda functions** with automatic state pers
 - **Type Safety** – Full TypeScript support with comprehensive type definitions
 - **Local Testing** – Run durable functions in unit tests with time skipping, no AWS deployment needed
 - **Observability** – OpenTelemetry traces and Workflow Insight records for every execution
-- **Replay Safety Checks** – ESLint rules that flag code which behaves differently on replay
+- **Replay Safety Checks** – ESLint rules that flag non-deterministic code outside steps and other mistakes that break replay
 
 ## 📦 Packages
 
@@ -31,11 +31,11 @@ This monorepo contains the following packages. Most developers need only the fir
 
 ### Build and test durable functions
 
-| Package                                                                                              | Description                                              | npm                                                                                                                                                           |
-| ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [@aws/durable-execution-sdk-js](./packages/aws-durable-execution-sdk-js)                             | Core SDK for building durable Lambda functions           | [![npm](https://img.shields.io/npm/v/@aws/durable-execution-sdk-js)](https://www.npmjs.com/package/@aws/durable-execution-sdk-js)                             |
-| [@aws/durable-execution-sdk-js-testing](./packages/aws-durable-execution-sdk-js-testing)             | Local and cloud test runners, plus the `run-durable` CLI | [![npm](https://img.shields.io/npm/v/@aws/durable-execution-sdk-js-testing)](https://www.npmjs.com/package/@aws/durable-execution-sdk-js-testing)             |
-| [@aws/durable-execution-sdk-js-eslint-plugin](./packages/aws-durable-execution-sdk-js-eslint-plugin) | ESLint rules that catch code which breaks replay         | [![npm](https://img.shields.io/npm/v/@aws/durable-execution-sdk-js-eslint-plugin)](https://www.npmjs.com/package/@aws/durable-execution-sdk-js-eslint-plugin) |
+| Package                                                                                              | Description                                                                         | npm                                                                                                                                                           |
+| ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [@aws/durable-execution-sdk-js](./packages/aws-durable-execution-sdk-js)                             | Core SDK for building durable Lambda functions                                      | [![npm](https://img.shields.io/npm/v/@aws/durable-execution-sdk-js)](https://www.npmjs.com/package/@aws/durable-execution-sdk-js)                             |
+| [@aws/durable-execution-sdk-js-testing](./packages/aws-durable-execution-sdk-js-testing)             | Local and cloud test runners, plus the `run-durable` CLI                            | [![npm](https://img.shields.io/npm/v/@aws/durable-execution-sdk-js-testing)](https://www.npmjs.com/package/@aws/durable-execution-sdk-js-testing)             |
+| [@aws/durable-execution-sdk-js-eslint-plugin](./packages/aws-durable-execution-sdk-js-eslint-plugin) | ESLint rules that catch non-deterministic code and other mistakes that break replay | [![npm](https://img.shields.io/npm/v/@aws/durable-execution-sdk-js-eslint-plugin)](https://www.npmjs.com/package/@aws/durable-execution-sdk-js-eslint-plugin) |
 
 ### Observability
 
@@ -116,6 +116,27 @@ const handler = async (event: any, context: DurableContext) => {
 export const lambdaHandler = withDurableExecution(handler);
 ```
 
+### How It Runs: Replay
+
+A durable function does not keep running while it waits. It can stop to wait for a timer or an event, or because of a failure. Lambda invokes it again when the execution can continue. Each invocation runs your handler from the beginning, and the SDK **replays** the execution up to the point where the previous run stopped:
+
+- At a step that already finished, the SDK returns the step's saved result. It does not run the step's function again.
+- At the first operation that has not finished, the SDK runs it and saves its result.
+
+So the code inside a step runs when the step executes, and **the code outside the steps runs again on every replay**. The code outside a step must therefore be deterministic: given the same saved results, it must make the same durable calls in the same order. Anything that can give a different answer the second time goes inside a step. That includes the current time, random numbers, UUIDs, and API calls whose results change.
+
+```typescript
+// ❌ Outside a step: runs again on every replay, and returns a new value each time
+const orderId = crypto.randomUUID();
+
+// ✅ Inside a step: the SDK saves the value, so every replay gets the same one
+const orderId = await context.step("create-order-id", async () =>
+  crypto.randomUUID(),
+);
+```
+
+The [Concepts & Use Cases](./packages/aws-durable-execution-sdk-js/src/documents/CONCEPTS.md) guide covers the replay model in more detail. The [ESLint plugin](#-catching-replay-bugs-with-eslint) reports code that breaks it.
+
 ### Invoking Your Durable Function
 
 Durable functions require a **qualified identifier** for invocation. You must specify a version or alias. Unqualified ARNs or function names without a suffix are not supported to ensure deterministic replay behavior.
@@ -194,7 +215,7 @@ See the [Testing SDK documentation](./packages/aws-durable-execution-sdk-js-test
 
 ## 🔎 Catching Replay Bugs with ESLint
 
-A durable function runs again from the start each time it resumes. Code that gives a different answer on a second run, such as `Date.now()` or a variable changed inside a step, breaks replay. The ESLint plugin reports it as you write:
+Because the code outside the steps runs again on every replay, it must be deterministic (see [How It Runs: Replay](#how-it-runs-replay)). The ESLint plugin reports code that breaks this as you write it, such as `Date.now()` or a random value outside a step, and a variable that a step changes. It also reports a durable operation started on the context of the operation it runs in.
 
 ```bash
 npm install @aws/durable-execution-sdk-js-eslint-plugin --save-dev
