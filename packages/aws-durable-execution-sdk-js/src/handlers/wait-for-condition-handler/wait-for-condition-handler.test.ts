@@ -686,4 +686,94 @@ describe("WaitForCondition Handler", () => {
       expect(checkFunc).not.toHaveBeenCalled();
     });
   });
+
+  describe("Serdes round-trip consistency", () => {
+    it("should pass a round-tripped initialState to the first check", async () => {
+      const handler = createWaitForConditionHandler(
+        mockContext,
+        mockCheckpoint,
+        createStepId,
+        createDefaultLogger(),
+        undefined,
+      );
+
+      const initialState = { count: 0, created: "now" };
+      const checkFunc = jest.fn().mockResolvedValue({ count: 1 });
+      const config: WaitForConditionConfig<{ count: number }> = {
+        waitStrategy: () => ({ shouldContinue: false }),
+        initialState,
+      };
+
+      await handler(checkFunc, config);
+
+      const firstCheckState = checkFunc.mock.calls[0][0];
+      expect(firstCheckState).toEqual(initialState);
+      expect(firstCheckState).not.toBe(initialState);
+      expect(mockSafeSerialize).toHaveBeenCalledWith(
+        expect.anything(),
+        initialState,
+        "step-1",
+        undefined,
+        mockContext.terminationManager,
+        mockContext.durableExecutionArn,
+      );
+    });
+
+    it("should not run the first check when initialState fails serialization", async () => {
+      // safeSerialize is mocked for this suite. Return a never-resolving
+      // promise, as the real helper does after requesting termination.
+      mockSafeSerialize.mockImplementationOnce(
+        () => new Promise(() => {}) as Promise<string>,
+      );
+
+      const handler = createWaitForConditionHandler(
+        mockContext,
+        mockCheckpoint,
+        createStepId,
+        createDefaultLogger(),
+        undefined,
+      );
+
+      const checkFunc = jest.fn().mockResolvedValue("ready");
+      const config: WaitForConditionConfig<string> = {
+        waitStrategy: () => ({ shouldContinue: false }),
+        initialState: "initial",
+      };
+
+      void handler(checkFunc, config);
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(checkFunc).not.toHaveBeenCalled();
+    });
+
+    it("should return the checkpointed value when waitStrategy mutates the state", async () => {
+      const handler = createWaitForConditionHandler(
+        mockContext,
+        mockCheckpoint,
+        createStepId,
+        createDefaultLogger(),
+        undefined,
+      );
+
+      const checkFunc = jest.fn().mockResolvedValue({ status: "done" });
+      const config: WaitForConditionConfig<{ status: string }> = {
+        waitStrategy: (state) => {
+          state.status = "mutated";
+          return { shouldContinue: false };
+        },
+        initialState: { status: "pending" },
+      };
+
+      const result = await handler(checkFunc, config);
+
+      expect(mockCheckpoint.checkpoint).toHaveBeenCalledWith(
+        "step-1",
+        expect.objectContaining({
+          Action: "SUCCEED",
+          Payload: JSON.stringify({ status: "done" }),
+        }),
+      );
+      expect(result).toEqual({ status: "done" });
+    });
+  });
 });
