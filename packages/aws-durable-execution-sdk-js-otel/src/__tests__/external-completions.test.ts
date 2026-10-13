@@ -71,6 +71,77 @@ describe.each([
   const spans = () =>
     exporter.getFinishedSpans().filter((span) => span.name === "external");
 
+  it("drains a completion delivered while invocation-end flush is awaiting", async () => {
+    const current = createPlugin();
+    await current.onInvocationStart(invocation);
+    await current.onOperationStart({
+      ...operation,
+      parentId: undefined,
+      status: "STARTED",
+      endTimestamp: undefined,
+    });
+    const completion = { ...operation, parentId: undefined };
+    const completed = () =>
+      spans().filter(
+        (span) => span.attributes["durable.operation.status"] === "SUCCEEDED",
+      );
+    let release!: () => void;
+    let entered!: () => void;
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const flushing = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const originalFlush = providers[0].forceFlush.bind(providers[0]);
+    const flushed: number[] = [];
+    const flush = jest
+      .spyOn(providers[0], "forceFlush")
+      .mockImplementation(async () => {
+        flushed.push(completed().length);
+        if (flushed.length === 1) {
+          entered();
+          await blocked;
+        }
+        await originalFlush();
+      });
+    const ending = current.onInvocationEnd({
+      ...invocation,
+      status: "RETRYING",
+    });
+    await flushing;
+    // Model the core's notification hook while its awaited end hook owns flush.
+    // This is a hook-order regression, not a Lambda reproduction.
+    await current.onOperationChange({
+      ...invocation,
+      operations: { external: completion },
+      updatedOperations: { external: completion },
+    });
+    release();
+    await ending;
+    expect(completed()).toHaveLength(1);
+    expect(flushed).toEqual([0, 1]);
+    expect(completed()[0].attributes["durable.operation.id"]).toBe(
+      operation.id,
+    );
+    if (view === "invocation") {
+      expect(completed()[0].links.map((link) => link.context.spanId)).toContain(
+        deriveSpanIdFromOperationId(operation.id, invocation.executionArn),
+      );
+      expect(completed()[0].spanContext().spanId).not.toBe(
+        deriveSpanIdFromOperationId(operation.id, invocation.executionArn),
+      );
+    } else {
+      expect(completed()[0].startTime).toEqual(timeInputToHrTime(start));
+      expect(completed()[0].endTime).toEqual(timeInputToHrTime(end));
+    }
+    await current.onInvocationStart({ ...invocation, requestId: "request-2" });
+    await current.onOperationEnd({ ...completion, isReplay: true });
+    await current.onInvocationEnd({ ...invocation, status: "SUCCEEDED" });
+    expect(completed()).toHaveLength(1);
+    flush.mockRestore();
+  });
+
   it.each(["WAIT", "INVOKE", "CHAINED_INVOKE", "CALLBACK"])(
     "preserves %s update fields/status/errors without traversal, with normal-replay dedup and retry redelivery",
     async (type) => {

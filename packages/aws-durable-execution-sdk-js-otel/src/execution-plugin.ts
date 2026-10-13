@@ -301,19 +301,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     // Prefer normal lifecycle hooks, which preserve live parent scopes. Before
     // returning, export any fresh completion the workflow did not reach. A
     // later resume may label it replay even though it has never been exported.
-    const terminal = info.status === "SUCCEEDED" || info.status === "FAILED";
-    for (const operation of this.externalCompletions.pending.values()) {
-      // A terminal handler can abandon an unawaited child. Its still-open
-      // placeholder will be discarded below, so it cannot parent this export.
-      const parentId =
-        (terminal &&
-          operation.parentId &&
-          this.operationContexts.has(operation.parentId)) ||
-        this.hasAbandonedParent(operation.parentId, info.operations)
-          ? undefined
-          : operation.parentId;
-      await this.onOperationEnd({ ...operation, parentId, isReplay: false });
-    }
+    await this.drainExternalCompletions(info);
     // 1. Always end and export Invocation_Span
     if (this.invocationSpan) {
       this.invocationSpan.setAttribute(
@@ -401,18 +389,41 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       }
     }
 
-    // 4. Always flush TracerProvider at invocation boundaries
-    try {
-      await flushTracerProvider(this.tracerProvider, this.usesGlobalProvider);
-    } catch (e) {
-      console.error(
-        "[ExecutionOtelPlugin] forceFlush failed:",
-        e instanceof Error ? e.message : e,
-      );
-    }
+    // End owns the drain/flush loop; change hooks only enqueue notifications.
+    // A response received during an awaited flush must not be cleared below.
+    do {
+      await this.drainExternalCompletions(info);
+      try {
+        await flushTracerProvider(this.tracerProvider, this.usesGlobalProvider);
+      } catch (e) {
+        console.error(
+          "[ExecutionOtelPlugin] forceFlush failed:",
+          e instanceof Error ? e.message : e,
+        );
+      }
+    } while (this.externalCompletions.pending.size > 0);
 
+    // No await separates the last empty check from resetting this invocation.
     // 5. Clear per-invocation state
     this.resetInvocationState();
+  }
+
+  private async drainExternalCompletions(
+    info: InvocationEndInfo,
+  ): Promise<void> {
+    const terminal = info.status === "SUCCEEDED" || info.status === "FAILED";
+    for (const operation of this.externalCompletions.pending.values()) {
+      // A terminal handler can abandon an unawaited child. Its still-open
+      // placeholder will be discarded below, so it cannot parent this export.
+      const parentId =
+        (terminal &&
+          operation.parentId &&
+          this.operationContexts.has(operation.parentId)) ||
+        this.hasAbandonedParent(operation.parentId, info.operations)
+          ? undefined
+          : operation.parentId;
+      await this.onOperationEnd({ ...operation, parentId, isReplay: false });
+    }
   }
 
   /** Creates at most one SDK-owned root per invocation; the caller ends it. */

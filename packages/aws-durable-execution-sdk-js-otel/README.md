@@ -739,10 +739,21 @@ hooks do not run. The local runner's retained resume state must not be treated a
 proof that the default Lambda configuration preserves those children. The local
 resume-state discrepancy is tracked in [#995](https://github.com/aws/aws-durable-execution-sdk-js/issues/995).
 
+The invocation-end hook drains notifications received while it awaits provider
+flush, then flushes the newly exported completions before clearing its state.
+Change hooks enqueue notifications; the end hook owns this loop. In the
+invocation view, a completion after its initial segment has ended uses a linked
+continuation. Enclosing spans may already have ended, so this does not guarantee
+late-child timestamp containment. Updates after the final drain/reset, a frozen
+runtime, and concurrent executions sharing a plugin instance remain outside this
+shutdown guarantee; the shared-instance limitation is tracked in [#950](https://github.com/aws/aws-durable-execution-sdk-js/issues/950).
+
 Notifications and operation-end hooks are deduplicated within each invocation.
-Normal replay does not re-export stored external completions. Deduplication is
-not persisted: redelivery after a failed invocation can export the completion
-again, as required for recovery.
+Plain replay without a fresh update does not re-export stored external
+completions. Deduplication is not persisted: a retry carrying the same updated
+operation IDs can export the completion again, preserving recovery eligibility.
+This is a conditional redelivery behavior, not a claim that Lambda always sends
+those IDs again or that the exporter has a durable delivery acknowledgement.
 
 ## Verification and Troubleshooting
 

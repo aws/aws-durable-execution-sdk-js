@@ -79,6 +79,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   private durableSampler: DurableSampler | undefined;
   private tracingEnabled = false;
   private readonly externalCompletions = new ExternalCompletions();
+  private invocationSpansEnded = false;
   private readonly workflowSpanName: string;
   private readonly enrichLogger: boolean;
 
@@ -369,13 +370,21 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     // PENDING/RETRYING never materializes Workflow. A sampled invocation may
     // already have ended its stable synthetic anchor before customer code ran.
 
-    // 4. Force flush the tracer provider
-    try {
-      await flushTracerProvider(this.tracerProvider, this.usesGlobalProvider);
-    } catch {
-      // Gracefully handle flush errors.
-    }
+    this.invocationSpansEnded = true;
+    // End owns the drain/flush loop; change hooks only enqueue notifications.
+    // Late completions need a linked segment, not mutation of an ended span.
+    do {
+      for (const operation of this.externalCompletions.pending.values()) {
+        await this.onOperationEnd({ ...operation, isReplay: false });
+      }
+      try {
+        await flushTracerProvider(this.tracerProvider, this.usesGlobalProvider);
+      } catch {
+        // Gracefully handle flush errors.
+      }
+    } while (this.externalCompletions.pending.size > 0);
 
+    // No await separates the last empty check from resetting this invocation.
     // 5. Clear all per-invocation state
     this.resetInvocationState();
   }
@@ -448,6 +457,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
 
   private resetInvocationState(): void {
     this.externalCompletions.clear();
+    this.invocationSpansEnded = false;
     this.invocationClock = undefined;
     this.spanMap.clear();
     this.spanStack = [];
@@ -665,8 +675,8 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       return;
     }
 
-    if (this.spanMap.has(info.id)) {
-      // Operation was started in this invocation
+    if (!this.invocationSpansEnded && this.spanMap.has(info.id)) {
+      // Operation was started in this invocation and its segment is still open
       const span = this.spanMap.get(info.id)!;
 
       // Finalize the operation status from the core-supplied terminal status.
