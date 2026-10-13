@@ -339,6 +339,24 @@ function getMainOptions(args: string[]): TemplateOptions {
 }
 
 /**
+ * Serialize a template to the YAML text written to template.yml.
+ *
+ * Kept separate from main() so tests can check the output format. js-yaml
+ * ignores dump options it does not recognize. So a renamed option changes the
+ * output without any error, as the js-yaml 5 rename of quotingType to
+ * quoteStyle did.
+ */
+function serializeTemplate(template: unknown): string {
+  return yaml.dump(template, {
+    indent: 2,
+    lineWidth: -1, // No line wrapping
+    noRefs: true,
+    sortKeys: false,
+    quoteStyle: "double",
+  });
+}
+
+/**
  * Main function to generate and write the template.yml file
  */
 function main() {
@@ -361,14 +379,7 @@ function main() {
       console.log(`   - ${resourceName} (${typedResource.Properties.Handler})`);
     });
 
-    // Convert to YAML with proper formatting
-    const yamlContent = yaml.dump(template, {
-      indent: 2,
-      lineWidth: -1, // No line wrapping
-      noRefs: true,
-      sortKeys: false,
-      quotingType: '"',
-    });
+    const yamlContent = serializeTemplate(template);
 
     const templatePath =
       options.outputTemplateFile ?? path.join(__dirname, "../template.yml");
@@ -398,4 +409,5 @@ export {
   toPascalCase,
   createFunctionResource,
   getExamplesCatalogJson,
+  serializeTemplate,
 };
