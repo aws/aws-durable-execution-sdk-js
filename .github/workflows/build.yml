@@ -130,21 +130,21 @@ jobs:
       - name: Bundle the MCP server
         run: npm run build -w packages/aws-durable-execution-sdk-js-insight-mcp
 
-  # The plugin's peer range is ESLint ^8.23.0 || ^9.0.0 || ^10.0.0, but the
+  # The plugin's peer range is ESLint ^8.57.0 || ^9.0.0 || ^10.0.0, but the
   # repository installs only ESLint 10, and the RuleTester suites need that version
-  # (ESLint 8 RuleTester takes a different config format). This job installs ESLint
-  # 8.23, the latest 8 and the latest 9 on top of the lockfile install, and lints
-  # real code through ESLint's public API with the plugin's recommended config. It
-  # needs no build artifacts, so like insight-hosts it runs off lint-commits.
+  # (ESLint 8 RuleTester takes a different config format). This job installs the
+  # latest ESLint 8 and the latest ESLint 9 on top of the lockfile install, and
+  # lints real code through ESLint's public API with the plugin's recommended
+  # config. It needs no build artifacts, so like insight-hosts it runs off
+  # lint-commits.
   eslint-plugin-compat:
     needs: lint-commits
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || format('codebuild-github-actions-runner-{0}-{1}', github.run_id, github.run_attempt) }}
     strategy:
       fail-fast: false
       matrix:
-        # 8.23 is the lowest version in the peer range: the first ESLint that
-        # loads an eslint.config.js file.
-        eslint: ["8.23", "8", "9"]
+        # The latest ESLint 8 is 8.57, the lowest version in the peer range.
+        eslint: ["8", "9"]
     name: eslint-plugin-compat (ESLint ${{ matrix.eslint }})
     steps:
       - uses: actions/checkout@v7

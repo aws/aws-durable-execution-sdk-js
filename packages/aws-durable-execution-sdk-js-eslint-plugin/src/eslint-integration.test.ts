@@ -2,12 +2,12 @@
  * Lints real code with the plugin through ESLint's public API, using whichever
  * ESLint version is installed.
  *
- * The plugin's peer range is ESLint ^8.23.0 || ^9.0.0 || ^10.0.0. The
+ * The plugin's peer range is ESLint ^8.57.0 || ^9.0.0 || ^10.0.0. The
  * RuleTester suites run only on the version the repository installs (10),
  * because RuleTester takes a different config format in ESLint 8. This suite
  * uses the flat config format, which every version in the peer range accepts.
- * The "eslint-plugin-compat" job in .github/workflows/build.yml installs
- * ESLint 8.23, the latest 8 and the latest 9 and runs this file against each.
+ * The "eslint-plugin-compat" job in .github/workflows/build.yml installs the
+ * latest ESLint 8 (8.57) and the latest 9 and runs this file against each.
  */
 import * as path from "node:path";
 import * as typescriptParser from "@typescript-eslint/parser";

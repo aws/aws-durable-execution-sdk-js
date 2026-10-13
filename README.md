@@ -128,7 +128,9 @@ So the code inside a step runs when the step executes, and **the code outside th
 ```typescript
 // ❌ Outside a step: runs again on every replay, and returns a new value each time
 const orderId = crypto.randomUUID();
+```
 
+```typescript
 // ✅ Inside a step: the SDK saves the value, so every replay gets the same one
 const orderId = await context.step("create-order-id", async () =>
   crypto.randomUUID(),

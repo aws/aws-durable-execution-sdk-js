@@ -29,10 +29,9 @@ checks how durable operations are nested.
 
 ## Requirements
 
-- ESLint 8.23 or later, 9, or 10, using the flat config format (`eslint.config.js`).
-  ESLint 8.23 to 8.56 load only a CommonJS `eslint.config.js`, so use the CommonJS
-  example below on those versions. ESLint 8.57 and later also load
-  `eslint.config.mjs`. CI tests ESLint 8.23, the latest 8, 9 and 10.
+- ESLint 8.57 or later, 9, or 10, using the flat config format (`eslint.config.js`).
+  CI tests ESLint 8.57, the latest 9, and 10. `@typescript-eslint/parser` 8 needs
+  the same ESLint versions.
 - Node.js 22 or later.
 - A parser for TypeScript files, such as `@typescript-eslint/parser`.
 
