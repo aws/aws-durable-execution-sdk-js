@@ -12,12 +12,16 @@ export default function buildWorkspaceCandidates() {
   );
   for (const packageName of [
     "packages/aws-durable-execution-sdk-js",
+    "packages/aws-durable-execution-sdk-js-testing",
     "packages/aws-durable-execution-sdk-js-otel",
   ]) {
     // Incremental state can otherwise survive deleted declaration output.
-    rmSync(resolve(workspace, packageName, "tsconfig.tsbuildinfo"), {
-      force: true,
-    });
+    for (const buildInfo of [
+      "tsconfig.tsbuildinfo",
+      "tsconfig.build.tsbuildinfo",
+    ]) {
+      rmSync(resolve(workspace, packageName, buildInfo), { force: true });
+    }
     execFileSync("npm", ["run", "build", "--workspace", packageName], {
       cwd: workspace,
       stdio: "inherit",

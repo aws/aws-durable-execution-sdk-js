@@ -12,7 +12,7 @@
     "directory": "packages/aws-durable-execution-sdk-js-insight-desktop"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12.0"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -23,22 +23,22 @@
   },
   "dependencies": {
     "@aws/durable-execution-sdk-js-insight-core": "0.1.0-alpha.0",
-    "node-llama-cpp": "^3.18.1"
+    "node-llama-cpp": "^3.22.1"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
-    "@types/node": "^20.0.0",
-    "electron": "^32.3.3",
+    "@types/node": "^20.19.43",
+    "electron": "^44.7.0",
     "electron-builder": "26.15.3",
-    "esbuild": "^0.24.0",
-    "jest": "^30.5.1",
-    "ts-jest": "^29.4.12",
+    "esbuild": "^0.28.2",
+    "jest": "^30.5.2",
+    "ts-jest": "^29.4.14",
     "typescript": "^6.0.3"
   },
   "build": {
     "appId": "com.amazon.aws.durable-execution-sdk-js-insight-desktop",
     "productName": "Workflow Insight Explorer",
-    "electronVersion": "32.3.3",
+    "electronVersion": "44.7.0",
     "directories": {
       "output": "release"
     },

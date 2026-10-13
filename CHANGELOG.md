@@ -42,6 +42,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **eslint-plugin**: the README showed `extends: ["plugin:@aws/durable-execution-sdk-js-eslint-plugin/recommended"]`
+  and `plugins: ["@aws/durable-execution-sdk-js-eslint-plugin"]`. Neither setup could load the
+  plugin. ESLint adds the `eslint-plugin-` prefix to the name of an eslintrc plugin, so it looked for
+  `@aws/eslint-plugin-durable-execution-sdk-js-eslint-plugin`, which does not exist. The README now
+  shows flat config, which works on ESLint 8.57, 9 and 10. `configs.recommended` is
+  deprecated for the same reason. It keeps its shape, so code that reads its `rules` still works.
+- **eslint-plugin**: the `eslint` peer range is now `^8.57.0 || ^9.0.0 || ^10.0.0`, from `>=8.0.0`.
+  This is the range `@typescript-eslint/parser` 8 requires, and the setup the README documents
+  needs that parser. The eslintrc setup never worked on any version.
+
+- The MicroVM worker in `@aws/durable-execution-sdk-js-microvm-worker` treated
+  `InvalidParameterValueException` as the answer for a callback that is already complete. The
+  service answers `CallbackTimeoutException` ("The callback is either timed out or already
+  completed") for a callback that is already complete, timed out, or whose execution stopped.
+  `InvalidParameterValueException` means a malformed or unknown callback ID. So two checks missed
+  the real answer:
+  - A completion whose earlier attempt reached the service, although its answer was lost, failed
+    on the retry instead of counting as delivered. The worker then logged that the outcome could
+    not be reported. It now logs a warning that names both cases the code covers: an earlier
+    attempt delivered the outcome, or the callback timed out first. A callback that really timed
+    out is now a warning where it was an error. The durable function sees the timeout either way.
+  - A heartbeat that met the completion while it was in flight logged "the callback no longer
+    accepts heartbeats". It is no longer logged.
+
+- A MicroVM worker job could reach its heartbeat timeout after two failed heartbeats in a row.
+  Each heartbeat call could take half the interval. The service times the heartbeat timeout from
+  when it receives a call, which can be at the call's start. So the worst gap was 3.5 intervals,
+  above the 3-interval timeout. Each call now ends after a third of the interval, and the worst
+  gap is about 2.83 intervals. The Python worker measured a 32.39-second gap against a 30-second
+  heartbeat timeout before the same change.
+
+- An `InvalidRunHookPayloadError` for a `runHookPayload` that is not JSON now keeps the parser's
+  `SyntaxError` as its `cause`. Its message names the position of the error.
+
 - An oversized result could keep the invocation running until the Lambda timeout. The SDK
   checkpoints a result over the response size limit after the handler returns, and waited for
   that checkpoint alone. When an earlier checkpoint in the queue failed, or was answered without a
@@ -110,6 +144,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   seconds. The worker acts on `suspend`, `terminate`, and `resume` only for requests with a local
   `Host` and no `x-amzn-requestid` header, as Lambda's own hook calls carry. It ignores a request
   that the MicroVM endpoint forwarded to one of these hook paths.
+
+- **eslint-plugin**: `configs["flat/recommended"]`, a flat config that registers the plugin as
+  `@aws/durable-functions` and turns on all three rules as errors. The plugin now exports
+  `meta.name` and `meta.version`. ESLint writes them into the config it hashes for `--cache`, so a
+  cached lint result no longer survives an upgrade of the plugin. The README now documents the
+  flat config setup and the third rule, `no-non-deterministic-outside-step`. The package tests
+  also run against the latest ESLint 8 and 9 in CI. The plugin's types are
+  assignable to ESLint's `Linter.Config` and `ESLint.Plugin`, and to `defineConfig()`, so a
+  type-checked `eslint.config.ts` accepts them.
 
 ## [2.3.1]
 

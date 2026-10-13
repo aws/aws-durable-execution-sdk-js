@@ -17,20 +17,20 @@
     "destroy": "cdk destroy"
   },
   "dependencies": {
-    "@aws-sdk/client-lambda": "^3.1076.0",
-    "@aws-sdk/client-redshift-data": "^3.1076.0",
+    "@aws-sdk/client-lambda": "^3.1149.0",
+    "@aws-sdk/client-redshift-data": "^3.1149.0",
     "@aws/durable-execution-sdk-js": "file:../../aws-durable-execution-sdk-js",
     "@aws/durable-execution-sdk-js-insight": "file:..",
-    "aws-cdk-lib": "^2.150.0",
-    "constructs": "^10.3.0"
+    "aws-cdk-lib": "^2.273.0",
+    "constructs": "^10.8.1"
   },
   "devDependencies": {
-    "@types/aws-lambda": "^8.10.162",
+    "@types/aws-lambda": "^8.10.164",
     "@types/jest": "^30.0.0",
-    "aws-cdk": "^2.150.0",
-    "esbuild": "^0.24.2",
-    "jest": "^30.5.1",
-    "ts-jest": "^29.4.12",
+    "aws-cdk": "^2.1145.0",
+    "esbuild": "^0.28.2",
+    "jest": "^30.5.2",
+    "ts-jest": "^29.4.14",
     "typescript": "^6.0.3"
   },
   "jest": {

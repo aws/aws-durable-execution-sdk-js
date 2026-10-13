@@ -16,7 +16,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "jest",
+    "typecheck": "tsc -p tsconfig.typecheck.json",
+    "test": "npm run typecheck && jest",
     "clean": "rm -rf dist node_modules .tsbuildinfo",
     "lint": "biome check src --diagnostic-level=error",
     "lint:fix": "biome check --write src"
@@ -28,17 +29,16 @@
     "aws-lambda"
   ],
   "peerDependencies": {
-    "eslint": ">=8.0.0"
+    "eslint": "^8.57.0 || ^9.0.0 || ^10.0.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.11",
-    "@types/eslint": "^8.56.0",
+    "@biomejs/biome": "2.5.15",
     "@types/jest": "^30.0.0",
-    "@types/node": "^20.0.0",
-    "@typescript-eslint/parser": "^8.44.0",
-    "eslint": "^8.57.0",
-    "jest": "^30.5.1",
-    "ts-jest": "^29.4.12",
+    "@types/node": "^20.19.43",
+    "@typescript-eslint/parser": "^8.71.2",
+    "eslint": "^10.12.0",
+    "jest": "^30.5.2",
+    "ts-jest": "^29.4.14",
     "typescript": "^6.0.3"
   },
   "files": [
