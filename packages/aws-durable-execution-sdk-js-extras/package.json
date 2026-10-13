@@ -46,7 +46,7 @@
     "dist-types"
   ],
   "dependencies": {
-    "@aws-sdk/client-lambda-microvms": "^3.1149.0"
+    "@aws-sdk/client-lambda-microvms": "^3.1150.0"
   },
   "devDependencies": {
     "@aws/durable-execution-sdk-js-microvm-worker": "0.1.0-alpha.0",
