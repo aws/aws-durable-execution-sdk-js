@@ -26,5 +26,6 @@ export {
   type MicrovmWorkerListener,
   type MicrovmWorkerLogger,
   type MicrovmWorkerOptions,
+  MicrovmTerminatedError,
   startMicrovmWorker,
 } from "./worker";

@@ -265,37 +265,116 @@ async function retryOnConflict<T>(
   throw new Error("Max retries exceeded");
 }
 
-async function runWithRetry<T, P>(
-  operation: () => Promise<T>,
+async function readBeforeDeadline<T>(
+  operation: (abortSignal: AbortSignal) => Promise<T>,
+  deadline: number,
+  timeoutError: unknown,
+): Promise<T> {
+  const remainingMs = deadline - performance.now();
+  if (remainingMs <= 0) throw timeoutError;
+
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        // Settle the deadline first so an SDK AbortError cannot replace the
+        // last transient failure. Race also bounds clients that ignore abort.
+        reject(timeoutError);
+        controller.abort(timeoutError);
+      }, Math.ceil(remainingMs));
+    });
+    const result = await Promise.race([operation(controller.signal), timeout]);
+    // A blocked event loop can deliver a late response before the timer runs.
+    if (performance.now() >= deadline) {
+      controller.abort(timeoutError);
+      throw timeoutError;
+    }
+    return result;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function runWithRetry<T>(
+  operation: (abortSignal: AbortSignal) => Promise<T>,
   checkOperationResult: (result: T) => {
     shouldRetry?: boolean;
     reason: string;
   },
-  maxRetries: number,
+  maxAttempts: number,
 ) {
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const result = await operation();
-    const operationResult = checkOperationResult(result);
-    if (!operationResult.shouldRetry) {
-      console.log(`Stopped retrying. Reason: ${operationResult.reason}`);
-      return result;
+  // Each raw read consumes one attempt, whether it returns Pending or throws.
+  // Preserve the one-second polling window as a deadline shared by reads and
+  // backoff. A successful Pending read must not start a new retry budget.
+  const pollIntervalMs = 1000;
+  const deadline = performance.now() + maxAttempts * pollIntervalMs;
+  let consecutiveErrors = 0;
+  let lastError: unknown;
+  for (
+    let attempt = 0;
+    attempt < maxAttempts && performance.now() < deadline;
+    attempt++
+  ) {
+    let delayMs = pollIntervalMs;
+    let reason: string;
+    try {
+      const result = await readBeforeDeadline(
+        operation,
+        deadline,
+        lastError ?? new Error("Max retries exceeded"),
+      );
+      const operationResult = checkOperationResult(result);
+      if (!operationResult.shouldRetry) {
+        console.log(`Stopped retrying. Reason: ${operationResult.reason}`);
+        return result;
+      }
+      reason = operationResult.reason;
+      consecutiveErrors = 0;
+      lastError = undefined;
+    } catch (error: unknown) {
+      const isThrottle = isThrottlingError(error);
+      if (!(error instanceof ResourceConflictException) && !isThrottle) {
+        throw error;
+      }
+      lastError = error;
+      const baseDelayMs = isThrottle
+        ? Math.min(1000 * 2 ** consecutiveErrors, 20000)
+        : pollIntervalMs;
+      consecutiveErrors++;
+      delayMs = baseDelayMs + Math.floor(Math.random() * 250);
+      reason = `Transient Lambda control-plane error: ${(error as Error).message}`;
     }
-    console.log(
-      `Retrying: ${operationResult.reason}. ${attempt + 1}/${maxRetries} attempts`,
+    const remainingMs = deadline - performance.now();
+    if (attempt === maxAttempts - 1 || remainingMs <= 0) break;
+    console.log(`Retrying: ${reason}. ${attempt + 1}/${maxAttempts} attempts`);
+    await new Promise((resolve) =>
+      setTimeout(resolve, Math.min(delayMs, remainingMs)),
     );
-    await new Promise((resolve) => setTimeout(resolve, 1000));
   }
-  throw new Error("Max retries exceeded");
+  throw lastError ?? new Error("Max retries exceeded");
 }
 
 async function getCurrentConfiguration(
   lambdaClient: LambdaClient,
   functionName: string,
+  abortSignal?: AbortSignal,
 ): Promise<GetFunctionConfigurationCommandOutput> {
   const command = new GetFunctionConfigurationCommand({
     FunctionName: functionName,
   });
-  return await lambdaClient.send(command);
+  // Reads inside a deployment phase or poll share that phase's retry budget.
+  return lambdaClient.send(command, { abortSignal });
+}
+
+async function getCurrentConfigurationWithRetry(
+  lambdaClient: LambdaClient,
+  functionName: string,
+): Promise<GetFunctionConfigurationCommandOutput> {
+  // The standalone initial inspection has no phase or polling retry budget.
+  return retryOnConflict(() =>
+    getCurrentConfiguration(lambdaClient, functionName),
+  );
 }
 
 async function ensureLogGroupRetention(functionName: string): Promise<void> {
@@ -365,11 +444,11 @@ async function pinCapacityProviderRuntime(
     console.log("Runtime pinned successfully");
 
     // PutRuntimeManagementConfig starts an update. Publishing while that update is in
-    // flight fails with "An update is in progress for resource ...", which the caller's
-    // outer retry turns into a re-run of CreateFunction and then an unrecoverable
-    // "Function already exist". Wait for the function to settle before returning.
+    // flight fails with "An update is in progress for resource ...". Wait for the
+    // function to settle before entering the separate publication phase.
     await runWithRetry(
-      () => getCurrentConfiguration(lambdaClient, functionName),
+      (abortSignal) =>
+        getCurrentConfiguration(lambdaClient, functionName, abortSignal),
       (config) => {
         if (
           config.LastUpdateStatus === LastUpdateStatus.Failed ||
@@ -557,7 +636,7 @@ async function showFinalConfiguration(
 }
 
 // Main function
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   try {
     // Parse arguments and load configuration
     const { example, functionName, runtime, useCapacityProvider } = parseArgs();
@@ -618,7 +697,10 @@ async function main(): Promise<void> {
 
     // Handle function deletion if configuration changes require it (outside retry logic)
     if (functionExists) {
-      currentConfig = await getCurrentConfiguration(lambdaClient, functionName);
+      currentConfig = await getCurrentConfigurationWithRetry(
+        lambdaClient,
+        functionName,
+      );
       if (!!currentConfig.DurableConfig !== !!exampleConfig.durableConfig) {
         console.log("Deleting function since durability changed");
         functionExists = false;
@@ -652,13 +734,19 @@ async function main(): Promise<void> {
     await retryOnConflict(
       async () => {
         if (functionExists) {
+          // A previous attempt may have created the function or failed while
+          // loading its configuration. Never reuse an absent or stale snapshot.
+          currentConfig = await getCurrentConfiguration(
+            lambdaClient,
+            functionName,
+          );
           await updateFunction(
             lambdaClient,
             functionName,
             exampleConfig,
             zipFile,
             env,
-            currentConfig!,
+            currentConfig,
             useCapacityProvider,
             selectedRuntime,
           );
@@ -674,6 +762,7 @@ async function main(): Promise<void> {
               useCapacityProvider,
               selectedRuntime,
             );
+            functionExists = true;
           } catch (error: unknown) {
             // The function can appear mid-deploy (a cancelled run's cleanup or a
             // racing run). Switch to update instead of retrying create.
@@ -681,6 +770,8 @@ async function main(): Promise<void> {
               console.log(
                 "Function already exists (created concurrently); switching to update",
               );
+              // Record existence before reading so a throttled read retries
+              // the update path with fresh configuration.
               functionExists = true;
               currentConfig = await getCurrentConfiguration(
                 lambdaClient,
@@ -701,167 +792,182 @@ async function main(): Promise<void> {
             }
           }
         }
-
-        if (useCapacityProvider) {
-          // Must happen before PublishVersion: the published version snapshots the
-          // function's runtime management config, so pinning afterwards has no effect on
-          // the version that actually serves invocations.
-          await pinCapacityProviderRuntime(
-            lambdaClient,
-            functionName,
-            env.AWS_REGION,
-          );
-
-          for (let attempts = 1; attempts <= 2; attempts++) {
-            console.log(
-              "Publishing LATEST_PUBLISHED for function with capacity provider",
-            );
-            try {
-              await retryOnConflict(
-                () =>
-                  lambdaClient.send(
-                    new PublishVersionCommand({
-                      FunctionName: functionName,
-                      PublishTo:
-                        FunctionVersionLatestPublished.LATEST_PUBLISHED,
-                    }),
-                  ),
-                180,
-              );
-            } catch (err) {
-              throw new Error("Timed out publishing LATEST_PUBLISHED version", {
-                cause: err,
-              });
-            }
-
-            try {
-              console.log("Waiting for function to enter active state");
-              const qualifier = "$LATEST.PUBLISHED";
-              const functionWithQualifier = `${functionName}:${qualifier}`;
-
-              const result = await runWithRetry(
-                async () => {
-                  return getCurrentConfiguration(
-                    lambdaClient,
-                    functionWithQualifier,
-                  );
-                },
-                (currentConfiguration) => {
-                  if (
-                    currentConfiguration.LastUpdateStatus ===
-                      LastUpdateStatus.Failed ||
-                    currentConfiguration.State === State.Failed
-                  ) {
-                    if (
-                      currentConfiguration.LastUpdateStatusReasonCode ===
-                      LastUpdateStatusReasonCode.CapacityProviderScalingLimitExceeded
-                    ) {
-                      return {
-                        shouldRetry: false,
-                        reason: `Capacity provider limit exceeded.`,
-                      };
-                    }
-
-                    throw new Error(
-                      `Function ${functionWithQualifier} failed to enter successful state. ${currentConfiguration.LastUpdateStatusReason ?? currentConfiguration.StateReason}`,
-                    );
-                  }
-
-                  if (
-                    currentConfiguration.State !== State.Active ||
-                    currentConfiguration.LastUpdateStatus ===
-                      LastUpdateStatus.InProgress
-                  ) {
-                    return {
-                      shouldRetry: true,
-                      reason: `Function update status is currently ${currentConfiguration.LastUpdateStatus ?? currentConfiguration.State}`,
-                    };
-                  }
-
-                  return {
-                    shouldRetry: false,
-                    reason: "Function is now active",
-                  };
-                },
-                900,
-              );
-
-              if (
-                result.LastUpdateStatusReasonCode !==
-                LastUpdateStatusReasonCode.CapacityProviderScalingLimitExceeded
-              ) {
-                console.log("Setting function scaling config");
-                await lambdaClient.send(
-                  new PutFunctionScalingConfigCommand({
-                    FunctionName: functionName,
-                    Qualifier: qualifier,
-                    FunctionScalingConfig: {
-                      MinExecutionEnvironments: 1,
-                      MaxExecutionEnvironments: 1,
-                    },
-                  }),
-                );
-                break;
-              }
-
-              console.log(
-                "Deleting function version and retrying since capacity limit exceeded",
-              );
-              // If the capacity provider limit exceeded, we should delete the version and retry once.
-              // It's possible for a failed version to take up capacity.
-              await lambdaClient.send(
-                new DeleteFunctionCommand({
-                  FunctionName: functionWithQualifier,
-                }),
-              );
-
-              console.log("Waiting for function to be deleted");
-              await runWithRetry(
-                async () => {
-                  try {
-                    await getCurrentConfiguration(
-                      lambdaClient,
-                      functionWithQualifier,
-                    );
-                    return true;
-                  } catch (err) {
-                    if (err instanceof ResourceNotFoundException) {
-                      return false;
-                    }
-                    throw err;
-                  }
-                },
-                (exists) => {
-                  if (exists) {
-                    return {
-                      shouldRetry: true,
-                      reason: "Function still exists",
-                    };
-                  }
-
-                  return {
-                    shouldRetry: false,
-                    reason: "Function deleted successfully",
-                  };
-                },
-                120,
-              );
-            } catch (err) {
-              if (err instanceof ResourceConflictException) {
-                throw new Error(
-                  "Timed out waiting for function to enter active state",
-                  {
-                    cause: err,
-                  },
-                );
-              }
-              throw err;
-            }
-          }
-        }
       },
       useCapacityProvider ? 120 : undefined,
     );
+
+    // Completed create/update work must not be replayed when a later phase
+    // exhausts its own bounded retries.
+    if (useCapacityProvider) {
+      // Must happen before PublishVersion: the published version snapshots the
+      // function's runtime management config, so pinning afterwards has no effect on
+      // the version that actually serves invocations.
+      await pinCapacityProviderRuntime(
+        lambdaClient,
+        functionName,
+        env.AWS_REGION,
+      );
+
+      for (let attempts = 1; attempts <= 2; attempts++) {
+        console.log(
+          "Publishing LATEST_PUBLISHED for function with capacity provider",
+        );
+        try {
+          await retryOnConflict(
+            () =>
+              lambdaClient.send(
+                new PublishVersionCommand({
+                  FunctionName: functionName,
+                  PublishTo: FunctionVersionLatestPublished.LATEST_PUBLISHED,
+                }),
+              ),
+            180,
+          );
+        } catch (err) {
+          throw new Error("Timed out publishing LATEST_PUBLISHED version", {
+            cause: err,
+          });
+        }
+
+        try {
+          console.log("Waiting for function to enter active state");
+          const qualifier = "$LATEST.PUBLISHED";
+          const functionWithQualifier = `${functionName}:${qualifier}`;
+
+          const result = await runWithRetry(
+            async (abortSignal) => {
+              return getCurrentConfiguration(
+                lambdaClient,
+                functionWithQualifier,
+                abortSignal,
+              );
+            },
+            (currentConfiguration) => {
+              if (
+                currentConfiguration.LastUpdateStatus ===
+                  LastUpdateStatus.Failed ||
+                currentConfiguration.State === State.Failed
+              ) {
+                if (
+                  currentConfiguration.LastUpdateStatusReasonCode ===
+                  LastUpdateStatusReasonCode.CapacityProviderScalingLimitExceeded
+                ) {
+                  return {
+                    shouldRetry: false,
+                    reason: `Capacity provider limit exceeded.`,
+                  };
+                }
+
+                throw new Error(
+                  `Function ${functionWithQualifier} failed to enter successful state. ${currentConfiguration.LastUpdateStatusReason ?? currentConfiguration.StateReason}`,
+                );
+              }
+
+              if (
+                currentConfiguration.State !== State.Active ||
+                currentConfiguration.LastUpdateStatus ===
+                  LastUpdateStatus.InProgress
+              ) {
+                return {
+                  shouldRetry: true,
+                  reason: `Function update status is currently ${currentConfiguration.LastUpdateStatus ?? currentConfiguration.State}`,
+                };
+              }
+
+              return {
+                shouldRetry: false,
+                reason: "Function is now active",
+              };
+            },
+            900,
+          );
+
+          if (
+            result.LastUpdateStatusReasonCode !==
+            LastUpdateStatusReasonCode.CapacityProviderScalingLimitExceeded
+          ) {
+            console.log("Setting function scaling config");
+            await retryOnConflict(() =>
+              lambdaClient.send(
+                new PutFunctionScalingConfigCommand({
+                  FunctionName: functionName,
+                  Qualifier: qualifier,
+                  FunctionScalingConfig: {
+                    MinExecutionEnvironments: 1,
+                    MaxExecutionEnvironments: 1,
+                  },
+                }),
+              ),
+            );
+            break;
+          }
+
+          console.log(
+            "Deleting function version and retrying since capacity limit exceeded",
+          );
+          // If the capacity provider limit exceeded, we should delete the version and retry once.
+          // It's possible for a failed version to take up capacity.
+          await retryOnConflict(() =>
+            lambdaClient.send(
+              new DeleteFunctionCommand({
+                FunctionName: functionWithQualifier,
+              }),
+            ),
+          );
+
+          console.log("Waiting for function to be deleted");
+          await runWithRetry(
+            async (abortSignal) => {
+              try {
+                await getCurrentConfiguration(
+                  lambdaClient,
+                  functionWithQualifier,
+                  abortSignal,
+                );
+                return true;
+              } catch (err) {
+                if (err instanceof ResourceNotFoundException) {
+                  return false;
+                }
+                throw err;
+              }
+            },
+            (exists) => {
+              if (exists) {
+                return {
+                  shouldRetry: true,
+                  reason: "Function still exists",
+                };
+              }
+
+              return {
+                shouldRetry: false,
+                reason: "Function deleted successfully",
+              };
+            },
+            120,
+          );
+          if (attempts === 2) {
+            throw new Error(
+              `Function ${functionWithQualifier} exceeded capacity after two publication attempts: ` +
+                (result.LastUpdateStatusReason ??
+                  result.StateReason ??
+                  "CapacityProviderScalingLimitExceeded"),
+            );
+          }
+        } catch (err) {
+          if (err instanceof ResourceConflictException) {
+            throw new Error(
+              "Timed out waiting for function to enter active state",
+              {
+                cause: err,
+              },
+            );
+          }
+          throw err;
+        }
+      }
+    }
 
     console.log(`Successfully deployed function: ${functionName}`);
 

@@ -1,10 +1,5 @@
-import type { IncomingMessage, ServerResponse } from "node:http";
-import { Readable } from "node:stream";
 import type { LambdaClient } from "@aws-sdk/client-lambda";
-import {
-  LambdaMicrovmsClient,
-  SuspendMicrovmCommand,
-} from "@aws-sdk/client-lambda-microvms";
+import { LambdaMicrovmsClient } from "@aws-sdk/client-lambda-microvms";
 import {
   createMicrovmWorkerListener,
   HOOK_PATH_PREFIX,
@@ -13,89 +8,17 @@ import {
   type MicrovmWorkerLogger,
   parseRunHookRequest,
 } from "..";
+import { advance, call, FakeMicrovmsClient } from "./helpers";
 
 /** Completes every callback call, and records nothing. */
 const lambdaClient = {
   send: async (): Promise<unknown> => ({}),
 } as unknown as LambdaClient;
 
-/**
- * Records SuspendMicrovm calls. `failure` answers every call with an error.
- * With `hold`, each call stays pending until `finish()`.
- */
-class FakeMicrovmsClient {
-  readonly suspended: string[] = [];
-  failure: Error | undefined;
-  hold = false;
-  /** The worker must never call it, because the test owns this client. */
-  readonly destroy = jest.fn();
-  private pending: (() => void) | undefined;
-
-  async send(command: unknown): Promise<unknown> {
-    if (!(command instanceof SuspendMicrovmCommand)) {
-      throw new Error("unexpected command");
-    }
-    this.suspended.push(command.input.microvmIdentifier as string);
-    if (this.hold) {
-      await new Promise<void>((resolve) => {
-        this.pending = resolve;
-      });
-    }
-    if (this.failure) {
-      throw this.failure;
-    }
-    return {};
-  }
-
-  /** Lets a held call return. */
-  finish(): void {
-    this.pending?.();
-    this.pending = undefined;
-  }
-
-  asClient(): LambdaMicrovmsClient {
-    return this as unknown as LambdaMicrovmsClient;
-  }
-}
-
-/** Sends one request to the listener, and resolves with the status. */
-const call = (
-  target: MicrovmWorkerListener,
-  path: string,
-  body: unknown,
-): Promise<number> =>
-  new Promise((resolve) => {
-    const request = Object.assign(
-      Readable.from([Buffer.from(JSON.stringify(body))]),
-      { url: path, method: "POST" },
-    );
-    let status = 0;
-    const response = {
-      headersSent: false,
-      writeHead(code: number) {
-        status = code;
-        this.headersSent = true;
-        return this;
-      },
-      end() {
-        resolve(status);
-        return this;
-      },
-    };
-    target.listener(
-      request as unknown as IncomingMessage,
-      response as unknown as ServerResponse,
-    );
-  });
-
 const IDLE_SECONDS = 10;
 const IDLE_MS = IDLE_SECONDS * 1_000;
 /** The worker's refusal period after a successful SuspendMicrovm call. */
 const GRACE_MS = 30_000;
-
-/** Advances fake time, and lets the promises that it releases settle. */
-const advance = (ms: number): Promise<void> =>
-  jest.advanceTimersByTimeAsync(ms);
 
 describe("auto-suspend when idle", () => {
   let target: MicrovmWorkerListener | undefined;

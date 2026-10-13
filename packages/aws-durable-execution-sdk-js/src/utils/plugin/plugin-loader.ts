@@ -4,8 +4,12 @@ import { pathToFileURL } from "url";
 import { PluginLoadError } from "../../errors/plugin-load-error/plugin-load-error";
 import {
   DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION,
+  DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION,
+  RegisteredDurableInstrumentationPlugin,
+  RegisteredDurableInstrumentationPluginType,
   DurableInstrumentationPlugin,
   DurableInstrumentationPluginProvider,
+  DurableInstrumentationPluginType,
 } from "../../types/plugin";
 
 export const PLUGIN_ENVIRONMENT_VARIABLE = "DURABLE_EXECUTION_PLUGINS";
@@ -261,6 +265,92 @@ function createPlugin(
   return plugin;
 }
 
+type PluginRegistration =
+  RegisteredDurableInstrumentationPlugin[typeof DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION];
+
+function getRegistrations(
+  plugin: DurableInstrumentationPlugin | DurableInstrumentationPluginType,
+): readonly PluginRegistration[] {
+  const pluginType =
+    typeof plugin === "function"
+      ? plugin
+      : Object.getPrototypeOf(plugin)?.constructor;
+  if (
+    typeof pluginType === "function" &&
+    DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION in pluginType
+  ) {
+    const concreteType = pluginType as DurableInstrumentationPluginType;
+    const registrations: PluginRegistration[] = [];
+    const visited = new Set<unknown>();
+    let name: string | undefined;
+    // A subclass may add a constraint, but cannot replace a base constraint.
+    // Only inspect declarations of the opt-in symbol; ordinary properties and
+    // unmarked callbacks are not registration metadata.
+    for (
+      let current: unknown = pluginType;
+      typeof current === "function" && !visited.has(current);
+      current = Object.getPrototypeOf(current)
+    ) {
+      visited.add(current);
+      if (!Object.hasOwn(current, DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION))
+        continue;
+      // Preserve the concrete constructor as the receiver for inherited getters.
+      const registration = Reflect.get(
+        current,
+        DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION,
+        pluginType,
+      ) as
+        | RegisteredDurableInstrumentationPluginType[typeof DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]
+        | undefined;
+      if (registration) {
+        name ??= concreteType.name || "(anonymous)";
+        registrations.push({
+          name,
+          exclusiveGroup: registration.exclusiveGroup,
+        });
+      }
+    }
+    if (registrations.length > 0) return registrations;
+  }
+
+  // Keep existing instance metadata working. Only declared static metadata can
+  // be checked before construction; validate the returned instances as well.
+  if (
+    typeof plugin !== "function" &&
+    DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION in plugin
+  ) {
+    const registration = (
+      plugin as Partial<RegisteredDurableInstrumentationPlugin>
+    )[DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION];
+    return registration ? [registration] : [];
+  }
+  return [];
+}
+
+function validateExclusiveGroups(
+  plugins: readonly (
+    | DurableInstrumentationPlugin
+    | DurableInstrumentationPluginType
+  )[],
+): void {
+  const groups = new Map<string, string>();
+  for (const plugin of plugins) {
+    const registeredGroups = new Set<string>();
+    for (const registration of getRegistrations(plugin)) {
+      const group = registration.exclusiveGroup;
+      if (!group || registeredGroups.has(group)) continue;
+      registeredGroups.add(group);
+      const previous = groups.get(group);
+      if (previous !== undefined) {
+        throw new PluginLoadError(
+          `Plugins '${previous}' and '${registration.name}' are mutually exclusive in group '${group}'. Configure only one.`,
+        );
+      }
+      groups.set(group, registration.name);
+    }
+  }
+}
+
 /**
  * Combines explicitly configured plugins with providers selected through the environment.
  *
@@ -276,6 +366,7 @@ export async function loadConfiguredPlugins(
   const plugins = [...(explicitPlugins ?? [])];
   const environment = options.environment ?? process.env;
   const specifiers = parseConfiguredSpecifiers(environment);
+  validateExclusiveGroups(plugins);
   if (specifiers.length === 0) {
     return plugins;
   }
@@ -287,6 +378,10 @@ export async function loadConfiguredPlugins(
       options.moduleImporterDependencies,
     );
 
+  const providers: {
+    specifier: string;
+    provider: DurableInstrumentationPluginProvider;
+  }[] = [];
   for (const specifier of specifiers) {
     let importedModule: unknown;
     try {
@@ -306,8 +401,20 @@ export async function loadConfiguredPlugins(
       specifier,
       getProviderExport(specifier, importedModule),
     );
-    plugins.push(createPlugin(specifier, provider));
+    providers.push({ specifier, provider });
   }
 
+  // Resolve and validate the complete configuration before any selected factory
+  // runs. In particular, a conflicting bundled OTel pair must not mutate the
+  // application's global tracer through its constructors.
+  validateExclusiveGroups([
+    ...plugins,
+    ...providers.map(({ provider }) => provider.pluginType),
+  ]);
+  for (const { specifier, provider } of providers) {
+    plugins.push(createPlugin(specifier, provider));
+  }
+  // A v1 provider may declare a base class and return a registered subclass.
+  validateExclusiveGroups(plugins);
   return plugins;
 }

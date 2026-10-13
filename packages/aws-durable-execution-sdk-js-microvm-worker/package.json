@@ -40,12 +40,12 @@
     "dist-types"
   ],
   "dependencies": {
-    "@aws-sdk/client-lambda": "^3.1014.0",
-    "@aws-sdk/client-lambda-microvms": "^3.1140.0"
+    "@aws-sdk/client-lambda": "^3.1149.0",
+    "@aws-sdk/client-lambda-microvms": "^3.1149.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.11",
-    "jest": "^30.5.1",
+    "@biomejs/biome": "2.5.15",
+    "jest": "^30.5.2",
     "typescript": "^6.0.3"
   },
   "private": false
