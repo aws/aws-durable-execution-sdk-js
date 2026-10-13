@@ -725,6 +725,17 @@ after the end hook retain the existing late-parent fallback; this does not add
 clock comparisons, retime supplied timestamps, or guarantee arbitrary cross-clock
 containment.
 
+This requires the SDK to receive the operation metadata. Lambda normally removes
+a completed context's children from subsequent execution state unless
+`ReplayChildren` preserves them. For completion visibility after a child context
+has finished, enable the appropriate `pluginsConfig.childOperationsDepth` (for
+example, `1` for direct children of a top-level context). Preserved contexts
+replay their orchestration; completed durable work still uses stored results.
+The plugin cannot reconstruct an operation that was pruned and whose lifecycle
+hooks do not run. The local runner's retained resume state must not be treated as
+proof that the default Lambda configuration preserves those children. The local
+resume-state discrepancy is tracked in [#995](https://github.com/aws/aws-durable-execution-sdk-js/issues/995).
+
 Notifications and operation-end hooks are deduplicated within each invocation.
 Normal replay does not re-export stored external completions. Deduplication is
 not persisted: redelivery after a failed invocation can export the completion

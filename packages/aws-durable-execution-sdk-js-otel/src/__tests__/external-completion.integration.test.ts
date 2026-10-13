@@ -726,29 +726,35 @@ describe.each([
   }, 30000);
 
   it.each([false, true])(
-    "exports a resume update inside a completed child skipped by replay (failure=%s)",
+    "exports a retained child completion with childOperationsDepth=1 (failure=%s)",
     async (fails) => {
       const live = gate();
       const release = gate();
       const starts: InvocationInfo[] = [];
       const ends: OperationEndInfo[] = [];
+      const callbackIds: string[] = [];
       const childBody = jest.fn(async (child: DurableContext) => {
-        await child.createCallback("external");
+        const [, callbackId] = await child.createCallback("external");
+        callbackIds.push(callbackId);
         return "submitted";
+      });
+      const savedBody = jest.fn(async () => {
+        live.open();
+        await release.opened;
+        return "saved";
       });
       const handler = withDurableExecution(
         async (_, ctx) => {
           const result = await ctx.runInChildContext("scope", childBody);
-          await ctx.step("saved", async () => {
-            live.open();
-            await release.opened;
-            return "saved";
-          });
+          await ctx.step("saved", savedBody);
           const [later] = await ctx.createCallback("later");
           await later;
           return result;
         },
         {
+          // Lambda requires retained child state for this resume notification.
+          // ReplayChildren replays orchestration while keeping stored operations.
+          pluginsConfig: { childOperationsDepth: 1 },
           plugins: [
             plugin,
             {
@@ -796,8 +802,17 @@ describe.each([
       const result = await execution;
       expect(result.getStatus()).toBe("SUCCEEDED");
       expect(result.getResult()).toBe("submitted");
-      expect(childBody).toHaveBeenCalledTimes(1);
-      expect(ends).toHaveLength(0);
+      expect(starts).toHaveLength(3);
+      expect(childBody).toHaveBeenCalledTimes(3);
+      expect(savedBody).toHaveBeenCalledTimes(1);
+      expect(new Set(callbackIds).size).toBe(1);
+      expect(
+        runner.getOperation("scope").getOperationData()?.ContextDetails
+          ?.ReplayChildren,
+      ).toBe(true);
+      expect(ends).toHaveLength(2);
+      expect(ends.map((end) => end.isReplay)).toEqual([false, true]);
+      expect(new Set(ends.map((end) => end.id)).size).toBe(1);
       const updates = starts
         .flatMap((start) => Object.values(start.updatedOperations))
         .filter((info) => info.name === "external");
