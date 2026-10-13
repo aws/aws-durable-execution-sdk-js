@@ -1,4 +1,4 @@
-import { InvalidParameterValueException } from "@aws-sdk/client-lambda";
+import { invalidParameterValue } from "../invalid-parameter-value";
 import {
   OperationAction,
   OperationUpdate,
@@ -14,24 +14,19 @@ export function validateExecutionOperation(update: OperationUpdate): void {
   switch (update.Action) {
     case OperationAction.SUCCEED:
       if (update.Error != null) {
-        throw new InvalidParameterValueException({
-          message: "Cannot provide an Error for SUCCEED action.",
-          $metadata: {},
-        });
+        throw invalidParameterValue(
+          "Cannot provide an Error for SUCCEED action.",
+        );
       }
       break;
     case OperationAction.FAIL:
       if (update.Payload != null) {
-        throw new InvalidParameterValueException({
-          message: "Cannot provide a Payload for FAIL action.",
-          $metadata: {},
-        });
+        throw invalidParameterValue(
+          "Cannot provide a Payload for FAIL action.",
+        );
       }
       break;
     default:
-      throw new InvalidParameterValueException({
-        message: "Invalid EXECUTION action.",
-        $metadata: {},
-      });
+      throw invalidParameterValue("Invalid action for EXECUTION operation.");
   }
 }

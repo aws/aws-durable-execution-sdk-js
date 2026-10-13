@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The testing SDK's local checkpoint server now validates checkpoints as the service does. Before,
+  it accepted some updates that the service rejects, and it rejected others with different
+  messages. So a test could pass locally for a handler that fails in AWS. The changes:
+  - The model checks now cover `Id`, `ParentId`, `Name`, `Type`, and `Action`, as well as
+    `SubType`. `Id` and `ParentId` must have 1 to 64 characters from `[a-zA-Z0-9-_]`. `Name` must
+    have 1 to 256 printable ASCII characters. `Id`, `Type`, and `Action` are required. An invalid
+    member rejects the whole request with HTTP 400 `ValidationException`, with the service's
+    message. The message lists at most 10 errors, as the service's does.
+  - An update for an existing operation must not change its `Type`, `SubType`, `Name`, or
+    `ParentId`. A different value usually means that the handler is not deterministic.
+  - The error object limit is 262144 bytes, the service's limit. It was 32768 bytes.
+  - Payloads now have the service's limits: 262144 bytes for STEP and CONTEXT output, 1048576
+    bytes for CHAINED_INVOKE input, and 6291456 bytes for EXECUTION output. So a handler result
+    over 6291456 bytes now fails the checkpoint, as it does in AWS.
+  - A CALLBACK and a CHAINED_INVOKE accept only `START`. The local server accepted `CANCEL`.
+  - A WAIT `START` requires `WaitOptions`. A CHAINED_INVOKE `START` requires
+    `ChainedInvokeOptions`.
+  - The error messages are the service's. For example, "Cannot start a WAIT that already exists."
+    is now "Cannot start a WAIT operation that already exists.". A test that matches the old
+    message text must update it.
+  - A validation failure now carries HTTP status 400, as the service's `InvalidParameterValueException`
+    does. The SDK classifies a 4xx checkpoint failure as unrecoverable for the execution. So the
+    local execution now ends `FAILED` with `CheckpointUnrecoverableExecutionError`, as it does in
+    AWS. Before, the error carried no status, so it failed only the invocation, and `run()` rejected.
+
 - A checkpoint response carrying no `CheckpointToken` now ends the invocation cleanly with
   `{Status: "PENDING"}`. Every response carries the token for the next call, so one without a token
   withdraws the invocation's ability to record anything further — for instance because a newer
