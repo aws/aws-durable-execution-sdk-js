@@ -44,3 +44,28 @@ export function createTracerProvider(
     usesGlobalProvider: true,
   };
 }
+
+/**
+ * Flushes an application-owned provider without shutting it down.
+ * The API global provider is a proxy; use its one public delegate when it does
+ * not itself expose forceFlush. Explicit factory providers are not unwrapped.
+ */
+export async function flushTracerProvider(
+  provider: TracerProvider,
+  usesGlobalProvider: boolean,
+): Promise<void> {
+  let target = provider;
+  if (usesGlobalProvider && !("forceFlush" in target)) {
+    const proxy = target as TracerProvider & {
+      getDelegate?: () => TracerProvider;
+    };
+    if (typeof proxy.getDelegate === "function") {
+      target = proxy.getDelegate();
+    }
+  }
+  if ("forceFlush" in target) {
+    await (
+      target as TracerProvider & { forceFlush: () => Promise<void> }
+    ).forceFlush();
+  }
+}

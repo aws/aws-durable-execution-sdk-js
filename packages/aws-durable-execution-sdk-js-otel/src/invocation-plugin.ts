@@ -45,7 +45,10 @@ import {
   rootSamplingDecision,
 } from "./execution-trace-context";
 import type { OtelPluginConfig } from "./otel-plugin-config";
-import { createTracerProvider } from "./otel-plugin-provider";
+import {
+  createTracerProvider,
+  flushTracerProvider,
+} from "./otel-plugin-provider";
 import { tryInstallGlobalIdGenerator } from "./global-id-generator";
 import { DurableSampler, tryInstallDurableSampler } from "./global-sampler";
 import { ExternalCompletions } from "./external-completions";
@@ -367,14 +370,10 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     // already have ended its stable synthetic anchor before customer code ran.
 
     // 4. Force flush the tracer provider
-    if ("forceFlush" in this.tracerProvider) {
-      try {
-        await (
-          this.tracerProvider as { forceFlush: () => Promise<void> }
-        ).forceFlush();
-      } catch {
-        // Gracefully handle flush errors
-      }
+    try {
+      await flushTracerProvider(this.tracerProvider, this.usesGlobalProvider);
+    } catch {
+      // Gracefully handle flush errors.
     }
 
     // 5. Clear all per-invocation state

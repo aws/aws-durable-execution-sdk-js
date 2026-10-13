@@ -153,7 +153,10 @@ tracer from it. Register it globally when the application also needs its
 context manager, propagator, or library instrumentation.
 
 At the end of each enabled invocation, both plugins call `forceFlush()` when
-the provider exposes it. They never call `shutdown()`.
+the provider exposes it. For the default global API provider, they also check
+its public delegate, so an SDK `BatchSpanProcessor` is flushed when the API proxy
+does not expose `forceFlush()` itself. Explicit factory providers are used as
+returned and are not unwrapped. The plugins never call `shutdown()`.
 
 ## Dynamic Loading from a Lambda Layer
 
@@ -365,7 +368,7 @@ anchor span content; backends may retain whichever resource accompanies their
 chosen copy. Span processors that enrich these spans must likewise avoid
 invocation-varying span fields when relying on identity-based deduplication.
 Export delivery and flushing remain the provider/layer's responsibility. The
-plugin awaits `forceFlush()` when its provider exposes it, but a killed invocation
+plugin awaits an available provider or global-delegate `forceFlush()`, but a killed invocation
 or a failed export cannot guarantee delivery; this is not exactly-once export.
 
 If a caller omits `executionStartTimestamp`, the plugin retains terminal-only

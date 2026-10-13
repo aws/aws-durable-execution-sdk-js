@@ -40,7 +40,10 @@ import {
   rootSamplingDecision,
 } from "./execution-trace-context";
 import type { OtelPluginConfig } from "./otel-plugin-config";
-import { createTracerProvider } from "./otel-plugin-provider";
+import {
+  createTracerProvider,
+  flushTracerProvider,
+} from "./otel-plugin-provider";
 import { tryInstallGlobalIdGenerator } from "./global-id-generator";
 import { DurableSampler, tryInstallDurableSampler } from "./global-sampler";
 import { ExternalCompletions } from "./external-completions";
@@ -399,17 +402,13 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     }
 
     // 4. Always flush TracerProvider at invocation boundaries
-    if ("forceFlush" in this.tracerProvider) {
-      try {
-        await (
-          this.tracerProvider as { forceFlush: () => Promise<void> }
-        ).forceFlush();
-      } catch (e) {
-        console.error(
-          "[ExecutionOtelPlugin] forceFlush failed:",
-          e instanceof Error ? e.message : e,
-        );
-      }
+    try {
+      await flushTracerProvider(this.tracerProvider, this.usesGlobalProvider);
+    } catch (e) {
+      console.error(
+        "[ExecutionOtelPlugin] forceFlush failed:",
+        e instanceof Error ? e.message : e,
+      );
     }
 
     // 5. Clear per-invocation state
