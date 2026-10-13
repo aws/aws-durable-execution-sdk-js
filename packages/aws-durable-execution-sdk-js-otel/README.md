@@ -768,6 +768,14 @@ exported at invocation end. Supplied operation timestamps, parent identity,
 status, and error details are preserved in the execution view; the invocation
 view completes the live segment or emits a linked continuation.
 
+When a deferred execution-view operation has no supplied start Date, its local
+fallback start is bounded by an already supplied completion Date. This preserves
+the historical end and exception timestamp instead of asking the provider to
+export a negative interval. Supplied start Dates remain authoritative. This does
+not retroactively move an already recording attempt span: if its later backend
+end predates its local start, strict interval/event containment still cannot be
+guaranteed across those clock domains.
+
 Notifications and operation-end hooks are deduplicated within each invocation.
 Normal replay does not re-export stored external completions. Deduplication is
 invocation-local. Shutdown first drains and flushes fresh completions while the

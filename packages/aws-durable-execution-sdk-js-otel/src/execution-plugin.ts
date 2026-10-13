@@ -665,9 +665,15 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
     // Earliest known start, so the span never begins after its own attempt/child
     // spans (created earlier at start).
-    const startTime =
+    const observedStart =
       this.earliestStart(started?.startTimestamp, info.startTimestamp) ??
       this.logicalTimestamp();
+    // A local fallback cannot establish a start after a known completion.
+    // Preserve supplied Date starts; only bound the synthesized HrTime start.
+    const startTime =
+      observedStart instanceof Date
+        ? observedStart
+        : this.earliestStart(observedStart, info.endTimestamp)!;
     this.observeAncestorStart(info.parentId ?? started?.parentId, startTime);
 
     const operationSpanId = deriveSpanIdFromOperationId(

@@ -12,9 +12,11 @@ import {
   SpanKind,
 } from "@opentelemetry/api";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-node";
+import { timeInputToHrTime } from "@opentelemetry/core";
 import type {
   InvocationInfo,
   InvocationEndInfo,
+  OperationInfo,
 } from "@aws/durable-execution-sdk-js";
 import {
   createExecutionOtelPluginFactory,
@@ -118,6 +120,48 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     context.disable();
     propagation.disable();
   });
+
+  it.each([false, true])(
+    "preserves a supplied completion time when an external start is unavailable (start hook=%s)",
+    async (hasStartHook) => {
+      const endTimestamp = new Date("2024-01-01T00:00:01Z");
+      const completion: OperationInfo = Object.freeze({
+        id: "missing-start",
+        name: "missing-start",
+        type: "CALLBACK",
+        status: "FAILED",
+        endTimestamp,
+        error: new Error("callback failed"),
+        isReplay: false,
+      });
+      const info = makeInvocationInfo({
+        isFirstInvocation: false,
+        operations: { [completion.id]: completion },
+        updatedOperations: { [completion.id]: completion },
+      });
+      const plugin = newPlugin({ tracerProviderFactory }, info);
+      await plugin.onInvocationStart(info);
+      if (hasStartHook)
+        await plugin.onOperationStart({ ...completion, isReplay: true });
+      await plugin.onInvocationEnd(
+        makeInvocationEndInfo({ status: "PENDING" }),
+      );
+      const span = findSpan(exporter, completion.name!)!;
+      expect(span).toBeDefined();
+      // There is no backend start to preserve. Do not let the resumed local
+      // clock make the supplied historical completion invalid or retime it.
+      expect(span.startTime).toEqual(timeInputToHrTime(endTimestamp));
+      expect(span.endTime).toEqual(timeInputToHrTime(endTimestamp));
+      expect(span.events[0].time).toEqual(timeInputToHrTime(endTimestamp));
+      expect(span.status.code).toBe(SpanStatusCode.ERROR);
+      expect(span.attributes["durable.operation.id"]).toBe(completion.id);
+      expect(completion.startTimestamp).toBeUndefined();
+      expect(completion.endTimestamp).toBe(endTimestamp);
+      expect(
+        getExportedSpans(exporter).filter((s) => s.name === completion.name),
+      ).toHaveLength(1);
+    },
+  );
 
   describe("Invocation_Span provider behavior", () => {
     it("creates an Invocation span as child of ambient context with the global provider", async () => {
