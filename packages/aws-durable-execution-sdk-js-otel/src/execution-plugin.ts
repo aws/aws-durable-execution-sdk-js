@@ -743,8 +743,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     )
       return false;
 
-    // Replay skips a completed context and all of its body. An unfinished
-    // descendant below it cannot later materialize its execution-view span.
+    // Completed contexts do not restart unfinished descendants. ReplayChildren
+    // can rebuild a successful result by traversing completed children, but
+    // ReplaySucceededContext still blocks unfinished child operations.
     const visited = new Set([parent.id]);
     let ancestorId = parent.parentId;
     while (ancestorId && !visited.has(ancestorId)) {

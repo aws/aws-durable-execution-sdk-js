@@ -857,6 +857,56 @@ describe("InvocationOtelPlugin", () => {
   });
 
   describe("Continuation span for cross-invocation operations", () => {
+    it("drains a queued replay completion while its resumed context is still open", async () => {
+      await plugin.onInvocationStart(
+        makeInvocationInfo({ isFirstInvocation: false }),
+      );
+      const parent = makeOperationInfo({
+        id: "resumed-parent",
+        name: "resumed-parent",
+        type: "CONTEXT",
+        isReplay: true,
+      });
+      const completion = Object.freeze(
+        makeOperationInfo({
+          id: "external",
+          name: "external",
+          type: "CALLBACK",
+          parentId: parent.id,
+          status: "SUCCEEDED",
+          isReplay: true,
+        }),
+      );
+      await plugin.onOperationStart(parent);
+      await plugin.onOperationStart(completion);
+      await plugin.onOperationChange({
+        executionArn: TEST_ARN,
+        operations: { [parent.id]: parent, [completion.id]: completion },
+        updatedOperations: { [completion.id]: completion },
+      });
+      await plugin.onOperationEnd({
+        ...parent,
+        status: "SUCCEEDED",
+        isReplay: false,
+      });
+      const atParentEnd = findSpan("external");
+      const parentSpan = findSpan("resumed-parent");
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+      expect(atParentEnd).toBeDefined();
+      expect(parentSpan).toBeDefined();
+      expect(atParentEnd!.parentSpanContext?.spanId).toBe(
+        parentSpan!.spanContext().spanId,
+      );
+      expect(atParentEnd!.links.map((link) => link.context.spanId)).toContain(
+        deriveSpanIdFromOperationId(completion.id, TEST_ARN),
+      );
+      expect(
+        exporter.getFinishedSpans().filter((span) => span.name === "external"),
+      ).toHaveLength(1);
+      expect(completion.isReplay).toBe(true);
+      expect(completion.parentId).toBe(parent.id);
+    });
+
     it("links continuation span to Workflow and the initial operation span when operation was started in prior invocation", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       // onOperationEnd for an operation NOT in the map (started elsewhere)

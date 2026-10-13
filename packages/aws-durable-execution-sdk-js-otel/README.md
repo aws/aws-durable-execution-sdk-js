@@ -711,11 +711,16 @@ that will be discarded. It does not invent a completion or span for that
 abandoned context. Pending or retrying invocations retain the parent identity
 because a later invocation can still complete and export that context. An
 exception is an unfinished parent below a known completed context in checkpoint
-history: replay skips that whole branch, so its deferred completion also uses
-`Workflow`. Missing or inconclusive ancestry is not treated as proof of abandonment.
+history: replay cannot restart that unfinished branch, so its deferred completion
+also uses `Workflow`. `ReplayChildren` can traverse completed children to rebuild
+a result, but `ReplaySucceededContext` still blocks unfinished child operations.
+Missing or inconclusive ancestry is not treated as proof of abandonment.
 
-A completion notification already queued when its live context ends is exported
-before that context closes, preserving its OTel parent. Notifications delivered
+In both views, a completion notification already queued when its live context
+ends is exported before that context closes, preserving its OTel parent. This
+includes an unawaited callback from a prior invocation: the invocation view emits
+its linked continuation while the resumed parent segment is still open.
+Notifications delivered
 after the end hook retain the existing late-parent fallback; this does not add
 clock comparisons, retime supplied timestamps, or guarantee arbitrary cross-clock
 containment.

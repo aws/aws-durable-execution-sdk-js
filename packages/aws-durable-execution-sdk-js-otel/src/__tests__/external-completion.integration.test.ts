@@ -61,6 +61,244 @@ describe.each([
     context.disable();
   });
 
+  it("drains a prior-invocation unawaited callback before its resumed parent closes", async () => {
+    const live = gate();
+    const release = gate();
+    const changes: OperationChangeInfo[] = [];
+    const ends: OperationEndInfo[] = [];
+    const starts: InvocationInfo[] = [];
+    const order: string[] = [];
+    const step = jest.fn(async () => {
+      live.open();
+      await release.opened;
+      return "checkpointed";
+    });
+    const handler = withDurableExecution(
+      async (_, ctx) => {
+        const result = await ctx.runInChildContext("scope", async (child) => {
+          await child.createCallback("external");
+          const [resume] = await child.createCallback("resume");
+          await resume;
+          await child.step("checkpoint", step);
+          return "submitted";
+        });
+        const [later] = await ctx.createCallback("later");
+        await later;
+        return result;
+      },
+      {
+        plugins: [
+          plugin,
+          {
+            async onInvocationStart(info) {
+              starts.push(info);
+            },
+            async onOperationChange(info) {
+              changes.push(info);
+              if (
+                Object.values(info.updatedOperations).some(
+                  (op) => op.name === "external" && op.status === "SUCCEEDED",
+                )
+              )
+                order.push("update");
+            },
+            async onOperationEnd(info) {
+              ends.push(info);
+              if (info.name === "scope") order.push("parent-end");
+            },
+          },
+        ],
+      },
+    );
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+    const execution = runner.run();
+    const external = runner.getOperation("external");
+    const resume = runner.getOperation("resume");
+    await external.waitForData(WaitingOperationStatus.STARTED);
+    await resume.waitForData(WaitingOperationStatus.STARTED);
+    await runner.pauseExecution();
+    await resume.sendCallbackSuccess("resume");
+    await runner.resumeExecution();
+    await live.opened;
+    await external.sendCallbackSuccess("external result");
+    release.open();
+    const later = runner.getOperation("later");
+    await later.waitForData(WaitingOperationStatus.STARTED);
+    await runner.pauseExecution();
+    const completed = () =>
+      exporter
+        .getFinishedSpans()
+        .filter(
+          (s) =>
+            s.name === "external" &&
+            s.attributes["durable.operation.status"] === "SUCCEEDED",
+        );
+    const atBoundary = completed();
+    const parent = exporter
+      .getFinishedSpans()
+      .find(
+        (s) =>
+          s.name === "scope" &&
+          s.attributes["durable.operation.status"] === "SUCCEEDED",
+      );
+    await later.sendCallbackSuccess("later");
+    await runner.resumeExecution();
+    const result = await execution;
+    expect(result.getStatus()).toBe("SUCCEEDED");
+    expect(result.getResult()).toBe("submitted");
+    expect(step).toHaveBeenCalledTimes(1);
+    expect(starts.length).toBeGreaterThanOrEqual(3);
+    const update = changes
+      .flatMap((change) => Object.values(change.updatedOperations))
+      .find((op) => op.name === "external" && op.status === "SUCCEEDED")!;
+    expect(update).toBeDefined();
+    expect(starts.every((start) => !start.updatedOperations[update.id])).toBe(
+      true,
+    );
+    expect(ends.filter((end) => end.name === "external")).toHaveLength(0);
+    expect(ends.find((end) => end.name === "scope")?.isReplay).toBe(false);
+    expect(order).toEqual(["update", "parent-end"]);
+    expect(atBoundary).toHaveLength(1);
+    expect(completed()).toHaveLength(1);
+    expect(parent).toBeDefined();
+    expect(completed()[0].parentSpanContext?.spanId).toBe(
+      parent!.spanContext().spanId,
+    );
+    expect(completed()[0].attributes["durable.operation.id"]).toBe(update.id);
+    if (view === "invocation")
+      expect(completed()[0].links.map((link) => link.context.spanId)).toContain(
+        deriveSpanIdFromOperationId(update.id, starts[0].executionArn),
+      );
+  }, 30000);
+
+  it("does not revive an unfinished branch below a ReplayChildren ancestor", async () => {
+    const resumedPending = gate();
+    const starts: InvocationInfo[] = [];
+    const ends: OperationEndInfo[] = [];
+    const childBody = jest.fn(async (child: DurableContext) => {
+      const [external] = await child.createCallback("external");
+      const [finish] = await child.createCallback("finish-child");
+      await finish;
+      return await external;
+    });
+    const winnerBody = jest.fn(async (child: DurableContext) => {
+      const [winner] = await child.createCallback("winner");
+      return await winner;
+    });
+    const handler = withDurableExecution(
+      async (_, ctx) => {
+        const branches = await ctx.parallel(
+          "ancestor",
+          [
+            { name: "pending-parent", func: childBody },
+            { name: "winner-parent", func: winnerBody },
+          ],
+          { completionConfig: { minSuccessful: 1 } },
+        );
+        const [later] = await ctx.createCallback("later");
+        await later;
+        return branches.getResults();
+      },
+      {
+        pluginsConfig: { childOperationsDepth: 2 },
+        plugins: [
+          plugin,
+          {
+            async onInvocationStart(info) {
+              starts.push(info);
+            },
+            async onOperationEnd(info) {
+              ends.push(info);
+            },
+            async onInvocationEnd(info) {
+              if (
+                info.status === "PENDING" &&
+                Object.values(info.operations).some(
+                  (op) => op.name === "external" && op.status === "SUCCEEDED",
+                )
+              )
+                resumedPending.open();
+            },
+          },
+        ],
+      },
+    );
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+    const execution = runner.run();
+    const external = runner.getOperation("external");
+    const finish = runner.getOperation("finish-child");
+    const winner = runner.getOperation("winner");
+    await external.waitForData(WaitingOperationStatus.STARTED);
+    await finish.waitForData(WaitingOperationStatus.STARTED);
+    await winner.waitForData(WaitingOperationStatus.STARTED);
+    await winner.sendCallbackSuccess("winner result");
+    const later = runner.getOperation("later");
+    await later.waitForData(WaitingOperationStatus.STARTED);
+    await runner.pauseExecution();
+    const ancestor = runner.getOperation("ancestor").getOperationData()!;
+    const parentData = runner
+      .getOperation("pending-parent")
+      .getOperationData()!;
+    expect(ancestor.Status).toBe("SUCCEEDED");
+    expect(ancestor.ContextDetails?.ReplayChildren).toBe(true);
+    expect(parentData.Status).toBe("STARTED");
+    // Initial execution suspends on the winner callback; the next invocation
+    // completes the ancestor. These are orchestration bodies, not step effects.
+    expect(starts).toHaveLength(2);
+    expect(childBody).toHaveBeenCalledTimes(2);
+    expect(winnerBody).toHaveBeenCalledTimes(2);
+    await external.sendCallbackSuccess("external result");
+    await runner.resumeExecution();
+    await resumedPending.opened;
+    await runner.pauseExecution();
+    const terminal = () =>
+      exporter
+        .getFinishedSpans()
+        .filter(
+          (s) =>
+            s.name === "external" &&
+            s.attributes["durable.operation.status"] === "SUCCEEDED",
+        );
+    const atPending = terminal();
+    await finish.sendCallbackSuccess("finish");
+    await later.sendCallbackSuccess("later");
+    await runner.resumeExecution();
+    const result = await execution;
+    expect(result.getStatus()).toBe("SUCCEEDED");
+    expect(result.getResult()).toEqual(["winner result"]);
+    // Both subsequent resumes traverse the preserved successful ancestor.
+    // Its successful branch is replayed, but its unfinished branch never runs
+    // again and never emits a terminal parent span.
+    expect(starts).toHaveLength(4);
+    expect(childBody).toHaveBeenCalledTimes(2);
+    expect(winnerBody).toHaveBeenCalledTimes(4);
+    expect(
+      ends.filter((end) => end.name === "winner").map((end) => end.isReplay),
+    ).toEqual([false, true, true]);
+    expect(atPending).toHaveLength(1);
+    expect(terminal()).toHaveLength(1);
+    expect(ends.filter((end) => end.name === "pending-parent")).toHaveLength(0);
+    const completion = starts
+      .flatMap((start) => Object.values(start.updatedOperations))
+      .find((op) => op.name === "external")!;
+    expect(completion).toBeDefined();
+    expect(completion.parentId).toBe(parentData.Id);
+    if (view === "execution") {
+      expect(
+        exporter.getFinishedSpans().filter((s) => s.name === "pending-parent"),
+      ).toHaveLength(0);
+      const workflow = exporter
+        .getFinishedSpans()
+        .find((s) => s.name === "Workflow")!;
+      expect(atPending[0].parentSpanContext?.spanId).toBe(
+        workflow.spanContext().spanId,
+      );
+      expect(terminal()[0].spanContext().spanId).toBe(
+        deriveSpanIdFromOperationId(completion.id, starts[0].executionArn),
+      );
+    }
+  }, 30000);
+
   it.each([
     ["callback", false],
     ["callback", true],

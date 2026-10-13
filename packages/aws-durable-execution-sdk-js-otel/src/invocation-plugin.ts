@@ -649,6 +649,16 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       return;
     }
 
+    // Checkpoint updates may complete an unawaited operation from an earlier
+    // invocation. Drain it before removing its live parent from spanMap.
+    if (info.type === "CONTEXT" && !info.isReplay) {
+      for (const child of this.externalCompletions.pending.values()) {
+        if (child.parentId === info.id) {
+          await this.onOperationEnd({ ...child, isReplay: false });
+        }
+      }
+    }
+
     // Updates and traversal can report the same completion in either order.
     // The set is reset each invocation so failed-invocation redelivery remains
     // eligible, while normal replay never exports a completion a second time.
