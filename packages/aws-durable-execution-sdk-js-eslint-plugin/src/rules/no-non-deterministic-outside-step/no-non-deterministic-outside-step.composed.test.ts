@@ -1,9 +1,10 @@
+import * as typescriptParser from "@typescript-eslint/parser";
 import { RuleTester } from "eslint";
 import { noNonDeterministicOutsideStep } from "./no-non-deterministic-outside-step";
 
 const ruleTester = new RuleTester({
-  parser: require.resolve("@typescript-eslint/parser"),
-} as any);
+  languageOptions: { parser: typescriptParser },
+});
 
 describe("no-non-deterministic-outside-step composed tests", () => {
   ruleTester.run(
