@@ -1,8 +1,10 @@
+import yaml from "js-yaml";
 import {
   toPascalCase,
   createFunctionResource,
   generateTemplate,
   getExamplesCatalogJson,
+  serializeTemplate,
 } from "../generate-sam-template";
 
 jest.mock("fs", () => ({
@@ -239,6 +241,39 @@ describe("generate-sam-template", () => {
         template.Resources.HelloWorld.Properties.Environment.Variables
           .MICROVM_IMAGE_ARN,
       ).toBeUndefined();
+    });
+  });
+
+  describe("serializeTemplate", () => {
+    // js-yaml ignores dump options it does not recognize. js-yaml 5 renamed
+    // quotingType to quoteStyle, and the old option silently switched every
+    // quoted value in template.yml to single quotes. These tests fail on any
+    // change of that kind.
+    test("double-quotes the values that need quotes", () => {
+      const yamlText = serializeTemplate(generateTemplate());
+
+      expect(yamlText).toContain('AWSTemplateFormatVersion: "2010-09-09"');
+      expect(yamlText).toContain('Resource: "*"');
+      expect(yamlText).toContain('DURABLE_VERBOSE_MODE: "false"');
+      expect(yamlText).not.toMatch(/: '/);
+    });
+
+    test("loads back to the same template", () => {
+      const template = generateTemplate({
+        microvmImageArn:
+          "arn:aws:lambda:us-east-1:123456789012:microvm-image:sdk-js-examples-abc",
+        microvmExecutionRoleArn:
+          "arn:aws:iam::123456789012:role/microvm-execution",
+      });
+
+      expect(yaml.load(serializeTemplate(template))).toEqual(template);
+    });
+
+    test("does not wrap long values", () => {
+      const description = "x".repeat(200);
+      const yamlText = serializeTemplate({ Description: description });
+
+      expect(yamlText).toBe(`Description: ${description}\n`);
     });
   });
 });
