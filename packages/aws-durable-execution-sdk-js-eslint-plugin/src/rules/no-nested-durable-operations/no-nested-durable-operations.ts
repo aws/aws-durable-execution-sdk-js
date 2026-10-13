@@ -6,7 +6,6 @@ export const noNestedDurableOperations: Rule.RuleModule = {
     docs: {
       description:
         "Disallow using the same context object inside its own durable operation",
-      category: "Possible Errors",
       recommended: true,
     },
     messages: {

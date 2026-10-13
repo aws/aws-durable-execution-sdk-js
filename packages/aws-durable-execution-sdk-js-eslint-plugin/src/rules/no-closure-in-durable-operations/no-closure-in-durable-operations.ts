@@ -34,7 +34,6 @@ export const noClosureInDurableOperations: Rule.RuleModule = {
     docs: {
       description:
         "Disallow modifying closure variables inside durable operations",
-      category: "Possible Errors",
       recommended: true,
     },
     messages: {

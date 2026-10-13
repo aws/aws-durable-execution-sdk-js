@@ -24,7 +24,6 @@ export const noNonDeterministicOutsideStep: Rule.RuleModule = {
     docs: {
       description:
         "Disallow non-deterministic operations outside of step functions",
-      category: "Possible Errors",
       recommended: true,
     },
     messages: {

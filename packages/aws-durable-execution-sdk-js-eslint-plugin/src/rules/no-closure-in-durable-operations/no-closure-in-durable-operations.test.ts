@@ -1,3 +1,4 @@
+import * as typescriptParser from "@typescript-eslint/parser";
 import { RuleTester } from "eslint";
 import { noClosureInDurableOperations } from "./no-closure-in-durable-operations";
 
@@ -168,8 +169,8 @@ describe("no-closure-in-durable-operations scope resolution", () => {
 // The rule reads the scope information ESLint derives while parsing, so it is
 // exercised against real source rather than hand-built AST fixtures.
 const ruleTester = new RuleTester({
-  parser: require.resolve("@typescript-eslint/parser"),
-} as any);
+  languageOptions: { parser: typescriptParser },
+});
 
 const mutationError = (variableName: string) => ({
   messageId: "closureVariableUsage",
