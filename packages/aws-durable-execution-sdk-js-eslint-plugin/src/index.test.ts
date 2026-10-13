@@ -46,5 +46,11 @@ describe("plugin", () => {
         rules: plugin.configs["flat/recommended"].rules,
       });
     });
+
+    it("does not share its rules object with the flat config", () => {
+      expect(plugin.configs.recommended.rules).not.toBe(
+        plugin.configs["flat/recommended"].rules,
+      );
+    });
   });
 });

@@ -43,7 +43,11 @@ const recommendedRules = {
  */
 interface FlatConfig {
   name: string;
-  plugins: Record<string, unknown>;
+  // ESLint 9 and 10 type `plugins` as Record<string, ESLint.Plugin>. With
+  // `unknown` here, a TypeScript eslint.config.ts that passes this config to
+  // defineConfig() or assigns it to Linter.Config fails with TS2322. The
+  // plugin type itself is assignable to ESLint.Plugin, so use it.
+  plugins: Record<string, DurableExecutionPlugin>;
   rules: Record<string, "error">;
 }
 
@@ -76,15 +80,17 @@ const plugin: DurableExecutionPlugin = {
   meta: { name, version },
   rules,
   configs: {
+    // Each config gets its own copy of the rules. A shared object would let a
+    // user who edits one config's rules change the other config too.
     recommended: {
       plugins: [NAMESPACE],
-      rules: recommendedRules,
+      rules: { ...recommendedRules },
     },
     // plugins refers to the plugin object itself, so it is filled in below.
     "flat/recommended": {
       name: `${name}/recommended`,
       plugins: {},
-      rules: recommendedRules,
+      rules: { ...recommendedRules },
     },
   },
 };
