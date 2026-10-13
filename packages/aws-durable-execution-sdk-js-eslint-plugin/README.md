@@ -29,8 +29,10 @@ checks how durable operations are nested.
 
 ## Requirements
 
-- ESLint 8.57 or later, using the flat config format (`eslint.config.js`).
-  ESLint 8.57, 9 and 10 are tested.
+- ESLint 8.23 or later, 9, or 10, using the flat config format (`eslint.config.js`).
+  ESLint 8.23 to 8.56 load only a CommonJS `eslint.config.js`, so use the CommonJS
+  example below on those versions. ESLint 8.57 and later also load
+  `eslint.config.mjs`. CI tests ESLint 8.23, the latest 8, 9 and 10.
 - Node.js 22 or later.
 - A parser for TypeScript files, such as `@typescript-eslint/parser`.
 
@@ -40,8 +42,11 @@ The plugin does not support the legacy eslintrc format. See
 ## Installation
 
 ```bash
-npm install --save-dev @aws/durable-execution-sdk-js-eslint-plugin
+npm install --save-dev @aws/durable-execution-sdk-js-eslint-plugin @typescript-eslint/parser
 ```
+
+`@typescript-eslint/parser` lets ESLint read TypeScript. A JavaScript-only project
+does not need it. Remove the `languageOptions.parser` lines from the examples below.
 
 ## Usage
 
@@ -88,8 +93,8 @@ checks. To limit it to your durable functions, spread it into your own object:
 }
 ```
 
-ESLint 8.57 uses flat config when it finds an `eslint.config.js` file. ESLint 9 and
-10 always use it.
+ESLint 8.57 uses flat config when it finds an `eslint.config.js` or
+`eslint.config.mjs` file. ESLint 9 and 10 always use it.
 
 ### Choose the rules yourself
 
@@ -163,7 +168,7 @@ Checked operations: `step`, `wait`, `waitForCallback`, `waitForCondition`,
 
 #### ❌ Incorrect
 
-```javascript
+```typescript
 const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
     return await context.step("step1", async () => {
@@ -182,7 +187,7 @@ const handler = withDurableExecution(
 
 #### ✅ Correct
 
-```javascript
+```typescript
 // Use runInChildContext for nested operations
 const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
@@ -223,7 +228,7 @@ Checked operations: `step`, `runInChildContext`, `waitForCondition` and
 
 #### ❌ Incorrect
 
-```javascript
+```typescript
 const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
     let a = 2;
@@ -244,7 +249,7 @@ const handler = withDurableExecution(
 
 #### ✅ Correct
 
-```javascript
+```typescript
 const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
     let a = 2;
@@ -301,7 +306,7 @@ the helper is outside a step.
 
 #### ❌ Incorrect
 
-```javascript
+```typescript
 const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
     // Error: this code runs again on every replay, and both values change
@@ -316,7 +321,7 @@ const handler = withDurableExecution(
 
 #### ✅ Correct
 
-```javascript
+```typescript
 const handler = withDurableExecution(
   async (event: any, context: DurableContext) => {
     // The step saves these values, so a replay returns the same ones

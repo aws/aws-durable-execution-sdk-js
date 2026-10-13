@@ -130,11 +130,11 @@ jobs:
       - name: Bundle the MCP server
         run: npm run build -w packages/aws-durable-execution-sdk-js-insight-mcp
 
-  # The plugin declares `eslint >=8.0.0` as a peer dependency, but the repository
-  # installs only ESLint 10, and the RuleTester suites need that version (ESLint 8
-  # RuleTester takes a different config format). This job installs the latest
-  # ESLint 8 and the latest ESLint 9 on top of the lockfile install, and lints real
-  # code through ESLint's public API with the plugin's recommended config. It
+  # The plugin's peer range is ESLint ^8.23.0 || ^9.0.0 || ^10.0.0, but the
+  # repository installs only ESLint 10, and the RuleTester suites need that version
+  # (ESLint 8 RuleTester takes a different config format). This job installs ESLint
+  # 8.23, the latest 8 and the latest 9 on top of the lockfile install, and lints
+  # real code through ESLint's public API with the plugin's recommended config. It
   # needs no build artifacts, so like insight-hosts it runs off lint-commits.
   eslint-plugin-compat:
     needs: lint-commits
@@ -142,7 +142,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        eslint: ["8", "9"]
+        # 8.23 is the lowest version in the peer range: the first ESLint that
+        # loads an eslint.config.js file.
+        eslint: ["8.23", "8", "9"]
     name: eslint-plugin-compat (ESLint ${{ matrix.eslint }})
     steps:
       - uses: actions/checkout@v7
@@ -162,7 +164,11 @@ jobs:
         working-directory: packages/aws-durable-execution-sdk-js-eslint-plugin
         run: node -p "'ESLint ' + require('eslint/package.json').version"
       - name: Lint with the plugin on ESLint ${{ matrix.eslint }}
-        run: npm test -w packages/aws-durable-execution-sdk-js-eslint-plugin -- src/index.test.ts src/eslint-integration.test.ts
+        # Jest only. The package's `npm test` also runs `npm run typecheck`, but
+        # ESLint 8 ships no types, so tsc would fall back to the root ESLint 10
+        # types and check nothing new here. The unit-tests job type-checks.
+        working-directory: packages/aws-durable-execution-sdk-js-eslint-plugin
+        run: npx jest src/index.test.ts src/eslint-integration.test.ts
 
   # Runs off lint-commits rather than build: Biome needs only the sources, so
   # linting does not have to wait for compilation and reports failures earlier.

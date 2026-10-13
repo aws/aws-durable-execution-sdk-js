@@ -218,7 +218,7 @@ See the [Testing SDK documentation](./packages/aws-durable-execution-sdk-js-test
 Because the code outside the steps runs again on every replay, it must be deterministic (see [How It Runs: Replay](#how-it-runs-replay)). The ESLint plugin reports code that breaks this as you write it, such as `Date.now()` or a random value outside a step, and a variable that a step changes. It also reports a durable operation started on the context of the operation it runs in.
 
 ```bash
-npm install @aws/durable-execution-sdk-js-eslint-plugin --save-dev
+npm install @aws/durable-execution-sdk-js-eslint-plugin @typescript-eslint/parser --save-dev
 ```
 
 ```js

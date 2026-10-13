@@ -46,8 +46,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `plugins: ["@aws/durable-execution-sdk-js-eslint-plugin"]`. Neither setup could load the
   plugin. ESLint adds the `eslint-plugin-` prefix to the name of an eslintrc plugin, so it looked for
   `@aws/eslint-plugin-durable-execution-sdk-js-eslint-plugin`, which does not exist. The README now
-  shows flat config, which works on ESLint 8.57, 9 and 10. `configs.recommended` is deprecated for
-  the same reason. It keeps its shape, so code that reads its `rules` still works.
+  shows flat config, which works on ESLint 8.23 and later, 9 and 10. `configs.recommended` is
+  deprecated for the same reason. It keeps its shape, so code that reads its `rules` still works.
+- **eslint-plugin**: the `eslint` peer range is now `^8.23.0 || ^9.0.0 || ^10.0.0`, from `>=8.0.0`.
+  ESLint 8.22 and earlier cannot load the plugin: the eslintrc setup never worked, and those
+  versions do not load a flat config file. The upper bounds match `@typescript-eslint/parser`.
 
 - The MicroVM worker in `@aws/durable-execution-sdk-js-microvm-worker` treated
   `InvalidParameterValueException` as the answer for a callback that is already complete. The
@@ -147,7 +150,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `meta.name` and `meta.version`. ESLint writes them into the config it hashes for `--cache`, so a
   cached lint result no longer survives an upgrade of the plugin. The README now documents the
   flat config setup and the third rule, `no-non-deterministic-outside-step`. The package tests
-  also run against the latest ESLint 8 and 9 in CI.
+  also run against ESLint 8.23, the latest 8 and the latest 9 in CI. The plugin's types are
+  assignable to ESLint's `Linter.Config` and `ESLint.Plugin`, and to `defineConfig()`, so a
+  type-checked `eslint.config.ts` accepts them.
 
 ## [2.3.1]
 
