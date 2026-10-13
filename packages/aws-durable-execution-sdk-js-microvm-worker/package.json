@@ -40,8 +40,8 @@
     "dist-types"
   ],
   "dependencies": {
-    "@aws-sdk/client-lambda": "^3.1149.0",
-    "@aws-sdk/client-lambda-microvms": "^3.1149.0"
+    "@aws-sdk/client-lambda": "^3.1150.0",
+    "@aws-sdk/client-lambda-microvms": "^3.1150.0"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
