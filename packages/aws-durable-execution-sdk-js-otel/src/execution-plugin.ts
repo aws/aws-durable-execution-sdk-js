@@ -671,12 +671,12 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
     const links = this.buildInvocationLinks();
 
-    // Earliest known start, so the span never begins after its own attempt/child
-    // spans (created earlier at start).
-    const startTime = this.earliestStart(
-      started?.startTimestamp,
-      info.startTimestamp,
-    );
+    // Reuse the earliest start already recorded by lifecycle hooks.
+    // With no recorded start, represent a known completion as a zero-duration
+    // span instead of starting at a later local time than its exception event.
+    const startTime =
+      this.earliestStart(started?.startTimestamp, info.startTimestamp) ??
+      info.endTimestamp;
 
     const operationSpanId = deriveSpanIdFromOperationId(
       info.id,

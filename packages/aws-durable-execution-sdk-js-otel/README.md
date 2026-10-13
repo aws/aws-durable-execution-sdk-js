@@ -269,6 +269,12 @@ just as their span end does. Recording the event at local receipt time can place
 it after the backend-ended span. Missing end timestamps retain the normal tracer
 default; this does not add rounding or cross-clock ordering policies.
 
+When an execution-view completion has no recorded start timestamp, an available
+backend end timestamp supplies a zero-duration fallback. This keeps its exception
+at that known completion time instead of before a later local default start.
+Recorded starts and missing-end defaults retain their existing behavior; this
+does not reconcile a captured local start with an earlier backend end.
+
 Because the original span context is not checkpointed, replayed `STEP` and
 `CONTEXT` spans and cross-invocation continuation spans use new provider IDs.
 They correlate through two links: the real exported `Workflow` span, and the
