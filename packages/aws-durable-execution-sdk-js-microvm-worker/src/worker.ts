@@ -14,6 +14,7 @@ import {
 } from "@aws-sdk/client-lambda-microvms";
 import {
   CallbackReporter,
+  CLOSED_CALLBACK_ERROR_NAME,
   isError,
   isPermanentError,
   isTerminalCallbackError,
@@ -1294,7 +1295,7 @@ export async function startMicrovmWorker<TInput = unknown, TOutput = unknown>(
  * A terminal error means the durable function no longer waits for this job.
  * While the handler runs, it aborts the job's signal and stops the
  * heartbeats. After the handler has settled, it only stops the heartbeats
- * and logs any answer other than "already complete".
+ * and logs any answer other than a closed callback.
  *
  * Another rejection, such as `AccessDeniedException` for a missing
  * `lambda:SendDurableExecutionCallbackHeartbeat` permission, is unlikely to
@@ -1362,13 +1363,12 @@ export function startHeartbeats<TInput>(
       if (isTerminalCallbackError(error)) {
         stopped = true;
         if (handlerSettled) {
-          // The outcome is being reported. "Already complete" usually means
+          // The outcome is being reported. A closed callback usually means
           // that the completion landed while this heartbeat was in flight,
           // so it is not logged. Any other terminal answer is logged, and
           // the completion call meets it too and reports it.
           if (
-            safeGet(() => (error as Error).name) !==
-            "InvalidParameterValueException"
+            safeGet(() => (error as Error).name) !== CLOSED_CALLBACK_ERROR_NAME
           ) {
             logger.info("the callback no longer accepts heartbeats", {
               error: describe(error),
@@ -1528,37 +1528,48 @@ export function heartbeatRetryDelayMs(
 }
 
 /**
- * Returns how long one heartbeat call may take before it is aborted: half
- * the interval.
+ * Returns how long one heartbeat call may take before it is aborted: a third
+ * of the interval.
  *
- * With interval I, the heartbeat timeout is at least 3I. The wait after a
- * success is at most I minus a jitter j of at least min(1 s, I/2). The wait
- * after one of the first two failures in a row is at most I/4. Each call,
- * including the one that ends the gap, takes at most I/2. So the gap between
- * two successful heartbeats, from the end of one to the arrival of the next,
- * is at most:
+ * The service starts the heartbeat timeout again when it receives a
+ * heartbeat. It can receive a call at any moment during the call. So the
+ * worst gap runs from a call that the service received at its start to a
+ * call that the service received at its end.
  *
- * - no failure: I - j + I/2, about 1.5I;
- * - one failed or stalled call: I - j + I/2 + I/4 + I/2, about 2.25I;
- * - two in a row: I - j + 2 (I/2 + I/4) + I/2 = 3I - j, under the heartbeat
- *   timeout by the jitter.
+ * Let I be the interval, c the call timeout, and j the jitter of at least
+ * min(1 s, I/2). The heartbeat timeout is at least 3I, because the interval
+ * is at most a third of it. The worst gap between two heartbeats that the
+ * service receives is:
  *
- * The bounds assume that the response of the last successful call arrives
- * promptly and that timers fire on time. The service's timer starts when it
- * receives that call, and a busy event loop delays every timer. Both come
- * out of the jitter in the two-failure case, a margin of 1 to 2 seconds, or
- * I/2 for an interval under 2 seconds. The other cases keep at least 0.75I.
- * A third failure in a row waits a full interval, and the job can then
- * reach its heartbeat timeout. A rejection, such as AccessDeniedException,
- * counts as a failure here too, so any two failures in a row keep the bound.
+ * 1. The last successful call: received at its start, so it adds up to c.
+ * 2. The wait after it: I - j.
+ * 3. Each failed or stalled call: up to c, then a wait of up to I/4.
+ * 4. The next successful call: received at its end, so it adds up to c.
  *
- * An explicit interval of 1 millisecond gives a call timeout of 1
- * millisecond, more than I/2. Such an interval suits tests only.
+ * With c = I/3, the gap is at most:
+ *
+ * - no failure: 2c + I - j, about 1.67I;
+ * - one failure: 3c + 1.25I - j, about 2.25I;
+ * - two failures in a row: 4c + 1.5I - j, about 2.83I. This stays under the
+ *   3I timeout by at least I/6 plus the jitter.
+ *
+ * A call timeout of I/2 gave 3.5I - j for two failures, which can exceed
+ * the timeout. A probe with a 30-second heartbeat timeout measured a
+ * 32.39-second gap. A third failure in a row waits a full interval, and the
+ * job can then reach its heartbeat timeout. A rejection, such as
+ * AccessDeniedException, counts as a failure here too, so any two failures
+ * in a row keep the bound.
+ *
+ * The bounds assume that timers fire on time. A busy event loop delays
+ * every timer, and that delay comes out of the margin.
+ *
+ * An explicit interval under 3 milliseconds gives a call timeout of 1
+ * millisecond, more than I/3. Such an interval suits tests only.
  *
  * @internal
  */
 export function heartbeatCallTimeoutMs(intervalMs: number): number {
-  return Math.max(1, Math.floor(intervalMs / 2));
+  return Math.max(1, Math.floor(intervalMs / 3));
 }
 
 const MIN_HEARTBEAT_JITTER_MS = 1_000;
