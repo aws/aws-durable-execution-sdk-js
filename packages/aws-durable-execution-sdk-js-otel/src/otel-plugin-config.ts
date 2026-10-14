@@ -69,6 +69,14 @@ export interface OtelPluginConfig {
    * minimal). Mirrors Python's `enrich_logger` and Java's `enableMdc`.
    */
   enrichLogger?: boolean;
+
+  /**
+   * Total elapsed budget, in milliseconds, for awaiting provider flushes at
+   * invocation end, including additional drain/flush rounds. Defaults to 1000.
+   * Must be a positive finite number. A timeout stops waiting; it does not
+   * cancel exports, shut down the provider, or preempt synchronous provider code.
+   */
+  flushTimeoutMillis?: number;
 }
 
 /**

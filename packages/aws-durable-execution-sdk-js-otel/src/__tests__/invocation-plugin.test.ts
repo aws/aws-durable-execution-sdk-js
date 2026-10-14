@@ -1597,12 +1597,7 @@ describe("InvocationOtelPlugin", () => {
       expect(exceptionEvent).toBeDefined();
     });
 
-    // Regression: onOperationEnd can be reached with a terminal FAILURE status
-    // (TIMED_OUT/STOPPED/FAILED/CANCELLED) and NO error object (callback-timeout
-    // and chained-invoke "already failed" cross-invocation fast paths). Those
-    // must NOT be labelled OTel OK — the OK branch is gated on SUCCEEDED, so a
-    // no-error failure leaves the span status at the default UNSET (code 0).
-    it("onOperationEnd terminal path: TIMED_OUT status with NO error leaves the operation span NOT OK (UNSET)", async () => {
+    it("onOperationEnd terminal path: TIMED_OUT status with NO error marks the operation span ERROR without an exception", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onOperationStart(
         makeOperationInfo({ id: "op-timeout", name: "timeout-op" }),
@@ -1620,10 +1615,11 @@ describe("InvocationOtelPlugin", () => {
       const opSpan = findSpan("timeout-op");
       expect(opSpan).toBeDefined();
       expect(opSpan!.status.code).not.toBe(SpanStatusCode.OK);
-      expect(opSpan!.status.code).toBe(SpanStatusCode.UNSET);
+      expect(opSpan!.status.code).toBe(SpanStatusCode.ERROR);
+      expect(opSpan!.events).toHaveLength(0);
     });
 
-    it("onOperationEnd continuation path: STOPPED status with NO error leaves the continuation span NOT OK (UNSET)", async () => {
+    it("onOperationEnd continuation path: STOPPED status with NO error marks the continuation span ERROR without an exception", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       // No prior onOperationStart -> spanMap miss -> cross-invocation
       // continuation span path.
@@ -1640,7 +1636,8 @@ describe("InvocationOtelPlugin", () => {
       const continuationSpan = findSpan("cross-stopped");
       expect(continuationSpan).toBeDefined();
       expect(continuationSpan!.status.code).not.toBe(SpanStatusCode.OK);
-      expect(continuationSpan!.status.code).toBe(SpanStatusCode.UNSET);
+      expect(continuationSpan!.status.code).toBe(SpanStatusCode.ERROR);
+      expect(continuationSpan!.events).toHaveLength(0);
     });
 
     it("onOperationEnd terminal path: SUCCEEDED status with NO error stamps OK", async () => {

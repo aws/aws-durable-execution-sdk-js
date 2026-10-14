@@ -1,3 +1,4 @@
+import { setOperationSpanStatus } from "./operation-span-status";
 import type {
   DurableInstrumentationPlugin,
   InvocationInfo,
@@ -48,6 +49,7 @@ import type { OtelPluginConfig } from "./otel-plugin-config";
 import {
   createTracerProvider,
   flushTracerProvider,
+  resolveFlushTimeoutMillis,
 } from "./otel-plugin-provider";
 import { tryInstallGlobalIdGenerator } from "./global-id-generator";
 import { DurableSampler, tryInstallDurableSampler } from "./global-sampler";
@@ -74,6 +76,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   private idGenerator: DeterministicIdGenerator;
   private readonly contextExtractor: ContextExtractor;
   private readonly instrumentationName: string;
+  private readonly flushTimeoutMillis: number;
   private readonly usesGlobalProvider: boolean;
   private globalIdGeneratorInstalled: boolean;
   private durableSampler: DurableSampler | undefined;
@@ -113,6 +116,9 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     const instrumentationName =
       config?.instrumentationName ?? DEFAULT_INSTRUMENTATION_NAME;
     this.instrumentationName = instrumentationName;
+    this.flushTimeoutMillis = resolveFlushTimeoutMillis(
+      config?.flushTimeoutMillis,
+    );
 
     this.idGenerator = new DeterministicIdGenerator();
     this.contextExtractor = config?.contextExtractor ?? xRayContextExtractor;
@@ -373,18 +379,32 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     this.invocationSpansEnded = true;
     // End owns the drain/flush loop; change hooks only enqueue notifications.
     // Late completions need a linked segment, not mutation of an ended span.
+    const flushDeadline = performance.now() + this.flushTimeoutMillis;
     do {
       for (const operation of this.externalCompletions.pending.values()) {
         await this.onOperationEnd({ ...operation, isReplay: false });
       }
       try {
-        await flushTracerProvider(this.tracerProvider, this.usesGlobalProvider);
+        await flushTracerProvider(
+          this.tracerProvider,
+          this.usesGlobalProvider,
+          Math.max(0, flushDeadline - performance.now()),
+        );
       } catch {
         // Gracefully handle flush errors.
       }
-    } while (this.externalCompletions.pending.size > 0);
+    } while (
+      this.externalCompletions.pending.size > 0 &&
+      performance.now() < flushDeadline
+    );
 
-    // No await separates the last empty check from resetting this invocation.
+    // Retain one bounded snapshot of terminal notifications already received,
+    // including while a provider wait timed out. Do not start another flush.
+    for (const operation of [...this.externalCompletions.pending.values()]) {
+      await this.onOperationEnd({ ...operation, isReplay: false });
+    }
+
+    // No further provider wait precedes resetting this invocation.
     // 5. Clear all per-invocation state
     this.resetInvocationState();
   }
@@ -697,21 +717,9 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         span.setAttribute("durable.attempt.number", info.attempt);
       }
 
-      // Record error if present; otherwise stamp explicit OK ONLY on a
-      // SUCCEEDED terminal status (matches Python OTel plugin #604). Only
-      // reached for operations that terminate this invocation — suspended ops
-      // early-return above and keep their STARTED status UNSET. Terminal
-      // FAILURE statuses (TIMED_OUT/STOPPED/FAILED/CANCELLED) can arrive with
-      // NO error object (callback-timeout, chained-invoke fast paths); those
-      // must NOT be labelled OK, so they are left UNSET.
+      setOperationSpanStatus(span, info);
       if (info.error) {
-        span.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: info.error.message,
-        });
         span.recordException(info.error, this.liveTimestamp());
-      } else if (info.status === "SUCCEEDED") {
-        span.setStatus({ code: SpanStatusCode.OK });
       }
 
       // End the span
@@ -785,20 +793,9 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         parentContext,
       );
 
-      // Record error if present; otherwise stamp explicit OK ONLY on a
-      // SUCCEEDED terminal status (matches Python OTel plugin #604). This is
-      // the terminal completion path for an operation started in a prior
-      // invocation. Terminal FAILURE statuses can arrive with NO error object
-      // (callback-timeout, chained-invoke 'already failed' cross-invocation
-      // fast paths); those must NOT be labelled OK, so they are left UNSET.
+      setOperationSpanStatus(continuationSpan, info);
       if (info.error) {
-        continuationSpan.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: info.error.message,
-        });
         continuationSpan.recordException(info.error, this.liveTimestamp());
-      } else if (info.status === "SUCCEEDED") {
-        continuationSpan.setStatus({ code: SpanStatusCode.OK });
       }
 
       // Immediately end

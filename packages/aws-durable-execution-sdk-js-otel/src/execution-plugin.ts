@@ -1,3 +1,4 @@
+import { setOperationSpanStatus } from "./operation-span-status";
 import type {
   DurableInstrumentationPlugin,
   InvocationInfo,
@@ -43,6 +44,7 @@ import type { OtelPluginConfig } from "./otel-plugin-config";
 import {
   createTracerProvider,
   flushTracerProvider,
+  resolveFlushTimeoutMillis,
 } from "./otel-plugin-provider";
 import { tryInstallGlobalIdGenerator } from "./global-id-generator";
 import { DurableSampler, tryInstallDurableSampler } from "./global-sampler";
@@ -78,6 +80,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   private tracerProvider: TracerProvider;
   private tracer: Tracer;
   private readonly instrumentationName: string;
+  private readonly flushTimeoutMillis: number;
 
   // Non-recording context carrying the deterministic Workflow identity; the real
   // span is created+ended once, at the terminal invocation (issue #831).
@@ -123,6 +126,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     const instrumentationName =
       config?.instrumentationName ?? DEFAULT_INSTRUMENTATION_NAME;
     this.instrumentationName = instrumentationName;
+    this.flushTimeoutMillis = resolveFlushTimeoutMillis(
+      config?.flushTimeoutMillis,
+    );
 
     this.idGenerator = new DeterministicIdGenerator();
     this.contextExtractor = config?.contextExtractor ?? xRayContextExtractor;
@@ -389,28 +395,45 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
     // End owns the drain/flush loop; change hooks only enqueue notifications.
     // A response received during an awaited flush must not be cleared below.
+    const flushDeadline = performance.now() + this.flushTimeoutMillis;
     do {
       await this.drainExternalCompletions(info);
       try {
-        await flushTracerProvider(this.tracerProvider, this.usesGlobalProvider);
+        await flushTracerProvider(
+          this.tracerProvider,
+          this.usesGlobalProvider,
+          Math.max(0, flushDeadline - performance.now()),
+        );
       } catch (e) {
         console.error(
           "[ExecutionOtelPlugin] forceFlush failed:",
           e instanceof Error ? e.message : e,
         );
       }
-    } while (this.externalCompletions.pending.size > 0);
+    } while (
+      this.externalCompletions.pending.size > 0 &&
+      performance.now() < flushDeadline
+    );
 
-    // No await separates the last empty check from resetting this invocation.
+    // Retain terminal metadata already observed when the wait budget expires.
+    // Drain one bounded snapshot, without starting another provider flush.
+    if (this.externalCompletions.pending.size > 0) {
+      await this.drainExternalCompletions(info, [
+        ...this.externalCompletions.pending.values(),
+      ]);
+    }
+
+    // No further provider wait precedes resetting this invocation.
     // 5. Clear per-invocation state
     this.resetInvocationState();
   }
 
   private async drainExternalCompletions(
     info: InvocationEndInfo,
+    operations: Iterable<OperationInfo> = this.externalCompletions.pending.values(),
   ): Promise<void> {
     const terminal = info.status === "SUCCEEDED" || info.status === "FAILED";
-    for (const operation of this.externalCompletions.pending.values()) {
+    for (const operation of operations) {
       // A terminal handler can abandon an unawaited child. Its still-open
       // placeholder will be discarded below, so it cannot parent this export.
       const parentId =
@@ -695,18 +718,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     // Preserve the backend completion on both the exception and the span end.
     // When absent, use the tracer's existing default timestamp behavior.
     const endTime = info.endTimestamp;
+    setOperationSpanStatus(span, info);
     if (info.error) {
-      span.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: info.error.message,
-      });
       span.recordException(info.error, endTime);
-    } else if (info.status === "SUCCEEDED") {
-      // Stamp explicit OK ONLY on a SUCCEEDED terminal status. Terminal
-      // FAILURE statuses (TIMED_OUT/STOPPED/FAILED/CANCELLED) can arrive with
-      // NO error object (callback-timeout, chained-invoke fast paths); those
-      // must NOT be labelled OK, so they are left UNSET.
-      span.setStatus({ code: SpanStatusCode.OK });
     }
 
     span.end(endTime);

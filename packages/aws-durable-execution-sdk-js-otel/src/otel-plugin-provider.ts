@@ -18,6 +18,14 @@ export interface ProviderResult {
   usesGlobalProvider: boolean;
 }
 
+export function resolveFlushTimeoutMillis(value: number | undefined): number {
+  const timeout = value ?? 1000;
+  if (!Number.isFinite(timeout) || timeout <= 0) {
+    throw new RangeError("flushTimeoutMillis must be a positive finite number");
+  }
+  return timeout;
+}
+
 /**
  * Resolves an application-owned provider factory or the globally registered
  * provider. Exporters, sampling, resources, propagators, instrumentation, and
@@ -53,6 +61,7 @@ export function createTracerProvider(
 export async function flushTracerProvider(
   provider: TracerProvider,
   usesGlobalProvider: boolean,
+  timeoutMillis: number = 1000,
 ): Promise<void> {
   let target = provider;
   if (usesGlobalProvider && !("forceFlush" in target)) {
@@ -64,8 +73,30 @@ export async function flushTracerProvider(
     }
   }
   if ("forceFlush" in target) {
-    await (
-      target as TracerProvider & { forceFlush: () => Promise<void> }
-    ).forceFlush();
+    if (timeoutMillis <= 0) {
+      throw new Error("OpenTelemetry invocation flush budget exhausted");
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      // Start the timer before calling an application-owned provider. Its
+      // synchronous work cannot be preempted, but must not grant a fresh wait.
+      const expired = new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
+          () =>
+            reject(
+              new Error("OpenTelemetry invocation flush budget exhausted"),
+            ),
+          timeoutMillis,
+        );
+      });
+      await Promise.race([
+        (
+          target as TracerProvider & { forceFlush: () => Promise<void> }
+        ).forceFlush(),
+        expired,
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }

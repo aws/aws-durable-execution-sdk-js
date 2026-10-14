@@ -58,7 +58,7 @@ on:
         description: Optional conformance test commit SHA or branch name
         required: false
         type: string
-        default: "fb69b21ccc8805a74271554403707f5e649e5aae"
+        default: "f711bbfeb5464400d3aa1f8366e0bbb02087a67d"
 
 # One run at a time for the whole repository, queued rather than cancelled. The
 # orchestrator's stacks are named per (language, backend, suite) and are persistent, so two
@@ -87,7 +87,7 @@ jobs:
       resource_prefix: js
       sdk_repository: aws/aws-durable-execution-sdk-js
       sdk_ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      conformance_test_ref: ${{ inputs.conformance_test_ref || 'fb69b21ccc8805a74271554403707f5e649e5aae' }}
+      conformance_test_ref: ${{ inputs.conformance_test_ref || 'f711bbfeb5464400d3aa1f8366e0bbb02087a67d' }}
       checkout_sdk: true
       # Build the handlers from this repo's checked-out package instead of the conformance
       # repo's bundled examples/javascript. Path is relative to the conformance workspace,

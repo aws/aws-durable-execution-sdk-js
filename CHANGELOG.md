@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Checkpoint-derived `OperationInfo.error` can be absent when a failed callback
+  or invoke has missing or empty wire error data. Instrumentation should use
+  `status` to identify failure and `error` for available exception details.
+  Caller-facing callback and invoke failures are unchanged.
+
 - A checkpoint response carrying no `CheckpointToken` now ends the invocation cleanly with
   `{Status: "PENDING"}`. Every response carries the token for the next call, so one without a token
   withdraws the invocation's ability to record anything further — for instance because a newer
@@ -41,6 +46,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   SDK's set of invocation responses is unchanged.
 
 ### Fixed
+
+- **OpenTelemetry**: failed terminal operations remain `ERROR` in both views,
+  including later-invocation continuations, even without error details.
+  Exception events still require an actual error object.
+- **OpenTelemetry**: flush the default global provider's public SDK delegate.
+  Both provider paths share a configurable `flushTimeoutMillis` wait budget
+  across invocation-end flush rounds (default 1000 ms). Expiry preserves one
+  bounded snapshot of already-received completion metadata; it does not cancel
+  export requests or shut down application-owned providers.
+- **OpenTelemetry**: retain external notifications received during a flush,
+  preserve an already-exported context's identity for delayed child completion,
+  and use the known backend end as a zero-duration start fallback when no start
+  was recorded. Existing supplied timestamps and caller outcomes are preserved.
 
 - **eslint-plugin**: the README showed `extends: ["plugin:@aws/durable-execution-sdk-js-eslint-plugin/recommended"]`
   and `plugins: ["@aws/durable-execution-sdk-js-eslint-plugin"]`. Neither setup could load the

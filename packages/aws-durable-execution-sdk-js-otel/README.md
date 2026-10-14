@@ -158,6 +158,20 @@ its public delegate, so an SDK `BatchSpanProcessor` is flushed when the API prox
 does not expose `forceFlush()` itself. Explicit factory providers are used as
 returned and are not unwrapped. The plugins never call `shutdown()`.
 
+Both views use one `flushTimeoutMillis` budget across the invocation-end
+drain/flush rounds (default **1000 ms**, positive and finite). This bounds
+asynchronous provider waiting on both the global and explicit-provider paths.
+Choose a value that leaves room in the Lambda invocation timeout and configure
+the exporter's own transport timeouts too. The plugin has no remaining-runtime
+deadline in its invocation metadata and cannot guarantee that this budget fits
+the time left after the handler.
+
+On expiry, the plugin drains one bounded snapshot of terminal notifications
+already received, then returns without starting another provider flush. Export
+delivery is best effort: spans may remain queued. Timing out does not cancel an
+export, shut down the provider, or preempt synchronously blocking provider or
+processor code.
+
 ## Dynamic Loading from a Lambda Layer
 
 The SDK can load either plugin without importing it in function code. Package
@@ -512,6 +526,9 @@ interface OtelPluginConfig {
 
   /** Add active OTel IDs to durable log records. Defaults to true. */
   enrichLogger?: boolean;
+
+  /** Total invocation-end provider wait budget; defaults to 1000 ms. */
+  flushTimeoutMillis?: number;
 }
 ```
 
@@ -552,23 +569,23 @@ environment values are available.
 
 OpenTelemetry status mapping is:
 
-| Span       | Durable result                                                     | OTel status              |
-| ---------- | ------------------------------------------------------------------ | ------------------------ |
-| Workflow   | `SUCCEEDED` / `FAILED`                                             | `OK` / `ERROR`           |
-| Invocation | `SUCCEEDED` or `PENDING` / `FAILED` / `RETRYING`                   | `OK` / `ERROR` / `UNSET` |
-| Operation  | `SUCCEEDED` / error object / other failure without an error object | `OK` / `ERROR` / `UNSET` |
-| Attempt    | `FAILED` / any other outcome                                       | `ERROR` / `OK`           |
+| Span       | Durable result | OTel status |
+| ---------- | -------------- | ----------- |
+| Workflow   | `SUCCEEDED` / `FAILED` | `OK` / `ERROR` |
+| Invocation | `SUCCEEDED` or `PENDING` / `FAILED` / `RETRYING` | `OK` / `ERROR` / `UNSET` |
+| Operation  | `SUCCEEDED` / `FAILED`, `TIMED_OUT`, `STOPPED` or an error object / otherwise | `OK` / `ERROR` / `UNSET` |
+| Attempt    | `FAILED` / any other outcome | `ERROR` / `OK` |
 
-Operation and attempt errors are recorded as exception events when an error
-object is available. Workflow and Invocation failures set an `ERROR` status and
-status message without recording an exception event.
+Operation failure status and exception details are independent. A failed callback
+or invoke remains an `ERROR` span when error details are absent, including when
+the handler catches its failure and returns successfully. The status message uses
+the supplied error message, or the failed status name when no error exists.
 
-An external callback failure with no error details leaves the callback leaf
-`UNSET`; an empty wire error object does not synthesize a plugin error. Explicit
-partial details, including empty strings or an empty stack trace, still count as
-provided error information. The callback promise continues to reject with the
-same callback error, so its enclosing context or invocation may record its own
-failure. Checkpoint payloads, operation status, and replay behavior are unchanged.
+Operation and attempt exceptions are recorded only when an error object is
+available. Empty wire errors do not synthesize exception events. Explicit partial
+details, including empty strings or an empty stack trace, remain error information.
+Workflow and Invocation failures set `ERROR` without recording an exception event.
+Caller exceptions, checkpoint payloads and replay behavior are unchanged.
 
 ## Log Correlation
 
@@ -750,9 +767,11 @@ hooks do not run. The local runner's retained resume state must not be treated a
 proof that the default Lambda configuration preserves those children. The local
 resume-state discrepancy is tracked in [#995](https://github.com/aws/aws-durable-execution-sdk-js/issues/995).
 
-The invocation-end hook drains notifications received while it awaits provider
-flush, then flushes the newly exported completions before clearing its state.
-Change hooks enqueue notifications; the end hook owns this loop. In the
+Within the configured flush budget, the invocation-end hook drains notifications
+received while it awaits a provider flush, then flushes the newly exported
+completions. On expiry it drains one snapshot of already-received notifications
+without another provider wait before clearing its state. Change hooks enqueue
+notifications; the end hook owns this loop. In the
 invocation view, a completion after its initial segment has ended uses a linked
 continuation. Enclosing spans may already have ended, so this does not guarantee
 late-child timestamp containment. Updates after the final drain/reset, a frozen

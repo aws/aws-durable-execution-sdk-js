@@ -417,7 +417,7 @@ describe.each([
     }
   });
 
-  it("does not label a terminal failure without an error as successful", async () => {
+  it("marks terminal failure ERROR without inventing an exception", async () => {
     const current = createPlugin();
     await current.onInvocationStart({
       ...invocation,
@@ -425,7 +425,11 @@ describe.each([
     });
     await current.onInvocationEnd({ ...invocation, status: "PENDING" });
     expect(spans()).toHaveLength(1);
-    expect(spans()[0].status.code).toBe(SpanStatusCode.UNSET);
+    expect(spans()[0].status).toEqual({
+      code: SpanStatusCode.ERROR,
+      message: "TIMED_OUT",
+    });
+    expect(spans()[0].events).toHaveLength(0);
   });
 });
 

@@ -179,7 +179,7 @@ describe.each([ExecutionOtelPlugin, InvocationOtelPlugin])(
                 span.attributes["durable.operation.status"] === "FAILED",
             );
           expect(terminal).toHaveLength(1);
-          expect(terminal[0].status.code).toBe(SpanStatusCode.UNSET);
+          expect(terminal[0].status.code).toBe(SpanStatusCode.ERROR);
           expect(terminal[0].events).toHaveLength(0);
         } finally {
           releaseStep.open();
