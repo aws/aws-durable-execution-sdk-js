@@ -36,12 +36,16 @@ Three suites, 56 requirements:
 | `otel-execution`    | `otel-execution-1..26`   | The same scenarios seen as one execution spanning many invocations — parentage has to hold across suspend and resume.                                                                                                      |
 | `otel-long-running` | `otel-long-running-1..4` | Long durable delays, retry backoff, callbacks, and chained invokes, where the trace has to stay coherent over hours.                                                                                                       |
 
-Cases25 and26 exercise external callback completion. Case25 reuses the real
-case17 failure handler with an omitted error payload; the shared driver waits
-for a completed invocation before sending it. Case26 uses a direct callback,
-a checkpointed observation step, and two callback barriers. The driver completes
-each callback only after its creating invocation has completed, so subsequent
-replays are controlled by execution history rather than guessed timer delays.
+Cases 25 and 26 exercise external callback completion. Case 25 catches the
+expected callback failure with an omitted error payload, checkpoints the value
+`caught`, and passes two callback barriers before returning `caught/one/two`.
+The failed callback must remain ERROR without an exception event while the
+execution succeeds, and its terminal export must not repeat on the two later
+replays. Case 17 retains the unhandled failure scenario. Case 26 uses a direct
+successful callback, a checkpointed observation step, and two callback barriers.
+The driver completes each callback only after its creating invocation has
+completed, so subsequent replays are controlled by execution history rather
+than guessed timer delays.
 The direct target is traversed again on replay, exposing duplicate terminal
 exports that a completed wait-for-callback container can otherwise hide.
 

@@ -820,7 +820,7 @@ Resources:
         - otel-invocation-25
     Properties:
       CodeUri: dist/
-      Handler: otel_17_wait_for_callback_failure.handler
+      Handler: otel_25_caught_callback_failure.handler
       FunctionName: !Sub "${AWS::StackName}-otel-invocation-25"
       Role: !Ref LambdaExecutionRoleArn
 
@@ -832,7 +832,7 @@ Resources:
         - otel-execution-25
     Properties:
       CodeUri: dist/
-      Handler: otel_17_wait_for_callback_failure.handler
+      Handler: otel_25_caught_callback_failure.handler
       FunctionName: !Sub "${AWS::StackName}-otel-execution-25"
       Role: !Ref LambdaExecutionRoleArn
       Environment:
