@@ -66,7 +66,9 @@ export function testCaughtCallbackConformance(
         payload: { scenario: "caught-callback-failure-replay" },
       });
       const failed = runner.getOperation("otel-failed-callback");
-      await failed.waitForData(WaitingOperationStatus.STARTED);
+      // Match the cloud driver's completed-invocation boundary before forcing
+      // the local runner to suspend, rather than interrupting its submitter.
+      await failed.waitForData(WaitingOperationStatus.SUBMITTED);
       await runner.pauseExecution();
       await failed.sendCallbackFailure();
       await runner.resumeExecution();
@@ -83,7 +85,7 @@ export function testCaughtCallbackConformance(
         const barrier = runner.getOperation(
           `otel-failed-callback-barrier-${suffix}`,
         );
-        await barrier.waitForData(WaitingOperationStatus.STARTED);
+        await barrier.waitForData(WaitingOperationStatus.SUBMITTED);
         await runner.pauseExecution();
         expect(failedLeaves()).toHaveLength(1);
         expect(failedLeaves()[0].status.code).toBe(SpanStatusCode.ERROR);
@@ -120,9 +122,21 @@ export function testCaughtCallbackConformance(
         "otel-failed-callback-barrier-one-submitter",
         "otel-failed-callback-barrier-two-submitter",
       ]) {
-        expect(
-          spans.filter((span) => span.name === `${name} attempt 1`),
-        ).toHaveLength(1);
+        const attempts = spans.filter(
+          (span) => span.name === `${name} attempt 1`,
+        );
+        expect(attempts).toHaveLength(1);
+        expect(attempts[0].status.code).toBe(SpanStatusCode.OK);
+        expect(attempts[0].attributes["durable.attempt.outcome"]).toBe(
+          "SUCCEEDED",
+        );
+        const completed = spans.filter(
+          (span) =>
+            span.name === name &&
+            span.attributes["durable.operation.status"] === "SUCCEEDED",
+        );
+        expect(completed).toHaveLength(1);
+        expect(completed[0].status.code).toBe(SpanStatusCode.OK);
       }
       expect(spans.find((span) => span.name === "Workflow")?.status.code).toBe(
         SpanStatusCode.OK,
@@ -166,7 +180,7 @@ export function testCaughtCallbackConformance(
         payload: { scenario: "caught-callback-failure-replay" },
       });
       const failed = runner.getOperation("otel-failed-callback");
-      await failed.waitForData(WaitingOperationStatus.STARTED);
+      await failed.waitForData(WaitingOperationStatus.SUBMITTED);
       await failed.sendCallbackSuccess("unexpected");
       const result = await execution;
       expect(result.getStatus()).toBe("FAILED");
