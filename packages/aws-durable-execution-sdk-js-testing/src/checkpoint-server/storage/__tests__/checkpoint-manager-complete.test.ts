@@ -88,34 +88,37 @@ describe("checkpoint-manager completeOperation", () => {
     ).toThrow("Could not find operation");
   });
 
-  it("should update operation with new context details", () => {
-    // Initialize storage
-    storage.initialize();
+  // The service records ReplayChildren from the closing update only. It
+  // ignores ContextOptions on START.
+  it.each([
+    ["omits ContextOptions", undefined, false],
+    ["sets ReplayChildren to true", { ReplayChildren: true }, true],
+    ["sets ReplayChildren to false", { ReplayChildren: false }, false],
+  ])(
+    "should record ReplayChildren from a close that %s",
+    (_label, ContextOptions, expected) => {
+      storage.initialize();
+      storage.registerUpdate({
+        Id: "new-id",
+        Action: OperationAction.START,
+        Type: OperationType.CONTEXT,
+        ContextOptions: { ReplayChildren: true },
+      });
 
-    // Register a step operation
-    storage.registerUpdate({
-      Id: "new-id",
-      Action: OperationAction.START,
-      Type: OperationType.CONTEXT,
-      ContextOptions: {
-        ReplayChildren: true,
-      },
-    });
+      const { operation } = storage.completeOperation({
+        Id: "new-id",
+        Action: OperationAction.SUCCEED,
+        Payload: "new payload",
+        Type: OperationType.CONTEXT,
+        ContextOptions,
+      });
 
-    // Complete the operation
-    const { operation } = storage.completeOperation({
-      Id: "new-id",
-      Action: OperationAction.SUCCEED,
-      Payload: "new payload",
-      Type: OperationType.STEP,
-    });
-
-    expect(operation).toBeDefined();
-    expect(operation.Status).toBe(OperationStatus.SUCCEEDED);
-    expect(operation.EndTimestamp).toBeInstanceOf(Date);
-    expect(operation.ContextDetails?.ReplayChildren).toBe(true);
-    expect(operation.ContextDetails?.Result).toEqual("new payload");
-  });
+      expect(operation.Status).toBe(OperationStatus.SUCCEEDED);
+      expect(operation.EndTimestamp).toBeInstanceOf(Date);
+      expect(operation.ContextDetails?.ReplayChildren).toBe(expected);
+      expect(operation.ContextDetails?.Result).toEqual("new payload");
+    },
+  );
 
   describe("retry operations", () => {
     beforeEach(() => {
