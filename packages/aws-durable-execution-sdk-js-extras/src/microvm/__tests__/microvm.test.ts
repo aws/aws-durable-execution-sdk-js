@@ -9,8 +9,11 @@ import {
 } from "@aws/durable-execution-sdk-js-testing";
 import {
   AccessDeniedException,
+  InsufficientCapacityException,
   ResourceNotFoundException,
+  ServiceException,
   ThrottlingException,
+  TooManyRequestsException,
   ValidationException,
 } from "@aws-sdk/client-lambda-microvms";
 import {
@@ -450,10 +453,14 @@ describe("microvm", () => {
 describe("defaultMicrovmRetryStrategy", () => {
   it.each([
     "ThrottlingException",
+    "TooManyRequestsException",
     "InternalServerException",
+    "ServiceException",
     "ServiceUnavailableException",
     "ConflictException",
     "TimeoutError",
+    "RequestTimeout",
+    "RequestTimeoutException",
   ])("retries %s", (name) => {
     const error = Object.assign(new Error("x"), { name });
     expect(defaultMicrovmRetryStrategy(error, 1)).toEqual({
@@ -467,9 +474,47 @@ describe("defaultMicrovmRetryStrategy", () => {
     "AccessDeniedException",
     "ResourceNotFoundException",
     "ServiceQuotaExceededException",
+    // HTTP 500, but a retry seconds later fails the same way.
+    "InsufficientCapacityException",
     "Error",
   ])("does not retry %s", (name) => {
     const error = Object.assign(new Error("x"), { name });
+    expect(defaultMicrovmRetryStrategy(error, 1).shouldRetry).toBe(false);
+  });
+
+  it.each([
+    "ECONNRESET",
+    "ECONNREFUSED",
+    "EPIPE",
+    "ETIMEDOUT",
+    "EHOSTUNREACH",
+    "ENETUNREACH",
+    "ENOTFOUND",
+    "EAI_AGAIN",
+  ])("retries a socket error with code %s", (code) => {
+    // The AWS SDK client throws the socket error itself when its own retries
+    // end: named Error, with the code, and without $retryable. Plain Node
+    // shows this with a real client. A Jest test cannot: Jest runs the test
+    // in its own realm, and Node creates the socket error in the main realm.
+    // So the SDK's `instanceof Error` check fails, and the SDK replaces the
+    // error with a new one that has no code.
+    const error = Object.assign(new Error("x"), { code });
+    expect(defaultMicrovmRetryStrategy(error, 1).shouldRetry).toBe(true);
+  });
+
+  it.each([
+    [TooManyRequestsException, true],
+    [ServiceException, true],
+    [InsufficientCapacityException, false],
+  ] as const)("decides on the modeled %p by name", (ErrorClass, retried) => {
+    // None of the three has a retryable trait, so $retryable is unset.
+    const error = new ErrorClass({ message: "x", $metadata: {} });
+    expect(error.$retryable).toBeUndefined();
+    expect(defaultMicrovmRetryStrategy(error, 1).shouldRetry).toBe(retried);
+  });
+
+  it("does not retry an error with another code", () => {
+    const error = Object.assign(new Error("x"), { code: "ERR_INVALID_ARG" });
     expect(defaultMicrovmRetryStrategy(error, 1).shouldRetry).toBe(false);
   });
 
