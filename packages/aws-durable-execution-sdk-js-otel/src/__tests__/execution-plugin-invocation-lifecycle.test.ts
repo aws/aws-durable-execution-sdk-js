@@ -107,6 +107,60 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     propagation.disable();
   });
 
+  it("retains an exported context for a completion delivered after its end hook", async () => {
+    const plugin = new ExecutionOtelPlugin({
+      tracerProviderFactory,
+      contextExtractor: () => undefined,
+    });
+    const info = makeInvocationInfo();
+    const parent: OperationInfo = {
+      id: "completed-parent",
+      name: "completed-parent",
+      type: "CONTEXT",
+      status: "SUCCEEDED",
+      startTimestamp: new Date("2024-01-01T00:00:01Z"),
+      endTimestamp: new Date("2024-01-01T00:00:03Z"),
+      isReplay: false,
+    };
+    const completion: OperationInfo = Object.freeze({
+      id: "early-external",
+      name: "early-external",
+      type: "CALLBACK",
+      parentId: parent.id,
+      status: "SUCCEEDED",
+      startTimestamp: new Date("2024-01-01T00:00:01Z"),
+      endTimestamp: new Date("2024-01-01T00:00:02Z"),
+      isReplay: false,
+    });
+    await plugin.onInvocationStart(info);
+    await plugin.onOperationStart(parent);
+    await plugin.onOperationEnd(parent);
+    const exportedParent = findSpan(exporter, parent.name!)!;
+    expect(exportedParent).toBeDefined();
+    await plugin.onOperationChange({
+      ...info,
+      operations: { [parent.id]: parent, [completion.id]: completion },
+      updatedOperations: { [completion.id]: completion },
+    });
+    await plugin.onInvocationEnd(makeInvocationEndInfo());
+    const child = findSpan(exporter, completion.name!)!;
+    expect(child.parentSpanContext?.spanId).toBe(
+      exportedParent.spanContext().spanId,
+    );
+    expect(child.spanContext().spanId).toBe(
+      deriveSpanIdFromOperationId(completion.id, TEST_ARN),
+    );
+    expect(child.startTime).toEqual([1704067201, 0]);
+    expect(child.endTime).toEqual([1704067202, 0]);
+    expect(completion.parentId).toBe(parent.id);
+    expect(
+      getExportedSpans(exporter).filter((s) => s.name === parent.name),
+    ).toHaveLength(1);
+    expect(
+      getExportedSpans(exporter).filter((s) => s.name === completion.name),
+    ).toHaveLength(1);
+  });
+
   it.each(["SUCCEEDED", "FAILED", "PENDING", "RETRYING"] as const)(
     "uses Workflow only for abandoned deferred parents at the %s invocation boundary",
     async (status) => {

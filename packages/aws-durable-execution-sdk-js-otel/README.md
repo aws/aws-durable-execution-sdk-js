@@ -729,10 +729,15 @@ In both views, a completion notification already queued when its live context
 ends is exported before that context closes, preserving its OTel parent. This
 includes an unawaited callback from a prior invocation: the invocation view emits
 its linked continuation while the resumed parent segment is still open.
-Notifications delivered
-after the end hook retain the existing late-parent fallback; this does not add
-clock comparisons, retime supplied timestamps, or guarantee arbitrary cross-clock
-containment.
+
+In the execution view, an already-exported context remains the parent of its
+child's completion, whether the notification arrives in the same invocation or
+a later one. A notification delivered after the parent's end hook may carry a
+completion that occurred earlier in the backend. Delivery order does not establish
+that chronology. Reusing the recorded parent identity does not recreate a parent
+span, compare timestamps, retime supplied dates, or promise temporal containment.
+The unfinished-parent safeguards above remain separate from this reuse of an
+already-exported context.
 
 This requires the SDK to receive the operation metadata. Lambda normally removes
 a completed context's children from subsequent execution state unless

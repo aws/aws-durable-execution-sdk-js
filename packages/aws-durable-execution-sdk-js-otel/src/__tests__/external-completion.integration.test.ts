@@ -482,7 +482,7 @@ describe.each([
   );
 
   it.each([false, true])(
-    "parents a late completion to the workflow after its child context ends (failure=%s)",
+    "retains the exported context identity when its child completes later (failure=%s)",
     async (fails) => {
       const live = gate();
       const release = gate();
@@ -540,10 +540,10 @@ describe.each([
       if (view === "execution") {
         const workflow = finished.find((span) => span.name === "Workflow")!;
         expect(completed[0].parentSpanContext?.spanId).toBe(
-          workflow.spanContext().spanId,
+          child.spanContext().spanId,
         );
         expect(completed[0].parentSpanContext?.spanId).not.toBe(
-          child.spanContext().spanId,
+          workflow.spanContext().spanId,
         );
       }
     },
