@@ -90,7 +90,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     with its children. This happens to a branch that is still running when a `map` or `parallel`
     completes early. The earlier `GetDurableExecutionState` check looked only at the parent.
   - A completed context records `ReplayChildren` from its closing update only, as the service does.
-    A close without `ContextOptions` sets it to `false`.
+    A close without `ContextOptions` sets it to `false`. `START` no longer records it. So the
+    `ContextDetails` of a completed context in `getOperationData()` now includes
+    `ReplayChildren: false`, as the service's operation does.
   - The test runner's own results, the checkpoint responses, and `UpdatedOperationIds` still
     include every operation, as they do in the service.
 

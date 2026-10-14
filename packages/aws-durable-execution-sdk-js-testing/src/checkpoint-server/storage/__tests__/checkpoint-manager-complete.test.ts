@@ -88,6 +88,20 @@ describe("checkpoint-manager completeOperation", () => {
     ).toThrow("Could not find operation");
   });
 
+  it("should not record ReplayChildren from START", () => {
+    storage.initialize();
+
+    const { operation } = storage.registerUpdate({
+      Id: "new-id",
+      Action: OperationAction.START,
+      Type: OperationType.CONTEXT,
+      ContextOptions: { ReplayChildren: true },
+    });
+
+    expect(operation.Status).toBe(OperationStatus.STARTED);
+    expect(operation.ContextDetails).not.toHaveProperty("ReplayChildren");
+  });
+
   // The service records ReplayChildren from the closing update only. It
   // ignores ContextOptions on START.
   it.each([

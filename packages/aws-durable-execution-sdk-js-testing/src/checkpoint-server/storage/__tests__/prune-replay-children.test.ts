@@ -127,4 +127,16 @@ describe("pruneReplayChildren", () => {
       ]),
     ).toEqual(["ctx"]);
   });
+
+  // The checkpoint validator prevents a cycle. The walk still terminates if
+  // one appears, and keeps the operations on it.
+  it.each([
+    ["an operation that is its own parent", [step("a", "a")]],
+    [
+      "two operations that are each other's parent",
+      [step("a", "b"), step("b", "a")],
+    ],
+  ])("terminates for %s", (_label, operations) => {
+    expect(prune(operations)).toEqual(operations.map((op) => op.Id));
+  });
 });

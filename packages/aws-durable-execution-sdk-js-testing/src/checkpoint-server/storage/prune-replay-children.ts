@@ -54,6 +54,10 @@ export function pruneReplayChildren<T>(
   const omitted = new Map<string, boolean>();
   const isOmitted = (operation: Operation): boolean => {
     const chain: string[] = [];
+    // The checkpoint validator rejects a parent that does not exist yet, so
+    // the stored parents form a tree. This set stops the walk anyway if a
+    // ParentId leads back to an operation already on the chain.
+    const visited = new Set<string>();
     let result = false;
     let current = operation;
     while (current.ParentId) {
@@ -63,6 +67,10 @@ export function pruneReplayChildren<T>(
           result = known;
           break;
         }
+        if (visited.has(current.Id)) {
+          break;
+        }
+        visited.add(current.Id);
         chain.push(current.Id);
       }
       const parent = byId.get(current.ParentId);

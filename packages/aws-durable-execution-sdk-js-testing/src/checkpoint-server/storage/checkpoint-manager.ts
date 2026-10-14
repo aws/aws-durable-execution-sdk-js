@@ -650,9 +650,9 @@ export class CheckpointManager {
         break;
       }
       case OperationType.CONTEXT: {
-        operation.ContextDetails = {
-          ReplayChildren: update.ContextOptions?.ReplayChildren,
-        };
+        // The service ignores ContextOptions on START. It records
+        // ReplayChildren from the closing update only.
+        operation.ContextDetails = {};
         break;
       }
     }
