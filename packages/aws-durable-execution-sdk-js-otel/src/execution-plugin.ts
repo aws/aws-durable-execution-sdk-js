@@ -115,6 +115,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   private durableSampler: DurableSampler | undefined;
   private tracingEnabled = false;
   private readonly externalCompletions = new ExternalCompletions();
+  private invocationEndOperations: Record<string, OperationInfo> | undefined;
 
   // Workflow span name (configurable)
   private readonly workflowSpanName: string;
@@ -302,6 +303,8 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       return;
     }
 
+    this.invocationEndOperations = info.operations ?? {};
+
     // Prefer normal lifecycle hooks, which preserve live parent scopes. Before
     // returning, export any fresh completion the workflow did not reach. A
     // later resume may label it replay even though it has never been exported.
@@ -440,7 +443,10 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         (terminal &&
           operation.parentId &&
           this.operationContexts.has(operation.parentId)) ||
-        this.hasAbandonedParent(operation.parentId, info.operations)
+        this.hasAbandonedParent(
+          operation.parentId,
+          this.invocationEndOperations,
+        )
           ? undefined
           : operation.parentId;
       await this.onOperationEnd({ ...operation, parentId, isReplay: false });
@@ -511,6 +517,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
   private resetInvocationState(): void {
     this.externalCompletions.clear();
+    this.invocationEndOperations = undefined;
     this.spanMap.clear();
     this.operationContexts.clear();
     this.operationStarts.clear();
@@ -882,6 +889,11 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
   async onOperationChange(info: OperationChangeInfo): Promise<void> {
     if (this.tracingEnabled) {
+      // End may be waiting for a provider flush. New completions must use the
+      // ancestry from this newer full snapshot, not End's captured snapshot.
+      if (this.invocationEndOperations && info.operations) {
+        this.invocationEndOperations = info.operations;
+      }
       this.externalCompletions.observe(info.updatedOperations, info.operations);
     }
   }

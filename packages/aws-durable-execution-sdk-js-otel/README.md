@@ -778,6 +778,9 @@ received while it awaits a provider flush, then flushes the newly exported
 completions. On expiry it drains one snapshot of already-received notifications
 without another provider wait before clearing its state. Change hooks enqueue
 notifications; the end hook owns this loop. In the
+execution view, these drains use the latest operation ancestry received during
+the end hook to detect an unfinished parent abandoned by a completed ancestor.
+Missing ancestry alone does not prove abandonment. In the
 invocation view, a completion after its initial segment has ended uses a linked
 continuation. Enclosing spans may already have ended, so this does not guarantee
 late-child timestamp containment. Updates after the final drain/reset, a frozen
