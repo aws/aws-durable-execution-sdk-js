@@ -731,7 +731,7 @@ remote parent, or a synthetic execution root).
 
 Apache-2.0
 
-## Chained-invoke propagation (draft; backend qualification pending)
+## Chained-invoke propagation
 
 When preparing a new `context.invoke()` START, the SDK calls the optional
 `providePropagationMetadata(input)` hook after assigning the operation identity
@@ -742,7 +742,8 @@ and before serializing the checkpoint. The readonly input contains
 in a batched checkpoint. Function name, tenant, payload and operation identity
 are unchanged; the SDK does not inject tracing fields into user payloads.
 
-Both OTel views encode the resolved execution trace ID as `Root`, the calling
+With the durable sampler bridge still installed on a compatible SDK tracer,
+both OTel views encode the resolved execution trace ID as `Root`, the calling
 CHAINED_INVOKE operation span ID as `Parent`, and the resolved sampling decision
 as `Sampled`, including `Sampled=0`. Producing metadata does not create an extra
 span or use an unrelated active span. For example, existing plugin registration
@@ -753,6 +754,14 @@ const first = context.invoke("first", "first-function:1", { item: 1 });
 const second = context.invoke("second", "second-function:1", { item: 2 });
 return context.promise.all([first, second]);
 ```
+
+An opaque tracer or a tracer whose sampler was replaced may make an independent
+decision for the invoke span. The plugins omit their optional propagation metadata
+when they cannot verify that their sampler bridge still controls that decision.
+They do not probe the sampler, create a span to obtain a decision, reinstall a
+customer's sampler, or change ordinary span behavior. The check occurs when the
+START is prepared; later provider reconfiguration cannot retroactively change a
+checkpointed header.
 
 The dispatcher calls providers synchronously with a frozen input snapshot.
 The first non-null supported value wins; identical values do not conflict.
@@ -773,11 +782,11 @@ That published release declares the optional `XAmznTraceId` field and includes
 it in the generated serializer. The strict wire-model parity guard and actual
 serializer regression pass with that release.
 
-This integration remains draft pending **deployed backend trace-topology
-qualification**. Local serialization and package compatibility do not establish
+**Deployed backend trace-topology qualification remains separate.** Local
+serialization and package compatibility do not establish
 that a deployed chained invocation receives the intended Root/Parent/Sampled
-or exports the expected caller/child topology. Validate those paths before
-merging this draft.
+or exports the expected caller/child topology. Existing sampled cloud traces
+do not qualify unsampled delivery.
 
 The design also adds `DistributedMapOptions.XAmznTraceId` to a future service
 model. This SDK currently has no distributed-map options or START API; its

@@ -42,7 +42,11 @@ import {
 import type { OtelPluginConfig } from "./otel-plugin-config";
 import { createTracerProvider } from "./otel-plugin-provider";
 import { tryInstallGlobalIdGenerator } from "./global-id-generator";
-import { DurableSampler, tryInstallDurableSampler } from "./global-sampler";
+import {
+  DurableSampler,
+  isDurableSamplerInstalled,
+  tryInstallDurableSampler,
+} from "./global-sampler";
 import { ExternalCompletions } from "./external-completions";
 
 import { createPropagationMetadata } from "./propagation-metadata";
@@ -285,7 +289,12 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   providePropagationMetadata(
     input: PropagationInput,
   ): PropagationMetadata | undefined {
-    if (!this.tracingEnabled || !this.invocationSpan || !this.workflowSpan) {
+    if (
+      !this.tracingEnabled ||
+      !this.invocationSpan ||
+      !this.workflowSpan ||
+      !isDurableSamplerInstalled(this.tracer, this.durableSampler)
+    ) {
       return undefined;
     }
     return createPropagationMetadata(
