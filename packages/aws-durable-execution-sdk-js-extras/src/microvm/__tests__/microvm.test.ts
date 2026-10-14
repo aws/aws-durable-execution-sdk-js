@@ -490,6 +490,7 @@ describe("defaultMicrovmRetryStrategy", () => {
     "EHOSTUNREACH",
     "ENETUNREACH",
     "ENOTFOUND",
+    "EAI_AGAIN",
   ])("retries a socket error with code %s", (code) => {
     // The AWS SDK client throws the socket error itself when its own retries
     // end: named Error, with the code, and without $retryable. Plain Node

@@ -40,7 +40,9 @@ const RETRYABLE_ERROR_NAMES: ReadonlySet<string> = new Set([
  * The AWS SDK client retries these inside each attempt. When its retries end,
  * it throws the socket error itself. That error is named `Error`, carries the
  * code in `code`, and has no `$retryable`. So the step strategy checks the
- * code. The list is the one that the AWS SDK's own retry strategy uses.
+ * code. The list is the one that the AWS SDK's own retry strategy uses:
+ * `NODEJS_TIMEOUT_ERROR_CODES` and `NODEJS_NETWORK_ERROR_CODES` in the retry
+ * module of `@smithy/core`. `EAI_AGAIN` is a temporary DNS failure.
  */
 const RETRYABLE_ERROR_CODES: ReadonlySet<string> = new Set([
   "ECONNRESET",
@@ -50,6 +52,7 @@ const RETRYABLE_ERROR_CODES: ReadonlySet<string> = new Set([
   "EHOSTUNREACH",
   "ENETUNREACH",
   "ENOTFOUND",
+  "EAI_AGAIN",
 ]);
 
 const MAX_ATTEMPTS = 5;
