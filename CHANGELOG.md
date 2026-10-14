@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     must be a Lambda function name, a qualified name, or a function ARN of at most 256 characters.
     `WaitOptions.WaitSeconds` and `StepOptions.NextAttemptDelaySeconds` must be from 1 to
     31622400. The `CallbackOptions` timeouts must be from 0 to 99999999.
+  - A member of the wrong JSON type, such as a number for `Name` or `NaN` for `WaitSeconds`,
+    rejects the request with HTTP 400 `SerializationException`, with the service's message. The
+    service reads an integer member without its fractional part. So `WaitSeconds: 1.5` is accepted
+    as 1, and `WaitSeconds: 0.5` is rejected as 0.
   - An update for an existing operation must not change its `Type`, `SubType`, `Name`, or
     `ParentId`. A different value usually means that the handler is not deterministic.
   - The error object limit is 262144 bytes, the service's limit. It was 32768 bytes.

@@ -287,6 +287,154 @@ describe("validateUpdateModel", () => {
     });
   });
 
+  describe("member types", () => {
+    const wait = (WaitSeconds: unknown): OperationUpdate =>
+      update({
+        Type: OperationType.WAIT,
+        WaitOptions: { WaitSeconds: WaitSeconds as number },
+      });
+    const named = (Name: unknown): OperationUpdate =>
+      update({ Name: Name as string });
+
+    // The messages below are the service's, recorded from
+    // CheckpointDurableExecution in us-east-1.
+    it.each([
+      ["a number", named(123), "NUMBER_VALUE can not be converted to a String"],
+      ["true", named(true), "TRUE_VALUE can not be converted to a String"],
+      ["false", named(false), "FALSE_VALUE can not be converted to a String"],
+      [
+        "an object",
+        named({ x: 1 }),
+        "Start of structure or map found where not expected.",
+      ],
+      ["an array", named([1]), "Start of list found where not expected"],
+    ])("rejects %s for a string member", (_label, rejected, message) => {
+      expect(rejection([rejected])).toMatchObject({
+        name: "SerializationException",
+        $fault: "client",
+        $metadata: { httpStatusCode: 400 },
+        message,
+      });
+    });
+
+    it.each([
+      [
+        "a string",
+        wait("5"),
+        "STRING_VALUE can not be converted to an Integer",
+      ],
+      [
+        "NaN",
+        wait(Number.NaN),
+        "STRING_VALUE can not be converted to an Integer",
+      ],
+      [
+        "Infinity",
+        wait(Number.POSITIVE_INFINITY),
+        "STRING_VALUE can not be converted to an Integer",
+      ],
+      [
+        "-Infinity",
+        wait(Number.NEGATIVE_INFINITY),
+        "STRING_VALUE can not be converted to an Integer",
+      ],
+      ["true", wait(true), "TRUE_VALUE can not be converted to an Integer"],
+      ["false", wait(false), "FALSE_VALUE can not be converted to an Integer"],
+      [
+        "an object",
+        wait({ x: 1 }),
+        "Start of structure or map found where not expected.",
+      ],
+      ["an array", wait([1]), "Start of list found where not expected"],
+    ])("rejects %s for an integer member", (_label, rejected, message) => {
+      expect(rejection([rejected])).toMatchObject({
+        name: "SerializationException",
+        $metadata: { httpStatusCode: 400 },
+        message,
+      });
+    });
+
+    it("rejects a wrong type before any constraint error", () => {
+      expect(rejection([update({ Id: "bad id!" }), named(1)])).toMatchObject({
+        name: "SerializationException",
+        message: "NUMBER_VALUE can not be converted to a String",
+      });
+    });
+
+    // The SDK writes members in alphabetical order, and the service reports
+    // the first member it cannot read.
+    it.each([
+      [
+        "Id before Name",
+        { Name: true, Id: 5 },
+        "NUMBER_VALUE can not be converted to a String",
+      ],
+      [
+        "Action before SubType",
+        { Action: true, SubType: 5 },
+        "TRUE_VALUE can not be converted to a String",
+      ],
+      [
+        "ParentId before SubType",
+        { ParentId: 5, SubType: true },
+        "NUMBER_VALUE can not be converted to a String",
+      ],
+      [
+        "StepOptions before WaitOptions",
+        {
+          WaitOptions: { WaitSeconds: "x" },
+          StepOptions: { NextAttemptDelaySeconds: true },
+        },
+        "TRUE_VALUE can not be converted to an Integer",
+      ],
+      [
+        "ChainedInvokeOptions before WaitOptions",
+        {
+          WaitOptions: { WaitSeconds: true },
+          ChainedInvokeOptions: { FunctionName: 5 },
+        },
+        "NUMBER_VALUE can not be converted to a String",
+      ],
+    ])("reports %s", (_label, fields, message) => {
+      expect(
+        rejection([update(fields as unknown as Partial<OperationUpdate>)]),
+      ).toMatchObject({ name: "SerializationException", message });
+    });
+
+    it.each([
+      ["1.5", 1.5],
+      ["31622400.9", 31622400.9],
+    ])(
+      "accepts %s seconds, which the service reads as an integer",
+      (_label, seconds) => {
+        expect(() => validateUpdateModel([wait(seconds)])).not.toThrow();
+      },
+    );
+
+    it.each([
+      [
+        "0.5 as 0",
+        0.5,
+        "Value '0' at 'updates.1.member.waitOptions.waitSeconds' failed to satisfy constraint: Member must have value greater than or equal to 1",
+      ],
+      [
+        "1e12 as the largest 32-bit integer",
+        1e12,
+        "Value '2147483647' at 'updates.1.member.waitOptions.waitSeconds' failed to satisfy constraint: Member must have value less than or equal to 31622400",
+      ],
+      [
+        "-1e12 as the smallest 32-bit integer",
+        -1e12,
+        "Value '-2147483648' at 'updates.1.member.waitOptions.waitSeconds' failed to satisfy constraint: Member must have value greater than or equal to 1",
+      ],
+    ])("reads %s", (_label, seconds, error) => {
+      expect(rejection([wait(seconds)])).toMatchObject({
+        name: "ValidationException",
+        message: `1 validation error detected: ${error}`,
+      });
+    });
+  });
+
   it("lists and counts at most 10 errors", () => {
     const updates = Array.from({ length: 12 }, () => update({ Id: "bad id!" }));
     const error = rejection(updates) as Error;

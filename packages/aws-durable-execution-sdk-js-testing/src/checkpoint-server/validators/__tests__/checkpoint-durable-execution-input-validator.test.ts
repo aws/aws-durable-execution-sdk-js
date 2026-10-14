@@ -279,6 +279,32 @@ describe("validateCheckpointUpdates", () => {
         );
       },
     );
+
+    // The service compares an update with the operation stored before the
+    // request. It does not compare the updates of one request with each
+    // other. So a START and a SUCCEED with different names in one request
+    // pass this check, as they do in the service.
+    it("should not compare updates within the same request", () => {
+      expect(() => {
+        validateCheckpointUpdates(
+          [
+            {
+              Id: "op2",
+              Type: OperationType.STEP,
+              Name: "charge",
+              Action: OperationAction.START,
+            },
+            {
+              Id: "op2",
+              Type: OperationType.STEP,
+              Name: "refund",
+              Action: OperationAction.SUCCEED,
+            },
+          ],
+          mockOperations,
+        );
+      }).not.toThrow();
+    });
   });
 
   describe("execution operation validation", () => {
