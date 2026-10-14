@@ -13,6 +13,7 @@ describe("validateInvokeOperation", () => {
     Action: action,
     Type: OperationType.CHAINED_INVOKE,
     Id: "test-id",
+    ChainedInvokeOptions: { FunctionName: "child-function" },
   });
 
   const createOperation = (status: OperationStatus): Operation => ({
@@ -40,54 +41,15 @@ describe("validateInvokeOperation", () => {
       }).toThrow(InvalidParameterValueException);
       expect(() => {
         validateChainedInvokeOperation(update, currentOperation);
-      }).toThrow("Cannot start a CHAINED_INVOKE that already exists.");
-    });
-  });
-
-  describe("CANCEL action", () => {
-    it("should succeed when operation has STARTED status", () => {
-      const currentOperation = createOperation(OperationStatus.STARTED);
-      const update = createOperationUpdate(OperationAction.CANCEL);
-
-      expect(() => {
-        validateChainedInvokeOperation(update, currentOperation);
-      }).not.toThrow();
-    });
-
-    it("should throw exception when no current operation exists", () => {
-      const update = createOperationUpdate(OperationAction.CANCEL);
-
-      expect(() => {
-        validateChainedInvokeOperation(update, undefined);
-      }).toThrow(InvalidParameterValueException);
-      expect(() => {
-        validateChainedInvokeOperation(update, undefined);
       }).toThrow(
-        "Cannot cancel a CHAINED_INVOKE that does not exist or has already completed.",
+        "Cannot start a CHAINED_INVOKE operation that already exists.",
       );
     });
 
-    it("should throw exception when operation has invalid status", () => {
-      const currentOperation = createOperation(OperationStatus.SUCCEEDED);
-      const update = createOperationUpdate(OperationAction.CANCEL);
-
-      expect(() => {
-        validateChainedInvokeOperation(update, currentOperation);
-      }).toThrow(InvalidParameterValueException);
-      expect(() => {
-        validateChainedInvokeOperation(update, currentOperation);
-      }).toThrow(
-        "Cannot cancel a CHAINED_INVOKE that does not exist or has already completed.",
-      );
-    });
-  });
-
-  describe("Invalid action", () => {
-    it("should throw exception for invalid action", () => {
+    it("should throw exception when ChainedInvokeOptions is missing", () => {
       const update: OperationUpdate = {
-        Action: "INVALID_ACTION" as OperationAction,
-        Type: OperationType.CHAINED_INVOKE,
-        Id: "test-id",
+        ...createOperationUpdate(OperationAction.START),
+        ChainedInvokeOptions: undefined,
       };
 
       expect(() => {
@@ -95,7 +57,27 @@ describe("validateInvokeOperation", () => {
       }).toThrow(InvalidParameterValueException);
       expect(() => {
         validateChainedInvokeOperation(update, undefined);
-      }).toThrow("Invalid CHAINED_INVOKE action.");
+      }).toThrow(
+        "Update for CHAINED_INVOKE operation requires ChainedInvokeOptions.",
+      );
+    });
+  });
+
+  describe("Invalid action", () => {
+    it.each([
+      OperationAction.CANCEL,
+      OperationAction.SUCCEED,
+      "INVALID_ACTION" as OperationAction,
+    ])("should throw exception for %s", (action) => {
+      const currentOperation = createOperation(OperationStatus.STARTED);
+      const update = createOperationUpdate(action);
+
+      expect(() => {
+        validateChainedInvokeOperation(update, currentOperation);
+      }).toThrow(InvalidParameterValueException);
+      expect(() => {
+        validateChainedInvokeOperation(update, currentOperation);
+      }).toThrow("Invalid action for CHAINED_INVOKE operation.");
     });
   });
 });

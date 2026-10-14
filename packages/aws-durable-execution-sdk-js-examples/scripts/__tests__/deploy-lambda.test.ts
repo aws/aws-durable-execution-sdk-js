@@ -146,7 +146,7 @@ describe("deployment retries", () => {
   }
 
   test.each([false, true])(
-    "retries a throttled existence probe before selecting create or update (exists=%s)",
+    "retries throttling before creating or updating the function (exists=%s)",
     async (exists) => {
       const normal = send.getMockImplementation()!;
       let probes = 0;
@@ -177,7 +177,7 @@ describe("deployment retries", () => {
       attempts: 1,
     },
   ])(
-    "bounds existence probes and preserves the error before any deployment ($error.name)",
+    "stops checking for the function after $attempts attempts and reports $error.name",
     async ({ error, attempts }) => {
       send.mockRejectedValue(error);
       const result = main().then(

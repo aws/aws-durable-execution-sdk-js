@@ -44,8 +44,17 @@ function writeRaw(name: string, contents: string): void {
   writeFileSync(join(userDataDir, name), contents, "utf-8");
 }
 
+// normalizeConfig falls back to AWS_REGION / AWS_DEFAULT_REGION before the
+// built-in default. CI runners on CodeBuild set both, so the default-region
+// assertions below would otherwise see the runner's region.
+const savedRegionEnv: Record<string, string | undefined> = {};
+
 beforeEach(() => {
   userDataDir = mkdtempSync(join(tmpdir(), "insight-settings-"));
+  for (const key of ["AWS_REGION", "AWS_DEFAULT_REGION"]) {
+    savedRegionEnv[key] = process.env[key];
+    delete process.env[key];
+  }
   // The corrupt-file cases warn by design; keep the suite output readable.
   jest.spyOn(console, "warn").mockImplementation(() => {});
 });
@@ -53,6 +62,13 @@ beforeEach(() => {
 afterEach(() => {
   jest.restoreAllMocks();
   rmSync(userDataDir, { recursive: true, force: true });
+  for (const [key, value] of Object.entries(savedRegionEnv)) {
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
 });
 
 describe("writeDesktopSettings", () => {

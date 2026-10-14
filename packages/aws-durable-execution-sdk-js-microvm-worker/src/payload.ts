@@ -98,7 +98,9 @@ const MISSING_ID_MESSAGE =
  *
  * `callbackId` and `region` are set when the document had them. The worker
  * then reports the error to that callback, so the durable function fails at
- * once instead of waiting for the callback timeout.
+ * once instead of waiting for the callback timeout. `cause` is set when a
+ * parser error caused this one, such as the `SyntaxError` of an invalid
+ * `runHookPayload`.
  *
  * @public
  *
@@ -111,8 +113,9 @@ export class InvalidRunHookPayloadError extends Error {
     message: string,
     readonly callbackId?: string,
     readonly region?: string,
+    options?: ErrorOptions,
   ) {
-    super(message);
+    super(message, options);
   }
 }
 
@@ -152,8 +155,17 @@ export function parseRunHookRequest<TInput = unknown>(
   let payload: unknown;
   try {
     payload = JSON.parse(body.runHookPayload);
-  } catch {
-    throw new InvalidRunHookPayloadError("runHookPayload is not valid JSON");
+  } catch (error) {
+    // The cause keeps the parser's message. Node names the position of the
+    // error in it, except for a short payload, where it quotes the payload.
+    // The payload comes from a durable function in any SDK language, so
+    // that position is the first thing to check.
+    throw new InvalidRunHookPayloadError(
+      "runHookPayload is not valid JSON",
+      undefined,
+      undefined,
+      { cause: error },
+    );
   }
   if (!isRecord(payload)) {
     throw new InvalidRunHookPayloadError("runHookPayload must be an object");

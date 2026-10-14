@@ -27,7 +27,7 @@ jobs:
     permissions:
       contents: read
       id-token: write # Required for AWS credentials
-    runs-on: ubuntu-latest
+    runs-on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v7
 
@@ -68,7 +68,7 @@ jobs:
 
   test-capacity-provider:
     needs: deploy-capacity-provider
-    runs-on: ubuntu-latest
+    runs-on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
     name: Test Capacity Provider Functions
     permissions:
       contents: read
@@ -112,7 +112,7 @@ jobs:
   cleanup-capacity-provider:
     if: always()
     needs: test-capacity-provider
-    runs-on: ubuntu-latest
+    runs-on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
     name: Clean up capacity provider functions
     permissions:
       contents: read
@@ -147,6 +147,8 @@ jobs:
 
       - name: Clean up capacity provider functions
         env:
+          # Cleanup can outlast a short control-plane throttling burst.
+          AWS_MAX_ATTEMPTS: "8"
           LAMBDA_ENDPOINT: ${{ secrets.LAMBDA_ENDPOINT }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_EVENT_NUMBER: ${{ github.event.number }}

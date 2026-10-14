@@ -1,0 +1,11 @@
+{
+  "name": "otel-compatibility-fixtures",
+  "version": "1.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "Pinned published packages for installed OTel backward-compatibility tests",
+  "dependencies": {
+    "@aws/durable-execution-sdk-js": "https://registry.npmjs.org/@aws/durable-execution-sdk-js/-/durable-execution-sdk-js-2.4.0.tgz",
+    "@aws/durable-execution-sdk-js-otel": "https://registry.npmjs.org/@aws/durable-execution-sdk-js-otel/-/durable-execution-sdk-js-otel-1.1.0.tgz"
+  }
+}

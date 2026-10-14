@@ -190,7 +190,7 @@ describe("validateStepOperation", () => {
       }).toThrow(InvalidParameterValueException);
       expect(() => {
         validateStepOperation(update, currentOperation);
-      }).toThrow("Invalid StepOptions for the given action.");
+      }).toThrow("RETRY action for STEP operation requires StepOptions.");
     });
 
     it("should throw exception when both payload and error are provided", () => {
@@ -212,7 +212,7 @@ describe("validateStepOperation", () => {
       }).toThrow(InvalidParameterValueException);
       expect(() => {
         validateStepOperation(update, currentOperation);
-      }).toThrow("Cannot provide both error and payload to RETRY a STEP.");
+      }).toThrow("Cannot provide both an Error and Payload for RETRY action.");
     });
 
     it("should throw exception when retry has invalid status", () => {
@@ -230,7 +230,7 @@ describe("validateStepOperation", () => {
       }).toThrow(InvalidParameterValueException);
       expect(() => {
         validateStepOperation(update, currentOperation);
-      }).toThrow("Invalid current STEP state to re-attempt.");
+      }).toThrow("Invalid current STEP state to retry.");
     });
   });
 
@@ -248,7 +248,7 @@ describe("validateStepOperation", () => {
       }).toThrow(InvalidParameterValueException);
       expect(() => {
         validateStepOperation(update, currentOperation);
-      }).toThrow("Invalid STEP action.");
+      }).toThrow("Invalid action for STEP operation.");
     });
   });
 });

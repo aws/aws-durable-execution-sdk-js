@@ -9,6 +9,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The testing SDK's local checkpoint server now validates checkpoints as the service does. Before,
+  it accepted some updates that the service rejects, and it rejected others with different
+  messages. So a test could pass locally for a handler that fails in AWS. The changes:
+  - The model checks now cover `Id`, `ParentId`, `Name`, `Type`, and `Action`, as well as
+    `SubType`. `Id` and `ParentId` must have 1 to 64 characters from `[a-zA-Z0-9-_]`. `Name` must
+    have 1 to 256 printable ASCII characters. `Id`, `Type`, and `Action` are required. An invalid
+    member rejects the whole request with HTTP 400 `ValidationException`, with the service's
+    message. The message lists at most 10 errors, as the service's does.
+  - The model checks also cover the options. `ChainedInvokeOptions.FunctionName` is required, and
+    must be a Lambda function name, a qualified name, or a function ARN of at most 256 characters.
+    `WaitOptions.WaitSeconds` and `StepOptions.NextAttemptDelaySeconds` must be from 1 to
+    31622400. The `CallbackOptions` timeouts must be from 0 to 99999999.
+  - A member of the wrong JSON type rejects the request with HTTP 400 `SerializationException`,
+    with the service's message. The check covers every member of `OperationUpdate`, including
+    `Payload`, the `Error` members, and `ContextOptions.ReplayChildren`. For example, a step that
+    throws `{ name: "X", message: 1 }` now fails the checkpoint, as it does in AWS. The service
+    reads an integer member without its fractional part. So `WaitSeconds: 1.5` is accepted as 1,
+    and `WaitSeconds: 0.5` is rejected as 0. The local server also stores and schedules that
+    integer, as the service applies it. So `context.wait({ seconds: 1.5 })` waits and records 1
+    second.
+  - A callback timeout or heartbeat timeout of 0 means no timeout, as it does in the service. The
+    local server timed the callback out at once.
+  - An update for an existing operation must not change its `Type`, `SubType`, `Name`, or
+    `ParentId`. A different value usually means that the handler is not deterministic.
+  - The error object limit is 262144 bytes, the service's limit. It was 32768 bytes.
+  - Payloads now have the service's limits: 262144 bytes for STEP and CONTEXT output, 1048576
+    bytes for CHAINED_INVOKE input, and 6291456 bytes for EXECUTION output. So a handler result
+    over 6291456 bytes now fails the checkpoint, as it does in AWS.
+  - A CALLBACK and a CHAINED_INVOKE accept only `START`. The local server accepted `CANCEL`.
+  - A WAIT `START` requires `WaitOptions`. A CHAINED_INVOKE `START` requires
+    `ChainedInvokeOptions`.
+  - The error messages are the service's. For example, "Cannot start a WAIT that already exists."
+    is now "Cannot start a WAIT operation that already exists.". A test that matches the old
+    message text must update it.
+  - A validation failure now carries HTTP status 400, as the service's `InvalidParameterValueException`
+    does. The SDK classifies a 4xx checkpoint failure as unrecoverable for the execution. So the
+    local execution now ends `FAILED` with `CheckpointUnrecoverableExecutionError`, as it does in
+    AWS. Before, the error carried no status, so it failed only the invocation, and `run()` rejected.
+
 - A checkpoint response carrying no `CheckpointToken` now ends the invocation cleanly with
   `{Status: "PENDING"}`. Every response carries the token for the next call, so one without a token
   withdraws the invocation's ability to record anything further — for instance because a newer
@@ -41,6 +80,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   SDK's set of invocation responses is unchanged.
 
 ### Fixed
+
+- **eslint-plugin**: the README showed `extends: ["plugin:@aws/durable-execution-sdk-js-eslint-plugin/recommended"]`
+  and `plugins: ["@aws/durable-execution-sdk-js-eslint-plugin"]`. Neither setup could load the
+  plugin. ESLint adds the `eslint-plugin-` prefix to the name of an eslintrc plugin, so it looked for
+  `@aws/eslint-plugin-durable-execution-sdk-js-eslint-plugin`, which does not exist. The README now
+  shows flat config, which works on ESLint 8.57, 9 and 10. `configs.recommended` is
+  deprecated for the same reason. It keeps its shape, so code that reads its `rules` still works.
+- **eslint-plugin**: the `eslint` peer range is now `^8.57.0 || ^9.0.0 || ^10.0.0`, from `>=8.0.0`.
+  This is the range `@typescript-eslint/parser` 8 requires, and the setup the README documents
+  needs that parser. The eslintrc setup never worked on any version.
+
+- The MicroVM worker in `@aws/durable-execution-sdk-js-microvm-worker` treated
+  `InvalidParameterValueException` as the answer for a callback that is already complete. The
+  service answers `CallbackTimeoutException` ("The callback is either timed out or already
+  completed") for a callback that is already complete, timed out, or whose execution stopped.
+  `InvalidParameterValueException` means a malformed or unknown callback ID. So two checks missed
+  the real answer:
+  - A completion whose earlier attempt reached the service, although its answer was lost, failed
+    on the retry instead of counting as delivered. The worker then logged that the outcome could
+    not be reported. It now logs a warning that names both cases the code covers: an earlier
+    attempt delivered the outcome, or the callback timed out first. A callback that really timed
+    out is now a warning where it was an error. The durable function sees the timeout either way.
+  - A heartbeat that met the completion while it was in flight logged "the callback no longer
+    accepts heartbeats". It is no longer logged.
+
+- A MicroVM worker job could reach its heartbeat timeout after two failed heartbeats in a row.
+  Each heartbeat call could take half the interval. The service times the heartbeat timeout from
+  when it receives a call, which can be at the call's start. So the worst gap was 3.5 intervals,
+  above the 3-interval timeout. Each call now ends after a third of the interval, and the worst
+  gap is about 2.83 intervals. The Python worker measured a 32.39-second gap against a 30-second
+  heartbeat timeout before the same change.
+
+- An `InvalidRunHookPayloadError` for a `runHookPayload` that is not JSON now keeps the parser's
+  `SyntaxError` as its `cause`. Its message names the position of the error.
 
 - An oversized result could keep the invocation running until the Lambda timeout. The SDK
   checkpoints a result over the response size limit after the handler returns, and waited for
@@ -101,6 +174,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   heartbeats, reports the outcome to the job's callback, and can suspend the MicroVM when idle, if
   the session opts in with `autoSuspendOnIdle: true`.
   The extras package requires core SDK 2.6.0 or later.
+
+- The MicroVM worker acts on the `suspend` and `terminate` lifecycle hooks, when the image enables
+  them. On `terminate` it fails the callback of each running job with `MicrovmTerminatedError`,
+  so the `microvm` operation fails at once with a `MicrovmJobFailedError` instead of at the
+  job's heartbeat timeout or its timeout. It answers the hook after the reports end, or after 5
+  seconds. On `suspend` it refuses new jobs with HTTP 503 until the `resume` hook, or for 30
+  seconds. The worker acts on `suspend`, `terminate`, and `resume` only for requests with a local
+  `Host` and no `x-amzn-requestid` header, as Lambda's own hook calls carry. It ignores a request
+  that the MicroVM endpoint forwarded to one of these hook paths.
+
+- **eslint-plugin**: `configs["flat/recommended"]`, a flat config that registers the plugin as
+  `@aws/durable-functions` and turns on all three rules as errors. The plugin now exports
+  `meta.name` and `meta.version`. ESLint writes them into the config it hashes for `--cache`, so a
+  cached lint result no longer survives an upgrade of the plugin. The README now documents the
+  flat config setup and the third rule, `no-non-deterministic-outside-step`. The package tests
+  also run against the latest ESLint 8 and 9 in CI. The plugin's types are
+  assignable to ESLint's `Linter.Config` and `ESLint.Plugin`, and to `defineConfig()`, so a
+  type-checked `eslint.config.ts` accepts them.
 
 ## [2.3.1]
 

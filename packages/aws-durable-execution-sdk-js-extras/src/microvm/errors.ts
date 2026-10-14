@@ -42,7 +42,14 @@ export class MicrovmError extends DurableOperationError {
 }
 
 /**
- * `RunMicrovm` failed after all retries, so no MicroVM runs the job.
+ * `RunMicrovm` failed after all retries.
+ *
+ * When the last attempt got an answer, such as a `ValidationException`, no
+ * MicroVM runs the job. When the last attempt timed out or lost its
+ * connection, the service may have created the MicroVM anyway. That MicroVM
+ * then runs the job, and the operation cannot terminate it, because it never
+ * learned the MicroVM's ID. The MicroVM ends at its maximum duration. So a
+ * caller that runs the job again after this error can run it twice.
  *
  * @public
  *

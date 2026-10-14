@@ -22,6 +22,7 @@ on:
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/otel-conformance-tests.yml"
+      - ".github/workflows/scripts/setup-node22*.sh"
   push:
     branches: [main]
     paths:
@@ -31,6 +32,7 @@ on:
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/otel-conformance-tests.yml"
+      - ".github/workflows/scripts/setup-node22*.sh"
   workflow_dispatch:
     inputs:
       phase:
@@ -64,6 +66,7 @@ on:
 concurrency:
   group: otel-conformance
   cancel-in-progress: false
+  queue: max
 
 permissions: {}
 
@@ -76,24 +79,22 @@ jobs:
       actions: write
       contents: read
       id-token: write
-    uses: aws/aws-durable-execution-conformance-tests/.github/workflows/opentelemetry-orchestrator.yml@a628f5589bbf067a441696c792ab3023c0d0899b
+    uses: aws/aws-durable-execution-conformance-tests/.github/workflows/opentelemetry-orchestrator.yml@e48ac54502d3c14e2e3fa216c5e200dbb4c14ac2
     with:
+      runs_on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
       language: javascript
       resource_prefix: js
       sdk_repository: aws/aws-durable-execution-sdk-js
       sdk_ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      conformance_test_ref: ${{ inputs.conformance_test_ref || 'e1ab203b351035412e149744b4fc6eada4ea335c' }}
+      conformance_test_ref: ${{ inputs.conformance_test_ref || 'a628f5589bbf067a441696c792ab3023c0d0899b' }}
       checkout_sdk: true
       # Build the handlers from this repo's checked-out package instead of the conformance
       # repo's bundled examples/javascript. Path is relative to the conformance workspace,
       # where this repo is checked out at .build/durable-sdk.
       examples_dir: .build/durable-sdk/packages/aws-durable-execution-sdk-js-conformance-tests-otel
       setup_command: |
-        export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
-        source "$NVM_DIR/nvm.sh"
-        nvm install 22
-        nvm use 22
-        node --version
+        bash "$SDK_CHECKOUT/.github/workflows/scripts/setup-node22.test.sh"
+        source "$SDK_CHECKOUT/.github/workflows/scripts/setup-node22.sh"
       # Unlike the conformance repo's examples/javascript, this package consumes the SDK and
       # the OTel plugin as workspace siblings, so there is no tarball install step: a root
       # npm ci links them and building them in place is enough.

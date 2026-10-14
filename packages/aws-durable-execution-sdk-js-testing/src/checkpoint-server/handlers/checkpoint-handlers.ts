@@ -14,6 +14,7 @@ import {
   encodeCheckpointToken,
 } from "../utils/checkpoint-token";
 import { validateCheckpointUpdates } from "../validators/checkpoint-durable-execution-input-validator";
+import { normalizeUpdateIntegers } from "../validators/normalize-update-integers";
 import { randomUUID } from "crypto";
 import { ExecutionManager } from "../storage/execution-manager";
 import { CheckpointOperation } from "../storage/checkpoint-manager";
@@ -107,7 +108,9 @@ export function processCheckpointDurableExecution(
 
   validateCheckpointUpdates(updates, storage.getAllOperationData());
 
-  storage.registerUpdates(updates);
+  // The service applies the integer that it reads for each integer member.
+  // So the local server stores the same integers.
+  storage.registerUpdates(updates.map(normalizeUpdateIntegers));
 
   const output: CheckpointDurableExecutionResponse = {
     // A paused execution still accepts this checkpoint: its updates were registered above.

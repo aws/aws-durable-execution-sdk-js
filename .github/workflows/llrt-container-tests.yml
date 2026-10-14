@@ -37,7 +37,7 @@ env:
 
 jobs:
   llrt-container:
-    runs-on: ubuntu-latest
+    runs-on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
     permissions:
       contents: read
       id-token: write # Required for AWS credentials

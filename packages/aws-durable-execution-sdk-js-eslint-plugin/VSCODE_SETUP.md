@@ -1,114 +1,71 @@
-# VS Code Setup for ESLint Plugin
+# VS Code Setup for the ESLint Plugin
 
-To see ESLint errors and warnings in VS Code when working with the durable functions examples:
+This page is for contributors to this repository. It shows how to see the plugin's
+rules in VS Code while you work on the examples.
 
-## 1. Install VS Code ESLint Extension
+Biome handles formatting and general linting for the whole repository. ESLint runs
+for one reason only: it applies this plugin's `no-nested-durable-operations` rule
+to the examples package, because Biome cannot load ESLint plugins. The command
+line check is `npm run lint:durable-rules` in `packages/aws-durable-execution-sdk-js-examples`.
 
-Install the official ESLint extension:
+To use the plugin in your own project, see the [README](./README.md).
 
-- Open VS Code
-- Go to Extensions (Ctrl+Shift+X)
-- Search for "ESLint" by Microsoft
-- Install it
+## 1. Install the ESLint extension
 
-## 2. Build the Plugin
+Install the extension **ESLint** by Microsoft.
 
-First, make sure the plugin is built:
+## 2. Build the plugin
+
+The examples package loads the plugin from `dist/`, so build it first. Run this
+after every change to the plugin's source:
 
 ```bash
-cd packages/aws-durable-execution-sdk-js-eslint-plugin
-npm run build
+npm run build -w packages/aws-durable-execution-sdk-js-eslint-plugin
 ```
 
-## 3. ESLint Configuration (Already Done!)
+## 3. Open the repository root
 
-The monorepo is configured to check:
+Open VS Code on the repository root. `.vscode/settings.json` already turns on the
+ESLint extension and limits it to `packages/aws-durable-execution-sdk-js-examples`
+through `eslint.workingDirectories`, so it does not overlap with Biome elsewhere.
+The rules come from `packages/aws-durable-execution-sdk-js-examples/eslint.config.mjs`.
 
-- All TypeScript files in `packages/examples/src/examples/`
-- The plugin example file
+## 4. Check that it works
 
-## 4. Test the Setup
+Open a file under `packages/aws-durable-execution-sdk-js-examples/src/examples/`.
+A durable operation that uses a context from an enclosing operation shows a red
+underline. For example, `context-validation/parent-context-in-step` calls
+`context.step` inside a step on purpose, to show the runtime error. That call has an
+`eslint-disable-next-line` comment. Remove the comment to see the underline and a message that starts with:
 
-1. Open VS Code in the monorepo root directory
-2. Open any file in `packages/examples/src/examples/`
-3. You should see red squiggly lines under nested durable operations
+> Cannot use the same context object "context" inside its own operation
 
-## 5. Current Issues Found
+## 5. Check from the command line
 
-The plugin has already found real issues in the examples:
-
-**❌ `packages/examples/src/examples/parallel-basic.ts` (lines 6, 11, 16):**
-
-```typescript
-const results = await context.parallel("parallel", [
-  async (context: DurableContext) => {
-    return await context.step(async () => {
-      // ← Error: nested in parallel
-      return "task 1 completed";
-    });
-  },
-  // ... more nested operations
-]);
+```bash
+npm run lint:durable-rules -w packages/aws-durable-execution-sdk-js-examples
 ```
 
-**❌ `packages/examples/src/examples/map-basic.ts` (line 10):**
+The command exits with a non-zero code when it finds a nested operation.
+
+## How to fix a finding
+
+Use `runInChildContext` and call the operation on the child context:
 
 ```typescript
-const results = await context.map(items, async (item, context) => {
-  return await context.step(async () => {
-    // ← Error: nested in map
-    return `Processed: ${item}`;
+const result = await context.runInChildContext("task1", async (childCtx) => {
+  return await childCtx.step(async () => {
+    return "task 1 completed";
   });
 });
 ```
-
-## 6. How to Fix These Issues
-
-Use `runInChildContext` for nested operations:
-
-**✅ Correct approach:**
-
-```typescript
-const results = await context.parallel("parallel", [
-  async () => {
-    return await context.runInChildContext("task1", async (childCtx) => {
-      return await childCtx.step(async () => {
-        return "task 1 completed";
-      });
-    });
-  },
-]);
-```
-
-## 7. Command Line Testing
-
-Test all examples:
-
-```bash
-# From monorepo root
-npx eslint "packages/examples/src/examples/*.ts"
-```
-
-Test specific file:
-
-```bash
-npx eslint packages/examples/src/examples/parallel-basic.ts
-```
-
-## 8. VS Code Experience
-
-When you open the example files in VS Code, you'll see:
-
-- **Red squiggly lines** under problematic nested operations
-- **Error messages** when you hover: "Durable operation 'step' cannot be nested inside another durable operation. Use runInChildContext for nested operations"
-- **Problems panel** (Ctrl+Shift+M) showing all issues
 
 ## Troubleshooting
 
 If you don't see errors in VS Code:
 
-1. Make sure the ESLint extension is enabled
-2. Check the VS Code output panel (View → Output → ESLint) for errors
-3. Try reloading VS Code (Ctrl+Shift+P → "Developer: Reload Window")
-4. Ensure you're opening VS Code from the monorepo root directory
-5. Make sure the plugin is built: `npm run build` in the plugin directory
+1. Check that the ESLint extension is enabled.
+2. Open the output panel (View → Output) and select **ESLint**. Look for errors.
+3. Check that you built the plugin (step 2). The output panel shows a missing `dist/index.js` as an error.
+4. Reload VS Code (Ctrl+Shift+P → "Developer: Reload Window").
+5. Check that you opened VS Code on the repository root, not on a single package.
