@@ -107,3 +107,31 @@ describe("chained invoke function name validation in the local checkpoint server
     expect(after).not.toHaveBeenCalled();
   });
 });
+
+// The SDK copies the `message` of a thrown error-like object into
+// `ErrorMessage` as it is. The service reads `ErrorMessage` as a string. So a
+// numeric `message` fails the checkpoint with HTTP 400
+// SerializationException, and the execution fails in AWS. The local server
+// makes it fail the same way.
+describe("error object type validation in the local checkpoint server", () => {
+  it("fails the execution for a thrown object with a numeric message", async () => {
+    const handler = withDurableExecution(
+      async (_event: unknown, context: DurableContext) =>
+        context.step("charge", async () => {
+          // biome-ignore lint/style/useThrowOnlyError: the test throws an error-like object on purpose, to reach the SDK's error-like path.
+          throw { name: "ChargeError", message: 1 };
+        }),
+    );
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+
+    const result = await runner.run();
+
+    expect(result.getStatus()).toBe(ExecutionStatus.FAILED);
+    expect(result.getError()).toMatchObject({
+      errorType: "CheckpointUnrecoverableExecutionError",
+      errorMessage: expect.stringContaining(
+        "NUMBER_VALUE can not be converted to a String",
+      ),
+    });
+  });
+});

@@ -13,6 +13,7 @@ import { validateStepOperation } from "./operation-type/validate-step-operation"
 import { validateWaitOperation } from "./operation-type/validate-wait-operation";
 import { validateValidActionsByOperationType } from "./valid-actions-by-operation-type-validator";
 import { validateUpdateModel } from "./validate-update-model";
+import { validateUpdateSerialization } from "./validate-update-serialization";
 import { OperationEvents } from "../../test-runner/common/operations/operation-with-data";
 
 /**
@@ -70,8 +71,10 @@ export function validateCheckpointUpdates(
     return;
   }
 
-  // The service checks the request against its model first. So an invalid
-  // member rejects the request before any other check.
+  // The service reads the request body first, and then checks the request
+  // against its model. So a member of the wrong type, and then an invalid
+  // member, rejects the request before any other check.
+  validateUpdateSerialization(updates);
   validateUpdateModel(updates);
   validateConflictingExecutionUpdate(updates);
   validateParentIdAndDuplicateId(updates, checkpointOperations);

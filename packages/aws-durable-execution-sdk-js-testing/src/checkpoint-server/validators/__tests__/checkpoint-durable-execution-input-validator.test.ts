@@ -94,6 +94,36 @@ describe("validateCheckpointUpdates", () => {
     });
   });
 
+  describe("validation order", () => {
+    // The service reads the body before it checks the model. So a member of
+    // the wrong type is reported before an invalid member of another update.
+    it("reports a wrong type before a model constraint", () => {
+      expect(() => {
+        validateCheckpointUpdates(
+          [
+            {
+              Id: "bad id!",
+              Type: OperationType.STEP,
+              Action: OperationAction.START,
+            },
+            {
+              Id: "op2",
+              Type: OperationType.STEP,
+              Action: OperationAction.START,
+              Name: 1 as unknown as string,
+            },
+          ],
+          mockOperations,
+        );
+      }).toThrow(
+        expect.objectContaining({
+          name: "SerializationException",
+          message: "NUMBER_VALUE can not be converted to a String",
+        }),
+      );
+    });
+  });
+
   describe("payload size validation", () => {
     it.each([
       [

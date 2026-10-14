@@ -93,6 +93,29 @@ describe("validateUpdateModel", () => {
     });
   });
 
+  // A pattern must match the whole value. A trailing line terminator is
+  // outside every pattern, so the service rejects it.
+  it.each([
+    ["\\n", "\n"],
+    ["\\r", "\r"],
+    ["\\r\\n", "\r\n"],
+    ["U+2028", "\u2028"],
+    ["U+2029", "\u2029"],
+  ])("rejects a name that ends with %s", (_label, terminator) => {
+    const name = `charge${terminator}`;
+    expect(rejection([update({ Name: name })])).toMatchObject({
+      message: `1 validation error detected: Value '${name}' at 'updates.1.member.name' failed to satisfy constraint: Member must satisfy regular expression pattern: ${NAME_PATTERN}`,
+    });
+  });
+
+  it("rejects an id and a subtype that end with \\n", () => {
+    expect(rejection([update({ Id: "a\n", SubType: "Step\n" })])).toMatchObject(
+      {
+        message: `2 validation errors detected: Value 'Step\n' at 'updates.1.member.subType' failed to satisfy constraint: Member must satisfy regular expression pattern: ${ID_PATTERN}; Value 'a\n' at 'updates.1.member.id' failed to satisfy constraint: Member must satisfy regular expression pattern: ${ID_PATTERN}`,
+      },
+    );
+  });
+
   it("reports both the length and the pattern of an empty string", () => {
     expect(rejection([update({ Id: "", Name: "" })])).toMatchObject({
       message: `4 validation errors detected: Value '' at 'updates.1.member.name' failed to satisfy constraint: Member must have length greater than or equal to 1; Value '' at 'updates.1.member.name' failed to satisfy constraint: Member must satisfy regular expression pattern: ${NAME_PATTERN}; Value '' at 'updates.1.member.id' failed to satisfy constraint: Member must have length greater than or equal to 1; Value '' at 'updates.1.member.id' failed to satisfy constraint: Member must satisfy regular expression pattern: ${ID_PATTERN}`,
@@ -287,120 +310,13 @@ describe("validateUpdateModel", () => {
     });
   });
 
-  describe("member types", () => {
-    const wait = (WaitSeconds: unknown): OperationUpdate =>
-      update({
-        Type: OperationType.WAIT,
-        WaitOptions: { WaitSeconds: WaitSeconds as number },
-      });
-    const named = (Name: unknown): OperationUpdate =>
-      update({ Name: Name as string });
+  describe("integer members", () => {
+    const wait = (WaitSeconds: number): OperationUpdate =>
+      update({ Type: OperationType.WAIT, WaitOptions: { WaitSeconds } });
 
-    // The messages below are the service's, recorded from
-    // CheckpointDurableExecution in us-east-1.
-    it.each([
-      ["a number", named(123), "NUMBER_VALUE can not be converted to a String"],
-      ["true", named(true), "TRUE_VALUE can not be converted to a String"],
-      ["false", named(false), "FALSE_VALUE can not be converted to a String"],
-      [
-        "an object",
-        named({ x: 1 }),
-        "Start of structure or map found where not expected.",
-      ],
-      ["an array", named([1]), "Start of list found where not expected"],
-    ])("rejects %s for a string member", (_label, rejected, message) => {
-      expect(rejection([rejected])).toMatchObject({
-        name: "SerializationException",
-        $fault: "client",
-        $metadata: { httpStatusCode: 400 },
-        message,
-      });
-    });
-
-    it.each([
-      [
-        "a string",
-        wait("5"),
-        "STRING_VALUE can not be converted to an Integer",
-      ],
-      [
-        "NaN",
-        wait(Number.NaN),
-        "STRING_VALUE can not be converted to an Integer",
-      ],
-      [
-        "Infinity",
-        wait(Number.POSITIVE_INFINITY),
-        "STRING_VALUE can not be converted to an Integer",
-      ],
-      [
-        "-Infinity",
-        wait(Number.NEGATIVE_INFINITY),
-        "STRING_VALUE can not be converted to an Integer",
-      ],
-      ["true", wait(true), "TRUE_VALUE can not be converted to an Integer"],
-      ["false", wait(false), "FALSE_VALUE can not be converted to an Integer"],
-      [
-        "an object",
-        wait({ x: 1 }),
-        "Start of structure or map found where not expected.",
-      ],
-      ["an array", wait([1]), "Start of list found where not expected"],
-    ])("rejects %s for an integer member", (_label, rejected, message) => {
-      expect(rejection([rejected])).toMatchObject({
-        name: "SerializationException",
-        $metadata: { httpStatusCode: 400 },
-        message,
-      });
-    });
-
-    it("rejects a wrong type before any constraint error", () => {
-      expect(rejection([update({ Id: "bad id!" }), named(1)])).toMatchObject({
-        name: "SerializationException",
-        message: "NUMBER_VALUE can not be converted to a String",
-      });
-    });
-
-    // The SDK writes members in alphabetical order, and the service reports
-    // the first member it cannot read.
-    it.each([
-      [
-        "Id before Name",
-        { Name: true, Id: 5 },
-        "NUMBER_VALUE can not be converted to a String",
-      ],
-      [
-        "Action before SubType",
-        { Action: true, SubType: 5 },
-        "TRUE_VALUE can not be converted to a String",
-      ],
-      [
-        "ParentId before SubType",
-        { ParentId: 5, SubType: true },
-        "NUMBER_VALUE can not be converted to a String",
-      ],
-      [
-        "StepOptions before WaitOptions",
-        {
-          WaitOptions: { WaitSeconds: "x" },
-          StepOptions: { NextAttemptDelaySeconds: true },
-        },
-        "TRUE_VALUE can not be converted to an Integer",
-      ],
-      [
-        "ChainedInvokeOptions before WaitOptions",
-        {
-          WaitOptions: { WaitSeconds: true },
-          ChainedInvokeOptions: { FunctionName: 5 },
-        },
-        "NUMBER_VALUE can not be converted to a String",
-      ],
-    ])("reports %s", (_label, fields, message) => {
-      expect(
-        rejection([update(fields as unknown as Partial<OperationUpdate>)]),
-      ).toMatchObject({ name: "SerializationException", message });
-    });
-
+    // The service reads a number for an integer member without its
+    // fractional part, and clamps it to the 32-bit range. It checks the
+    // integer that it read.
     it.each([
       ["1.5", 1.5],
       ["31622400.9", 31622400.9],
