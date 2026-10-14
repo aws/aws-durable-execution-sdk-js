@@ -731,7 +731,7 @@ remote parent, or a synthetic execution root).
 
 Apache-2.0
 
-## Chained-invoke propagation (draft; model/backend dependent)
+## Chained-invoke propagation (draft; backend qualification pending)
 
 When preparing a new `context.invoke()` START, the SDK calls the optional
 `providePropagationMetadata(input)` hook after assigning the operation identity
@@ -768,14 +768,16 @@ call the hook or send another START. A failed, uncommitted START can collect
 metadata again when the invocation is retried. Providers must therefore use the
 stable identity, avoid side effects, and not assume exactly-once callbacks.
 
-The SDK-owned field and START integration are implemented in this draft, but
-end-to-end transmission **requires a generated Lambda model with the new field
-and the backend rollout**. The pinned `@aws-sdk/client-lambda` 3.1014.0 lacks
-`XAmznTraceId`: the unchanged wire-model parity guard fails type checking and
-the normal Lambda serializer drops the member. The serializer regression test
-intentionally fails with that model rather than bypassing serialization or
-skipping the assertion. This draft must remain unmerged until those dependency
-checks pass; deployed parent/child topology still needs validation after rollout.
+The runtime dependency requires `@aws-sdk/client-lambda` 3.1152.0 or newer.
+That published release declares the optional `XAmznTraceId` field and includes
+it in the generated serializer. The strict wire-model parity guard and actual
+serializer regression pass with that release.
+
+This integration remains draft pending **deployed backend trace-topology
+qualification**. Local serialization and package compatibility do not establish
+that a deployed chained invocation receives the intended Root/Parent/Sampled
+or exports the expected caller/child topology. Validate those paths before
+merging this draft.
 
 The design also adds `DistributedMapOptions.XAmznTraceId` to a future service
 model. This SDK currently has no distributed-map options or START API; its
