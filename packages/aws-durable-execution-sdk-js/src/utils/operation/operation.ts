@@ -34,18 +34,12 @@ export function toOperationInfo(operation?: Operation): OperationInfo {
       operation?.CallbackDetails?.Result ??
       operation?.ContextDetails?.Result ??
       operation?.ChainedInvokeDetails?.Result,
-    // Normalize only empty or known-undefined wire errors. Present values and
-    // unrecognized shapes retain the existing converter behavior; this does not
+    // An undefined field supplies no diagnostic detail, regardless of its name.
+    // Defined values retain the existing converter behavior; this does not
     // add support for exposing arbitrary unknown fields on the resulting Error.
     error:
       errorObject &&
-      Object.entries(errorObject).some(
-        ([field, value]) =>
-          value !== undefined ||
-          !["ErrorType", "ErrorMessage", "ErrorData", "StackTrace"].includes(
-            field,
-          ),
-      )
+      Object.values(errorObject).some((value) => value !== undefined)
         ? DurableOperationError.fromErrorObject(errorObject)
         : undefined,
     attempt: operation?.StepDetails?.Attempt,

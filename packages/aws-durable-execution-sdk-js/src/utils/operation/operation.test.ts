@@ -18,6 +18,7 @@ describe("operation plugin error metadata", () => {
   it.each([
     undefined,
     {},
+    { FutureDetail: undefined } as ErrorObject,
     {
       ErrorType: undefined,
       ErrorMessage: undefined,
@@ -48,7 +49,6 @@ describe("operation plugin error metadata", () => {
       StackTrace: ["source:1"],
     },
     { FutureDetail: "preserve" },
-    { FutureDetail: undefined },
   ])(
     "retains existing conversion for nonempty or unrecognized error shapes (%j)",
     (error) => {

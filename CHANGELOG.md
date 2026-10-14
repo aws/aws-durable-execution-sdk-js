@@ -10,7 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Checkpoint-derived `OperationInfo.error` can be absent when a failed callback
-  or invoke has missing or empty wire error data. Instrumentation should use
+  or invoke has missing wire error data or no defined diagnostic values.
+  Instrumentation should use
   `status` to identify failure and `error` for available exception details.
   Caller-facing callback and invoke failures are unchanged.
 
@@ -47,7 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **OpenTelemetry**: failed terminal operations remain `ERROR` in both views,
+- **OpenTelemetry**: `FAILED`, `TIMED_OUT`, and `STOPPED` operations remain `ERROR` in both views,
   including later-invocation continuations, even without error details.
   Exception events still require an actual error object.
 - **OpenTelemetry**: flush the default global provider's public SDK delegate.

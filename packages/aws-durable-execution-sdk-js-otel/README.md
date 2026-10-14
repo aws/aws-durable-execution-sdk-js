@@ -577,13 +577,18 @@ OpenTelemetry status mapping is:
 | Operation  | `SUCCEEDED` / `FAILED`, `TIMED_OUT`, `STOPPED` or an error object / otherwise | `OK` / `ERROR` / `UNSET` |
 | Attempt    | `FAILED` / any other outcome | `ERROR` / `OK` |
 
-Operation failure status and exception details are independent. A failed callback
-or invoke remains an `ERROR` span when error details are absent, including when
+Operation failure status and exception details are independent. `FAILED`,
+`TIMED_OUT`, and `STOPPED` remain `ERROR` when error details are absent, including when
 the handler catches its failure and returns successfully. The status message uses
 the supplied error message, or the failed status name when no error exists.
 
+`CANCELLED` without error details remains `UNSET`. A supplied error still makes
+a cancelled operation `ERROR`; this mapping does not introduce a general
+cancellation policy.
+
 Operation and attempt exceptions are recorded only when an error object is
-available. Empty wire errors do not synthesize exception events. Explicit partial
+available. Wire errors with no defined values do not synthesize exception events,
+including when an unrecognized property is `undefined`. Explicit partial
 details, including empty strings or an empty stack trace, remain error information.
 Workflow and Invocation failures set `ERROR` without recording an exception event.
 Caller exceptions, checkpoint payloads and replay behavior are unchanged.
