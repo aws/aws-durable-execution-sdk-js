@@ -29,7 +29,7 @@ export const handler = withDurableExecution(async (event, context) =>
       imageIdentifier: process.env.MICROVM_IMAGE_ARN!,
       executionRoleArn: process.env.MICROVM_ROLE_ARN!,
       timeout: { hours: 1 },
-      heartbeatTimeout: { seconds: 60 },
+      heartbeatTimeout: { minutes: 5 },
     },
   ),
 );
@@ -74,7 +74,13 @@ The operation runs its durable operations inside one child context named after t
 4. The child context waits for the MicroVM to complete the callback.
 5. `<name>.terminate` calls `TerminateMicrovm`. It runs after success, failure, and timeout alike.
 
-A terminate failure does not fail the operation. The job result is already recorded at that point. So the operation logs an error instead of throwing. The MicroVM then keeps running, and is billed, until the platform ends it at `maximumDurationInSeconds`, the operation timeout plus 5 minutes. For example, a job with an 8-hour timeout that finishes in 5 minutes leaves its MicroVM running for almost 8 more hours.
+A terminate failure does not fail the operation. The job result is already recorded at that point. So the operation logs an error instead of throwing. The MicroVM then keeps running, and is billed, until the platform ends it at `maximumDurationInSeconds`, the operation timeout plus 5 minutes, at most 8 hours. For example, a job with an 8-hour timeout that finishes in 5 minutes leaves its MicroVM running for almost 8 more hours.
+
+The terminate step runs only when the operation sees the job's outcome. In these cases it never does, and the MicroVM also runs until its maximum duration:
+
+- A `map` or `parallel` completes early, for example with `minSuccessful`, while an item still waits for its MicroVM. The SDK never runs that item again.
+- The execution fails, times out, or is stopped while the operation waits.
+- Every launch attempt timed out or lost its connection, but the service created the MicroVM anyway. The operation never learned the MicroVM's ID.
 
 ### Subtypes
 
@@ -98,7 +104,7 @@ Replay compares each subtype with the checkpoint. So these values are fixed: a c
 A step retry costs one durable operation and one more Lambda invocation. Most failures here are short, so the steps retry in two tiers:
 
 1. **Inside one step attempt.** The AWS SDK client retries throttling and server errors of `RunMicrovm`, `CreateMicrovmAuthToken`, and `TerminateMicrovm`. The request step retries the POST itself: connection errors, 429, and 5xx with a backoff from 250 ms to 4 s, and one 401 or 403 with a new auth token. The endpoint answers this way until the MicroVM's `run` hook returns. This tier ends after `request.retryWindow` (60 seconds by default, between 1 second and 10 minutes), or 10 seconds before the invocation times out.
-2. **The step retry strategy.** When the first tier gives up, the step retries after a longer backoff, outside the invocation. `retryStrategy` replaces the default, which allows 5 attempts.
+2. **The step retry strategy.** When the first tier gives up, the step retries after a longer backoff, outside the invocation. `retryStrategy` replaces the default, which allows 5 attempts. The default retries throttling, server errors, state conflicts, connection failures, and timeouts. It does not retry `ValidationException`, `AccessDeniedException`, `ResourceNotFoundException`, `ServiceQuotaExceededException`, or `InsufficientCapacityException`, because a later attempt fails the same way.
 
 A route that answers another 4xx status fails the operation without a retry.
 
@@ -108,7 +114,7 @@ Every MicroVM failure is a `MicrovmError`. Catch the base class for all of them,
 
 | Error | When |
 |---|---|
-| `MicrovmLaunchError` | `RunMicrovm` failed after all retries, so no MicroVM runs the job. |
+| `MicrovmLaunchError` | `RunMicrovm` failed after all retries. When the last attempt timed out or lost its connection, the service may have created the MicroVM anyway, and it then runs the job. So running the job again after this error can run it twice. |
 | `MicrovmDeliveryError` | HTTP delivery failed after all retries, or the route answered a 4xx status such as 404. |
 | `MicrovmNotRunningError` | A `MicrovmDeliveryError` of a session job: the session's MicroVM is terminating, terminated, or removed. It is not retried. Only a session that checks the MicroVM state before each job reports it. See [Suspending the MicroVM between jobs](#suspending-the-microvm-between-jobs). |
 | `MicrovmJobFailedError` | The job handler in the MicroVM failed. The message includes the job's error type, and `errorData` is the data that the MicroVM reported. |
@@ -145,12 +151,13 @@ A `MicrovmError` that leaves your own `runInChildContext` reaches the next calle
 - The MicroVM gets the `INTERNET_EGRESS` connector. It needs egress to reach the Lambda callback APIs. For ingress, it gets `NO_INGRESS` with `run` hook delivery and `ALL_INGRESS` with HTTP delivery. If you set `ingressNetworkConnectors`, allow ingress whenever an input can exceed the `run` hook limit.
 - The operation sets no idle policy. The idle policy counts only inbound endpoint traffic. A job receives none after its delivery, so an idle policy would suspend the MicroVM during the job.
 - `timeout` must be between 1 second and 8 hours, because a MicroVM lives at most 8 hours. The MicroVM's `maximumDurationInSeconds` is `timeout` plus 5 minutes, capped at 8 hours.
+- `heartbeatTimeout` starts when the callback is created, before the launch. So it must cover the launch, with its retries, and the boot. A throttled launch can take several minutes. With a shorter heartbeat timeout, the operation fails with `MicrovmTimeoutError` before the MicroVM sends its first heartbeat.
 
 ### Permissions
 
 The function's execution role needs:
 
-- `lambda:RunMicrovm` and `lambda:TerminateMicrovm`. Without `lambda:TerminateMicrovm`, every operation still returns its result, but every MicroVM runs until its timeout plus 5 minutes. The only sign is an error in the function's log.
+- `lambda:RunMicrovm` and `lambda:TerminateMicrovm`. Without `lambda:TerminateMicrovm`, every operation still returns its result, but every MicroVM runs until its timeout plus 5 minutes, at most 8 hours. The only sign is an error in the function's log.
 - `lambda:CreateMicrovmAuthToken`, for HTTP delivery. Grant it unless every input is small.
 - `lambda:PassNetworkConnector` on the connectors the MicroVM uses. RunMicrovm authorizes each connector separately. With the defaults, that is `arn:aws:lambda:<region>:aws:network-connector:aws-network-connector:*`.
 - `iam:PassRole` on the MicroVM execution role.

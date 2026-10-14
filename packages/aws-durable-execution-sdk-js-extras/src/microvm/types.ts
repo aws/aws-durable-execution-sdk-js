@@ -151,6 +151,12 @@ export interface MicrovmConfig extends MicrovmBaseConfig {
    * When it is set, a MicroVM that fails to boot or stops responding fails the
    * operation after this duration, instead of after `timeout`. The MicroVM
    * receives this value in the job document.
+   *
+   * The first period starts when the callback is created, before the launch.
+   * So it must cover the launch, with its retries, and the boot. A throttled
+   * launch can take several minutes. With a shorter heartbeat timeout, the
+   * operation fails with `MicrovmTimeoutError` before the MicroVM sends its
+   * first heartbeat.
    */
   heartbeatTimeout?: Duration;
 
