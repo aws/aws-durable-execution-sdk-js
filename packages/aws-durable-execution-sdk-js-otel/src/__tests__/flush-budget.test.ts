@@ -172,7 +172,7 @@ describe.each([ExecutionOtelPlugin, InvocationOtelPlugin])(
       }
     });
 
-    it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+    it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, 2_147_483_648])(
       "rejects invalid budget %s before invoking a provider factory",
       (flushTimeoutMillis) => {
         const factory = jest.fn(() => provider);

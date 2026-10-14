@@ -73,7 +73,8 @@ export interface OtelPluginConfig {
   /**
    * Total elapsed budget, in milliseconds, for awaiting provider flushes at
    * invocation end, including additional drain/flush rounds. Defaults to 1000.
-   * Must be a positive finite number. A timeout stops waiting; it does not
+   * Must be positive and at most 2147483647 (Node.js's maximum timer delay).
+   * A timeout stops waiting; it does not
    * cancel exports, shut down the provider, or preempt synchronous provider code.
    */
   flushTimeoutMillis?: number;

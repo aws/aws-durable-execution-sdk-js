@@ -20,8 +20,10 @@ export interface ProviderResult {
 
 export function resolveFlushTimeoutMillis(value: number | undefined): number {
   const timeout = value ?? 1000;
-  if (!Number.isFinite(timeout) || timeout <= 0) {
-    throw new RangeError("flushTimeoutMillis must be a positive finite number");
+  if (!Number.isFinite(timeout) || timeout <= 0 || timeout > 2_147_483_647) {
+    throw new RangeError(
+      "flushTimeoutMillis must be positive and no greater than 2147483647",
+    );
   }
   return timeout;
 }

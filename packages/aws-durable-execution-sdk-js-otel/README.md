@@ -159,7 +159,8 @@ does not expose `forceFlush()` itself. Explicit factory providers are used as
 returned and are not unwrapped. The plugins never call `shutdown()`.
 
 Both views use one `flushTimeoutMillis` budget across the invocation-end
-drain/flush rounds (default **1000 ms**, positive and finite). This bounds
+drain/flush rounds (default **1000 ms**, positive and at most **2147483647 ms**,
+Node.js's maximum timer delay). This bounds
 asynchronous provider waiting on both the global and explicit-provider paths.
 Choose a value that leaves room in the Lambda invocation timeout and configure
 the exporter's own transport timeouts too. The plugin has no remaining-runtime
