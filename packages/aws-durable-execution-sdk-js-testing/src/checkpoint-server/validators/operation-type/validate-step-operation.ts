@@ -1,4 +1,4 @@
-import { InvalidParameterValueException } from "@aws-sdk/client-lambda";
+import { invalidParameterValue } from "../invalid-parameter-value";
 import {
   Operation,
   OperationAction,
@@ -35,57 +35,41 @@ export function validateStepOperation(
   switch (update.Action) {
     case OperationAction.START:
       if (operation && !allowedStatusToStart.includes(operation.Status)) {
-        throw new InvalidParameterValueException({
-          message: "Invalid current STEP state to start.",
-          $metadata: {},
-        });
+        throw invalidParameterValue("Invalid current STEP state to start.");
       }
       break;
     case OperationAction.FAIL:
     case OperationAction.SUCCEED:
       if (operation && !allowedStatusToClose.includes(operation.Status)) {
-        throw new InvalidParameterValueException({
-          message: "Invalid current STEP state to close.",
-          $metadata: {},
-        });
+        throw invalidParameterValue("Invalid current STEP state to close.");
       }
       if (update.Action === OperationAction.FAIL && update.Payload != null) {
-        throw new InvalidParameterValueException({
-          message: "Cannot provide a Payload for FAIL action.",
-          $metadata: {},
-        });
+        throw invalidParameterValue(
+          "Cannot provide a Payload for FAIL action.",
+        );
       }
       if (update.Action === OperationAction.SUCCEED && update.Error != null) {
-        throw new InvalidParameterValueException({
-          message: "Cannot provide an Error for SUCCEED action.",
-          $metadata: {},
-        });
+        throw invalidParameterValue(
+          "Cannot provide an Error for SUCCEED action.",
+        );
       }
       break;
     case OperationAction.RETRY:
       if (operation && !allowedStatusToReattempt.includes(operation.Status)) {
-        throw new InvalidParameterValueException({
-          message: "Invalid current STEP state to re-attempt.",
-          $metadata: {},
-        });
+        throw invalidParameterValue("Invalid current STEP state to retry.");
       }
       if (update.StepOptions == null) {
-        throw new InvalidParameterValueException({
-          message: "Invalid StepOptions for the given action.",
-          $metadata: {},
-        });
+        throw invalidParameterValue(
+          "RETRY action for STEP operation requires StepOptions.",
+        );
       }
       if (update.Error != null && update.Payload != null) {
-        throw new InvalidParameterValueException({
-          message: "Cannot provide both error and payload to RETRY a STEP.",
-          $metadata: {},
-        });
+        throw invalidParameterValue(
+          "Cannot provide both an Error and Payload for RETRY action.",
+        );
       }
       break;
     default:
-      throw new InvalidParameterValueException({
-        message: "Invalid STEP action.",
-        $metadata: {},
-      });
+      throw invalidParameterValue("Invalid action for STEP operation.");
   }
 }
