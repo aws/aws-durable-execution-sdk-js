@@ -133,6 +133,160 @@ describe("validateUpdateModel", () => {
     });
   });
 
+  // The service checks the pattern even when the length check fails. So an
+  // empty subtype gets 2 errors, as an empty id or name does.
+  it("reports both the length and the pattern of an empty subtype", () => {
+    expect(rejection([update({ SubType: "" })])).toMatchObject({
+      name: "ValidationException",
+      message: `2 validation errors detected: Value '' at 'updates.1.member.subType' failed to satisfy constraint: Member must have length greater than or equal to 1; Value '' at 'updates.1.member.subType' failed to satisfy constraint: Member must satisfy regular expression pattern: ${ID_PATTERN}`,
+    });
+  });
+
+  describe("options members", () => {
+    const FUNCTION_NAME_PATTERN =
+      "(arn:(aws[a-zA-Z-]*)?:lambda:)?((eusc-)?[a-z]{2}((-gov)|(-iso([a-z]?)))?-[a-z]+-\\d{1}:)?(\\d{12}:)?(function:)?([a-zA-Z0-9-_\\.]+)(:(\\$LATEST(\\.PUBLISHED)?|[a-zA-Z0-9-_]+))?";
+
+    const invoke = (
+      ChainedInvokeOptions: OperationUpdate["ChainedInvokeOptions"],
+    ): OperationUpdate =>
+      update({ Type: OperationType.CHAINED_INVOKE, ChainedInvokeOptions });
+
+    it.each([
+      ["a local function name", "child-function"],
+      ["a qualified name", "my-function:$LATEST"],
+      [
+        "a function ARN",
+        "arn:aws:lambda:us-east-1:123456789012:function:my-fn:$LATEST.PUBLISHED",
+      ],
+    ])("accepts %s", (_label, FunctionName) => {
+      expect(() =>
+        validateUpdateModel([invoke({ FunctionName, TenantId: "tenant-1" })]),
+      ).not.toThrow();
+    });
+
+    it("accepts absent options", () => {
+      expect(() => validateUpdateModel([update()])).not.toThrow();
+    });
+
+    it("requires FunctionName when ChainedInvokeOptions is present", () => {
+      expect(rejection([invoke({ FunctionName: undefined })])).toMatchObject({
+        name: "ValidationException",
+        $metadata: { httpStatusCode: 400 },
+        message:
+          "1 validation error detected: Value null at 'updates.1.member.chainedInvokeOptions.functionName' failed to satisfy constraint: Member must not be null",
+      });
+    });
+
+    it("rejects an empty FunctionName", () => {
+      expect(rejection([invoke({ FunctionName: "" })])).toMatchObject({
+        message: `2 validation errors detected: Value '' at 'updates.1.member.chainedInvokeOptions.functionName' failed to satisfy constraint: Member must have length greater than or equal to 1; Value '' at 'updates.1.member.chainedInvokeOptions.functionName' failed to satisfy constraint: Member must satisfy regular expression pattern: ${FUNCTION_NAME_PATTERN}`,
+      });
+    });
+
+    it("rejects a FunctionName over 256 characters", () => {
+      const name = "f".repeat(300);
+      expect(rejection([invoke({ FunctionName: name })])).toMatchObject({
+        message: `1 validation error detected: Value '${name}' at 'updates.1.member.chainedInvokeOptions.functionName' failed to satisfy constraint: Member must have length less than or equal to 256`,
+      });
+    });
+
+    it("rejects a FunctionName outside the pattern", () => {
+      expect(rejection([invoke({ FunctionName: "bad name!" })])).toMatchObject({
+        message: `1 validation error detected: Value 'bad name!' at 'updates.1.member.chainedInvokeOptions.functionName' failed to satisfy constraint: Member must satisfy regular expression pattern: ${FUNCTION_NAME_PATTERN}`,
+      });
+    });
+
+    it("rejects a TenantId outside the pattern", () => {
+      expect(
+        rejection([invoke({ FunctionName: "f", TenantId: "bad!tenant" })]),
+      ).toMatchObject({
+        message:
+          "1 validation error detected: Value 'bad!tenant' at 'updates.1.member.chainedInvokeOptions.tenantId' failed to satisfy constraint: Member must satisfy regular expression pattern: [a-zA-Z0-9\\._:\\/=+\\-@ ]+",
+      });
+    });
+
+    it.each([
+      [
+        "WaitSeconds below 1",
+        update({ Type: OperationType.WAIT, WaitOptions: { WaitSeconds: 0 } }),
+        "Value '0' at 'updates.1.member.waitOptions.waitSeconds' failed to satisfy constraint: Member must have value greater than or equal to 1",
+      ],
+      [
+        "WaitSeconds above 31622400",
+        update({
+          Type: OperationType.WAIT,
+          WaitOptions: { WaitSeconds: 31622401 },
+        }),
+        "Value '31622401' at 'updates.1.member.waitOptions.waitSeconds' failed to satisfy constraint: Member must have value less than or equal to 31622400",
+      ],
+      [
+        "NextAttemptDelaySeconds below 1",
+        update({
+          Action: OperationAction.RETRY,
+          StepOptions: { NextAttemptDelaySeconds: 0 },
+        }),
+        "Value '0' at 'updates.1.member.stepOptions.nextAttemptDelaySeconds' failed to satisfy constraint: Member must have value greater than or equal to 1",
+      ],
+    ])("rejects %s", (_label, rejected, error) => {
+      expect(rejection([rejected])).toMatchObject({
+        message: `1 validation error detected: ${error}`,
+      });
+    });
+
+    it("rejects callback timeouts out of range", () => {
+      expect(
+        rejection([
+          update({
+            Type: OperationType.CALLBACK,
+            CallbackOptions: {
+              TimeoutSeconds: -1,
+              HeartbeatTimeoutSeconds: 100000000,
+            },
+          }),
+        ]),
+      ).toMatchObject({
+        message:
+          "2 validation errors detected: Value '-1' at 'updates.1.member.callbackOptions.timeoutSeconds' failed to satisfy constraint: Member must have value greater than or equal to 0; Value '100000000' at 'updates.1.member.callbackOptions.heartbeatTimeoutSeconds' failed to satisfy constraint: Member must have value less than or equal to 99999999",
+      });
+    });
+
+    it("reports options members in the service's order", () => {
+      expect(
+        rejection([
+          {
+            Id: "bad id!",
+            Type: OperationType.CHAINED_INVOKE,
+            Action: OperationAction.START,
+            Name: "héllo",
+            ChainedInvokeOptions: { FunctionName: undefined },
+            WaitOptions: { WaitSeconds: 0 },
+            StepOptions: { NextAttemptDelaySeconds: 0 },
+            CallbackOptions: { TimeoutSeconds: -1 },
+          },
+        ]),
+      ).toMatchObject({
+        message: `6 validation errors detected: Value null at 'updates.1.member.chainedInvokeOptions.functionName' failed to satisfy constraint: Member must not be null; Value '-1' at 'updates.1.member.callbackOptions.timeoutSeconds' failed to satisfy constraint: Member must have value greater than or equal to 0; Value '0' at 'updates.1.member.waitOptions.waitSeconds' failed to satisfy constraint: Member must have value greater than or equal to 1; Value '0' at 'updates.1.member.stepOptions.nextAttemptDelaySeconds' failed to satisfy constraint: Member must have value greater than or equal to 1; Value 'héllo' at 'updates.1.member.name' failed to satisfy constraint: Member must satisfy regular expression pattern: ${NAME_PATTERN}; Value 'bad id!' at 'updates.1.member.id' failed to satisfy constraint: Member must satisfy regular expression pattern: ${ID_PATTERN}`,
+      });
+    });
+
+    it("reports options members between the other members", () => {
+      expect(
+        rejection([
+          {
+            Id: "x",
+            Type: undefined as unknown as OperationType,
+            Action: OperationAction.START,
+            ParentId: "p.q",
+            CallbackOptions: { TimeoutSeconds: -1 },
+            WaitOptions: { WaitSeconds: 0 },
+          },
+        ]),
+      ).toMatchObject({
+        message: `4 validation errors detected: Value '-1' at 'updates.1.member.callbackOptions.timeoutSeconds' failed to satisfy constraint: Member must have value greater than or equal to 0; Value null at 'updates.1.member.type' failed to satisfy constraint: Member must not be null; Value 'p.q' at 'updates.1.member.parentId' failed to satisfy constraint: Member must satisfy regular expression pattern: ${ID_PATTERN}; Value '0' at 'updates.1.member.waitOptions.waitSeconds' failed to satisfy constraint: Member must have value greater than or equal to 1`,
+      });
+    });
+  });
+
   it("lists and counts at most 10 errors", () => {
     const updates = Array.from({ length: 12 }, () => update({ Id: "bad id!" }));
     const error = rejection(updates) as Error;

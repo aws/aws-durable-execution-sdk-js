@@ -2,6 +2,7 @@ import { LambdaServiceException } from "@aws-sdk/client-lambda";
 import { OperationUpdate } from "@aws/durable-execution-sdk-js";
 
 interface StringConstraint {
+  kind: "string";
   required: boolean;
   minLength?: number;
   maxLength?: number;
@@ -9,66 +10,159 @@ interface StringConstraint {
   pattern?: string;
 }
 
+interface NumberConstraint {
+  kind: "number";
+  min: number;
+  max: number;
+}
+
+type Constraint = StringConstraint | NumberConstraint;
+
+/**
+ * One constrained member of `OperationUpdate`.
+ *
+ * A member of an options structure is checked only when the structure is
+ * present. So a required member of an absent structure is not an error.
+ */
+interface ConstrainedMember {
+  /** The member's path in the service's message, after `member.`. */
+  path: string;
+  /** Returns the structure that holds the member, or undefined if it is absent. */
+  container: (update: OperationUpdate) => object | undefined;
+  /** Returns the member's value. */
+  value: (update: OperationUpdate) => unknown;
+  constraint: Constraint;
+}
+
 const OPERATION_ID: StringConstraint = {
+  kind: "string",
   required: false,
   minLength: 1,
   maxLength: 64,
   pattern: "[a-zA-Z0-9-_]+",
 };
 
+/** The longest duration that a wait or a step retry delay can have. */
+const MAX_DURATION_SECONDS = 31_622_400;
+
+/** The longest callback timeout and heartbeat timeout. */
+const MAX_CALLBACK_TIMEOUT_SECONDS = 99_999_999;
+
+const topLevel = (update: OperationUpdate): object => update;
+
 /**
- * The constrained members of `OperationUpdate`, in the order in which the
- * service reports their errors. This order was measured. It is not the
- * order of the members in the model.
+ * The constrained members, in the order in which the service reports their
+ * errors. This order was measured. It is not the order of the members in the
+ * model.
  */
-const CONSTRAINED_MEMBERS: [keyof OperationUpdate, string, StringConstraint][] =
-  [
-    ["Type", "type", { required: true }],
-    ["ParentId", "parentId", OPERATION_ID],
-    [
-      "Name",
-      "name",
-      {
-        required: false,
-        minLength: 1,
-        maxLength: 256,
-        pattern: "[\\x20-\\x7E]+",
-      },
-    ],
-    ["Action", "action", { required: true }],
-    [
-      "SubType",
-      "subType",
-      {
-        required: false,
-        minLength: 1,
-        maxLength: 32,
-        pattern: "[a-zA-Z0-9-_]+",
-      },
-    ],
-    ["Id", "id", { ...OPERATION_ID, required: true }],
-  ];
+const CONSTRAINED_MEMBERS: ConstrainedMember[] = [
+  {
+    path: "chainedInvokeOptions.functionName",
+    container: (update) => update.ChainedInvokeOptions,
+    value: (update) => update.ChainedInvokeOptions?.FunctionName,
+    constraint: {
+      kind: "string",
+      required: true,
+      minLength: 1,
+      maxLength: 256,
+      pattern:
+        "(arn:(aws[a-zA-Z-]*)?:lambda:)?((eusc-)?[a-z]{2}((-gov)|(-iso([a-z]?)))?-[a-z]+-\\d{1}:)?(\\d{12}:)?(function:)?([a-zA-Z0-9-_\\.]+)(:(\\$LATEST(\\.PUBLISHED)?|[a-zA-Z0-9-_]+))?",
+    },
+  },
+  {
+    path: "chainedInvokeOptions.tenantId",
+    container: (update) => update.ChainedInvokeOptions,
+    value: (update) => update.ChainedInvokeOptions?.TenantId,
+    constraint: {
+      kind: "string",
+      required: false,
+      minLength: 1,
+      maxLength: 256,
+      pattern: "[a-zA-Z0-9\\._:\\/=+\\-@ ]+",
+    },
+  },
+  {
+    path: "callbackOptions.timeoutSeconds",
+    container: (update) => update.CallbackOptions,
+    value: (update) => update.CallbackOptions?.TimeoutSeconds,
+    constraint: { kind: "number", min: 0, max: MAX_CALLBACK_TIMEOUT_SECONDS },
+  },
+  {
+    path: "callbackOptions.heartbeatTimeoutSeconds",
+    container: (update) => update.CallbackOptions,
+    value: (update) => update.CallbackOptions?.HeartbeatTimeoutSeconds,
+    constraint: { kind: "number", min: 0, max: MAX_CALLBACK_TIMEOUT_SECONDS },
+  },
+  {
+    path: "type",
+    container: topLevel,
+    value: (update) => update.Type,
+    constraint: { kind: "string", required: true },
+  },
+  {
+    path: "parentId",
+    container: topLevel,
+    value: (update) => update.ParentId,
+    constraint: OPERATION_ID,
+  },
+  {
+    path: "waitOptions.waitSeconds",
+    container: (update) => update.WaitOptions,
+    value: (update) => update.WaitOptions?.WaitSeconds,
+    constraint: { kind: "number", min: 1, max: MAX_DURATION_SECONDS },
+  },
+  {
+    path: "stepOptions.nextAttemptDelaySeconds",
+    container: (update) => update.StepOptions,
+    value: (update) => update.StepOptions?.NextAttemptDelaySeconds,
+    constraint: { kind: "number", min: 1, max: MAX_DURATION_SECONDS },
+  },
+  {
+    path: "name",
+    container: topLevel,
+    value: (update) => update.Name,
+    constraint: {
+      kind: "string",
+      required: false,
+      minLength: 1,
+      maxLength: 256,
+      pattern: "[\\x20-\\x7E]+",
+    },
+  },
+  {
+    path: "action",
+    container: topLevel,
+    value: (update) => update.Action,
+    constraint: { kind: "string", required: true },
+  },
+  {
+    path: "subType",
+    container: topLevel,
+    value: (update) => update.SubType,
+    constraint: {
+      kind: "string",
+      required: false,
+      minLength: 1,
+      maxLength: 32,
+      pattern: "[a-zA-Z0-9-_]+",
+    },
+  },
+  {
+    path: "id",
+    container: topLevel,
+    value: (update) => update.Id,
+    constraint: { ...OPERATION_ID, required: true },
+  },
+];
 
 /** The service lists at most this many errors, and counts only those. */
 const MAX_REPORTED_ERRORS = 10;
 
-function memberErrors(
-  value: unknown,
-  path: string,
+function stringErrors(
+  value: string,
+  at: string,
   constraint: StringConstraint,
 ): string[] {
-  if (value == null) {
-    return constraint.required
-      ? [
-          `Value null at '${path}' failed to satisfy constraint: Member must not be null`,
-        ]
-      : [];
-  }
-  if (typeof value !== "string") {
-    return [];
-  }
-
-  const at = `Value '${value}' at '${path}' failed to satisfy constraint:`;
   const errors: string[] = [];
   if (
     constraint.minLength !== undefined &&
@@ -86,6 +180,8 @@ function memberErrors(
       `${at} Member must have length less than or equal to ${constraint.maxLength}`,
     );
   }
+  // The service checks the pattern even when the length check fails. So an
+  // empty string gets both a length error and a pattern error.
   if (
     constraint.pattern !== undefined &&
     !new RegExp(`^${constraint.pattern}$`).test(value)
@@ -95,6 +191,53 @@ function memberErrors(
     );
   }
   return errors;
+}
+
+function numberErrors(
+  value: number,
+  at: string,
+  constraint: NumberConstraint,
+): string[] {
+  if (value < constraint.min) {
+    return [
+      `${at} Member must have value greater than or equal to ${constraint.min}`,
+    ];
+  }
+  if (value > constraint.max) {
+    return [
+      `${at} Member must have value less than or equal to ${constraint.max}`,
+    ];
+  }
+  return [];
+}
+
+function memberErrors(
+  update: OperationUpdate,
+  path: string,
+  member: ConstrainedMember,
+): string[] {
+  if (member.container(update) == null) {
+    return [];
+  }
+
+  const value = member.value(update);
+  const { constraint } = member;
+  if (value == null) {
+    return constraint.kind === "string" && constraint.required
+      ? [
+          `Value null at '${path}' failed to satisfy constraint: Member must not be null`,
+        ]
+      : [];
+  }
+
+  const at = `Value '${String(value)}' at '${path}' failed to satisfy constraint:`;
+  if (constraint.kind === "string" && typeof value === "string") {
+    return stringErrors(value, at, constraint);
+  }
+  if (constraint.kind === "number" && typeof value === "number") {
+    return numberErrors(value, at, constraint);
+  }
+  return [];
 }
 
 /**
@@ -119,12 +262,12 @@ function memberErrors(
 export function validateUpdateModel(updates: OperationUpdate[]): void {
   const errors: string[] = [];
   updates.forEach((update, index) => {
-    for (const [member, wireName, constraint] of CONSTRAINED_MEMBERS) {
+    for (const member of CONSTRAINED_MEMBERS) {
       errors.push(
         ...memberErrors(
-          update[member],
-          `updates.${index + 1}.member.${wireName}`,
-          constraint,
+          update,
+          `updates.${index + 1}.member.${member.path}`,
+          member,
         ),
       );
     }

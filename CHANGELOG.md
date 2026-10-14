@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     have 1 to 256 printable ASCII characters. `Id`, `Type`, and `Action` are required. An invalid
     member rejects the whole request with HTTP 400 `ValidationException`, with the service's
     message. The message lists at most 10 errors, as the service's does.
+  - The model checks also cover the options. `ChainedInvokeOptions.FunctionName` is required, and
+    must be a Lambda function name, a qualified name, or a function ARN of at most 256 characters.
+    `WaitOptions.WaitSeconds` and `StepOptions.NextAttemptDelaySeconds` must be from 1 to
+    31622400. The `CallbackOptions` timeouts must be from 0 to 99999999.
   - An update for an existing operation must not change its `Type`, `SubType`, `Name`, or
     `ParentId`. A different value usually means that the handler is not deterministic.
   - The error object limit is 262144 bytes, the service's limit. It was 32768 bytes.

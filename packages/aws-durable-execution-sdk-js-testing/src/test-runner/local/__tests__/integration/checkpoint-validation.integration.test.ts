@@ -66,3 +66,44 @@ describe("operation name validation in the local checkpoint server", () => {
     expect(result.getResult()).toBe("ok");
   });
 });
+
+// The service requires ChainedInvokeOptions.FunctionName to be a Lambda
+// function name, a qualified name, or a function ARN. It rejects any other
+// value with HTTP 400 ValidationException. So the execution fails in AWS
+// before any function runs, and the local server makes it fail the same way.
+describe("chained invoke function name validation in the local checkpoint server", () => {
+  it.each([
+    [
+      "an empty function name",
+      "",
+      "Value '' at 'updates.1.member.chainedInvokeOptions.functionName' failed to satisfy constraint: Member must have length greater than or equal to 1",
+    ],
+    [
+      "a function name outside the pattern",
+      "bad name!",
+      "Value 'bad name!' at 'updates.1.member.chainedInvokeOptions.functionName' failed to satisfy constraint: Member must satisfy regular expression pattern:",
+    ],
+  ])("fails the execution for %s", async (_label, functionName, error) => {
+    const child = jest.fn(async () => "child result");
+    const after = jest.fn();
+    const handler = withDurableExecution(
+      async (_event: unknown, context: DurableContext) => {
+        await context.invoke("call child", functionName, {});
+        after();
+        return "done";
+      },
+    );
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+    runner.registerFunction(functionName, child);
+
+    const result = await runner.run();
+
+    expect(result.getStatus()).toBe(ExecutionStatus.FAILED);
+    expect(result.getError()).toMatchObject({
+      errorType: "CheckpointUnrecoverableExecutionError",
+      errorMessage: expect.stringContaining(error),
+    });
+    expect(child).not.toHaveBeenCalled();
+    expect(after).not.toHaveBeenCalled();
+  });
+});
