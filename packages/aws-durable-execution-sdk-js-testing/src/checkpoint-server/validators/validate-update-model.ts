@@ -167,7 +167,7 @@ const MAX_INTEGER = 2_147_483_647;
  * discards the fractional part, so 1.5 becomes 1 and 0.5 becomes 0. It
  * clamps a value outside the 32-bit range to the nearest bound.
  */
-function toServiceInteger(value: number): number {
+export function toServiceInteger(value: number): number {
   return Math.min(MAX_INTEGER, Math.max(MIN_INTEGER, Math.trunc(value)));
 }
 
@@ -194,10 +194,14 @@ function stringErrors(
     );
   }
   // The service checks the pattern even when the length check fails. So an
-  // empty string gets both a length error and a pattern error.
+  // empty string gets both a length error and a pattern error. The pattern
+  // must match the whole value. `(?![\s\S])` asserts the end of the value.
+  // In JavaScript, `$` without the `m` flag asserts the same. The lookahead
+  // states it explicitly, because `$` in Java and PCRE also matches before a
+  // final line terminator.
   if (
     constraint.pattern !== undefined &&
-    !new RegExp(`^${constraint.pattern}$`).test(value)
+    !new RegExp(`^(?:${constraint.pattern})(?![\\s\\S])`).test(value)
   ) {
     errors.push(
       `${at} Member must satisfy regular expression pattern: ${constraint.pattern}`,

@@ -26,7 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `Payload`, the `Error` members, and `ContextOptions.ReplayChildren`. For example, a step that
     throws `{ name: "X", message: 1 }` now fails the checkpoint, as it does in AWS. The service
     reads an integer member without its fractional part. So `WaitSeconds: 1.5` is accepted as 1,
-    and `WaitSeconds: 0.5` is rejected as 0.
+    and `WaitSeconds: 0.5` is rejected as 0. The local server also stores and schedules that
+    integer, as the service applies it. So `context.wait({ seconds: 1.5 })` waits and records 1
+    second.
+  - A callback timeout or heartbeat timeout of 0 means no timeout, as it does in the service. The
+    local server timed the callback out at once.
   - An update for an existing operation must not change its `Type`, `SubType`, `Name`, or
     `ParentId`. A different value usually means that the handler is not deterministic.
   - The error object limit is 262144 bytes, the service's limit. It was 32768 bytes.

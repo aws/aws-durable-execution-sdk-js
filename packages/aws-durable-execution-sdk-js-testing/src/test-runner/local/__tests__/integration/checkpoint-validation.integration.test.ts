@@ -135,3 +135,24 @@ describe("error object type validation in the local checkpoint server", () => {
     });
   });
 });
+
+// The service reads an integer member without its fractional part, and then
+// applies that integer. So `context.wait({ seconds: 1.5 })` waits 1 second in
+// AWS, and records 1 second. The local server stores and schedules the same
+// integer.
+describe("integer members in the local checkpoint server", () => {
+  it("records a wait of 1.5 seconds as 1 second", async () => {
+    const handler = withDurableExecution(
+      async (_event: unknown, context: DurableContext) => {
+        await context.wait("pause", { seconds: 1.5 });
+        return "done";
+      },
+    );
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+
+    const result = await runner.run();
+
+    expect(result.getStatus()).toBe(ExecutionStatus.SUCCEEDED);
+    expect(runner.getOperation("pause").getWaitDetails()?.waitSeconds).toBe(1);
+  });
+});
