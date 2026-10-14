@@ -21,11 +21,9 @@ describe("validateValidActionsByOperationType", () => {
 
     // CALLBACK operations
     [OperationType.CALLBACK, OperationAction.START],
-    [OperationType.CALLBACK, OperationAction.CANCEL],
 
     // CHAINED_INVOKE operations
     [OperationType.CHAINED_INVOKE, OperationAction.START],
-    [OperationType.CHAINED_INVOKE, OperationAction.CANCEL],
 
     // EXECUTION operations
     [OperationType.EXECUTION, OperationAction.SUCCEED],
@@ -49,11 +47,13 @@ describe("validateValidActionsByOperationType", () => {
     [OperationType.CALLBACK, OperationAction.FAIL],
     [OperationType.CALLBACK, OperationAction.SUCCEED],
     [OperationType.CALLBACK, OperationAction.RETRY],
+    [OperationType.CALLBACK, OperationAction.CANCEL],
 
     // Invalid CHAINED_INVOKE actions
     [OperationType.CHAINED_INVOKE, OperationAction.FAIL],
     [OperationType.CHAINED_INVOKE, OperationAction.SUCCEED],
     [OperationType.CHAINED_INVOKE, OperationAction.RETRY],
+    [OperationType.CHAINED_INVOKE, OperationAction.CANCEL],
 
     // Invalid EXECUTION actions
     [OperationType.EXECUTION, OperationAction.START],
@@ -99,7 +99,7 @@ describe("validateValidActionsByOperationType", () => {
           "UNKNOWN_TYPE" as OperationType,
           OperationAction.START,
         );
-      }).toThrow("Unknown operation type.");
+      }).toThrow("Invalid operation type.");
     });
   });
 });

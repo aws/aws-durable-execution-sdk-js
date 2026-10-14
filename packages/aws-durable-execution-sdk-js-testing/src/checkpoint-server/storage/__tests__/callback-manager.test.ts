@@ -173,6 +173,28 @@ describe("CallbackManager", () => {
         CompleteCallbackStatus.TIMED_OUT,
       );
     });
+
+    // The service treats a timeout of 0 as no timeout. A fractional timeout
+    // below 1 second is read as 0. So neither starts a timer.
+    it("should not time out a callback with timeouts of 0", () => {
+      const operationId = "test-operation-id";
+      mockCheckpointManager.registerUpdates([
+        {
+          Id: operationId,
+          Action: OperationAction.START,
+          Type: OperationType.CALLBACK,
+        },
+      ]);
+      const completeCallbackSpy = jest.spyOn(
+        callbackManager,
+        "completeCallback",
+      );
+
+      callbackManager.createCallback(operationId, 0, 0);
+      jest.advanceTimersByTime(60 * 60 * 1000);
+
+      expect(completeCallbackSpy).not.toHaveBeenCalled();
+    });
   });
 
   describe("completeCallback", () => {
