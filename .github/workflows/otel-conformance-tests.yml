@@ -1,68 +1,8 @@
-name: OTel Conformance Tests
-
-# Per-PR OpenTelemetry conformance run. Reuses the shared orchestrator from
-# aws-durable-execution-conformance-tests and points it at this repo's own handlers and
-# templates (packages/aws-durable-execution-sdk-js-conformance-tests-otel) via examples_dir,
-# so the handlers live here while the orchestration (backend matrix, ADOT layer discovery,
-# collector layer build, long-running cycle) and the requirement specs stay centralized.
-#
-# Mirrors the JavaScript preset's language config in the conformance repo
-# (javascript-opentelemetry.yml) but calls opentelemetry-orchestrator.yml directly, the way
-# the Python and Java SDK repos do. The one deliberate difference from that preset: no
-# contract_test_command, because the conformance repo's test_javascript_examples.py asserts
-# against its own bundled examples/javascript and workflow files, not this package.
+name: Temporary JS957 wire diagnostic (never merge)
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - "packages/aws-durable-execution-sdk-js/**"
-      - "packages/aws-durable-execution-sdk-js-otel/**"
-      - "packages/aws-durable-execution-sdk-js-conformance-tests-otel/**"
-      - "package.json"
-      - "package-lock.json"
-      - ".github/workflows/otel-conformance-tests.yml"
-      - ".github/workflows/scripts/setup-node22*.sh"
-  push:
-    branches: [main]
-    paths:
-      - "packages/aws-durable-execution-sdk-js/**"
-      - "packages/aws-durable-execution-sdk-js-otel/**"
-      - "packages/aws-durable-execution-sdk-js-conformance-tests-otel/**"
-      - "package.json"
-      - "package-lock.json"
-      - ".github/workflows/otel-conformance-tests.yml"
-      - ".github/workflows/scripts/setup-node22*.sh"
   workflow_dispatch:
-    inputs:
-      phase:
-        description: Run short tests, launch a long run, or check the active long run
-        required: true
-        default: short
-        type: choice
-        options:
-          - short
-          - launch
-          - check
-      delay_seconds:
-        description: Durable delay in seconds (1-86400, launch only)
-        required: true
-        default: "82800"
-        type: string
-      aws_region:
-        description: AWS region
-        required: true
-        default: us-west-2
-        type: string
-      conformance_test_ref:
-        description: Optional conformance test commit SHA or branch name
-        required: false
-        type: string
 
-# One run at a time for the whole repository, queued rather than cancelled. The
-# orchestrator's stacks are named per (language, backend, suite) and are persistent, so two
-# runs from different branches would deploy to the same CloudFormation stacks concurrently.
-# This is the same reasoning as the per-suite lock in conformance-tests.yml.
 concurrency:
   group: otel-conformance
   cancel-in-progress: false
@@ -71,36 +11,28 @@ concurrency:
 permissions: {}
 
 jobs:
-  opentelemetry:
-    # 1. Run for non-PR events, such as scheduled runs and manual invocations
-    # 2. For PRs, run only same-repo branches from non-Dependabot actors; forked PRs or Dependabot should not access secrets.
-    if: github.event_name != 'pull_request' || (github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository)
+  probe:
     permissions:
       actions: write
       contents: read
       id-token: write
-    uses: aws/aws-durable-execution-conformance-tests/.github/workflows/opentelemetry-orchestrator.yml@e48ac54502d3c14e2e3fa216c5e200dbb4c14ac2
+    uses: aws/aws-durable-execution-conformance-tests/.github/workflows/opentelemetry-suite.yml@e48ac54502d3c14e2e3fa216c5e200dbb4c14ac2
     with:
-      runs_on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
       language: javascript
       resource_prefix: js
       sdk_repository: aws/aws-durable-execution-sdk-js
-      sdk_ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      conformance_test_ref: ${{ inputs.conformance_test_ref || 'a628f5589bbf067a441696c792ab3023c0d0899b' }}
+      sdk_ref: ${{ github.sha }}
+      conformance_repository: aws/aws-durable-execution-conformance-tests
+      conformance_test_sha: a628f5589bbf067a441696c792ab3023c0d0899b
       checkout_sdk: true
-      # Build the handlers from this repo's checked-out package instead of the conformance
-      # repo's bundled examples/javascript. Path is relative to the conformance workspace,
-      # where this repo is checked out at .build/durable-sdk.
+      suite: otel-execution
+      case_count: 20
+      runs_on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
       examples_dir: .build/durable-sdk/packages/aws-durable-execution-sdk-js-conformance-tests-otel
       setup_command: |
         bash "$SDK_CHECKOUT/.github/workflows/scripts/setup-node22.test.sh"
         source "$SDK_CHECKOUT/.github/workflows/scripts/setup-node22.sh"
-      # Unlike the conformance repo's examples/javascript, this package consumes the SDK and
-      # the OTel plugin as workspace siblings, so there is no tarball install step: a root
-      # npm ci links them and building them in place is enough.
       prepare_command: |
-        # The insight desktop app's electron devDependency downloads a ~100 MB binary that
-        # nothing in this job launches.
         export ELECTRON_SKIP_BINARY_DOWNLOAD=1
         cd "$SDK_CHECKOUT"
         npm ci
@@ -111,16 +43,45 @@ jobs:
       adot_release_repository: aws-observability/aws-otel-js-instrumentation
       collector_compatible_runtime: nodejs22.x
       collector_otlp_endpoint: http://localhost:4318
-      phase: ${{ inputs.phase || 'short' }}
-      delay_seconds: ${{ inputs.delay_seconds || '82800' }}
-      aws_region: ${{ inputs.aws_region || 'us-west-2' }}
+      aws_region: us-west-2
     secrets:
       CONFORMANCE_TEST_ROLE_ARN: ${{ secrets.TEST_ROLE_ARN }}
       CONFORMANCE_TEST_ACCOUNT_ID: ${{ secrets.TEST_ACCOUNT_ID }}
       CONFORMANCE_TEST_LAMBDA_EXECUTION_ROLE_ARN: ${{ secrets.TEST_LAMBDA_EXECUTION_ROLE_ARN }}
-      # Optional backends. The orchestrator's resolve job skips Dash0 and Datadog when their
-      # tokens are absent, so an unset secret disables that backend rather than failing.
-      DASH0_AUTH_TOKEN: ${{ secrets.DASH0_AUTH_TOKEN }}
-      DATADOG_ACCESS_TOKEN: ${{ secrets.DATADOG_ACCESS_TOKEN }}
-      DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
-      DATADOG_APPLICATION_KEY: ${{ secrets.DATADOG_APPLICATION_KEY }}
+
+  collect:
+    needs: probe
+    if: always()
+    runs-on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: javascript-otel-*-otel-execution-*
+          path: ${{ runner.temp }}/wire-artifacts
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.TEST_ROLE_ARN }}
+          role-session-name: js957WireObservation
+          aws-region: us-west-2
+          allowed-account-ids: ${{ secrets.TEST_ACCOUNT_ID }}
+      - name: Read selected case11 tracing metadata
+        env:
+          TEST_ACCOUNT_ID: ${{ secrets.TEST_ACCOUNT_ID }}
+        run: |
+          python3 .github/workflows/scripts/collect-wire-observations.py \
+            --artifacts "$RUNNER_TEMP/wire-artifacts" \
+            --output "$RUNNER_TEMP/wire-proof.json"
+      - name: Upload selected metadata only
+        if: always()
+        uses: actions/upload-artifact@v8
+        with:
+          name: js957-wire-observations-${{ github.run_id }}
+          path: ${{ runner.temp }}/wire-proof.json
+          if-no-files-found: error

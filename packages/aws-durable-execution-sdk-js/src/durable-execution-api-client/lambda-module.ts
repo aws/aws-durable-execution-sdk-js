@@ -17,6 +17,7 @@ import {
   GetDurableExecutionStateRequest,
 } from "../types/wire";
 import { SDK_NAME, SDK_VERSION } from "../utils/constants/version";
+import { attachWireObservation } from "./wire-observation";
 
 /**
  * The subset of `@aws-sdk/client-lambda` this package needs at runtime.
@@ -86,6 +87,9 @@ export const loadLambdaModule = (): Promise<LambdaModule> => {
  */
 export const resolveDefaultLambdaClient = async (): Promise<LambdaClient> => {
   const module = await loadLambdaModule();
-  defaultLambdaClient ??= new module.LambdaClient(DEFAULT_CLIENT_CONFIG);
+  if (!defaultLambdaClient) {
+    defaultLambdaClient = new module.LambdaClient(DEFAULT_CLIENT_CONFIG);
+    attachWireObservation(defaultLambdaClient);
+  }
   return defaultLambdaClient;
 };
