@@ -701,7 +701,7 @@ describe("TestExecutionOrchestrator", () => {
       );
     });
 
-    it("should handle non-SUCCEEDED/FAILED status responses", async () => {
+    it("should reject PENDING when no operation can resume the execution", async () => {
       // Mock a never-resolving polling to simulate PENDING status
       (checkpointApi.pollCheckpointData as jest.Mock).mockReturnValue(
         nonResolvingPromise,
@@ -713,12 +713,16 @@ describe("TestExecutionOrchestrator", () => {
 
       mockInvoke.mockResolvedValue(pendingResult);
 
-      const executePromise = orchestrator.executeHandler();
-
-      // Give some time for the handler to be invoked
-      await new Promise((resolve) => {
-        setTimeout(resolve, 10);
+      const rejection = expect(orchestrator.executeHandler()).rejects.toEqual({
+        error: {
+          ErrorType: "InvalidParameterValueException",
+          ErrorMessage:
+            "Cannot return PENDING status with no pending operations.",
+        },
+        status: "FAILED",
       });
+
+      await rejection;
 
       expect(mockInvoke).toHaveBeenCalledWith(mockHandlerFunction, {
         durableExecutionArn: mockExecutionId,
@@ -726,19 +730,6 @@ describe("TestExecutionOrchestrator", () => {
         operations: [mockOperationEvents[0].operation],
         updatedOperationIds: [],
       });
-
-      // The promise should not resolve immediately for PENDING status
-      const timeoutSymbol = Symbol("timeout");
-      const raceResult = await Promise.race([
-        executePromise,
-        new Promise((resolve) => {
-          setTimeout(() => {
-            resolve(timeoutSymbol);
-          }, 50);
-        }),
-      ]);
-
-      expect(raceResult).toBe(timeoutSymbol);
     });
 
     it("should handle AbortError gracefully during polling", async () => {
@@ -1720,14 +1711,15 @@ describe("TestExecutionOrchestrator", () => {
       });
 
       const executePromise = orchestrator.executeHandler();
+      const rejection = expect(executePromise).rejects.toThrow(
+        "Failed to start invocation",
+      );
 
       await new Promise((resolve) => setImmediate(resolve));
 
       resolvePolling!();
 
-      await expect(executePromise).rejects.toThrow(
-        "Failed to start invocation",
-      );
+      await rejection;
 
       // Verify startInvocation was called
       expect(checkpointApi.startInvocation).toHaveBeenCalledWith({
@@ -1909,14 +1901,13 @@ describe("TestExecutionOrchestrator", () => {
         });
 
       const executePromise = orchestrator.executeHandler();
-
-      // Queue up advancing timers
-      void jest.advanceTimersByTimeAsync(5000);
-
-      // Start execution
-      await expect(executePromise).rejects.toThrow(
+      const rejection = expect(executePromise).rejects.toThrow(
         "Failed to update checkpoint data",
       );
+
+      await jest.advanceTimersByTimeAsync(5000);
+
+      await rejection;
 
       // Only one invocation should have occurred in the whole execution
       expect(mockInvoke).toHaveBeenCalledTimes(1);
@@ -1957,14 +1948,15 @@ describe("TestExecutionOrchestrator", () => {
         });
 
       const executePromise = orchestrator.executeHandler();
+      const rejection = expect(executePromise).rejects.toThrow(
+        "Failed to start invocation",
+      );
 
       // Queue up advancing timers
       await jest.advanceTimersByTimeAsync(5000);
 
       // Start execution
-      await expect(executePromise).rejects.toThrow(
-        "Failed to start invocation",
-      );
+      await rejection;
 
       // Only one invocation should have occurred in the whole execution
       expect(mockInvoke).toHaveBeenCalledTimes(1);
