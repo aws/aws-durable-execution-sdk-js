@@ -33,6 +33,17 @@ export interface CheckpointApiClient {
   }>;
 
   /**
+   * Take the checkpoint data no poll has picked up yet, without waiting for more, and
+   * release a poll that is still waiting with no data.
+   *
+   * Called once the execution has finished. Optional so that a client without it still
+   * works: the orchestrator then stops polling without collecting what is left.
+   */
+  drainCheckpointData?(executionId: ExecutionId): Promise<{
+    operations: CheckpointOperation[];
+  }>;
+
+  /**
    * Update checkpoint data for a specific operation with the intended status.
    *
    * @param params Object containing update parameters
