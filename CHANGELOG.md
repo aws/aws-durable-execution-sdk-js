@@ -81,6 +81,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The testing SDK's local runner no longer waits for the fake clock's 20 ms advancement interval
+  before it starts each queued invocation when `skipTime` is enabled. QueueScheduler now yields
+  with the real `setImmediate`, so the fake clock controls durable time without delaying scheduler
+  progress.
+
 - The testing SDK's local runner no longer waits a fixed 100 ms after an execution finishes.
   It now drains the final checkpoint updates from the local checkpoint server before `run()`
   settles. A failed drain request after a successful execution rejects `run()` instead of
