@@ -81,6 +81,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The testing SDK's local runner sent every operation of the execution in the input of each
+  invocation. The service omits every descendant of a completed CONTEXT whose `ReplayChildren` is
+  not `true`, because the SDK replays such a context from its result. So a test exercised a replay
+  path with operations that the SDK never receives in AWS. The local runner and
+  `GetDurableExecutionState` now omit the same operations as the service:
+  - The rule walks every ancestor. A STARTED context under such a completed context is omitted
+    with its children. This happens to a branch that is still running when a `map` or `parallel`
+    completes early. The earlier `GetDurableExecutionState` check looked only at the parent.
+  - A completed context records `ReplayChildren` from its closing update only, as the service does.
+    A close without `ContextOptions` sets it to `false`. `START` no longer records it. So the
+    `ContextDetails` of a completed context in `getOperationData()` now includes
+    `ReplayChildren: false`, as the service's operation does.
+  - The test runner's own results, the checkpoint responses, and `UpdatedOperationIds` still
+    include every operation, as they do in the service.
+
 - **eslint-plugin**: the README showed `extends: ["plugin:@aws/durable-execution-sdk-js-eslint-plugin/recommended"]`
   and `plugins: ["@aws/durable-execution-sdk-js-eslint-plugin"]`. Neither setup could load the
   plugin. ESLint adds the `eslint-plugin-` prefix to the name of an eslintrc plugin, so it looked for
