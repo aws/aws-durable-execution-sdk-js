@@ -17,6 +17,7 @@ import {
   DEFAULT_MICROVM_JOB_PATH,
   DEFAULT_MICROVM_PORT,
   DEFAULT_REQUEST_RETRY_WINDOW_MS,
+  assertTimeToDeliver,
   sendJob,
 } from "./request";
 import { ensureRunning } from "./lifecycle";
@@ -232,6 +233,14 @@ export function validateRequest(
       `MicroVM "${name}": the request path must be an RFC 3986 path that starts with "/". Percent-encode any other character, for example a space as %20.`,
     );
   }
+  // fetch resolves a dot segment before it sends the request. So a path
+  // with one would reach a route other than the one written, and it could
+  // pass the prefix check below and still reach a lifecycle hook path.
+  if (path !== undefined && DOT_SEGMENT.test(path)) {
+    throw new TypeError(
+      `MicroVM "${name}": the request path must not have a "." or ".." segment, because fetch resolves it before sending the request.`,
+    );
+  }
   if (path?.startsWith("/aws/lambda-microvms/")) {
     throw new TypeError(
       `MicroVM "${name}": the request path must not use the lifecycle hook prefix /aws/lambda-microvms/`,
@@ -268,10 +277,18 @@ const MAX_REQUEST_RETRY_WINDOW_SECONDS = 10 * 60;
 /**
  * An RFC 3986 path, section 3.3: segments of pchar characters and `%XX`
  * escapes. The WHATWG URL parser in `fetch` leaves such a path unchanged,
- * except `.` and `..` segments.
+ * unless it has a {@link DOT_SEGMENT}.
  */
 const ROUTE_PATH =
   /^(?:\/(?:[A-Za-z0-9\-._~!$&'()*+,;=:@]|%[0-9A-Fa-f]{2})*)+$/;
+
+/**
+ * A `.` or `..` segment, also with `%2e` for a dot. The WHATWG URL parser in
+ * `fetch` resolves such a segment, so a path with one does not reach the
+ * worker as written. A segment with other characters next to its dots, such
+ * as `/.well-known`, and a segment of three dots stay unchanged.
+ */
+const DOT_SEGMENT = /\/(?:\.|%2e){1,2}(?=\/|$)/i;
 
 /**
  * Runs the launch step.
@@ -393,6 +410,11 @@ export async function deliverJob<TInput>(
   await child.step(
     `${jobName}.request`,
     async (stepContext) => {
+      // A session job calls GetMicrovm before sendJob, and that call has the
+      // same limit as the request. So the step checks the time before
+      // either call, and both kinds of job get the message that names the
+      // function timeout.
+      assertTimeToDeliver(remainingTime(child));
       const client = getClient(scope.config, scope.region);
       const log = (message: string, data: Record<string, unknown>): void =>
         stepContext.logger.info(`MicroVM "${jobName}": ${message}`, data);

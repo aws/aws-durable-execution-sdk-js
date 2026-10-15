@@ -36,6 +36,10 @@ describe("the request path on the wire", () => {
     "/!$&'()*+,;=",
     "/~user/-._",
     "//double//slash/",
+    // Dots next to other characters, and three dots, are not dot segments.
+    "/.well-known/job",
+    "/.../job",
+    "/a.b/c..d",
   ])("sends %s as written", async (path) => {
     received.length = 0;
 

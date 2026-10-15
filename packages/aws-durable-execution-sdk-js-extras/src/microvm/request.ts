@@ -168,6 +168,38 @@ export class MicrovmEndpointUnavailableError extends Error {
   override readonly name = "MicrovmEndpointUnavailableError";
 }
 
+/**
+ * Throws when the request step has too little time left to make its first
+ * call.
+ *
+ * A call that would start with less than {@link MIN_CALL_MS} before the
+ * invocation reserve does not start. So with less than 11 seconds left, the
+ * step makes no call, and the first tier's own error would blame the
+ * MicroVM. The cause is the function timeout. The error stays retryable: a
+ * retry in a new invocation has more time when this invocation spent its
+ * time before the step.
+ *
+ * The message rounds the time down. So it never reads "11.0 seconds left" next
+ * to "needs at least 11 seconds".
+ *
+ * @internal
+ */
+export function assertTimeToDeliver(
+  remainingTimeMs: (() => number | undefined) | undefined,
+): void {
+  const remaining = remainingTimeMs?.();
+  const neededMs = INVOCATION_RESERVE_MS + MIN_CALL_MS;
+  if (
+    remaining !== undefined &&
+    Number.isFinite(remaining) &&
+    remaining < neededMs
+  ) {
+    throw new MicrovmEndpointUnavailableError(
+      `The request step had ${(Math.floor(remaining / 100) / 10).toFixed(1)} seconds left in the Lambda invocation, and it needs at least ${neededMs / 1000} seconds to send the job. Raise the function timeout.`,
+    );
+  }
+}
+
 export interface SendJobOptions {
   client: LambdaMicrovmsClient;
   fetch: typeof fetch;
@@ -248,21 +280,7 @@ export interface SendJobOptions {
  * @returns The status that accepted the job.
  */
 export async function sendJob(options: SendJobOptions): Promise<number> {
-  // Without this check, the tier below makes no call and reports "after 0
-  // attempts". That message blames the MicroVM. The cause is the function
-  // timeout. The error stays retryable: a retry in a new invocation has more
-  // time when this invocation spent its time before the step.
-  const remaining = options.remainingTimeMs?.();
-  const neededMs = INVOCATION_RESERVE_MS + MIN_CALL_MS;
-  if (
-    remaining !== undefined &&
-    Number.isFinite(remaining) &&
-    remaining < neededMs
-  ) {
-    throw new MicrovmEndpointUnavailableError(
-      `The request step had ${(remaining / 1000).toFixed(1)} seconds left in the Lambda invocation, and it needs at least ${neededMs / 1000} seconds to send the job. Raise the function timeout.`,
-    );
-  }
+  assertTimeToDeliver(options.remainingTimeMs);
   const sleep =
     options.sleep ??
     ((ms: number): Promise<void> =>
@@ -403,8 +421,8 @@ async function createAuthToken(
  * RunMicrovm returns the endpoint as a host name without a scheme.
  *
  * `fetch` parses the URL with the WHATWG URL parser, which can change the
- * path. `validateRequest` accepts only RFC 3986 paths, and the parser leaves
- * each of them unchanged, except `.` and `..` segments. So the worker
+ * path. `validateRequest` accepts only RFC 3986 paths without a `.` or `..`
+ * segment, and the parser leaves each of them unchanged. So the worker
  * receives the path as written.
  */
 function endpointUrl(endpoint: string, path: string): string {
