@@ -16,6 +16,7 @@ import { OperationEvents } from "../../test-runner/common/operations/operation-w
 import { waitHistoryDetails } from "./wait-details";
 import { chainedInvokeHistoryDetails } from "./chained-invoke-details";
 import { executionDetails } from "./execution-details";
+import { pruneReplayChildren } from "./prune-replay-children";
 
 export interface CheckpointOperation extends OperationEvents {
   // required for test execution orchestrator to process retries
@@ -123,8 +124,13 @@ export class CheckpointManager {
     const updatedOperationIds = Array.from(this.dirtyOperationIds);
     this.dirtyOperationIds.clear();
 
+    // The service omits the children of completed contexts from the
+    // invocation input. It still reports their IDs in UpdatedOperationIds.
     return {
-      operationEvents: Array.from(this.operationDataMap.values()),
+      operationEvents: pruneReplayChildren(
+        Array.from(this.operationDataMap.values()),
+        (data) => data.operation,
+      ),
       updatedOperationIds,
     };
   }
@@ -147,37 +153,16 @@ export class CheckpointManager {
     };
   }
 
+  /**
+   * Returns the execution state that the service returns from
+   * `GetDurableExecutionState`. It omits the children of completed contexts,
+   * as the service does. See {@link pruneReplayChildren}.
+   */
   getState(): Operation[] {
-    const excludedOperations = new Set<string>();
-    const operations: Operation[] = [];
-    for (const [id, { operation }] of this.operationDataMap.entries()) {
-      const parentId = operation.ParentId;
-      if (!parentId) {
-        operations.push(operation);
-        continue;
-      }
-
-      const parent = this.operationDataMap.get(parentId);
-      if (
-        // Parent type is valid
-        parent?.operation.Type === OperationType.CONTEXT &&
-        // Parent is completed
-        (parent.operation.Status === OperationStatus.SUCCEEDED ||
-          parent.operation.Status === OperationStatus.FAILED) &&
-        // The parent is set to not replay children
-        (!parent.operation.ContextDetails?.ReplayChildren ||
-          // If the parent was excluded, then ReplayChildren must be false for an ancestor,
-          // so this operation should also be excluded.
-          excludedOperations.has(parentId))
-      ) {
-        excludedOperations.add(id);
-        continue;
-      }
-
-      operations.push(operation);
-    }
-
-    return operations;
+    return pruneReplayChildren(
+      Array.from(this.operationDataMap.values()),
+      (data) => data.operation,
+    ).map((data) => data.operation);
   }
 
   /**
@@ -376,10 +361,9 @@ export class CheckpointManager {
           ...copied.operation.ContextDetails,
           Result: inputUpdate.Payload,
           Error: inputUpdate.Error,
-          // Preserve ReplayChildren from ContextOptions if provided
-          ReplayChildren:
-            inputUpdate.ContextOptions?.ReplayChildren ??
-            copied.operation.ContextDetails?.ReplayChildren,
+          // The service records ReplayChildren from the closing update only.
+          // A close without it sets ReplayChildren to false.
+          ReplayChildren: inputUpdate.ContextOptions?.ReplayChildren === true,
         };
         break;
       case OperationType.EXECUTION:
@@ -666,9 +650,9 @@ export class CheckpointManager {
         break;
       }
       case OperationType.CONTEXT: {
-        operation.ContextDetails = {
-          ReplayChildren: update.ContextOptions?.ReplayChildren,
-        };
+        // The service ignores ContextOptions on START. It records
+        // ReplayChildren from the closing update only.
+        operation.ContextDetails = {};
         break;
       }
     }

@@ -1,6 +1,7 @@
 import {
   withDurableExecution,
   type InvocationInfo,
+  type OperationInfo,
 } from "@aws/durable-execution-sdk-js";
 import {
   LocalDurableTestRunner,
@@ -18,9 +19,13 @@ import { InvocationOtelPlugin } from "../invocation-plugin";
 beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
-it.each([ExecutionOtelPlugin, InvocationOtelPlugin])(
-  "%p preserves a waitForCallback child's derived name before deferred export and replay",
-  async (Plugin) => {
+it.each(
+  [ExecutionOtelPlugin, InvocationOtelPlugin].flatMap((Plugin) =>
+    [false, true].map((callbackAtRoot) => ({ Plugin, callbackAtRoot })),
+  ),
+)(
+  "$Plugin preserves service-visible callback names (callbackAtRoot=$callbackAtRoot)",
+  async ({ Plugin, callbackAtRoot }) => {
     let entered!: () => void;
     let release!: () => void;
     const live = new Promise<void>((resolve) => {
@@ -30,6 +35,7 @@ it.each([ExecutionOtelPlugin, InvocationOtelPlugin])(
       release = resolve;
     });
     const starts: InvocationInfo[] = [];
+    const operations: OperationInfo[] = [];
     const exporter = new InMemorySpanExporter();
     let provider!: NodeTracerProvider;
     let submitted!: () => void;
@@ -42,8 +48,9 @@ it.each([ExecutionOtelPlugin, InvocationOtelPlugin])(
     const childBody = jest.fn(
       async (child: import("@aws/durable-execution-sdk-js").DurableContext) => {
         // The outer child can finish before the external operation completes.
-        // Its checkpoint will skip this whole branch on subsequent invocations.
-        child.waitForCallback("named", submitter);
+        // Descendants of this completed small context are omitted on replay.
+        // A root waitForCallback remains STARTED, so its completion stays visible.
+        if (!callbackAtRoot) child.waitForCallback("named", submitter);
         await child.step("submitted", async () => {
           await submission;
           return "submitted";
@@ -66,6 +73,7 @@ it.each([ExecutionOtelPlugin, InvocationOtelPlugin])(
     });
     const handler = withDurableExecution(
       async (_, ctx) => {
+        if (callbackAtRoot) ctx.waitForCallback("named", submitter);
         const outcome = await ctx.runInChildContext("scope", childBody);
         await ctx.step("saved", step);
         const [later] = await ctx.createCallback("later");
@@ -78,6 +86,9 @@ it.each([ExecutionOtelPlugin, InvocationOtelPlugin])(
           {
             async onInvocationStart(info) {
               starts.push(info);
+            },
+            async onOperationStart(info) {
+              operations.push(info);
             },
           },
         ],
@@ -104,36 +115,41 @@ it.each([ExecutionOtelPlugin, InvocationOtelPlugin])(
       expect(childBody).toHaveBeenCalledTimes(1);
       expect(submitter).toHaveBeenCalledTimes(1);
       expect(step).toHaveBeenCalledTimes(1);
-      const notification = starts.find((change) =>
-        Object.values(change.updatedOperations).some(
-          (info) =>
-            info.type === "CALLBACK" &&
-            info.status === "SUCCEEDED" &&
-            info.parentId &&
-            change.operations[info.parentId]?.name === "named",
-        ),
+      const callback = operations.find(
+        (info) => info.type === "CALLBACK" && info.name === "named-callback",
       )!;
-      expect(notification).toBeDefined();
-      const raw = Object.values(notification.updatedOperations).find(
-        (info) =>
-          info.type === "CALLBACK" &&
-          info.status === "SUCCEEDED" &&
-          info.parentId &&
-          notification.operations[info.parentId]?.name === "named",
-      )!;
-      // This name is deliberately absent from the checkpoint. Inferring display
-      // metadata must not mutate the source event or rewrite durable identity.
-      expect(raw.name).toBeUndefined();
-      expect(notification.operations[raw.parentId!].subType).toBe(
-        "WaitForCallback",
+      expect(callback).toBeDefined();
+      const notification = starts.find(
+        (change) =>
+          change.updatedOperations[callback.id]?.status === "SUCCEEDED",
       );
       const terminal = exporter
         .getFinishedSpans()
         .filter(
           (span) =>
-            span.attributes["durable.operation.id"] === raw.id &&
+            span.attributes["durable.operation.id"] === callback.id &&
             span.attributes["durable.operation.status"] === "SUCCEEDED",
         );
+      if (!callbackAtRoot) {
+        // The service omits this completed context's descendants. Missing
+        // completion metadata cannot be reconstructed into a notification/span.
+        expect(notification).toBeUndefined();
+        for (const start of starts.slice(1)) {
+          expect(start.operations[callback.id]).toBeUndefined();
+          expect(start.updatedOperations[callback.id]).toBeUndefined();
+        }
+        expect(terminal).toHaveLength(0);
+        return;
+      }
+      expect(notification).toBeDefined();
+      const raw = notification!.updatedOperations[callback.id];
+      // Inferring display metadata must not mutate the source event or rewrite
+      // durable identity. The wire callback deliberately has no name.
+      expect(raw.name).toBeUndefined();
+      expect(notification!.operations[raw.parentId!].name).toBe("named");
+      expect(notification!.operations[raw.parentId!].subType).toBe(
+        "WaitForCallback",
+      );
       expect(terminal).toHaveLength(1);
       expect(terminal[0].name).toBe("named-callback");
       expect(terminal[0].attributes["durable.operation.name"]).toBe(
