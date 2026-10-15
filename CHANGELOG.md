@@ -84,7 +84,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The testing SDK's local runner no longer waits a fixed 100 ms after an execution finishes.
   It now drains the final checkpoint updates from the local checkpoint server before `run()`
   settles. A failed drain request after a successful execution rejects `run()` instead of
-  returning a result that may omit its final updates.
+  returning a result that may omit its final updates. A test expecting `run()` to reject must
+  attach its rejection handler before it awaits other work. The old wait accidentally allowed
+  that handler to be attached up to 100 ms late; a later handler was never supported.
 
 - The testing SDK's local runner sent every operation of the execution in the input of each
   invocation. The service omits every descendant of a completed CONTEXT whose `ReplayChildren` is

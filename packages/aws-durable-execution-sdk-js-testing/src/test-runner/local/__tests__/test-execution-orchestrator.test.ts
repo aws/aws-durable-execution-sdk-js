@@ -702,7 +702,6 @@ describe("TestExecutionOrchestrator", () => {
     });
 
     it("should reject PENDING when no operation can resume the execution", async () => {
-      // Mock a never-resolving polling to simulate PENDING status
       (checkpointApi.pollCheckpointData as jest.Mock).mockReturnValue(
         nonResolvingPromise,
       );
@@ -713,7 +712,7 @@ describe("TestExecutionOrchestrator", () => {
 
       mockInvoke.mockResolvedValue(pendingResult);
 
-      const rejection = expect(orchestrator.executeHandler()).rejects.toEqual({
+      await expect(orchestrator.executeHandler()).rejects.toEqual({
         error: {
           ErrorType: "InvalidParameterValueException",
           ErrorMessage:
@@ -721,8 +720,6 @@ describe("TestExecutionOrchestrator", () => {
         },
         status: "FAILED",
       });
-
-      await rejection;
 
       expect(mockInvoke).toHaveBeenCalledWith(mockHandlerFunction, {
         durableExecutionArn: mockExecutionId,
