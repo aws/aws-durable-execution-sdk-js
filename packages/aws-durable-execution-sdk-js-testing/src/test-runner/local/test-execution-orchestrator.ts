@@ -317,12 +317,12 @@ export class TestExecutionOrchestrator {
       // drain is answered cancels nothing that carries updates.
       stopPollingController.abort();
 
-      let drainError: unknown;
+      let drainRequestError: unknown;
       if (polledExecutionId !== undefined) {
         try {
           await this.drainCheckpointData(polledExecutionId);
         } catch (err) {
-          drainError = err;
+          drainRequestError = err;
         }
       }
 
@@ -336,16 +336,16 @@ export class TestExecutionOrchestrator {
       });
 
       // Never hide the error the execution itself failed with. Otherwise a failed drain
-      // must surface, since the result would be missing its last updates.
-      if (drainError !== undefined) {
+      // request must surface, since its updates never reached this process.
+      if (drainRequestError !== undefined) {
         if (failed) {
           defaultLogger.warn(
             "Could not collect the last checkpoint updates of a failed execution:",
-            drainError,
+            drainRequestError,
           );
         } else {
-          // biome-ignore lint/correctness/noUnsafeFinally: a failed drain leaves the result without its last updates, so it must surface when nothing else has failed.
-          throw drainError;
+          // biome-ignore lint/correctness/noUnsafeFinally: a failed drain request leaves the result without its last updates, so it must surface when nothing else has failed.
+          throw drainRequestError;
         }
       }
     }
@@ -358,19 +358,22 @@ export class TestExecutionOrchestrator {
    * Replaces a fixed wait for the long poll. The final updates are written by
    * {@link handleCompletedExecution}, and the checkpoint server answers that write before
    * the poll that carries them, so they can still be on their way when the execution ends.
-   * The checkpoint server handles requests one at a time, in the order they arrive, and
-   * answers each poll it has already resolved before it reads the next request. So when the
-   * drain is answered, every poll that took updates has been answered first, and the drain
-   * holds the rest. A poll still waiting is released with no updates.
+   * The worker handles UpdateCheckpointData, PollCheckpointData and DrainCheckpointData in
+   * request order. So every poll that took updates is answered before the later drain.
+   * The final EXECUTION update also marks the execution complete. So a delayed checkpoint
+   * request cannot add an update after the drain. The drain therefore holds what remains,
+   * and it releases a poll still waiting with no updates.
    */
   private async drainCheckpointData(executionId: ExecutionId): Promise<void> {
-    if (!this.checkpointApi.drainCheckpointData) {
-      return;
-    }
-
     const { operations } =
       await this.checkpointApi.drainCheckpointData(executionId);
-    this.applyCheckpointOperations(operations, executionId);
+    try {
+      this.applyCheckpointOperations(operations, executionId);
+    } catch (err) {
+      // A processing error from the poll loop is sent to this state too. The state has
+      // already settled, so this preserves that behaviour whichever path got the update.
+      this.executionState.rejectWith(err);
+    }
   }
 
   /**

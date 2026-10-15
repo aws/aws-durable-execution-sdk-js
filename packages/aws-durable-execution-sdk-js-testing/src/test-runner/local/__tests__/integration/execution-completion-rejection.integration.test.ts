@@ -22,6 +22,13 @@ describe("execution completion when the runner rejects", () => {
     const handler: DurableLambdaHandler = async () => ({
       Status: InvocationStatus.PENDING,
     });
+
+    // The first run includes module loading and the worker's first request. Warm those up,
+    // so the measured run isolates the rejection path.
+    await new LocalDurableTestRunner({ handlerFunction: handler })
+      .run()
+      .catch(() => undefined);
+
     const runner = new LocalDurableTestRunner({ handlerFunction: handler });
     const warn = jest.spyOn(defaultLogger, "warn");
 

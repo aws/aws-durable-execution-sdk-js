@@ -255,7 +255,34 @@ describe("TestExecutionOrchestrator completion", () => {
     expect(checkpointApi.drainCheckpointData).toHaveBeenCalledTimes(1);
   });
 
-  it("surfaces a failed drain when the execution succeeded", async () => {
+  it("handles malformed drained updates like malformed polled updates", async () => {
+    const malformedWait: CheckpointOperation = {
+      operation: {
+        Id: "wait-id",
+        Type: OperationType.WAIT,
+        Status: OperationStatus.STARTED,
+        StartTimestamp: new Date(),
+      },
+      update: {
+        Id: "wait-id",
+        Type: OperationType.WAIT,
+        Action: OperationAction.START,
+      },
+      events: [],
+    };
+    checkpointApi.drainCheckpointData.mockResolvedValue({
+      operations: [malformedWait],
+    });
+
+    await expect(createOrchestrator().executeHandler()).resolves.toMatchObject({
+      status: OperationStatus.SUCCEEDED,
+    });
+    expect(operationStorage.populateOperations).toHaveBeenCalledWith([
+      malformedWait,
+    ]);
+  });
+
+  it("surfaces a failed drain request when the execution succeeded", async () => {
     checkpointApi.drainCheckpointData.mockRejectedValue(
       new Error("drain failed"),
     );
@@ -289,13 +316,5 @@ describe("TestExecutionOrchestrator completion", () => {
       "start failed",
     );
     expect(checkpointApi.drainCheckpointData).not.toHaveBeenCalled();
-  });
-
-  it("works with a client that cannot drain", async () => {
-    const { drainCheckpointData: _unused, ...withoutDrain } = checkpointApi;
-
-    const result = await createOrchestrator(withoutDrain).executeHandler();
-
-    expect(result.status).toBe(OperationStatus.SUCCEEDED);
   });
 });

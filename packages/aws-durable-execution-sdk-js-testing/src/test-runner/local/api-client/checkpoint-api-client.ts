@@ -39,11 +39,8 @@ export interface CheckpointApiClient {
    * Called once the execution has finished. The caller relies on the server answering
    * requests in order: a poll that took updates is answered before a drain sent after it.
    * The caller therefore sends no new poll, drains, and only then aborts the poll signal.
-   *
-   * Optional so that a client without it still works: the orchestrator then stops polling
-   * without collecting what is left.
    */
-  drainCheckpointData?(executionId: ExecutionId): Promise<{
+  drainCheckpointData(executionId: ExecutionId): Promise<{
     operations: CheckpointOperation[];
   }>;
 
