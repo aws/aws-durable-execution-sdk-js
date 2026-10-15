@@ -125,7 +125,7 @@ export class BatchResultImpl<R> implements BatchResult<R> {
   succeeded(): Array<BatchItem<R> & { result: R }> {
     this.#succeededMemo ??= this.all.filter(
       (item): item is BatchItem<R> & { result: R } =>
-        item.status === BatchItemStatus.SUCCEEDED && item.result !== undefined,
+        item.status === BatchItemStatus.SUCCEEDED,
     );
     // Fresh copy per call: callers could always mutate the returned array
     // (sort/reverse) without affecting later calls, and memoization must not
@@ -136,7 +136,7 @@ export class BatchResultImpl<R> implements BatchResult<R> {
   failed(): Array<BatchItem<R> & { error: ChildContextError }> {
     this.#failedMemo ??= this.all.filter(
       (item): item is BatchItem<R> & { error: ChildContextError } =>
-        item.status === BatchItemStatus.FAILED && item.error !== undefined,
+        item.status === BatchItemStatus.FAILED,
     );
     return this.#failedMemo.slice();
   }
