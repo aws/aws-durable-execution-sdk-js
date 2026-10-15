@@ -21,7 +21,7 @@ const endingAt =
 const sendWith = (
   client: FakeMicrovmsClient,
   endpoint: FakeEndpoint,
-  remainingTimeMs: () => number,
+  remainingTimeMs: () => number | undefined,
 ) =>
   sendJob({
     client: client.asClient(),
@@ -83,20 +83,50 @@ describe("sendJob near the invocation reserve", () => {
     expect(Date.now()).toBeLessThan(reserveAt + SLACK_MS);
   });
 
-  it("starts no call when less than 1 second remains before the reserve", async () => {
+  it("names the function timeout when less than 11 seconds remain", async () => {
     const client = new FakeMicrovmsClient();
     const endpoint = new FakeEndpoint();
+
+    const error = await sendWith(client, endpoint, () => 2_900).catch(
+      (e: unknown) => e,
+    );
+
+    // The error stays retryable: a retry in a new invocation can have more
+    // time.
+    expect(error).toBeInstanceOf(MicrovmEndpointUnavailableError);
+    expect((error as Error).message).toBe(
+      "The request step had 2.9 seconds left in the Lambda invocation, and it needs at least 11 seconds to send the job. Raise the function timeout.",
+    );
+    expect(client.tokenInputs).toHaveLength(0);
+    expect(endpoint.requests).toHaveLength(0);
+  });
+
+  it("starts no call when the reserve is reached after the time-left check", async () => {
+    // 11 seconds pass the time-left check. The clock then moves past the
+    // last moment to start a call, before the auth token call.
+    const client = new FakeMicrovmsClient();
+    const endpoint = new FakeEndpoint();
+    const readings = [11_000, 10_500];
 
     const error = await sendWith(
       client,
       endpoint,
-      endingAt(Date.now() + 500 + INVOCATION_RESERVE_MS),
+      () => readings.shift() ?? 10_500,
     ).catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(MicrovmEndpointUnavailableError);
     expect((error as Error).message).toContain("after 0 attempts");
     expect(client.tokenInputs).toHaveLength(0);
     expect(endpoint.requests).toHaveLength(0);
+  });
+
+  it("sends the job when the compute reports no deadline", async () => {
+    const endpoint = new FakeEndpoint();
+
+    await expect(
+      sendWith(new FakeMicrovmsClient(), endpoint, () => undefined),
+    ).resolves.toBe(202);
+    expect(endpoint.requests).toHaveLength(1);
   });
 
   it("passes on an AWS SDK error that the abort signal did not cause", async () => {
@@ -123,7 +153,7 @@ describe("sendJob near the invocation reserve", () => {
 describe("ensureRunning near the invocation reserve", () => {
   const ensureWith = (
     client: FakeMicrovmsClient,
-    remainingTimeMs: () => number,
+    remainingTimeMs: () => number | undefined,
   ) =>
     ensureRunning({
       client: client.asClient(),

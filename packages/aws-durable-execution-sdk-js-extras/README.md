@@ -64,6 +64,8 @@ await microvm(context, "build", input, {
 
 The route must answer with a 2xx status at once and run the job in the background.
 
+The operation sends `path` as written, and the worker matches the raw request path. So use the same string in the config and in the route. The path must be an RFC 3986 path that starts with `/`, without a query, a fragment, or a `.` or `..` segment. `fetch` resolves a dot segment before it sends the request, also when the dot is written as `%2e`. Percent-encode any other character, for example a space as `%20`. The operation throws a `TypeError` for any other path, before any durable operation starts.
+
 ### What it does
 
 The operation runs its durable operations inside one child context named after the first argument:
@@ -152,6 +154,7 @@ A `MicrovmError` that leaves your own `runInChildContext` reaches the next calle
 - The operation sets no idle policy. The idle policy counts only inbound endpoint traffic. A job receives none after its delivery, so an idle policy would suspend the MicroVM during the job.
 - `timeout` must be between 1 second and 8 hours, because a MicroVM lives at most 8 hours. The MicroVM's `maximumDurationInSeconds` is `timeout` plus 5 minutes, capped at 8 hours.
 - `heartbeatTimeout` starts when the callback is created, before the launch. So it must cover the launch, with its retries, and the boot. A throttled launch can take several minutes. With a shorter heartbeat timeout, the operation fails with `MicrovmTimeoutError` before the MicroVM sends its first heartbeat.
+- The request step needs at least 11 seconds left in the invocation when it starts. It keeps a 10-second reserve before the invocation times out, and it starts a call only with at least 1 second left before the reserve. The launch step can run earlier in the same invocation, so the function timeout must cover it too. A function timeout of `retryWindow` plus 11 seconds, 71 seconds by default, leaves the first retry tier about its whole window. With less than 11 seconds left, every attempt fails with `MicrovmEndpointUnavailableError`, and the message of the final `MicrovmDeliveryError` names the function timeout. The Lambda default timeout is 3 seconds. With it, `microvm` runs small jobs in the `run` hook and fails every job that goes over HTTP: a job too large for the hook, a job with `request.path`, and every `microvmSession` job.
 
 ### Permissions
 
