@@ -32,6 +32,7 @@ export class WorkerClientApiHandler {
     [ApiType.CompleteInvocation]: new Map(),
     [ApiType.UpdateCheckpointData]: new Map(),
     [ApiType.PollCheckpointData]: new Map(),
+    [ApiType.DrainCheckpointData]: new Map(),
     [ApiType.GetDurableExecutionState]: new Map(),
     [ApiType.CheckpointDurableExecutionState]: new Map(),
     [ApiType.SendDurableExecutionCallbackSuccess]: new Map(),

@@ -4,6 +4,7 @@ export enum ApiType {
   CompleteInvocation = "CompleteInvocation",
   UpdateCheckpointData = "UpdateCheckpointData",
   PollCheckpointData = "PollCheckpointData",
+  DrainCheckpointData = "DrainCheckpointData",
   GetDurableExecutionState = "GetDurableExecutionState",
   CheckpointDurableExecutionState = "CheckpointDurableExecutionState",
   SendDurableExecutionCallbackSuccess = "SendDurableExecutionCallbackSuccess",

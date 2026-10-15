@@ -165,6 +165,7 @@ describe("TestExecutionOrchestrator", () => {
         updatedOperationIds: [],
       }),
       pollCheckpointData: jest.fn().mockReturnValue(nonResolvingPromise),
+      drainCheckpointData: jest.fn().mockResolvedValue({ operations: [] }),
       updateCheckpointData: jest.fn().mockResolvedValue(undefined),
       startInvocation: jest.fn().mockResolvedValue({
         checkpointToken: createCheckpointToken("new-token"),
