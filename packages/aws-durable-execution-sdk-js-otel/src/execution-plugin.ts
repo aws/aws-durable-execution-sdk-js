@@ -158,6 +158,23 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onInvocationStart(info: InvocationInfo): Promise<void> {
+    try {
+      this.initializeInvocation(info);
+    } catch (error) {
+      // Keep later hooks inert, but release the Invocation we already obtained.
+      // The shared provider belongs to the environment, not this failed instance.
+      this.tracingEnabled = false;
+      try {
+        this.invocationSpan?.end(this.liveTimestamp());
+      } catch {
+        // Cleanup is best effort; the core must receive the original start error.
+      }
+      this.invocationSpan = undefined;
+      throw error;
+    }
+  }
+
+  private initializeInvocation(info: InvocationInfo): void {
     if (!this.environment.ensureTracingEnabled(PLUGIN_NAME)) {
       return;
     }

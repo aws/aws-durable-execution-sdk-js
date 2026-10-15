@@ -65,6 +65,13 @@ identity, the spans and the operation maps are per-invocation, which is what
 keeps two executions running concurrently in one execution environment (routine
 under Lambda Managed Instances) from overwriting each other.
 
+If invocation tracing setup fails after the plugin has obtained its Invocation
+span, that span is ended best effort and subsequent instrumentation hooks stay
+disabled for that instance. Cleanup does not shut down the shared provider or
+replace the original setup error reported to the core's hook-error isolation.
+This cannot reclaim a span that a throwing tracer never returned, or resources
+that a failing custom processor retains independently.
+
 Use `createInvocationOtelPluginFactory()` instead when operations should appear
 under each Lambda invocation rather than under the durable Workflow.
 

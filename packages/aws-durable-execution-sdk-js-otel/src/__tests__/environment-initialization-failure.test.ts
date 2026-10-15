@@ -17,6 +17,7 @@ import {
   InMemorySpanExporter,
   NodeTracerProvider,
   SimpleSpanProcessor,
+  type SpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
 import type { InvocationInfo } from "@aws/durable-execution-sdk-js";
 import { createExecutionOtelPluginFactory } from "../execution-plugin";
@@ -134,6 +135,45 @@ describe.each([
     expect(() => factory.createPlugin(invocationInfo(arnFor("b")))).toThrow(
       failure,
     );
+  });
+
+  it("retains the original start error when allocated-span cleanup also throws", async () => {
+    const original = new Error("root initialization failed");
+    const cleanupFailure = new Error("invocation cleanup failed");
+    let cleanupAttempts = 0;
+    let provider!: NodeTracerProvider;
+    const processor: SpanProcessor = {
+      onStart() {},
+      onEnd(span) {
+        if (span.name === "DurableExecutionRoot") throw original;
+        if (span.name === "Invocation") {
+          cleanupAttempts++;
+          throw cleanupFailure;
+        }
+      },
+      async forceFlush() {},
+      async shutdown() {},
+    };
+    const factory = createFactory({
+      contextExtractor: () => undefined,
+      tracerProviderFactory: (ids) =>
+        (provider = new NodeTracerProvider({
+          idGenerator: ids(),
+          spanProcessors: [processor],
+        })),
+    });
+    const info = invocationInfo(arnFor("cleanup-failure"));
+    const plugin = factory.createPlugin(info);
+    try {
+      await expect(plugin.onInvocationStart?.(info)).rejects.toBe(original);
+      expect(cleanupAttempts).toBe(1);
+      await expect(
+        plugin.onInvocationEnd?.({ ...info, status: "SUCCEEDED" }),
+      ).resolves.toBeUndefined();
+      expect(cleanupAttempts).toBe(1);
+    } finally {
+      await provider.shutdown();
+    }
   });
 
   it("still resolves a working tracerProviderFactory exactly once", async () => {
