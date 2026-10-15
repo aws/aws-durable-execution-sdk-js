@@ -152,6 +152,8 @@ export {
   RegisteredDurableInstrumentationPlugin,
   RegisteredDurableInstrumentationPluginType,
   DurableInstrumentationPlugin,
+  PropagationInput,
+  PropagationMetadata,
   DurableInstrumentationPluginProvider,
   DurableInstrumentationPluginType,
   InvocationInfo,

@@ -92,6 +92,19 @@ export function tryInstallDurableSampler(
   }
 }
 
+/** Whether this tracer still uses the bridge that controls SDK span decisions. */
+export function isDurableSamplerInstalled(
+  tracer: Tracer,
+  sampler: DurableSampler | undefined,
+): boolean {
+  if (!sampler) return false;
+  try {
+    return Reflect.get(tracer, SAMPLER_FIELD) === sampler;
+  } catch {
+    return false;
+  }
+}
+
 export function getConfiguredSampler(tracer: Tracer): Sampler | undefined {
   try {
     const sampler = Reflect.get(tracer, SAMPLER_FIELD);
