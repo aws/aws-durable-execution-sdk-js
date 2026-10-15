@@ -222,6 +222,21 @@ export class CheckpointManager {
     return copied;
   }
 
+  /**
+   * Takes the pending checkpoint updates without waiting for any.
+   *
+   * Used once an execution has finished, to collect the updates no poll has picked up yet.
+   * A poll still waiting is released with an empty list, since no further update is coming.
+   * This takes the updates first, so the released poll cannot get them as well.
+   * @returns A list of checkpoint updates since the last poll or drain.
+   */
+  drainPendingCheckpointUpdates(): CheckpointOperation[] {
+    const copied = Array.from(this.pendingUpdates);
+    this.pendingUpdates.length = 0;
+    this.resolvePendingUpdatePromise?.();
+    return copied;
+  }
+
   addOperationUpdate(operationData: CheckpointOperation) {
     if (!operationData.operation.Id) {
       throw new Error("Missing Id in operation");

@@ -28,6 +28,12 @@ import { TimerScheduler } from "./orchestration/timer-scheduler";
 import { CheckpointApiClient } from "./api-client/checkpoint-api-client";
 import { realSetTimeout } from "./real-timers/real-timers";
 
+/**
+ * How long a failed execution waits before {@link TestExecutionOrchestrator.executeHandler}
+ * rejects. A successful execution does not wait.
+ */
+const FAILED_EXECUTION_SETTLE_DELAY_MS = 100;
+
 export interface SkipTimeProps {
   enabled: boolean;
   fakeClock?: Clock;
@@ -224,8 +230,14 @@ export class TestExecutionOrchestrator {
     // Reset invocations tracking when starting a new execution
     this.invocationTracker.reset();
 
-    // Abort controller aborts polling when any invocation returns with 'SUCCEEDED/FAILED'
+    // Polling stops in two steps. Stopping tells the loop to send no further poll. Aborting
+    // also cancels a poll that is in flight, if the client supports that. See the finally
+    // block for why the two happen at different times.
+    const stopPollingController = new AbortController();
     const abortController = new AbortController();
+    // Set once polling starts, so the end of the execution knows there is polling to stop.
+    let polledExecutionId: ExecutionId | undefined;
+    let failed = false;
 
     try {
       const invocationId = this.invocationTracker.createInvocation();
@@ -249,7 +261,12 @@ export class TestExecutionOrchestrator {
       }
 
       // Start polling for checkpoint data before invoking the handler
-      void this.pollForCheckpointData(abortController, executionId);
+      polledExecutionId = executionId;
+      void this.pollForCheckpointData(
+        abortController,
+        executionId,
+        stopPollingController.signal,
+      );
 
       this.operationStorage.populateOperations(initialOperationsEvents);
 
@@ -272,6 +289,7 @@ export class TestExecutionOrchestrator {
         executionOperationId,
       );
     } catch (err) {
+      failed = true;
       // A no-op once the id has resolved. Before that, it is what stops a pause() waiting
       // on an execution that never started.
       this.rejectExecutionId(err);
@@ -281,46 +299,124 @@ export class TestExecutionOrchestrator {
       this.settled = true;
       this.notifyIdle();
 
-      // Stop polling
+      if (failed) {
+        // The failure path keeps the fixed delay it always had before rejecting. A
+        // rejection means the handler crashed or the runner reached an invalid state, so
+        // it is rare and the delay costs little. Callers that start an execution and
+        // attach a rejection handler later, for example after advancing fake timers, rely
+        // on it: a promise that rejects before it has a handler fails the Jest test.
+        await new Promise<void>((resolve) => {
+          realSetTimeout(resolve, FAILED_EXECUTION_SETTLE_DELAY_MS);
+        });
+      }
+
+      // Stop polling, but do not abort yet. A poll can be in flight with the last updates:
+      // the checkpoint server has already taken them from its queue to answer it. If an
+      // abort cancelled that poll, its updates would be lost, because the drain only returns
+      // what is still queued. The drain is answered after that poll, so aborting once the
+      // drain is answered cancels nothing that carries updates.
+      stopPollingController.abort();
+
+      let drainRequestError: unknown;
+      if (polledExecutionId !== undefined) {
+        try {
+          await this.drainCheckpointData(polledExecutionId);
+        } catch (err) {
+          drainRequestError = err;
+        }
+      }
+
+      abortController.abort();
+
+      // Settle from a timer callback, as the fixed wait always did. Code after the
+      // execution then starts in the same event loop phase as before, which matters to
+      // callers that race a 0 ms timer against setImmediate. A 0 ms timer costs about 1 ms.
       await new Promise<void>((resolve) => {
-        // TODO: improve the polling mechanism so that we don't need an arbitrary timer
-        realSetTimeout(() => {
-          abortController.abort();
-          resolve();
-        }, 100);
+        realSetTimeout(resolve, 0);
       });
+
+      // Never hide the error the execution itself failed with. Otherwise a failed drain
+      // request must surface, since its updates never reached this process.
+      if (drainRequestError !== undefined) {
+        if (failed) {
+          defaultLogger.warn(
+            "Could not collect the last checkpoint updates of a failed execution:",
+            drainRequestError,
+          );
+        } else {
+          // biome-ignore lint/correctness/noUnsafeFinally: a failed drain request leaves the result without its last updates, so it must surface when nothing else has failed.
+          throw drainRequestError;
+        }
+      }
     }
+  }
+
+  /**
+   * Collects the checkpoint updates the polling loop has not delivered, once the execution
+   * has finished.
+   *
+   * Replaces a fixed wait for the long poll. The final updates are written by
+   * {@link handleCompletedExecution}, and the checkpoint server answers that write before
+   * the poll that carries them, so they can still be on their way when the execution ends.
+   * The worker handles UpdateCheckpointData, PollCheckpointData and DrainCheckpointData in
+   * request order. So every poll that took updates is answered before the later drain.
+   * The final EXECUTION update also marks the execution complete. So a delayed checkpoint
+   * request cannot add an update after the drain. The drain therefore holds what remains,
+   * and it releases a poll still waiting with no updates.
+   */
+  private async drainCheckpointData(executionId: ExecutionId): Promise<void> {
+    const { operations } =
+      await this.checkpointApi.drainCheckpointData(executionId);
+    try {
+      this.applyCheckpointOperations(operations, executionId);
+    } catch (err) {
+      // A processing error from the poll loop is sent to this state too. The state has
+      // already settled, so this preserves that behaviour whichever path got the update.
+      this.executionState.rejectWith(err);
+    }
+  }
+
+  /**
+   * Stores a batch of checkpoint updates and acts on them.
+   */
+  private applyCheckpointOperations(
+    operations: CheckpointOperation[],
+    executionId: ExecutionId,
+  ): void {
+    defaultLogger.debug(
+      `Processing ${operations.length} operations`,
+      operations,
+    );
+
+    this.operationStorage.populateOperations(operations);
+
+    this.processOperations(operations, executionId);
   }
 
   /**
    * Continuously polls checkpoint data until execution reaches completion.
    *
    * This method runs in a loop, repeatedly checking for new operations
-   * and processing them. The loop continues until the execution is
-   * signaled as complete via the abort controller.
+   * and processing them. The loop sends no further poll once polling is
+   * stopped or aborted.
    *
-   * @param abortController Aborted when execution completes
+   * @param abortController Aborted when execution completes, after the final drain
    * @param executionId The execution to monitor
+   * @param stopSignal Aborted when execution completes, before the final drain
    */
   private async pollForCheckpointData(
     abortController: AbortController,
     executionId: ExecutionId,
+    stopSignal?: AbortSignal,
   ): Promise<void> {
     try {
-      while (!abortController.signal.aborted) {
+      while (!abortController.signal.aborted && !stopSignal?.aborted) {
         const { operations } = await this.checkpointApi.pollCheckpointData(
           executionId,
           abortController.signal,
         );
 
-        defaultLogger.debug(
-          `Processing ${operations.length} operations`,
-          operations,
-        );
-
-        this.operationStorage.populateOperations(operations);
-
-        this.processOperations(operations, executionId);
+        this.applyCheckpointOperations(operations, executionId);
 
         // Yield to event loop if `pollCheckpointData` returns too often (mainly in unit tests).
         await new Promise((resolve) => setImmediate(resolve));

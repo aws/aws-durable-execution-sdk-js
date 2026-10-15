@@ -17,6 +17,7 @@ describe("InvocationTracker", () => {
       resumeExecution: jest.fn().mockResolvedValue(undefined),
       startDurableExecution: jest.fn(),
       pollCheckpointData: jest.fn(),
+      drainCheckpointData: jest.fn().mockResolvedValue({ operations: [] }),
       updateCheckpointData: jest.fn(),
       startInvocation: jest.fn(),
       completeInvocation: jest.fn((_executionId, invocationId, error) =>
