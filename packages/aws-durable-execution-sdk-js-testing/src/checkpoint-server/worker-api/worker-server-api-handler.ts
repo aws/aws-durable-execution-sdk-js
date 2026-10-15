@@ -10,6 +10,7 @@ import {
 import { ExecutionManager } from "../storage/execution-manager";
 import {
   processCheckpointDurableExecution,
+  processDrainCheckpointData,
   processPollCheckpointData,
   processUpdateCheckpointData,
 } from "../handlers/checkpoint-handlers";
@@ -57,6 +58,11 @@ export class WorkerServerApiHandler {
         );
       case ApiType.PollCheckpointData:
         return processPollCheckpointData(
+          data.params.executionId,
+          this.executionManager,
+        );
+      case ApiType.DrainCheckpointData:
+        return processDrainCheckpointData(
           data.params.executionId,
           this.executionManager,
         );
