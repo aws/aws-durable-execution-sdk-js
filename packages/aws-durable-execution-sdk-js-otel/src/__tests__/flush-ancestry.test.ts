@@ -136,3 +136,87 @@ describe("execution view ancestry received during flush", () => {
     },
   );
 });
+
+it.each(["SUCCEEDED", "FAILED", "PENDING"] as const)(
+  "allows a live parent to finish during a %s invocation's flush",
+  async (status) => {
+    const exporter = new InMemorySpanExporter();
+    let provider!: NodeTracerProvider;
+    const plugin = new ExecutionOtelPlugin({
+      contextExtractor: () => undefined,
+      tracerProviderFactory: (ids) =>
+        (provider = new NodeTracerProvider({
+          idGenerator: ids(),
+          spanProcessors: [new SimpleSpanProcessor(exporter)],
+        })),
+    });
+    const parent: OperationInfo = {
+      id: "parent",
+      type: "CONTEXT",
+      name: "parent",
+      status: "STARTED",
+      isReplay: false,
+    };
+    const callback: OperationInfo = {
+      id: "callback",
+      type: "CALLBACK",
+      name: "callback",
+      parentId: parent.id,
+      status: "SUCCEEDED",
+      isReplay: false,
+    };
+    const info: InvocationInfo = {
+      requestId: "first",
+      executionArn:
+        "arn:aws:lambda:us-east-1:123456789012:function:test:$LATEST:execution",
+      executionInput: {},
+      isFirstInvocation: true,
+      operations: {},
+      updatedOperations: {},
+    };
+    const entered = gate(),
+      release = gate();
+    const flush = jest
+      .spyOn(provider, "forceFlush")
+      .mockImplementation(async () => {
+        entered.open();
+        await release.opened;
+      });
+    await plugin.onInvocationStart(info);
+    await plugin.onOperationStart(parent);
+    await plugin.onOperationChange({
+      executionArn: info.executionArn,
+      operations: { parent, callback },
+      updatedOperations: { callback },
+    });
+    const ending = plugin.onInvocationEnd({
+      ...info,
+      operations: { parent, callback },
+      status,
+    });
+    try {
+      await entered.opened;
+      expect(
+        exporter.getFinishedSpans().filter((span) => span.name === "callback"),
+      ).toHaveLength(0);
+      await plugin.onOperationEnd({ ...parent, status: "SUCCEEDED" });
+      release.open();
+      await ending;
+      expect(flush).toHaveBeenCalledTimes(2);
+      const spans = exporter.getFinishedSpans();
+      const callbacks = spans.filter((span) => span.name === "callback");
+      const parents = spans.filter((span) => span.name === "parent");
+      expect(callbacks).toHaveLength(1);
+      expect(parents).toHaveLength(1);
+      expect(callbacks[0].parentSpanContext?.spanId).toBe(
+        parents[0].spanContext().spanId,
+      );
+    } finally {
+      release.open();
+      await ending;
+      await provider.shutdown();
+      trace.disable();
+      context.disable();
+    }
+  },
+);

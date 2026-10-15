@@ -737,10 +737,13 @@ For a named `waitForCallback`, a deferred inner callback recovers its derived
 skips that branch. This does not change checkpointed names, operation identity,
 parent identity, or the source notification; explicit names remain unchanged.
 
-At a terminal invocation boundary, the execution view parents a deferred
-completion to `Workflow` if its direct parent is still an open local placeholder
-that will be discarded. It does not invent a completion or span for that
-abandoned context. Pending or retrying invocations retain the parent identity
+At the final cleanup of a terminal invocation, the execution view parents a
+deferred completion to `Workflow` if its direct parent is still an open local
+placeholder that will be discarded. During the open drain/flush phase, a live
+parent can still finish and its normal end hook exports the queued child with
+the real parent identity. An open parent alone does not trigger repeated flushes.
+The plugin does not invent a completion or span for an abandoned context. Pending
+or retrying invocations retain the parent identity
 because a later invocation can still complete and export that context. An
 exception is an unfinished parent below a known completed context in checkpoint
 history: replay cannot restart that unfinished branch, so its deferred completion
@@ -780,8 +783,13 @@ checkpoint responses still retain their existing operation data.
 Within the configured flush budget, the invocation-end hook drains notifications
 received while it awaits a provider flush, then flushes the newly exported
 completions. On expiry it drains one snapshot of already-received notifications
-without another provider wait before clearing its state. Change hooks enqueue
-notifications; the end hook owns this loop. In the
+without another provider wait before clearing its state. In the execution view,
+completions held for a still-open parent are finalized after the open drain/flush
+phase. The plugin then closes its invocation state before a final provider flush
+for operations ended during the previous wait or this finalization, using only
+the original budget remaining. New operation-end hooks after finalization do not
+record additional spans during that final wait. At deadline expiry these final exports remain best
+effort. Change hooks enqueue notifications; the end hook owns this loop. In the
 execution view, these drains use the latest operation ancestry received during
 the end hook to detect an unfinished parent abandoned by a completed ancestor.
 Missing ancestry alone does not prove abandonment. In the
