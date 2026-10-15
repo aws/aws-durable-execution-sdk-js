@@ -28,12 +28,6 @@ import { TimerScheduler } from "./orchestration/timer-scheduler";
 import { CheckpointApiClient } from "./api-client/checkpoint-api-client";
 import { realSetTimeout } from "./real-timers/real-timers";
 
-/**
- * How long a failed execution waits before {@link TestExecutionOrchestrator.executeHandler}
- * rejects. A successful execution does not wait.
- */
-const FAILED_EXECUTION_SETTLE_DELAY_MS = 100;
-
 export interface SkipTimeProps {
   enabled: boolean;
   fakeClock?: Clock;
@@ -298,17 +292,6 @@ export class TestExecutionOrchestrator {
       // Nothing left to pause, so release anyone waiting for the execution to go quiet.
       this.settled = true;
       this.notifyIdle();
-
-      if (failed) {
-        // The failure path keeps the fixed delay it always had before rejecting. A
-        // rejection means the handler crashed or the runner reached an invalid state, so
-        // it is rare and the delay costs little. Callers that start an execution and
-        // attach a rejection handler later, for example after advancing fake timers, rely
-        // on it: a promise that rejects before it has a handler fails the Jest test.
-        await new Promise<void>((resolve) => {
-          realSetTimeout(resolve, FAILED_EXECUTION_SETTLE_DELAY_MS);
-        });
-      }
 
       // Stop polling, but do not abort yet. A poll can be in flight with the last updates:
       // the checkpoint server has already taken them from its queue to answer it. If an

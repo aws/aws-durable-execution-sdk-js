@@ -244,14 +244,14 @@ describe("TestExecutionOrchestrator completion", () => {
     expect(requestedRealDelays()).toEqual([0]);
   });
 
-  it("keeps the fixed wait before rejecting", async () => {
+  it("rejects without a fixed wait", async () => {
     mockInvoke.mockRejectedValue(new Error("handler crashed"));
 
     await expect(createOrchestrator().executeHandler()).rejects.toThrow(
       "handler crashed",
     );
 
-    expect(requestedRealDelays()).toEqual([100, 0]);
+    expect(requestedRealDelays()).toEqual([0]);
     expect(checkpointApi.drainCheckpointData).toHaveBeenCalledTimes(1);
   });
 
