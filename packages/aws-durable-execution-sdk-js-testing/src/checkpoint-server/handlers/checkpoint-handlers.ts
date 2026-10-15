@@ -45,6 +45,31 @@ export async function processPollCheckpointData(
 }
 
 /**
+ * Returns the checkpoint data no poll has picked up yet, without waiting for more. A poll
+ * still waiting is released with no data.
+ *
+ * Called once the execution has finished, so the test runner holds every update without
+ * waiting an arbitrary time for the long poll to deliver them.
+ */
+export function processDrainCheckpointData(
+  executionIdParam: string,
+  executionManager: ExecutionManager,
+): { operations: CheckpointOperation[] } {
+  const executionId = createExecutionId(executionIdParam);
+
+  const checkpointStorage =
+    executionManager.getCheckpointsByExecution(executionId);
+
+  if (!checkpointStorage) {
+    throw new Error("Execution not found");
+  }
+
+  return {
+    operations: checkpointStorage.drainPendingCheckpointUpdates(),
+  };
+}
+
+/**
  * Updates the checkpoint data for a particular execution and operation ID with the intended status.
  *
  * Used for resolving operations like wait steps, retries, and status transitions, and also for resolving the execution itself.
