@@ -753,14 +753,18 @@ ends is exported before that context closes, preserving its OTel parent. This
 includes an unawaited callback from a prior invocation: the invocation view emits
 its linked continuation while the resumed parent segment is still open.
 
-In the execution view, an already-exported context remains the parent of its
-child's completion, whether the notification arrives in the same invocation or
-a later one. A notification delivered after the parent's end hook may carry a
+In the execution view, a completed context in checkpoint history remains a valid
+parent for a later completion. A context span actually recorded during the current
+invocation also remains a valid parent when an enclosing context suppressed its
+terminal checkpoint and history still shows it as unfinished. This recording takes
+precedence over abandonment inference within that invocation; knowledge of an
+uncheckpointed recording is not persisted into later invocations.
+
+A notification delivered after the parent's end hook may carry a
 completion that occurred earlier in the backend. Delivery order does not establish
 that chronology. Reusing the recorded parent identity does not recreate a parent
 span, compare timestamps, retime supplied dates, or promise temporal containment.
-The unfinished-parent safeguards above remain separate from this reuse of an
-already-exported context.
+The unfinished-parent safeguards still apply when no such recorded parent is known.
 
 This requires the SDK to receive the operation metadata. Lambda normally removes
 a completed context's children from subsequent execution state unless
@@ -769,9 +773,9 @@ has finished, enable the appropriate `pluginsConfig.childOperationsDepth` (for
 example, `1` for direct children of a top-level context). Preserved contexts
 replay their orchestration; completed durable work still uses stored results.
 The plugin cannot reconstruct an operation that was pruned and whose lifecycle
-hooks do not run. The local runner's retained resume state must not be treated as
-proof that the default Lambda configuration preserves those children. The local
-resume-state discrepancy is tracked in [#995](https://github.com/aws/aws-durable-execution-sdk-js/issues/995).
+hooks do not run. The local runner now applies the service's pruning rule to
+invocation input and `GetDurableExecutionState`; its inspection results and
+checkpoint responses still retain their existing operation data.
 
 Within the configured flush budget, the invocation-end hook drains notifications
 received while it awaits a provider flush, then flushes the newly exported

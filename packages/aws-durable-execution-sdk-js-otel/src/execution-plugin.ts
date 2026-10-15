@@ -115,6 +115,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   private durableSampler: DurableSampler | undefined;
   private tracingEnabled = false;
   private readonly externalCompletions = new ExternalCompletions();
+  // A real context span can finish even when an enclosing completed context
+  // suppresses its terminal checkpoint. Keep that observed parent identity.
+  private readonly recordedContextIds = new Set<string>();
   private invocationEndOperations: Record<string, OperationInfo> | undefined;
 
   // Workflow span name (configurable)
@@ -437,16 +440,19 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   ): Promise<void> {
     const terminal = info.status === "SUCCEEDED" || info.status === "FAILED";
     for (const operation of operations) {
+      const recordedParent =
+        operation.parentId && this.recordedContextIds.has(operation.parentId);
       // A terminal handler can abandon an unawaited child. Its still-open
       // placeholder will be discarded below, so it cannot parent this export.
       const parentId =
-        (terminal &&
+        !recordedParent &&
+        ((terminal &&
           operation.parentId &&
           this.operationContexts.has(operation.parentId)) ||
-        this.hasAbandonedParent(
-          operation.parentId,
-          this.invocationEndOperations,
-        )
+          this.hasAbandonedParent(
+            operation.parentId,
+            this.invocationEndOperations,
+          ))
           ? undefined
           : operation.parentId;
       await this.onOperationEnd({ ...operation, parentId, isReplay: false });
@@ -517,6 +523,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
   private resetInvocationState(): void {
     this.externalCompletions.clear();
+    this.recordedContextIds.clear();
     this.invocationEndOperations = undefined;
     this.spanMap.clear();
     this.operationContexts.clear();
@@ -730,7 +737,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       span.recordException(info.error, endTime);
     }
 
+    const recordedContext = info.type === "CONTEXT" && span.isRecording();
     span.end(endTime);
+    if (recordedContext) this.recordedContextIds.add(info.id);
     this.externalCompletions.markExported(info);
   }
 
