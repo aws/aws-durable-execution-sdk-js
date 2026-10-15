@@ -51,6 +51,7 @@ export interface WorkerApiRequestMapping {
   [ApiType.CompleteInvocation]: CompleteInvocationRequest;
   [ApiType.UpdateCheckpointData]: UpdateCheckpointDataRequest;
   [ApiType.PollCheckpointData]: PollCheckpointDataRequest;
+  [ApiType.DrainCheckpointData]: PollCheckpointDataRequest;
   [ApiType.GetDurableExecutionState]: GetDurableExecutionCommandInput;
   [ApiType.CheckpointDurableExecutionState]: CheckpointDurableExecutionCommandInput;
   [ApiType.SendDurableExecutionCallbackSuccess]: SendDurableExecutionCallbackSuccessRequest;
@@ -73,6 +74,7 @@ export type WorkerApiRequestMessage =
   | WorkerApiRequest<ApiType.UpdateCheckpointData>
   | WorkerApiRequest<ApiType.GetDurableExecutionState>
   | WorkerApiRequest<ApiType.PollCheckpointData>
+  | WorkerApiRequest<ApiType.DrainCheckpointData>
   | WorkerApiRequest<ApiType.CheckpointDurableExecutionState>
   | WorkerApiRequest<ApiType.SendDurableExecutionCallbackSuccess>
   | WorkerApiRequest<ApiType.SendDurableExecutionCallbackFailure>
