@@ -45,8 +45,14 @@ import {
   createPluginFactory,
   OtelPluginEnvironment,
 } from "./otel-plugin-environment";
+import { isDurableSamplerInstalled } from "./global-sampler";
 import { ExternalCompletions } from "./external-completions";
 
+import { createPropagationMetadata } from "./propagation-metadata";
+import type {
+  PropagationInput,
+  PropagationMetadata,
+} from "./propagation-metadata";
 import { PLUGIN_REGISTRATION } from "./plugin-registration";
 
 const PLUGIN_NAME = "InvocationOtelPlugin";
@@ -260,6 +266,29 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     // and emitted links carrying an invalid all-zero trace ID.
     this.tracingEnabled = true;
     this.externalCompletions.observe(info.updatedOperations);
+  }
+
+  providePropagationMetadata(
+    input: PropagationInput,
+  ): PropagationMetadata | undefined {
+    if (
+      !this.tracingEnabled ||
+      this.invocationFinalized ||
+      !this.invocationSpan ||
+      !this.workflowSpan ||
+      !isDurableSamplerInstalled(
+        this.environment.tracer,
+        this.environment.durableSampler,
+      )
+    ) {
+      return undefined;
+    }
+    return createPropagationMetadata(
+      input,
+      this.executionArn,
+      this.executionTraceId,
+      this.executionTraceFlags,
+    );
   }
 
   wrapInvocation(

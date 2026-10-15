@@ -152,6 +152,8 @@ export {
   DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION,
   RegisteredDurableInstrumentationPlugin,
   RegisteredDurableInstrumentationPluginFactory,
+  PropagationInput,
+  PropagationMetadata,
   InvocationInfo,
   InvocationEndInfo,
   PluginInvocationStatus,

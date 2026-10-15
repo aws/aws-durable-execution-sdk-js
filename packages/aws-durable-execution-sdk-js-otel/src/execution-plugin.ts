@@ -41,6 +41,7 @@ import {
   createPluginFactory,
   OtelPluginEnvironment,
 } from "./otel-plugin-environment";
+import { isDurableSamplerInstalled } from "./global-sampler";
 import { ExternalCompletions } from "./external-completions";
 import {
   hrTimeToMilliseconds,
@@ -53,6 +54,11 @@ import {
   type InvocationClock,
 } from "./invocation-clock";
 
+import { createPropagationMetadata } from "./propagation-metadata";
+import type {
+  PropagationInput,
+  PropagationMetadata,
+} from "./propagation-metadata";
 import { PLUGIN_REGISTRATION } from "./plugin-registration";
 
 const PLUGIN_NAME = "ExecutionOtelPlugin";
@@ -297,6 +303,29 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     // A failed extractor or span setup leaves later hooks inert for this instance.
     this.tracingEnabled = true;
     this.externalCompletions.observe(info.updatedOperations);
+  }
+
+  providePropagationMetadata(
+    input: PropagationInput,
+  ): PropagationMetadata | undefined {
+    if (
+      !this.tracingEnabled ||
+      this.invocationFinalized ||
+      !this.invocationSpan ||
+      !this.workflowSpan ||
+      !isDurableSamplerInstalled(
+        this.environment.tracer,
+        this.environment.durableSampler,
+      )
+    ) {
+      return undefined;
+    }
+    return createPropagationMetadata(
+      input,
+      this.executionArn,
+      this.executionTraceId,
+      this.executionTraceFlags,
+    );
   }
 
   wrapInvocation(
