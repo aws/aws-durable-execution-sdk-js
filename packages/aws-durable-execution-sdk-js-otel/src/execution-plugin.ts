@@ -313,7 +313,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     // Prefer normal lifecycle hooks, which preserve live parent scopes. Before
     // returning, export any fresh completion the workflow did not reach. A
     // later resume may label it replay even though it has never been exported.
-    await this.drainExternalCompletions(info);
+    this.drainExternalCompletions(info);
     // 1. Always end and export Invocation_Span
     if (this.invocationSpan) {
       this.invocationSpan.setAttribute(
@@ -419,7 +419,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       }
     };
     do {
-      await this.drainExternalCompletions(info);
+      this.drainExternalCompletions(info);
       this.operationSpansNeedFlush = false;
       await flush();
     } while (
@@ -432,7 +432,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     // Finalize the remaining live parents after the open drain/flush phase.
     // A normal parent End may already have exported its child during that wait.
     if (this.externalCompletions.pending.size > 0) {
-      await this.drainExternalCompletions(
+      this.drainExternalCompletions(
         info,
         [...this.externalCompletions.pending.values()],
         true,
@@ -448,11 +448,11 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     }
   }
 
-  private async drainExternalCompletions(
+  private drainExternalCompletions(
     info: InvocationEndInfo,
     operations: Iterable<OperationInfo> = this.externalCompletions.pending.values(),
     finalDrain = false,
-  ): Promise<void> {
+  ): void {
     const terminal = info.status === "SUCCEEDED" || info.status === "FAILED";
     for (const operation of operations) {
       // Even below a checkpointed terminal ancestor, a live context can still
@@ -472,7 +472,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
           ))
           ? undefined
           : operation.parentId;
-      await this.onOperationEnd({ ...operation, parentId, isReplay: false });
+      this.finishOperation({ ...operation, parentId, isReplay: false });
     }
   }
 
@@ -674,6 +674,12 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onOperationEnd(info: OperationEndInfo): Promise<void> {
+    this.finishOperation(info);
+  }
+
+  // Child completion and parent finalization share one synchronous turn. A
+  // provider flush must not reset invocation state between these two actions.
+  private finishOperation(info: OperationEndInfo): void {
     if (!this.tracingEnabled) {
       return;
     }
@@ -683,7 +689,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     if (info.type === "CONTEXT" && !info.isReplay) {
       for (const child of this.externalCompletions.pending.values()) {
         if (child.parentId === info.id) {
-          await this.onOperationEnd({ ...child, isReplay: false });
+          this.finishOperation({ ...child, isReplay: false });
         }
       }
     }

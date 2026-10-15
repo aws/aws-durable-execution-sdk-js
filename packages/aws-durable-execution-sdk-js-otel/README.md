@@ -752,7 +752,10 @@ a result, but `ReplaySucceededContext` still blocks unfinished child operations.
 Missing or inconclusive ancestry is not treated as proof of abandonment.
 
 In both views, a completion notification already queued when its live context
-ends is exported before that context closes, preserving its OTel parent. This
+ends is exported before that context closes, preserving its OTel parent. Queued
+child draining and parent finalization run synchronously within the End hook;
+flush completion cannot reset invocation state between them. Invocation-end
+drains likewise finish their current snapshot before yielding. This
 includes an unawaited callback from a prior invocation: the invocation view emits
 its linked continuation while the resumed parent segment is still open.
 

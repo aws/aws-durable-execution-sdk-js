@@ -277,7 +277,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     // returning, export any fresh completion the workflow did not reach. A
     // later resume may label it replay even though it has never been exported.
     for (const operation of this.externalCompletions.pending.values()) {
-      await this.onOperationEnd({ ...operation, isReplay: false });
+      this.finishOperation({ ...operation, isReplay: false });
     }
 
     const endTime = this.liveTimestamp();
@@ -369,7 +369,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     const flushDeadline = performance.now() + this.flushTimeoutMillis;
     do {
       for (const operation of this.externalCompletions.pending.values()) {
-        await this.onOperationEnd({ ...operation, isReplay: false });
+        this.finishOperation({ ...operation, isReplay: false });
       }
       try {
         await flushTracerProvider(
@@ -388,7 +388,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     // Retain one bounded snapshot of terminal notifications already received,
     // including while a provider wait timed out. Do not start another flush.
     for (const operation of [...this.externalCompletions.pending.values()]) {
-      await this.onOperationEnd({ ...operation, isReplay: false });
+      this.finishOperation({ ...operation, isReplay: false });
     }
 
     // A still-running operation may have started while flush yielded. End its
@@ -681,6 +681,12 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onOperationEnd(info: OperationEndInfo): Promise<void> {
+    this.finishOperation(info);
+  }
+
+  // Child completion and parent finalization share one synchronous turn. A
+  // provider flush must not reset invocation state between these two actions.
+  private finishOperation(info: OperationEndInfo): void {
     if (!this.tracingEnabled) {
       return;
     }
@@ -690,7 +696,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     if (info.type === "CONTEXT" && !info.isReplay) {
       for (const child of this.externalCompletions.pending.values()) {
         if (child.parentId === info.id) {
-          await this.onOperationEnd({ ...child, isReplay: false });
+          this.finishOperation({ ...child, isReplay: false });
         }
       }
     }
