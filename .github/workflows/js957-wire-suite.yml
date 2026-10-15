@@ -1,0 +1,52 @@
+name: Temporary JS957 wire suite adapter (never merge)
+
+on:
+  workflow_call:
+    inputs:
+      sdk_ref:
+        type: string
+        required: true
+    secrets:
+      CONFORMANCE_TEST_ROLE_ARN:
+        required: true
+      CONFORMANCE_TEST_ACCOUNT_ID:
+        required: true
+      CONFORMANCE_TEST_LAMBDA_EXECUTION_ROLE_ARN:
+        required: true
+
+permissions: {}
+
+jobs:
+  probe:
+    permissions:
+      contents: read
+      id-token: write
+    uses: aws/aws-durable-execution-conformance-tests/.github/workflows/opentelemetry-suite.yml@e48ac54502d3c14e2e3fa216c5e200dbb4c14ac2
+    with:
+      language: javascript
+      resource_prefix: js
+      sdk_repository: aws/aws-durable-execution-sdk-js
+      sdk_ref: ${{ inputs.sdk_ref }}
+      conformance_repository: aws/aws-durable-execution-conformance-tests
+      conformance_test_sha: a628f5589bbf067a441696c792ab3023c0d0899b
+      checkout_sdk: true
+      suite: otel-execution
+      case_count: 20
+      runs_on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
+      examples_dir: .build/durable-sdk/packages/aws-durable-execution-sdk-js-conformance-tests-otel
+      setup_command: |
+        bash "$SDK_CHECKOUT/.github/workflows/scripts/setup-node22.test.sh"
+        source "$SDK_CHECKOUT/.github/workflows/scripts/setup-node22.sh"
+      prepare_command: |
+        export ELECTRON_SKIP_BINARY_DOWNLOAD=1
+        cd "$SDK_CHECKOUT"
+        npm ci
+        npm run build --workspace packages/aws-durable-execution-sdk-js
+        npm run build --workspace packages/aws-durable-execution-sdk-js-otel
+        npm run typecheck --workspace packages/aws-durable-execution-sdk-js-conformance-tests-otel
+        npm run build --workspace packages/aws-durable-execution-sdk-js-conformance-tests-otel
+      adot_release_repository: aws-observability/aws-otel-js-instrumentation
+      collector_compatible_runtime: nodejs22.x
+      collector_otlp_endpoint: http://localhost:4318
+      aws_region: us-west-2
+    secrets: inherit
