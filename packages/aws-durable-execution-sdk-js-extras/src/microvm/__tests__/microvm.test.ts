@@ -734,6 +734,13 @@ describe("microvm with request delivery", () => {
 
   it.each<[string, MicrovmConfig["request"], string]>([
     ["a path without a leading slash", { path: "job" }, "the request path"],
+    ["a path with a space", { path: "/clone build" }, "RFC 3986 path"],
+    ["a path with a query", { path: "/job?x=1" }, "RFC 3986 path"],
+    ["a path with a fragment", { path: "/job#x" }, "RFC 3986 path"],
+    ["a path with a backslash", { path: "/a\\b" }, "RFC 3986 path"],
+    ["a path with a non-ASCII character", { path: "/✓" }, "RFC 3986 path"],
+    ["a path with a bad escape", { path: "/a%2" }, "RFC 3986 path"],
+    ["an empty path", { path: "" }, "RFC 3986 path"],
     [
       "a lifecycle hook path",
       { path: "/aws/lambda-microvms/runtime/v1/run" },

@@ -248,6 +248,21 @@ export interface SendJobOptions {
  * @returns The status that accepted the job.
  */
 export async function sendJob(options: SendJobOptions): Promise<number> {
+  // Without this check, the tier below makes no call and reports "after 0
+  // attempts". That message blames the MicroVM. The cause is the function
+  // timeout. The error stays retryable: a retry in a new invocation has more
+  // time when this invocation spent its time before the step.
+  const remaining = options.remainingTimeMs?.();
+  const neededMs = INVOCATION_RESERVE_MS + MIN_CALL_MS;
+  if (
+    remaining !== undefined &&
+    Number.isFinite(remaining) &&
+    remaining < neededMs
+  ) {
+    throw new MicrovmEndpointUnavailableError(
+      `The request step had ${(remaining / 1000).toFixed(1)} seconds left in the Lambda invocation, and it needs at least ${neededMs / 1000} seconds to send the job. Raise the function timeout.`,
+    );
+  }
   const sleep =
     options.sleep ??
     ((ms: number): Promise<void> =>
@@ -384,7 +399,14 @@ async function createAuthToken(
   return response.authToken;
 }
 
-/** RunMicrovm returns the endpoint as a host name without a scheme. */
+/**
+ * RunMicrovm returns the endpoint as a host name without a scheme.
+ *
+ * `fetch` parses the URL with the WHATWG URL parser, which can change the
+ * path. `validateRequest` accepts only RFC 3986 paths, and the parser leaves
+ * each of them unchanged, except `.` and `..` segments. So the worker
+ * receives the path as written.
+ */
 function endpointUrl(endpoint: string, path: string): string {
   const base = /^https?:\/\//.test(endpoint) ? endpoint : `https://${endpoint}`;
   return `${base.replace(/\/+$/, "")}${path}`;

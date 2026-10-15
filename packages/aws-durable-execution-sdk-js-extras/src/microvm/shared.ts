@@ -220,13 +220,16 @@ export function validateRequest(
   request: MicrovmRequestConfig,
 ): void {
   const { path, port, retryWindow } = request ?? {};
-  // No path selects the worker's default job route.
+  // No path selects the worker's default job route. The operation sends the
+  // path as written, and the worker matches the raw request path. So the
+  // path must be valid as written: the config and the route then use the
+  // same string.
   if (
     path !== undefined &&
-    (typeof path !== "string" || !path.startsWith("/"))
+    (typeof path !== "string" || !ROUTE_PATH.test(path))
   ) {
     throw new TypeError(
-      `MicroVM "${name}": the request path must be a string that starts with "/"`,
+      `MicroVM "${name}": the request path must be an RFC 3986 path that starts with "/". Percent-encode any other character, for example a space as %20.`,
     );
   }
   if (path?.startsWith("/aws/lambda-microvms/")) {
@@ -261,6 +264,14 @@ export function validateRequest(
 
 /** The longest request retry window. */
 const MAX_REQUEST_RETRY_WINDOW_SECONDS = 10 * 60;
+
+/**
+ * An RFC 3986 path, section 3.3: segments of pchar characters and `%XX`
+ * escapes. The WHATWG URL parser in `fetch` leaves such a path unchanged,
+ * except `.` and `..` segments.
+ */
+const ROUTE_PATH =
+  /^(?:\/(?:[A-Za-z0-9\-._~!$&'()*+,;=:@]|%[0-9A-Fa-f]{2})*)+$/;
 
 /**
  * Runs the launch step.
