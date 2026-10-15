@@ -82,7 +82,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   private durableSampler: DurableSampler | undefined;
   private tracingEnabled = false;
   private readonly externalCompletions = new ExternalCompletions();
-  private invocationSpansEnded = false;
+  private endedOperationSpans = new WeakSet<Span>();
   private readonly workflowSpanName: string;
   private readonly enrichLogger: boolean;
 
@@ -282,21 +282,8 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
 
     const endTime = this.liveTimestamp();
 
-    // 1. End all spans in the stack in reverse order
-    while (this.spanStack.length > 0) {
-      const span = this.spanStack.pop()!;
-      span.end(endTime);
-    }
-
-    // 1b. End any still-recording span left in spanMap (attempt spans, which are
-    // not on the stack; operation spans were unwound above). Safeguard against a
-    // leak on a non-terminal invocation (issue #831). isRecording() skips spans
-    // already ended by the stack unwind.
-    for (const span of this.spanMap.values()) {
-      if (span.isRecording()) {
-        span.end(endTime);
-      }
-    }
+    // 1. Close the spans that exist at the initial invocation unwind.
+    this.endOpenSpans(endTime);
 
     // 2. End the invocation span if it exists
     if (this.invocationSpan) {
@@ -376,9 +363,9 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     // PENDING/RETRYING never materializes Workflow. A sampled invocation may
     // already have ended its stable synthetic anchor before customer code ran.
 
-    this.invocationSpansEnded = true;
     // End owns the drain/flush loop; change hooks only enqueue notifications.
-    // Late completions need a linked segment, not mutation of an ended span.
+    // Only segments actually ended above need a linked continuation. A span
+    // created during an awaited flush can still complete normally.
     const flushDeadline = performance.now() + this.flushTimeoutMillis;
     do {
       for (const operation of this.externalCompletions.pending.values()) {
@@ -403,6 +390,10 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     for (const operation of [...this.externalCompletions.pending.values()]) {
       await this.onOperationEnd({ ...operation, isReplay: false });
     }
+
+    // A still-running operation may have started while flush yielded. End its
+    // owned recording span before dropping the maps, without another flush wait.
+    this.endOpenSpans(this.liveTimestamp());
 
     // No further provider wait precedes resetting this invocation.
     // 5. Clear all per-invocation state
@@ -477,7 +468,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
 
   private resetInvocationState(): void {
     this.externalCompletions.clear();
-    this.invocationSpansEnded = false;
+    this.endedOperationSpans = new WeakSet<Span>();
     this.invocationClock = undefined;
     this.spanMap.clear();
     this.spanStack = [];
@@ -492,6 +483,22 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     this.executionTraceFlags = 0;
     this.executionSamplingDecision = SamplingDecision.NOT_RECORD;
     this.tracingEnabled = false;
+  }
+
+  private endOpenSpans(endTime: HrTime): void {
+    while (this.spanStack.length > 0) {
+      const span = this.spanStack.pop()!;
+      span.end(endTime);
+      this.endedOperationSpans.add(span);
+    }
+    // Attempts are held only in the map. Recording state avoids ending spans
+    // twice here; it is not used to infer whether a sampled-out span has ended.
+    for (const span of this.spanMap.values()) {
+      if (span.isRecording()) {
+        span.end(endTime);
+        this.endedOperationSpans.add(span);
+      }
+    }
   }
 
   private startSpan(
@@ -695,9 +702,10 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       return;
     }
 
-    if (!this.invocationSpansEnded && this.spanMap.has(info.id)) {
+    const currentSpan = this.spanMap.get(info.id);
+    if (currentSpan && !this.endedOperationSpans.has(currentSpan)) {
       // Operation was started in this invocation and its segment is still open
-      const span = this.spanMap.get(info.id)!;
+      const span = currentSpan;
 
       // Finalize the operation status from the core-supplied terminal status.
       // Container CONTEXT ops receive a terminal status from the core too:

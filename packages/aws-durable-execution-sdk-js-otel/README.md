@@ -785,8 +785,11 @@ notifications; the end hook owns this loop. In the
 execution view, these drains use the latest operation ancestry received during
 the end hook to detect an unfinished parent abandoned by a completed ancestor.
 Missing ancestry alone does not prove abandonment. In the
-invocation view, a completion after its initial segment has ended uses a linked
-continuation. Enclosing spans may already have ended, so this does not guarantee
+invocation view, a completion after its individual segment has ended uses a linked
+continuation. A segment first created while a provider flush is waiting remains
+eligible for normal completion. Any such segment still open at final cleanup is
+ended before state is cleared, without starting another provider wait.
+Enclosing spans may already have ended, so this does not guarantee
 late-child timestamp containment. Updates after the final drain/reset, a frozen
 runtime, and concurrent executions sharing a plugin instance remain outside this
 shutdown guarantee; the shared-instance limitation is tracked in [#950](https://github.com/aws/aws-durable-execution-sdk-js/issues/950).
