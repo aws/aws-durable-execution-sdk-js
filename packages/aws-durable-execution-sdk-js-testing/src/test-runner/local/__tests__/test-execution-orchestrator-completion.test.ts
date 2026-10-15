@@ -20,6 +20,8 @@ import { CheckpointOperation } from "../../../checkpoint-server/storage/checkpoi
 import { FunctionStorage } from "../operations/function-storage";
 import { ILocalDurableTestRunnerFactory } from "../interfaces/durable-test-runner-factory";
 import { CheckpointApiClient } from "../api-client/checkpoint-api-client";
+import { defaultLogger } from "../../../logger";
+import { realSetTimeout } from "../real-timers/real-timers";
 
 jest.mock("../operations/local-operation-storage");
 
@@ -30,6 +32,27 @@ jest.mock("../invoke-handler", () => ({
     invoke: mockInvoke,
   })),
 }));
+
+// Record every real-timer delay the orchestrator asks for, while keeping the real timer.
+// Asserting on the requested delays, not on elapsed time, keeps the tests stable under load.
+jest.mock("../real-timers/real-timers", () => {
+  const actual = jest.requireActual<
+    typeof import("../real-timers/real-timers")
+  >("../real-timers/real-timers");
+  return {
+    ...actual,
+    realSetTimeout: jest.fn(
+      (callback: () => void, ms?: number): ReturnType<typeof setTimeout> =>
+        actual.realSetTimeout(callback, ms),
+    ),
+  };
+});
+
+function requestedRealDelays(): (number | undefined)[] {
+  return (realSetTimeout as unknown as jest.Mock).mock.calls.map(
+    (call: unknown[]) => call[1] as number | undefined,
+  );
+}
 
 /**
  * How executeHandler ends: it collects the last checkpoint updates with a drain instead of
@@ -161,7 +184,7 @@ describe("TestExecutionOrchestrator completion", () => {
     ]);
   });
 
-  it("aborts polling before draining", async () => {
+  it("stops polling before draining, and aborts the poll signal only after", async () => {
     let signal: AbortSignal | undefined;
     (checkpointApi.pollCheckpointData as jest.Mock).mockImplementation(
       (_id: unknown, s: AbortSignal) => {
@@ -169,39 +192,66 @@ describe("TestExecutionOrchestrator completion", () => {
         return nonResolvingPromise;
       },
     );
+    let abortedDuringDrain: boolean | undefined;
     checkpointApi.drainCheckpointData.mockImplementation(async () => {
-      expect(signal?.aborted).toBe(true);
+      abortedDuringDrain = signal?.aborted;
       return { operations: [] };
     });
 
     await createOrchestrator().executeHandler();
 
-    expect(checkpointApi.drainCheckpointData).toHaveBeenCalledTimes(1);
+    // An abort during the drain could cancel a poll that carries the last updates.
+    expect(abortedDuringDrain).toBe(false);
+    expect(signal?.aborted).toBe(true);
+    // The loop sent the first poll only, so stopping prevented any further poll.
+    expect(checkpointApi.pollCheckpointData).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the last updates when the poll client cancels on abort", async () => {
+    // A client may reject its in-flight poll once the signal aborts. Here the poll that
+    // carries the last update is answered just before the drain, as the worker does.
+    let resolveInFlightPoll: (() => void) | undefined;
+    (checkpointApi.pollCheckpointData as jest.Mock).mockImplementation(
+      (_id: unknown, s: AbortSignal) =>
+        new Promise((resolve, reject) => {
+          resolveInFlightPoll = () =>
+            resolve({ operations: [drainedOperation] });
+          s.addEventListener("abort", () => {
+            const err = new Error("aborted");
+            err.name = "AbortError";
+            reject(err);
+          });
+        }),
+    );
+    checkpointApi.drainCheckpointData.mockImplementation(async () => {
+      resolveInFlightPoll?.();
+      return { operations: [] };
+    });
+
+    await createOrchestrator().executeHandler();
+
+    expect(operationStorage.populateOperations).toHaveBeenCalledWith([
+      drainedOperation,
+    ]);
   });
 
   it("resolves a successful execution without a fixed wait", async () => {
-    // Warm up, so module loading is not timed.
-    await createOrchestrator().executeHandler();
-
-    const start = performance.now();
     const result = await createOrchestrator().executeHandler();
-    const elapsedMs = performance.now() - start;
 
     expect(result.status).toBe(OperationStatus.SUCCEEDED);
-    // The old fixed wait alone took 100 ms. What is left is a 0 ms timer for the initial
-    // invocation and one for settling, about 1 ms each.
-    expect(elapsedMs).toBeLessThan(50);
+    // The old code asked for a 100 ms real timer. Now the only real timer is the 0 ms one
+    // that settles the execution.
+    expect(requestedRealDelays()).toEqual([0]);
   });
 
   it("keeps the fixed wait before rejecting", async () => {
     mockInvoke.mockRejectedValue(new Error("handler crashed"));
 
-    const start = performance.now();
     await expect(createOrchestrator().executeHandler()).rejects.toThrow(
       "handler crashed",
     );
 
-    expect(performance.now() - start).toBeGreaterThanOrEqual(90);
+    expect(requestedRealDelays()).toEqual([100, 0]);
     expect(checkpointApi.drainCheckpointData).toHaveBeenCalledTimes(1);
   });
 
@@ -215,15 +265,19 @@ describe("TestExecutionOrchestrator completion", () => {
     );
   });
 
-  it("keeps the execution's own error when the drain also fails", async () => {
+  it("keeps the execution's own error when the drain also fails, and logs the drain error", async () => {
+    const warn = jest
+      .spyOn(defaultLogger, "warn")
+      .mockImplementation(() => undefined);
     mockInvoke.mockRejectedValue(new Error("handler crashed"));
-    checkpointApi.drainCheckpointData.mockRejectedValue(
-      new Error("drain failed"),
-    );
+    const drainError = new Error("drain failed");
+    checkpointApi.drainCheckpointData.mockRejectedValue(drainError);
 
     await expect(createOrchestrator().executeHandler()).rejects.toThrow(
       "handler crashed",
     );
+    expect(warn).toHaveBeenCalledWith(expect.any(String), drainError);
+    warn.mockRestore();
   });
 
   it("does not drain when the execution never started", async () => {

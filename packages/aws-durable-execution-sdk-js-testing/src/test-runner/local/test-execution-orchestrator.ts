@@ -230,7 +230,10 @@ export class TestExecutionOrchestrator {
     // Reset invocations tracking when starting a new execution
     this.invocationTracker.reset();
 
-    // Abort controller aborts polling when any invocation returns with 'SUCCEEDED/FAILED'
+    // Polling stops in two steps. Stopping tells the loop to send no further poll. Aborting
+    // also cancels a poll that is in flight, if the client supports that. See the finally
+    // block for why the two happen at different times.
+    const stopPollingController = new AbortController();
     const abortController = new AbortController();
     // Set once polling starts, so the end of the execution knows there is polling to stop.
     let polledExecutionId: ExecutionId | undefined;
@@ -259,7 +262,11 @@ export class TestExecutionOrchestrator {
 
       // Start polling for checkpoint data before invoking the handler
       polledExecutionId = executionId;
-      void this.pollForCheckpointData(abortController, executionId);
+      void this.pollForCheckpointData(
+        abortController,
+        executionId,
+        stopPollingController.signal,
+      );
 
       this.operationStorage.populateOperations(initialOperationsEvents);
 
@@ -303,8 +310,12 @@ export class TestExecutionOrchestrator {
         });
       }
 
-      // Stop polling. The loop sends no further poll once aborted.
-      abortController.abort();
+      // Stop polling, but do not abort yet. A poll can be in flight with the last updates:
+      // the checkpoint server has already taken them from its queue to answer it. If an
+      // abort cancelled that poll, its updates would be lost, because the drain only returns
+      // what is still queued. The drain is answered after that poll, so aborting once the
+      // drain is answered cancels nothing that carries updates.
+      stopPollingController.abort();
 
       let drainError: unknown;
       if (polledExecutionId !== undefined) {
@@ -315,6 +326,8 @@ export class TestExecutionOrchestrator {
         }
       }
 
+      abortController.abort();
+
       // Settle from a timer callback, as the fixed wait always did. Code after the
       // execution then starts in the same event loop phase as before, which matters to
       // callers that race a 0 ms timer against setImmediate. A 0 ms timer costs about 1 ms.
@@ -324,9 +337,16 @@ export class TestExecutionOrchestrator {
 
       // Never hide the error the execution itself failed with. Otherwise a failed drain
       // must surface, since the result would be missing its last updates.
-      if (drainError !== undefined && !failed) {
-        // biome-ignore lint/correctness/noUnsafeFinally: a failed drain leaves the result without its last updates, so it must surface when nothing else has failed.
-        throw drainError;
+      if (drainError !== undefined) {
+        if (failed) {
+          defaultLogger.warn(
+            "Could not collect the last checkpoint updates of a failed execution:",
+            drainError,
+          );
+        } else {
+          // biome-ignore lint/correctness/noUnsafeFinally: a failed drain leaves the result without its last updates, so it must surface when nothing else has failed.
+          throw drainError;
+        }
       }
     }
   }
@@ -374,18 +394,20 @@ export class TestExecutionOrchestrator {
    * Continuously polls checkpoint data until execution reaches completion.
    *
    * This method runs in a loop, repeatedly checking for new operations
-   * and processing them. The loop continues until the execution is
-   * signaled as complete via the abort controller.
+   * and processing them. The loop sends no further poll once polling is
+   * stopped or aborted.
    *
-   * @param abortController Aborted when execution completes
+   * @param abortController Aborted when execution completes, after the final drain
    * @param executionId The execution to monitor
+   * @param stopSignal Aborted when execution completes, before the final drain
    */
   private async pollForCheckpointData(
     abortController: AbortController,
     executionId: ExecutionId,
+    stopSignal?: AbortSignal,
   ): Promise<void> {
     try {
-      while (!abortController.signal.aborted) {
+      while (!abortController.signal.aborted && !stopSignal?.aborted) {
         const { operations } = await this.checkpointApi.pollCheckpointData(
           executionId,
           abortController.signal,

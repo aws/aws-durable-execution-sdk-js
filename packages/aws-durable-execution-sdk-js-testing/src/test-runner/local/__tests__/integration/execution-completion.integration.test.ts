@@ -40,7 +40,7 @@ describe("execution completion", () => {
     expect(eventTypes).toContain(EventType.ExecutionSucceeded);
   });
 
-  it("records the final updates of a failed execution", async () => {
+  it("records the final updates when the handler fails", async () => {
     const handler = withDurableExecution(
       async (_event: unknown, context: DurableContext) => {
         await context.step("before-failure", async () => "ok");
