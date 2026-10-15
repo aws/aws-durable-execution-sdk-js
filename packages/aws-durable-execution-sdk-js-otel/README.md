@@ -815,6 +815,10 @@ while it remains open; only a segment already ended by cleanup needs a linked
 continuation. Final cleanup also ends any newly created spans still open when
 that flush returns, without adding another provider wait. This is a span-lifetime
 safeguard, not an additional delivery or temporal-containment guarantee.
+After final cleanup, operation and attempt start hooks no longer allocate live
+spans or placeholders for that invocation. This does not cancel a losing
+parallel branch or change its business effects. Late terminal notifications
+remain eligible for the separate completion drain described above.
 
 Export acknowledgement is
 not persisted: redelivery after a failed invocation can export the completion

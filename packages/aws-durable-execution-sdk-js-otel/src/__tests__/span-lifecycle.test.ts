@@ -247,6 +247,23 @@ describe.each(PLUGINS)("%s span lifecycle", (_name, makeDriver) => {
     expect(duplicateIdentities(exporter)).toEqual([]);
   });
 
+  it("does not allocate operation or attempt state after final cleanup", async () => {
+    register();
+    const plugin = makeDriver();
+    await plugin.onInvocationStart(makeInvocationInfo());
+    await plugin.onInvocationEnd(makeInvocationEndInfo());
+    const stateBefore = [...plugin.spanMap];
+    await plugin.onOperationStart(
+      makeOperationInfo({ id: "after-final", name: "after-final" }),
+    );
+    await plugin.onOperationAttemptStart(
+      makeAttemptInfo({ id: "after-final", name: "after-final" }),
+    );
+    expect([...plugin.spanMap]).toEqual(stateBefore);
+    expect(named(exporter, "after-final")).toHaveLength(0);
+    expect(named(exporter, "after-final attempt 1")).toHaveLength(0);
+  });
+
   it("ends an in-flight attempt span left open by a non-terminal invocation", async () => {
     register();
     const plugin = makeDriver();

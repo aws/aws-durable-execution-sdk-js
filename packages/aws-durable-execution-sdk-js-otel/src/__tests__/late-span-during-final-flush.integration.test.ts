@@ -5,6 +5,7 @@ import {
   propagation,
   trace,
   type SpanContext,
+  type Span,
 } from "@opentelemetry/api";
 import {
   InMemorySpanExporter,
@@ -12,6 +13,7 @@ import {
   SimpleSpanProcessor,
   type SpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
+import { createExecutionOtelPluginFactory } from "../execution-plugin";
 import { createInvocationOtelPluginFactory } from "../invocation-plugin";
 
 const gate = () => {
@@ -152,6 +154,114 @@ it.each([false, true])(
       // turn that detached work into a completion dependency of this test.
       if (completes) await Promise.resolve(childWork).catch(() => undefined);
       else void Promise.resolve(childWork).catch(() => undefined);
+      await execution.catch(() => undefined);
+      await provider.shutdown();
+      trace.disable();
+      context.disable();
+    }
+  },
+  15000,
+);
+
+it.each([
+  ["execution", createExecutionOtelPluginFactory],
+  ["invocation", createInvocationOtelPluginFactory],
+] as const)(
+  "%s: a losing parallel branch cannot allocate attempts after final cleanup",
+  async (_view, createFactory) => {
+    const delayedStart = gate();
+    const releaseStart = gate();
+    const attemptReached = gate();
+    const active = new Map<string, Span>();
+    const exporter = new InMemorySpanExporter();
+    let provider!: NodeTracerProvider;
+    const tracker: SpanProcessor = {
+      onStart(span) {
+        active.set(span.spanContext().spanId, span);
+      },
+      onEnd(span) {
+        active.delete(span.spanContext().spanId);
+      },
+      async forceFlush() {},
+      async shutdown() {},
+    };
+    const factory = createFactory({
+      contextExtractor: () => undefined,
+      tracerProviderFactory: (ids) =>
+        (provider = new NodeTracerProvider({
+          idGenerator: ids(),
+          spanProcessors: [tracker, new SimpleSpanProcessor(exporter)],
+        })),
+    });
+    const lateBody = jest.fn(async () => "late result");
+    const runner = new LocalDurableTestRunner({
+      handlerFunction: withDurableExecution(
+        async (_, ctx) => {
+          const result = await ctx.parallel(
+            "first-success",
+            [
+              {
+                name: "winner",
+                func: async () => {
+                  await delayedStart.opened;
+                  return "winner result";
+                },
+              },
+              {
+                name: "loser",
+                func: async (child) => child.step("delayed-step", lateBody),
+              },
+            ],
+            { completionConfig: { minSuccessful: 1 } },
+          );
+          return result.getResults();
+        },
+        {
+          plugins: [
+            factory,
+            {
+              createPlugin: () => ({
+                async onOperationStart(info) {
+                  if (info.name === "delayed-step") {
+                    delayedStart.open();
+                    await releaseStart.opened;
+                  }
+                },
+                async onOperationAttemptStart(info) {
+                  if (info.name === "delayed-step") attemptReached.open();
+                },
+              }),
+            },
+          ],
+        },
+      ),
+    });
+    const execution = runner.run();
+    try {
+      const result = await execution;
+      expect(result.getStatus()).toBe("SUCCEEDED");
+      expect(result.getResult()).toEqual(["winner result"]);
+      expect(
+        exporter.getFinishedSpans().some((s) => s.name === "Invocation"),
+      ).toBe(true);
+      expect(active.size).toBe(0);
+      releaseStart.open();
+      await attemptReached.opened;
+      // All real plugin callbacks for the attempt have run before this turn.
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(lateBody).toHaveBeenCalledTimes(1);
+      expect([...active.values()].filter((span) => span.isRecording())).toEqual(
+        [],
+      );
+      expect(
+        exporter
+          .getFinishedSpans()
+          .filter((s) => s.name === "delayed-step attempt 1"),
+      ).toHaveLength(0);
+    } finally {
+      releaseStart.open();
+      // Release diagnostic tracker handles only after the lifetime assertions.
+      for (const span of active.values()) span.end();
       await execution.catch(() => undefined);
       await provider.shutdown();
       trace.disable();

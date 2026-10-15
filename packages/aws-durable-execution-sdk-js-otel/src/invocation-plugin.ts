@@ -87,6 +87,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   private tracingEnabled = false;
   private readonly externalCompletions = new ExternalCompletions();
   private invocationEnded = false;
+  private invocationFinalized = false;
   private readonly endedOperationSpans = new WeakSet<Span>();
 
   // Per-invocation state
@@ -379,6 +380,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
 
     // The final flush may yield to a newly started operation. Close any owned
     // span still open on return, without another provider wait or new topology.
+    this.invocationFinalized = true;
     this.endOpenSpans(this.liveTimestamp());
   }
 
@@ -523,7 +525,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onOperationStart(info: OperationInfo): Promise<void> {
-    if (!this.tracingEnabled) {
+    if (!this.tracingEnabled || this.invocationFinalized) {
       return;
     }
 
@@ -782,7 +784,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onOperationAttemptStart(info: AttemptInfo): Promise<void> {
-    if (!this.tracingEnabled) {
+    if (!this.tracingEnabled || this.invocationFinalized) {
       return;
     }
 
