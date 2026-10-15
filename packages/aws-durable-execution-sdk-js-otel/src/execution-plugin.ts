@@ -423,11 +423,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     // 3. End any attempt span still open (safeguard against a leak on a
     // non-terminal invocation, issue #831). Operation placeholders have no
     // recording span and are dropped in resetInvocationState.
-    for (const span of this.spanMap.values()) {
-      if (span.isRecording()) {
-        span.end();
-      }
-    }
+    this.endOpenAttemptSpans();
 
     // End owns the drain/flush loop; change hooks only enqueue notifications.
     // A response received during an awaited flush must not be cleared below.
@@ -466,6 +462,9 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         true,
       );
     }
+
+    // Attempts started during the awaited flush are owned by this invocation too.
+    this.endOpenAttemptSpans();
 
     // Close this invocation's hooks before flushing the finalized snapshot.
     // New operation-end hooks during this last wait cannot revise the snapshot.
@@ -572,6 +571,20 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       "[ExecutionOtelPlugin] Expected a compatible OpenTelemetry SDK tracer at invocation start; telemetry is disabled for this invocation. Ensure the OpenTelemetry SDK is configured before invocation start.",
     );
     return false;
+  }
+
+  private endOpenAttemptSpans(): void {
+    for (const span of this.spanMap.values()) {
+      if (span.isRecording()) this.endOperationSpan(span);
+    }
+  }
+
+  private endOperationSpan(
+    span: Span,
+    endTime?: Parameters<Span["end"]>[0],
+  ): void {
+    span.end(endTime);
+    this.operationSpansNeedFlush = true;
   }
 
   private resetInvocationState(): void {
@@ -798,8 +811,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     }
 
     const recordedContext = info.type === "CONTEXT" && span.isRecording();
-    span.end(endTime);
-    this.operationSpansNeedFlush = true;
+    this.endOperationSpan(span, endTime);
     if (recordedContext) this.recordedContextIds.add(info.id);
     this.externalCompletions.markExported(info);
   }
@@ -952,7 +964,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         // Non-failed attempt: stamp explicit OK (matches Python OTel #604).
         attemptSpan.setStatus({ code: SpanStatusCode.OK });
       }
-      attemptSpan.end(endTime);
+      this.endOperationSpan(attemptSpan, endTime);
       this.spanMap.delete(key);
     }
   }

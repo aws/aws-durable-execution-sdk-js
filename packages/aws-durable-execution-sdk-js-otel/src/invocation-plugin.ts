@@ -90,6 +90,8 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   private globalIdGeneratorInstalled: boolean;
   private durableSampler: DurableSampler | undefined;
   private tracingEnabled = false;
+  // Operation and attempt spans ended after a flush starts need a final batch.
+  private operationSpansNeedFlush = false;
   private readonly externalCompletions = new ExternalCompletions();
   private endedOperationSpans = new WeakSet<Span>();
   private readonly workflowSpanName: string;
@@ -395,10 +397,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     // Only segments actually ended above need a linked continuation. A span
     // created during an awaited flush can still complete normally.
     const flushDeadline = performance.now() + this.flushTimeoutMillis;
-    do {
-      for (const operation of this.externalCompletions.pending.values()) {
-        this.finishOperation({ ...operation, isReplay: false });
-      }
+    const flush = async (): Promise<void> => {
       try {
         await flushTracerProvider(
           this.tracerProvider,
@@ -408,24 +407,35 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       } catch {
         // Gracefully handle flush errors.
       }
+    };
+    do {
+      for (const operation of this.externalCompletions.pending.values()) {
+        this.finishOperation({ ...operation, isReplay: false });
+      }
+      this.operationSpansNeedFlush = false;
+      await flush();
     } while (
       this.externalCompletions.pending.size > 0 &&
       performance.now() < flushDeadline
     );
 
     // Retain one bounded snapshot of terminal notifications already received,
-    // including while a provider wait timed out. Do not start another flush.
+    // including while a provider wait timed out.
     for (const operation of [...this.externalCompletions.pending.values()]) {
       this.finishOperation({ ...operation, isReplay: false });
     }
 
     // A still-running operation may have started while flush yielded. End its
-    // owned recording span before dropping the maps, without another flush wait.
+    // owned recording span before dropping the maps.
     this.endOpenSpans(this.liveTimestamp());
 
-    // No further provider wait precedes resetting this invocation.
-    // 5. Clear all per-invocation state
+    // Close hooks before the final batch: late lifecycle callbacks cannot create
+    // more spans while this last wait uses only the original budget remaining.
+    const flushFinalOperations = this.operationSpansNeedFlush;
     this.resetInvocationState();
+    if (flushFinalOperations && performance.now() < flushDeadline) {
+      await flush();
+    }
   }
 
   /** Creates at most one SDK-owned root per invocation; the caller ends it. */
@@ -496,6 +506,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
 
   private resetInvocationState(): void {
     this.externalCompletions.clear();
+    this.operationSpansNeedFlush = false;
     this.endedOperationSpans = new WeakSet<Span>();
     this.invocationClock = undefined;
     this.spanMap.clear();
@@ -513,17 +524,22 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     this.tracingEnabled = false;
   }
 
+  private endOperationSpan(span: Span, endTime: HrTime): void {
+    span.end(endTime);
+    this.operationSpansNeedFlush = true;
+  }
+
   private endOpenSpans(endTime: HrTime): void {
     while (this.spanStack.length > 0) {
       const span = this.spanStack.pop()!;
-      span.end(endTime);
+      this.endOperationSpan(span, endTime);
       this.endedOperationSpans.add(span);
     }
     // Attempts are held only in the map. Recording state avoids ending spans
     // twice here; it is not used to infer whether a sampled-out span has ended.
     for (const span of this.spanMap.values()) {
       if (span.isRecording()) {
-        span.end(endTime);
+        this.endOperationSpan(span, endTime);
         this.endedOperationSpans.add(span);
       }
     }
@@ -765,7 +781,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       }
 
       // End the span
-      span.end(this.liveTimestamp());
+      this.endOperationSpan(span, this.liveTimestamp());
 
       // Remove from map
       this.spanMap.delete(info.id);
@@ -841,7 +857,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       }
 
       // Immediately end
-      continuationSpan.end(this.liveTimestamp());
+      this.endOperationSpan(continuationSpan, this.liveTimestamp());
     }
     this.externalCompletions.markExported(info);
   }
@@ -924,7 +940,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
         // Non-failed attempt: stamp explicit OK (matches Python OTel #604).
         attemptSpan.setStatus({ code: SpanStatusCode.OK });
       }
-      attemptSpan.end(this.liveTimestamp());
+      this.endOperationSpan(attemptSpan, this.liveTimestamp());
       this.spanMap.delete(key);
     }
   }

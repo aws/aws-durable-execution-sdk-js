@@ -135,6 +135,68 @@ describe.each([ExecutionOtelPlugin, InvocationOtelPlugin])(
       }
     });
 
+    it("uses only the remaining budget for the final ordinary-operation batch", async () => {
+      const firstCalled = gate(),
+        secondCalled = gate();
+      const first = gate(),
+        second = gate();
+      const flush = jest
+        .spyOn(provider, "forceFlush")
+        .mockImplementationOnce(async () => {
+          firstCalled.open();
+          await first.opened;
+        })
+        .mockImplementationOnce(async () => {
+          secondCalled.open();
+          await second.opened;
+        });
+      const info = invocation();
+      await plugin.onInvocationStart(info);
+      let settled = false;
+      const end = plugin.onInvocationEnd(ending(info)).then(() => {
+        settled = true;
+      });
+      try {
+        await firstCalled.opened;
+        await jest.advanceTimersByTimeAsync(40);
+        const late: OperationInfo = {
+          id: "late",
+          name: "late",
+          type: "STEP",
+          status: "STARTED",
+          isReplay: false,
+        };
+        await plugin.onOperationStart(late);
+        await plugin.onOperationAttemptStart({ ...late, attempt: 1 });
+        await plugin.onOperationAttemptEnd({
+          ...late,
+          attempt: 1,
+          outcome: "SUCCEEDED",
+        });
+        await plugin.onOperationEnd({ ...late, status: "SUCCEEDED" });
+        first.open();
+        await secondCalled.opened;
+        await jest.advanceTimersByTimeAsync(29);
+        expect(settled).toBe(false);
+        await jest.advanceTimersByTimeAsync(1);
+        expect(settled).toBe(true);
+        await end;
+        expect(flush).toHaveBeenCalledTimes(2);
+        expect(
+          exporter.getFinishedSpans().filter((span) => span.name === "late"),
+        ).toHaveLength(1);
+        expect(
+          exporter
+            .getFinishedSpans()
+            .filter((span) => span.name === "late attempt 1"),
+        ).toHaveLength(1);
+      } finally {
+        first.open();
+        second.open();
+        await end;
+      }
+    });
+
     it("preserves reuse after timeout and handles the old provider's late rejection", async () => {
       const called = gate(),
         release = gate();
