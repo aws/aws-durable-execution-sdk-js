@@ -451,6 +451,43 @@ describe("InvocationOtelPlugin", () => {
       expect(spans.length).toBeGreaterThan(0);
     });
 
+    it("ends the original operation segment started during the final flush", async () => {
+      await plugin.onInvocationStart(makeInvocationInfo());
+      const originalFlush = provider!.forceFlush.bind(provider);
+      let calls = 0;
+      jest.spyOn(provider!, "forceFlush").mockImplementation(async () => {
+        calls++;
+        if (calls === 2) {
+          await plugin.onOperationStart(
+            makeOperationInfo({
+              id: "late-unit",
+              name: "late-unit",
+              type: "STEP",
+            }),
+          );
+          await plugin.onOperationEnd(
+            makeOperationEndInfo({
+              id: "late-unit",
+              name: "late-unit",
+              type: "STEP",
+              status: "SUCCEEDED",
+            }),
+          );
+        }
+        await originalFlush();
+      });
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+      const spans = getExportedSpans().filter(
+        (span) => span.name === "late-unit",
+      );
+      expect(calls).toBe(2);
+      expect(spans).toHaveLength(1);
+      expect(spans[0].spanContext().spanId).toBe(
+        deriveSpanIdFromOperationId("late-unit", TEST_ARN),
+      );
+      expect(spans[0].attributes["durable.operation.status"]).toBe("SUCCEEDED");
+    });
+
     it("carries no state from one invocation into the next on a warm Lambda", async () => {
       // Two invocations in one execution environment. The state that used to be
       // cleared at the end of an invocation is now unreachable by construction:

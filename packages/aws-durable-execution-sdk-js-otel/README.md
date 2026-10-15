@@ -803,6 +803,12 @@ completions. This
 does not guarantee delivery of notifications after the Lambda environment has
 stopped running, or successful export when the configured provider fails.
 
+An operation span created during the final flush completes its original segment
+while it remains open; only a segment already ended by cleanup needs a linked
+continuation. Final cleanup also ends any newly created spans still open when
+that flush returns, without adding another provider wait. This is a span-lifetime
+safeguard, not an additional delivery or temporal-containment guarantee.
+
 Export acknowledgement is
 not persisted: redelivery after a failed invocation can export the completion
 again, as required for recovery.

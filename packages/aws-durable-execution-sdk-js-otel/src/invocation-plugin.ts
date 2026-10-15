@@ -87,6 +87,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   private tracingEnabled = false;
   private readonly externalCompletions = new ExternalCompletions();
   private invocationEnded = false;
+  private readonly endedOperationSpans = new WeakSet<Span>();
 
   // Per-invocation state
   private invocationClock: InvocationClock | undefined;
@@ -274,21 +275,8 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
 
     const endTime = this.liveTimestamp();
 
-    // 1. End all spans in the stack in reverse order
-    while (this.spanStack.length > 0) {
-      const span = this.spanStack.pop()!;
-      span.end(endTime);
-    }
-
-    // 1b. End any still-recording span left in spanMap (attempt spans, which are
-    // not on the stack; operation spans were unwound above). Safeguard against a
-    // leak on a non-terminal invocation (issue #831). isRecording() skips spans
-    // already ended by the stack unwind.
-    for (const span of this.spanMap.values()) {
-      if (span.isRecording()) {
-        span.end(endTime);
-      }
-    }
+    // 1. Close the operation segments that exist at the initial unwind.
+    this.endOpenSpans(endTime);
 
     // 2. End the invocation span if it exists
     if (this.invocationSpan) {
@@ -371,6 +359,26 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
     // 4. Force flush the tracer provider
     this.invocationEnded = true;
     await this.flushExternalCompletions();
+
+    // The final flush may yield to a newly started operation. Close any owned
+    // span still open on return, without another provider wait or new topology.
+    this.endOpenSpans(this.liveTimestamp());
+  }
+
+  private endOpenSpans(endTime: HrTime): void {
+    while (this.spanStack.length > 0) {
+      const span = this.spanStack.pop()!;
+      span.end(endTime);
+      this.endedOperationSpans.add(span);
+    }
+    // Attempts are held only in the map. Recording state avoids a second end
+    // here; it does not determine whether a sampled-out operation has ended.
+    for (const span of this.spanMap.values()) {
+      if (span.isRecording()) {
+        span.end(endTime);
+        this.endedOperationSpans.add(span);
+      }
+    }
   }
 
   private flushExternalCompletions(): Promise<void> {
@@ -621,10 +629,11 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       return;
     }
 
-    if (!this.invocationEnded && this.spanMap.has(info.id)) {
+    const currentSpan = this.spanMap.get(info.id);
+    if (currentSpan && !this.endedOperationSpans.has(currentSpan)) {
       // Complete a live segment. Shutdown may already have ended a segment
       // started in this invocation; a late completion then needs a continuation.
-      const span = this.spanMap.get(info.id)!;
+      const span = currentSpan;
 
       // Finalize the operation status from the core-supplied terminal status.
       // Container CONTEXT ops receive a terminal status from the core too:
