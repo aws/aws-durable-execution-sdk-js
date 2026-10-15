@@ -1,6 +1,9 @@
 import { install, Clock } from "@sinonjs/fake-timers";
 import { QueueScheduler } from "../queue-scheduler";
 
+const nativeSetTimeout = setTimeout;
+const nativeClearTimeout = clearTimeout;
+
 describe("QueueScheduler", () => {
   let scheduler: QueueScheduler;
 
@@ -17,6 +20,7 @@ describe("QueueScheduler", () => {
   describe("sequential execution", () => {
     it("should progress without advancing a fake setImmediate clock", async () => {
       let clock: Clock | undefined;
+      let timeout: ReturnType<typeof setTimeout> | undefined;
       try {
         clock = install({
           shouldAdvanceTime: false,
@@ -31,11 +35,20 @@ describe("QueueScheduler", () => {
           executionOrder.push(2);
         }, jest.fn());
 
-        await scheduler.waitForCompletion();
+        const completed = await Promise.race([
+          scheduler.waitForCompletion().then(() => true),
+          new Promise<boolean>((resolve) => {
+            timeout = nativeSetTimeout(() => resolve(false), 100);
+          }),
+        ]);
 
+        expect(completed).toBe(true);
         expect(executionOrder).toEqual([1, 2]);
         expect(clock.countTimers()).toBe(0);
       } finally {
+        if (timeout) {
+          nativeClearTimeout(timeout);
+        }
         clock?.uninstall();
       }
     });
