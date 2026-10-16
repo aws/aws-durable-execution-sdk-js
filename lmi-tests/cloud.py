@@ -184,7 +184,18 @@ class Cloud:
 
     def finish(self, item, status="SUCCEEDED", seconds=150):
         def terminal():
-            response = self.lam.get_durable_execution(DurableExecutionArn=item["arn"])
+            try:
+                response = self.lam.get_durable_execution(DurableExecutionArn=item["arn"])
+            except ClientError as error:
+                if error.response["Error"]["Code"] not in {
+                    "ResourceNotFoundException",
+                    "TooManyRequestsException",
+                }:
+                    raise
+                # An accepted asynchronous Invoke can precede read visibility.
+                # Retry this ARN only within the existing poll deadline; never
+                # repeat Invoke, infer completion, or extend recovery windows.
+                return None
             return response if response["Status"] != "RUNNING" else None
 
         result = self.poll(terminal, seconds=seconds)
