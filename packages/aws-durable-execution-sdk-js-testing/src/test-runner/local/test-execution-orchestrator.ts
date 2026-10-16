@@ -27,6 +27,13 @@ import { QueueScheduler } from "./orchestration/queue-scheduler";
 import { TimerScheduler } from "./orchestration/timer-scheduler";
 import { CheckpointApiClient } from "./api-client/checkpoint-api-client";
 import { realSetTimeout } from "./real-timers/real-timers";
+import {
+  SkipTimeCoordinator,
+  SkipTimeParticipant,
+} from "./orchestration/skip-time-coordinator";
+
+/** The longest delay setTimeout accepts. A longer one fires at once. */
+const MAX_TIMER_MS = 2_147_483_647;
 
 export interface SkipTimeProps {
   enabled: boolean;
@@ -46,7 +53,7 @@ const TERMINAL_EXECUTION_STATUSES: ReadonlySet<OperationStatus> = new Set([
   OperationStatus.TIMED_OUT,
 ]);
 
-export class TestExecutionOrchestrator {
+export class TestExecutionOrchestrator implements SkipTimeParticipant {
   private executionState: TestExecutionState;
   private invokeHandlerInstance: InvokeHandler;
   private invocationTracker: InvocationTracker;
@@ -65,8 +72,12 @@ export class TestExecutionOrchestrator {
    * further end is applied by advancing the fake clock.
    */
   private timedCompletionReleased = false;
-  /** Real timer for the next end, armed while an invocation is running. */
+  /** Real timer for the next pending end. */
   private timedCompletionTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The execution whose ends are pending, set once it starts. */
+  private skipTimeExecutionId: ExecutionId | undefined;
+  /** Moves the fake clock that this execution shares with every other runner. */
+  private readonly skipTimeCoordinator: SkipTimeCoordinator | undefined;
 
   // Pausing. The checkpoint server's half is to answer checkpoints without a token, which
   // suspends the invocation running at the time; this half is to start no invocation while
@@ -106,6 +117,12 @@ export class TestExecutionOrchestrator {
     this.scheduler = this.skipTimeProps.enabled
       ? new QueueScheduler()
       : new TimerScheduler();
+    if (this.skipTimeProps.enabled && this.skipTimeProps.fakeClock) {
+      this.skipTimeCoordinator = SkipTimeCoordinator.forClock(
+        this.skipTimeProps.fakeClock,
+      );
+      this.skipTimeCoordinator.register(this);
+    }
     // Only pause() and resume() await this, and neither need be called: without a handler a
     // failed start would surface as an unhandled rejection besides the error run() reports.
     this.executionId.catch(() => undefined);
@@ -312,6 +329,8 @@ export class TestExecutionOrchestrator {
       // Nothing left to pause, so release anyone waiting for the execution to go quiet.
       this.settled = true;
       this.notifyIdle();
+      // Let the other executions sharing the fake clock advance without this one.
+      this.skipTimeCoordinator?.unregister(this);
 
       // Stop polling, but do not abort yet. A poll can be in flight with the last updates:
       // the checkpoint server has already taken them from its queue to answer it. If an
@@ -749,11 +768,12 @@ export class TestExecutionOrchestrator {
     updateCheckpoint: () => Promise<void>,
   ): void {
     if (this.skipTimeProps.enabled) {
+      this.skipTimeExecutionId = executionId;
       this.timedCompletions.push({
         deadlineMs: timestamp.getTime(),
         complete: updateCheckpoint,
       });
-      this.releaseTimedCompletions(executionId);
+      this.releaseTimedCompletions();
       return;
     }
 
@@ -768,75 +788,87 @@ export class TestExecutionOrchestrator {
   }
 
   /**
-   * With skipTime, completes waits and retries when their ends come, without letting a later
-   * end move the fake clock past an earlier one.
+   * With skipTime, completes waits and retries when their ends come, without letting the
+   * fake clock pass an end before the work that resumes there has run.
    *
-   * The checkpoint server records every scheduled end on the fake clock. There are two cases.
+   * The checkpoint server records every scheduled end on the fake clock. The fake clock
+   * advances with real time, and the {@link SkipTimeCoordinator} also moves it forward when
+   * every execution sharing it is idle. So this does two things:
    *
-   * 1. No invocation is running or queued to start. Nothing can happen before the earliest
-   *    end. So this advances the fake clock to that end, completes every operation that ends
-   *    there, and starts one invocation. That invocation runs, and may start further delays,
-   *    before the next end is applied.
-   * 2. An invocation is running. The fake clock advances with real time while it runs, and
-   *    the invocation can observe a completion by polling, as it can in the service. So this
-   *    completes every operation whose end has come, and arms a real timer for the next end.
-   *    It does not advance the fake clock, which would skip time the invocation is using.
-   *
-   * Advancing to any end other than the earliest would let a branch that resumes at an
-   * earlier end start its next delay from the later one.
+   * 1. It completes every pending operation whose end the clock has reached, and arms a
+   *    real timer for the next end. A running invocation observes the completion by polling,
+   *    as it does in the service.
+   * 2. It asks the coordinator to advance. The coordinator moves the clock only when no
+   *    execution is busy, and only to the earliest end across all of them.
    */
-  private releaseTimedCompletions(executionId: ExecutionId): void {
+  private releaseTimedCompletions(): void {
     if (this.timedCompletionTimer) {
       clearTimeout(this.timedCompletionTimer);
       this.timedCompletionTimer = undefined;
     }
 
-    if (this.settled || this.timedCompletions.length === 0) {
-      return;
-    }
+    if (!this.settled && this.timedCompletions.length > 0) {
+      this.timedCompletions.sort((a, b) => a.deadlineMs - b.deadlineMs);
+      this.completeTimedCompletionsUntil(Date.now());
 
-    this.timedCompletions.sort((a, b) => a.deadlineMs - b.deadlineMs);
-
-    if (this.runningInvocations > 0) {
-      this.completeTimedCompletionsUntil(Date.now(), executionId, false);
       const next = this.timedCompletions.at(0);
       if (next) {
-        this.timedCompletionTimer = realSetTimeout(
+        const timer = realSetTimeout(
           () => {
             this.timedCompletionTimer = undefined;
-            this.releaseTimedCompletions(executionId);
+            this.releaseTimedCompletions();
           },
-          Math.max(0, next.deadlineMs - Date.now()),
+          Math.min(Math.max(0, next.deadlineMs - Date.now()), MAX_TIMER_MS),
         );
+        // A test can finish while a long wait is still pending. The timer must not keep
+        // the process alive.
+        timer.unref?.();
+        this.timedCompletionTimer = timer;
       }
-      return;
     }
 
-    if (
+    if (this.skipTimeCoordinator) {
+      this.skipTimeCoordinator.advance();
+    } else if (!this.isBusy()) {
+      // Without a fake clock there is no time to advance. Apply the earliest end directly.
+      const earliest = this.earliestDeadline();
+      if (earliest !== undefined) {
+        this.applyDeadline(earliest);
+      }
+    }
+  }
+
+  /** See {@link SkipTimeParticipant.isBusy}. */
+  isBusy(): boolean {
+    return (
+      this.runningInvocations > 0 ||
       this.timedCompletionReleased ||
       (this.scheduler instanceof QueueScheduler &&
         this.scheduler.hasQueuedFunction())
-    ) {
-      // An invocation starts next. When it ends, the next end is applied.
-      return;
-    }
+    );
+  }
 
-    const deadlineMs = this.timedCompletions[0].deadlineMs;
-    this.advanceFakeClockTo(deadlineMs);
-    this.completeTimedCompletionsUntil(deadlineMs, executionId, true);
+  /** See {@link SkipTimeParticipant.earliestDeadline}. */
+  earliestDeadline(): number | undefined {
+    if (this.settled || this.timedCompletions.length === 0) {
+      return undefined;
+    }
+    return Math.min(...this.timedCompletions.map((c) => c.deadlineMs));
+  }
+
+  /** See {@link SkipTimeParticipant.applyDeadline}. */
+  applyDeadline(deadlineMs: number): void {
+    this.timedCompletions.sort((a, b) => a.deadlineMs - b.deadlineMs);
+    this.completeTimedCompletionsUntil(deadlineMs);
   }
 
   /**
    * Completes every pending wait and retry that ends by the given time, and queues one
-   * invocation to continue the execution.
-   *
-   * @param markReleased Whether to hold back further ends until that invocation starts
+   * invocation to continue the execution. Until that invocation starts, the execution
+   * counts as busy, so the clock does not advance past work it has to do.
    */
-  private completeTimedCompletionsUntil(
-    timestampMs: number,
-    executionId: ExecutionId,
-    markReleased: boolean,
-  ): void {
+  private completeTimedCompletionsUntil(timestampMs: number): void {
+    const executionId = this.skipTimeExecutionId;
     const dueCount = this.timedCompletions.findIndex(
       (completion) => completion.deadlineMs > timestampMs,
     );
@@ -844,13 +876,11 @@ export class TestExecutionOrchestrator {
       0,
       dueCount === -1 ? this.timedCompletions.length : dueCount,
     );
-    if (due.length === 0) {
+    if (due.length === 0 || executionId === undefined) {
       return;
     }
 
-    if (markReleased) {
-      this.timedCompletionReleased = true;
-    }
+    this.timedCompletionReleased = true;
     this.scheduler.scheduleFunction(
       () => {
         this.timedCompletionReleased = false;
@@ -867,24 +897,6 @@ export class TestExecutionOrchestrator {
         }
       },
     );
-  }
-
-  private advanceFakeClockTo(timestampMs: number): void {
-    const fakeClock = this.skipTimeProps.fakeClock;
-    if (!fakeClock) {
-      defaultLogger.debug(
-        "Skipped advancing fake timers since timers were not initialized",
-      );
-      return;
-    }
-
-    // No invocation is running here, so no SDK timer is pending: a tick only moves
-    // Date.now() forward, and fires any timer the test itself has set.
-    const advanceTimersMs = timestampMs - Date.now();
-    if (advanceTimersMs > 0) {
-      defaultLogger.debug(`Advancing fake clock by ${advanceTimersMs}ms`);
-      fakeClock.tick(advanceTimersMs);
-    }
   }
 
   /**
@@ -910,6 +922,8 @@ export class TestExecutionOrchestrator {
       this.deferredInvocation = {
         params: invocationParams ?? this.deferredInvocation?.params,
       };
+      // Waits keep elapsing while paused. Nothing runs, so the next end can be applied.
+      this.releaseTimedCompletions();
       return;
     }
 
@@ -921,7 +935,7 @@ export class TestExecutionOrchestrator {
       if (this.runningInvocations === 0) {
         this.notifyIdle();
         // Nothing runs now, so the earliest pending wait or retry end can be applied.
-        this.releaseTimedCompletions(executionId);
+        this.releaseTimedCompletions();
       }
     }
   }
