@@ -149,6 +149,22 @@ describe("SkipTimeCoordinator", () => {
     expect(Date.now()).toBe(3000);
   });
 
+  it("advances only once when an invoke's hold is ended twice", () => {
+    // A context that completes without the invoke's result ends the hold. The invoke's
+    // own cleanup ends it again later.
+    const owner = participant({ deadline: 1000 });
+    coordinator.register(owner);
+    const end = startInvoke();
+    end();
+    expect(owner.applyDeadline).toHaveBeenCalledTimes(1);
+
+    owner.state.deadline = 2000;
+    end();
+
+    expect(owner.applyDeadline).toHaveBeenCalledTimes(1);
+    expect(Date.now()).toBe(1000);
+  });
+
   it("releases an invoke's hold on the clock when its caller finishes", () => {
     // The caller finished without the invoke's result, such as a parallel that completed
     // without that branch. The invoked function never returns.

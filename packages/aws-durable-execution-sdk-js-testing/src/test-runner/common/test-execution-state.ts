@@ -15,6 +15,15 @@ export interface TestExecutionResult {
 export class TestExecutionState {
   private resolveExecution?: (result: TestExecutionResult) => void;
   private rejectExecution?: (error: unknown) => void;
+  private settled = false;
+
+  /**
+   * Whether {@link resolveWith} or {@link rejectWith} has been called. The handler has then
+   * returned a final result, or the execution has failed, even if cleanup is still running.
+   */
+  isSettled(): boolean {
+    return this.settled;
+  }
 
   /**
    * Creates a promise that will be resolved when the execution completes.
@@ -32,6 +41,7 @@ export class TestExecutionState {
    * This should be called when the handler execution completes successfully.
    */
   resolveWith(result: TestExecutionResult): void {
+    this.settled = true;
     this.resolveExecution?.(result);
   }
 
@@ -41,6 +51,7 @@ export class TestExecutionState {
    */
   rejectWith(error: unknown): void {
     defaultLogger.debug("Rejecting execution with error", error);
+    this.settled = true;
     this.rejectExecution?.(error);
   }
 }
