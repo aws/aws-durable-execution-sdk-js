@@ -3,6 +3,12 @@ name: AI PR Review
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+  pull_request_review_comment:
+    types: [created, edited, deleted]
+  issue_comment:
+    types: [created]
 
 permissions: {}
 
@@ -12,7 +18,7 @@ jobs:
       contents: write
       id-token: write
       pull-requests: write
-    uses: aws/aws-durable-execution-ci/.github/workflows/ai-pr-review.yml@8ea82196db65b5b0dd67f0b72bb03fa2fa9cf65b
+    uses: aws/aws-durable-execution-ci/.github/workflows/ai-pr-review.yml@8a06a1e5c82083a9224af9d489ddd030be44d978
     with:
       # CodeBuild-hosted runner in the JavaScript testing account; the label must
       # match the CodeBuild project name.
