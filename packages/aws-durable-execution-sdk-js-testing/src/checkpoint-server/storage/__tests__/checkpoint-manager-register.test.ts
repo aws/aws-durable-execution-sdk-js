@@ -4,7 +4,10 @@ import {
   OperationAction,
   OperationStatus,
 } from "@aws/durable-execution-sdk-js";
-import { createExecutionId } from "../../utils/tagged-strings";
+import {
+  createExecutionId,
+  createInvocationId,
+} from "../../utils/tagged-strings";
 import { CheckpointManager } from "../checkpoint-manager";
 
 jest.mock("node:crypto", () => ({
@@ -174,6 +177,41 @@ describe("checkpoint-manager registerUpdate", () => {
     // Allow 1 second tolerance for test execution time
     expect(scheduledTime).toBeGreaterThan(now + 4000);
     expect(scheduledTime).toBeLessThan(now + 6000);
+  });
+
+  it("should carry the producing invocation on pending updates", async () => {
+    const invocationId = createInvocationId("wait-invocation");
+    storage.registerUpdate(
+      {
+        Id: "wait-id",
+        Type: OperationType.WAIT,
+        Action: OperationAction.START,
+        WaitOptions: { WaitSeconds: 5 },
+      },
+      invocationId,
+    );
+
+    const [pending] = await storage.getPendingCheckpointUpdates();
+
+    expect(pending.invocationId).toBe(invocationId);
+  });
+
+  it("should keep the original invocation when a wait start replays", async () => {
+    const originalInvocationId = createInvocationId("original-invocation");
+    const replayInvocationId = createInvocationId("replay-invocation");
+    const update: OperationUpdate = {
+      Id: "wait-id",
+      Type: OperationType.WAIT,
+      Action: OperationAction.START,
+      WaitOptions: { WaitSeconds: 5 },
+    };
+    storage.registerUpdate(update, originalInvocationId);
+    await storage.getPendingCheckpointUpdates();
+
+    storage.registerUpdate(update, replayInvocationId);
+    const [replayed] = await storage.getPendingCheckpointUpdates();
+
+    expect(replayed.invocationId).toBe(originalInvocationId);
   });
 
   it("should return existing operation if it has waitDetails with scheduledEndTimestamp", () => {

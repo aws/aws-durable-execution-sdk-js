@@ -247,7 +247,10 @@ describe("checkpoint handlers", () => {
       );
 
       expect(getStorageSpy).toHaveBeenCalledWith(executionId);
-      expect(registerUpdatesSpy).toHaveBeenCalledWith(input.Updates);
+      expect(registerUpdatesSpy).toHaveBeenCalledWith(
+        input.Updates,
+        invocationResult.invocationId,
+      );
 
       expect(result.CheckpointToken).toBeDefined();
       expect(result.NewExecutionState?.Operations).toEqual([
@@ -382,7 +385,10 @@ describe("checkpoint handlers", () => {
         executionManager,
       );
 
-      expect(registerUpdatesSpy).toHaveBeenCalledWith([]);
+      expect(registerUpdatesSpy).toHaveBeenCalledWith(
+        [],
+        invocationResult.invocationId,
+      );
       expect(result.CheckpointToken).toBeDefined();
       expect(result.NewExecutionState?.Operations).toEqual([
         {

@@ -9,7 +9,10 @@ import {
   OperationUpdate,
 } from "@aws/durable-execution-sdk-js";
 import { InvocationResult } from "../../checkpoint-server/storage/execution-manager";
-import { ExecutionId } from "../../checkpoint-server/utils/tagged-strings";
+import {
+  ExecutionId,
+  InvocationId,
+} from "../../checkpoint-server/utils/tagged-strings";
 import { InvokeHandler } from "./invoke-handler";
 import { LocalOperationStorage } from "./operations/local-operation-storage";
 import { InvocationTracker } from "./operations/invocation-tracker";
@@ -52,6 +55,8 @@ export class TestExecutionOrchestrator {
   private invocationTracker: InvocationTracker;
   private readonly scheduler: Scheduler;
   private readonly pendingOperations = new Set<string>();
+  /** Fake clock time at which each invocation started. */
+  private readonly invocationStartTimestamps = new Map<InvocationId, number>();
 
   // Pausing. The checkpoint server's half is to answer checkpoints without a token, which
   // suspends the invocation running at the time; this half is to start no invocation while
@@ -429,12 +434,12 @@ export class TestExecutionOrchestrator {
     operations: CheckpointOperation[],
     executionId: ExecutionId,
   ): void {
-    for (const { update, operation } of operations) {
+    for (const { update, operation, invocationId } of operations) {
       if (!operation.Id) {
         throw new Error("Could not process operation without an Id");
       }
 
-      this.processOperation(update, operation, executionId);
+      this.processOperation(update, operation, executionId, invocationId);
     }
   }
 
@@ -444,11 +449,13 @@ export class TestExecutionOrchestrator {
    * @param update The operation update containing processing instructions
    * @param operation The operation being processed
    * @param executionId The current execution ID
+   * @param invocationId The invocation that produced this operation update
    */
   private processOperation(
     update: OperationUpdate | undefined,
     operation: Operation,
     executionId: ExecutionId,
+    invocationId?: InvocationId,
   ): void {
     if (!operation.Id) {
       throw new Error("Could not process operation without an Id");
@@ -456,10 +463,10 @@ export class TestExecutionOrchestrator {
 
     switch (operation.Type) {
       case OperationType.WAIT:
-        this.handleWaitUpdate(update, operation, executionId);
+        this.handleWaitUpdate(update, operation, executionId, invocationId);
         break;
       case OperationType.STEP:
-        this.handleStepUpdate(update, operation, executionId);
+        this.handleStepUpdate(update, operation, executionId, invocationId);
         break;
       case OperationType.CALLBACK:
         this.handleCallbackUpdate(operation, executionId);
@@ -541,11 +548,13 @@ export class TestExecutionOrchestrator {
    * @param update The WAIT operation update containing timing information
    * @param operation The operation being processed
    * @param executionId The current execution ID
+   * @param invocationId The invocation that produced this wait
    */
   private handleWaitUpdate(
     update: OperationUpdate | undefined,
     operation: Operation,
     executionId: ExecutionId,
+    invocationId?: InvocationId,
   ): void {
     if (update?.Action !== OperationAction.START) {
       return;
@@ -568,23 +577,32 @@ export class TestExecutionOrchestrator {
       operation,
       update,
     });
-    this.scheduleInvocationAtTimestamp(waitEndTimestamp, executionId, () => {
-      defaultLogger.debug(
-        `Wait triggered at ${waitEndTimestamp.toISOString()}`,
-        {
+    const skipTimeEndTimestampMs = this.getSkipTimeTargetTimestamp(
+      invocationId,
+      update.WaitOptions?.WaitSeconds ?? 0,
+    );
+    this.scheduleInvocationAtTimestamp(
+      waitEndTimestamp,
+      executionId,
+      () => {
+        defaultLogger.debug(
+          `Wait triggered at ${waitEndTimestamp.toISOString()}`,
+          {
+            executionId,
+            operation,
+            update,
+          },
+        );
+        return this.checkpointApi.updateCheckpointData({
           executionId,
-          operation,
-          update,
-        },
-      );
-      return this.checkpointApi.updateCheckpointData({
-        executionId,
-        operationId,
-        operationData: {
-          Status: OperationStatus.SUCCEEDED,
-        },
-      });
-    });
+          operationId,
+          operationData: {
+            Status: OperationStatus.SUCCEEDED,
+          },
+        });
+      },
+      skipTimeEndTimestampMs,
+    );
   }
 
   /**
@@ -594,11 +612,13 @@ export class TestExecutionOrchestrator {
    * @param update The STEP operation update
    * @param operation The operation being processed
    * @param executionId The current execution ID
+   * @param invocationId The invocation that produced this retry
    */
   private handleStepUpdate(
     update: OperationUpdate | undefined,
     operation: Operation,
     executionId: ExecutionId,
+    invocationId?: InvocationId,
   ): void {
     if (update?.Action === OperationAction.RETRY) {
       const nextAttemptTimestamp = operation.StepDetails?.NextAttemptTimestamp;
@@ -623,6 +643,10 @@ export class TestExecutionOrchestrator {
           update,
         },
       );
+      const skipTimeNextAttemptTimestampMs = this.getSkipTimeTargetTimestamp(
+        invocationId,
+        update.StepOptions?.NextAttemptDelaySeconds ?? 0,
+      );
       this.scheduleInvocationAtTimestamp(
         nextAttemptTimestamp,
         executionId,
@@ -643,6 +667,7 @@ export class TestExecutionOrchestrator {
             },
           });
         },
+        skipTimeNextAttemptTimestampMs,
       );
     }
   }
@@ -717,16 +742,50 @@ export class TestExecutionOrchestrator {
   }
 
   /**
+   * Maps a relative delay from an invocation onto the main thread's fake clock.
+   *
+   * All waits and retries produced by one invocation share its start time. So parallel
+   * delays target the latest end rather than adding their durations. A later invocation
+   * starts from the fake time advanced by earlier work.
+   */
+  private getSkipTimeTargetTimestamp(
+    invocationId: InvocationId | undefined,
+    delaySeconds: number,
+  ): number | undefined {
+    if (!this.skipTimeProps.enabled) {
+      return undefined;
+    }
+
+    if (!invocationId) {
+      // Unit-test clients created before checkpoint notifications carried invocation IDs
+      // still exercise relative scheduling from their current fake time.
+      return Date.now() + delaySeconds * 1000;
+    }
+
+    const invocationStartTimestamp =
+      this.invocationStartTimestamps.get(invocationId);
+    if (invocationStartTimestamp === undefined) {
+      throw new Error(
+        `Could not find fake start time for invocation ${invocationId}`,
+      );
+    }
+
+    return invocationStartTimestamp + delaySeconds * 1000;
+  }
+
+  /**
    * Schedules an invocation to execute at a specific timestamp.
    *
    * @param timestamp The time that the next invocation should start
    * @param executionId The id of the execution
    * @param updateCheckpoint Function that always executes before the next invocation (e.g., for checkpoint updates)
+   * @param skipTimeTargetTimestampMs The target on the main thread's fake clock
    */
   private scheduleInvocationAtTimestamp(
     timestamp: Date,
     executionId: ExecutionId,
     updateCheckpoint: () => Promise<void>,
+    skipTimeTargetTimestampMs?: number,
   ): void {
     this.scheduler.scheduleFunction(
       () => this.invokeHandler(executionId),
@@ -750,8 +809,12 @@ export class TestExecutionOrchestrator {
 
           // When skipTime is enabled, we are advancing the timers in the language SDK waitBeforeContinue timers.
           const timerCount = fakeClock.countTimers();
-          const advanceTimersMs = timestamp.getTime() - Date.now();
-          if (timerCount > 0 && advanceTimersMs > 0) {
+          const advanceTimersMs =
+            (skipTimeTargetTimestampMs ?? timestamp.getTime()) - Date.now();
+          // Advance logical time even when the SDK has cleared its invocation-local
+          // timers. Parallel waits can outlive the invocation that created those timers,
+          // but later branches still complete at their declared fake-time targets.
+          if (advanceTimersMs > 0) {
             defaultLogger.debug(
               `Advancing fake timers for ${timerCount} timers by ${advanceTimersMs}ms`,
             );
@@ -831,6 +894,10 @@ export class TestExecutionOrchestrator {
       }));
 
     const operations = operationEvents.map((operation) => operation.operation);
+
+    if (this.skipTimeProps.enabled) {
+      this.invocationStartTimestamps.set(invocationId, Date.now());
+    }
 
     try {
       defaultLogger.debug(`Invoking handler with invocationId=${invocationId}`);

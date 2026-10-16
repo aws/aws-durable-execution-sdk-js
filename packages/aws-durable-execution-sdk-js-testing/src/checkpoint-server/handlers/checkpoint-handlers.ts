@@ -135,7 +135,10 @@ export function processCheckpointDurableExecution(
 
   // The service applies the integer that it reads for each integer member.
   // So the local server stores the same integers.
-  storage.registerUpdates(updates.map(normalizeUpdateIntegers));
+  storage.registerUpdates(
+    updates.map(normalizeUpdateIntegers),
+    data.invocationId,
+  );
 
   const output: CheckpointDurableExecutionResponse = {
     // A paused execution still accepts this checkpoint: its updates were registered above.

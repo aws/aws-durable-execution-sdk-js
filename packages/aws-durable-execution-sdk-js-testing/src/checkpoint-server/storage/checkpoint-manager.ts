@@ -22,6 +22,9 @@ export interface CheckpointOperation extends OperationEvents {
   // required for test execution orchestrator to process retries
   // TODO: schedule the retries internally instead of polling for updates
   update: OperationUpdate | undefined;
+  // Identifies the invocation whose fake start time anchors this wait or retry delay.
+  // For a replayed wait, this remains the invocation that first started the wait.
+  invocationId?: InvocationId;
 }
 
 /**
@@ -36,6 +39,8 @@ export class CheckpointManager {
   readonly eventProcessor = new EventProcessor();
   private readonly invocationsMap = new Map<InvocationId, Date>();
   private readonly dirtyOperationIds = new Set<string>();
+  /** Invocation whose fake start time anchors each wait's relative duration. */
+  private readonly waitInvocationIds = new Map<string, InvocationId>();
 
   private _isExecutionCompleted = false;
 
@@ -407,7 +412,10 @@ export class CheckpointManager {
    * @param invocationId The invocation ID these updates belong to
    * @returns Array of checkpoint operations with their associated updates
    */
-  registerUpdates(updates: OperationUpdate[]): OperationEvents[] {
+  registerUpdates(
+    updates: OperationUpdate[],
+    invocationId?: InvocationId,
+  ): OperationEvents[] {
     if (this._isExecutionCompleted) {
       // Checkpoint token is invalid once execution is completed
       throw new InvalidParameterValueException({
@@ -416,7 +424,7 @@ export class CheckpointManager {
       });
     }
 
-    return updates.map((update) => this.registerUpdate(update));
+    return updates.map((update) => this.registerUpdate(update, invocationId));
   }
 
   /**
@@ -580,9 +588,13 @@ export class CheckpointManager {
    * Register an operation update to be stored in the checkpoint manager.
    * This function does not schedule anything and is only used for storing the data.
    * `getPendingCheckpointUpdates` should be used for acting on the data after each update.
+   * @param invocationId The invocation that produced the update
    * @returns the operation update along with the operation itself
    */
-  registerUpdate(update: OperationUpdate): OperationEvents {
+  registerUpdate(
+    update: OperationUpdate,
+    invocationId?: InvocationId,
+  ): OperationEvents {
     // An EXECUTION-typed update always refers to the execution itself, whatever
     // id the caller used. The SDK's oversized-result path checkpoints with a
     // synthetic `execution-result-<timestamp>` id; the service applies it to the
@@ -608,6 +620,7 @@ export class CheckpointManager {
         this.addOperationUpdate({
           ...previousOperation,
           update,
+          invocationId: this.waitInvocationIds.get(update.Id) ?? invocationId,
         });
         return previousOperation;
       }
@@ -616,6 +629,7 @@ export class CheckpointManager {
       this.addOperationUpdate({
         ...completedOperation,
         update,
+        invocationId,
       });
       return completedOperation;
     }
@@ -632,6 +646,9 @@ export class CheckpointManager {
 
     switch (update.Type) {
       case OperationType.WAIT: {
+        if (invocationId) {
+          this.waitInvocationIds.set(update.Id, invocationId);
+        }
         const scheduledEndTimestamp = new Date();
         const waitSeconds = update.WaitOptions?.WaitSeconds ?? 0;
         scheduledEndTimestamp.setSeconds(
@@ -692,6 +709,7 @@ export class CheckpointManager {
     this.addOperationUpdate({
       ...updatedResult,
       update,
+      invocationId,
     });
 
     return updatedResult;
@@ -702,6 +720,7 @@ export class CheckpointManager {
   cleanup(): void {
     this.operationDataMap.clear();
     this.dirtyOperationIds.clear();
+    this.waitInvocationIds.clear();
     this.callbackManager.cleanup();
   }
 }

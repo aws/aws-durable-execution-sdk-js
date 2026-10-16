@@ -81,6 +81,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- With `skipTime` enabled, the testing SDK now advances its fake clock from the start of the
+  invocation that produced each wait or retry. The checkpoint worker uses real time, so its
+  absolute scheduled timestamps fell behind fake time after the first wait. A later sequential
+  wait then advanced by only real elapsed time. Parallel waits could also stop at the first end
+  instead of the latest one. Sequential waits now each advance by their duration, while parallel
+  waits advance to their latest end without adding their durations.
+
 - The testing SDK's local runner no longer waits for the fake clock's 20 ms advancement interval
   before it starts each queued invocation when `skipTime` is enabled. QueueScheduler now yields
   with the real `setImmediate`, so the fake clock controls durable time without delaying scheduler
