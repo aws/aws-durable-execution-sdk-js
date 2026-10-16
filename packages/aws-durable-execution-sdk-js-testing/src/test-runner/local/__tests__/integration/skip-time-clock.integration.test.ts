@@ -427,6 +427,61 @@ describe("skip-time clock", () => {
     expectDuration(end - start, HOUR_MS);
   });
 
+  it.each([
+    [
+      "promise.race",
+      (context: DurableContext) =>
+        context.promise.race("race", [
+          context.invoke("never", "neverReturns", {}),
+          context.wait("short", { seconds: 1 }),
+        ]),
+    ],
+    [
+      "promise.any",
+      (context: DurableContext) =>
+        context.promise.any("any", [
+          context.invoke("never", "neverReturns", {}),
+          context.wait("short", { seconds: 1 }),
+        ]),
+    ],
+    [
+      "a handler that never awaits it",
+      async (context: DurableContext) => {
+        context.invoke("never", "neverReturns", {}).then(
+          () => undefined,
+          () => undefined,
+        );
+      },
+    ],
+  ] as const)(
+    "skips time with a non-durable invoke left unanswered by %s",
+    async (_name, leaveInvokeUnanswered) => {
+      // The non-durable invoked function never returns, and the handler does not wait for
+      // it. The runner cannot see that. So the clock waits for the function only for a
+      // bounded real time, and the later wait still skips time.
+      const handler = withDurableExecution(
+        async (_event: unknown, context: DurableContext) => {
+          await leaveInvokeUnanswered(context);
+          const start = await context.step("start", async () => Date.now());
+          await context.wait("later", { seconds: HOUR_SECONDS });
+          const end = await context.step("end", async () => Date.now());
+          return { start, end };
+        },
+      );
+      const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+      runner.registerFunction(
+        "neverReturns",
+        () => new Promise(() => undefined),
+      );
+
+      const { start, end } = await runner
+        .run()
+        .then((result) => result.getResult());
+
+      expectDuration(end - start, HOUR_MS);
+    },
+  );
+
   it("applies no pending end after the handler returns its result", async () => {
     // The parallel completes on the 1 h wait. The 3 h wait is still pending when the
     // handler returns, and must not complete after the execution does.

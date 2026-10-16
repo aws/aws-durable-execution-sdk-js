@@ -1,5 +1,6 @@
 import { Clock, install } from "@sinonjs/fake-timers";
 import {
+  NON_DURABLE_INVOKE_HOLD_MS,
   SkipTimeCoordinator,
   SkipTimeParticipant,
 } from "../skip-time-coordinator";
@@ -163,6 +164,53 @@ describe("SkipTimeCoordinator", () => {
 
     expect(owner.applyDeadline).toHaveBeenCalledTimes(1);
     expect(Date.now()).toBe(1000);
+  });
+
+  it("stops waiting for a function outside the clock after the hold time", async () => {
+    // The function never returns, as when a promise combinator stops awaiting it.
+    coordinator.register(participant({ deadline: 3000 }));
+    const caller = participant();
+    coordinator.register(caller);
+    coordinator.startInvoke(caller, () => new Promise<void>(() => undefined));
+
+    coordinator.advance();
+    expect(Date.now()).toBe(0);
+
+    await new Promise((resolve) =>
+      setTimeout(resolve, NON_DURABLE_INVOKE_HOLD_MS + 100),
+    );
+
+    expect(Date.now()).toBe(3000);
+  });
+
+  it("holds a returned function's result until the caller resumes, even after the hold time", async () => {
+    coordinator.register(participant({ deadline: 3000 }));
+    const caller = participant();
+    coordinator.register(caller);
+    let returnResult!: () => void;
+    const { end } = coordinator.startInvoke(
+      caller,
+      () =>
+        new Promise<void>((resolve) => {
+          returnResult = resolve;
+        }),
+    );
+    await new Promise((resolve) =>
+      setTimeout(resolve, NON_DURABLE_INVOKE_HOLD_MS + 100),
+    );
+    // The hold time has passed, so the clock advanced. Reset it to check the next hold.
+    expect(Date.now()).toBe(3000);
+    clock.setSystemTime(0);
+
+    returnResult();
+    await Promise.resolve();
+    coordinator.advance();
+
+    expect(Date.now()).toBe(0);
+
+    end();
+
+    expect(Date.now()).toBe(3000);
   });
 
   it("releases an invoke's hold on the clock when its caller finishes", () => {
