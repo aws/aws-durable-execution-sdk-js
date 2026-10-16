@@ -17,6 +17,7 @@ import { waitHistoryDetails } from "./wait-details";
 import { chainedInvokeHistoryDetails } from "./chained-invoke-details";
 import { executionDetails } from "./execution-details";
 import { pruneReplayChildren } from "./prune-replay-children";
+import { currentTime } from "../utils/client-clock";
 
 export interface CheckpointOperation extends OperationEvents {
   // required for test execution orchestrator to process retries
@@ -115,7 +116,7 @@ export class CheckpointManager {
     operationEvents: OperationEvents[];
     updatedOperationIds: string[];
   } {
-    this.invocationsMap.set(invocationId, new Date());
+    this.invocationsMap.set(invocationId, currentTime());
 
     // Capture the IDs of operations that were updated externally between invocations
     // (e.g., wait timers expired, callbacks received, chained invokes completed).
@@ -149,7 +150,7 @@ export class CheckpointManager {
 
     return {
       startTimestamp,
-      endTimestamp: new Date(),
+      endTimestamp: currentTime(),
     };
   }
 
@@ -175,7 +176,7 @@ export class CheckpointManager {
       Id: initialId,
       Type: OperationType.EXECUTION,
       Status: OperationStatus.STARTED,
-      StartTimestamp: new Date(),
+      StartTimestamp: currentTime(),
       ExecutionDetails: {
         InputPayload: payload,
       },
@@ -284,7 +285,7 @@ export class CheckpointManager {
     const result: Operation = {
       ...operation,
       Status: status,
-      EndTimestamp: new Date(),
+      EndTimestamp: currentTime(),
     };
 
     if (operation.Type === OperationType.STEP) {
@@ -302,7 +303,7 @@ export class CheckpointManager {
     attempt: number,
     retryDelaySeconds = 0,
   ): void {
-    const scheduledEndTimestamp = new Date();
+    const scheduledEndTimestamp = currentTime();
     scheduledEndTimestamp.setSeconds(
       scheduledEndTimestamp.getSeconds() + retryDelaySeconds,
     );
@@ -625,14 +626,14 @@ export class CheckpointManager {
       ParentId: update.ParentId,
       Name: update.Name,
       Type: update.Type,
-      StartTimestamp: new Date(),
+      StartTimestamp: currentTime(),
       Status: OperationStatus.STARTED,
       SubType: update.SubType,
     };
 
     switch (update.Type) {
       case OperationType.WAIT: {
-        const scheduledEndTimestamp = new Date();
+        const scheduledEndTimestamp = currentTime();
         const waitSeconds = update.WaitOptions?.WaitSeconds ?? 0;
         scheduledEndTimestamp.setSeconds(
           scheduledEndTimestamp.getSeconds() + waitSeconds,
