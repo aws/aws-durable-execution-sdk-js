@@ -4,6 +4,7 @@ import {
 } from "@aws/durable-execution-sdk-js";
 import { LocalDurableTestRunner } from "../../local-durable-test-runner";
 import { WaitingOperationStatus } from "../../../types/durable-operation";
+import { realSetTimeout } from "../../real-timers/real-timers";
 
 /**
  * pauseExecution and resumeExecution with skipTime, which swaps the timer scheduler for a
@@ -15,14 +16,16 @@ beforeAll(() =>
 );
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
-/** Whether `promise` settles within a short window. */
+/** Whether `promise` settles within a short window, measured in real time. */
 const settlesSoon = (promise: Promise<unknown>): Promise<boolean> =>
   Promise.race([
     promise.then(
       () => true,
       () => true,
     ),
-    new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 200)),
+    new Promise<boolean>((resolve) =>
+      realSetTimeout(() => resolve(false), 200),
+    ),
   ]);
 
 describe("pauseExecution and resumeExecution with skipTime", () => {
@@ -62,6 +65,41 @@ describe("pauseExecution and resumeExecution with skipTime", () => {
     const result = await execution;
 
     expect(result.getStatus()).toBe("SUCCEEDED");
+    expect(result.getResult()).toBe("done");
+  }, 30000);
+
+  it("keeps completing waits with different ends while paused", async () => {
+    const handler = withDurableExecution(
+      async (_event: unknown, context: DurableContext) => {
+        await context.parallel("waits", [
+          async (child) => child.wait("one hour", { hours: 1 }),
+          async (child) => child.wait("two hours", { hours: 2 }),
+        ]);
+        return "done";
+      },
+    );
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+
+    const execution = runner.run({ payload: {} });
+    await runner
+      .getOperation("two hours")
+      .waitForData(WaitingOperationStatus.STARTED);
+    await runner.pauseExecution();
+
+    // Both waits end while paused, although each needs the clock to reach its own end.
+    const bothCompleted = Promise.all([
+      runner
+        .getOperation("one hour")
+        .waitForData(WaitingOperationStatus.COMPLETED),
+      runner
+        .getOperation("two hours")
+        .waitForData(WaitingOperationStatus.COMPLETED),
+    ]);
+    expect(await settlesSoon(bothCompleted)).toBe(true);
+
+    await runner.resumeExecution();
+    const result = await execution;
+
     expect(result.getResult()).toBe("done");
   }, 30000);
 

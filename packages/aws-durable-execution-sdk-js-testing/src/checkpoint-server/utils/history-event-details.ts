@@ -5,6 +5,7 @@ import {
   OperationType,
   Operation,
 } from "@aws/durable-execution-sdk-js";
+import { currentTime } from "./client-clock";
 
 export type OperationActionWithoutRetry = Exclude<
   OperationAction,
@@ -206,7 +207,7 @@ const historyEventDetailMap = {
     EventType.WaitStarted,
     "WaitStartedDetails",
     (update) => {
-      const scheduledEndTimestamp = new Date();
+      const scheduledEndTimestamp = currentTime();
       scheduledEndTimestamp.setSeconds(
         scheduledEndTimestamp.getSeconds() +
           (update.WaitOptions?.WaitSeconds ?? 0),

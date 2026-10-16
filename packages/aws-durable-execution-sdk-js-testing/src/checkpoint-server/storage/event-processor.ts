@@ -11,6 +11,7 @@ import {
   HistoryEventDetail,
   OperationActionWithoutRetry,
 } from "../utils/history-event-details";
+import { currentTime } from "../utils/client-clock";
 
 /**
  * Processes operation updates and transforms them into properly formatted history events.
@@ -68,7 +69,7 @@ export class EventProcessor {
       EventId: this.eventId++,
       Id: operation?.Id,
       Name: operation?.Name,
-      EventTimestamp: new Date(),
+      EventTimestamp: currentTime(),
       ParentId: operation?.ParentId,
       [detailPlace]: details,
     };
@@ -117,7 +118,7 @@ export class EventProcessor {
       EventId: this.eventId++,
       Id: update.Id,
       Name: update.Name,
-      EventTimestamp: new Date(),
+      EventTimestamp: currentTime(),
       ParentId: update.ParentId,
       [historyDetails.detailPlace]: historyDetails.getDetails(
         update,
