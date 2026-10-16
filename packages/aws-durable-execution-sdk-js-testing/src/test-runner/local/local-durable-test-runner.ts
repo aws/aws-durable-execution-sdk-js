@@ -71,6 +71,10 @@ export interface LocalDurableTestRunnerSetupParameters {
    * non-durable invoked function, fires after its delay in real time. To keep such a test
    * fast, shorten the delay in the test, or use `context.wait` for a durable delay.
    *
+   * While a non-durable invoked function runs, the clock waits for its result for up to 1 s
+   * of real time. If the function takes longer, a later wait or retry end can be applied
+   * before its result arrives.
+   *
    * When set to `false` or undefined, real timers will be used and any time-based
    * operations will execute with their actual delays.
    *

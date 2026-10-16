@@ -1,5 +1,19 @@
 import { Clock } from "@sinonjs/fake-timers";
 import { defaultLogger } from "../../../logger";
+import { realSetTimeout } from "../real-timers/real-timers";
+
+/**
+ * How long, in real time, the clock waits for a running non-durable invoked function.
+ *
+ * A non-durable function runs outside the clock. While it runs, the clock does not advance,
+ * so its result reaches the caller before a later wait or retry end. But the runner cannot
+ * see whether the handler still awaits the result. A promise combinator such as
+ * `context.promise.race` stops awaiting its other operands, and a handler may never await
+ * an invoke at all. If such a function never returns, the clock would never advance again.
+ * So the clock waits for the function only this long. After that, the clock may advance
+ * before the function's result arrives.
+ */
+export const NON_DURABLE_INVOKE_HOLD_MS = 1000;
 
 /**
  * One execution's view of the fake clock, as seen by {@link SkipTimeCoordinator}.
@@ -46,9 +60,11 @@ export interface SkipTimeParticipant {
  * resumes it. The clock does not advance while a tracked invoke's invoked function is idle
  * without pending work, which means it has finished. It also does not advance while a
  * tracked invoke has no invoked participant, as with a non-durable function, which runs
- * outside the clock. Pending work elsewhere does not lift this, because it is not the
- * result on its way back. When a caller finishes without an invoke's result, as when a
- * parallel completes without that branch, its invokes stop holding the clock.
+ * outside the clock, for up to {@link NON_DURABLE_INVOKE_HOLD_MS} of real time. Pending
+ * work elsewhere does not lift this, because it is not the result on its way back. When a
+ * caller finishes without an invoke's result, as when a parallel completes without that
+ * branch, its invokes stop holding the clock. Once a non-durable function returns, its
+ * result holds the clock until the caller has queued the invocation that resumes it.
  *
  * Advancing past an earlier end would let work resuming at that end start its next delay
  * from the later one.
@@ -93,7 +109,7 @@ export class SkipTimeCoordinator {
     this.participants.delete(participant);
     for (const invoke of this.invokes) {
       if (invoke.caller === participant) {
-        this.invokes.delete(invoke);
+        this.deleteInvoke(invoke);
       }
     }
     this.advance();
@@ -104,8 +120,9 @@ export class SkipTimeCoordinator {
    *
    * `start` must create the invoked function's runner synchronously. The participant that
    * registers during `start` is the invoked function. If none registers, the invoked
-   * function runs outside the clock, and the clock does not advance until `end()`, or until
-   * `caller` unregisters.
+   * function runs outside the clock. The clock then does not advance until `end()`, until
+   * `caller` unregisters, or until the function has run for
+   * {@link NON_DURABLE_INVOKE_HOLD_MS} of real time without returning.
    *
    * @param caller the execution waiting for the invoke's result
    * @returns the promise `start` returned, and `end()`, which the caller must call once
@@ -130,7 +147,13 @@ export class SkipTimeCoordinator {
       }
       return { result, end: () => undefined };
     }
-    const invoke: InvokeHandoff = { caller, invoked: undefined };
+    const invoke: InvokeHandoff = {
+      caller,
+      invoked: undefined,
+      returned: false,
+      holdExpired: false,
+      holdTimer: undefined,
+    };
     this.invokes.add(invoke);
     this.startingInvoke = invoke;
     let result: Promise<T>;
@@ -145,18 +168,40 @@ export class SkipTimeCoordinator {
       // Expected for a non-durable function. For a durable function, its runner did not
       // register before the invoke's first await, so its waits would take real time.
       defaultLogger.debug(
-        "No runner registered while starting an invoke. The fake clock stays until the caller resumes.",
+        `No runner registered while starting an invoke. The fake clock waits up to ${NON_DURABLE_INVOKE_HOLD_MS}ms of real time for it.`,
       );
+      const onReturn = () => {
+        invoke.returned = true;
+      };
+      result.then(onReturn, onReturn);
+      const timer = realSetTimeout(() => {
+        invoke.holdTimer = undefined;
+        invoke.holdExpired = true;
+        this.advance();
+      }, NON_DURABLE_INVOKE_HOLD_MS);
+      // A test can finish while the function still runs. The timer must not keep the
+      // process alive.
+      timer.unref?.();
+      invoke.holdTimer = timer;
     }
     return {
       result,
       end: () => {
         // Idempotent: a caller can end a hold after its context has already released it.
-        if (this.invokes.delete(invoke)) {
+        if (this.deleteInvoke(invoke)) {
           this.advance();
         }
       },
     };
+  }
+
+  /** Stops tracking an invoke. @returns whether it was still tracked */
+  private deleteInvoke(invoke: InvokeHandoff): boolean {
+    if (invoke.holdTimer) {
+      clearTimeout(invoke.holdTimer);
+      invoke.holdTimer = undefined;
+    }
+    return this.invokes.delete(invoke);
   }
 
   /**
@@ -170,10 +215,15 @@ export class SkipTimeCoordinator {
     }
 
     for (const invoke of this.invokes) {
-      // An invoked function that is idle without pending work has finished, even if it
-      // has not unregistered yet. Its result is on its way back to its caller. Without an
-      // invoked participant, the invoked function runs outside the clock.
-      if (!invoke.invoked?.hasPendingWork()) {
+      if (invoke.invoked) {
+        // An invoked function that is idle without pending work has finished, even if it
+        // has not unregistered yet. Its result is on its way back to its caller.
+        if (!invoke.invoked.hasPendingWork()) {
+          return;
+        }
+      } else if (invoke.returned || !invoke.holdExpired) {
+        // A non-durable function runs outside the clock. Hold for its result while it may
+        // still return soon, and always once it has returned.
         return;
       }
     }
@@ -216,4 +266,10 @@ interface InvokeHandoff {
   caller: SkipTimeParticipant;
   /** The invoked function's execution, if it runs on the clock. */
   invoked: SkipTimeParticipant | undefined;
+  /** Without `invoked`: whether the function has returned or thrown. */
+  returned: boolean;
+  /** Without `invoked`: whether the function has run past {@link NON_DURABLE_INVOKE_HOLD_MS}. */
+  holdExpired: boolean;
+  /** Without `invoked`: the real timer that sets `holdExpired`. */
+  holdTimer: ReturnType<typeof setTimeout> | undefined;
 }
