@@ -114,6 +114,13 @@ export class SkipTimeCoordinator {
     } finally {
       this.startingInvoke = undefined;
     }
+    if (!invoke.invoked) {
+      // Expected for a non-durable function. For a durable function, its runner did not
+      // register before the invoke's first await, so its waits would take real time.
+      defaultLogger.debug(
+        "No runner registered while starting an invoke. The fake clock stays until the caller resumes.",
+      );
+    }
     return {
       result,
       end: () => {

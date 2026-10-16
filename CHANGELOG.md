@@ -111,6 +111,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A wait ends after the invocation that started it, as in the service. So a test that counts
     invocations or checks the order of history events across waits can see one more invocation,
     with each `InvocationCompleted` before the matching `WaitSucceeded`.
+  - A timer that your own code sets inside a step or a non-durable invoked function, such as
+    `setTimeout`, fires after its delay in real time. Before, a wait ending beside a running step
+    moved the clock, which fired the step's timer early as a side effect. A step's timer without
+    a wait beside it already ran in real time. A test that relied on the side effect can get
+    slower or time out. Shorten the delay in the test, or use `context.wait` for a durable delay.
 
 - The testing SDK's local runner no longer waits for the fake clock's 20 ms advancement interval
   before it starts each queued invocation when `skipTime` is enabled. QueueScheduler now yields
