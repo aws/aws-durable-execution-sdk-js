@@ -82,6 +82,10 @@ describe.each([
         await callback.waitForData(WaitingOperationStatus.STARTED);
         if (resume) {
           releaseStep.open();
+          // Replay may skip this side effect only after its success is persisted.
+          await runner
+            .getOperation("saved")
+            .waitForData(WaitingOperationStatus.COMPLETED);
           await runner.pauseExecution();
         }
         await callback.sendCallbackFailure();
