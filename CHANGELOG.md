@@ -82,19 +82,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - With `skipTime` enabled, the testing SDK's local runner now advances its fake clock by the full
-  duration of every wait and retry delay. The checkpoint server scheduled waits and retries from
-  its own real clock, while the runner and the SDK read a fake clock that runs ahead after the
-  first wait. So a later wait or retry advanced by only a few milliseconds, and parallel waits
-  stopped at the first one to end. The local runner now sends the time on its own clock with each
-  checkpoint, and the server schedules waits and retries from that time. As a result:
+  duration of every wait and retry delay. The checkpoint server recorded times on its own real
+  clock, while the runner and the SDK read a fake clock that runs ahead after the first wait. So a
+  later wait or retry advanced by only a few milliseconds, and parallel waits stopped at the first
+  one to end. Two changes fix this:
+  - Every request from the local runner to the checkpoint server carries the runner's clock. The
+    server records every timestamp on that clock: scheduled ends, retry times, start and end
+    times, and history event times. So a wait's `ScheduledEndTimestamp` is its start time plus its
+    duration, and both match `Date.now()` inside the handler.
+  - The runner applies one wait or retry end at a time, the earliest first, and only when no
+    invocation is running or about to start. So a branch that resumes after its own wait ends
+    starts its next delay from that end, not from a later branch's end.
+
+  As a result:
   - Each sequential wait advances fake time by its duration.
   - Parallel waits advance fake time to the latest end, not by the sum of their durations.
   - A delay starts when its checkpoint is sent, as in the service. Time spent earlier in the
     invocation no longer shortens it.
-  - `ScheduledEndTimestamp` and `NextAttemptTimestamp` are on the fake clock, so they agree with
-    `Date.now()` inside the handler.
-  - A wait now suspends the invocation when the wait outlasts the SDK's termination cooldown, as
-    in the service. So a test that counts invocations across several waits can see one more.
+  - A wait ends after the invocation that started it, as in the service. So a test that counts
+    invocations or checks the order of history events across waits can see one more invocation,
+    with each `InvocationCompleted` before the matching `WaitSucceeded`.
 
 - The testing SDK's local runner no longer waits for the fake clock's 20 ms advancement interval
   before it starts each queued invocation when `skipTime` is enabled. QueueScheduler now yields

@@ -5,6 +5,7 @@ import {
   OperationType,
   Operation,
 } from "@aws/durable-execution-sdk-js";
+import { currentTime } from "./client-clock";
 
 export type OperationActionWithoutRetry = Exclude<
   OperationAction,
@@ -205,17 +206,12 @@ const historyEventDetailMap = {
   [`${OperationAction.START}-${OperationType.WAIT}`]: createEventDetails(
     EventType.WaitStarted,
     "WaitStartedDetails",
-    (update, operation) => {
-      // Report the operation's own scheduled end, so the history and the operation agree.
-      // The checkpoint manager computes it from the time the checkpoint was processed.
-      let scheduledEndTimestamp = operation.WaitDetails?.ScheduledEndTimestamp;
-      if (!scheduledEndTimestamp) {
-        scheduledEndTimestamp = new Date();
-        scheduledEndTimestamp.setSeconds(
-          scheduledEndTimestamp.getSeconds() +
-            (update.WaitOptions?.WaitSeconds ?? 0),
-        );
-      }
+    (update) => {
+      const scheduledEndTimestamp = currentTime();
+      scheduledEndTimestamp.setSeconds(
+        scheduledEndTimestamp.getSeconds() +
+          (update.WaitOptions?.WaitSeconds ?? 0),
+      );
       return {
         Duration: update.WaitOptions?.WaitSeconds,
         ScheduledEndTimestamp: scheduledEndTimestamp,

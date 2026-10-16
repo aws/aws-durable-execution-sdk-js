@@ -176,40 +176,6 @@ describe("checkpoint-manager registerUpdate", () => {
     expect(scheduledTime).toBeLessThan(now + 6000);
   });
 
-  it("should schedule a wait and a retry from the processing time, not the current time", () => {
-    const processedAt = new Date("2030-01-01T00:00:00.000Z");
-
-    const wait = storage.registerUpdate(
-      {
-        Id: "stamped-wait",
-        Type: OperationType.WAIT,
-        Action: OperationAction.START,
-        WaitOptions: { WaitSeconds: 60 },
-      },
-      processedAt,
-    );
-    const retry = storage.registerUpdate(
-      {
-        Id: "stamped-retry",
-        Type: OperationType.STEP,
-        Action: OperationAction.RETRY,
-        StepOptions: { NextAttemptDelaySeconds: 30 },
-      },
-      processedAt,
-    );
-
-    expect(wait.operation.WaitDetails?.ScheduledEndTimestamp).toEqual(
-      new Date("2030-01-01T00:01:00.000Z"),
-    );
-    // The history reports the same scheduled end as the operation.
-    expect(wait.events[0].WaitStartedDetails?.ScheduledEndTimestamp).toEqual(
-      new Date("2030-01-01T00:01:00.000Z"),
-    );
-    expect(retry.operation.StepDetails?.NextAttemptTimestamp).toEqual(
-      new Date("2030-01-01T00:00:30.000Z"),
-    );
-  });
-
   it("should return existing operation if it has waitDetails with scheduledEndTimestamp", () => {
     // First register a wait operation
     const waitUpdate: OperationUpdate = {

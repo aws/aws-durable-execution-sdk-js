@@ -17,6 +17,7 @@ import { waitHistoryDetails } from "./wait-details";
 import { chainedInvokeHistoryDetails } from "./chained-invoke-details";
 import { executionDetails } from "./execution-details";
 import { pruneReplayChildren } from "./prune-replay-children";
+import { currentTime } from "../utils/client-clock";
 
 export interface CheckpointOperation extends OperationEvents {
   // required for test execution orchestrator to process retries
@@ -115,7 +116,7 @@ export class CheckpointManager {
     operationEvents: OperationEvents[];
     updatedOperationIds: string[];
   } {
-    this.invocationsMap.set(invocationId, new Date());
+    this.invocationsMap.set(invocationId, currentTime());
 
     // Capture the IDs of operations that were updated externally between invocations
     // (e.g., wait timers expired, callbacks received, chained invokes completed).
@@ -149,7 +150,7 @@ export class CheckpointManager {
 
     return {
       startTimestamp,
-      endTimestamp: new Date(),
+      endTimestamp: currentTime(),
     };
   }
 
@@ -175,7 +176,7 @@ export class CheckpointManager {
       Id: initialId,
       Type: OperationType.EXECUTION,
       Status: OperationStatus.STARTED,
-      StartTimestamp: new Date(),
+      StartTimestamp: currentTime(),
       ExecutionDetails: {
         InputPayload: payload,
       },
@@ -284,7 +285,7 @@ export class CheckpointManager {
     const result: Operation = {
       ...operation,
       Status: status,
-      EndTimestamp: new Date(),
+      EndTimestamp: currentTime(),
     };
 
     if (operation.Type === OperationType.STEP) {
@@ -301,9 +302,8 @@ export class CheckpointManager {
     operation: Operation,
     attempt: number,
     retryDelaySeconds = 0,
-    processedAt: Date = new Date(),
   ): void {
-    const scheduledEndTimestamp = new Date(processedAt);
+    const scheduledEndTimestamp = currentTime();
     scheduledEndTimestamp.setSeconds(
       scheduledEndTimestamp.getSeconds() + retryDelaySeconds,
     );
@@ -317,13 +317,9 @@ export class CheckpointManager {
 
   /**
    * Used for marking an operation as complete. Can be used for wait steps.
-   * @param processedAt When the checkpoint was processed. A retry delay starts here.
    * @returns the updated operation data
    */
-  completeOperation(
-    inputUpdate: OperationUpdate,
-    processedAt: Date = new Date(),
-  ): OperationEvents {
+  completeOperation(inputUpdate: OperationUpdate): OperationEvents {
     if (!inputUpdate.Id) {
       throw new Error("Missing Id in operation");
     }
@@ -373,7 +369,6 @@ export class CheckpointManager {
             copied.operation,
             (operation.StepDetails?.Attempt ?? 0) + 1,
             inputUpdate.StepOptions?.NextAttemptDelaySeconds,
-            processedAt,
           );
         }
         break;
@@ -410,13 +405,10 @@ export class CheckpointManager {
    * This is a batch operation that calls registerUpdate for each update.
    *
    * @param updates Array of operation updates to register
-   * @param processedAt When the checkpoint was processed. Wait and retry delays start here.
+   * @param invocationId The invocation ID these updates belong to
    * @returns Array of checkpoint operations with their associated updates
    */
-  registerUpdates(
-    updates: OperationUpdate[],
-    processedAt: Date = new Date(),
-  ): OperationEvents[] {
+  registerUpdates(updates: OperationUpdate[]): OperationEvents[] {
     if (this._isExecutionCompleted) {
       // Checkpoint token is invalid once execution is completed
       throw new InvalidParameterValueException({
@@ -425,7 +417,7 @@ export class CheckpointManager {
       });
     }
 
-    return updates.map((update) => this.registerUpdate(update, processedAt));
+    return updates.map((update) => this.registerUpdate(update));
   }
 
   /**
@@ -589,13 +581,9 @@ export class CheckpointManager {
    * Register an operation update to be stored in the checkpoint manager.
    * This function does not schedule anything and is only used for storing the data.
    * `getPendingCheckpointUpdates` should be used for acting on the data after each update.
-   * @param processedAt When the checkpoint was processed. Wait and retry delays start here.
    * @returns the operation update along with the operation itself
    */
-  registerUpdate(
-    update: OperationUpdate,
-    processedAt: Date = new Date(),
-  ): OperationEvents {
+  registerUpdate(update: OperationUpdate): OperationEvents {
     // An EXECUTION-typed update always refers to the execution itself, whatever
     // id the caller used. The SDK's oversized-result path checkpoints with a
     // synthetic `execution-result-<timestamp>` id; the service applies it to the
@@ -625,7 +613,7 @@ export class CheckpointManager {
         return previousOperation;
       }
 
-      const completedOperation = this.completeOperation(update, processedAt);
+      const completedOperation = this.completeOperation(update);
       this.addOperationUpdate({
         ...completedOperation,
         update,
@@ -638,14 +626,14 @@ export class CheckpointManager {
       ParentId: update.ParentId,
       Name: update.Name,
       Type: update.Type,
-      StartTimestamp: new Date(),
+      StartTimestamp: currentTime(),
       Status: OperationStatus.STARTED,
       SubType: update.SubType,
     };
 
     switch (update.Type) {
       case OperationType.WAIT: {
-        const scheduledEndTimestamp = new Date(processedAt);
+        const scheduledEndTimestamp = currentTime();
         const waitSeconds = update.WaitOptions?.WaitSeconds ?? 0;
         scheduledEndTimestamp.setSeconds(
           scheduledEndTimestamp.getSeconds() + waitSeconds,
@@ -662,7 +650,6 @@ export class CheckpointManager {
             operation,
             1,
             update.StepOptions?.NextAttemptDelaySeconds,
-            processedAt,
           );
         }
         break;
@@ -698,7 +685,7 @@ export class CheckpointManager {
       update.Action === OperationAction.SUCCEED ||
       update.Action === OperationAction.FAIL
     ) {
-      updatedResult = this.completeOperation(update, processedAt);
+      updatedResult = this.completeOperation(update);
     } else {
       result.events = [this.eventProcessor.processUpdate(update, operation)];
     }

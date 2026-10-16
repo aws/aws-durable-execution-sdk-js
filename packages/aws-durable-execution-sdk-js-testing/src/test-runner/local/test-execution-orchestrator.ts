@@ -52,6 +52,16 @@ export class TestExecutionOrchestrator {
   private invocationTracker: InvocationTracker;
   private readonly scheduler: Scheduler;
   private readonly pendingOperations = new Set<string>();
+  /**
+   * With skipTime, the wait and retry ends that have not yet been applied. See
+   * {@link releaseTimedCompletions}.
+   */
+  private readonly timedCompletions: {
+    deadlineMs: number;
+    complete: () => Promise<void>;
+  }[] = [];
+  /** Whether an applied end's invocation is queued and has not started yet. */
+  private timedCompletionReleased = false;
 
   // Pausing. The checkpoint server's half is to answer checkpoints without a token, which
   // suspends the invocation running at the time; this half is to start no invocation while
@@ -209,6 +219,7 @@ export class TestExecutionOrchestrator {
       throw err;
     } finally {
       this.scheduler.flushTimers();
+      this.timedCompletions.length = 0;
     }
   }
 
@@ -728,50 +739,95 @@ export class TestExecutionOrchestrator {
     executionId: ExecutionId,
     updateCheckpoint: () => Promise<void>,
   ): void {
+    if (this.skipTimeProps.enabled) {
+      this.timedCompletions.push({
+        deadlineMs: timestamp.getTime(),
+        complete: updateCheckpoint,
+      });
+      this.releaseTimedCompletions(executionId);
+      return;
+    }
+
     this.scheduler.scheduleFunction(
       () => this.invokeHandler(executionId),
       (err) => {
         this.executionState.rejectWith(err);
       },
       timestamp,
-      () =>
-        updateCheckpoint().then(() => {
-          if (!this.skipTimeProps.enabled) {
-            return;
-          }
-
-          const fakeClock = this.skipTimeProps.fakeClock;
-          if (!fakeClock) {
-            defaultLogger.debug(
-              "Skipped advancing fake timers since timers were not initialized",
-            );
-            return;
-          }
-
-          // When skipTime is enabled, we are advancing the timers in the language SDK waitBeforeContinue timers.
-          // The timestamp is on the fake clock: the checkpoint server schedules from the
-          // time the SDK sent the checkpoint, read on this thread. So subtracting the fake
-          // Date.now() gives the time left.
-          //
-          // Advance even when no fake timer is pending. When the first of several parallel
-          // waits completes, the invocation ends and its timers are cleared. The later
-          // waits still complete at their own ends, so fake time must reach those ends.
-          // With no timer pending, a tick only moves Date.now() forward.
-          const timerCount = fakeClock.countTimers();
-          const advanceTimersMs = timestamp.getTime() - Date.now();
-          if (advanceTimersMs > 0) {
-            defaultLogger.debug(
-              `Advancing fake timers for ${timerCount} timers by ${advanceTimersMs}ms`,
-            );
-            fakeClock.tick(advanceTimersMs);
-            return;
-          }
-
-          defaultLogger.debug(
-            `Skipped advancing fake timers with timerCount=(${timerCount}) and advanceTimerMs=${advanceTimersMs}`,
-          );
-        }),
+      updateCheckpoint,
     );
+  }
+
+  /**
+   * With skipTime, completes the waits and retries that end first, once nothing else can
+   * happen before they end.
+   *
+   * The checkpoint server records every scheduled end on the fake clock. Nothing that is
+   * running can be affected by an end that has not yet come. So while an invocation is
+   * running, or another invocation is queued to start, every pending end stays pending.
+   * When neither holds, this advances the fake clock to the earliest end, completes every
+   * operation that ends at that time, and starts one invocation. That invocation runs, and
+   * may start further delays, before the next end is applied.
+   *
+   * Completing an end any earlier would let a later end move the fake clock past an earlier
+   * one. A branch resuming at the earlier end would then start its next delay from the
+   * later one.
+   */
+  private releaseTimedCompletions(executionId: ExecutionId): void {
+    if (
+      this.settled ||
+      this.timedCompletionReleased ||
+      this.timedCompletions.length === 0 ||
+      this.runningInvocations > 0 ||
+      (this.scheduler instanceof QueueScheduler &&
+        this.scheduler.hasQueuedFunction())
+    ) {
+      return;
+    }
+
+    this.timedCompletions.sort((a, b) => a.deadlineMs - b.deadlineMs);
+    const deadlineMs = this.timedCompletions[0].deadlineMs;
+    const due = this.timedCompletions.filter(
+      (completion) => completion.deadlineMs <= deadlineMs,
+    );
+    this.timedCompletions.splice(0, due.length);
+    this.timedCompletionReleased = true;
+
+    this.scheduler.scheduleFunction(
+      () => {
+        this.timedCompletionReleased = false;
+        return this.invokeHandler(executionId);
+      },
+      (err) => {
+        this.timedCompletionReleased = false;
+        this.executionState.rejectWith(err);
+      },
+      undefined,
+      async () => {
+        this.advanceFakeClockTo(deadlineMs);
+        for (const completion of due) {
+          await completion.complete();
+        }
+      },
+    );
+  }
+
+  private advanceFakeClockTo(timestampMs: number): void {
+    const fakeClock = this.skipTimeProps.fakeClock;
+    if (!fakeClock) {
+      defaultLogger.debug(
+        "Skipped advancing fake timers since timers were not initialized",
+      );
+      return;
+    }
+
+    // No invocation is running here, so no SDK timer is pending: a tick only moves
+    // Date.now() forward, and fires any timer the test itself has set.
+    const advanceTimersMs = timestampMs - Date.now();
+    if (advanceTimersMs > 0) {
+      defaultLogger.debug(`Advancing fake clock by ${advanceTimersMs}ms`);
+      fakeClock.tick(advanceTimersMs);
+    }
   }
 
   /**
@@ -807,6 +863,8 @@ export class TestExecutionOrchestrator {
       this.runningInvocations--;
       if (this.runningInvocations === 0) {
         this.notifyIdle();
+        // Nothing runs now, so the earliest pending wait or retry end can be applied.
+        this.releaseTimedCompletions(executionId);
       }
     }
   }
@@ -912,7 +970,8 @@ export class TestExecutionOrchestrator {
 
       if (
         !this.scheduler.hasScheduledFunction() &&
-        !this.pendingOperations.size
+        !this.pendingOperations.size &&
+        !this.timedCompletions.length
       ) {
         this.executionState.rejectWith({
           error: {

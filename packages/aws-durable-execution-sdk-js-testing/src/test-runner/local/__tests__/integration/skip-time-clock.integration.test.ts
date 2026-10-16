@@ -76,6 +76,72 @@ describe("skip-time clock", () => {
     expectDuration(end - start, 3 * HOUR_MS);
   });
 
+  it.each([
+    ["the chained branch listed first", true],
+    ["the chained branch listed second", false],
+  ])(
+    "resumes a parallel branch at its own wait's end, with %s",
+    async (_label, chainedFirst) => {
+      // Branch A waits 1 h twice. Branch B waits 3 h once. A must resume at 1 h and
+      // finish at 2 h, so the parallel ends at 3 h, when B ends.
+      const handler = withDurableExecution(
+        async (_event: unknown, context: DurableContext) => {
+          const start = await context.step("start", async () => Date.now());
+          const chained = async (child: DurableContext) => {
+            await child.wait("a first", { seconds: HOUR_SECONDS });
+            const resumedAt = await child.step("a resumed", async () =>
+              Date.now(),
+            );
+            await child.wait("a second", { seconds: HOUR_SECONDS });
+            return resumedAt;
+          };
+          const single = async (child: DurableContext) => {
+            await child.wait("b", { seconds: 3 * HOUR_SECONDS });
+            return 0;
+          };
+          const results = await context.parallel(
+            "waits",
+            chainedFirst ? [chained, single] : [single, chained],
+          );
+          const end = await context.step("end", async () => Date.now());
+          const resumedAt = results.getResults()[chainedFirst ? 0 : 1];
+          return { start, resumedAt, end };
+        },
+      );
+      const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+
+      const { start, resumedAt, end } = await runner
+        .run()
+        .then((result) => result.getResult());
+
+      expectDuration(resumedAt - start, HOUR_MS);
+      expectDuration(end - start, 3 * HOUR_MS);
+    },
+  );
+
+  it("records start times and scheduled ends on the same clock", async () => {
+    const handler = withDurableExecution(
+      async (_event: unknown, context: DurableContext) => {
+        for (let i = 1; i <= 3; i++) {
+          await context.wait(`wait ${i}`, { seconds: HOUR_SECONDS });
+        }
+      },
+    );
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+
+    await runner.run();
+
+    for (let i = 1; i <= 3; i++) {
+      const wait = runner.getOperation(`wait ${i}`);
+      const start = wait.getStartTimestamp()!.getTime();
+      const scheduledEnd = wait
+        .getWaitDetails()!
+        .scheduledEndTimestamp!.getTime();
+      // The service sets the scheduled end to the start plus the duration.
+      expectDuration(scheduledEnd - start, HOUR_MS);
+    }
+  });
+
   it("starts a wait's duration when the wait starts, not when the invocation starts", async () => {
     const handler = withDurableExecution(
       async (_event: unknown, context: DurableContext) => {

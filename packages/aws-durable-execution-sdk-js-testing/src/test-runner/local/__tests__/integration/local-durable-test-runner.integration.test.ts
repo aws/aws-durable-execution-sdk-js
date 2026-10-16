@@ -126,7 +126,8 @@ describe("LocalDurableTestRunner Integration", () => {
       requestId: expect.any(String),
     });
 
-    // Assert history events
+    // Assert history events. Each wait completes after the invocation that started it ends,
+    // so its InvocationCompleted comes before its WaitSucceeded, as in the service.
     expect(result.getHistoryEvents()).toEqual([
       {
         EventType: "ExecutionStarted",
@@ -152,17 +153,8 @@ describe("LocalDurableTestRunner Integration", () => {
         },
       },
       {
-        EventType: "WaitSucceeded",
-        SubType: "Wait",
-        EventId: 3,
-        Id: "c4ca4238a0b92382",
-        Name: "wait-invocation-1",
-        EventTimestamp: expect.any(Date),
-        WaitSucceededDetails: { Duration: 1 },
-      },
-      {
         EventType: "InvocationCompleted",
-        EventId: 4,
+        EventId: 3,
         EventTimestamp: expect.any(Date),
         InvocationCompletedDetails: {
           StartTimestamp: expect.any(Date),
@@ -170,6 +162,15 @@ describe("LocalDurableTestRunner Integration", () => {
           Error: {},
           RequestId: expect.any(String),
         },
+      },
+      {
+        EventType: "WaitSucceeded",
+        SubType: "Wait",
+        EventId: 4,
+        Id: "c4ca4238a0b92382",
+        Name: "wait-invocation-1",
+        EventTimestamp: expect.any(Date),
+        WaitSucceededDetails: { Duration: 1 },
       },
       {
         EventType: "StepStarted",
@@ -207,17 +208,8 @@ describe("LocalDurableTestRunner Integration", () => {
         },
       },
       {
-        EventType: "WaitSucceeded",
-        SubType: "Wait",
-        EventId: 8,
-        Id: "eccbc87e4b5ce2fe",
-        Name: "wait-invocation-2",
-        EventTimestamp: expect.any(Date),
-        WaitSucceededDetails: { Duration: 1 },
-      },
-      {
         EventType: "InvocationCompleted",
-        EventId: 9,
+        EventId: 8,
         EventTimestamp: expect.any(Date),
         InvocationCompletedDetails: {
           StartTimestamp: expect.any(Date),
@@ -225,6 +217,15 @@ describe("LocalDurableTestRunner Integration", () => {
           Error: {},
           RequestId: expect.any(String),
         },
+      },
+      {
+        EventType: "WaitSucceeded",
+        SubType: "Wait",
+        EventId: 9,
+        Id: "eccbc87e4b5ce2fe",
+        Name: "wait-invocation-2",
+        EventTimestamp: expect.any(Date),
+        WaitSucceededDetails: { Duration: 1 },
       },
       {
         EventType: "InvocationCompleted",

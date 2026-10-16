@@ -312,35 +312,7 @@ describe("WorkerServerApiHandler", () => {
           CheckpointToken: "test-checkpoint-token",
         },
         mockExecutionManagerInstance,
-        expect.any(Date),
       );
-    });
-
-    it("schedules from the client's timestamp plus the simulated network delay", async () => {
-      const clientTimestampMs = Date.UTC(2030, 0, 1);
-      const delayedHandler = new WorkerServerApiHandler({
-        checkpointDelaySettings: 20,
-      });
-      const before = Date.now();
-
-      await delayedHandler.performApiCall({
-        type: ApiType.CheckpointDurableExecutionState as const,
-        requestId: TEST_UUIDS.SUCCESS,
-        params: {
-          DurableExecutionArn:
-            "arn:aws:lambda:us-east-1:123456789012:function:test",
-          CheckpointToken: "test-checkpoint-token",
-          clientTimestampMs,
-        },
-      });
-      const elapsed = Date.now() - before;
-
-      const processedAt = mockProcessCheckpointDurableExecution.mock
-        .lastCall?.[3] as Date;
-      const offset = processedAt.getTime() - clientTimestampMs;
-      // The worker's own clock contributes only the time spent in the delay.
-      expect(offset).toBeGreaterThanOrEqual(15);
-      expect(offset).toBeLessThanOrEqual(elapsed + 5);
     });
 
     it("should delegate SendDurableExecutionCallbackFailure to processCallbackFailure", () => {

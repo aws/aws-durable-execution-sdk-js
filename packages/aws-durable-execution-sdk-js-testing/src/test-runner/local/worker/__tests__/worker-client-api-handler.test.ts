@@ -70,6 +70,7 @@ describe("WorkerClientApiHandler", () => {
         type: WorkerCommandType.API_REQUEST,
         data: {
           requestId: "12345678-1234-1234-1234-123456789012",
+          clientTimestampMs: expect.any(Number),
           type: apiType,
           params,
         },
@@ -119,6 +120,7 @@ describe("WorkerClientApiHandler", () => {
         type: WorkerCommandType.API_REQUEST,
         data: {
           requestId: "11111111-1111-1111-1111-111111111111",
+          clientTimestampMs: expect.any(Number),
           type: ApiType.StartDurableExecution,
           params: params1,
         },
@@ -128,6 +130,7 @@ describe("WorkerClientApiHandler", () => {
         type: WorkerCommandType.API_REQUEST,
         data: {
           requestId: "22222222-2222-2222-2222-222222222222",
+          clientTimestampMs: expect.any(Number),
           type: ApiType.StartInvocation,
           params: params2,
         },
@@ -183,6 +186,7 @@ describe("WorkerClientApiHandler", () => {
           type: WorkerCommandType.API_REQUEST,
           data: {
             requestId: uuid,
+            clientTimestampMs: expect.any(Number),
             type: apiType,
             params,
           },
