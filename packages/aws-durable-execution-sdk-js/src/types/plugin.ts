@@ -65,9 +65,13 @@ export interface OperationInfo {
   endTimestamp?: Date;
   result?: string;
   /**
-   * The error the operation failed with, reconstructed from the checkpointed
-   * error data. Present on failed operations regardless of which lifecycle
-   * hook surfaced this info (e.g. also available via `onOperationChange`).
+   * Error details, when available. Checkpoint-derived metadata can omit this
+   * field when wire error data is missing or empty, including during replay
+   * and `onOperationChange`. A lifecycle hook may also supply a runtime error.
+   *
+   * Use `status` to identify an operation failure; absence of `error` does not
+   * imply success. Supplied partial error details are retained, including
+   * explicitly empty strings or an empty stack trace.
    */
   error?: Error;
   /**

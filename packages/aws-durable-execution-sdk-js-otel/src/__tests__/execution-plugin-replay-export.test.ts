@@ -1,4 +1,4 @@
-import { context, trace } from "@opentelemetry/api";
+import { context, trace, SpanStatusCode } from "@opentelemetry/api";
 import {
   InMemorySpanExporter,
   NodeTracerProvider,
@@ -48,6 +48,50 @@ describe("execution view external completion exports", () => {
       },
     });
   }
+  it("uses a known completion time when a deferred failure has no start timestamp", async () => {
+    const failure: OperationEndInfo = {
+      id: "missing-start",
+      name: "missing-start",
+      type: "CALLBACK",
+      status: "FAILED",
+      isReplay: false,
+      endTimestamp: end,
+      error: new Error("failed externally"),
+    };
+    const current = plugin();
+    await current.onInvocationStart({
+      ...invocation,
+      updatedOperations: { [failure.id]: failure },
+      operations: { [failure.id]: failure },
+    });
+    // No start/end traversal: this completion is drained from resume metadata.
+    await current.onInvocationEnd({ ...invocation, status: "PENDING" });
+    const completed = () =>
+      exporter
+        .getFinishedSpans()
+        .filter(
+          (span) => span.attributes["durable.operation.id"] === failure.id,
+        );
+    expect(completed()).toHaveLength(1);
+    const span = completed()[0];
+    expect(span.startTime).toEqual([end.getTime() / 1000, 0]);
+    expect(span.endTime).toEqual(span.startTime);
+    expect(span.events).toHaveLength(1);
+    expect(span.events[0].time).toEqual(span.endTime);
+    expect(span.status).toEqual({
+      code: SpanStatusCode.ERROR,
+      message: failure.error!.message,
+    });
+    expect(span.spanContext().spanId).toBe(
+      deriveSpanIdFromOperationId(failure.id, invocation.executionArn),
+    );
+    const replay = plugin();
+    await replay.onInvocationStart({ ...invocation, requestId: "replay" });
+    await replay.onOperationEnd({ ...failure, isReplay: true });
+    await replay.onInvocationEnd({ ...invocation, status: "SUCCEEDED" });
+    expect(completed()).toHaveLength(1);
+  });
+
   it.each(["WAIT", "INVOKE", "CHAINED_INVOKE", "CALLBACK"])(
     "exports %s first completion but not later stored successes or failures",
     async (type) => {

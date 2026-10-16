@@ -1,12 +1,26 @@
+import {
+  withDurableExecution,
+  type InvocationInfo,
+} from "@aws/durable-execution-sdk-js";
+import {
+  LocalDurableTestRunner,
+  WaitingOperationStatus,
+} from "@aws/durable-execution-sdk-js-testing";
+import { ExecutionOtelPlugin } from "../execution-plugin";
+import { InvocationOtelPlugin } from "../invocation-plugin";
 import { context, propagation, trace } from "@opentelemetry/api";
 import {
   InMemorySpanExporter,
   NodeTracerProvider,
   SimpleSpanProcessor,
+  BatchSpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
 import type { IdGenerator } from "@opentelemetry/sdk-trace-node";
 import { DeterministicIdGenerator } from "../deterministic-id-generator";
-import { createTracerProvider } from "../otel-plugin-provider";
+import {
+  createTracerProvider,
+  flushTracerProvider,
+} from "../otel-plugin-provider";
 
 beforeEach(() => {
   trace.disable();
@@ -176,5 +190,139 @@ describe("ExecutionOtelPlugin provider resolution", () => {
     );
 
     await globalProvider.shutdown();
+  });
+});
+
+describe.each([
+  ["execution", ExecutionOtelPlugin],
+  ["invocation", InvocationOtelPlugin],
+] as const)("%s global provider batch export", (_view, Plugin) => {
+  beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
+  afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
+
+  it("flushes the registered SDK provider before each public invocation returns", async () => {
+    const exporter = new InMemorySpanExporter();
+    const provider = new NodeTracerProvider({
+      spanProcessors: [
+        new BatchSpanProcessor(exporter, { scheduledDelayMillis: 60_000 }),
+      ],
+    });
+    provider.register();
+    const flush = jest.spyOn(provider, "forceFlush");
+    const shutdown = jest.spyOn(provider, "shutdown");
+    const plugin = new Plugin({ contextExtractor: () => undefined });
+    const starts: InvocationInfo[] = [];
+    const savedBody = jest.fn(async () => "saved");
+    const handler = withDurableExecution(
+      async (_, ctx) => {
+        const saved = await ctx.step("saved", savedBody);
+        const [external] = await ctx.createCallback("external");
+        await external;
+        const [later] = await ctx.createCallback("later");
+        await later;
+        return saved;
+      },
+      {
+        plugins: [
+          plugin,
+          {
+            async onInvocationStart(info) {
+              starts.push(info);
+            },
+          },
+        ],
+      },
+    );
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+    const terminalCount = () =>
+      exporter
+        .getFinishedSpans()
+        .filter(
+          (span) =>
+            span.name === "external" &&
+            span.attributes["durable.operation.status"] === "SUCCEEDED",
+        ).length;
+    const counts: number[] = [];
+    try {
+      const execution = runner.run();
+      const external = runner.getOperation("external");
+      await external.waitForData(WaitingOperationStatus.STARTED);
+      await runner.pauseExecution();
+      counts.push(terminalCount());
+      const savedAtFirstReturn = exporter
+        .getFinishedSpans()
+        .filter((span) => span.name === "saved").length;
+      await external.sendCallbackSuccess("external result");
+      await runner.resumeExecution();
+      const later = runner.getOperation("later");
+      await later.waitForData(WaitingOperationStatus.STARTED);
+      await runner.pauseExecution();
+      counts.push(terminalCount());
+      await later.sendCallbackSuccess("continue");
+      await runner.resumeExecution();
+      const result = await execution;
+      counts.push(terminalCount());
+      expect(result.getStatus()).toBe("SUCCEEDED");
+      expect(result.getResult()).toBe("saved");
+      expect(starts).toHaveLength(3);
+      expect(savedBody).toHaveBeenCalledTimes(1);
+      expect(savedAtFirstReturn).toBe(1);
+      expect(counts).toEqual([0, 1, 1]);
+      expect(flush).toHaveBeenCalledTimes(3);
+      expect(shutdown).not.toHaveBeenCalled();
+    } finally {
+      await provider.shutdown();
+    }
+  }, 30000);
+});
+
+describe("provider boundary flushing", () => {
+  it("flushes a batch through the global API proxy and leaves provider lifetime owned by the caller", async () => {
+    const exporter = new InMemorySpanExporter();
+    const provider = new NodeTracerProvider({
+      spanProcessors: [
+        new BatchSpanProcessor(exporter, { scheduledDelayMillis: 60_000 }),
+      ],
+    });
+    provider.register();
+    const shutdown = jest.spyOn(provider, "shutdown");
+    try {
+      trace.getTracer("unit").startSpan("queued").end();
+      expect(exporter.getFinishedSpans()).toHaveLength(0);
+      await flushTracerProvider(trace.getTracerProvider(), true);
+      expect(exporter.getFinishedSpans().map((span) => span.name)).toEqual([
+        "queued",
+      ]);
+      expect(shutdown).not.toHaveBeenCalled();
+    } finally {
+      await provider.shutdown();
+    }
+  });
+
+  it("honors an explicit factory provider's own flush without traversing its delegate", async () => {
+    const provider = new NodeTracerProvider();
+    const getDelegate = jest.fn(() => provider);
+    let receiver: unknown;
+    const factoryProvider = {
+      getTracer: provider.getTracer.bind(provider),
+      getDelegate,
+      async forceFlush() {
+        receiver = this;
+        await provider.forceFlush();
+      },
+    };
+    try {
+      await flushTracerProvider(factoryProvider, false);
+      expect(receiver).toBe(factoryProvider);
+      expect(getDelegate).not.toHaveBeenCalled();
+      const opaque = {
+        getTracer: provider.getTracer.bind(provider),
+        getDelegate,
+      };
+      await flushTracerProvider(opaque, false);
+      expect(getDelegate).not.toHaveBeenCalled();
+    } finally {
+      await provider.shutdown();
+    }
   });
 });

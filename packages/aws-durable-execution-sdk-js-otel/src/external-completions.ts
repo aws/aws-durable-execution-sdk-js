@@ -14,8 +14,11 @@ export class ExternalCompletions {
   readonly pending = new Map<string, OperationInfo>();
   private readonly exported = new Set<string>();
 
-  observe(operations: Record<string, OperationInfo> = {}): void {
-    for (const info of Object.values(operations)) {
+  observe(
+    updates: Record<string, OperationInfo> = {},
+    operations: Record<string, OperationInfo> = {},
+  ): void {
+    for (const info of Object.values(updates)) {
       if (
         info.id &&
         isExternalOperation(info) &&
@@ -26,7 +29,18 @@ export class ExternalCompletions {
           info.status === "CANCELLED") &&
         !this.exported.has(info.id)
       ) {
-        this.pending.set(info.id, info);
+        const parent = info.parentId ? operations[info.parentId] : undefined;
+        // waitForCallback's derived inner name is hook-only, not persisted.
+        // A skipped branch cannot backfill it before the deferred export.
+        const completion =
+          info.type === "CALLBACK" &&
+          info.name === undefined &&
+          parent?.type === "CONTEXT" &&
+          parent.subType === "WaitForCallback" &&
+          parent.name
+            ? { ...info, name: `${parent.name}-callback` }
+            : info;
+        this.pending.set(info.id, completion);
       }
     }
   }
