@@ -11,13 +11,8 @@ export interface SkipTimeParticipant {
    */
   isBusy(): boolean;
   /**
-   * Whether the execution is waiting for a durable invoke to return. The invoked function
-   * runs as another participant on the same clock.
-   */
-  hasInvokeInFlight(): boolean;
-  /**
    * Whether the execution still waits for something outside an invocation: a wait or
-   * retry end, a callback, or a durable invoke.
+   * retry end, a callback, or a durable invoke. False once the execution has finished.
    */
   hasPendingWork(): boolean;
   /** The earliest wait or retry end not yet applied, on the fake clock. */
@@ -45,10 +40,14 @@ export interface SkipTimeParticipant {
  *
  * An execution waiting for a durable invoke is not busy while the invoked function runs,
  * because the invoked function may need the clock to advance. But once the invoked
- * function has finished, the caller must resume before the clock moves: the invoked
- * function's result is still on its way back to it. So while an invoke is in flight, the
- * clock advances only if some execution without an invoke in flight still has pending
- * work.
+ * function has finished, its caller must resume before the clock moves: the invoked
+ * function's result is still on its way back to it. So the coordinator tracks each invoke
+ * separately, from {@link startInvoke} until the caller has queued the invocation that
+ * resumes it. The clock does not advance while a tracked invoke's invoked function is idle
+ * without pending work, which means it has finished. It also does not advance while a
+ * tracked invoke has no invoked participant, as with a non-durable function, which runs
+ * outside the clock. Pending work elsewhere does not lift this, because it is not the
+ * result on its way back.
  *
  * Advancing past an earlier end would let work resuming at that end start its next delay
  * from the later one.
@@ -60,6 +59,10 @@ export class SkipTimeCoordinator {
   >();
 
   private readonly participants = new Set<SkipTimeParticipant>();
+  /** Every invoke between {@link startInvoke} and its `end()`. */
+  private readonly invokes = new Set<InvokeHandoff>();
+  /** The invoke being started, which a participant registering now belongs to. */
+  private startingInvoke: InvokeHandoff | undefined;
 
   private constructor(private readonly clock: Clock) {}
 
@@ -75,12 +78,49 @@ export class SkipTimeCoordinator {
 
   register(participant: SkipTimeParticipant): void {
     this.participants.add(participant);
+    if (this.startingInvoke && !this.startingInvoke.invoked) {
+      this.startingInvoke.invoked = participant;
+    }
   }
 
   /** Removes a finished execution, and lets the others advance without it. */
   unregister(participant: SkipTimeParticipant): void {
     this.participants.delete(participant);
     this.advance();
+  }
+
+  /**
+   * Tracks one durable invoke until its caller has queued the invocation that resumes it.
+   *
+   * `start` must create the invoked function's runner synchronously. The participant that
+   * registers during `start` is the invoked function. If none registers, the invoked
+   * function runs outside the clock, and the clock does not advance until `end()`.
+   *
+   * @returns the promise `start` returned, and `end()`, which the caller must call once
+   * the invocation that resumes it is queued, or once the invoke has failed
+   */
+  startInvoke<T>(start: () => Promise<T>): {
+    result: Promise<T>;
+    end: () => void;
+  } {
+    const invoke: InvokeHandoff = { invoked: undefined };
+    this.invokes.add(invoke);
+    this.startingInvoke = invoke;
+    let result: Promise<T>;
+    try {
+      result = start();
+    } catch (err) {
+      result = Promise.reject(err);
+    } finally {
+      this.startingInvoke = undefined;
+    }
+    return {
+      result,
+      end: () => {
+        this.invokes.delete(invoke);
+        this.advance();
+      },
+    };
   }
 
   /**
@@ -93,19 +133,13 @@ export class SkipTimeCoordinator {
       return;
     }
 
-    const awaitingInvoke = participants.some((participant) =>
-      participant.hasInvokeInFlight(),
-    );
-    // An execution without an invoke in flight that still has pending work is typically
-    // the invoked function, waiting for an end or for a callback. While one exists, the
-    // invoked side is not finished, and the clock may serve it.
-    const invokedWorkRemains = participants.some(
-      (participant) =>
-        !participant.hasInvokeInFlight() && participant.hasPendingWork(),
-    );
-    if (awaitingInvoke && !invokedWorkRemains) {
-      // An invoked function has finished, and its caller has not resumed yet.
-      return;
+    for (const invoke of this.invokes) {
+      // An invoked function that is idle without pending work has finished, even if it
+      // has not unregistered yet. Its result is on its way back to its caller. Without an
+      // invoked participant, the invoked function runs outside the clock.
+      if (!invoke.invoked?.hasPendingWork()) {
+        return;
+      }
     }
 
     let earliest: { participant: SkipTimeParticipant; deadlineMs: number } =
@@ -138,4 +172,10 @@ export class SkipTimeCoordinator {
       participant.onClockAdvanced();
     }
   }
+}
+
+/** One durable invoke tracked by {@link SkipTimeCoordinator.startInvoke}. */
+interface InvokeHandoff {
+  /** The invoked function's execution, if it runs on the clock. */
+  invoked: SkipTimeParticipant | undefined;
 }

@@ -109,6 +109,9 @@ export class FunctionStorage {
     const { isDurable, handler } = functionData;
 
     if (isDurable) {
+      // With skipTime, the caller's SkipTimeCoordinator identifies the invoked function as
+      // the runner that registers before this call returns. So create and start the runner
+      // before the first await.
       const invokeRunner = this.runnerFactory.createRunner({
         handlerFunction: handler,
       });

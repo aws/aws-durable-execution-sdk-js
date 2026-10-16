@@ -78,11 +78,6 @@ export class TestExecutionOrchestrator implements SkipTimeParticipant {
   private skipTimeExecutionId: ExecutionId | undefined;
   /** Moves the fake clock that this execution shares with every other runner. */
   private readonly skipTimeCoordinator: SkipTimeCoordinator | undefined;
-  /**
-   * Durable invokes this execution is waiting for, counted until the invocation that
-   * resumes it is queued. See {@link SkipTimeCoordinator}.
-   */
-  private invokesInFlight = 0;
 
   // Pausing. The checkpoint server's half is to answer checkpoints without a token, which
   // suspends the invocation running at the time; this half is to start no invocation while
@@ -545,14 +540,16 @@ export class TestExecutionOrchestrator implements SkipTimeParticipant {
     this.pendingOperations.add(operationId);
 
     // Until the invocation that resumes this execution is queued, the invoked function's
-    // result is on its way back here. The clock must not move past that. The invoked
-    // function runs as its own participant, so this does not stop it from advancing.
-    this.invokesInFlight++;
+    // result is on its way back here. The coordinator does not move the clock past that.
+    // The invoked function runs as its own participant, so it can still advance the clock.
+    const invoke = this.skipTimeCoordinator?.startInvoke(() =>
+      this.functionStorage.runHandler(functionName, update.Payload),
+    ) ?? {
+      result: this.functionStorage.runHandler(functionName, update.Payload),
+      end: () => undefined,
+    };
     try {
-      const { result, error } = await this.functionStorage.runHandler(
-        functionName,
-        update.Payload,
-      );
+      const { result, error } = await invoke.result;
 
       await this.checkpointApi.updateCheckpointData({
         executionId,
@@ -579,7 +576,7 @@ export class TestExecutionOrchestrator implements SkipTimeParticipant {
         },
       );
     } finally {
-      this.invokesInFlight--;
+      invoke.end();
     }
   }
 
@@ -856,11 +853,6 @@ export class TestExecutionOrchestrator implements SkipTimeParticipant {
       timer.unref?.();
       this.timedCompletionTimer = timer;
     }
-  }
-
-  /** See {@link SkipTimeParticipant.hasInvokeInFlight}. */
-  hasInvokeInFlight(): boolean {
-    return this.invokesInFlight > 0;
   }
 
   /** See {@link SkipTimeParticipant.hasPendingWork}. */

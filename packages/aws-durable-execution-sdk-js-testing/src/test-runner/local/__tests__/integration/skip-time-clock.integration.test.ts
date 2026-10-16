@@ -287,6 +287,80 @@ describe("skip-time clock", () => {
     expectDuration(end - start, 3 * HOUR_MS);
   });
 
+  it("resumes each caller with its invoke's result while another invoke still waits", async () => {
+    // Branch A invokes a function that waits 1 h, then waits 1 h itself. Branch B invokes a
+    // function that waits 3 h. When A's invoked function finishes, B's invoked function
+    // still has a pending end. The clock must still not reach it before A has resumed.
+    const waitingFunction = (seconds: number) =>
+      withDurableExecution(async (_event: unknown, context: DurableContext) => {
+        await context.wait("invoked wait", { seconds });
+        return seconds;
+      });
+    const handler = withDurableExecution(
+      async (_event: unknown, context: DurableContext) => {
+        const start = await context.step("start", async () => Date.now());
+        const results = await context.parallel("invokes", [
+          async (child) => {
+            await child.invoke("a", "oneHour", {});
+            await child.wait("after invoke", { seconds: HOUR_SECONDS });
+            return child.step("a done", async () => Date.now());
+          },
+          async (child) => {
+            await child.invoke("b", "threeHours", {});
+            return child.step("b done", async () => Date.now());
+          },
+        ]);
+        const end = await context.step("end", async () => Date.now());
+        const [aDone, bDone] = results.getResults() as number[];
+        return { start, aDone, bDone, end };
+      },
+    );
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+    runner.registerDurableFunction("oneHour", waitingFunction(HOUR_SECONDS));
+    runner.registerDurableFunction(
+      "threeHours",
+      waitingFunction(3 * HOUR_SECONDS),
+    );
+
+    const { start, aDone, bDone, end } = await runner
+      .run()
+      .then((result) => result.getResult());
+
+    expectDuration(aDone - start, 2 * HOUR_MS);
+    expectDuration(bDone - start, 3 * HOUR_MS);
+    expectDuration(end - start, 3 * HOUR_MS);
+  });
+
+  it("resumes a caller with a non-durable invoke's result before applying a later end", async () => {
+    const handler = withDurableExecution(
+      async (_event: unknown, context: DurableContext) => {
+        const start = await context.step("start", async () => Date.now());
+        const results = await context.parallel("waits", [
+          async (child) => {
+            await child.invoke("plain", "plainFunction", {});
+            await child.wait("after invoke", { seconds: HOUR_SECONDS });
+            return child.step("a done", async () => Date.now());
+          },
+          async (child) => {
+            await child.wait("long", { seconds: 3 * HOUR_SECONDS });
+            return 0;
+          },
+        ]);
+        const end = await context.step("end", async () => Date.now());
+        return { start, aDone: results.getResults()[0] as number, end };
+      },
+    );
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+    runner.registerFunction("plainFunction", async () => "plain");
+
+    const { start, aDone, end } = await runner
+      .run()
+      .then((result) => result.getResult());
+
+    expectDuration(aDone - start, HOUR_MS);
+    expectDuration(end - start, 3 * HOUR_MS);
+  });
+
   it("starts a wait's duration when the wait starts, not when the invocation starts", async () => {
     const handler = withDurableExecution(
       async (_event: unknown, context: DurableContext) => {

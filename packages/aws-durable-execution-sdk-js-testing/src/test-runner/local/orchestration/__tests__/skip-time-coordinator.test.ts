@@ -7,7 +7,6 @@ import {
 function participant(
   overrides: Partial<{
     busy: boolean;
-    invokeInFlight: boolean;
     pendingWork: boolean;
     deadline: number;
   }> = {},
@@ -16,7 +15,6 @@ function participant(
   return {
     state,
     isBusy: jest.fn(() => state.busy ?? false),
-    hasInvokeInFlight: jest.fn(() => state.invokeInFlight ?? false),
     hasPendingWork: jest.fn(
       () => state.pendingWork ?? state.deadline !== undefined,
     ),
@@ -79,27 +77,78 @@ describe("SkipTimeCoordinator", () => {
     expect(Date.now()).toBe(0);
   });
 
-  it("does not advance while an invoke's result is on its way back to its caller", () => {
-    // The invoked function has finished and unregistered. Only the caller remains.
-    const caller = participant({ invokeInFlight: true, deadline: 3000 });
-    coordinator.register(caller);
-
-    coordinator.advance();
-
-    expect(Date.now()).toBe(0);
-    expect(caller.applyDeadline).not.toHaveBeenCalled();
-  });
+  /** Starts an invoke whose invoked function is `invoked`, or runs outside the clock. */
+  function startInvoke(invoked?: SkipTimeParticipant): () => void {
+    return coordinator.startInvoke(() => {
+      if (invoked) {
+        coordinator.register(invoked);
+      }
+      return Promise.resolve();
+    }).end;
+  }
 
   it("advances for an invoked function that still has pending work", () => {
-    const caller = participant({ invokeInFlight: true, deadline: 3000 });
-    const invoked = participant({ deadline: 1000 });
+    const caller = participant({ deadline: 3000 });
     coordinator.register(caller);
-    coordinator.register(invoked);
+    const invoked = participant({ deadline: 1000 });
+    startInvoke(invoked);
 
     coordinator.advance();
 
     expect(Date.now()).toBe(1000);
     expect(invoked.applyDeadline).toHaveBeenCalledWith(1000);
+  });
+
+  it("does not advance while an invoke's result is on its way back to its caller", () => {
+    const caller = participant({ deadline: 3000 });
+    coordinator.register(caller);
+    const invoked = participant();
+    const end = startInvoke(invoked);
+
+    // The invoked function is idle without pending work, so it has finished.
+    coordinator.advance();
+    coordinator.unregister(invoked);
+
+    expect(Date.now()).toBe(0);
+
+    // The caller has queued the invocation that resumes it.
+    end();
+
+    expect(Date.now()).toBe(3000);
+    expect(caller.applyDeadline).toHaveBeenCalledWith(3000);
+  });
+
+  it("holds a finished invoke's result even while another invoke has pending work", () => {
+    const caller = participant({ deadline: 3000 });
+    coordinator.register(caller);
+    startInvoke(participant());
+    startInvoke(participant({ deadline: 3000 }));
+
+    coordinator.advance();
+
+    expect(Date.now()).toBe(0);
+  });
+
+  it("does not advance while a function that runs outside the clock is invoked", () => {
+    coordinator.register(participant({ deadline: 3000 }));
+    const end = startInvoke();
+
+    coordinator.advance();
+
+    expect(Date.now()).toBe(0);
+
+    end();
+
+    expect(Date.now()).toBe(3000);
+  });
+
+  it("returns a rejected result when starting the invoke throws", async () => {
+    const { result, end } = coordinator.startInvoke(() => {
+      throw new Error("no such function");
+    });
+    end();
+
+    await expect(result).rejects.toThrow("no such function");
   });
 
   it("advances once a finished execution unregisters", () => {

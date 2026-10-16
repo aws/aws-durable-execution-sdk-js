@@ -97,6 +97,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     the fake clock, so the runner considers every one of them: the clock moves only when none
     has an invocation to run, and only to the earliest end across all of them. Once an
     invoked function finishes, the clock waits until its caller has resumed with the result.
+    This holds even while another invoked function still waits, and for a non-durable invoked
+    function.
     While an invocation is running, the fake clock advances with real time, and an end is
     applied when that time reaches it. Waits also keep completing while an execution is
     paused.
