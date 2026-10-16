@@ -182,7 +182,8 @@ describe.each([ExecutionOtelPlugin, InvocationOtelPlugin])(
         };
         const lambdaContext: Context = {
           awsRequestId: "req",
-          getRemainingTimeInMillis: () => 0,
+          // A live invocation budget below the polling delay plus its reserved time.
+          getRemainingTimeInMillis: () => 1000,
           callbackWaitsForEmptyEventLoop: false,
           functionName: "parent",
           functionVersion: "1",

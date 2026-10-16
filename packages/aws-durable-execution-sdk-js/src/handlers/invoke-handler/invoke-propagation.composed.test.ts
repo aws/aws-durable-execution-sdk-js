@@ -23,7 +23,8 @@ const header =
   "Root=1-5759e988-bd862e3fe1be46a994272793;Parent=53995c3f42cd8ad8;Sampled=1";
 const lambdaContext: Context = {
   awsRequestId: "request",
-  getRemainingTimeInMillis: () => 0,
+  // A live invocation budget below the polling delay plus its reserved time.
+  getRemainingTimeInMillis: () => 1000,
   callbackWaitsForEmptyEventLoop: false,
   functionName: "parent",
   functionVersion: "1",

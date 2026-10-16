@@ -428,6 +428,8 @@ import {
   CheckpointDurableExecutionRequest,
   CheckpointDurableExecutionResponse,
   DurableExecutionClient,
+  DurableExecutionRequestOptions,
+  DurableLogger,
   DurableExecutionClientError,
   DurableExecutionClientErrorScope,
   GetDurableExecutionStateRequest,
@@ -440,11 +442,14 @@ class HttpDurableExecutionClient implements DurableExecutionClient {
 
   async getExecutionState(
     params: GetDurableExecutionStateRequest,
+    _logger?: DurableLogger,
+    options?: DurableExecutionRequestOptions,
   ): Promise<GetDurableExecutionStateResponse> {
     const response = await fetch(`${this.endpoint}/state`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(params),
+      ...(options?.abortSignal && { signal: options.abortSignal }),
     });
 
     if (!response.ok) {
@@ -459,11 +464,14 @@ class HttpDurableExecutionClient implements DurableExecutionClient {
 
   async checkpoint(
     params: CheckpointDurableExecutionRequest,
+    _logger?: DurableLogger,
+    options?: DurableExecutionRequestOptions,
   ): Promise<CheckpointDurableExecutionResponse> {
     const response = await fetch(`${this.endpoint}/checkpoint`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(params),
+      ...(options?.abortSignal && { signal: options.abortSignal }),
     });
 
     if (!response.ok) {
@@ -495,6 +503,24 @@ export const handler = withDurableExecution(myHandler, {
   ),
 });
 ```
+
+The optional third argument carries an invocation-owned `AbortSignal`. The default Lambda
+transport passes it to individual AWS SDK requests; it never destroys a shared client.
+Existing one- or two-argument custom clients remain compatible. A custom transport should
+forward the signal to its request implementation as above. If it ignores cancellation,
+the SDK stops waiting when the deadline expires and the event loop can run, and ignores late
+responses. It cannot
+stop that transport's already-running I/O or undo a request accepted by the backend.
+
+The invocation deadline closes admission to new durable work and interrupts the invocation
+without checkpointing a business failure. Lambda can retry and replay previously recorded
+outcomes. Normal handler completion closes admission while already queued checkpoints drain;
+the SDK may still write its final oversized execution result. After disposal, no new SDK
+checkpoint requests are admitted. These boundaries apply independently to concurrent LMI
+invocations. Synchronous code that blocks the event loop cannot be preempted. Already-running
+application I/O can continue and must remain idempotent; this
+does not add a cancellation signal or cleanup callback to `StepContext`. Durable suspension
+continues to leave the original business stack suspended instead of running its catch/finally.
 
 Without a stated scope, every failure is treated as transient, so a permanent one is retried
 until the execution times out. Note that a stated scope is believed ahead of the SDK's own

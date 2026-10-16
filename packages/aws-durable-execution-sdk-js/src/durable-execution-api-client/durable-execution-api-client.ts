@@ -7,7 +7,10 @@ import {
   GetDurableExecutionStateRequest,
   GetDurableExecutionStateResponse,
 } from "../types/wire";
-import { DurableExecutionClient } from "../types/durable-execution";
+import {
+  DurableExecutionClient,
+  DurableExecutionRequestOptions,
+} from "../types/durable-execution";
 import { log } from "../utils/logger/logger";
 import { DurableLogger } from "../types/durable-logger";
 import {
@@ -67,20 +70,23 @@ export class DurableExecutionApiClient implements DurableExecutionClient {
   async getExecutionState(
     params: GetDurableExecutionStateRequest,
     logger?: DurableLogger,
+    options?: DurableExecutionRequestOptions,
   ): Promise<GetDurableExecutionStateResponse> {
     // Resolved outside the try so that a failure to load or construct the client is not
     // reported as the request itself having failed.
     const { client, module } = await this.resolveClient();
 
     try {
-      const response = await client.send(
-        new module.GetDurableExecutionStateCommand({
-          DurableExecutionArn: params.DurableExecutionArn,
-          CheckpointToken: params.CheckpointToken,
-          Marker: params.Marker,
-          MaxItems: params.MaxItems,
-        }),
-      );
+      options?.abortSignal?.throwIfAborted();
+      const command = new module.GetDurableExecutionStateCommand({
+        DurableExecutionArn: params.DurableExecutionArn,
+        CheckpointToken: params.CheckpointToken,
+        Marker: params.Marker,
+        MaxItems: params.MaxItems,
+      });
+      const response = options?.abortSignal
+        ? await client.send(command, { abortSignal: options.abortSignal })
+        : await client.send(command);
 
       return response;
     } catch (error) {
@@ -115,20 +121,23 @@ export class DurableExecutionApiClient implements DurableExecutionClient {
   async checkpoint(
     params: CheckpointDurableExecutionRequest,
     logger?: DurableLogger,
+    options?: DurableExecutionRequestOptions,
   ): Promise<CheckpointDurableExecutionResponse> {
     // Resolved outside the try so that a failure to load or construct the client is not
     // reported as the checkpoint itself having failed.
     const { client, module } = await this.resolveClient();
 
     try {
-      const response = await client.send(
-        new module.CheckpointDurableExecutionCommand({
-          DurableExecutionArn: params.DurableExecutionArn,
-          CheckpointToken: params.CheckpointToken,
-          ClientToken: params.ClientToken,
-          Updates: params.Updates,
-        }),
-      );
+      options?.abortSignal?.throwIfAborted();
+      const command = new module.CheckpointDurableExecutionCommand({
+        DurableExecutionArn: params.DurableExecutionArn,
+        CheckpointToken: params.CheckpointToken,
+        ClientToken: params.ClientToken,
+        Updates: params.Updates,
+      });
+      const response = options?.abortSignal
+        ? await client.send(command, { abortSignal: options.abortSignal })
+        : await client.send(command);
       return response;
     } catch (error) {
       // Internal debug logging
