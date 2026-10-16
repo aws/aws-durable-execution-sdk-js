@@ -1,4 +1,5 @@
 import { LocalDurableTestRunner } from "../../local-durable-test-runner";
+import { WaitingOperationStatus } from "../../../types/durable-operation";
 import {
   DurableContext,
   withDurableExecution,
@@ -41,137 +42,126 @@ describe("LocalDurableTestRunner Integration", () => {
   });
 
   it("should track operations across multiple invocations", async () => {
-    // This test creates a workflow with multiple wait operations
-    // which cause separate invocations, and verifies that invocation tracking works
+    // Complete each callback only after its invocation has suspended. Unlike
+    // skipped waits, these boundaries cannot coalesce during the idle cooldown.
+    const stepBody = jest.fn(async () => ({
+      processed: true,
+      timestamp: Date.now(),
+    }));
     const handler = withDurableExecution(
       async (_event: unknown, context: DurableContext) => {
-        // First wait operation - this will run in invocation index 0
-        await context.wait("wait-invocation-1", { seconds: 1 });
+        const [first] = await context.createCallback("callback-invocation-1");
+        await first;
 
-        // This will execute in invocation index 1
-        const stepResult = await context.step("process-data-step", () => {
-          return Promise.resolve({ processed: true, timestamp: Date.now() });
-        });
+        const stepResult = await context.step("process-data-step", stepBody);
 
-        // Second wait operation - this will run in invocation index 1
-        await context.wait("wait-invocation-2", { seconds: 1 });
+        const [second] = await context.createCallback("callback-invocation-2");
+        await second;
 
-        // Third invocation will only return the result
-        return {
-          result: stepResult,
-          completed: true,
-        };
+        return { result: stepResult, completed: true };
       },
     );
-
-    const runner = new LocalDurableTestRunner({
-      handlerFunction: handler,
-    });
-
-    // Get operations for verification
-    const firstWaitOp = runner.getOperation("wait-invocation-1");
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+    const firstCallbackOp = runner.getOperation("callback-invocation-1");
     const stepOp = runner.getOperation("process-data-step");
-    const secondWaitOp = runner.getOperation("wait-invocation-2");
+    const secondCallbackOp = runner.getOperation("callback-invocation-2");
 
-    const result = await runner.run();
+    const execution = runner.run();
+    for (const callback of [firstCallbackOp, secondCallbackOp]) {
+      await callback.waitForData(WaitingOperationStatus.STARTED);
+      await runner.pauseExecution();
+      await callback.sendCallbackSuccess("continue");
+      await callback.waitForData(WaitingOperationStatus.COMPLETED);
+      await runner.resumeExecution();
+    }
+    const result = await execution;
 
-    // Verify the final result is correct
     const resultData = result.getResult() as {
       result: { processed: boolean; timestamp: number };
       completed: boolean;
     };
+    expect(result.getStatus()).toBe(OperationStatus.SUCCEEDED);
     expect(resultData).toMatchObject({
       result: { processed: true },
       completed: true,
     });
     expect(typeof resultData.result.timestamp).toBe("number");
+    expect(stepBody).toHaveBeenCalledTimes(1);
 
-    // Verify that operations were tracked
     const operations = result.getOperations();
-
-    // Verify the invocations were tracked - should be exactly 2 invocations
-    // Centralized termination implements a cool-down period prior to termination.
-    // This cool-down phase reduces the total number of invocations needed while increasing
-    // the number of operations performed in each invocation.
     const invocations = result.getInvocations();
-    expect(invocations).toHaveLength(2);
-
-    // We should have 3 operations in total
+    expect(invocations).toHaveLength(3);
     expect(operations).toHaveLength(3);
 
-    // Get all operation IDs
-    const firstWaitId = firstWaitOp.getOperationData()!.Id!;
+    const firstCallbackId = firstCallbackOp.getOperationData()!.Id!;
     const stepOpId = stepOp.getOperationData()!.Id!;
-    const secondWaitId = secondWaitOp.getOperationData()!.Id!;
+    const secondCallbackId = secondCallbackOp.getOperationData()!.Id!;
+    expect(firstCallbackId).not.toBe(stepOpId);
+    expect(firstCallbackId).not.toBe(secondCallbackId);
+    expect(stepOpId).not.toBe(secondCallbackId);
 
-    // Verify all three operations have unique IDs
-    expect(firstWaitId).not.toBe(stepOpId);
-    expect(firstWaitId).not.toBe(secondWaitId);
-    expect(stepOpId).not.toBe(secondWaitId);
-
-    // Get all operation IDs from the complete operations list
     const allOperationIds = operations.map((op) => op.getOperationData()!.Id!);
-
-    // Verify all our operations are in the final operations list by checking IDs
-    expect(allOperationIds).toContain(firstWaitId);
+    expect(allOperationIds).toContain(firstCallbackId);
     expect(allOperationIds).toContain(stepOpId);
-    expect(allOperationIds).toContain(secondWaitId);
+    expect(allOperationIds).toContain(secondCallbackId);
+    for (const operation of operations) {
+      expect(operation.getOperationData()!.Status).toBe(
+        OperationStatus.SUCCEEDED,
+      );
+    }
+    for (const invocation of invocations) {
+      expect(invocation).toEqual({
+        startTimestamp: expect.any(Date),
+        endTimestamp: expect.any(Date),
+        requestId: expect.any(String),
+      });
+    }
+    expect(
+      new Set(invocations.map((invocation) => invocation.requestId)).size,
+    ).toBe(3);
 
-    expect(invocations[0]).toEqual({
-      startTimestamp: expect.any(Date),
-      endTimestamp: expect.any(Date),
-      requestId: expect.any(String),
-    });
-    expect(invocations[1]).toEqual({
-      startTimestamp: expect.any(Date),
-      endTimestamp: expect.any(Date),
-      requestId: expect.any(String),
-    });
-
-    // Assert history events
+    // Check every event and its order, including each invocation's exact tracking
+    // fields. No timing-dependent event filtering or relaxed count is needed.
     expect(result.getHistoryEvents()).toEqual([
       {
         EventType: "ExecutionStarted",
         EventId: 1,
         Id: expect.any(String),
         EventTimestamp: expect.any(Date),
-        ExecutionStartedDetails: {
-          Input: {
-            Payload: "{}",
-          },
-        },
+        ExecutionStartedDetails: { Input: { Payload: "{}" } },
       },
       {
-        EventType: "WaitStarted",
-        SubType: "Wait",
+        EventType: "CallbackStarted",
+        SubType: "Callback",
         EventId: 2,
         Id: "c4ca4238a0b92382",
-        Name: "wait-invocation-1",
+        Name: "callback-invocation-1",
         EventTimestamp: expect.any(Date),
-        WaitStartedDetails: {
-          Duration: 1,
-          ScheduledEndTimestamp: expect.any(Date),
+        CallbackStartedDetails: {
+          CallbackId:
+            firstCallbackOp.getOperationData()!.CallbackDetails!.CallbackId,
+          Input: {},
         },
-      },
-      {
-        EventType: "WaitSucceeded",
-        SubType: "Wait",
-        EventId: 3,
-        Id: "c4ca4238a0b92382",
-        Name: "wait-invocation-1",
-        EventTimestamp: expect.any(Date),
-        WaitSucceededDetails: { Duration: 1 },
       },
       {
         EventType: "InvocationCompleted",
-        EventId: 4,
+        EventId: 3,
         EventTimestamp: expect.any(Date),
         InvocationCompletedDetails: {
-          StartTimestamp: expect.any(Date),
-          EndTimestamp: expect.any(Date),
+          StartTimestamp: invocations[0].startTimestamp,
+          EndTimestamp: invocations[0].endTimestamp,
           Error: {},
-          RequestId: expect.any(String),
+          RequestId: invocations[0].requestId,
         },
+      },
+      {
+        EventType: "CallbackSucceeded",
+        SubType: "Callback",
+        EventId: 4,
+        Id: "c4ca4238a0b92382",
+        Name: "callback-invocation-1",
+        EventTimestamp: expect.any(Date),
+        CallbackSucceededDetails: { Result: { Payload: "continue" } },
       },
       {
         EventType: "StepStarted",
@@ -190,53 +180,61 @@ describe("LocalDurableTestRunner Integration", () => {
         Name: "process-data-step",
         EventTimestamp: expect.any(Date),
         StepSucceededDetails: {
-          Result: {
-            Payload: JSON.stringify(resultData.result),
-          },
+          Result: { Payload: JSON.stringify(resultData.result) },
           RetryDetails: {},
         },
       },
       {
-        EventType: "WaitStarted",
-        SubType: "Wait",
+        EventType: "CallbackStarted",
+        SubType: "Callback",
         EventId: 7,
         Id: "eccbc87e4b5ce2fe",
-        Name: "wait-invocation-2",
+        Name: "callback-invocation-2",
         EventTimestamp: expect.any(Date),
-        WaitStartedDetails: {
-          Duration: 1,
-          ScheduledEndTimestamp: expect.any(Date),
+        CallbackStartedDetails: {
+          CallbackId:
+            secondCallbackOp.getOperationData()!.CallbackDetails!.CallbackId,
+          Input: {},
         },
       },
       {
-        EventType: "WaitSucceeded",
-        SubType: "Wait",
+        EventType: "InvocationCompleted",
         EventId: 8,
-        Id: "eccbc87e4b5ce2fe",
-        Name: "wait-invocation-2",
         EventTimestamp: expect.any(Date),
-        WaitSucceededDetails: { Duration: 1 },
+        InvocationCompletedDetails: {
+          StartTimestamp: invocations[1].startTimestamp,
+          EndTimestamp: invocations[1].endTimestamp,
+          Error: {},
+          RequestId: invocations[1].requestId,
+        },
+      },
+      {
+        EventType: "CallbackSucceeded",
+        SubType: "Callback",
+        EventId: 9,
+        Id: "eccbc87e4b5ce2fe",
+        Name: "callback-invocation-2",
+        EventTimestamp: expect.any(Date),
+        CallbackSucceededDetails: { Result: { Payload: "continue" } },
       },
       {
         EventType: "InvocationCompleted",
-        EventId: 9,
+        EventId: 10,
         EventTimestamp: expect.any(Date),
         InvocationCompletedDetails: {
-          StartTimestamp: expect.any(Date),
-          EndTimestamp: expect.any(Date),
+          StartTimestamp: invocations[2].startTimestamp,
+          EndTimestamp: invocations[2].endTimestamp,
           Error: {},
-          RequestId: expect.any(String),
+          RequestId: invocations[2].requestId,
         },
       },
       {
         EventType: "ExecutionSucceeded",
-        EventId: 10,
+        EventId: 11,
         Id: expect.any(String),
         EventTimestamp: expect.any(Date),
         ExecutionSucceededDetails: {
-          Result: {
-            Payload: JSON.stringify(resultData),
-          },
+          Result: { Payload: JSON.stringify(resultData) },
         },
       },
     ]);
