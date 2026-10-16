@@ -42,9 +42,18 @@ import {
 import type { OtelPluginConfig } from "./otel-plugin-config";
 import { createTracerProvider } from "./otel-plugin-provider";
 import { tryInstallGlobalIdGenerator } from "./global-id-generator";
-import { DurableSampler, tryInstallDurableSampler } from "./global-sampler";
+import {
+  DurableSampler,
+  isDurableSamplerInstalled,
+  tryInstallDurableSampler,
+} from "./global-sampler";
 import { ExternalCompletions } from "./external-completions";
 
+import { createPropagationMetadata } from "./propagation-metadata";
+import type {
+  PropagationInput,
+  PropagationMetadata,
+} from "./propagation-metadata";
 import { PLUGIN_REGISTRATION } from "./plugin-registration";
 
 const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
@@ -275,6 +284,25 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
     if (this.durableSampler && this.syntheticRootAnchorTimestamp) {
       this.createSyntheticRoot()?.end(this.syntheticRootAnchorTimestamp);
     }
+  }
+
+  providePropagationMetadata(
+    input: PropagationInput,
+  ): PropagationMetadata | undefined {
+    if (
+      !this.tracingEnabled ||
+      !this.invocationSpan ||
+      !this.workflowSpan ||
+      !isDurableSamplerInstalled(this.tracer, this.durableSampler)
+    ) {
+      return undefined;
+    }
+    return createPropagationMetadata(
+      input,
+      this.executionArn,
+      this.executionTraceId,
+      this.executionTraceFlags,
+    );
   }
 
   wrapInvocation(

@@ -4,4 +4,5 @@
  */
 
 export const realSetTimeout = setTimeout;
+export const realSetImmediate = setImmediate;
 export const RealDate = Date;
