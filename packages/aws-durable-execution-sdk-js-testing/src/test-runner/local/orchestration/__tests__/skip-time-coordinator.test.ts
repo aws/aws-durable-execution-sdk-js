@@ -80,8 +80,12 @@ describe("SkipTimeCoordinator", () => {
   /** Starts an invoke whose invoked function is `invoked`, or runs outside the clock. */
   function startInvoke(
     invoked?: SkipTimeParticipant,
-    caller: SkipTimeParticipant = participant(),
+    caller?: SkipTimeParticipant,
   ): () => void {
+    if (!caller) {
+      caller = participant();
+      coordinator.register(caller);
+    }
     return coordinator.startInvoke(caller, () => {
       if (invoked) {
         coordinator.register(invoked);
@@ -164,8 +168,27 @@ describe("SkipTimeCoordinator", () => {
     expect(unrelated.applyDeadline).toHaveBeenCalledWith(3000);
   });
 
+  it("does not hold the clock for an invoke whose caller has already finished", () => {
+    // The final checkpoint drain can deliver the START of an invoke that the finished
+    // handler did not await.
+    const finished = participant();
+    coordinator.register(finished);
+    coordinator.unregister(finished);
+    const start = jest.fn(() => Promise.resolve());
+    coordinator.startInvoke(finished, start);
+    const unrelated = participant({ deadline: 3000 });
+    coordinator.register(unrelated);
+
+    coordinator.advance();
+
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(Date.now()).toBe(3000);
+  });
+
   it("returns a rejected result when starting the invoke throws", async () => {
-    const { result, end } = coordinator.startInvoke(participant(), () => {
+    const caller = participant();
+    coordinator.register(caller);
+    const { result, end } = coordinator.startInvoke(caller, () => {
       throw new Error("no such function");
     });
     end();

@@ -118,6 +118,18 @@ export class SkipTimeCoordinator {
     result: Promise<T>;
     end: () => void;
   } {
+    if (!this.participants.has(caller)) {
+      // The caller has finished, as when the final checkpoint drain delivers the START of
+      // an invoke the handler did not await. No caller remains to resume with the result,
+      // and nothing would remove the hold once its caller has unregistered.
+      let result: Promise<T>;
+      try {
+        result = start();
+      } catch (err) {
+        result = Promise.reject(err);
+      }
+      return { result, end: () => undefined };
+    }
     const invoke: InvokeHandoff = { caller, invoked: undefined };
     this.invokes.add(invoke);
     this.startingInvoke = invoke;
