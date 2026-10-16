@@ -451,13 +451,13 @@ describe("InvocationOtelPlugin", () => {
       expect(spans.length).toBeGreaterThan(0);
     });
 
-    it("ends the original operation segment started during the final flush", async () => {
+    it("ends the original operation segment started during the open flush", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       const originalFlush = provider!.forceFlush.bind(provider);
       let calls = 0;
       jest.spyOn(provider!, "forceFlush").mockImplementation(async () => {
         calls++;
-        if (calls === 2) {
+        if (calls === 1) {
           await plugin.onOperationStart(
             makeOperationInfo({
               id: "late-unit",
@@ -935,6 +935,56 @@ describe("InvocationOtelPlugin", () => {
   });
 
   describe("Continuation span for cross-invocation operations", () => {
+    it("drains a queued replay completion while its resumed context is still open", async () => {
+      await plugin.onInvocationStart(
+        makeInvocationInfo({ isFirstInvocation: false }),
+      );
+      const parent = makeOperationInfo({
+        id: "resumed-parent",
+        name: "resumed-parent",
+        type: "CONTEXT",
+        isReplay: true,
+      });
+      const completion = Object.freeze(
+        makeOperationInfo({
+          id: "external",
+          name: "external",
+          type: "CALLBACK",
+          parentId: parent.id,
+          status: "SUCCEEDED",
+          isReplay: true,
+        }),
+      );
+      await plugin.onOperationStart(parent);
+      await plugin.onOperationStart(completion);
+      await plugin.onOperationChange({
+        executionArn: TEST_ARN,
+        operations: { [parent.id]: parent, [completion.id]: completion },
+        updatedOperations: { [completion.id]: completion },
+      });
+      await plugin.onOperationEnd({
+        ...parent,
+        status: "SUCCEEDED",
+        isReplay: false,
+      });
+      const atParentEnd = findSpan("external");
+      const parentSpan = findSpan("resumed-parent");
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+      expect(atParentEnd).toBeDefined();
+      expect(parentSpan).toBeDefined();
+      expect(atParentEnd!.parentSpanContext?.spanId).toBe(
+        parentSpan!.spanContext().spanId,
+      );
+      expect(atParentEnd!.links.map((link) => link.context.spanId)).toContain(
+        deriveSpanIdFromOperationId(completion.id, TEST_ARN),
+      );
+      expect(
+        exporter.getFinishedSpans().filter((span) => span.name === "external"),
+      ).toHaveLength(1);
+      expect(completion.isReplay).toBe(true);
+      expect(completion.parentId).toBe(parent.id);
+    });
+
     it("links continuation span to Workflow and the initial operation span when operation was started in prior invocation", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       // onOperationEnd for an operation NOT in the map (started elsewhere)
@@ -1683,12 +1733,7 @@ describe("InvocationOtelPlugin", () => {
       expect(exceptionEvent).toBeDefined();
     });
 
-    // Regression: onOperationEnd can be reached with a terminal FAILURE status
-    // (TIMED_OUT/STOPPED/FAILED/CANCELLED) and NO error object (callback-timeout
-    // and chained-invoke "already failed" cross-invocation fast paths). Those
-    // must NOT be labelled OTel OK — the OK branch is gated on SUCCEEDED, so a
-    // no-error failure leaves the span status at the default UNSET (code 0).
-    it("onOperationEnd terminal path: TIMED_OUT status with NO error leaves the operation span NOT OK (UNSET)", async () => {
+    it("onOperationEnd terminal path: TIMED_OUT status with NO error marks the operation span ERROR without an exception", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onOperationStart(
         makeOperationInfo({ id: "op-timeout", name: "timeout-op" }),
@@ -1706,10 +1751,11 @@ describe("InvocationOtelPlugin", () => {
       const opSpan = findSpan("timeout-op");
       expect(opSpan).toBeDefined();
       expect(opSpan!.status.code).not.toBe(SpanStatusCode.OK);
-      expect(opSpan!.status.code).toBe(SpanStatusCode.UNSET);
+      expect(opSpan!.status.code).toBe(SpanStatusCode.ERROR);
+      expect(opSpan!.events).toHaveLength(0);
     });
 
-    it("onOperationEnd continuation path: STOPPED status with NO error leaves the continuation span NOT OK (UNSET)", async () => {
+    it("onOperationEnd continuation path: STOPPED status with NO error marks the continuation span ERROR without an exception", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       // No prior onOperationStart -> spanMap miss -> cross-invocation
       // continuation span path.
@@ -1726,7 +1772,8 @@ describe("InvocationOtelPlugin", () => {
       const continuationSpan = findSpan("cross-stopped");
       expect(continuationSpan).toBeDefined();
       expect(continuationSpan!.status.code).not.toBe(SpanStatusCode.OK);
-      expect(continuationSpan!.status.code).toBe(SpanStatusCode.UNSET);
+      expect(continuationSpan!.status.code).toBe(SpanStatusCode.ERROR);
+      expect(continuationSpan!.events).toHaveLength(0);
     });
 
     it("onOperationEnd terminal path: SUCCEEDED status with NO error stamps OK", async () => {

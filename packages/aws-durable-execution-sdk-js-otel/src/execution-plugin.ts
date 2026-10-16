@@ -1,3 +1,4 @@
+import { setOperationSpanStatus } from "./operation-span-status";
 import type {
   DurableInstrumentationPlugin,
   InvocationInfo,
@@ -37,6 +38,7 @@ import {
   rootSamplingDecision,
 } from "./execution-trace-context";
 import type { OtelPluginConfig } from "./otel-plugin-config";
+import { flushTracerProvider } from "./otel-plugin-provider";
 import {
   createPluginFactory,
   OtelPluginEnvironment,
@@ -134,8 +136,14 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   private syntheticRootMaterialized = false;
 
   private tracingEnabled = false;
+  // Operation ends received after a flush starts may still be in a batch buffer.
+  private operationSpansNeedFlush = false;
   private readonly externalCompletions = new ExternalCompletions();
-  private invocationEnded = false;
+  // A real context span can finish even when an enclosing completed context
+  // suppresses its terminal checkpoint. Keep that observed parent identity.
+  private readonly recordedContextIds = new Set<string>();
+  private invocationEndOperations: Record<string, OperationInfo> | undefined;
+
   private invocationFinalized = false;
 
   /**
@@ -293,6 +301,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       },
       invocationParentContext,
     );
+
     // Each sampled invocation can recover an earlier undelivered anchor. An
     // opaque tracer retains terminal-only creation: without the sampler wrapper,
     // an early anchor would independently query its hidden sampler again.
@@ -302,7 +311,7 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
     // A failed extractor or span setup leaves later hooks inert for this instance.
     this.tracingEnabled = true;
-    this.externalCompletions.observe(info.updatedOperations);
+    this.externalCompletions.observe(info.updatedOperations, info.operations);
   }
 
   providePropagationMetadata(
@@ -343,22 +352,22 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       return;
     }
 
-    // Keep enclosing spans open while pending completions are exported and
-    // flushed. Checkpoint updates received during that flush are drained before
-    // their parent timestamps become immutable.
-    await this.flushExternalCompletions();
+    this.invocationEndOperations = info.operations ?? {};
 
-    // Drain updates delivered in the microtask handoff after the flush settles.
-    // No await separates the final empty check from ending the enclosing spans.
-    for (const operation of this.externalCompletions.pending.values()) {
-      await this.onOperationEnd({ ...operation, isReplay: false });
-    }
-
+    // Prefer normal lifecycle hooks, which preserve live parent scopes. Before
+    // returning, export any fresh completion the workflow did not reach. A
+    // later resume may label it replay even though it has never been exported.
+    this.drainExternalCompletions(info);
     // Backend operation dates remain authoritative. Do not let a fractional
     // local clock end this invocation before a boundary it actually observed.
     const logicalEndTime = this.logicalTimestamp();
-    this.observeTimestamp(this.liveTimestamp());
-    const endTime = this.latestObservedTimestamp!;
+    const liveEndTime = this.liveTimestamp();
+    const endTime =
+      logicalEndTime[0] > liveEndTime[0] ||
+      (logicalEndTime[0] === liveEndTime[0] &&
+        logicalEndTime[1] > liveEndTime[1])
+        ? logicalEndTime
+        : liveEndTime;
 
     // 1. Always end and export Invocation_Span
     if (this.invocationSpan) {
@@ -440,42 +449,94 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
 
     // 3. End any attempt span still open (safeguard against a leak on a
     // non-terminal invocation, issue #831). Operation placeholders have no
-    // recording span, and this instance is dropped with the invocation, so
-    // there is nothing else to release.
-    for (const span of this.spanMap.values()) {
-      if (span.isRecording()) {
-        span.end(logicalEndTime);
-      }
-    }
+    // recording span; their invocation-local hooks are finalized below.
+    this.endOpenAttemptSpans();
 
-    // 4. Always flush TracerProvider at invocation boundaries
-    this.invocationEnded = true;
-    await this.flushExternalCompletions();
-    this.invocationFinalized = true;
-  }
-
-  private flushExternalCompletions(): Promise<void> {
-    return this.externalCompletions.drainAndFlush(
-      (operation) => this.onOperationEnd({ ...operation, isReplay: false }),
-      () => this.flushTracerProvider(),
-    );
-  }
-
-  private async flushTracerProvider(): Promise<void> {
-    if ("forceFlush" in this.environment.tracerProvider) {
+    // End owns the drain/flush loop; change hooks only enqueue notifications.
+    // A response received during an awaited flush must not be cleared below.
+    const flushDeadline =
+      performance.now() + this.environment.flushTimeoutMillis;
+    const flush = async () => {
       try {
-        await (
-          this.environment.tracerProvider as {
-            forceFlush: () => Promise<void>;
-          }
-        ).forceFlush();
+        await flushTracerProvider(
+          this.environment.tracerProvider,
+          this.environment.usesGlobalProvider,
+          Math.max(0, flushDeadline - performance.now()),
+        );
       } catch (e) {
         console.error(
           "[ExecutionOtelPlugin] forceFlush failed:",
           e instanceof Error ? e.message : e,
         );
       }
+    };
+    do {
+      this.drainExternalCompletions(info);
+      this.operationSpansNeedFlush = false;
+      await flush();
+    } while (
+      [...this.externalCompletions.pending.values()].some(
+        (operation) => !this.hasOpenUnrecordedParent(operation),
+      ) &&
+      performance.now() < flushDeadline
+    );
+
+    // Finalize the remaining live parents after the open drain/flush phase.
+    // A normal parent End may already have exported its child during that wait.
+    if (this.externalCompletions.pending.size > 0) {
+      this.drainExternalCompletions(
+        info,
+        [...this.externalCompletions.pending.values()],
+        true,
+      );
     }
+
+    // Attempts started during the awaited flush are owned by this invocation too.
+    this.endOpenAttemptSpans();
+
+    // Close this invocation's hooks before flushing the finalized snapshot.
+    // New operation-end hooks during this last wait cannot revise the snapshot.
+    const flushFinalOperations = this.operationSpansNeedFlush;
+    this.finalizeInvocation();
+    if (flushFinalOperations && performance.now() < flushDeadline) {
+      await flush();
+    }
+  }
+
+  private drainExternalCompletions(
+    info: InvocationEndInfo,
+    operations: Iterable<OperationInfo> = this.externalCompletions.pending.values(),
+    finalDrain = false,
+  ): void {
+    const terminal = info.status === "SUCCEEDED" || info.status === "FAILED";
+    for (const operation of operations) {
+      // Even below a checkpointed terminal ancestor, a live context can still
+      // finish locally while forceFlush awaits. Give its End hook first choice.
+      const openParent = this.hasOpenUnrecordedParent(operation);
+      if (openParent && !finalDrain) continue;
+      const recordedParent =
+        operation.parentId && this.recordedContextIds.has(operation.parentId);
+      // A terminal handler can abandon an unawaited child. Its still-open
+      // placeholder will be discarded below, so it cannot parent this export.
+      const parentId =
+        !recordedParent &&
+        ((terminal && openParent) ||
+          this.hasAbandonedParent(
+            operation.parentId,
+            this.invocationEndOperations,
+          ))
+          ? undefined
+          : operation.parentId;
+      this.finishOperation({ ...operation, parentId, isReplay: false });
+    }
+  }
+
+  private hasOpenUnrecordedParent(operation: OperationInfo): boolean {
+    return (
+      operation.parentId !== undefined &&
+      this.operationContexts.has(operation.parentId) &&
+      !this.recordedContextIds.has(operation.parentId)
+    );
   }
 
   /** Creates at most one SDK-owned root per invocation; the caller ends it. */
@@ -550,6 +611,29 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       this.latestObservedTimestamp = time;
     }
     return timestamp;
+  }
+
+  private endOpenAttemptSpans(): void {
+    for (const span of this.spanMap.values()) {
+      if (span.isRecording())
+        this.endOperationSpan(span, this.logicalTimestamp());
+    }
+  }
+
+  private endOperationSpan(
+    span: Span,
+    endTime?: Parameters<Span["end"]>[0],
+  ): void {
+    span.end(endTime);
+    this.operationSpansNeedFlush = true;
+  }
+
+  private finalizeInvocation(): void {
+    // A factory instance is never reused. Freeze its final snapshot before the
+    // final bounded provider wait; late hooks must not create or revise spans.
+    this.invocationFinalized = true;
+    this.tracingEnabled = false;
+    this.externalCompletions.clear();
   }
 
   private startSpan(
@@ -664,8 +748,24 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onOperationEnd(info: OperationEndInfo): Promise<void> {
+    this.finishOperation(info);
+  }
+
+  // Child completion and parent finalization share one synchronous turn. A
+  // provider flush must not reset invocation state between these two actions.
+  private finishOperation(info: OperationEndInfo): void {
     if (!this.tracingEnabled) {
       return;
+    }
+
+    // A queued external completion can precede its live context's end even
+    // when traversal never awaited it. Export it while that parent is open.
+    if (info.type === "CONTEXT" && !info.isReplay) {
+      for (const child of this.externalCompletions.pending.values()) {
+        if (child.parentId === info.id) {
+          this.finishOperation({ ...child, isReplay: false });
+        }
+      }
     }
 
     // Release placeholders even when this is a previously observed completion.
@@ -741,23 +841,12 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         ),
     );
 
-    // Reuse the same logical completion for the error event and the span end.
     const endTime = info.endTimestamp ?? this.logicalTimestamp();
-    if (info.error) {
-      span.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: info.error.message,
-      });
-      span.recordException(info.error, endTime);
-    } else if (info.status === "SUCCEEDED") {
-      // Stamp explicit OK ONLY on a SUCCEEDED terminal status. Terminal
-      // FAILURE statuses (TIMED_OUT/STOPPED/FAILED/CANCELLED) can arrive with
-      // NO error object (callback-timeout, chained-invoke fast paths); those
-      // must NOT be labelled OK, so they are left UNSET.
-      span.setStatus({ code: SpanStatusCode.OK });
-    }
-
-    span.end(this.observeTimestamp(endTime));
+    setOperationSpanStatus(span, info);
+    if (info.error) span.recordException(info.error, endTime);
+    const recordedContext = info.type === "CONTEXT" && span.isRecording();
+    this.endOperationSpan(span, this.observeTimestamp(endTime));
+    if (recordedContext) this.recordedContextIds.add(info.id);
     this.externalCompletions.markExported(info);
   }
 
@@ -766,6 +855,8 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
    * deterministic identity, or the Workflow identity for a top-level operation.
    * A completion notification can arrive without traversing its parent in this
    * invocation (for example, a completed child context skipped during replay).
+   * An exported parent's context remains a valid parent after it ends. Reusing
+   * its identity does not recreate the parent span or compare clock domains.
    */
   private resolveOperationParentContext(parentId: string | undefined): Context {
     if (parentId) {
@@ -800,6 +891,37 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
       parent.startTimestamp = start;
       parentId = parent.parentId;
     }
+  }
+
+  private hasAbandonedParent(
+    parentId: string | undefined,
+    operations: Record<string, OperationInfo> = {},
+  ): boolean {
+    const parent = parentId ? operations[parentId] : undefined;
+    if (
+      parent?.type !== "CONTEXT" ||
+      !["STARTED", "READY", "PENDING"].includes(parent.status ?? "")
+    )
+      return false;
+
+    // Completed contexts do not restart unfinished descendants. ReplayChildren
+    // can rebuild a successful result by traversing completed children, but
+    // ReplaySucceededContext still blocks unfinished child operations.
+    const visited = new Set([parent.id]);
+    let ancestorId = parent.parentId;
+    while (ancestorId && !visited.has(ancestorId)) {
+      visited.add(ancestorId);
+      const ancestor = operations[ancestorId];
+      if (ancestor?.type !== "CONTEXT") return false;
+      if (
+        ["SUCCEEDED", "FAILED", "TIMED_OUT", "STOPPED", "CANCELLED"].includes(
+          ancestor.status ?? "",
+        )
+      )
+        return true;
+      ancestorId = ancestor.parentId;
+    }
+    return false;
   }
 
   /** The earlier of two timestamps, ignoring undefined; undefined only when both are. */
@@ -919,17 +1041,19 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         // Non-failed attempt: stamp explicit OK (matches Python OTel #604).
         attemptSpan.setStatus({ code: SpanStatusCode.OK });
       }
-      attemptSpan.end(this.observeTimestamp(endTime));
+      this.endOperationSpan(attemptSpan, this.observeTimestamp(endTime));
       this.spanMap.delete(key);
     }
   }
 
   async onOperationChange(info: OperationChangeInfo): Promise<void> {
     if (this.tracingEnabled) {
-      this.externalCompletions.observe(info.updatedOperations);
-      if (this.invocationEnded && this.externalCompletions.pending.size > 0) {
-        await this.flushExternalCompletions();
+      // End may be waiting for a provider flush. New completions must use the
+      // ancestry from this newer full snapshot, not End's captured snapshot.
+      if (this.invocationEndOperations && info.operations) {
+        this.invocationEndOperations = info.operations;
       }
+      this.externalCompletions.observe(info.updatedOperations, info.operations);
     }
   }
 

@@ -181,7 +181,25 @@ tracer from it. Register it globally when the application also needs its
 context manager, propagator, or library instrumentation.
 
 At the end of each enabled invocation, both plugins call `forceFlush()` when
-the provider exposes it. They never call `shutdown()`.
+the provider exposes it. For the default global API provider, they also check
+its public delegate, so an SDK `BatchSpanProcessor` is flushed when the API proxy
+does not expose `forceFlush()` itself. Explicit factory providers are used as
+returned and are not unwrapped. The plugins never call `shutdown()`.
+
+Both views use one `flushTimeoutMillis` budget across the invocation-end
+drain/flush rounds (default **1000 ms**, positive and at most **2147483647 ms**,
+Node.js's maximum timer delay). This bounds
+asynchronous provider waiting on both the global and explicit-provider paths.
+Choose a value that leaves room in the Lambda invocation timeout and configure
+the exporter's own transport timeouts too. The plugin has no remaining-runtime
+deadline in its invocation metadata and cannot guarantee that this budget fits
+the time left after the handler.
+
+On expiry, the plugin drains one bounded snapshot of terminal notifications
+already received, then returns without starting another provider flush. Export
+delivery is best effort: spans may remain queued. Timing out does not cancel an
+export, shut down the provider, or preempt synchronously blocking provider or
+processor code.
 
 ## Dynamic Loading from a Lambda Layer
 
@@ -337,6 +355,18 @@ wall time from its provider. Its timestamps can therefore fall outside a parent
 opened before that adjustment, even though both measure durations monotonically.
 The plugin does not change the application's provider or rewrite user spans.
 
+Independently of the invocation clock origin, execution-view operation and attempt
+exception events use the supplied backend end timestamp when one is available,
+just as their span end does. Recording the event at local receipt time can place
+it after the backend-ended span. Missing end timestamps retain the normal tracer
+default; this does not add rounding or cross-clock ordering policies.
+
+When an execution-view completion has no recorded start timestamp, an available
+backend end timestamp supplies a zero-duration fallback. This keeps its exception
+at that known completion time instead of before a later local default start.
+Recorded starts and missing-end defaults retain their existing behavior; this
+does not reconcile a captured local start with an earlier backend end.
+
 Because the original span context is not checkpointed, replayed `STEP` and
 `CONTEXT` spans and cross-invocation continuation spans use new provider IDs.
 They correlate through two links: the real exported `Workflow` span, and the
@@ -436,7 +466,7 @@ anchor span content; backends may retain whichever resource accompanies their
 chosen copy. Span processors that enrich these spans must likewise avoid
 invocation-varying span fields when relying on identity-based deduplication.
 Export delivery and flushing remain the provider/layer's responsibility. The
-plugin awaits `forceFlush()` when its provider exposes it, but a killed invocation
+plugin awaits an available provider or global-delegate `forceFlush()`, but a killed invocation
 or a failed export cannot guarantee delivery; this is not exactly-once export.
 
 If a caller omits `executionStartTimestamp`, the plugin retains terminal-only
@@ -574,6 +604,9 @@ interface OtelPluginConfig {
 
   /** Add active OTel IDs to durable log records. Defaults to true. */
   enrichLogger?: boolean;
+
+  /** Total invocation-end provider wait budget; defaults to 1000 ms. */
+  flushTimeoutMillis?: number;
 }
 ```
 
@@ -614,16 +647,28 @@ environment values are available.
 
 OpenTelemetry status mapping is:
 
-| Span       | Durable result                                                     | OTel status              |
-| ---------- | ------------------------------------------------------------------ | ------------------------ |
-| Workflow   | `SUCCEEDED` / `FAILED`                                             | `OK` / `ERROR`           |
-| Invocation | `SUCCEEDED` or `PENDING` / `FAILED` / `RETRYING`                   | `OK` / `ERROR` / `UNSET` |
-| Operation  | `SUCCEEDED` / error object / other failure without an error object | `OK` / `ERROR` / `UNSET` |
-| Attempt    | `FAILED` / any other outcome                                       | `ERROR` / `OK`           |
+| Span       | Durable result | OTel status |
+| ---------- | -------------- | ----------- |
+| Workflow   | `SUCCEEDED` / `FAILED` | `OK` / `ERROR` |
+| Invocation | `SUCCEEDED` or `PENDING` / `FAILED` / `RETRYING` | `OK` / `ERROR` / `UNSET` |
+| Operation  | `SUCCEEDED` / `FAILED`, `TIMED_OUT`, `STOPPED` or an error object / otherwise | `OK` / `ERROR` / `UNSET` |
+| Attempt    | `FAILED` / any other outcome | `ERROR` / `OK` |
 
-Operation and attempt errors are recorded as exception events when an error
-object is available. Workflow and Invocation failures set an `ERROR` status and
-status message without recording an exception event.
+Operation failure status and exception details are independent. `FAILED`,
+`TIMED_OUT`, and `STOPPED` remain `ERROR` when error details are absent, including when
+the handler catches its failure and returns successfully. The status message uses
+the supplied error message, or the failed status name when no error exists.
+
+`CANCELLED` without error details remains `UNSET`. A supplied error still makes
+a cancelled operation `ERROR`; this mapping does not introduce a general
+cancellation policy.
+
+Operation and attempt exceptions are recorded only when an error object is
+available. Wire errors with no defined values do not synthesize exception events,
+including when an unrecognized property is `undefined`. Explicit partial
+details, including empty strings or an empty stack trace, remain error information.
+Workflow and Invocation failures set `ERROR` without recording an exception event.
+Caller exceptions, checkpoint payloads and replay behavior are unchanged.
 
 ## Log Correlation
 
@@ -783,6 +828,51 @@ not retroactively move an already recording attempt span: if its later backend
 end predates its local start, strict interval/event containment still cannot be
 guaranteed across those clock domains.
 
+A failed invoke still rejects with `InvokeError` when backend error details are
+absent. Its telemetry retains the absent error metadata in live, resumed, and
+deferred delivery, rather than inventing an exception. Provided error details
+continue through the existing metadata converter.
+
+For a named `waitForCallback`, a deferred inner callback recovers its derived
+`<name>-callback` display name from a known `WaitForCallback` parent when replay
+skips that branch. This does not change checkpointed names, operation identity,
+parent identity, or the source notification; explicit names remain unchanged.
+
+At the final cleanup of a terminal invocation, the execution view parents a
+deferred completion to `Workflow` if its direct parent is still an open local
+placeholder that will be discarded. During the open drain/flush phase, a live
+parent can still finish and its normal end hook exports the queued child with
+the real parent identity. An open parent alone does not trigger repeated flushes.
+The plugin does not invent a completion or span for an abandoned context. Pending
+or retrying invocations retain the parent identity
+because a later invocation can still complete and export that context. An
+exception is an unfinished parent below a known completed context in checkpoint
+history: replay cannot restart that unfinished branch, so its deferred completion
+also uses `Workflow`. `ReplayChildren` can traverse completed children to rebuild
+a result, but `ReplaySucceededContext` still blocks unfinished child operations.
+Missing or inconclusive ancestry is not treated as proof of abandonment.
+
+In both views, a completion notification already queued when its live context
+ends is exported before that context closes, preserving its OTel parent. Queued
+child draining and parent finalization run synchronously within the End hook;
+flush completion cannot reset invocation state between them. Invocation-end
+drains likewise finish their current snapshot before yielding. This
+includes an unawaited callback from a prior invocation: the invocation view emits
+its linked continuation while the resumed parent segment is still open.
+
+In the execution view, a completed context in checkpoint history remains a valid
+parent for a later completion. A context span actually recorded during the current
+invocation also remains a valid parent when an enclosing context suppressed its
+terminal checkpoint and history still shows it as unfinished. This recording takes
+precedence over abandonment inference within that invocation; knowledge of an
+uncheckpointed recording is not persisted into later invocations.
+
+A notification delivered after the parent's end hook may carry a
+completion that occurred earlier in the backend. Delivery order does not establish
+that chronology. Reusing the recorded parent identity does not recreate a parent
+span, compare timestamps, retime supplied dates, or promise temporal containment.
+The unfinished-parent safeguards still apply when no such recorded parent is known.
+
 This requires the SDK to receive the operation metadata. Lambda normally removes
 a completed context's children from subsequent execution state unless
 `ReplayChildren` preserves them. For completion visibility after a child context
@@ -790,39 +880,42 @@ has finished, enable the appropriate `pluginsConfig.childOperationsDepth` (for
 example, `1` for direct children of a top-level context). Preserved contexts
 replay their orchestration; completed durable work still uses stored results.
 The plugin cannot reconstruct an operation that was pruned and whose lifecycle
-hooks do not run. The local runner's retained resume state must not be treated as
-proof that the default Lambda configuration preserves those children. The local
-resume-state discrepancy is tracked in [#995](https://github.com/aws/aws-durable-execution-sdk-js/issues/995).
+hooks do not run. The local runner now applies the service's pruning rule to
+invocation input and `GetDurableExecutionState`; its inspection results and
+checkpoint responses still retain their existing operation data.
+
+Within the configured flush budget, the invocation-end hook drains notifications
+received while it awaits a provider flush, then flushes the newly exported
+completions. On expiry it drains one snapshot of already-received notifications
+without another provider wait before clearing its state. In the execution view,
+completions held for a still-open parent are finalized after the open drain/flush
+phase. Both views close their invocation state before a final provider flush for
+operation or attempt spans ended during the previous wait or final cleanup,
+using only the original budget remaining. New operation-end hooks after
+finalization do not record additional spans during that final wait. At deadline
+expiry these final exports remain best effort. Change hooks enqueue notifications;
+the end hook owns this loop. In the execution view, these drains use the latest operation ancestry received during
+the end hook to detect an unfinished parent abandoned by a completed ancestor.
+Missing ancestry alone does not prove abandonment. In the
+invocation view, a completion after its individual segment has ended uses a linked
+continuation. A segment first created while a provider flush is waiting remains
+eligible for normal completion. Any such segment still open at final cleanup is
+ended before state is cleared and included in the final bounded flush. The
+execution view likewise closes recording attempt spans that started during the
+wait, without inventing a completed operation span for unfinished work.
+Enclosing spans may already have ended, so this does not guarantee
+late-child timestamp containment. Updates after finalization and a frozen runtime
+remain outside this shutdown guarantee. Each invocation uses its own plugin
+instance, so finalizing one invocation does not close another invocation’s hooks.
+This bounded finalization replaces the earlier factory proposal’s extra pre-flush
+and post-shutdown notification export; hooks are inert after the final snapshot.
 
 Notifications and operation-end hooks are deduplicated within each invocation.
-Normal replay does not re-export stored external completions. Deduplication is
-invocation-local. Shutdown first drains and flushes fresh completions while the
-enclosing spans remain open, draining again for updates received during that
-flush. It then ends the enclosing spans and performs a final serialized flush.
-Even with no new updates this uses two flush passes, so provider flush latency
-contributes twice to shutdown. Updates received during the final flush or after
-shutdown are still exported and flushed, but their immutable enclosing spans
-cannot be extended: containment is not guaranteed for those late arrivals.
-Their original timestamps, IDs, sampling decisions and deduplication remain
-unchanged; this does not introduce additional roots or a new trace topology. A
-change hook received after shutdown also awaits export and flushing of its fresh
-completions. This
-does not guarantee delivery of notifications after the Lambda environment has
-stopped running, or successful export when the configured provider fails.
-
-An operation span created during the final flush completes its original segment
-while it remains open; only a segment already ended by cleanup needs a linked
-continuation. Final cleanup also ends any newly created spans still open when
-that flush returns, without adding another provider wait. This is a span-lifetime
-safeguard, not an additional delivery or temporal-containment guarantee.
-After final cleanup, operation and attempt start hooks no longer allocate live
-spans or placeholders for that invocation. This does not cancel a losing
-parallel branch or change its business effects. Late terminal notifications
-remain eligible for the separate completion drain described above.
-
-Export acknowledgement is
-not persisted: redelivery after a failed invocation can export the completion
-again, as required for recovery.
+Plain replay without a fresh update does not re-export stored external
+completions. Deduplication is not persisted: a retry carrying the same updated
+operation IDs can export the completion again, preserving recovery eligibility.
+This is a conditional redelivery behavior, not a claim that Lambda always sends
+those IDs again or that the exporter has a durable delivery acknowledgement.
 
 ## Verification and Troubleshooting
 
@@ -931,6 +1024,14 @@ per-invocation factory. Custom factories must return a fresh plugin for every
 `createPlugin(info)` call; process-owned tracer providers may remain shared.
 This required migration belongs to the core 3.x major release only.
 
+Instrumentation error details are optional even for failed operations. The core
+metadata correction for an empty callback error payload no longer invents an
+error object. Earlier API-v1 plugins that previously used only `OperationInfo.error`
+presence as a failure signal should use `OperationInfo.status` instead (and
+`AttemptEndInfo.outcome` for an attempt). Missing error details do not imply a
+successful operation; supplied partial or explicitly empty detail fields are
+retained. This does not change the provider/hook shape, callback rejection,
+persisted error payload, or replay identity.
 
 Factory registration metadata uses the namespaced symbol
 `Symbol.for("aws.lambda.durable.instrumentation.plugin-registration")`.

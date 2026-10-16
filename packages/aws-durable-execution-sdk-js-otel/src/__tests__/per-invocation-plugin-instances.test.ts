@@ -227,8 +227,8 @@ describe.each([
         expect(
           soleSpanFor(exporter.getFinishedSpans(), "Workflow", ARN_B),
         ).toBeDefined();
-        // Flush completions before ending parents, then flush the ended parents.
-        expect(flush).toHaveBeenCalledTimes(2);
+        // With no late arrivals, the bounded finalizer needs one flush.
+        expect(flush).toHaveBeenCalledTimes(1);
       } finally {
         await tracerProvider?.shutdown();
       }

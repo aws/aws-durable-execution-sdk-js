@@ -530,12 +530,7 @@ describe("ExecutionOtelPlugin - Parent-child workflow span ID collision preventi
     );
   });
 
-  // Regression: onOperationEnd can be reached with a terminal FAILURE status
-  // (TIMED_OUT/STOPPED/FAILED/CANCELLED) and NO error object (callback-timeout
-  // and chained-invoke cross-invocation fast paths). Those must NOT be labelled
-  // OTel OK — the OK branch is gated on SUCCEEDED, so a no-error failure leaves
-  // the span status at the default UNSET (code 0).
-  it("onOperationEnd terminal path: TIMED_OUT status with NO error leaves the operation span NOT OK (UNSET)", async () => {
+  it("onOperationEnd terminal path: TIMED_OUT status with NO error marks the operation span ERROR without an exception", async () => {
     const plugin = newPlugin({});
 
     await plugin.onInvocationStart(makeInvocationInfo());
@@ -555,10 +550,11 @@ describe("ExecutionOtelPlugin - Parent-child workflow span ID collision preventi
     const opSpan = findSpan(exporter, "timeout-op");
     expect(opSpan).toBeDefined();
     expect(opSpan!.status.code).not.toBe(SpanStatusCode.OK);
-    expect(opSpan!.status.code).toBe(SpanStatusCode.UNSET);
+    expect(opSpan!.status.code).toBe(SpanStatusCode.ERROR);
+    expect(opSpan!.events).toHaveLength(0);
   });
 
-  it("onOperationEnd cross-invocation path: STOPPED status with NO error leaves the span NOT OK (UNSET)", async () => {
+  it("onOperationEnd cross-invocation path: STOPPED status with NO error marks the span ERROR without an exception", async () => {
     const plugin = newPlugin({});
 
     await plugin.onInvocationStart(makeInvocationInfo());
@@ -576,7 +572,8 @@ describe("ExecutionOtelPlugin - Parent-child workflow span ID collision preventi
     const opSpan = findSpan(exporter, "cross-stopped");
     expect(opSpan).toBeDefined();
     expect(opSpan!.status.code).not.toBe(SpanStatusCode.OK);
-    expect(opSpan!.status.code).toBe(SpanStatusCode.UNSET);
+    expect(opSpan!.status.code).toBe(SpanStatusCode.ERROR);
+    expect(opSpan!.events).toHaveLength(0);
   });
 
   it("onOperationEnd terminal path: SUCCEEDED status with NO error stamps OK", async () => {

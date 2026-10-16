@@ -10,6 +10,7 @@ import {
   NodeTracerProvider,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
+import { ExternalCompletions } from "../external-completions";
 import { createExecutionOtelPluginFactory } from "../execution-plugin";
 import { createInvocationOtelPluginFactory } from "../invocation-plugin";
 import { deriveSpanIdFromOperationId } from "../deterministic-id-generator";
@@ -141,116 +142,78 @@ describe.each([
     },
   );
 
-  it.each(["PENDING", "SUCCEEDED"] as const)(
-    "keeps enclosing spans open for completion arriving during first flush (%s)",
-    async (status) => {
-      let now = end.getTime() + 10000;
-      const originalNow = Object.getOwnPropertyDescriptor(otperformance, "now");
-      const originalOrigin = Object.getOwnPropertyDescriptor(
-        otperformance,
-        "timeOrigin",
+  it("drains a completion delivered while invocation-end flush is awaiting", async () => {
+    const current = createPlugin();
+    await current.onInvocationStart(invocation);
+    await current.onOperationStart({
+      ...operation,
+      parentId: undefined,
+      status: "STARTED",
+      endTimestamp: undefined,
+    });
+    const completion = { ...operation, parentId: undefined };
+    const completed = () =>
+      spans().filter(
+        (span) => span.attributes["durable.operation.status"] === "SUCCEEDED",
       );
-      const origin = now - 100;
-      const wallClock = jest.spyOn(Date, "now").mockImplementation(() => now);
-      Object.defineProperty(otperformance, "now", {
-        configurable: true,
-        value: () => now - origin,
-      });
-      Object.defineProperty(otperformance, "timeOrigin", {
-        configurable: true,
-        value: origin,
-      });
-      try {
-        const current = createPlugin();
-        await current.onInvocationStart(invocation);
-        let unblock!: () => void;
-        let flushing!: () => void;
-        const blocked = new Promise<void>((resolve) => {
-          unblock = resolve;
-        });
-        const started = new Promise<void>((resolve) => {
-          flushing = resolve;
-        });
-        const originalFlush = providers[0].forceFlush.bind(providers[0]);
-        let calls = 0;
-        const flush = jest
-          .spyOn(providers[0], "forceFlush")
-          .mockImplementation(async () => {
-            if (++calls === 1) {
-              flushing();
-              await blocked;
-            }
-            await originalFlush();
-          });
-        const ending = current.onInvocationEnd({ ...invocation, status });
-        await started;
-        now += 25;
-        const changed = current.onOperationChange({
-          ...invocation,
-          updatedOperations: {
-            external: {
-              ...operation,
-              parentId: undefined,
-              endTimestamp: new Date(now),
-            },
-          },
-        });
-        unblock();
-        await Promise.all([ending, changed]);
-        const child = spans()[0];
-        const enclosing = exporter
-          .getFinishedSpans()
-          .find(
-            (span) =>
-              span.spanContext().spanId === child.parentSpanContext?.spanId,
-          );
-        if (view === "invocation" || status === "SUCCEEDED") {
-          expect(enclosing).toBeDefined();
-          expect(nanoseconds(child.endTime)).toBeLessThanOrEqual(
-            nanoseconds(enclosing!.endTime),
-          );
+    let release!: () => void;
+    let entered!: () => void;
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const flushing = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const originalFlush = providers[0].forceFlush.bind(providers[0]);
+    const flushed: number[] = [];
+    const flush = jest
+      .spyOn(providers[0], "forceFlush")
+      .mockImplementation(async () => {
+        flushed.push(completed().length);
+        if (flushed.length === 1) {
+          entered();
+          await blocked;
         }
-        flush.mockRestore();
-      } finally {
-        wallClock.mockRestore();
-        for (const [name, descriptor] of [
-          ["now", originalNow],
-          ["timeOrigin", originalOrigin],
-        ] as const) {
-          if (descriptor)
-            Object.defineProperty(otperformance, name, descriptor);
-          else Reflect.deleteProperty(otperformance, name);
-        }
-      }
-    },
-  );
-
-  it.each([false, true])(
-    "exports and flushes a fresh completion after shutdown (started=%s)",
-    async (operationStarted) => {
-      const current = createPlugin();
-      await current.onInvocationStart(invocation);
-      if (operationStarted)
-        await current.onOperationStart({
-          ...operation,
-          status: "STARTED",
-          endTimestamp: undefined,
-        });
-      await current.onInvocationEnd({ ...invocation, status: "RETRYING" });
-      const flush = jest.spyOn(providers[0], "forceFlush");
-      await current.onOperationChange({
-        ...invocation,
-        updatedOperations: { external: operation },
+        await originalFlush();
       });
-      expect(
-        spans().filter(
-          (span) => span.attributes["durable.operation.status"] === "SUCCEEDED",
-        ),
-      ).toHaveLength(1);
-      expect(flush).toHaveBeenCalled();
-      flush.mockRestore();
-    },
-  );
+    const ending = current.onInvocationEnd({
+      ...invocation,
+      status: "RETRYING",
+    });
+    await flushing;
+    // Model the core's notification hook while its awaited end hook owns flush.
+    // This is a hook-order regression, not a Lambda reproduction.
+    await current.onOperationChange({
+      ...invocation,
+      operations: { external: completion },
+      updatedOperations: { external: completion },
+    });
+    release();
+    await ending;
+    expect(completed()).toHaveLength(1);
+    expect(flushed).toEqual([0, 1]);
+    expect(completed()[0].attributes["durable.operation.id"]).toBe(
+      operation.id,
+    );
+    if (view === "invocation") {
+      expect(completed()[0].links.map((link) => link.context.spanId)).toContain(
+        deriveSpanIdFromOperationId(operation.id, invocation.executionArn),
+      );
+      expect(completed()[0].spanContext().spanId).not.toBe(
+        deriveSpanIdFromOperationId(operation.id, invocation.executionArn),
+      );
+    } else {
+      expect(completed()[0].startTime).toEqual(timeInputToHrTime(start));
+      expect(completed()[0].endTime).toEqual(timeInputToHrTime(end));
+    }
+    const nextInfo = { ...invocation, requestId: "request-2" };
+    const next = createPlugin(nextInfo);
+    await next.onInvocationStart(nextInfo);
+    await next.onOperationEnd({ ...completion, isReplay: true });
+    await next.onInvocationEnd({ ...nextInfo, status: "SUCCEEDED" });
+    expect(completed()).toHaveLength(1);
+    flush.mockRestore();
+  });
 
   it.each(["WAIT", "INVOKE", "CHAINED_INVOKE", "CALLBACK"])(
     "preserves %s update fields/status/errors without traversal, with normal-replay dedup and retry redelivery",
@@ -531,7 +494,7 @@ describe.each([
     }
   });
 
-  it("does not label a terminal failure without an error as successful", async () => {
+  it("marks terminal failure ERROR without inventing an exception", async () => {
     const current = createPlugin();
     await current.onInvocationStart({
       ...invocation,
@@ -539,6 +502,69 @@ describe.each([
     });
     await current.onInvocationEnd({ ...invocation, status: "PENDING" });
     expect(spans()).toHaveLength(1);
-    expect(spans()[0].status.code).toBe(SpanStatusCode.UNSET);
+    expect(spans()[0].status).toEqual({
+      code: SpanStatusCode.ERROR,
+      message: "TIMED_OUT",
+    });
+    expect(spans()[0].events).toHaveLength(0);
+  });
+});
+
+describe("deferred callback display metadata", () => {
+  it("derives a missing name from its known WaitForCallback parent without changing source metadata or export deduplication", () => {
+    const pending = new ExternalCompletions();
+    const raw = Object.freeze({ ...operation, name: undefined });
+    const parent = Object.freeze({
+      ...operation,
+      id: "parent",
+      type: "CONTEXT",
+      subType: "WaitForCallback",
+      name: "approval",
+    });
+    pending.observe({ external: raw }, { parent, external: raw });
+    expect(pending.pending.get("external")).toEqual({
+      ...raw,
+      name: "approval-callback",
+    });
+    expect(raw.name).toBeUndefined();
+    expect(pending.pending.get("external")!.startTimestamp).toBe(
+      raw.startTimestamp,
+    );
+    pending.markExported(raw);
+    pending.observe({ external: raw }, { parent });
+    expect(pending.pending.size).toBe(0);
+    expect(pending.shouldSkip({ ...raw, isReplay: true })).toBe(true);
+  });
+
+  it("preserves explicit callback names and leaves unrelated or unknown parents unchanged", () => {
+    const parent = {
+      ...operation,
+      id: "parent",
+      type: "CONTEXT",
+      subType: "WaitForCallback",
+      name: "approval",
+    };
+    for (const name of ["explicit", ""]) {
+      const pending = new ExternalCompletions();
+      const raw = { ...operation, name };
+      pending.observe({ external: raw }, { parent });
+      expect(pending.pending.get("external")).toBe(raw);
+    }
+    const parentHistories: Array<Record<string, OperationInfo>> = [
+      {},
+      { parent: { ...parent, subType: "RunInChildContext" } },
+      { parent: { ...parent, type: "STEP" } },
+      { parent: { ...parent, name: undefined } },
+    ];
+    for (const parents of parentHistories) {
+      const pending = new ExternalCompletions();
+      const raw = { ...operation, name: undefined };
+      pending.observe({ external: raw }, parents);
+      expect(pending.pending.get("external")).toBe(raw);
+    }
+    const pending = new ExternalCompletions();
+    const wait = { ...operation, type: "WAIT", name: undefined };
+    pending.observe({ external: wait }, { parent });
+    expect(pending.pending.get("external")).toBe(wait);
   });
 });

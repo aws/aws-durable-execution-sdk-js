@@ -14,12 +14,16 @@ createTests<{ first: CarrierObservation; resumed: CarrierObservation }>({
       const { first, resumed } = captured;
       const target = functionNameMap.getFunctionName("otel-runtime-carrier");
       const requiresRuntimeCarrier =
-        isCloud && target.includes("-CapacityProvider:");
+        isCloud &&
+        (target.includes("-CapacityProvider:") ||
+          process.env.LMI_SHARED_EXAMPLES === "1");
       if (isCloud) expect(resumed.requestId).not.toBe(first.requestId);
       for (const captured of [first, resumed]) {
         expect(captured.forwardedHeader).toBe(captured.runtimeHeader);
         if (requiresRuntimeCarrier) {
-          expect(captured.functionName).toContain("-CapacityProvider");
+          // The shared LMI fixture has no capacity-provider suffix. Check the
+          // actual qualified target rather than infer its mode from its name.
+          expect(captured.functionName).toBe(target.split(":").at(-2));
           expect(captured.runtimeHeader).toEqual(expect.any(String));
           expect(captured.runtimeHeader).not.toBe("");
         }

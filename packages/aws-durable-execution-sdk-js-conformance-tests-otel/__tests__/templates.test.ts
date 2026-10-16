@@ -76,9 +76,9 @@ describe("template handler references", () => {
     .map((file) => file.replace(/\.ts$/, ""));
 
   it("finds a reference in every template function", () => {
-    // 52 functions in template.yaml (24 invocation + 24 execution + 4 invoke targets)
+    // 56 functions in template.yaml (26 invocation + 26 execution + 4 invoke targets)
     // and 5 in template-long-running.yaml (4 scenarios + 1 invoke target).
-    expect(references).toHaveLength(57);
+    expect(references).toHaveLength(61);
   });
 
   it.each([
@@ -103,7 +103,7 @@ describe("template handler references", () => {
 describe("requirement coverage", () => {
   it("covers the invocation and execution suites", () => {
     expect(requirementIds(template).sort()).toEqual(
-      [...range("otel-invocation", 24), ...range("otel-execution", 24)].sort(),
+      [...range("otel-invocation", 26), ...range("otel-execution", 26)].sort(),
     );
   });
 

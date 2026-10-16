@@ -362,6 +362,22 @@ rule, because an entry with no `createPlugin` could never produce a plugin. A
 any other plugin failure: that plugin sits out the invocation and the execution
 is unaffected.
 
+### Instrumentation Operation Status and Errors
+
+Use `OperationInfo.status` to identify terminal operation states such as `FAILED`,
+`CANCELLED`, `TIMED_OUT`, and `STOPPED`. `OperationInfo.error` contains optional
+error details; a failed operation can have `error === undefined`, including in
+replay and `onOperationChange` metadata. Missing or empty checkpointed error data
+does not invent an error. Supplied partial details, including explicitly empty
+strings or an empty stack trace, remain available.
+
+This also applies to API-v1 plugins: code that uses only the presence of `error`
+as its failure signal should inspect `status` instead. For an attempt-end hook,
+use `AttemptEndInfo.outcome` to determine whether that attempt failed. An external
+callback failure without error details still rejects the callback promise and
+retains its failed operation status; optional instrumentation details do not
+change the caller's outcome or persisted state.
+
 ### Retry Strategies
 
 Custom retry strategy:

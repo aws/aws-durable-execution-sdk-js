@@ -10,7 +10,10 @@ import { DeterministicIdGenerator } from "./deterministic-id-generator";
 import { tryInstallGlobalIdGenerator } from "./global-id-generator";
 import { DurableSampler, tryInstallDurableSampler } from "./global-sampler";
 import type { OtelPluginConfig } from "./otel-plugin-config";
-import { createTracerProvider } from "./otel-plugin-provider";
+import {
+  createTracerProvider,
+  resolveFlushTimeoutMillis,
+} from "./otel-plugin-provider";
 
 const DEFAULT_INSTRUMENTATION_NAME = "aws-durable-execution-sdk-js";
 
@@ -43,6 +46,7 @@ export class OtelPluginEnvironment {
   readonly contextExtractor: ContextExtractor;
   readonly workflowSpanName: string;
   readonly enrichLogger: boolean;
+  readonly flushTimeoutMillis: number;
   readonly usesGlobalProvider: boolean;
 
   /**
@@ -60,6 +64,9 @@ export class OtelPluginEnvironment {
     const instrumentationName =
       config?.instrumentationName ?? DEFAULT_INSTRUMENTATION_NAME;
     this.instrumentationName = instrumentationName;
+    this.flushTimeoutMillis = resolveFlushTimeoutMillis(
+      config?.flushTimeoutMillis,
+    );
 
     this.idGenerator = new DeterministicIdGenerator();
     this.contextExtractor = config?.contextExtractor ?? xRayContextExtractor;

@@ -474,7 +474,12 @@ describe.each([10, -10])(
     );
 
     it("anchors an omitted execution start before a millisecond rollover", async () => {
-      jest.useFakeTimers({ now: epoch, doNotFake: ["performance"] });
+      // Only the clock inputs are controlled. The global provider now flushes
+      // through its API delegate, whose exporter acknowledgment uses a timer.
+      jest.useFakeTimers({
+        now: epoch,
+        doNotFake: ["performance", "setTimeout", "clearTimeout"],
+      });
       try {
         factory = createInvocationOtelPluginFactory({
           contextExtractor: () => {

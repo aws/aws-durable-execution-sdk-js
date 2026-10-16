@@ -1,16 +1,10 @@
 import { withDurableExecution } from "@aws/durable-execution-sdk-js";
 import { LocalDurableTestRunner } from "@aws/durable-execution-sdk-js-testing";
+import { context, propagation, trace, type Span } from "@opentelemetry/api";
 import {
-  context,
-  propagation,
-  trace,
-  type SpanContext,
-  type Span,
-} from "@opentelemetry/api";
-import {
+  BatchSpanProcessor,
   InMemorySpanExporter,
   NodeTracerProvider,
-  SimpleSpanProcessor,
   type SpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
 import { createExecutionOtelPluginFactory } from "../execution-plugin";
@@ -26,247 +20,133 @@ const gate = () => {
 
 beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
-beforeEach(() => {
-  trace.disable();
-  context.disable();
-  propagation.disable();
-});
 
-it.each([false, true])(
-  "factory v2 ends a real operation span created during final flush (completes=%s)",
-  async (completes) => {
-    const flushEntered = gate();
-    const releaseFlush = gate();
-    const childReady = gate();
-    const bodyEntered = gate();
-    const releaseBody = gate();
-    const childFinished = gate();
+describe.each([
+  ["execution", createExecutionOtelPluginFactory],
+  ["invocation", createInvocationOtelPluginFactory],
+] as const)("%s view final flush admission", (_view, createFactory) => {
+  it("freezes the final snapshot before awaiting its last provider flush", async () => {
+    trace.disable();
+    context.disable();
+    propagation.disable();
+    const firstFlush = gate(),
+      releaseFirst = gate();
+    const finalFlush = gate(),
+      releaseFinal = gate();
+    const firstReady = gate(),
+      finalReady = gate();
+    const firstBody = gate(),
+      finalBody = gate(),
+      releaseBodies = gate();
     const exporter = new InMemorySpanExporter();
-    const started: SpanContext[] = [];
-    let flushCalls = 0;
+    const started: Array<{ name: string; span: Span }> = [];
     let provider!: NodeTracerProvider;
+    let flushCalls = 0;
     const flushGate: SpanProcessor = {
       onStart(span) {
-        if (span.name === "late-step") started.push(span.spanContext());
+        started.push({ name: span.name, span });
       },
       onEnd() {},
       async forceFlush() {
-        flushCalls++;
-        // Factory v2 first drains while parents remain open. Only the final
-        // provider pass is held: this reproduces the post-unwind lifetime edge.
-        if (flushCalls === 2) {
-          flushEntered.open();
-          await releaseFlush.opened;
+        if (++flushCalls === 1) {
+          firstFlush.open();
+          await releaseFirst.opened;
+        } else if (flushCalls === 2) {
+          finalFlush.open();
+          await releaseFinal.opened;
         }
       },
       async shutdown() {},
     };
-    const plugin = createInvocationOtelPluginFactory({
+    const factory = createFactory({
       contextExtractor: () => undefined,
+      flushTimeoutMillis: 5000,
       tracerProviderFactory: (ids) =>
         (provider = new NodeTracerProvider({
           idGenerator: ids(),
-          spanProcessors: [flushGate, new SimpleSpanProcessor(exporter)],
+          spanProcessors: [
+            flushGate,
+            new BatchSpanProcessor(exporter, { scheduledDelayMillis: 60000 }),
+          ],
         })),
     });
-    const step = jest.fn(async () => {
-      bodyEntered.open();
-      await releaseBody.opened;
-      return "late result";
+    const firstStep = jest.fn(async () => {
+      firstBody.open();
+      await releaseBodies.opened;
     });
-    let childWork: PromiseLike<unknown> | undefined;
+    const finalStep = jest.fn(async () => {
+      finalBody.open();
+      await releaseBodies.opened;
+    });
+    const detached: PromiseLike<unknown>[] = [];
     const handler = withDurableExecution(
       async (_, ctx) => {
-        childWork = ctx.runInChildContext("child", async (child) => {
-          childReady.open();
-          // Scheduling-only gate. The actual operation begins after the SDK has
-          // entered the real provider's flush, without calling plugin hooks here.
-          await flushEntered.opened;
-          return child.step("late-step", step);
-        });
-        await childReady.opened;
+        detached.push(
+          ctx.runInChildContext("during-open-flush", async (child) => {
+            firstReady.open();
+            await firstFlush.opened;
+            return child.step("first-step", firstStep);
+          }),
+        );
+        detached.push(
+          ctx.runInChildContext("during-final-flush", async (child) => {
+            finalReady.open();
+            await finalFlush.opened;
+            return child.step("final-step", finalStep);
+          }),
+        );
+        await Promise.all([firstReady.opened, finalReady.opened]);
         return "root result";
       },
-      {
-        plugins: [
-          plugin,
-          {
-            createPlugin: () => ({
-              async onOperationEnd(info) {
-                if (info.name === "child") childFinished.open();
-              },
-            }),
-          },
-        ],
-      },
+      { plugins: [factory] },
     );
     const runner = new LocalDurableTestRunner({ handlerFunction: handler });
     const execution = runner.run();
     try {
-      await flushEntered.opened;
-      await bodyEntered.opened;
-      expect(flushCalls).toBe(2);
-      expect(
-        exporter.getFinishedSpans().some((span) => span.name === "Invocation"),
-      ).toBe(true);
-      expect(started).toHaveLength(1);
-      if (completes) {
-        releaseBody.open();
-        await childFinished.opened;
-      }
-      releaseFlush.open();
+      await firstBody.opened;
+      const firstAttempt = started.find(
+        (item) => item.name === "first-step attempt 1",
+      )!;
+      expect(firstAttempt).toBeDefined();
+      expect(firstAttempt.span.isRecording()).toBe(true);
+      releaseFirst.open();
+      await finalFlush.opened;
+      expect(firstAttempt.span.isRecording()).toBe(false);
+      const finalSnapshot = started.length;
+      await finalBody.opened;
+      // The OTel factory does not cancel detached business work. Its finalized
+      // hooks must nevertheless stay inert throughout the final provider wait.
+      expect(firstStep).toHaveBeenCalledTimes(1);
+      expect(finalStep).toHaveBeenCalledTimes(1);
+      expect(started).toHaveLength(finalSnapshot);
+      expect(started.some((item) => item.name.startsWith("final-step"))).toBe(
+        false,
+      );
+      releaseFinal.open();
       const result = await execution;
       expect(result.getStatus()).toBe("SUCCEEDED");
       expect(result.getResult()).toBe("root result");
-      expect(step).toHaveBeenCalledTimes(1);
       expect(flushCalls).toBe(2);
-      const spans = exporter.getFinishedSpans();
-      const operations = spans.filter((span) => span.name === "late-step");
-      expect(operations).toHaveLength(1);
-      expect(operations[0].spanContext()).toEqual(started[0]);
-      expect(operations[0].attributes["durable.operation.status"]).toBe(
-        completes ? "SUCCEEDED" : "STARTED",
-      );
-      const attempts = spans.filter(
-        (span) => span.name === "late-step attempt 1",
-      );
+      expect(started.filter((item) => item.span.isRecording())).toHaveLength(0);
+      const attempts = exporter
+        .getFinishedSpans()
+        .filter((span) => span.name === "first-step attempt 1");
       expect(attempts).toHaveLength(1);
-      expect(attempts[0].parentSpanContext?.spanId).toBe(
-        operations[0].spanContext().spanId,
+      expect(attempts[0].spanContext()).toEqual(
+        firstAttempt.span.spanContext(),
       );
-      if (completes) {
-        // This context was present at the initial unwind, so its later completion
-        // still needs a continuation linked to the actually exported first span.
-        const children = spans.filter((span) => span.name === "child");
-        expect(children).toHaveLength(2);
-        expect(
-          children[1].links.some(
-            (link) => link.context.spanId === children[0].spanContext().spanId,
-          ),
-        ).toBe(true);
-      }
+      expect(attempts[0].attributes["durable.attempt.outcome"]).toBeUndefined();
     } finally {
-      releaseFlush.open();
-      releaseBody.open();
-      // A step released only after terminal delivery need not settle its
-      // checkpoint promise: the invocation has stopped accepting updates.
-      // It is intentionally unawaited by the handler, and cleanup must not
-      // turn that detached work into a completion dependency of this test.
-      if (completes) await Promise.resolve(childWork).catch(() => undefined);
-      else void Promise.resolve(childWork).catch(() => undefined);
+      releaseFirst.open();
+      releaseFinal.open();
+      releaseBodies.open();
+      for (const work of detached)
+        void Promise.resolve(work).catch(() => undefined);
       await execution.catch(() => undefined);
       await provider.shutdown();
       trace.disable();
       context.disable();
+      propagation.disable();
     }
-  },
-  15000,
-);
-
-it.each([
-  ["execution", createExecutionOtelPluginFactory],
-  ["invocation", createInvocationOtelPluginFactory],
-] as const)(
-  "%s: a losing parallel branch cannot allocate attempts after final cleanup",
-  async (_view, createFactory) => {
-    const delayedStart = gate();
-    const releaseStart = gate();
-    const attemptReached = gate();
-    const active = new Map<string, Span>();
-    const exporter = new InMemorySpanExporter();
-    let provider!: NodeTracerProvider;
-    const tracker: SpanProcessor = {
-      onStart(span) {
-        active.set(span.spanContext().spanId, span);
-      },
-      onEnd(span) {
-        active.delete(span.spanContext().spanId);
-      },
-      async forceFlush() {},
-      async shutdown() {},
-    };
-    const factory = createFactory({
-      contextExtractor: () => undefined,
-      tracerProviderFactory: (ids) =>
-        (provider = new NodeTracerProvider({
-          idGenerator: ids(),
-          spanProcessors: [tracker, new SimpleSpanProcessor(exporter)],
-        })),
-    });
-    const lateBody = jest.fn(async () => "late result");
-    const runner = new LocalDurableTestRunner({
-      handlerFunction: withDurableExecution(
-        async (_, ctx) => {
-          const result = await ctx.parallel(
-            "first-success",
-            [
-              {
-                name: "winner",
-                func: async () => {
-                  await delayedStart.opened;
-                  return "winner result";
-                },
-              },
-              {
-                name: "loser",
-                func: async (child) => child.step("delayed-step", lateBody),
-              },
-            ],
-            { completionConfig: { minSuccessful: 1 } },
-          );
-          return result.getResults();
-        },
-        {
-          plugins: [
-            factory,
-            {
-              createPlugin: () => ({
-                async onOperationStart(info) {
-                  if (info.name === "delayed-step") {
-                    delayedStart.open();
-                    await releaseStart.opened;
-                  }
-                },
-                async onOperationAttemptStart(info) {
-                  if (info.name === "delayed-step") attemptReached.open();
-                },
-              }),
-            },
-          ],
-        },
-      ),
-    });
-    const execution = runner.run();
-    try {
-      const result = await execution;
-      expect(result.getStatus()).toBe("SUCCEEDED");
-      expect(result.getResult()).toEqual(["winner result"]);
-      expect(
-        exporter.getFinishedSpans().some((s) => s.name === "Invocation"),
-      ).toBe(true);
-      expect(active.size).toBe(0);
-      releaseStart.open();
-      await attemptReached.opened;
-      // All real plugin callbacks for the attempt have run before this turn.
-      await new Promise<void>((resolve) => setImmediate(resolve));
-      expect(lateBody).toHaveBeenCalledTimes(1);
-      expect([...active.values()].filter((span) => span.isRecording())).toEqual(
-        [],
-      );
-      expect(
-        exporter
-          .getFinishedSpans()
-          .filter((s) => s.name === "delayed-step attempt 1"),
-      ).toHaveLength(0);
-    } finally {
-      releaseStart.open();
-      // Release diagnostic tracker handles only after the lifetime assertions.
-      for (const span of active.values()) span.end();
-      await execution.catch(() => undefined);
-      await provider.shutdown();
-      trace.disable();
-      context.disable();
-    }
-  },
-  15000,
-);
+  }, 15000);
+});
