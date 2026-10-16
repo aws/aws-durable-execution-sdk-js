@@ -59,6 +59,13 @@ export class TestExecutionOrchestrator implements SkipTimeParticipant {
   private invocationTracker: InvocationTracker;
   private readonly scheduler: Scheduler;
   private readonly pendingOperations = new Set<string>();
+  /** The parent of every operation seen, by operation id. */
+  private readonly operationParents = new Map<string, string | undefined>();
+  /**
+   * With skipTime, ends the clock hold of each durable invoke still waiting for its result,
+   * by invoke operation id. See {@link releaseAbandonedInvokes}.
+   */
+  private readonly invokeHolds = new Map<string, () => void>();
   /**
    * With skipTime, the wait and retry ends that have not yet been applied. See
    * {@link releaseTimedCompletions}.
@@ -502,6 +509,15 @@ export class TestExecutionOrchestrator implements SkipTimeParticipant {
       throw new Error("Could not process operation without an Id");
     }
 
+    this.operationParents.set(operation.Id, operation.ParentId);
+    if (
+      operation.Type === OperationType.CONTEXT &&
+      operation.Status &&
+      TERMINAL_EXECUTION_STATUSES.has(operation.Status)
+    ) {
+      this.releaseAbandonedInvokes(operation.Id);
+    }
+
     switch (operation.Type) {
       case OperationType.WAIT:
         this.handleWaitUpdate(update, operation, executionId);
@@ -557,6 +573,7 @@ export class TestExecutionOrchestrator implements SkipTimeParticipant {
       result: this.functionStorage.runHandler(functionName, update.Payload),
       end: () => undefined,
     };
+    this.invokeHolds.set(operationId, invoke.end);
     try {
       const { result, error } = await invoke.result;
 
@@ -585,8 +602,42 @@ export class TestExecutionOrchestrator implements SkipTimeParticipant {
         },
       );
     } finally {
+      this.invokeHolds.delete(operationId);
       invoke.end();
     }
+  }
+
+  /**
+   * Ends the clock hold of every invoke inside a context that has completed.
+   *
+   * A context can complete before an invoke inside it returns. For example, a parallel
+   * with `minSuccessful: 1` completes on another branch. The SDK then never resumes with
+   * that invoke's result. A non-durable invoked function that has not returned would hold
+   * the clock until the execution finishes, so every later wait would take real time.
+   *
+   * @param contextId the id of the context that has completed
+   */
+  private releaseAbandonedInvokes(contextId: string): void {
+    for (const [invokeId, end] of this.invokeHolds) {
+      if (this.isDescendant(invokeId, contextId)) {
+        this.invokeHolds.delete(invokeId);
+        end();
+      }
+    }
+  }
+
+  /** Whether `ancestorId` is a parent of `operationId`, directly or through other parents. */
+  private isDescendant(operationId: string, ancestorId: string): boolean {
+    const seen = new Set<string>();
+    let parentId = this.operationParents.get(operationId);
+    while (parentId !== undefined && !seen.has(parentId)) {
+      if (parentId === ancestorId) {
+        return true;
+      }
+      seen.add(parentId);
+      parentId = this.operationParents.get(parentId);
+    }
+    return false;
   }
 
   /**
@@ -842,7 +893,13 @@ export class TestExecutionOrchestrator implements SkipTimeParticipant {
       this.timedCompletionTimer = undefined;
     }
 
-    if (this.settled || this.timedCompletions.length === 0) {
+    if (this.hasFinished()) {
+      // The handler has returned its final result. No invocation will observe a later
+      // end, so applying one would only record a completion after the execution's.
+      this.timedCompletions.length = 0;
+      return;
+    }
+    if (this.timedCompletions.length === 0) {
       return;
     }
 
@@ -865,10 +922,25 @@ export class TestExecutionOrchestrator implements SkipTimeParticipant {
     }
   }
 
+  /**
+   * Whether the execution has a final result, or has failed. Set before the runner
+   * finishes its cleanup, so pending ends are not applied while the final update is sent.
+   */
+  private hasFinished(): boolean {
+    // Admission closes as soon as the handler returns a terminal status, before the
+    // invocation's history is recorded and before the execution resolves. A real timer
+    // can fire in that interval, so it must already see the execution as finished.
+    return (
+      this.settled ||
+      this.invocationAdmissionClosed ||
+      this.executionState.isSettled()
+    );
+  }
+
   /** See {@link SkipTimeParticipant.hasPendingWork}. */
   hasPendingWork(): boolean {
     return (
-      !this.settled &&
+      !this.hasFinished() &&
       (this.timedCompletions.length > 0 || this.pendingOperations.size > 0)
     );
   }
@@ -885,7 +957,7 @@ export class TestExecutionOrchestrator implements SkipTimeParticipant {
 
   /** See {@link SkipTimeParticipant.earliestDeadline}. */
   earliestDeadline(): number | undefined {
-    if (this.settled || this.timedCompletions.length === 0) {
+    if (this.hasFinished() || this.timedCompletions.length === 0) {
       return undefined;
     }
     return Math.min(...this.timedCompletions.map((c) => c.deadlineMs));
@@ -904,6 +976,9 @@ export class TestExecutionOrchestrator implements SkipTimeParticipant {
    */
   private completeTimedCompletionsUntil(timestampMs: number): void {
     const executionId = this.skipTimeExecutionId;
+    if (this.hasFinished()) {
+      return;
+    }
     const dueCount = this.timedCompletions.findIndex(
       (completion) => completion.deadlineMs > timestampMs,
     );

@@ -151,8 +151,10 @@ export class SkipTimeCoordinator {
     return {
       result,
       end: () => {
-        this.invokes.delete(invoke);
-        this.advance();
+        // Idempotent: a caller can end a hold after its context has already released it.
+        if (this.invokes.delete(invoke)) {
+          this.advance();
+        }
       },
     };
   }

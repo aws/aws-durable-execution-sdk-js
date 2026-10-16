@@ -398,6 +398,65 @@ describe("skip-time clock", () => {
     expectDuration(end - start, HOUR_MS);
   });
 
+  it("skips time later in the same run after a race leaves an invoke unanswered", async () => {
+    // The parallel completes on the 1 s wait. The non-durable invoked function never
+    // returns. The execution continues, so its next wait must still skip time.
+    const handler = withDurableExecution(
+      async (_event: unknown, context: DurableContext) => {
+        await context.parallel(
+          "race",
+          [
+            async (child) => child.wait("short", { seconds: 1 }),
+            async (child) => child.invoke("never", "neverReturns", {}),
+          ],
+          { completionConfig: { minSuccessful: 1 } },
+        );
+        const start = await context.step("start", async () => Date.now());
+        await context.wait("after race", { seconds: HOUR_SECONDS });
+        const end = await context.step("end", async () => Date.now());
+        return { start, end };
+      },
+    );
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+    runner.registerFunction("neverReturns", () => new Promise(() => undefined));
+
+    const { start, end } = await runner
+      .run()
+      .then((result) => result.getResult());
+
+    expectDuration(end - start, HOUR_MS);
+  });
+
+  it("applies no pending end after the handler returns its result", async () => {
+    // The parallel completes on the 1 h wait. The 3 h wait is still pending when the
+    // handler returns, and must not complete after the execution does.
+    const handler = withDurableExecution(
+      async (_event: unknown, context: DurableContext) => {
+        await context.parallel(
+          "race",
+          [
+            async (child) => child.wait("one hour", { seconds: HOUR_SECONDS }),
+            async (child) =>
+              child.wait("three hours", { seconds: 3 * HOUR_SECONDS }),
+          ],
+          { completionConfig: { minSuccessful: 1 } },
+        );
+        return "done";
+      },
+    );
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+    const start = Date.now();
+
+    const result = await runner.run();
+
+    const eventTypes = result
+      .getHistoryEvents()
+      .map((event) => event.EventType);
+    expect(eventTypes.at(-1)).toBe("ExecutionSucceeded");
+    expect(runner.getOperation("three hours").getStatus()).toBe("STARTED");
+    expectDuration(Date.now() - start, HOUR_MS);
+  });
+
   it("starts a wait's duration when the wait starts, not when the invocation starts", async () => {
     const handler = withDurableExecution(
       async (_event: unknown, context: DurableContext) => {
