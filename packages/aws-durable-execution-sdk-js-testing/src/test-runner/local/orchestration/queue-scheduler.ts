@@ -1,4 +1,5 @@
 import { defaultLogger } from "../../../logger";
+import { realSetImmediate } from "../real-timers/real-timers";
 import { Scheduler } from "./scheduler";
 
 /**
@@ -71,9 +72,11 @@ export class QueueScheduler implements Scheduler {
 
     // Start processing if not already running
     if (!this.isProcessing) {
-      // Use setImmediate to yield to event loop before starting processing
+      // Runner infrastructure must keep progressing while the fake clock controls the
+      // durable function's time. So yield with the immediate captured before fake timers
+      // were installed.
       const processingPromise = new Promise<void>((resolve) => {
-        setImmediate(() => {
+        realSetImmediate(() => {
           void this.processQueue().finally(() => {
             resolve();
           });
@@ -126,9 +129,9 @@ export class QueueScheduler implements Scheduler {
           onError(err);
         }
 
-        // Yield to event loop before processing next function since this queue
-        // is behaving like a scheduler, so timers could be flushed before the next iteration
-        await new Promise((resolve) => setImmediate(resolve));
+        // Yield to the event loop before processing the next function. Use the real
+        // immediate so the fake clock controls durable time, not scheduler progress.
+        await new Promise((resolve) => realSetImmediate(resolve));
       }
     } finally {
       this.isProcessing = false;
