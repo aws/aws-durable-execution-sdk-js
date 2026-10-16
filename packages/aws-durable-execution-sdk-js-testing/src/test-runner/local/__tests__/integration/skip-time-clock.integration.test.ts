@@ -361,6 +361,43 @@ describe("skip-time clock", () => {
     expectDuration(end - start, 3 * HOUR_MS);
   });
 
+  it("skips time for a later run after a run finished with an invoke still unanswered", async () => {
+    // The parallel completes on the 1 s wait. The non-durable invoked function never
+    // returns, so its caller never resumes with the result.
+    const racing = withDurableExecution(
+      async (_event: unknown, context: DurableContext) => {
+        await context.parallel(
+          "race",
+          [
+            async (child) => child.wait("short", { seconds: 1 }),
+            async (child) => child.invoke("never", "neverReturns", {}),
+          ],
+          { completionConfig: { minSuccessful: 1 } },
+        );
+        return "raced";
+      },
+    );
+    const first = new LocalDurableTestRunner({ handlerFunction: racing });
+    first.registerFunction("neverReturns", () => new Promise(() => undefined));
+    await first.run();
+
+    const waiting = withDurableExecution(
+      async (_event: unknown, context: DurableContext) => {
+        const start = await context.step("start", async () => Date.now());
+        await context.wait("long", { seconds: HOUR_SECONDS });
+        const end = await context.step("end", async () => Date.now());
+        return { start, end };
+      },
+    );
+    const { start, end } = await new LocalDurableTestRunner({
+      handlerFunction: waiting,
+    })
+      .run()
+      .then((result) => result.getResult());
+
+    expectDuration(end - start, HOUR_MS);
+  });
+
   it("starts a wait's duration when the wait starts, not when the invocation starts", async () => {
     const handler = withDurableExecution(
       async (_event: unknown, context: DurableContext) => {

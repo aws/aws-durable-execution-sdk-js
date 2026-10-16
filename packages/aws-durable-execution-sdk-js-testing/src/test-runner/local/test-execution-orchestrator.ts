@@ -542,7 +542,7 @@ export class TestExecutionOrchestrator implements SkipTimeParticipant {
     // Until the invocation that resumes this execution is queued, the invoked function's
     // result is on its way back here. The coordinator does not move the clock past that.
     // The invoked function runs as its own participant, so it can still advance the clock.
-    const invoke = this.skipTimeCoordinator?.startInvoke(() =>
+    const invoke = this.skipTimeCoordinator?.startInvoke(this, () =>
       this.functionStorage.runHandler(functionName, update.Payload),
     ) ?? {
       result: this.functionStorage.runHandler(functionName, update.Payload),

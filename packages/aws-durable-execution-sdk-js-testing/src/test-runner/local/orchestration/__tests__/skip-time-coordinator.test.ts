@@ -78,8 +78,11 @@ describe("SkipTimeCoordinator", () => {
   });
 
   /** Starts an invoke whose invoked function is `invoked`, or runs outside the clock. */
-  function startInvoke(invoked?: SkipTimeParticipant): () => void {
-    return coordinator.startInvoke(() => {
+  function startInvoke(
+    invoked?: SkipTimeParticipant,
+    caller: SkipTimeParticipant = participant(),
+  ): () => void {
+    return coordinator.startInvoke(caller, () => {
       if (invoked) {
         coordinator.register(invoked);
       }
@@ -142,8 +145,27 @@ describe("SkipTimeCoordinator", () => {
     expect(Date.now()).toBe(3000);
   });
 
+  it("releases an invoke's hold on the clock when its caller finishes", () => {
+    // The caller finished without the invoke's result, such as a parallel that completed
+    // without that branch. The invoked function never returns.
+    const caller = participant();
+    coordinator.register(caller);
+    startInvoke(undefined, caller);
+    const unrelated = participant({ deadline: 3000 });
+    coordinator.register(unrelated);
+
+    coordinator.advance();
+
+    expect(Date.now()).toBe(0);
+
+    coordinator.unregister(caller);
+
+    expect(Date.now()).toBe(3000);
+    expect(unrelated.applyDeadline).toHaveBeenCalledWith(3000);
+  });
+
   it("returns a rejected result when starting the invoke throws", async () => {
-    const { result, end } = coordinator.startInvoke(() => {
+    const { result, end } = coordinator.startInvoke(participant(), () => {
       throw new Error("no such function");
     });
     end();

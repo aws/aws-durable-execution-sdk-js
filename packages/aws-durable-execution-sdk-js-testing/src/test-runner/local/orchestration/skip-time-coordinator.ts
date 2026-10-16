@@ -47,7 +47,8 @@ export interface SkipTimeParticipant {
  * without pending work, which means it has finished. It also does not advance while a
  * tracked invoke has no invoked participant, as with a non-durable function, which runs
  * outside the clock. Pending work elsewhere does not lift this, because it is not the
- * result on its way back.
+ * result on its way back. When a caller finishes without an invoke's result, as when a
+ * parallel completes without that branch, its invokes stop holding the clock.
  *
  * Advancing past an earlier end would let work resuming at that end start its next delay
  * from the later one.
@@ -83,9 +84,18 @@ export class SkipTimeCoordinator {
     }
   }
 
-  /** Removes a finished execution, and lets the others advance without it. */
+  /**
+   * Removes a finished execution, and lets the others advance without it. The invokes it
+   * still waited for no longer hold the clock: no caller remains to resume with their
+   * results.
+   */
   unregister(participant: SkipTimeParticipant): void {
     this.participants.delete(participant);
+    for (const invoke of this.invokes) {
+      if (invoke.caller === participant) {
+        this.invokes.delete(invoke);
+      }
+    }
     this.advance();
   }
 
@@ -94,16 +104,21 @@ export class SkipTimeCoordinator {
    *
    * `start` must create the invoked function's runner synchronously. The participant that
    * registers during `start` is the invoked function. If none registers, the invoked
-   * function runs outside the clock, and the clock does not advance until `end()`.
+   * function runs outside the clock, and the clock does not advance until `end()`, or until
+   * `caller` unregisters.
    *
+   * @param caller the execution waiting for the invoke's result
    * @returns the promise `start` returned, and `end()`, which the caller must call once
    * the invocation that resumes it is queued, or once the invoke has failed
    */
-  startInvoke<T>(start: () => Promise<T>): {
+  startInvoke<T>(
+    caller: SkipTimeParticipant,
+    start: () => Promise<T>,
+  ): {
     result: Promise<T>;
     end: () => void;
   } {
-    const invoke: InvokeHandoff = { invoked: undefined };
+    const invoke: InvokeHandoff = { caller, invoked: undefined };
     this.invokes.add(invoke);
     this.startingInvoke = invoke;
     let result: Promise<T>;
@@ -183,6 +198,8 @@ export class SkipTimeCoordinator {
 
 /** One durable invoke tracked by {@link SkipTimeCoordinator.startInvoke}. */
 interface InvokeHandoff {
+  /** The execution waiting for the invoke's result. */
+  caller: SkipTimeParticipant;
   /** The invoked function's execution, if it runs on the clock. */
   invoked: SkipTimeParticipant | undefined;
 }
