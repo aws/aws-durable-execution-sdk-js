@@ -127,6 +127,7 @@ From the repository root, with Node.js 24 and Python 3.12:
 npm ci
 npm run build -w packages/aws-durable-execution-sdk-js
 npm run build -w packages/aws-durable-execution-sdk-js-testing
+npm run build -w packages/aws-durable-execution-sdk-js-extras
 npm run generate-examples -w packages/aws-durable-execution-sdk-js-examples
 pip install -r lmi-tests/requirements.txt
 npm run test:lmi:harness

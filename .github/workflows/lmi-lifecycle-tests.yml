@@ -29,6 +29,7 @@ jobs:
       - run: npm ci
       - run: npm run build -w packages/aws-durable-execution-sdk-js
       - run: npm run build -w packages/aws-durable-execution-sdk-js-testing
+      - run: npm run build -w packages/aws-durable-execution-sdk-js-extras
       - run: npm run generate-examples -w packages/aws-durable-execution-sdk-js-examples
       - run: npm run test:lmi:harness
       - run: pip install -r lmi-tests/requirements.txt
