@@ -22,9 +22,6 @@ export interface CheckpointOperation extends OperationEvents {
   // required for test execution orchestrator to process retries
   // TODO: schedule the retries internally instead of polling for updates
   update: OperationUpdate | undefined;
-  // Identifies the invocation whose fake start time anchors this wait or retry delay.
-  // For a replayed wait, this remains the invocation that first started the wait.
-  invocationId?: InvocationId;
 }
 
 /**
@@ -39,8 +36,6 @@ export class CheckpointManager {
   readonly eventProcessor = new EventProcessor();
   private readonly invocationsMap = new Map<InvocationId, Date>();
   private readonly dirtyOperationIds = new Set<string>();
-  /** Invocation whose fake start time anchors each wait's relative duration. */
-  private readonly waitInvocationIds = new Map<string, InvocationId>();
 
   private _isExecutionCompleted = false;
 
@@ -306,8 +301,9 @@ export class CheckpointManager {
     operation: Operation,
     attempt: number,
     retryDelaySeconds = 0,
+    processedAt: Date = new Date(),
   ): void {
-    const scheduledEndTimestamp = new Date();
+    const scheduledEndTimestamp = new Date(processedAt);
     scheduledEndTimestamp.setSeconds(
       scheduledEndTimestamp.getSeconds() + retryDelaySeconds,
     );
@@ -321,9 +317,13 @@ export class CheckpointManager {
 
   /**
    * Used for marking an operation as complete. Can be used for wait steps.
+   * @param processedAt When the checkpoint was processed. A retry delay starts here.
    * @returns the updated operation data
    */
-  completeOperation(inputUpdate: OperationUpdate): OperationEvents {
+  completeOperation(
+    inputUpdate: OperationUpdate,
+    processedAt: Date = new Date(),
+  ): OperationEvents {
     if (!inputUpdate.Id) {
       throw new Error("Missing Id in operation");
     }
@@ -373,6 +373,7 @@ export class CheckpointManager {
             copied.operation,
             (operation.StepDetails?.Attempt ?? 0) + 1,
             inputUpdate.StepOptions?.NextAttemptDelaySeconds,
+            processedAt,
           );
         }
         break;
@@ -409,12 +410,12 @@ export class CheckpointManager {
    * This is a batch operation that calls registerUpdate for each update.
    *
    * @param updates Array of operation updates to register
-   * @param invocationId The invocation ID these updates belong to
+   * @param processedAt When the checkpoint was processed. Wait and retry delays start here.
    * @returns Array of checkpoint operations with their associated updates
    */
   registerUpdates(
     updates: OperationUpdate[],
-    invocationId?: InvocationId,
+    processedAt: Date = new Date(),
   ): OperationEvents[] {
     if (this._isExecutionCompleted) {
       // Checkpoint token is invalid once execution is completed
@@ -424,7 +425,7 @@ export class CheckpointManager {
       });
     }
 
-    return updates.map((update) => this.registerUpdate(update, invocationId));
+    return updates.map((update) => this.registerUpdate(update, processedAt));
   }
 
   /**
@@ -588,12 +589,12 @@ export class CheckpointManager {
    * Register an operation update to be stored in the checkpoint manager.
    * This function does not schedule anything and is only used for storing the data.
    * `getPendingCheckpointUpdates` should be used for acting on the data after each update.
-   * @param invocationId The invocation that produced the update
+   * @param processedAt When the checkpoint was processed. Wait and retry delays start here.
    * @returns the operation update along with the operation itself
    */
   registerUpdate(
     update: OperationUpdate,
-    invocationId?: InvocationId,
+    processedAt: Date = new Date(),
   ): OperationEvents {
     // An EXECUTION-typed update always refers to the execution itself, whatever
     // id the caller used. The SDK's oversized-result path checkpoints with a
@@ -620,16 +621,14 @@ export class CheckpointManager {
         this.addOperationUpdate({
           ...previousOperation,
           update,
-          invocationId: this.waitInvocationIds.get(update.Id) ?? invocationId,
         });
         return previousOperation;
       }
 
-      const completedOperation = this.completeOperation(update);
+      const completedOperation = this.completeOperation(update, processedAt);
       this.addOperationUpdate({
         ...completedOperation,
         update,
-        invocationId,
       });
       return completedOperation;
     }
@@ -646,10 +645,7 @@ export class CheckpointManager {
 
     switch (update.Type) {
       case OperationType.WAIT: {
-        if (invocationId) {
-          this.waitInvocationIds.set(update.Id, invocationId);
-        }
-        const scheduledEndTimestamp = new Date();
+        const scheduledEndTimestamp = new Date(processedAt);
         const waitSeconds = update.WaitOptions?.WaitSeconds ?? 0;
         scheduledEndTimestamp.setSeconds(
           scheduledEndTimestamp.getSeconds() + waitSeconds,
@@ -666,6 +662,7 @@ export class CheckpointManager {
             operation,
             1,
             update.StepOptions?.NextAttemptDelaySeconds,
+            processedAt,
           );
         }
         break;
@@ -701,7 +698,7 @@ export class CheckpointManager {
       update.Action === OperationAction.SUCCEED ||
       update.Action === OperationAction.FAIL
     ) {
-      updatedResult = this.completeOperation(update);
+      updatedResult = this.completeOperation(update, processedAt);
     } else {
       result.events = [this.eventProcessor.processUpdate(update, operation)];
     }
@@ -709,7 +706,6 @@ export class CheckpointManager {
     this.addOperationUpdate({
       ...updatedResult,
       update,
-      invocationId,
     });
 
     return updatedResult;
@@ -720,7 +716,6 @@ export class CheckpointManager {
   cleanup(): void {
     this.operationDataMap.clear();
     this.dirtyOperationIds.clear();
-    this.waitInvocationIds.clear();
     this.callbackManager.cleanup();
   }
 }

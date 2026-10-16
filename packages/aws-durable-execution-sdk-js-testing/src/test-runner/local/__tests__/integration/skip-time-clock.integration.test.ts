@@ -9,39 +9,45 @@ beforeAll(() =>
 );
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
-const HOUR_MS = 60 * 60 * 1000;
+const HOUR_SECONDS = 60 * 60;
+const HOUR_MS = HOUR_SECONDS * 1000;
+// Longer than the tolerance below, so a delay shortened by this time fails the test.
+const SLOW_WORK_MS = 2500;
+
+function sleep(ms: number): Promise<void> {
+  // The fake clock advances with real time, so this takes about `ms` of both.
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function expectDuration(actualMs: number, expectedMs: number): void {
   // The fake clock also advances with real time. Keep a one-second allowance for that
-  // progress, while distinguishing an hour from the few milliseconds the defect produced.
+  // progress, while distinguishing an hour from the milliseconds the defect produced.
   expect(actualMs).toBeGreaterThanOrEqual(expectedMs - 1000);
   expect(actualMs).toBeLessThan(expectedMs + 1000);
 }
 
 describe("skip-time clock", () => {
   it("advances by the duration of every sequential wait", async () => {
+    // Four waits, because a later wait can complete inside the invocation that started
+    // it. The first two waits each start a new invocation; later ones may not.
     const handler = withDurableExecution(
       async (_event: unknown, context: DurableContext) => {
-        const start = await context.step("start", async () => Date.now());
-        await context.wait("first wait", { seconds: HOUR_MS / 1000 });
-        const afterFirst = await context.step("after first", async () =>
-          Date.now(),
-        );
-        await context.wait("second wait", { seconds: HOUR_MS / 1000 });
-        const afterSecond = await context.step("after second", async () =>
-          Date.now(),
-        );
-        return { start, afterFirst, afterSecond };
+        const times = [await context.step("t0", async () => Date.now())];
+        for (let i = 1; i <= 4; i++) {
+          await context.wait(`wait ${i}`, { seconds: HOUR_SECONDS });
+          times.push(await context.step(`t${i}`, async () => Date.now()));
+        }
+        return times;
       },
     );
     const runner = new LocalDurableTestRunner({ handlerFunction: handler });
 
-    const { start, afterFirst, afterSecond } = await runner
-      .run()
-      .then((result) => result.getResult());
+    const times = await runner.run().then((result) => result.getResult());
 
-    expectDuration(afterFirst - start, HOUR_MS);
-    expectDuration(afterSecond - afterFirst, HOUR_MS);
+    expect(times).toHaveLength(5);
+    for (let i = 1; i < times!.length; i++) {
+      expectDuration(times![i] - times![i - 1], HOUR_MS);
+    }
   });
 
   it("advances parallel waits to their latest end, not by their sum", async () => {
@@ -51,11 +57,11 @@ describe("skip-time clock", () => {
           Date.now(),
         );
         await context.parallel("waits", [
-          async (child) => child.wait("one hour", { seconds: HOUR_MS / 1000 }),
+          async (child) => child.wait("one hour", { seconds: HOUR_SECONDS }),
           async (child) =>
-            child.wait("two hours", { seconds: (2 * HOUR_MS) / 1000 }),
+            child.wait("two hours", { seconds: 2 * HOUR_SECONDS }),
           async (child) =>
-            child.wait("three hours", { seconds: (3 * HOUR_MS) / 1000 }),
+            child.wait("three hours", { seconds: 3 * HOUR_SECONDS }),
         ]);
         const end = await context.step("parallel end", async () => Date.now());
         return { start, end };
@@ -69,4 +75,60 @@ describe("skip-time clock", () => {
 
     expectDuration(end - start, 3 * HOUR_MS);
   });
+
+  it("starts a wait's duration when the wait starts, not when the invocation starts", async () => {
+    const handler = withDurableExecution(
+      async (_event: unknown, context: DurableContext) => {
+        await context.step("slow work", async () => {
+          await sleep(SLOW_WORK_MS);
+        });
+        const before = await context.step("before", async () => Date.now());
+        await context.wait("wait", { seconds: HOUR_SECONDS });
+        const after = await context.step("after", async () => Date.now());
+        return { before, after };
+      },
+    );
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+
+    const { before, after } = await runner
+      .run()
+      .then((result) => result.getResult());
+
+    expectDuration(after - before, HOUR_MS);
+  }, 15_000);
+
+  it("starts a retry delay when the attempt fails, not when the invocation starts", async () => {
+    const attempts: { startedAt: number; failedAt?: number }[] = [];
+    const handler = withDurableExecution(
+      async (_event: unknown, context: DurableContext) =>
+        context.step(
+          "flaky",
+          async () => {
+            const attempt: { startedAt: number; failedAt?: number } = {
+              startedAt: Date.now(),
+            };
+            attempts.push(attempt);
+            if (attempts.length === 1) {
+              await sleep(SLOW_WORK_MS);
+              attempt.failedAt = Date.now();
+              throw new Error("first attempt fails");
+            }
+            return "ok";
+          },
+          {
+            retryStrategy: (_error, attemptCount) =>
+              attemptCount < 2
+                ? { shouldRetry: true, delay: { seconds: HOUR_SECONDS } }
+                : { shouldRetry: false },
+          },
+        ),
+    );
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+
+    const result = await runner.run();
+
+    expect(result.getResult()).toBe("ok");
+    expect(attempts).toHaveLength(2);
+    expectDuration(attempts[1].startedAt - attempts[0].failedAt!, HOUR_MS);
+  }, 15_000);
 });

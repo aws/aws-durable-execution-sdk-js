@@ -82,15 +82,24 @@ export class WorkerServerApiHandler {
           this.executionManager,
         );
       case ApiType.CheckpointDurableExecutionState: {
+        const receivedAtMs = Date.now();
         return new Promise<CheckpointDurableExecutionResponse>(
           (resolve, reject) => {
             setTimeout(() => {
               try {
+                // The service starts a delay when it processes the checkpoint. That is the
+                // client's clock at send time, plus the simulated network delay above.
+                const clientTimestampMs = data.params.clientTimestampMs;
+                const processedAt =
+                  clientTimestampMs === undefined
+                    ? new Date()
+                    : new Date(clientTimestampMs + (Date.now() - receivedAtMs));
                 resolve(
                   processCheckpointDurableExecution(
                     data.params.DurableExecutionArn,
                     data.params,
                     this.executionManager,
+                    processedAt,
                   ),
                 );
               } catch (err: unknown) {

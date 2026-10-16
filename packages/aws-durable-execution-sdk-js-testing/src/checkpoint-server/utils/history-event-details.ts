@@ -205,12 +205,17 @@ const historyEventDetailMap = {
   [`${OperationAction.START}-${OperationType.WAIT}`]: createEventDetails(
     EventType.WaitStarted,
     "WaitStartedDetails",
-    (update) => {
-      const scheduledEndTimestamp = new Date();
-      scheduledEndTimestamp.setSeconds(
-        scheduledEndTimestamp.getSeconds() +
-          (update.WaitOptions?.WaitSeconds ?? 0),
-      );
+    (update, operation) => {
+      // Report the operation's own scheduled end, so the history and the operation agree.
+      // The checkpoint manager computes it from the time the checkpoint was processed.
+      let scheduledEndTimestamp = operation.WaitDetails?.ScheduledEndTimestamp;
+      if (!scheduledEndTimestamp) {
+        scheduledEndTimestamp = new Date();
+        scheduledEndTimestamp.setSeconds(
+          scheduledEndTimestamp.getSeconds() +
+            (update.WaitOptions?.WaitSeconds ?? 0),
+        );
+      }
       return {
         Duration: update.WaitOptions?.WaitSeconds,
         ScheduledEndTimestamp: scheduledEndTimestamp,

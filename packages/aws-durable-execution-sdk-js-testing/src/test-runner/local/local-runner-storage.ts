@@ -27,7 +27,12 @@ export class LocalRunnerClient implements DurableExecutionClient {
   ): Promise<CheckpointDurableExecutionResponse> {
     return CheckpointWorkerManager.getInstance().sendApiRequest(
       ApiType.CheckpointDurableExecutionState,
-      params,
+      {
+        ...params,
+        // Read here, on the thread whose clock skipTime fakes. The worker schedules waits
+        // and retries from this time. See CheckpointDurableExecutionStateRequest.
+        clientTimestampMs: Date.now(),
+      },
     );
   }
 }

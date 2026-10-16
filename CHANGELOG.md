@@ -81,12 +81,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- With `skipTime` enabled, the testing SDK now advances its fake clock from the start of the
-  invocation that produced each wait or retry. The checkpoint worker uses real time, so its
-  absolute scheduled timestamps fell behind fake time after the first wait. A later sequential
-  wait then advanced by only real elapsed time. Parallel waits could also stop at the first end
-  instead of the latest one. Sequential waits now each advance by their duration, while parallel
-  waits advance to their latest end without adding their durations.
+- With `skipTime` enabled, the testing SDK's local runner now advances its fake clock by the full
+  duration of every wait and retry delay. The checkpoint server scheduled waits and retries from
+  its own real clock, while the runner and the SDK read a fake clock that runs ahead after the
+  first wait. So a later wait or retry advanced by only a few milliseconds, and parallel waits
+  stopped at the first one to end. The local runner now sends the time on its own clock with each
+  checkpoint, and the server schedules waits and retries from that time. As a result:
+  - Each sequential wait advances fake time by its duration.
+  - Parallel waits advance fake time to the latest end, not by the sum of their durations.
+  - A delay starts when its checkpoint is sent, as in the service. Time spent earlier in the
+    invocation no longer shortens it.
+  - `ScheduledEndTimestamp` and `NextAttemptTimestamp` are on the fake clock, so they agree with
+    `Date.now()` inside the handler.
+  - A wait now suspends the invocation when the wait outlasts the SDK's termination cooldown, as
+    in the service. So a test that counts invocations across several waits can see one more.
 
 - The testing SDK's local runner no longer waits for the fake clock's 20 ms advancement interval
   before it starts each queued invocation when `skipTime` is enabled. QueueScheduler now yields

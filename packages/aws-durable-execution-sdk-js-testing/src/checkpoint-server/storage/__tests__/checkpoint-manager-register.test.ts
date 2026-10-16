@@ -4,10 +4,7 @@ import {
   OperationAction,
   OperationStatus,
 } from "@aws/durable-execution-sdk-js";
-import {
-  createExecutionId,
-  createInvocationId,
-} from "../../utils/tagged-strings";
+import { createExecutionId } from "../../utils/tagged-strings";
 import { CheckpointManager } from "../checkpoint-manager";
 
 jest.mock("node:crypto", () => ({
@@ -179,39 +176,38 @@ describe("checkpoint-manager registerUpdate", () => {
     expect(scheduledTime).toBeLessThan(now + 6000);
   });
 
-  it("should carry the producing invocation on pending updates", async () => {
-    const invocationId = createInvocationId("wait-invocation");
-    storage.registerUpdate(
+  it("should schedule a wait and a retry from the processing time, not the current time", () => {
+    const processedAt = new Date("2030-01-01T00:00:00.000Z");
+
+    const wait = storage.registerUpdate(
       {
-        Id: "wait-id",
+        Id: "stamped-wait",
         Type: OperationType.WAIT,
         Action: OperationAction.START,
-        WaitOptions: { WaitSeconds: 5 },
+        WaitOptions: { WaitSeconds: 60 },
       },
-      invocationId,
+      processedAt,
+    );
+    const retry = storage.registerUpdate(
+      {
+        Id: "stamped-retry",
+        Type: OperationType.STEP,
+        Action: OperationAction.RETRY,
+        StepOptions: { NextAttemptDelaySeconds: 30 },
+      },
+      processedAt,
     );
 
-    const [pending] = await storage.getPendingCheckpointUpdates();
-
-    expect(pending.invocationId).toBe(invocationId);
-  });
-
-  it("should keep the original invocation when a wait start replays", async () => {
-    const originalInvocationId = createInvocationId("original-invocation");
-    const replayInvocationId = createInvocationId("replay-invocation");
-    const update: OperationUpdate = {
-      Id: "wait-id",
-      Type: OperationType.WAIT,
-      Action: OperationAction.START,
-      WaitOptions: { WaitSeconds: 5 },
-    };
-    storage.registerUpdate(update, originalInvocationId);
-    await storage.getPendingCheckpointUpdates();
-
-    storage.registerUpdate(update, replayInvocationId);
-    const [replayed] = await storage.getPendingCheckpointUpdates();
-
-    expect(replayed.invocationId).toBe(originalInvocationId);
+    expect(wait.operation.WaitDetails?.ScheduledEndTimestamp).toEqual(
+      new Date("2030-01-01T00:01:00.000Z"),
+    );
+    // The history reports the same scheduled end as the operation.
+    expect(wait.events[0].WaitStartedDetails?.ScheduledEndTimestamp).toEqual(
+      new Date("2030-01-01T00:01:00.000Z"),
+    );
+    expect(retry.operation.StepDetails?.NextAttemptTimestamp).toEqual(
+      new Date("2030-01-01T00:00:30.000Z"),
+    );
   });
 
   it("should return existing operation if it has waitDetails with scheduledEndTimestamp", () => {

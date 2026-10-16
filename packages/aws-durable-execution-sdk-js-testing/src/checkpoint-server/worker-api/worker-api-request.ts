@@ -45,6 +45,19 @@ export interface ResumeDurableExecutionRequest {
   executionId: ExecutionId;
 }
 
+/**
+ * A checkpoint request, plus the time on the test runner's clock when the SDK sent it.
+ *
+ * With skipTime, the test runner's clock is a fake clock that runs ahead of the worker's
+ * real clock. The service starts a wait or retry delay when it receives the checkpoint.
+ * So the worker schedules from this timestamp, which keeps every scheduled time on the
+ * same clock that the SDK and the test runner read.
+ */
+export type CheckpointDurableExecutionStateRequest =
+  CheckpointDurableExecutionCommandInput & {
+    clientTimestampMs?: number;
+  };
+
 export interface WorkerApiRequestMapping {
   [ApiType.StartDurableExecution]: StartDurableExecutionRequest;
   [ApiType.StartInvocation]: StartInvocationRequest;
@@ -53,7 +66,7 @@ export interface WorkerApiRequestMapping {
   [ApiType.PollCheckpointData]: PollCheckpointDataRequest;
   [ApiType.DrainCheckpointData]: PollCheckpointDataRequest;
   [ApiType.GetDurableExecutionState]: GetDurableExecutionCommandInput;
-  [ApiType.CheckpointDurableExecutionState]: CheckpointDurableExecutionCommandInput;
+  [ApiType.CheckpointDurableExecutionState]: CheckpointDurableExecutionStateRequest;
   [ApiType.SendDurableExecutionCallbackSuccess]: SendDurableExecutionCallbackSuccessRequest;
   [ApiType.SendDurableExecutionCallbackFailure]: SendDurableExecutionCallbackFailureRequest;
   [ApiType.SendDurableExecutionCallbackHeartbeat]: SendDurableExecutionCallbackHeartbeatRequest;
