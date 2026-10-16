@@ -20,7 +20,7 @@ def quiet_cloud(monkeypatch, tmp_path):
         SimpleNamespace(time=lambda: clock["time"], monotonic=lambda: clock["time"], sleep=sleep),
     )
     monkeypatch.setattr(driver, "ARTIFACTS", tmp_path)
-    monkeypatch.setattr(driver, "client", lambda _service: object())
+    monkeypatch.setattr(driver, "client", lambda _service, **_kwargs: object())
     cloud = driver.Cloud({"run": "run", "quietSeconds": 5, "drainTimeout": 20, "functions": {}})
     cloud.running = lambda: []
     return cloud, clock, tmp_path
@@ -58,7 +58,9 @@ def test_control_keys_are_scoped_to_current_run(monkeypatch):
     monkeypatch.setattr(
         driver,
         "client",
-        lambda _service: SimpleNamespace(put_object=lambda **kwargs: writes.append(kwargs)),
+        lambda _service, **_kwargs: SimpleNamespace(
+            put_object=lambda **kwargs: writes.append(kwargs)
+        ),
     )
     cloud = driver.Cloud({"run": "new-run", "bucket": "persistent"})
     cloud.control("case-loser", "release")

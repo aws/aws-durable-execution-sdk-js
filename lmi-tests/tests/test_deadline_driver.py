@@ -39,7 +39,7 @@ def setup(monkeypatch, tmp_path):
 
     lam = SimpleNamespace(invoke=invoke)
     services = {"lambda": lam, "s3": SimpleNamespace(put_object=put), "logs": object()}
-    monkeypatch.setattr(driver, "client", lambda service: services[service])
+    monkeypatch.setattr(driver, "client", lambda service, **_kwargs: services[service])
     monkeypatch.setattr(driver, "time", clock)
     monkeypatch.setattr(driver, "ARTIFACTS", tmp_path)
     instance = driver.Cloud({"bucket": "bucket", "run": "run", "functions": {"shared": "function"}})

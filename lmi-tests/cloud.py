@@ -8,7 +8,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 from botocore.exceptions import ClientError
-from deploy import ARTIFACTS, QUALIFIER, client, save, verify
+from deploy import ARTIFACTS, QUALIFIER, client, read_configuration, save, verify
 from evidence import CollectionError
 
 
@@ -16,6 +16,8 @@ class Cloud:
     def __init__(self, manifest):
         self.manifest = manifest
         self.lam, self.s3, self.logs = client("lambda"), client("s3"), client("logs")
+        # Deadline demand has one measured attempt. Do not hide a retry inside botocore.
+        self.invoker = client("lambda", total_max_attempts=1)
         self.items, self.gates, self.cache = [], set(), {}
         self.next_history_read = 0.0
         self.completed_diagnostics = set()
@@ -23,9 +25,11 @@ class Cloud:
     def verify(self):
         for key, arn in self.manifest["functions"].items():
             verify(
-                self.lam.get_function_configuration(FunctionName=arn),
-                self.lam.get_function_scaling_config(
-                    FunctionName=arn.rsplit(":", 1)[0], Qualifier=QUALIFIER
+                read_configuration(self.lam.get_function_configuration, FunctionName=arn),
+                read_configuration(
+                    self.lam.get_function_scaling_config,
+                    FunctionName=arn.rsplit(":", 1)[0],
+                    Qualifier=QUALIFIER,
                 ),
                 self.manifest,
                 key,
@@ -80,7 +84,7 @@ class Cloud:
         # No control PUTs or evidence collection between this timestamp and Invoke.
         item["timing"]["invokeBegin"] = self.timestamp()
         try:
-            result = self.lam.invoke(
+            result = self.invoker.invoke(
                 FunctionName=self.manifest["functions"][item["fixture"]],
                 InvocationType="Event",
                 DurableExecutionName=item["marker"],
@@ -236,7 +240,7 @@ class Cloud:
                 errors.append(str(error))
         for key, arn in self.manifest["functions"].items():
             try:
-                config = self.lam.get_function_configuration(FunctionName=arn)
+                config = read_configuration(self.lam.get_function_configuration, FunctionName=arn)
                 logs = []
                 for page in self.logs.get_paginator("filter_log_events").paginate(
                     logGroupName=config["LoggingConfig"]["LogGroup"],

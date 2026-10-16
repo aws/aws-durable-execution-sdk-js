@@ -26,12 +26,27 @@ SCALING = {"MinExecutionEnvironments": 1, "MaxExecutionEnvironments": 1}
 QUALIFIER = "$LATEST.PUBLISHED"
 
 
-def client(service, region=None):
+def client(service, region=None, *, total_max_attempts=2):
     return boto3.client(
         service,
         region_name=region or os.environ["AWS_REGION"],
-        config=Config(connect_timeout=3, read_timeout=10, retries={"total_max_attempts": 2}),
+        config=Config(
+            connect_timeout=3,
+            read_timeout=10,
+            retries={"total_max_attempts": total_max_attempts},
+        ),
     )
+
+
+def read_configuration(read, **request):
+    """Retry only throttled configuration reads, outside test timing windows."""
+    for attempt in range(5):
+        try:
+            return read(**request)
+        except ClientError as error:
+            if error.response["Error"]["Code"] != "TooManyRequestsException" or attempt == 4:
+                raise
+            time.sleep(0.25 * 2**attempt)
 
 
 def scrub(value):
@@ -311,7 +326,7 @@ def settle_previous(stack, bucket):
     if not stack.get("Outputs"):
         return
     arn = next(o["OutputValue"] for o in stack["Outputs"] if o["OutputKey"] == "shared")
-    config = client("lambda").get_function_configuration(FunctionName=arn)
+    config = read_configuration(client("lambda").get_function_configuration, FunctionName=arn)
     previous_run = config["Environment"]["Variables"]["LMI_RUN_ID"]
     response = client("s3").get_object(
         Bucket=bucket, Key=f"deployments/{previous_run}/manifest.json"
@@ -416,9 +431,11 @@ def deploy(args):
     if outputs != manifest["functions"]:
         raise ProvisioningError("Persistent stack did not expose the one expected shared function")
     for key, arn in manifest["functions"].items():
-        config = client("lambda").get_function_configuration(FunctionName=arn)
-        scaling = client("lambda").get_function_scaling_config(
-            FunctionName=arn.rsplit(":", 1)[0], Qualifier=QUALIFIER
+        config = read_configuration(client("lambda").get_function_configuration, FunctionName=arn)
+        scaling = read_configuration(
+            client("lambda").get_function_scaling_config,
+            FunctionName=arn.rsplit(":", 1)[0],
+            Qualifier=QUALIFIER,
         )
         save(ARTIFACTS / f"configuration/{key}.json", {"function": config, "scaling": scaling})
         verify(config, scaling, manifest, key)

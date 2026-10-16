@@ -12,11 +12,12 @@ test("poll fixture reaches the held transport and resumes while the manager is o
     release = deferred();
   let calls = 0;
   const m = manager({
-    async checkpoint() {
+    async checkpoint(request) {
       calls++;
       entered.resolve();
       await release.promise;
-      return {};
+      // Keep the control invocation live: a missing token means service withdrawal.
+      return { CheckpointToken: request.CheckpointToken };
     },
   });
   const op = preparePoll(m);

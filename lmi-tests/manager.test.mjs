@@ -18,7 +18,8 @@ test("dispose is idempotent; checkpoint and force cannot send; live manager stil
   const client = {
     async checkpoint(request) {
       calls.push(request);
-      return {};
+      // Keep the control invocation live: a missing token means service withdrawal.
+      return { CheckpointToken: request.CheckpointToken };
     },
   };
   const closed = manager(client),
@@ -46,7 +47,8 @@ test("queued immediate cannot issue a request after dispose", async () => {
   const m = manager({
     async checkpoint(request) {
       calls.push(request);
-      return {};
+      // Keep the control invocation live: a missing token means service withdrawal.
+      return { CheckpointToken: request.CheckpointToken };
     },
   });
   m.checkpoint("1", update).catch(() => undefined);
@@ -62,11 +64,12 @@ test("in-flight refresh cannot rearm polling after dispose", {
     release = deferred();
   let calls = 0;
   const m = manager({
-    async checkpoint() {
+    async checkpoint(request) {
       calls++;
       entered.resolve();
       await release.promise;
-      return {};
+      // Keep the control invocation live: a missing token means service withdrawal.
+      return { CheckpointToken: request.CheckpointToken };
     },
   });
   // A still-executing sibling prevents suspension while this callback is in flight.

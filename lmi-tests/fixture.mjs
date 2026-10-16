@@ -166,7 +166,7 @@ lambda.middlewareStack.add(
 );
 
 const client = {
-  async checkpoint(request, logger) {
+  async checkpoint(request, logger, options) {
     const state = current();
     state.checkpoints++;
     try {
@@ -185,7 +185,7 @@ const client = {
         target: request.DurableExecutionArn,
         closed: state.closed,
       });
-      const response = await transport.checkpoint(request, logger);
+      const response = await transport.checkpoint(request, logger, options);
       await trace(state, "CHECKPOINT_SETTLED", { updates });
       if (
         state.event.scenario === "deadline-checkpoint" &&
@@ -198,7 +198,7 @@ const client = {
       state.checkpoints--;
     }
   },
-  async getExecutionState(request, logger) {
+  async getExecutionState(request, logger, options) {
     const state = current();
     state.checkpoints++;
     try {
@@ -207,7 +207,7 @@ const client = {
         target: request.DurableExecutionArn,
         closed: state.closed,
       });
-      return await transport.getExecutionState(request, logger);
+      return await transport.getExecutionState(request, logger, options);
     } finally {
       state.checkpoints--;
     }
