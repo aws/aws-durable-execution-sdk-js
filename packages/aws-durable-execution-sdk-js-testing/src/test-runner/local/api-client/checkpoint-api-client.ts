@@ -33,6 +33,18 @@ export interface CheckpointApiClient {
   }>;
 
   /**
+   * Take the checkpoint data no poll has picked up yet, without waiting for more, and
+   * release a poll that is still waiting with no data.
+   *
+   * Called once the execution has finished. The caller relies on the server answering
+   * requests in order: a poll that took updates is answered before a drain sent after it.
+   * The caller therefore sends no new poll, drains, and only then aborts the poll signal.
+   */
+  drainCheckpointData(executionId: ExecutionId): Promise<{
+    operations: CheckpointOperation[];
+  }>;
+
+  /**
    * Update checkpoint data for a specific operation with the intended status.
    *
    * @param params Object containing update parameters
@@ -59,4 +71,14 @@ export interface CheckpointApiClient {
     invocationId: InvocationId,
     error: ErrorObject | undefined,
   ): Promise<CompleteInvocationResponse>;
+
+  /**
+   * Make the checkpoint server answer this execution's checkpoints without a token.
+   */
+  pauseExecution(executionId: ExecutionId): Promise<void>;
+
+  /**
+   * Make the checkpoint server answer this execution's checkpoints with a token again.
+   */
+  resumeExecution(executionId: ExecutionId): Promise<void>;
 }

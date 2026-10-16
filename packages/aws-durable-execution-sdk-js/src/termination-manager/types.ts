@@ -12,6 +12,10 @@ export enum TerminationReason {
   // Callback-related reasons
   CALLBACK_PENDING = "CALLBACK_PENDING",
 
+  // The service withdrew this invocation's checkpoint token, so it can record nothing
+  // further. See CheckpointManager.handleRevokedCheckpointToken.
+  EXECUTION_SUSPENDED_BY_SERVICE = "EXECUTION_SUSPENDED_BY_SERVICE",
+
   // Error-related reasons
   CHECKPOINT_FAILED = "CHECKPOINT_FAILED",
   SERDES_FAILED = "SERDES_FAILED",
@@ -51,6 +55,19 @@ export const TERMINATION_CLASS: Record<TerminationReason, TerminationClass> = {
   [TerminationReason.RETRY_INTERRUPTED_STEP]: "suspend",
   [TerminationReason.WAIT_SCHEDULED]: "suspend",
   [TerminationReason.CALLBACK_PENDING]: "suspend",
+  // A withdrawn checkpoint token says this invocation can record nothing further. It does
+  // not say the execution cannot continue, which is what a fault would claim, so this is a
+  // suspend like any other: the invocation answers PENDING and stops.
+  //
+  // A suspend leaves it to the service to invoke again, and the SDK cannot see whether
+  // anything will. Both answers are still accounted for. Where the token was withdrawn
+  // because a newer invocation took over -- the case this exists for -- that invocation is
+  // already driving the execution, and only a suspend lets it carry on. Where nothing at all
+  // is outstanding, the service rejects a PENDING response with "Cannot return PENDING
+  // status with no pending operations" and the execution fails after its deterministic
+  // retries, which is where a fault would have left it anyway. So the suspend is right when
+  // it matters and costs nothing when it is not.
+  [TerminationReason.EXECUTION_SUSPENDED_BY_SERVICE]: "suspend",
   [TerminationReason.CHECKPOINT_FAILED]: "fault",
   [TerminationReason.SERDES_FAILED]: "fault",
   [TerminationReason.CONTEXT_VALIDATION_ERROR]: "fault",

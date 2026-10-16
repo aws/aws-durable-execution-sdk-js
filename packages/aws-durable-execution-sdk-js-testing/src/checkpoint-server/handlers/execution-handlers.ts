@@ -46,3 +46,37 @@ export function processCompleteInvocation(
 ): CompleteInvocationResponse {
   return executionManager.completeInvocation(executionId, invocationId, error);
 }
+
+const getExecutionStorage = (
+  executionId: ExecutionId,
+  executionManager: ExecutionManager,
+) => {
+  const storage = executionManager.getCheckpointsByExecution(executionId);
+  if (!storage) {
+    throw new Error("Execution not found");
+  }
+  return storage;
+};
+
+/**
+ * Pauses an execution: from now on its checkpoints are answered without a token. See
+ * CheckpointManager.pause.
+ */
+export function processPauseDurableExecution(
+  executionId: ExecutionId,
+  executionManager: ExecutionManager,
+): Record<string, never> {
+  getExecutionStorage(executionId, executionManager).pause();
+  return {};
+}
+
+/**
+ * Resumes a paused execution: its checkpoints are answered with a token again.
+ */
+export function processResumeDurableExecution(
+  executionId: ExecutionId,
+  executionManager: ExecutionManager,
+): Record<string, never> {
+  getExecutionStorage(executionId, executionManager).resume();
+  return {};
+}

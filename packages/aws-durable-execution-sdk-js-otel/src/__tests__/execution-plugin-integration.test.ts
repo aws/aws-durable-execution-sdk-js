@@ -234,10 +234,9 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
       ambientSpanContext.spanId,
     );
 
-    // Assertion 3: Invocation_Span shares the execution trace with the Workflow
-    // span. It parents onto the active ambient span (which is on the canonical
-    // execution trace), keeping the per-invocation span nested under the layer's
-    // handler span without changing the execution ancestor.
+    // Assertion 3: With a Root but no usable Parent, fallback mode makes
+    // the exported SDK-owned synthetic root the common parent of Workflow and
+    // Invocation. The ambient handler span is not stable across reinvocations.
     const invocationSpan = findSpan(exporter, "Invocation");
     expect(invocationSpan).toBeDefined();
     expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(TEST_ARN);
@@ -245,7 +244,20 @@ describe("ExecutionOtelPlugin - Integration: End-to-end span export with default
       workflowSpan!.spanContext().traceId,
     );
     expect(invocationSpan!.parentSpanContext?.spanId).toBe(
+      workflowSpan!.parentSpanContext?.spanId,
+    );
+    expect(invocationSpan!.parentSpanContext?.spanId).not.toBe(
       ambientSpanContext.spanId,
+    );
+
+    const syntheticRoot = findSpan(exporter, "DurableExecutionRoot");
+    expect(syntheticRoot).toBeDefined();
+    expect(syntheticRoot!.parentSpanContext).toBeUndefined();
+    expect(syntheticRoot!.spanContext().spanId).toBe(
+      workflowSpan!.parentSpanContext?.spanId,
+    );
+    expect(syntheticRoot!.spanContext().traceId).toBe(
+      workflowSpan!.spanContext().traceId,
     );
 
     // Assertion 4: Operation span has link to the plugin-created Invocation_Span
@@ -491,12 +503,7 @@ describe("ExecutionOtelPlugin - Parent-child workflow span ID collision preventi
     );
   });
 
-  // Regression: onOperationEnd can be reached with a terminal FAILURE status
-  // (TIMED_OUT/STOPPED/FAILED/CANCELLED) and NO error object (callback-timeout
-  // and chained-invoke cross-invocation fast paths). Those must NOT be labelled
-  // OTel OK — the OK branch is gated on SUCCEEDED, so a no-error failure leaves
-  // the span status at the default UNSET (code 0).
-  it("onOperationEnd terminal path: TIMED_OUT status with NO error leaves the operation span NOT OK (UNSET)", async () => {
+  it("onOperationEnd terminal path: TIMED_OUT status with NO error marks the operation span ERROR without an exception", async () => {
     const plugin = new ExecutionOtelPlugin({});
 
     await plugin.onInvocationStart(makeInvocationInfo());
@@ -516,10 +523,11 @@ describe("ExecutionOtelPlugin - Parent-child workflow span ID collision preventi
     const opSpan = findSpan(exporter, "timeout-op");
     expect(opSpan).toBeDefined();
     expect(opSpan!.status.code).not.toBe(SpanStatusCode.OK);
-    expect(opSpan!.status.code).toBe(SpanStatusCode.UNSET);
+    expect(opSpan!.status.code).toBe(SpanStatusCode.ERROR);
+    expect(opSpan!.events).toHaveLength(0);
   });
 
-  it("onOperationEnd cross-invocation path: STOPPED status with NO error leaves the span NOT OK (UNSET)", async () => {
+  it("onOperationEnd cross-invocation path: STOPPED status with NO error marks the span ERROR without an exception", async () => {
     const plugin = new ExecutionOtelPlugin({});
 
     await plugin.onInvocationStart(makeInvocationInfo());
@@ -537,7 +545,8 @@ describe("ExecutionOtelPlugin - Parent-child workflow span ID collision preventi
     const opSpan = findSpan(exporter, "cross-stopped");
     expect(opSpan).toBeDefined();
     expect(opSpan!.status.code).not.toBe(SpanStatusCode.OK);
-    expect(opSpan!.status.code).toBe(SpanStatusCode.UNSET);
+    expect(opSpan!.status.code).toBe(SpanStatusCode.ERROR);
+    expect(opSpan!.events).toHaveLength(0);
   });
 
   it("onOperationEnd terminal path: SUCCEEDED status with NO error stamps OK", async () => {

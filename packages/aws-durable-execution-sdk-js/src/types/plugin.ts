@@ -65,9 +65,13 @@ export interface OperationInfo {
   endTimestamp?: Date;
   result?: string;
   /**
-   * The error the operation failed with, reconstructed from the checkpointed
-   * error data. Present on failed operations regardless of which lifecycle
-   * hook surfaced this info (e.g. also available via `onOperationChange`).
+   * Error details, when available. Checkpoint-derived metadata can omit this
+   * field when wire error data is missing or empty, including during replay
+   * and `onOperationChange`. A lifecycle hook may also supply a runtime error.
+   *
+   * Use `status` to identify an operation failure; absence of `error` does not
+   * imply success. Supplied partial error details are retained, including
+   * explicitly empty strings or an empty stack trace.
    */
   error?: Error;
   /**
@@ -219,6 +223,20 @@ export interface OperationChangeInfo {
  * its promise.
  */
 export interface DurableInstrumentationPlugin {
+  /**
+   * Synchronously supplies SDK-owned metadata for a prospective chained invoke.
+   * Omit the hook or return undefined for no metadata. The collector isolates
+   * plugin failures and keeps the first non-null value for each supported field.
+   *
+   * Called only when preparing a new invoke START, before checkpoint serialization.
+   * Replaying a persisted START does not call the hook. An uncommitted START can
+   * call it again on retry, so implementations must use the stable input identity
+   * and avoid side effects. Transport requires the Lambda model and backend to
+   * support ChainedInvokeOptions.XAmznTraceId.
+   */
+  providePropagationMetadata?(
+    input: PropagationInput,
+  ): PropagationMetadata | undefined;
   onInvocationStart?(info: InvocationInfo): Promise<void>;
   wrapInvocation?(
     info: InvocationInfo,
@@ -256,6 +274,25 @@ export interface DurableInstrumentationPlugin {
   onOperationAttemptEnd?(info: AttemptEndInfo): Promise<void>;
   onOperationChange?(info: OperationChangeInfo): Promise<void>;
   enrichLogContext?(): Record<string, string | number | boolean> | undefined;
+}
+
+/**
+ * Immutable identity of a prospective chained-invoke operation.
+ * @experimental This interface is experimental and may change.
+ */
+export interface PropagationInput {
+  readonly executionArn: string;
+  readonly operationId: string;
+  readonly parentOperationId?: string;
+  readonly targetFunctionName: string;
+}
+
+/**
+ * SDK-owned propagation values, independent of Lambda wire and OTel types.
+ * @experimental This interface is experimental and may change.
+ */
+export interface PropagationMetadata {
+  readonly xAmznTraceId?: string;
 }
 
 /**
@@ -305,3 +342,41 @@ export interface DurableInstrumentationPluginProvider<
  */
 export type CustomerFnResult = unknown;
 export type CustomerFn = () => CustomerFnResult;
+
+/**
+ * Opt-in registration metadata key. Ordinary plugin properties remain untouched.
+ * Symbol.for keeps the protocol shared across application and Lambda-layer copies.
+ * @experimental
+ */
+export const DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION = Symbol.for(
+  "aws.lambda.durable.instrumentation.plugin-registration",
+);
+
+/**
+ * Static registration metadata, available before a provider factory runs.
+ * Subclasses retain every group declared by their constructor ancestors. An own
+ * declaration adds a constraint rather than replacing inherited constraints.
+ * Diagnostics use the concrete constructor name.
+ * @experimental
+ */
+export type RegisteredDurableInstrumentationPluginType<
+  Plugin extends DurableInstrumentationPlugin = DurableInstrumentationPlugin,
+> = DurableInstrumentationPluginType<Plugin> & {
+  readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: {
+    readonly exclusiveGroup?: string;
+  };
+};
+
+/**
+ * Instance registration metadata retained for compatibility. Prefer static metadata
+ * on RegisteredDurableInstrumentationPluginType so conflicts can be rejected
+ * before environment-selected factories run.
+ * @experimental
+ */
+export interface RegisteredDurableInstrumentationPlugin
+  extends DurableInstrumentationPlugin {
+  readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: {
+    readonly name: string;
+    readonly exclusiveGroup?: string;
+  };
+}

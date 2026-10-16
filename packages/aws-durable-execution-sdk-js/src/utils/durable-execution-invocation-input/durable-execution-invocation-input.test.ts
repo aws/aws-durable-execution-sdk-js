@@ -24,6 +24,23 @@ describe("DurableExecutionInvocationInputWithClient", () => {
   });
 
   describe("constructor", () => {
+    it.each([undefined, [], ["completed-op"]])(
+      "preserves UpdatedOperationIds: %j",
+      (updatedOperationIds) => {
+        const input = {
+          ...basicInvocationInput,
+          ...(updatedOperationIds === undefined
+            ? {}
+            : { UpdatedOperationIds: updatedOperationIds }),
+        };
+        const wrapped = new DurableExecutionInvocationInputWithClient(
+          input,
+          mockDurableExecutionClient,
+        );
+        expect(wrapped.UpdatedOperationIds).toEqual(updatedOperationIds);
+      },
+    );
+
     it("should assign all properties from DurableExecutionInvocationInput parameters", () => {
       const invocationInput: DurableExecutionInvocationInput = {
         DurableExecutionArn:

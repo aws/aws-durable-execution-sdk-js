@@ -347,6 +347,33 @@ describe("resolveExecutionTraceContext", () => {
     expect(execCtx.traceFlags & 1).toBe(1);
   });
 
+  it("keeps synthetic root identities execution-scoped when executions share a propagated Root", () => {
+    const extracted = { traceId: REMOTE_TRACE_ID };
+    const otherArn = `${ARN}:chained-child`;
+    const first = resolveExecutionTraceContext(
+      extracted,
+      REMOTE_TRACE_ID,
+      ARN,
+      () => SamplingDecision.RECORD_AND_SAMPLED,
+    );
+    const second = resolveExecutionTraceContext(
+      extracted,
+      REMOTE_TRACE_ID,
+      otherArn,
+      () => SamplingDecision.RECORD_AND_SAMPLED,
+    );
+
+    expect(first.executionAncestor.traceId).toBe(REMOTE_TRACE_ID);
+    expect(second.executionAncestor.traceId).toBe(REMOTE_TRACE_ID);
+    expect(first.executionAncestor.spanId).toBe(deriveExecutionRootSpanId(ARN));
+    expect(second.executionAncestor.spanId).toBe(
+      deriveExecutionRootSpanId(otherArn),
+    );
+    expect(second.executionAncestor.spanId).not.toBe(
+      first.executionAncestor.spanId,
+    );
+  });
+
   it("synthesizes a root on the ARN-derived trace with no context, supplier decides", () => {
     const canonicalId = canonical(undefined);
     const sampled = resolve(

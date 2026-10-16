@@ -1,0 +1,156 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "15a2f5cb-6d97-3ea0-9cca-2d340e689226",
+    "Name": "95786dd8-e0b7-4cb4-b5fb-db05e1a4f89d",
+    "EventTimestamp": "2026-10-05T18:20:29.876Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{\"text\":\"the quick brown fox jumps over the lazy dog\"}",
+        "Truncated": false
+      },
+      "ExecutionTimeout": 900
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "Microvm",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "count-words",
+    "EventTimestamp": "2026-10-05T18:20:31.617Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "CallbackStarted",
+    "SubType": "MicrovmCallback",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "count-words.callback",
+    "EventTimestamp": "2026-10-05T18:20:31.617Z",
+    "ParentId": "c4ca4238a0b92382",
+    "CallbackStartedDetails": {
+      "CallbackId": "Ab9hZXiyYXJuOmF3czpsYW1iZGE6dXMtZWFzdC0xOjczMDc1ODc0NTA3NzpmdW5jdGlvbjpNaWNyb1ZNUnVuSm9iLTIyeC1Ob2RlSlMtVmVyaWZ5OiRMQVRFU1QvZHVyYWJsZS1leGVjdXRpb24vOTU3ODZkZDgtZTBiNy00Y2I0LWI1ZmItZGIwNWUxYTRmODlkLzE1YTJmNWNiLTZkOTctM2VhMC05Y2NhLTJkMzQwZTY4OTIyNmFpeCRlYTUwNzkyNi1hYjBkLTQwMjYtYjA5Ni0xNTZmZjIxZGQwMDhhcngsJExBVEVTVDoxNWEyZjVjYi02ZDk3LTNlYTAtOWNjYS0yZDM0MGU2ODkyMjb/",
+      "HeartbeatTimeout": 60,
+      "Timeout": 300
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "MicrovmLaunch",
+    "EventId": 4,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "count-words.launch",
+    "EventTimestamp": "2026-10-05T18:20:32.225Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "MicrovmLaunch",
+    "EventId": 5,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "count-words.launch",
+    "EventTimestamp": "2026-10-05T18:20:32.431Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "{\"microvmId\":\"microvm-465688de-7da0-368a-a889-47e16a0a02fd\",\"delivery\":\"run-hook\"}",
+        "Truncated": false
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 6,
+    "EventTimestamp": "2026-10-05T18:20:32.619Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-10-05T18:20:29.931Z",
+      "EndTimestamp": "2026-10-05T18:20:32.614Z",
+      "RequestId": "48e4bac8-9658-4f86-95be-aa6ab08af173"
+    }
+  },
+  {
+    "EventType": "CallbackSucceeded",
+    "SubType": "MicrovmCallback",
+    "EventId": 7,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "count-words.callback",
+    "EventTimestamp": "2026-10-05T18:20:34.199Z",
+    "ParentId": "c4ca4238a0b92382",
+    "CallbackSucceededDetails": {
+      "Result": {
+        "Payload": "{\"wordCount\":9,\"sha256\":\"05c6e08f1d9fdafa03147fcb8f82f124c76d2f70e3d989dc8aadb5e7d7450bec\",\"microvmId\":\"microvm-465688de-7da0-368a-a889-47e16a0a02fd\"}",
+        "Truncated": false
+      }
+    }
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "MicrovmTerminate",
+    "EventId": 8,
+    "Id": "13cee27a2bd93915",
+    "Name": "count-words.terminate",
+    "EventTimestamp": "2026-10-05T18:20:34.318Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "MicrovmTerminate",
+    "EventId": 9,
+    "Id": "13cee27a2bd93915",
+    "Name": "count-words.terminate",
+    "EventTimestamp": "2026-10-05T18:20:34.473Z",
+    "ParentId": "c4ca4238a0b92382",
+    "StepSucceededDetails": {
+      "Result": {
+        "Truncated": false
+      },
+      "RetryDetails": {
+        "CurrentAttempt": 1
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "Microvm",
+    "EventId": 10,
+    "Id": "c4ca4238a0b92382",
+    "Name": "count-words",
+    "EventTimestamp": "2026-10-05T18:20:34.522Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"wordCount\":9,\"sha256\":\"05c6e08f1d9fdafa03147fcb8f82f124c76d2f70e3d989dc8aadb5e7d7450bec\",\"microvmId\":\"microvm-465688de-7da0-368a-a889-47e16a0a02fd\"}",
+        "Truncated": false
+      }
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 11,
+    "EventTimestamp": "2026-10-05T18:20:34.550Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-10-05T18:20:34.235Z",
+      "EndTimestamp": "2026-10-05T18:20:34.544Z",
+      "RequestId": "199422d3-aaa1-4a17-8674-4d27a32ada2d"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 12,
+    "Id": "15a2f5cb-6d97-3ea0-9cca-2d340e689226",
+    "Name": "95786dd8-e0b7-4cb4-b5fb-db05e1a4f89d",
+    "EventTimestamp": "2026-10-05T18:20:34.550Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "{\"wordCount\":9,\"sha256\":\"05c6e08f1d9fdafa03147fcb8f82f124c76d2f70e3d989dc8aadb5e7d7450bec\",\"microvmId\":\"microvm-465688de-7da0-368a-a889-47e16a0a02fd\"}",
+        "Truncated": false
+      }
+    }
+  }
+]

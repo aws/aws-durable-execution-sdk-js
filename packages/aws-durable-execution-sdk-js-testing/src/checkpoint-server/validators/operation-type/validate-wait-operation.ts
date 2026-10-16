@@ -1,4 +1,4 @@
-import { InvalidParameterValueException } from "@aws-sdk/client-lambda";
+import { invalidParameterValue } from "../invalid-parameter-value";
 import {
   Operation,
   OperationAction,
@@ -24,25 +24,25 @@ export function validateWaitOperation(
   switch (update.Action) {
     case OperationAction.START:
       if (operation) {
-        throw new InvalidParameterValueException({
-          message: "Cannot start a WAIT that already exists.",
-          $metadata: {},
-        });
+        throw invalidParameterValue(
+          "Cannot start a WAIT operation that already exists.",
+        );
+      }
+      if (update.WaitOptions == null) {
+        throw invalidParameterValue(
+          "Update for WAIT operation requires WaitOptions.",
+        );
       }
       break;
     case OperationAction.CANCEL:
+      // CANCEL is only allowed for a WAIT that exists and has not completed.
       if (!operation || !allowedStatusToCancel.includes(operation.Status)) {
-        throw new InvalidParameterValueException({
-          message:
-            "Cannot cancel a WAIT that does not exist or has already completed.",
-          $metadata: {},
-        });
+        throw invalidParameterValue(
+          "Cannot cancel a WAIT operation that does not exist or has already completed.",
+        );
       }
       break;
     default:
-      throw new InvalidParameterValueException({
-        message: "Invalid WAIT action.",
-        $metadata: {},
-      });
+      throw invalidParameterValue("Invalid action for WAIT operation.");
   }
 }

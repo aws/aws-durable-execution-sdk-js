@@ -263,6 +263,30 @@ const results = await context.promise.allSettled([operation1(), operation2()]);
 
 **Note**: Promise combinators accept already-executing promises and cannot provide concurrency control or durability. Use `map()` or `parallel()` for durable, controlled execution.
 
+## Operation Subtypes
+
+`runInChildContext`, `step`, and `createCallback` accept a `subType` option. A function that composes several operations can use it to label its parts. The SDK records the subtype in the checkpoint and passes it to plugins. So execution history and plugins can filter the parts without parsing names.
+
+```typescript
+ctx.runInChildContext(
+  name,
+  async (child) => {
+    const receipt = await child.step("charge", async () => charge(orderId), {
+      subType: "OrderCharge",
+    });
+    await child.step("notify", async () => notify(receipt), {
+      subType: "OrderNotify",
+    });
+    return receipt;
+  },
+  { subType: "ChargeAndNotify" },
+);
+```
+
+The service accepts 1 to 32 characters from `[a-zA-Z0-9-_]`. An empty string selects the default subtype, such as `Step` or `Callback`. Replay compares the subtype with the checkpoint. So changing a subtype is a breaking change for executions in flight.
+
+[`@aws/durable-execution-sdk-js-extras`](../aws-durable-execution-sdk-js-extras) ships ready-made operations built this way, such as `microvm`.
+
 ## Configuration
 
 ### Dynamic Instrumentation Plugins
@@ -322,6 +346,22 @@ plugin-layer.zip
 Malformed configuration, missing modules or exports, incompatible provider API
 versions, invalid plugin types, and provider construction failures are reported
 as `PluginLoadError` failures before execution state is read.
+
+### Instrumentation Operation Status and Errors
+
+Use `OperationInfo.status` to identify terminal operation states such as `FAILED`,
+`CANCELLED`, `TIMED_OUT`, and `STOPPED`. `OperationInfo.error` contains optional
+error details; a failed operation can have `error === undefined`, including in
+replay and `onOperationChange` metadata. Missing or empty checkpointed error data
+does not invent an error. Supplied partial details, including explicitly empty
+strings or an empty stack trace, remain available.
+
+This also applies to API-v1 plugins: code that uses only the presence of `error`
+as its failure signal should inspect `status` instead. For an attempt-end hook,
+use `AttemptEndInfo.outcome` to determine whether that attempt failed. An external
+callback failure without error details still rejects the callback promise and
+retains its failed operation status; optional instrumentation details do not
+change the caller's outcome or persisted state.
 
 ### Retry Strategies
 

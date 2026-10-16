@@ -159,12 +159,19 @@ afterEach(async () => {
 
 describe("InvocationOtelPlugin", () => {
   describe("onInvocationStart", () => {
-    it("creates an invocation span with durable.execution.arn attribute", async () => {
-      const info = makeInvocationInfo();
+    it("creates a resumed invocation and its ARN-correlated anchor before terminal completion", async () => {
+      const info = makeInvocationInfo({ isFirstInvocation: false });
       await plugin.onInvocationStart(info);
+      const anchor = findSpan("DurableExecutionRoot");
+      expect(anchor).toBeDefined();
+      expect(anchor!.attributes["durable.execution.arn"]).toBe(TEST_ARN);
+      expect(anchor!.startTime).toEqual(anchor!.endTime);
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
       const spans = getExportedSpans();
+      expect(
+        spans.filter((span) => span.name === "DurableExecutionRoot"),
+      ).toHaveLength(1);
       const invocationSpan = findSpan("Invocation");
       expect(invocationSpan).toBeDefined();
       expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(
@@ -406,10 +413,14 @@ describe("InvocationOtelPlugin", () => {
       await plugin.onInvocationEnd(makeInvocationEndInfo());
 
       const spans = getExportedSpans();
-      // Should have: op-1, op-2, invocation, Workflow (all ended)
-      expect(spans.length).toBe(4);
+      // Should have: op-1, op-2, Invocation, Workflow, and the exported
+      // synthetic root that anchors fallback traces.
+      expect(spans).toHaveLength(5);
       expect(findSpan("Invocation")).toBeDefined();
       expect(findSpan("Workflow")).toBeDefined();
+      const syntheticRoot = findSpan("DurableExecutionRoot");
+      expect(syntheticRoot).toBeDefined();
+      expect(syntheticRoot!.parentSpanContext).toBeUndefined();
     });
 
     it("flushes spans (they appear in exporter)", async () => {
@@ -442,8 +453,17 @@ describe("InvocationOtelPlugin", () => {
       expect(invocationSpan!.attributes["durable.execution.arn"]).toBe(
         "arn:second",
       );
-      // Only invocation span + Workflow span from second invocation, no leftover op-1
-      expect(spans.length).toBe(2);
+      // Only Invocation + Workflow + the fallback synthetic root from the
+      // second invocation; no operation span from the first invocation survives.
+      expect(spans).toHaveLength(3);
+      const syntheticRoot = findSpan("DurableExecutionRoot");
+      expect(syntheticRoot).toBeDefined();
+      expect(syntheticRoot!.parentSpanContext).toBeUndefined();
+      expect(
+        spans.find(
+          (span) => span.attributes["durable.operation.id"] === "op-1",
+        ),
+      ).toBeUndefined();
     });
   });
 
@@ -670,7 +690,7 @@ describe("InvocationOtelPlugin", () => {
   });
 
   describe("operation span timing envelope", () => {
-    it("uses a shared monotonic clock so nested spans stay strictly contained", async () => {
+    it("uses one invocation clock so nested SDK spans stay strictly contained", async () => {
       const wallClockStart = Date.now();
       let wallClockCalls = 0;
       const dateNow = jest
@@ -837,6 +857,56 @@ describe("InvocationOtelPlugin", () => {
   });
 
   describe("Continuation span for cross-invocation operations", () => {
+    it("drains a queued replay completion while its resumed context is still open", async () => {
+      await plugin.onInvocationStart(
+        makeInvocationInfo({ isFirstInvocation: false }),
+      );
+      const parent = makeOperationInfo({
+        id: "resumed-parent",
+        name: "resumed-parent",
+        type: "CONTEXT",
+        isReplay: true,
+      });
+      const completion = Object.freeze(
+        makeOperationInfo({
+          id: "external",
+          name: "external",
+          type: "CALLBACK",
+          parentId: parent.id,
+          status: "SUCCEEDED",
+          isReplay: true,
+        }),
+      );
+      await plugin.onOperationStart(parent);
+      await plugin.onOperationStart(completion);
+      await plugin.onOperationChange({
+        executionArn: TEST_ARN,
+        operations: { [parent.id]: parent, [completion.id]: completion },
+        updatedOperations: { [completion.id]: completion },
+      });
+      await plugin.onOperationEnd({
+        ...parent,
+        status: "SUCCEEDED",
+        isReplay: false,
+      });
+      const atParentEnd = findSpan("external");
+      const parentSpan = findSpan("resumed-parent");
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+      expect(atParentEnd).toBeDefined();
+      expect(parentSpan).toBeDefined();
+      expect(atParentEnd!.parentSpanContext?.spanId).toBe(
+        parentSpan!.spanContext().spanId,
+      );
+      expect(atParentEnd!.links.map((link) => link.context.spanId)).toContain(
+        deriveSpanIdFromOperationId(completion.id, TEST_ARN),
+      );
+      expect(
+        exporter.getFinishedSpans().filter((span) => span.name === "external"),
+      ).toHaveLength(1);
+      expect(completion.isReplay).toBe(true);
+      expect(completion.parentId).toBe(parent.id);
+    });
+
     it("links continuation span to Workflow and the initial operation span when operation was started in prior invocation", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       // onOperationEnd for an operation NOT in the map (started elsewhere)
@@ -1527,12 +1597,7 @@ describe("InvocationOtelPlugin", () => {
       expect(exceptionEvent).toBeDefined();
     });
 
-    // Regression: onOperationEnd can be reached with a terminal FAILURE status
-    // (TIMED_OUT/STOPPED/FAILED/CANCELLED) and NO error object (callback-timeout
-    // and chained-invoke "already failed" cross-invocation fast paths). Those
-    // must NOT be labelled OTel OK — the OK branch is gated on SUCCEEDED, so a
-    // no-error failure leaves the span status at the default UNSET (code 0).
-    it("onOperationEnd terminal path: TIMED_OUT status with NO error leaves the operation span NOT OK (UNSET)", async () => {
+    it("onOperationEnd terminal path: TIMED_OUT status with NO error marks the operation span ERROR without an exception", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       await plugin.onOperationStart(
         makeOperationInfo({ id: "op-timeout", name: "timeout-op" }),
@@ -1550,10 +1615,11 @@ describe("InvocationOtelPlugin", () => {
       const opSpan = findSpan("timeout-op");
       expect(opSpan).toBeDefined();
       expect(opSpan!.status.code).not.toBe(SpanStatusCode.OK);
-      expect(opSpan!.status.code).toBe(SpanStatusCode.UNSET);
+      expect(opSpan!.status.code).toBe(SpanStatusCode.ERROR);
+      expect(opSpan!.events).toHaveLength(0);
     });
 
-    it("onOperationEnd continuation path: STOPPED status with NO error leaves the continuation span NOT OK (UNSET)", async () => {
+    it("onOperationEnd continuation path: STOPPED status with NO error marks the continuation span ERROR without an exception", async () => {
       await plugin.onInvocationStart(makeInvocationInfo());
       // No prior onOperationStart -> spanMap miss -> cross-invocation
       // continuation span path.
@@ -1570,7 +1636,8 @@ describe("InvocationOtelPlugin", () => {
       const continuationSpan = findSpan("cross-stopped");
       expect(continuationSpan).toBeDefined();
       expect(continuationSpan!.status.code).not.toBe(SpanStatusCode.OK);
-      expect(continuationSpan!.status.code).toBe(SpanStatusCode.UNSET);
+      expect(continuationSpan!.status.code).toBe(SpanStatusCode.ERROR);
+      expect(continuationSpan!.events).toHaveLength(0);
     });
 
     it("onOperationEnd terminal path: SUCCEEDED status with NO error stamps OK", async () => {
@@ -2515,119 +2582,133 @@ describe("InvocationOtelPlugin", () => {
       expect(attemptSpan!.events).toHaveLength(0);
     });
 
-    it("waitForCondition links the first polling attempt, not the resumed operation", async () => {
-      await plugin.onInvocationStart(makeInvocationInfo());
-      await plugin.onOperationStart(
-        makeOperationInfo({
-          id: "cond-1",
-          type: "STEP",
-          subType: "WaitForCondition",
-          name: "otel-condition",
-        }),
-      );
-      await plugin.onOperationAttemptStart(
-        makeAttemptInfo({
-          id: "cond-1",
-          type: "STEP",
-          subType: "WaitForCondition",
-          name: "otel-condition",
-          attempt: 1,
-        }),
-      );
-      await plugin.onOperationAttemptEnd(
-        makeAttemptEndInfo({
-          id: "cond-1",
-          type: "STEP",
-          subType: "WaitForCondition",
-          name: "otel-condition",
-          attempt: 1,
-          outcome: "SUCCEEDED" as any,
-        }),
-      );
-      await plugin.onInvocationEnd(
-        makeInvocationEndInfo({ status: "PENDING" as any }),
-      );
+    it.each(["configured", "global"] as const)(
+      "waitForCondition links the resumed operation to its initial segment (%s provider)",
+      async (providerMode) => {
+        if (providerMode === "global") plugin = new InvocationOtelPlugin();
+        await plugin.onInvocationStart(makeInvocationInfo());
+        await plugin.onOperationStart(
+          makeOperationInfo({
+            id: "cond-1",
+            type: "STEP",
+            subType: "WaitForCondition",
+            name: "otel-condition",
+          }),
+        );
+        await plugin.onOperationAttemptStart(
+          makeAttemptInfo({
+            id: "cond-1",
+            type: "STEP",
+            subType: "WaitForCondition",
+            name: "otel-condition",
+            attempt: 1,
+          }),
+        );
+        await plugin.onOperationAttemptEnd(
+          makeAttemptEndInfo({
+            id: "cond-1",
+            type: "STEP",
+            subType: "WaitForCondition",
+            name: "otel-condition",
+            attempt: 1,
+            outcome: "SUCCEEDED" as any,
+          }),
+        );
+        await plugin.onInvocationEnd(
+          makeInvocationEndInfo({ status: "PENDING" as any }),
+        );
 
-      await plugin.onInvocationStart(
-        makeInvocationInfo({ isFirstInvocation: false }),
-      );
-      await plugin.onOperationStart(
-        makeOperationInfo({
-          id: "cond-1",
-          type: "STEP",
-          subType: "WaitForCondition",
-          name: "otel-condition",
-          isReplay: true,
-        }),
-      );
-      await plugin.onOperationAttemptStart(
-        makeAttemptInfo({
-          id: "cond-1",
-          type: "STEP",
-          subType: "WaitForCondition",
-          name: "otel-condition",
-          attempt: 2,
-        }),
-      );
-      await plugin.onOperationAttemptEnd(
-        makeAttemptEndInfo({
-          id: "cond-1",
-          type: "STEP",
-          subType: "WaitForCondition",
-          name: "otel-condition",
-          attempt: 2,
-          outcome: "SUCCEEDED" as any,
-        }),
-      );
-      await plugin.onOperationEnd(
-        makeOperationEndInfo({
-          id: "cond-1",
-          type: "STEP",
-          subType: "WaitForCondition",
-          name: "otel-condition",
-          isReplay: false,
-          status: "SUCCEEDED" as any,
-          attempt: 2,
-        }),
-      );
-      await plugin.onInvocationEnd(makeInvocationEndInfo());
+        await plugin.onInvocationStart(
+          makeInvocationInfo({ isFirstInvocation: false }),
+        );
+        await plugin.onOperationStart(
+          makeOperationInfo({
+            id: "cond-1",
+            type: "STEP",
+            subType: "WaitForCondition",
+            name: "otel-condition",
+            isReplay: true,
+          }),
+        );
+        await plugin.onOperationAttemptStart(
+          makeAttemptInfo({
+            id: "cond-1",
+            type: "STEP",
+            subType: "WaitForCondition",
+            name: "otel-condition",
+            attempt: 2,
+          }),
+        );
+        await plugin.onOperationAttemptEnd(
+          makeAttemptEndInfo({
+            id: "cond-1",
+            type: "STEP",
+            subType: "WaitForCondition",
+            name: "otel-condition",
+            attempt: 2,
+            outcome: "SUCCEEDED" as any,
+          }),
+        );
+        await plugin.onOperationEnd(
+          makeOperationEndInfo({
+            id: "cond-1",
+            type: "STEP",
+            subType: "WaitForCondition",
+            name: "otel-condition",
+            isReplay: false,
+            status: "SUCCEEDED" as any,
+            attempt: 2,
+          }),
+        );
+        await plugin.onInvocationEnd(makeInvocationEndInfo());
 
-      const workflowSpan = findSpan("Workflow");
-      const firstOperationSpan = getExportedSpans().find(
-        (s) =>
-          s.name === "otel-condition" &&
-          s.attributes["durable.operation.status"] === "STARTED",
-      );
-      const firstAttemptSpan = findSpan("otel-condition attempt 1");
-      const resumedOperationSpan = getExportedSpans().find(
-        (s) =>
-          s.name === "otel-condition" &&
-          s.attributes["durable.operation.status"] === "SUCCEEDED",
-      );
-      const secondAttemptSpan = findSpan("otel-condition attempt 2");
+        const workflowSpan = findSpan("Workflow");
+        const firstOperationSpan = getExportedSpans().find(
+          (s) =>
+            s.name === "otel-condition" &&
+            s.attributes["durable.operation.status"] === "STARTED",
+        );
+        const firstAttemptSpan = findSpan("otel-condition attempt 1");
+        const resumedOperationSpan = getExportedSpans().find(
+          (s) =>
+            s.name === "otel-condition" &&
+            s.attributes["durable.operation.status"] === "SUCCEEDED",
+        );
+        const secondAttemptSpan = findSpan("otel-condition attempt 2");
 
-      expect(workflowSpan).toBeDefined();
-      expect(firstOperationSpan).toBeDefined();
-      expect(firstAttemptSpan).toBeDefined();
-      expect(resumedOperationSpan).toBeDefined();
-      expect(secondAttemptSpan).toBeDefined();
+        expect(workflowSpan).toBeDefined();
+        expect(firstOperationSpan).toBeDefined();
+        expect(firstAttemptSpan).toBeDefined();
+        expect(resumedOperationSpan).toBeDefined();
+        expect(secondAttemptSpan).toBeDefined();
 
-      expect(firstAttemptSpan!.links).toHaveLength(2);
-      expect(firstAttemptSpan!.links[0].context.spanId).toBe(
-        firstOperationSpan!.spanContext().spanId,
-      );
-      expect(firstAttemptSpan!.links[1].context.spanId).toBe(
-        workflowSpan!.spanContext().spanId,
-      );
+        expect(firstAttemptSpan!.links).toHaveLength(1);
+        expect(firstAttemptSpan!.links[0].context.spanId).toBe(
+          workflowSpan!.spanContext().spanId,
+        );
+        expect(firstAttemptSpan!.parentSpanContext?.spanId).toBe(
+          firstOperationSpan!.spanContext().spanId,
+        );
 
-      expect(resumedOperationSpan!.links).toHaveLength(1);
-      expect(resumedOperationSpan!.links[0].context.spanId).toBe(
-        workflowSpan!.spanContext().spanId,
-      );
-      expect(secondAttemptSpan!.links).toHaveLength(1);
-      expect(secondAttemptSpan!.links[0].context.spanId).toBe(
-        workflowSpan!.spanContext().spanId,
-      );
-    });
+        expect(resumedOperationSpan!.spanContext().spanId).not.toBe(
+          firstOperationSpan!.spanContext().spanId,
+        );
+        expect(resumedOperationSpan!.links).toHaveLength(2);
+        expect(resumedOperationSpan!.links[0].context).toMatchObject({
+          traceId: firstOperationSpan!.spanContext().traceId,
+          spanId: firstOperationSpan!.spanContext().spanId,
+        });
+        expect(resumedOperationSpan!.links[1].context.spanId).toBe(
+          workflowSpan!.spanContext().spanId,
+        );
+        expect(secondAttemptSpan!.parentSpanContext?.spanId).toBe(
+          resumedOperationSpan!.spanContext().spanId,
+        );
+        expect(secondAttemptSpan!.links).toHaveLength(1);
+        expect(secondAttemptSpan!.links[0].context.spanId).toBe(
+          workflowSpan!.spanContext().spanId,
+        );
+      },
+    );
   });
 });

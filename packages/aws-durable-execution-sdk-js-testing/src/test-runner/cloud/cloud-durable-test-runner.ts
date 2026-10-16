@@ -24,6 +24,15 @@ import {
 import { CloudOperation } from "./operations/cloud-operation";
 
 /**
+ * Pausing and resuming works by having the checkpoint server withhold checkpoint tokens,
+ * and a cloud execution's checkpoints go to the service, which offers no call to ask it to.
+ */
+const notImplemented = (method: string): Error =>
+  new Error(
+    `${method}() is not implemented for CloudDurableTestRunner. It is supported by LocalDurableTestRunner only.`,
+  );
+
+/**
  * Options for the cloud durable test runner.
  * @public
  */
@@ -336,6 +345,24 @@ export class CloudDurableTestRunner<TResult = any>
       },
     });
     return operation;
+  }
+
+  /**
+   * Not implemented for cloud executions: always rejects.
+   *
+   * @experimental This method is experimental and may be changed or removed in future releases.
+   */
+  pauseExecution(): Promise<void> {
+    return Promise.reject(notImplemented("pauseExecution"));
+  }
+
+  /**
+   * Not implemented for cloud executions: always rejects.
+   *
+   * @experimental This method is experimental and may be changed or removed in future releases.
+   */
+  resumeExecution(): Promise<void> {
+    return Promise.reject(notImplemented("resumeExecution"));
   }
 
   /**

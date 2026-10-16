@@ -7,6 +7,238 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Checkpoint-derived `OperationInfo.error` can be absent when a failed callback
+  or invoke has missing wire error data or no defined diagnostic values.
+  Instrumentation should use
+  `status` to identify failure and `error` for available exception details.
+  Caller-facing callback and invoke failures are unchanged.
+
+- The testing SDK's local checkpoint server now validates checkpoints as the service does. Before,
+  it accepted some updates that the service rejects, and it rejected others with different
+  messages. So a test could pass locally for a handler that fails in AWS. The changes:
+  - The model checks now cover `Id`, `ParentId`, `Name`, `Type`, and `Action`, as well as
+    `SubType`. `Id` and `ParentId` must have 1 to 64 characters from `[a-zA-Z0-9-_]`. `Name` must
+    have 1 to 256 printable ASCII characters. `Id`, `Type`, and `Action` are required. An invalid
+    member rejects the whole request with HTTP 400 `ValidationException`, with the service's
+    message. The message lists at most 10 errors, as the service's does.
+  - The model checks also cover the options. `ChainedInvokeOptions.FunctionName` is required, and
+    must be a Lambda function name, a qualified name, or a function ARN of at most 256 characters.
+    `WaitOptions.WaitSeconds` and `StepOptions.NextAttemptDelaySeconds` must be from 1 to
+    31622400. The `CallbackOptions` timeouts must be from 0 to 99999999.
+  - A member of the wrong JSON type rejects the request with HTTP 400 `SerializationException`,
+    with the service's message. The check covers every member of `OperationUpdate`, including
+    `Payload`, the `Error` members, and `ContextOptions.ReplayChildren`. For example, a step that
+    throws `{ name: "X", message: 1 }` now fails the checkpoint, as it does in AWS. The service
+    reads an integer member without its fractional part. So `WaitSeconds: 1.5` is accepted as 1,
+    and `WaitSeconds: 0.5` is rejected as 0. The local server also stores and schedules that
+    integer, as the service applies it. So `context.wait({ seconds: 1.5 })` waits and records 1
+    second.
+  - A callback timeout or heartbeat timeout of 0 means no timeout, as it does in the service. The
+    local server timed the callback out at once.
+  - An update for an existing operation must not change its `Type`, `SubType`, `Name`, or
+    `ParentId`. A different value usually means that the handler is not deterministic.
+  - The error object limit is 262144 bytes, the service's limit. It was 32768 bytes.
+  - Payloads now have the service's limits: 262144 bytes for STEP and CONTEXT output, 1048576
+    bytes for CHAINED_INVOKE input, and 6291456 bytes for EXECUTION output. So a handler result
+    over 6291456 bytes now fails the checkpoint, as it does in AWS.
+  - A CALLBACK and a CHAINED_INVOKE accept only `START`. The local server accepted `CANCEL`.
+  - A WAIT `START` requires `WaitOptions`. A CHAINED_INVOKE `START` requires
+    `ChainedInvokeOptions`.
+  - The error messages are the service's. For example, "Cannot start a WAIT that already exists."
+    is now "Cannot start a WAIT operation that already exists.". A test that matches the old
+    message text must update it.
+  - A validation failure now carries HTTP status 400, as the service's `InvalidParameterValueException`
+    does. The SDK classifies a 4xx checkpoint failure as unrecoverable for the execution. So the
+    local execution now ends `FAILED` with `CheckpointUnrecoverableExecutionError`, as it does in
+    AWS. Before, the error carried no status, so it failed only the invocation, and `run()` rejected.
+
+- A checkpoint response carrying no `CheckpointToken` now ends the invocation cleanly with
+  `{Status: "PENDING"}`. Every response carries the token for the next call, so one without a token
+  withdraws the invocation's ability to record anything further — for instance because a newer
+  invocation has taken the execution over. The checkpoint manager previously ignored the omission,
+  kept the token it had just spent and presented it again on the next call, which the service
+  rejects with `InvalidParameterValueException: Invalid checkpoint token`. That is classified as an
+  invocation error, so a condition the SDK could recognise ended the invocation with a Lambda error
+  one call later.
+
+  Whatever the SDK had not yet sent is abandoned rather than checkpointed, and replays on the next
+  invocation. This is the defined behaviour for `AT_LEAST_ONCE` operations; an `AT_MOST_ONCE` step
+  whose START reached the last accepted checkpoint will not run again, which is what `AT_MOST_ONCE`
+  means. The `NewExecutionState` on the token-less response is deliberately not applied, and the
+  callers of the accepted checkpoint are not resolved: either would let the handler run on past the
+  point where the service can be told anything — starting its next step, or reaching a result that
+  is never recorded. The one exception is a checkpoint carrying the execution's own terminal update
+  (the oversized-result path), which finishes the execution and so still reports `SUCCEEDED`.
+
+  The same applies when the handler has already returned or thrown while a checkpoint it did not
+  await is still in flight, for example from the unfinished branches of a `map` or `parallel` with
+  early completion. If that checkpoint is answered without a token, the invocation answers
+  `PENDING` rather than `SUCCEEDED` or `FAILED`, because the service will not record that outcome.
+  A `PENDING` that follows a handler error carries that error to plugins, which report no outcome
+  to the service in any case.
+
+  The condition is logged at `WARN` rather than passing silently, since an absent token is
+  indistinguishable from a client that dropped the field.
+
+  New internal termination reason `EXECUTION_SUSPENDED_BY_SERVICE`, classified as a suspend. The
+  SDK's set of invocation responses is unchanged.
+
+### Fixed
+
+- **OpenTelemetry**: `FAILED`, `TIMED_OUT`, and `STOPPED` operations remain `ERROR` in both views,
+  including later-invocation continuations, even without error details.
+  Exception events still require an actual error object.
+- **OpenTelemetry**: flush the default global provider's public SDK delegate.
+  Both provider paths share a configurable `flushTimeoutMillis` wait budget
+  across invocation-end flush rounds (default 1000 ms). Expiry preserves one
+  bounded snapshot of already-received completion metadata; it does not cancel
+  export requests or shut down application-owned providers.
+- **OpenTelemetry**: retain external notifications received during a flush,
+  preserve an already-exported context's identity for delayed child completion,
+  and use the known backend end as a zero-duration start fallback when no start
+  was recorded. Existing supplied timestamps and caller outcomes are preserved.
+
+- The testing SDK's local runner no longer waits for the fake clock's 20 ms advancement interval
+  before it starts each queued invocation when `skipTime` is enabled. QueueScheduler now yields
+  with the real `setImmediate`, so the fake clock controls durable time without delaying scheduler
+  progress.
+
+- The testing SDK's local runner no longer waits a fixed 100 ms after an execution finishes.
+  It now drains the final checkpoint updates from the local checkpoint server before `run()`
+  settles. A failed drain request after a successful execution rejects `run()` instead of
+  returning a result that may omit its final updates. A test expecting `run()` to reject must
+  attach its rejection handler before it awaits other work. The old wait accidentally allowed
+  that handler to be attached up to 100 ms late; a later handler was never supported.
+
+- The testing SDK's local runner sent every operation of the execution in the input of each
+  invocation. The service omits every descendant of a completed CONTEXT whose `ReplayChildren` is
+  not `true`, because the SDK replays such a context from its result. So a test exercised a replay
+  path with operations that the SDK never receives in AWS. The local runner and
+  `GetDurableExecutionState` now omit the same operations as the service:
+  - The rule walks every ancestor. A STARTED context under such a completed context is omitted
+    with its children. This happens to a branch that is still running when a `map` or `parallel`
+    completes early. The earlier `GetDurableExecutionState` check looked only at the parent.
+  - A completed context records `ReplayChildren` from its closing update only, as the service does.
+    A close without `ContextOptions` sets it to `false`. `START` no longer records it. So the
+    `ContextDetails` of a completed context in `getOperationData()` now includes
+    `ReplayChildren: false`, as the service's operation does.
+  - The test runner's own results, the checkpoint responses, and `UpdatedOperationIds` still
+    include every operation, as they do in the service.
+
+- **eslint-plugin**: the README showed `extends: ["plugin:@aws/durable-execution-sdk-js-eslint-plugin/recommended"]`
+  and `plugins: ["@aws/durable-execution-sdk-js-eslint-plugin"]`. Neither setup could load the
+  plugin. ESLint adds the `eslint-plugin-` prefix to the name of an eslintrc plugin, so it looked for
+  `@aws/eslint-plugin-durable-execution-sdk-js-eslint-plugin`, which does not exist. The README now
+  shows flat config, which works on ESLint 8.57, 9 and 10. `configs.recommended` is
+  deprecated for the same reason. It keeps its shape, so code that reads its `rules` still works.
+- **eslint-plugin**: the `eslint` peer range is now `^8.57.0 || ^9.0.0 || ^10.0.0`, from `>=8.0.0`.
+  This is the range `@typescript-eslint/parser` 8 requires, and the setup the README documents
+  needs that parser. The eslintrc setup never worked on any version.
+
+- The MicroVM worker in `@aws/durable-execution-sdk-js-microvm-worker` treated
+  `InvalidParameterValueException` as the answer for a callback that is already complete. The
+  service answers `CallbackTimeoutException` ("The callback is either timed out or already
+  completed") for a callback that is already complete, timed out, or whose execution stopped.
+  `InvalidParameterValueException` means a malformed or unknown callback ID. So two checks missed
+  the real answer:
+  - A completion whose earlier attempt reached the service, although its answer was lost, failed
+    on the retry instead of counting as delivered. The worker then logged that the outcome could
+    not be reported. It now logs a warning that names both cases the code covers: an earlier
+    attempt delivered the outcome, or the callback timed out first. A callback that really timed
+    out is now a warning where it was an error. The durable function sees the timeout either way.
+  - A heartbeat that met the completion while it was in flight logged "the callback no longer
+    accepts heartbeats". It is no longer logged.
+
+- A MicroVM worker job could reach its heartbeat timeout after two failed heartbeats in a row.
+  Each heartbeat call could take half the interval. The service times the heartbeat timeout from
+  when it receives a call, which can be at the call's start. So the worst gap was 3.5 intervals,
+  above the 3-interval timeout. Each call now ends after a third of the interval, and the worst
+  gap is about 2.83 intervals. The Python worker measured a 32.39-second gap against a 30-second
+  heartbeat timeout before the same change.
+
+- An `InvalidRunHookPayloadError` for a `runHookPayload` that is not JSON now keeps the parser's
+  `SyntaxError` as its `cause`. Its message names the position of the error.
+
+- An oversized result could keep the invocation running until the Lambda timeout. The SDK
+  checkpoints a result over the response size limit after the handler returns, and waited for
+  that checkpoint alone. When an earlier checkpoint in the queue failed, or was answered without a
+  token, the checkpoint manager cleared the queue without sending the result, so the wait never
+  ended. The manager now reports whether it sent that update. An update it never sent answers from
+  the termination: a failed checkpoint throws its classified error, and a withdrawn token answers
+  `PENDING`. An update the service accepted still reports `SUCCEEDED`, even when a termination
+  arrived while it was in flight, because the execution is then recorded as finished.
+
+- An invocation could report an outcome the service had already refused to record. Every exit that
+  reports `SUCCEEDED` or `FAILED` now consults the termination and the token state first, so these
+  cases agree rather than depending on which exit was taken:
+  - A checkpoint that failed after the handler returned answered `SUCCEEDED` for a small result and
+    threw for an oversized one. Both now throw the classified error.
+  - A serdes failure during the oversized-result path threw a plain `Error` instead of
+    `SerdesFailedError`, so the execution failed for good rather than the invocation being retried.
+  - A fault termination followed by a withdrawn token answered `FAILED`. It now answers `PENDING`.
+  - An unrecoverable invocation error was rethrown after the token was withdrawn, so Lambda retried
+    with a token the service had already rejected. It now answers `PENDING`.
+
+### Added
+
+- `LocalDurableTestRunner` gains `pauseExecution()` and `resumeExecution()`, **experimental**, to
+  test a handler
+  against the suspend path above. Pausing answers the running invocation's next checkpoint
+  without a `CheckpointToken` — that checkpoint is kept, and the invocation returns `PENDING` —
+  and starts no further invocation until resumed. Waits keep elapsing and callbacks can still be
+  sent while paused; the invocations they would start are held back, and `resumeExecution()`
+  starts one if anything is left to continue. `pauseExecution()` resolves once no invocation is
+  running, so assertions after it see a quiet execution. Both act on the execution `run()` has
+  in progress, so call `run()` first without awaiting it, and resume before awaiting it.
+
+  Both are also on the `DurableTestRunner` interface, so a test written against it compiles for
+  either runner; `CloudDurableTestRunner` rejects both as not implemented for now.
+
+- `StepConfig.subType` and `CreateCallbackConfig.subType` label a step or a callback with a custom
+  subtype, as `ChildConfig.subType` already does for child contexts. The subtype is recorded on
+  the operation's checkpoint and passed to plugin events. It replaces the default `Step` or
+  `Callback` subtype. So history tools can tell the parts of a composed operation apart without
+  parsing names. Replay compares the subtype, and a replayed operation whose subtype changed
+  terminates as non-deterministic. A step with a custom subtype that waits for a retry still
+  suspends the invocation with `RETRY_SCHEDULED`.
+
+- The testing SDK's local checkpoint server validates `SubType` as the service does. A subtype
+  must have 1 to 32 characters from `[a-zA-Z0-9-_]`. An invalid subtype rejects the whole
+  checkpoint request with HTTP 400 `ValidationException`, with the service's message. So a test
+  with an invalid subtype fails the same way as an execution in AWS. Errors from the local
+  checkpoint server now keep their `name` and `$metadata` across the worker thread, so the SDK
+  classifies them as it classifies the service's errors.
+
+- New packages, **experimental**: `@aws/durable-execution-sdk-js-extras` and
+  `@aws/durable-execution-sdk-js-microvm-worker`, at `0.1.0-alpha.0`. The extras package adds
+  `microvm(context, ...)`, which runs one job in a new Lambda MicroVM, and
+  `microvmSession(context, ...)`, which sends several jobs to one MicroVM. Both are built from
+  `step`, `createCallback`, and `runInChildContext`, and label their parts with `subType`. The
+  worker package runs in the MicroVM image. It answers the lifecycle hooks, runs each job, sends
+  heartbeats, reports the outcome to the job's callback, and can suspend the MicroVM when idle, if
+  the session opts in with `autoSuspendOnIdle: true`.
+  The extras package requires core SDK 2.6.0 or later.
+
+- The MicroVM worker acts on the `suspend` and `terminate` lifecycle hooks, when the image enables
+  them. On `terminate` it fails the callback of each running job with `MicrovmTerminatedError`,
+  so the `microvm` operation fails at once with a `MicrovmJobFailedError` instead of at the
+  job's heartbeat timeout or its timeout. It answers the hook after the reports end, or after 5
+  seconds. On `suspend` it refuses new jobs with HTTP 503 until the `resume` hook, or for 30
+  seconds. The worker acts on `suspend`, `terminate`, and `resume` only for requests with a local
+  `Host` and no `x-amzn-requestid` header, as Lambda's own hook calls carry. It ignores a request
+  that the MicroVM endpoint forwarded to one of these hook paths.
+
+- **eslint-plugin**: `configs["flat/recommended"]`, a flat config that registers the plugin as
+  `@aws/durable-functions` and turns on all three rules as errors. The plugin now exports
+  `meta.name` and `meta.version`. ESLint writes them into the config it hashes for `--cache`, so a
+  cached lint result no longer survives an upgrade of the plugin. The README now documents the
+  flat config setup and the third rule, `no-non-deterministic-outside-step`. The package tests
+  also run against the latest ESLint 8 and 9 in CI. The plugin's types are
+  assignable to ESLint's `Linter.Config` and `ESLint.Plugin`, and to `defineConfig()`, so a
+  type-checked `eslint.config.ts` accepts them.
+
 ## [2.3.1]
 
 ### Fixed

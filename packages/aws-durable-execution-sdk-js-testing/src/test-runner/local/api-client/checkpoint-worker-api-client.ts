@@ -41,6 +41,17 @@ export class CheckpointWorkerApiClient implements CheckpointApiClient {
   }
 
   /**
+   * Take the checkpoint data no poll has picked up yet, without waiting for more
+   */
+  async drainCheckpointData(executionId: ExecutionId): Promise<{
+    operations: CheckpointOperation[];
+  }> {
+    return this.workerManager.sendApiRequest(ApiType.DrainCheckpointData, {
+      executionId,
+    });
+  }
+
+  /**
    * Update checkpoint data for a specific operation with the intended status.
    *
    * @param params Object containing update parameters
@@ -82,6 +93,18 @@ export class CheckpointWorkerApiClient implements CheckpointApiClient {
       executionId,
       invocationId,
       error,
+    });
+  }
+
+  async pauseExecution(executionId: ExecutionId): Promise<void> {
+    await this.workerManager.sendApiRequest(ApiType.PauseDurableExecution, {
+      executionId,
+    });
+  }
+
+  async resumeExecution(executionId: ExecutionId): Promise<void> {
+    await this.workerManager.sendApiRequest(ApiType.ResumeDurableExecution, {
+      executionId,
     });
   }
 }

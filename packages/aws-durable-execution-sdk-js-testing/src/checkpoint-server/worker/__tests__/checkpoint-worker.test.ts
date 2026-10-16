@@ -1,4 +1,5 @@
 import { MessagePort } from "worker_threads";
+import { serializeWorkerApiError } from "../../worker-api/worker-api-error";
 import { CheckpointWorker } from "../checkpoint-worker";
 import { WorkerServerApiHandler } from "../../worker-api/worker-server-api-handler";
 import {
@@ -211,7 +212,8 @@ describe("CheckpointWorker", () => {
         data: {
           type: ApiType.CheckpointDurableExecutionState,
           requestId: "async-error-789",
-          error: rejectionError,
+          // Errors cross the port as plain objects, so name and $metadata survive.
+          error: serializeWorkerApiError(rejectionError),
         },
       });
     });
@@ -242,7 +244,8 @@ describe("CheckpointWorker", () => {
         data: {
           requestId: "error-request-999",
           type: ApiType.UpdateCheckpointData,
-          error: thrownError,
+          // Errors cross the port as plain objects, so name and $metadata survive.
+          error: serializeWorkerApiError(thrownError),
         },
       });
     });

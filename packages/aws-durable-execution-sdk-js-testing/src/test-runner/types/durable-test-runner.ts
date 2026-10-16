@@ -66,6 +66,29 @@ export interface DurableTestRunner<
    * @returns An operation instance for the operation with the specified ID
    */
   getOperationById(id: string): TDurableOperation;
+
+  /**
+   * Pauses the execution that {@link DurableTestRunner.run} has in progress, resolving once
+   * no invocation of it is running. The running invocation is answered without a checkpoint
+   * token on its next checkpoint, so the SDK suspends it with PENDING, and no invocation
+   * starts again until {@link DurableTestRunner.resumeExecution}.
+   *
+   * Supported by `LocalDurableTestRunner` only; `CloudDurableTestRunner` rejects with a
+   * not-implemented error.
+   *
+   * @experimental This method is experimental and may be changed or removed in future releases.
+   */
+  pauseExecution(): Promise<void>;
+
+  /**
+   * Resumes an execution paused with {@link DurableTestRunner.pauseExecution}.
+   *
+   * Supported by `LocalDurableTestRunner` only; `CloudDurableTestRunner` rejects with a
+   * not-implemented error.
+   *
+   * @experimental This method is experimental and may be changed or removed in future releases.
+   */
+  resumeExecution(): Promise<void>;
 }
 
 /**

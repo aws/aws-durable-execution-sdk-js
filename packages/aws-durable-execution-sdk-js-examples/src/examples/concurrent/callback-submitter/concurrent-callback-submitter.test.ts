@@ -30,9 +30,18 @@ createTests({
       await callback1Op.sendCallbackSuccess(callback1Result);
 
       const execution = await executionPromise;
+      expect(execution.getStatus()).toBe("SUCCEEDED");
+      expect(execution.getResult()).toEqual({
+        results: [JSON.parse(callback1Result), JSON.parse(callback2Result)],
+        allCompleted: true,
+      });
 
       assertEventSignatures(execution, "concurrent-callback-submitter", {
-        invocationCompletedDifference: 1,
+        // The fixture completes in one invocation. When callbacks arrive after
+        // suspension, each independent delivery can resume the execution once:
+        // initial invocation + two callback resumes is also a valid history.
+        // All operation event counts remain exact.
+        invocationCompletedDifference: 2,
       });
     });
   },

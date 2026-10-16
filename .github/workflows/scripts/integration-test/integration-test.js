@@ -1,7 +1,7 @@
 // @ts-check
 
 import { execSync } from "child_process";
-import { appendFileSync, mkdirSync, writeFileSync } from "fs";
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { ArgumentParser } from "argparse";
@@ -465,6 +465,15 @@ class IntegrationTestRunner {
       );
     }
 
+    const examples = await this.getIntegrationExamples();
+    if (examples.some((example) => example.usesMicrovm)) {
+      const { imageArn, executionRoleArn } = this.ensureMicrovmImage(samDir);
+      templateArgs.push(
+        `--microvm-image-arn ${shellQuote(imageArn)}`,
+        `--microvm-execution-role-arn ${shellQuote(executionRoleArn)}`,
+      );
+    }
+
     this.execCommand(templateArgs.join(" "), { cwd: examplesDir });
 
     if (!this.samStackExists()) {
@@ -489,6 +498,26 @@ class IntegrationTestRunner {
     log.info(`Deploying SAM stack: ${stackName}`);
     await this.execCommandWithRetry(deployCommand, { cwd: examplesDir });
     log.success(`Deployed SAM stack: ${stackName}`);
+  }
+
+  /**
+   * Builds the MicroVM image that the MicroVM examples run, or reuses it.
+   * The image name carries a hash of its contents, so an unchanged worker and
+   * app skip the build.
+   * @param {string} samDir
+   * @returns {{ imageArn: string, executionRoleArn: string }}
+   */
+  ensureMicrovmImage(samDir) {
+    const outputPath = join(samDir, "microvm-image.json");
+    log.info("Ensuring the MicroVM image for the MicroVM examples...");
+    this.execCommand(
+      `npm run ensure-microvm-image -- --output ${shellQuote(outputPath)}`,
+      {
+        cwd: CONFIG.EXAMPLES_PACKAGE_PATH,
+        env: { AWS_REGION: CONFIG.AWS_REGION },
+      },
+    );
+    return JSON.parse(readFileSync(outputPath, "utf8"));
   }
 
   // Run Jest integration tests

@@ -881,4 +881,21 @@ describe("CloudDurableTestRunner", () => {
       );
     });
   });
+
+  describe("pauseExecution and resumeExecution", () => {
+    it("reject as not implemented", async () => {
+      const runner = new CloudDurableTestRunner({
+        functionName: mockFunctionArn,
+      });
+
+      await expect(runner.pauseExecution()).rejects.toThrow(
+        "pauseExecution() is not implemented for CloudDurableTestRunner",
+      );
+      await expect(runner.resumeExecution()).rejects.toThrow(
+        "resumeExecution() is not implemented for CloudDurableTestRunner",
+      );
+      // Nothing was sent: the rejection is not a failed service call.
+      expect(mockSend).not.toHaveBeenCalled();
+    });
+  });
 });

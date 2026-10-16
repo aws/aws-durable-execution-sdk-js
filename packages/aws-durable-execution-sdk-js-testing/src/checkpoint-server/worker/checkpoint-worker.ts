@@ -12,6 +12,7 @@ import {
 import { WorkerServerApiHandler } from "../worker-api/worker-server-api-handler";
 import { WorkerApiResponseMapping } from "../worker-api/worker-api-response";
 import { ApiType } from "../worker-api/worker-api-types";
+import { serializeWorkerApiError } from "../worker-api/worker-api-error";
 import { CheckpointWorkerManagerParams } from "../../test-runner/local/worker/checkpoint-worker-manager";
 
 const workerParams = workerData as CheckpointWorkerManagerParams;
@@ -60,7 +61,7 @@ export class CheckpointWorker {
         data: {
           requestId: command.data.requestId,
           type: command.data.type,
-          error,
+          error: serializeWorkerApiError(error),
         },
       });
       return;
@@ -84,7 +85,7 @@ export class CheckpointWorker {
             data: {
               type: command.data.type,
               requestId: command.data.requestId,
-              error,
+              error: serializeWorkerApiError(error),
             },
           });
         });

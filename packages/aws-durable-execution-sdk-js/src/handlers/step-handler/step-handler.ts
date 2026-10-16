@@ -81,6 +81,10 @@ export const createStepHandler = <Logger extends DurableLogger>(
 
     const stepId = createStepId();
     const semantics = options?.semantics || StepSemantics.AtLeastOncePerRetry;
+    // A custom subtype labels steps of a custom operation. It is typed as
+    // OperationSubType, like ChildConfig.subType in the child context handler.
+    const subType =
+      (options?.subType as OperationSubType) || OperationSubType.STEP;
     const serdes =
       options?.serdes ||
       (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes);
@@ -91,7 +95,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
 
       validateReplayConsistency(
         stepId,
-        { type: OperationType.STEP, name, subType: OperationSubType.STEP },
+        { type: OperationType.STEP, name, subType },
         stepData,
         context,
       );
@@ -100,7 +104,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
         id: hashId(stepId),
         name: pluginOperationName ?? name,
         type: OperationType.STEP,
-        subType: OperationSubType.STEP,
+        subType,
         parentId: parentId ? hashId(parentId) : undefined,
       };
 
@@ -115,7 +119,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
               stepId,
               name,
               type: OperationType.STEP,
-              subType: OperationSubType.STEP,
+              subType,
               parentId,
             },
           },
@@ -141,7 +145,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
               stepId,
               name,
               type: OperationType.STEP,
-              subType: OperationSubType.STEP,
+              subType,
               parentId,
             },
           },
@@ -165,7 +169,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
               stepId,
               name,
               type: OperationType.STEP,
-              subType: OperationSubType.STEP,
+              subType,
               parentId,
             },
             endTimestamp: stepData.StepDetails?.NextAttemptTimestamp,
@@ -194,7 +198,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
             Id: stepId,
             ParentId: parentId,
             Action: OperationAction.FAIL,
-            SubType: OperationSubType.STEP,
+            SubType: subType,
             Type: OperationType.STEP,
             Error: createErrorObjectFromError(error),
             Name: name,
@@ -207,7 +211,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
                 stepId,
                 name,
                 type: OperationType.STEP,
-                subType: OperationSubType.STEP,
+                subType,
                 parentId,
               },
             },
@@ -221,7 +225,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
           Id: stepId,
           ParentId: parentId,
           Action: OperationAction.RETRY,
-          SubType: OperationSubType.STEP,
+          SubType: subType,
           Type: OperationType.STEP,
           Error: createErrorObjectFromError(error),
           Name: name,
@@ -240,7 +244,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
               stepId,
               name,
               type: OperationType.STEP,
-              subType: OperationSubType.STEP,
+              subType,
               parentId,
             },
             endTimestamp:
@@ -265,7 +269,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
               Id: stepId,
               ParentId: parentId,
               Action: OperationAction.START,
-              SubType: OperationSubType.STEP,
+              SubType: subType,
               Type: OperationType.STEP,
               Name: name,
             });
@@ -283,7 +287,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
               Id: stepId,
               ParentId: parentId,
               Action: OperationAction.START,
-              SubType: OperationSubType.STEP,
+              SubType: subType,
               Type: OperationType.STEP,
               Name: name,
             });
@@ -318,7 +322,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
                 stepId,
                 name,
                 type: OperationType.STEP,
-                subType: OperationSubType.STEP,
+                subType,
                 parentId,
               },
             },
@@ -354,7 +358,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
             Id: stepId,
             ParentId: parentId,
             Action: OperationAction.SUCCEED,
-            SubType: OperationSubType.STEP,
+            SubType: subType,
             Type: OperationType.STEP,
             Payload: serializedResult,
             Name: name,
@@ -409,7 +413,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
               Id: stepId,
               ParentId: parentId,
               Action: OperationAction.FAIL,
-              SubType: OperationSubType.STEP,
+              SubType: subType,
               Type: OperationType.STEP,
               Error: createErrorObjectFromError(error),
               Name: name,
@@ -447,7 +451,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
             Id: stepId,
             ParentId: parentId,
             Action: OperationAction.RETRY,
-            SubType: OperationSubType.STEP,
+            SubType: subType,
             Type: OperationType.STEP,
             Error: createErrorObjectFromError(error),
             Name: name,
@@ -474,7 +478,7 @@ export const createStepHandler = <Logger extends DurableLogger>(
                 stepId,
                 name,
                 type: OperationType.STEP,
-                subType: OperationSubType.STEP,
+                subType,
                 parentId,
               },
               endTimestamp:

@@ -8,6 +8,7 @@ import {
   ChildContextError,
   CallbackError,
 } from "../../errors/durable-error/durable-error";
+import { MockBatchResult } from "../../testing/mock-batch-result";
 
 class CustomError extends Error {
   additionalProperty = 1;
@@ -23,6 +24,98 @@ describe("BatchResult", () => {
   });
 
   describe("BatchResultImpl", () => {
+    it("keeps successful undefined results in branch order", () => {
+      const items: BatchItem<number | undefined>[] = [
+        { index: 0, status: BatchItemStatus.SUCCEEDED, result: undefined },
+        { index: 1, status: BatchItemStatus.SUCCEEDED, result: 10 },
+        { index: 2, status: BatchItemStatus.SUCCEEDED, result: undefined },
+        { index: 3, status: BatchItemStatus.SUCCEEDED, result: 30 },
+      ];
+      const result = new BatchResultImpl(items, "ALL_COMPLETED");
+
+      expect(result.successCount).toBe(4);
+      expect(result.succeeded()).toStrictEqual(items);
+      expect(result.getResults()).toStrictEqual([undefined, 10, undefined, 30]);
+    });
+
+    it("keeps failed items and errors in branch order", () => {
+      const firstError = new ChildContextError("first failure");
+      const secondError = new ChildContextError("second failure");
+      const items: BatchItem<number>[] = [
+        { index: 0, status: BatchItemStatus.FAILED, error: firstError },
+        { index: 1, status: BatchItemStatus.FAILED, error: secondError },
+      ];
+      const result = new BatchResultImpl(items, "ALL_COMPLETED");
+
+      expect(result.failureCount).toBe(2);
+      expect(result.failed()).toStrictEqual(items);
+      expect(result.getErrors()).toStrictEqual([firstError, secondError]);
+      let thrown: unknown;
+      try {
+        result.throwIfError();
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toBe(firstError);
+    });
+
+    it("keeps mixed status views separate and handles an empty batch", () => {
+      const error = new ChildContextError("mixed failure");
+      const mixed = new BatchResultImpl<number | undefined>(
+        [
+          { index: 0, status: BatchItemStatus.SUCCEEDED, result: undefined },
+          { index: 1, status: BatchItemStatus.FAILED, error },
+          { index: 2, status: BatchItemStatus.STARTED },
+          { index: 3, status: BatchItemStatus.SUCCEEDED, result: 30 },
+        ],
+        "ALL_COMPLETED",
+      );
+      expect([
+        mixed.successCount,
+        mixed.failureCount,
+        mixed.startedCount,
+      ]).toEqual([2, 1, 1]);
+      expect(mixed.succeeded().map((item) => item.index)).toEqual([0, 3]);
+      expect(mixed.getResults()).toStrictEqual([undefined, 30]);
+      expect(mixed.failed().map((item) => item.index)).toEqual([1]);
+      expect(mixed.getErrors()).toStrictEqual([error]);
+      expect(mixed.started().map((item) => item.index)).toEqual([2]);
+
+      const empty = new BatchResultImpl<number>([], "ALL_COMPLETED");
+      expect([
+        empty.totalCount,
+        empty.successCount,
+        empty.failureCount,
+      ]).toEqual([0, 0, 0]);
+      expect(empty.succeeded()).toEqual([]);
+      expect(empty.failed()).toEqual([]);
+      expect(empty.getResults()).toEqual([]);
+      expect(empty.getErrors()).toEqual([]);
+    });
+
+    it("keeps the test mock aligned with status-based batch views", () => {
+      const firstError = new ChildContextError("first mock failure");
+      const secondError = new ChildContextError("second mock failure");
+      const mock = new MockBatchResult<number | undefined>([
+        { index: 0, status: BatchItemStatus.SUCCEEDED, result: undefined },
+        { index: 1, status: BatchItemStatus.FAILED, error: firstError },
+        { index: 2, status: BatchItemStatus.SUCCEEDED, result: 10 },
+        { index: 3, status: BatchItemStatus.FAILED, error: secondError },
+      ]);
+
+      expect(mock.succeeded().map((item) => item.index)).toEqual([0, 2]);
+      expect(mock.getResults()).toStrictEqual([undefined, 10]);
+      expect(mock.failed().map((item) => item.index)).toEqual([1, 3]);
+      expect(mock.getErrors()).toStrictEqual([firstError, secondError]);
+      let thrown: unknown;
+      try {
+        mock.throwIfError();
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toBe(firstError);
+    });
+
     it("should handle all success items", () => {
       const items: BatchItem<string>[] = [
         { index: 0, result: "success1", status: BatchItemStatus.SUCCEEDED },
@@ -96,6 +189,24 @@ describe("BatchResult", () => {
   });
 
   describe("restoreBatchResult", () => {
+    it("preserves undefined successful results through batch serialization", async () => {
+      const serdes = createBatchResultSerdes<number | undefined>();
+      const original = new BatchResultImpl<number | undefined>(
+        [
+          { index: 0, status: BatchItemStatus.SUCCEEDED, result: undefined },
+          { index: 1, status: BatchItemStatus.SUCCEEDED, result: 10 },
+        ],
+        "ALL_COMPLETED",
+      );
+      const context = { entityId: "test", durableExecutionArn: "arn:test" };
+      const serialized = await serdes.serialize(original, context);
+      const restored = await serdes.deserialize(serialized, context);
+
+      expect(restored?.successCount).toBe(2);
+      expect(restored?.succeeded().map((item) => item.index)).toEqual([0, 1]);
+      expect(restored?.getResults()).toStrictEqual([undefined, 10]);
+    });
+
     it("should restore BatchResult with DurableOperationError objects", () => {
       const data = {
         all: [

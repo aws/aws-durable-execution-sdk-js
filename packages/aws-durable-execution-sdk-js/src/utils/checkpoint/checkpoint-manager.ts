@@ -3,6 +3,7 @@ import {
   OperationUpdate,
   Operation,
   OperationStatus,
+  OperationType,
 } from "../../types/wire";
 import { DurableExecutionClient } from "../../types/durable-execution";
 import { log } from "../logger/logger";
@@ -61,7 +62,23 @@ interface QueuedCheckpoint {
   sizeBytes: number;
   resolve: () => void;
   reject: (error: Error) => void;
+  /**
+   * Called instead of {@link QueuedCheckpoint.resolve} when the manager gives up on this
+   * update, either by clearing the queue or by abandoning the batch it was sent in.
+   *
+   * Only {@link CheckpointManager.checkpointExecutionResult} sets it. Every other caller is
+   * left unresolved on those paths, so that the termination decides the invocation.
+   */
+  onAbandon?: () => void;
 }
+
+/**
+ * Whether an update reached the service.
+ *
+ * `"sent"` means the service accepted it. `"abandoned"` means the manager could not send it
+ * and will not retry it in this invocation.
+ */
+export type CheckpointOutcome = "sent" | "abandoned";
 
 export class CheckpointManager implements Checkpoint {
   private queue: QueuedCheckpoint[] = [];
@@ -76,6 +93,11 @@ export class CheckpointManager implements Checkpoint {
   private readonly MAX_ITEMS_IN_BATCH = 250;
   private isTerminating = false;
   private disposed = false;
+  /**
+   * Set once the service answers a checkpoint without a token. See
+   * {@link CheckpointManager.handleRevokedCheckpointToken}.
+   */
+  private checkpointTokenRevoked = false;
 
   // Operation lifecycle tracking
   private operations = new Map<string, OperationInfo>();
@@ -113,6 +135,15 @@ export class CheckpointManager implements Checkpoint {
   setTerminating(): void {
     this.isTerminating = true;
     log("🛑", "Checkpoint manager marked as terminating");
+  }
+
+  /**
+   * Whether the service has withdrawn this invocation's checkpoint token. Once it has, the
+   * invocation can record nothing further, including its own result. See
+   * {@link CheckpointManager.handleRevokedCheckpointToken}.
+   */
+  isCheckpointTokenRevoked(): boolean {
+    return this.checkpointTokenRevoked;
   }
 
   /**
@@ -216,15 +247,88 @@ export class CheckpointManager implements Checkpoint {
 
   public clearQueue(): void {
     // Silently clear queue - we're terminating so no need to reject promises
+    const abandoned = this.queue;
     this.queue = [];
     this.forceCheckpointPromises = [];
     // Resolve any waiting queue completion promises since we're clearing
     this.notifyQueueCompletion();
+    this.notifyAbandoned(abandoned);
+  }
+
+  /**
+   * Tells the callers that asked to hear about it that their updates were never sent.
+   *
+   * Without this, such a caller waits for a promise nothing settles. That is the intended
+   * outcome for handler code, because the termination ends the invocation instead. It is not
+   * the outcome for a caller that runs after the handler has settled: nothing else will end
+   * its wait, so the invocation would run until Lambda stops it.
+   */
+  private notifyAbandoned(items: QueuedCheckpoint[]): void {
+    for (const item of items) {
+      item.onAbandon?.();
+    }
   }
 
   // Alias for backward compatibility with Checkpoint interface
   async force(): Promise<void> {
     return this.forceCheckpoint();
+  }
+
+  /**
+   * Sends the execution's own terminal update and reports whether the service accepted it.
+   *
+   * For `withDurableExecution`'s oversized-result path, which checkpoints the handler's
+   * result after the handler has returned. That caller is past the point where a termination
+   * can end its wait, so it needs an answer in every case rather than a promise that another
+   * path settles.
+   *
+   * Returns `"sent"` once the service has accepted the update. The execution is then
+   * recorded as finished, whatever else has happened in this invocation, so the caller
+   * reports success. A termination that arrived while the update was in flight does not
+   * change that.
+   *
+   * Returns `"abandoned"` when the manager cannot send the update: it is already
+   * terminating, the token is already withdrawn, or the queue was cleared before the update
+   * went out. The termination details are set by then, so the caller decides its answer from
+   * the termination reason.
+   */
+  async checkpointExecutionResult(
+    stepId: string,
+    data: Partial<OperationUpdate>,
+  ): Promise<CheckpointOutcome> {
+    if (this.isTerminating || this.checkpointTokenRevoked) {
+      log("⚠️", "Execution result not checkpointed - manager is terminating:", {
+        stepId,
+        checkpointTokenRevoked: this.checkpointTokenRevoked,
+      });
+      return "abandoned";
+    }
+
+    return new Promise<CheckpointOutcome>((resolve, reject) => {
+      const queuedItem: QueuedCheckpoint = {
+        stepId,
+        data,
+        sizeBytes: Buffer.byteLength(JSON.stringify({ stepId, data }), "utf8"),
+        resolve: () => {
+          resolve("sent");
+        },
+        reject: (error: Error) => {
+          reject(error);
+        },
+        onAbandon: () => {
+          log("⚠️", "Execution result was never sent:", { stepId });
+          resolve("abandoned");
+        },
+      };
+
+      this.queue.push(queuedItem);
+
+      if (!this.isProcessing) {
+        setImmediate(() => {
+          this.processQueue();
+        });
+      }
+    });
   }
 
   async checkpoint(
@@ -368,6 +472,20 @@ export class CheckpointManager implements Checkpoint {
       return;
     }
 
+    // Nothing can be sent once the token is gone, so drop whatever arrived after it was
+    // withdrawn rather than making a call the service is certain to reject. Checked here
+    // and not only in checkpoint(): the isTerminating flag that normally turns callers
+    // away is set by the termination manager's callback, which a directly constructed
+    // manager need not have wired, and forceCheckpoint() reaches processQueue without
+    // enqueueing anything at all.
+    if (this.checkpointTokenRevoked) {
+      log("⚠️", "Checkpoint skipped - checkpoint token was withdrawn", {
+        queueLength: this.queue.length,
+      });
+      this.clearQueue();
+      return;
+    }
+
     const hasQueuedItems = this.queue.length > 0;
     const hasForceRequests = this.forceCheckpointPromises.length > 0;
 
@@ -415,6 +533,13 @@ export class CheckpointManager implements Checkpoint {
         await this.processBatch(batch);
       }
 
+      // The batch was accepted, but resolving its callers would let the handler run on past
+      // the point where the service can be told anything -- the same reason the response's
+      // NewExecutionState is not applied. Left unresolved, as on every other termination.
+      if (this.checkpointTokenRevoked) {
+        return;
+      }
+
       batch.forEach((item) => {
         item.resolve();
       });
@@ -445,6 +570,11 @@ export class CheckpointManager implements Checkpoint {
         message: checkpointError.message,
         error: checkpointError,
       });
+
+      // This batch left the queue before it was sent, so clearQueue did not cover it.
+      // Reported after the termination, so a caller that reads the termination details sees
+      // them already set.
+      this.notifyAbandoned(batch);
     } finally {
       this.isProcessing = false;
 
@@ -504,15 +634,84 @@ export class CheckpointManager implements Checkpoint {
 
     const response = await this.storage.checkpoint(checkpointData, this.logger);
 
-    if (response.CheckpointToken) {
-      this.currentTaskToken = response.CheckpointToken;
+    if (!response.CheckpointToken) {
+      // A batch carrying the execution's own terminal update -- the oversized-result
+      // EXECUTION/SUCCEED withDurableExecution sends after the handler returns -- finishes the
+      // execution, so there is nothing a missing token could stop and no invocation left to
+      // suspend. Returning normally resolves that checkpoint, and the invocation reports the
+      // SUCCEEDED the service has already recorded. Treating it as revoked would answer
+      // PENDING for a finished execution. Nothing further is sent after it; if something were,
+      // the spent token is rejected as before.
+      if (updates.some((update) => update.Type === OperationType.EXECUTION)) {
+        log("ℹ️", "No CheckpointToken after the execution's terminal update");
+        return;
+      }
+
+      this.handleRevokedCheckpointToken();
+      return;
     }
+
+    this.currentTaskToken = response.CheckpointToken;
 
     if (response.NewExecutionState?.Operations) {
       await this.updateStepDataFromCheckpointResponse(
         normalizeOperations(response.NewExecutionState.Operations),
       );
     }
+  }
+
+  /**
+   * Ends the invocation when the service answers a checkpoint without a token.
+   *
+   * Each checkpoint response carries the token for the next one. A response without one
+   * withdraws this invocation's ability to record anything further: the token just spent is
+   * consumed, and sending it again earns `InvalidParameterValueException: Invalid checkpoint
+   * token`. Before this, the manager kept the spent token and did exactly that, turning a
+   * condition it could recognise into a Lambda error one call later.
+   *
+   * The checkpoint that prompted this response was accepted, so the updates in it are
+   * durable. In-flight operations are not: they are abandoned rather than checkpointed, and
+   * replay on the next invocation. That is correct for AT_LEAST_ONCE. An AT_MOST_ONCE step
+   * whose START reached the last accepted checkpoint will not run again, which is what
+   * AT_MOST_ONCE means.
+   *
+   * `NewExecutionState` from this response is deliberately not applied, and the callers of
+   * the accepted batch are deliberately not resolved. Either one lets the handler run on --
+   * start its next step, or reach a result -- past the point where the service can be told
+   * about any of it, so that work runs for nothing and then again on the next invocation.
+   * Terminating instead keeps the invocation's answer to PENDING, which is the only answer
+   * left that is true.
+   *
+   * A batch carrying the execution's own terminal update never reaches here: see the
+   * EXECUTION check in processBatch.
+   */
+  private handleRevokedCheckpointToken(): void {
+    this.checkpointTokenRevoked = true;
+
+    const message =
+      "Checkpoint response contained no CheckpointToken: the service will accept no " +
+      "further checkpoints from this invocation. Suspending; the execution continues on " +
+      "the next invocation.";
+
+    // Warned, not silent: an absent token is indistinguishable from a client that dropped
+    // the field, and a suspend that leaves no trace gives nobody a way to tell which
+    // happened.
+    this.logger.warn(message, {
+      durableExecutionArn: this.durableExecutionArn,
+      requestId: this.requestId,
+    });
+    log("🛑", "Checkpoint token withdrawn by service - suspending invocation", {
+      durableExecutionArn: this.durableExecutionArn,
+    });
+
+    // Silently, as on the checkpoint-failure path: callers awaiting a checkpoint that can
+    // no longer be sent are left unresolved so the termination decides the invocation.
+    this.clearQueue();
+
+    this.terminationManager.terminate({
+      reason: TerminationReason.EXECUTION_SUSPENDED_BY_SERVICE,
+      message,
+    });
   }
 
   private async updateStepDataFromCheckpointResponse(
@@ -808,6 +1007,13 @@ export class CheckpointManager implements Checkpoint {
   }
 
   private checkAndTerminate(): void {
+    // The invocation is already ending, and every reason this would schedule is a suspend
+    // the termination manager would discard. Arming a cooldown timer for it only leaves a
+    // timer pending past the invocation.
+    if (this.checkpointTokenRevoked) {
+      return;
+    }
+
     const terminationReason = this.shouldTerminate();
 
     if (terminationReason) {
@@ -873,11 +1079,14 @@ export class CheckpointManager implements Checkpoint {
   private determineTerminationReason(ops: OperationInfo[]): TerminationReason {
     // Priority: RETRY_SCHEDULED > WAIT_SCHEDULED > CALLBACK_PENDING
 
+    // Only STEP operations reach RETRY_WAITING. The check keys on the type,
+    // not the subtype, because a step can carry a custom subtype
+    // (StepConfig.subType).
     if (
       ops.some(
         (op) =>
           op.state === OperationLifecycleState.RETRY_WAITING &&
-          op.metadata.subType === "Step",
+          op.metadata.type === OperationType.STEP,
       )
     ) {
       return TerminationReason.RETRY_SCHEDULED;

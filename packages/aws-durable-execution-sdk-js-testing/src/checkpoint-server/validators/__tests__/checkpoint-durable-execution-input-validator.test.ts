@@ -66,7 +66,274 @@ describe("validateCheckpointUpdates", () => {
       }).toThrow(InvalidParameterValueException);
       expect(() => {
         validateCheckpointUpdates([update], mockOperations);
-      }).toThrow("Error object size must be less than 32768 bytes.");
+      }).toThrow(
+        "Error object size must be less than or equal to 262144 bytes.",
+      );
+    });
+
+    it("should accept an error just under the limit", () => {
+      const update: OperationUpdate = {
+        Id: "op1",
+        Type: OperationType.STEP,
+        Action: OperationAction.FAIL,
+        Error: { ErrorMessage: "" },
+      };
+      const overhead = Buffer.byteLength(JSON.stringify(update));
+      update.Error = { ErrorMessage: "a".repeat(262144 - overhead) };
+
+      expect(() => {
+        validateCheckpointUpdates([update], mockOperations);
+      }).not.toThrow();
+
+      update.Error = { ErrorMessage: "a".repeat(262144 - overhead + 1) };
+      expect(() => {
+        validateCheckpointUpdates([update], mockOperations);
+      }).toThrow(
+        "Error object size must be less than or equal to 262144 bytes.",
+      );
+    });
+  });
+
+  describe("validation order", () => {
+    // The service reads the body before it checks the model. So a member of
+    // the wrong type is reported before an invalid member of another update.
+    it("reports a wrong type before a model constraint", () => {
+      expect(() => {
+        validateCheckpointUpdates(
+          [
+            {
+              Id: "bad id!",
+              Type: OperationType.STEP,
+              Action: OperationAction.START,
+            },
+            {
+              Id: "op2",
+              Type: OperationType.STEP,
+              Action: OperationAction.START,
+              Name: 1 as unknown as string,
+            },
+          ],
+          mockOperations,
+        );
+      }).toThrow(
+        expect.objectContaining({
+          name: "SerializationException",
+          message: "NUMBER_VALUE can not be converted to a String",
+        }),
+      );
+    });
+  });
+
+  describe("payload size validation", () => {
+    it.each([
+      [
+        OperationType.STEP,
+        OperationAction.SUCCEED,
+        262144,
+        "STEP output payload",
+      ],
+      [
+        OperationType.CONTEXT,
+        OperationAction.SUCCEED,
+        262144,
+        "CONTEXT output payload",
+      ],
+      [
+        OperationType.CHAINED_INVOKE,
+        OperationAction.START,
+        1048576,
+        "CHAINED_INVOKE input payload",
+      ],
+      [
+        OperationType.EXECUTION,
+        OperationAction.SUCCEED,
+        6291456,
+        "Execution output payload",
+      ],
+    ] satisfies [OperationType, OperationAction, number, string][])(
+      "should limit a %s payload to %s bytes",
+      (type, action, maxBytes, description) => {
+        const update = (Payload: string): OperationUpdate => ({
+          Id: "op1",
+          Type: type,
+          Action: action,
+          Payload,
+          ChainedInvokeOptions:
+            type === OperationType.CHAINED_INVOKE
+              ? { FunctionName: "child-function" }
+              : undefined,
+        });
+
+        expect(() => {
+          validateCheckpointUpdates(
+            [update("a".repeat(maxBytes))],
+            mockOperations,
+          );
+        }).not.toThrow();
+        expect(() => {
+          validateCheckpointUpdates(
+            [update("a".repeat(maxBytes + 1))],
+            mockOperations,
+          );
+        }).toThrow(
+          new InvalidParameterValueException({
+            message: `${description} size must be less than or equal to ${maxBytes} bytes.`,
+            $metadata: {},
+          }),
+        );
+      },
+    );
+
+    it("should count the UTF-8 bytes of the payload", () => {
+      // "é" is 2 bytes in UTF-8, so this payload is 262146 bytes.
+      const update: OperationUpdate = {
+        Id: "op1",
+        Type: OperationType.STEP,
+        Action: OperationAction.SUCCEED,
+        Payload: "é".repeat(131073),
+      };
+
+      expect(() => {
+        validateCheckpointUpdates([update], mockOperations);
+      }).toThrow("STEP output payload size must be less than or equal to");
+    });
+
+    it("should not limit a WAIT payload", () => {
+      const update: OperationUpdate = {
+        Id: "op1",
+        Type: OperationType.WAIT,
+        Action: OperationAction.START,
+        Payload: "a".repeat(262145),
+        WaitOptions: { WaitSeconds: 1 },
+      };
+
+      expect(() => {
+        validateCheckpointUpdates([update], mockOperations);
+      }).not.toThrow();
+    });
+  });
+
+  describe("operation metadata consistency validation", () => {
+    const existingStep = (): CheckpointOperation => ({
+      operation: {
+        Id: "op1",
+        Type: OperationType.STEP,
+        SubType: "Step",
+        Name: "charge",
+        ParentId: "parent",
+        Status: OperationStatus.STARTED,
+        StartTimestamp: undefined,
+      },
+      update: {
+        Id: "op1",
+        Type: OperationType.STEP,
+        Action: OperationAction.START,
+      },
+      events: [],
+    });
+
+    beforeEach(() => {
+      mockOperations.set("parent", {
+        ...createCheckpointOperation(
+          OperationType.CONTEXT,
+          OperationStatus.STARTED,
+        ),
+      });
+      mockOperations.set("other-parent", {
+        ...createCheckpointOperation(
+          OperationType.CONTEXT,
+          OperationStatus.STARTED,
+        ),
+      });
+      mockOperations.set("op1", existingStep());
+    });
+
+    it("should accept an update that repeats the existing values", () => {
+      expect(() => {
+        validateCheckpointUpdates(
+          [
+            {
+              Id: "op1",
+              Type: OperationType.STEP,
+              SubType: "Step",
+              Name: "charge",
+              ParentId: "parent",
+              Action: OperationAction.SUCCEED,
+            },
+          ],
+          mockOperations,
+        );
+      }).not.toThrow();
+    });
+
+    it("should accept an update that omits the values", () => {
+      expect(() => {
+        validateCheckpointUpdates(
+          [
+            {
+              Id: "op1",
+              Type: OperationType.STEP,
+              Action: OperationAction.SUCCEED,
+            },
+          ],
+          mockOperations,
+        );
+      }).not.toThrow();
+    });
+
+    it.each([
+      ["Type", { Type: OperationType.CONTEXT }],
+      ["SubType", { SubType: "Other" }],
+      ["Name", { Name: "refund" }],
+      ["ParentId", { ParentId: "other-parent" }],
+    ] satisfies [string, Partial<OperationUpdate>][])(
+      "should reject a different %s",
+      (field, fields) => {
+        expect(() => {
+          validateCheckpointUpdates(
+            [
+              {
+                Id: "op1",
+                Type: OperationType.STEP,
+                Action: OperationAction.SUCCEED,
+                ...fields,
+              },
+            ],
+            mockOperations,
+          );
+        }).toThrow(
+          new InvalidParameterValueException({
+            message: `${field} value in OperationUpdate is inconsistent with existing operation. Check for non-determinism.`,
+            $metadata: {},
+          }),
+        );
+      },
+    );
+
+    // The service compares an update with the operation stored before the
+    // request. It does not compare the updates of one request with each
+    // other. So a START and a SUCCEED with different names in one request
+    // pass this check, as they do in the service.
+    it("should not compare updates within the same request", () => {
+      expect(() => {
+        validateCheckpointUpdates(
+          [
+            {
+              Id: "op2",
+              Type: OperationType.STEP,
+              Name: "charge",
+              Action: OperationAction.START,
+            },
+            {
+              Id: "op2",
+              Type: OperationType.STEP,
+              Name: "refund",
+              Action: OperationAction.SUCCEED,
+            },
+          ],
+          mockOperations,
+        );
+      }).not.toThrow();
     });
   });
 
@@ -139,7 +406,10 @@ describe("validateCheckpointUpdates", () => {
     it("should succeed with execution fail operation", () => {
       mockOperations.set(
         "op1",
-        createCheckpointOperation(OperationType.STEP, OperationStatus.STARTED),
+        createCheckpointOperation(
+          OperationType.EXECUTION,
+          OperationStatus.STARTED,
+        ),
       );
       const update = {
         Id: "op1",
@@ -451,10 +721,13 @@ describe("validateCheckpointUpdates", () => {
 
       expect(() => {
         validateCheckpointUpdates([update], mockOperations);
-      }).toThrow(InvalidParameterValueException);
-      expect(() => {
-        validateCheckpointUpdates([update], mockOperations);
-      }).toThrow("Operation update must have an Id.");
+      }).toThrow(
+        expect.objectContaining({
+          name: "ValidationException",
+          message:
+            "1 validation error detected: Value null at 'updates.1.member.id' failed to satisfy constraint: Member must not be null",
+        }),
+      );
     });
   });
 
@@ -471,7 +744,7 @@ describe("validateCheckpointUpdates", () => {
       }).toThrow(InvalidParameterValueException);
       expect(() => {
         validateCheckpointUpdates([update], mockOperations);
-      }).toThrow("Unknown operation type.");
+      }).toThrow("Invalid operation type.");
     });
 
     it("should throw exception with invalid action for operation type", () => {
@@ -489,7 +762,7 @@ describe("validateCheckpointUpdates", () => {
       }).toThrow("Invalid action for the given operation type.");
     });
 
-    it("should throw exception for truly invalid operation type", () => {
+    it("should throw a model validation error for a null operation type", () => {
       const update = {
         Id: "op1",
         Type: null as unknown as OperationType,
@@ -498,10 +771,13 @@ describe("validateCheckpointUpdates", () => {
 
       expect(() => {
         validateCheckpointUpdates([update], mockOperations);
-      }).toThrow(InvalidParameterValueException);
-      expect(() => {
-        validateCheckpointUpdates([update], mockOperations);
-      }).toThrow("Unknown operation type.");
+      }).toThrow(
+        expect.objectContaining({
+          name: "ValidationException",
+          message:
+            "1 validation error detected: Value null at 'updates.1.member.type' failed to satisfy constraint: Member must not be null",
+        }),
+      );
     });
   });
 
@@ -517,7 +793,7 @@ describe("validateCheckpointUpdates", () => {
     }).toThrow(InvalidParameterValueException);
     expect(() => {
       validateCheckpointUpdates([update], mockOperations);
-    }).toThrow("Unknown operation type");
+    }).toThrow("Invalid operation type.");
   });
 
   describe("valid operations", () => {
@@ -550,6 +826,7 @@ describe("validateCheckpointUpdates", () => {
         Id: "op1",
         Type: OperationType.WAIT,
         Action: OperationAction.START,
+        WaitOptions: { WaitSeconds: 1 },
       };
 
       expect(() => {
@@ -574,6 +851,7 @@ describe("validateCheckpointUpdates", () => {
         Id: "op1",
         Type: OperationType.CHAINED_INVOKE,
         Action: OperationAction.START,
+        ChainedInvokeOptions: { FunctionName: "child-function" },
       };
 
       expect(() => {
