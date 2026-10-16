@@ -90,9 +90,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     server records every timestamp on that clock: scheduled ends, retry times, start and end
     times, and history event times. So a wait's `ScheduledEndTimestamp` is its start time plus its
     duration, and both match `Date.now()` inside the handler.
-  - The runner applies one wait or retry end at a time, the earliest first, and only when no
-    invocation is running or about to start. So a branch that resumes after its own wait ends
-    starts its next delay from that end, not from a later branch's end.
+  - When no invocation is running or about to start, the runner advances the fake clock to the
+    earliest pending wait or retry end only, and applies the next end after the invocation that
+    one releases has run. So a branch that resumes after its own wait ends starts its next delay
+    from that end, not from a later branch's end. While an invocation is running, the fake clock
+    advances with real time, and an end is applied when that time reaches it.
 
   As a result:
   - Each sequential wait advances fake time by its duration.

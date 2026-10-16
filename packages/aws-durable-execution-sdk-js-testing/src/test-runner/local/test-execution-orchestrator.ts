@@ -60,8 +60,13 @@ export class TestExecutionOrchestrator {
     deadlineMs: number;
     complete: () => Promise<void>;
   }[] = [];
-  /** Whether an applied end's invocation is queued and has not started yet. */
+  /**
+   * Whether the invocation queued by applying an end has not started yet. While set, no
+   * further end is applied by advancing the fake clock.
+   */
   private timedCompletionReleased = false;
+  /** Real timer for the next end, armed while an invocation is running. */
+  private timedCompletionTimer: ReturnType<typeof setTimeout> | undefined;
 
   // Pausing. The checkpoint server's half is to answer checkpoints without a token, which
   // suspends the invocation running at the time; this half is to start no invocation while
@@ -220,6 +225,10 @@ export class TestExecutionOrchestrator {
     } finally {
       this.scheduler.flushTimers();
       this.timedCompletions.length = 0;
+      if (this.timedCompletionTimer) {
+        clearTimeout(this.timedCompletionTimer);
+        this.timedCompletionTimer = undefined;
+      }
     }
   }
 
@@ -759,40 +768,89 @@ export class TestExecutionOrchestrator {
   }
 
   /**
-   * With skipTime, completes the waits and retries that end first, once nothing else can
-   * happen before they end.
+   * With skipTime, completes waits and retries when their ends come, without letting a later
+   * end move the fake clock past an earlier one.
    *
-   * The checkpoint server records every scheduled end on the fake clock. Nothing that is
-   * running can be affected by an end that has not yet come. So while an invocation is
-   * running, or another invocation is queued to start, every pending end stays pending.
-   * When neither holds, this advances the fake clock to the earliest end, completes every
-   * operation that ends at that time, and starts one invocation. That invocation runs, and
-   * may start further delays, before the next end is applied.
+   * The checkpoint server records every scheduled end on the fake clock. There are two cases.
    *
-   * Completing an end any earlier would let a later end move the fake clock past an earlier
-   * one. A branch resuming at the earlier end would then start its next delay from the
-   * later one.
+   * 1. No invocation is running or queued to start. Nothing can happen before the earliest
+   *    end. So this advances the fake clock to that end, completes every operation that ends
+   *    there, and starts one invocation. That invocation runs, and may start further delays,
+   *    before the next end is applied.
+   * 2. An invocation is running. The fake clock advances with real time while it runs, and
+   *    the invocation can observe a completion by polling, as it can in the service. So this
+   *    completes every operation whose end has come, and arms a real timer for the next end.
+   *    It does not advance the fake clock, which would skip time the invocation is using.
+   *
+   * Advancing to any end other than the earliest would let a branch that resumes at an
+   * earlier end start its next delay from the later one.
    */
   private releaseTimedCompletions(executionId: ExecutionId): void {
-    if (
-      this.settled ||
-      this.timedCompletionReleased ||
-      this.timedCompletions.length === 0 ||
-      this.runningInvocations > 0 ||
-      (this.scheduler instanceof QueueScheduler &&
-        this.scheduler.hasQueuedFunction())
-    ) {
+    if (this.timedCompletionTimer) {
+      clearTimeout(this.timedCompletionTimer);
+      this.timedCompletionTimer = undefined;
+    }
+
+    if (this.settled || this.timedCompletions.length === 0) {
       return;
     }
 
     this.timedCompletions.sort((a, b) => a.deadlineMs - b.deadlineMs);
-    const deadlineMs = this.timedCompletions[0].deadlineMs;
-    const due = this.timedCompletions.filter(
-      (completion) => completion.deadlineMs <= deadlineMs,
-    );
-    this.timedCompletions.splice(0, due.length);
-    this.timedCompletionReleased = true;
 
+    if (this.runningInvocations > 0) {
+      this.completeTimedCompletionsUntil(Date.now(), executionId, false);
+      const next = this.timedCompletions.at(0);
+      if (next) {
+        this.timedCompletionTimer = realSetTimeout(
+          () => {
+            this.timedCompletionTimer = undefined;
+            this.releaseTimedCompletions(executionId);
+          },
+          Math.max(0, next.deadlineMs - Date.now()),
+        );
+      }
+      return;
+    }
+
+    if (
+      this.timedCompletionReleased ||
+      (this.scheduler instanceof QueueScheduler &&
+        this.scheduler.hasQueuedFunction())
+    ) {
+      // An invocation starts next. When it ends, the next end is applied.
+      return;
+    }
+
+    const deadlineMs = this.timedCompletions[0].deadlineMs;
+    this.advanceFakeClockTo(deadlineMs);
+    this.completeTimedCompletionsUntil(deadlineMs, executionId, true);
+  }
+
+  /**
+   * Completes every pending wait and retry that ends by the given time, and queues one
+   * invocation to continue the execution.
+   *
+   * @param markReleased Whether to hold back further ends until that invocation starts
+   */
+  private completeTimedCompletionsUntil(
+    timestampMs: number,
+    executionId: ExecutionId,
+    markReleased: boolean,
+  ): void {
+    const dueCount = this.timedCompletions.findIndex(
+      (completion) => completion.deadlineMs > timestampMs,
+    );
+    const due = this.timedCompletions.splice(
+      0,
+      dueCount === -1 ? this.timedCompletions.length : dueCount,
+    );
+    if (due.length === 0) {
+      return;
+    }
+
+    if (markReleased) {
+      this.timedCompletionReleased = true;
+    }
     this.scheduler.scheduleFunction(
       () => {
         this.timedCompletionReleased = false;
@@ -804,7 +862,6 @@ export class TestExecutionOrchestrator {
       },
       undefined,
       async () => {
-        this.advanceFakeClockTo(deadlineMs);
         for (const completion of due) {
           await completion.complete();
         }
