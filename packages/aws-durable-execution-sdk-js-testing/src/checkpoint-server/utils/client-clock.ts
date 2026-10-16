@@ -16,6 +16,16 @@
  */
 
 let offsetMs = 0;
+let lastReportedMs: number | undefined;
+
+/**
+ * The longest backward step that {@link currentTime} hides. The fake clock follows real
+ * time in steps of its advance interval, 20 ms by default. So the offset observed from one
+ * request to the next can shrink by up to that step, and the time read between requests
+ * would go backward. A larger step back means the main thread installed a new clock, for
+ * example in a new `setupTestEnvironment`, and is reported as is.
+ */
+const MAX_HIDDEN_REGRESSION_MS = 1000;
 
 /**
  * Records the main thread's clock as carried by a request.
@@ -30,10 +40,20 @@ export function observeClientTime(clientTimestampMs: number | undefined): void {
 }
 
 /**
- * @returns the current time on the main thread's clock
+ * @returns the current time on the main thread's clock. Successive calls never go back by
+ * less than {@link MAX_HIDDEN_REGRESSION_MS}, so recorded event times stay in order.
  */
 export function currentTime(): Date {
-  return new Date(Date.now() + offsetMs);
+  let nowMs = Date.now() + offsetMs;
+  if (
+    lastReportedMs !== undefined &&
+    nowMs < lastReportedMs &&
+    lastReportedMs - nowMs <= MAX_HIDDEN_REGRESSION_MS
+  ) {
+    nowMs = lastReportedMs;
+  }
+  lastReportedMs = nowMs;
+  return new Date(nowMs);
 }
 
 /**
@@ -42,4 +62,5 @@ export function currentTime(): Date {
  */
 export function resetClientTimeForTesting(): void {
   offsetMs = 0;
+  lastReportedMs = undefined;
 }

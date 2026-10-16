@@ -35,4 +35,24 @@ describe("client clock", () => {
 
     expect(currentTime()).toEqual(new Date("2030-01-01T01:00:00.000Z"));
   });
+
+  it("does not go back by one fake-clock step between requests", () => {
+    observeClientTime(Date.parse("2030-01-01T01:00:00.020Z"));
+    expect(currentTime()).toEqual(new Date("2030-01-01T01:00:00.020Z"));
+
+    // The next request reports a clock 15 ms behind the time already reported.
+    observeClientTime(Date.parse("2030-01-01T01:00:00.005Z"));
+
+    expect(currentTime()).toEqual(new Date("2030-01-01T01:00:00.020Z"));
+  });
+
+  it("follows a clock that was reset to an earlier time", () => {
+    observeClientTime(Date.parse("2030-01-01T05:00:00.000Z"));
+    currentTime();
+
+    // A new test environment installs a new fake clock at real time.
+    observeClientTime(Date.parse("2030-01-01T00:00:00.000Z"));
+
+    expect(currentTime()).toEqual(new Date("2030-01-01T00:00:00.000Z"));
+  });
 });

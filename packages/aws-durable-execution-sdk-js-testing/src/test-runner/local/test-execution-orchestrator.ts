@@ -78,6 +78,11 @@ export class TestExecutionOrchestrator implements SkipTimeParticipant {
   private skipTimeExecutionId: ExecutionId | undefined;
   /** Moves the fake clock that this execution shares with every other runner. */
   private readonly skipTimeCoordinator: SkipTimeCoordinator | undefined;
+  /**
+   * Durable invokes this execution is waiting for, counted until the invocation that
+   * resumes it is queued. See {@link SkipTimeCoordinator}.
+   */
+  private invokesInFlight = 0;
 
   // Pausing. The checkpoint server's half is to answer checkpoints without a token, which
   // suspends the invocation running at the time; this half is to start no invocation while
@@ -539,35 +544,43 @@ export class TestExecutionOrchestrator implements SkipTimeParticipant {
 
     this.pendingOperations.add(operationId);
 
-    const { result, error } = await this.functionStorage.runHandler(
-      functionName,
-      update.Payload,
-    );
+    // Until the invocation that resumes this execution is queued, the invoked function's
+    // result is on its way back here. The clock must not move past that. The invoked
+    // function runs as its own participant, so this does not stop it from advancing.
+    this.invokesInFlight++;
+    try {
+      const { result, error } = await this.functionStorage.runHandler(
+        functionName,
+        update.Payload,
+      );
 
-    await this.checkpointApi.updateCheckpointData({
-      executionId,
-      operationId: operationId,
-      operationData: {
-        // todo: handle other operation types as well
-        Status: result ? OperationStatus.SUCCEEDED : OperationStatus.FAILED,
-        ChainedInvokeDetails: {
-          Result: result,
-          Error: error,
+      await this.checkpointApi.updateCheckpointData({
+        executionId,
+        operationId: operationId,
+        operationData: {
+          // todo: handle other operation types as well
+          Status: result ? OperationStatus.SUCCEEDED : OperationStatus.FAILED,
+          ChainedInvokeDetails: {
+            Result: result,
+            Error: error,
+          },
         },
-      },
-    });
+      });
 
-    this.scheduler.scheduleFunction(
-      () => this.invokeHandler(executionId),
-      (err) => {
-        this.executionState.rejectWith(err);
-      },
-      undefined,
-      () => {
-        this.pendingOperations.delete(operationId);
-        return Promise.resolve();
-      },
-    );
+      this.scheduler.scheduleFunction(
+        () => this.invokeHandler(executionId),
+        (err) => {
+          this.executionState.rejectWith(err);
+        },
+        undefined,
+        () => {
+          this.pendingOperations.delete(operationId);
+          return Promise.resolve();
+        },
+      );
+    } finally {
+      this.invokesInFlight--;
+    }
   }
 
   /**
@@ -802,30 +815,7 @@ export class TestExecutionOrchestrator implements SkipTimeParticipant {
    *    execution is busy, and only to the earliest end across all of them.
    */
   private releaseTimedCompletions(): void {
-    if (this.timedCompletionTimer) {
-      clearTimeout(this.timedCompletionTimer);
-      this.timedCompletionTimer = undefined;
-    }
-
-    if (!this.settled && this.timedCompletions.length > 0) {
-      this.timedCompletions.sort((a, b) => a.deadlineMs - b.deadlineMs);
-      this.completeTimedCompletionsUntil(Date.now());
-
-      const next = this.timedCompletions.at(0);
-      if (next) {
-        const timer = realSetTimeout(
-          () => {
-            this.timedCompletionTimer = undefined;
-            this.releaseTimedCompletions();
-          },
-          Math.min(Math.max(0, next.deadlineMs - Date.now()), MAX_TIMER_MS),
-        );
-        // A test can finish while a long wait is still pending. The timer must not keep
-        // the process alive.
-        timer.unref?.();
-        this.timedCompletionTimer = timer;
-      }
-    }
+    this.onClockAdvanced();
 
     if (this.skipTimeCoordinator) {
       this.skipTimeCoordinator.advance();
@@ -836,6 +826,49 @@ export class TestExecutionOrchestrator implements SkipTimeParticipant {
         this.applyDeadline(earliest);
       }
     }
+  }
+
+  /** See {@link SkipTimeParticipant.onClockAdvanced}. */
+  onClockAdvanced(): void {
+    if (this.timedCompletionTimer) {
+      clearTimeout(this.timedCompletionTimer);
+      this.timedCompletionTimer = undefined;
+    }
+
+    if (this.settled || this.timedCompletions.length === 0) {
+      return;
+    }
+
+    this.timedCompletions.sort((a, b) => a.deadlineMs - b.deadlineMs);
+    this.completeTimedCompletionsUntil(Date.now());
+
+    const next = this.timedCompletions.at(0);
+    if (next) {
+      const timer = realSetTimeout(
+        () => {
+          this.timedCompletionTimer = undefined;
+          this.releaseTimedCompletions();
+        },
+        Math.min(Math.max(0, next.deadlineMs - Date.now()), MAX_TIMER_MS),
+      );
+      // A test can finish while a long wait is still pending. The timer must not keep
+      // the process alive.
+      timer.unref?.();
+      this.timedCompletionTimer = timer;
+    }
+  }
+
+  /** See {@link SkipTimeParticipant.hasInvokeInFlight}. */
+  hasInvokeInFlight(): boolean {
+    return this.invokesInFlight > 0;
+  }
+
+  /** See {@link SkipTimeParticipant.hasPendingWork}. */
+  hasPendingWork(): boolean {
+    return (
+      !this.settled &&
+      (this.timedCompletions.length > 0 || this.pendingOperations.size > 0)
+    );
   }
 
   /** See {@link SkipTimeParticipant.isBusy}. */
