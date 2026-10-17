@@ -18,6 +18,16 @@ export interface ProviderResult {
   usesGlobalProvider: boolean;
 }
 
+export function resolveFlushTimeoutMillis(value: number | undefined): number {
+  const timeout = value ?? 1000;
+  if (!Number.isFinite(timeout) || timeout <= 0 || timeout > 2_147_483_647) {
+    throw new RangeError(
+      "flushTimeoutMillis must be positive and no greater than 2147483647",
+    );
+  }
+  return timeout;
+}
+
 /**
  * Resolves an application-owned provider factory or the globally registered
  * provider. Exporters, sampling, resources, propagators, instrumentation, and
@@ -43,4 +53,52 @@ export function createTracerProvider(
     tracerProvider: trace.getTracerProvider(),
     usesGlobalProvider: true,
   };
+}
+
+/**
+ * Flushes an application-owned provider without shutting it down.
+ * The API global provider is a proxy; use its one public delegate when it does
+ * not itself expose forceFlush. Explicit factory providers are not unwrapped.
+ */
+export async function flushTracerProvider(
+  provider: TracerProvider,
+  usesGlobalProvider: boolean,
+  timeoutMillis: number = 1000,
+): Promise<void> {
+  let target = provider;
+  if (usesGlobalProvider && !("forceFlush" in target)) {
+    const proxy = target as TracerProvider & {
+      getDelegate?: () => TracerProvider;
+    };
+    if (typeof proxy.getDelegate === "function") {
+      target = proxy.getDelegate();
+    }
+  }
+  if ("forceFlush" in target) {
+    if (timeoutMillis <= 0) {
+      throw new Error("OpenTelemetry invocation flush budget exhausted");
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      // Start the timer before calling an application-owned provider. Its
+      // synchronous work cannot be preempted, but must not grant a fresh wait.
+      const expired = new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
+          () =>
+            reject(
+              new Error("OpenTelemetry invocation flush budget exhausted"),
+            ),
+          timeoutMillis,
+        );
+      });
+      await Promise.race([
+        (
+          target as TracerProvider & { forceFlush: () => Promise<void> }
+        ).forceFlush(),
+        expired,
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 }
