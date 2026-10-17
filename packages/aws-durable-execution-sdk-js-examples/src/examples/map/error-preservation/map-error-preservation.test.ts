@@ -10,9 +10,9 @@ createTests({
 
       expect(result).toBeDefined();
 
-      // With no-retry config, map operations fail completely when any task fails
-      expect(result.totalSuccess).toBe(0);
-      expect(result.success).toHaveLength(0);
+      // Fail-fast still reports items that already finished (issue #967)
+      expect(result.totalSuccess).toBe(2);
+      expect(result.success).toHaveLength(2);
 
       // Verify we have 1 error (simplified test)
       expect(result.totalErrors).toBe(1);

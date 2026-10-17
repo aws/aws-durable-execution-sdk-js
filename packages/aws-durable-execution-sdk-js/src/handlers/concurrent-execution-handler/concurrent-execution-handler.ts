@@ -853,35 +853,84 @@ export class ConcurrencyController<Logger extends DurableLogger> {
         }
       };
 
+      const itemStatusesKey = (): string =>
+        resultItems.map((item) => item?.status ?? "").join(",");
+
+      const resolveBatch = (): void => {
+        // Convert sparse array to dense array - items are already in correct order by index
+        // Include all items that were started (have a value in resultItems)
+        // Create shallow copy to prevent mutations from affecting the returned result
+        const finalBatchItems: BatchItem<R>[] = [];
+        for (let i = 0; i < resultItems.length; i++) {
+          if (resultItems[i] !== undefined) {
+            finalBatchItems.push({ ...resultItems[i]! });
+          }
+        }
+
+        log("🎉", `${this.operationName} completed:`, {
+          successCount,
+          failureCount,
+          startedCount: finalBatchItems.filter(
+            (item) => item.status === BatchItemStatus.STARTED,
+          ).length,
+          totalCount: finalBatchItems.length,
+        });
+
+        const result = new BatchResultImpl(
+          finalBatchItems,
+          getCompletionReason(failureCount),
+        );
+        resolve(result);
+      };
+
+      // Failure-driven early exit only (default fail-fast, or a tolerated
+      // failure threshold being exceeded). minSuccessful / shouldComplete /
+      // all-items-done snapshot immediately so later siblings that finish in
+      // the same turn are not absorbed into the result.
+      const isFailureDrivenEarlyExit = (): boolean =>
+        failureCount > 0 && !shouldContinue();
+
+      let finishing = false;
+      const finish = (): void => {
+        if (finishing) {
+          return;
+        }
+        finishing = true;
+
+        if (!isFailureDrivenEarlyExit()) {
+          resolveBatch();
+          return;
+        }
+
+        // Sibling items may have already finished, but their promise
+        // callbacks have not run yet (issue #967). Yield one setImmediate
+        // so those callbacks update resultItems. Repeat only while statuses
+        // keep changing, up to 2N+1 turns (START + terminal per item, plus
+        // the quiet stop). Never wait for items that are still pending
+        // after that — they stay STARTED.
+        //
+        // Do not wait on CheckpointManager.waitForQueueCompletion: that
+        // API keeps only one waiter, so two concurrent fail-fast maps hang.
+        const maxTurns = items.length * 2 + 1;
+        const drainFailureCompletions = (turnsLeft: number): void => {
+          const before = itemStatusesKey();
+          setImmediate(() => {
+            if (itemStatusesKey() !== before && turnsLeft > 1) {
+              drainFailureCompletions(turnsLeft - 1);
+              return;
+            }
+            resolveBatch();
+          });
+        };
+        drainFailureCompletions(maxTurns);
+      };
+
       const onComplete = (): void => {
         activeCount--;
         completedCount++;
 
         if (isComplete() || !shouldContinue()) {
-          // Convert sparse array to dense array - items are already in correct order by index
-          // Include all items that were started (have a value in resultItems)
-          // Create shallow copy to prevent mutations from affecting the returned result
-          const finalBatchItems: BatchItem<R>[] = [];
-          for (let i = 0; i < resultItems.length; i++) {
-            if (resultItems[i] !== undefined) {
-              finalBatchItems.push({ ...resultItems[i]! });
-            }
-          }
-
-          log("🎉", `${this.operationName} completed:`, {
-            successCount,
-            failureCount,
-            startedCount: finalBatchItems.filter(
-              (item) => item.status === BatchItemStatus.STARTED,
-            ).length,
-            totalCount: finalBatchItems.length,
-          });
-
-          const result = new BatchResultImpl(
-            finalBatchItems,
-            getCompletionReason(failureCount),
-          );
-          resolve(result);
+          finish();
         } else {
           tryStartNext();
         }

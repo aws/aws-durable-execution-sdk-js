@@ -139,6 +139,51 @@ describe("ConcurrentExecutionHandler Composed Tests", () => {
     expect(results).toEqual([10, 20]);
   });
 
+  it("keeps finished map items when fail-fast completes early (issue #967)", async () => {
+    const { context } = createTestDurableContext();
+
+    const mapped = await context.map("m", [0, 1, 2, 3], async (child, item) =>
+      child.step(
+        "s",
+        async () => {
+          if (item === 1) throw new Error("boom");
+          return item * 10;
+        },
+        { retryStrategy: () => ({ shouldRetry: false }) },
+      ),
+    );
+
+    expect(mapped.all.map((item) => item.status)).toEqual([
+      BatchItemStatus.SUCCEEDED,
+      BatchItemStatus.FAILED,
+      BatchItemStatus.SUCCEEDED,
+      BatchItemStatus.SUCCEEDED,
+    ]);
+    expect(mapped.successCount).toBe(3);
+    expect(mapped.getResults()).toEqual([0, 20, 30]);
+  });
+
+  it("does not absorb later map successes after minSuccessful is reached", async () => {
+    const { context } = createTestDurableContext();
+
+    const mapped = await context.map(
+      "min-successful-no-absorb",
+      [0, 1, 2, 3],
+      async (child, item) =>
+        child.step(`s-${item}`, async () => {
+          if (item > 0) {
+            await new Promise((resolve) => setImmediate(resolve));
+          }
+          return item * 10;
+        }),
+      { completionConfig: { minSuccessful: 1 } },
+    );
+
+    expect(mapped.successCount).toBe(1);
+    expect(mapped.getResults()).toEqual([0]);
+    expect(mapped.completionReason).toBe("MIN_SUCCESSFUL_REACHED");
+  });
+
   it("should support early termination with minSuccessful", async () => {
     const { context } = createTestDurableContext();
 
