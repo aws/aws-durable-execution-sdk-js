@@ -5,6 +5,7 @@ import {
 import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
+  capacityProviderConfig: {},
   name: "Run in Child Context",
   description: "Basic usage of context.runInChildContext()",
 };

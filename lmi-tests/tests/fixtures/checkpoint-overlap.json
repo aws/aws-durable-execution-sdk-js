@@ -1,0 +1,79 @@
+[
+  {
+    "marker": "victim",
+    "request": "victim-request",
+    "phase": "BLOCKED",
+    "gate": "loser",
+    "time": 0.516,
+    "environment": "environment",
+    "worker": "worker",
+    "pid": 15,
+    "threadId": 1
+  },
+  {
+    "marker": "victim",
+    "request": "victim-request",
+    "phase": "RELEASED",
+    "gate": "loser",
+    "time": 1.2,
+    "environment": "environment",
+    "worker": "worker",
+    "pid": 15,
+    "threadId": 1
+  },
+  {
+    "marker": "victim",
+    "request": "victim-request",
+    "phase": "BLOCKED",
+    "gate": "transport",
+    "time": 1.435,
+    "environment": "environment",
+    "worker": "worker",
+    "pid": 15,
+    "threadId": 1
+  },
+  {
+    "marker": "peer",
+    "request": "peer-request",
+    "phase": "BLOCKED",
+    "gate": "peer",
+    "time": 13.952,
+    "environment": "environment",
+    "worker": "worker",
+    "pid": 15,
+    "threadId": 1
+  },
+  {
+    "marker": "peer",
+    "request": "peer-request",
+    "phase": "ALIVE",
+    "gate": "peer",
+    "time": 14.041,
+    "environment": "environment",
+    "worker": "worker",
+    "pid": 15,
+    "threadId": 1
+  },
+  {
+    "marker": "victim",
+    "request": "victim-request",
+    "phase": "ALIVE",
+    "gate": "transport",
+    "time": 14.454,
+    "environment": "environment",
+    "worker": "worker",
+    "pid": 15,
+    "threadId": 1
+  },
+  {
+    "marker": "peer",
+    "request": "peer-request",
+    "phase": "ALIVE",
+    "gate": "peer",
+    "time": 14.634,
+    "environment": "environment",
+    "worker": "worker",
+    "pid": 15,
+    "threadId": 1
+  }
+]

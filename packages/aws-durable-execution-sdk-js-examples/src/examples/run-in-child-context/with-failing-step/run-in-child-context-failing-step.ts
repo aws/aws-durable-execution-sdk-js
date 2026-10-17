@@ -7,6 +7,7 @@ import {
 import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
+  capacityProviderConfig: {},
   name: "Run in Child Context with Failing Step",
   description:
     "Demonstrates runInChildContext with a failing step followed by a successful wait",

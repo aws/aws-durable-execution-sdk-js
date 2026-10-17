@@ -5,6 +5,7 @@ import {
 import { ExampleConfig } from "../../types";
 
 export const config: ExampleConfig = {
+  capacityProviderConfig: {},
   name: "Retry Exhaustion",
   description:
     "Demonstrates retry mechanism until complete exhaustion and final failure",
