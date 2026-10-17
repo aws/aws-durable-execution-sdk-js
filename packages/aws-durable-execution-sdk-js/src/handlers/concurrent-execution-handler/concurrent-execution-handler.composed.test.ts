@@ -163,6 +163,27 @@ describe("ConcurrentExecutionHandler Composed Tests", () => {
     expect(mapped.getResults()).toEqual([0, 20, 30]);
   });
 
+  it("does not absorb later map successes after minSuccessful is reached", async () => {
+    const { context } = createTestDurableContext();
+
+    const mapped = await context.map(
+      "min-successful-no-absorb",
+      [0, 1, 2, 3],
+      async (child, item) =>
+        child.step(`s-${item}`, async () => {
+          if (item > 0) {
+            await new Promise((resolve) => setImmediate(resolve));
+          }
+          return item * 10;
+        }),
+      { completionConfig: { minSuccessful: 1 } },
+    );
+
+    expect(mapped.successCount).toBe(1);
+    expect(mapped.getResults()).toEqual([0]);
+    expect(mapped.completionReason).toBe("MIN_SUCCESSFUL_REACHED");
+  });
+
   it("should support early termination with minSuccessful", async () => {
     const { context } = createTestDurableContext();
 

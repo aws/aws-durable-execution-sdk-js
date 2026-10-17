@@ -883,13 +883,25 @@ export class ConcurrencyController<Logger extends DurableLogger> {
         resolve(result);
       };
 
-      // Fail-fast (and other early-completion) can fire before sibling items
-      // that have already finished report their status. Completions go through
-      // the checkpoint queue (setImmediate) and then the item promise
-      // callbacks, so a synchronous snapshot reports them as STARTED with no
-      // result (issue #967). Drain until a full setImmediate turn is stable,
-      // then snapshot. Items that are still pending after that (e.g. an
-      // in-flight wait) stay STARTED.
+      const waitForQueuedCheckpoints = (): Promise<void> => {
+        const checkpoint = (
+          parentContext as unknown as {
+            checkpoint?: { waitForQueueCompletion?: () => Promise<void> };
+          }
+        ).checkpoint;
+        if (typeof checkpoint?.waitForQueueCompletion === "function") {
+          return checkpoint.waitForQueueCompletion();
+        }
+        return Promise.resolve();
+      };
+
+      // Failure-driven early exit only (default fail-fast, or a tolerated
+      // failure threshold being exceeded). minSuccessful / shouldComplete /
+      // all-items-done snapshot immediately so later siblings that finish in
+      // the same turn are not absorbed into the result.
+      const isFailureDrivenEarlyExit = (): boolean =>
+        failureCount > 0 && !shouldContinue();
+
       let finishing = false;
       const finish = (): void => {
         if (finishing) {
@@ -897,19 +909,37 @@ export class ConcurrencyController<Logger extends DurableLogger> {
         }
         finishing = true;
 
-        const drainUntilStable = (): void => {
+        if (!isFailureDrivenEarlyExit()) {
+          resolveBatch();
+          return;
+        }
+
+        // Sibling items may have already finished and queued a terminal
+        // checkpoint, but their promise callbacks have not run yet (issue
+        // #967). Flush already-submitted checkpoints, then yield one
+        // setImmediate so those callbacks update resultItems. Repeat only
+        // while statuses keep changing, up to 2N+1 turns (START + terminal
+        // per item, plus the quiet stop). Never wait for items that are
+        // still pending after that — they stay STARTED.
+        //
+        // This is deterministic relative to work already submitted: we do
+        // not start new items, and we do not wait for user code or waits
+        // that have not yet queued a completion. The cap is explicit so a
+        // custom shouldComplete flip cannot spin the loop.
+        const maxTurns = items.length * 2 + 1;
+        const drainFailureCompletions = (turnsLeft: number): void => {
           const before = itemStatusesKey();
-          // Child completions go through the checkpoint queue, which is
-          // scheduled with setImmediate. A microtask drain is not enough.
-          setImmediate(() => {
-            if (itemStatusesKey() !== before) {
-              drainUntilStable();
-              return;
-            }
-            resolveBatch();
+          void waitForQueuedCheckpoints().finally(() => {
+            setImmediate(() => {
+              if (itemStatusesKey() !== before && turnsLeft > 1) {
+                drainFailureCompletions(turnsLeft - 1);
+                return;
+              }
+              resolveBatch();
+            });
           });
         };
-        drainUntilStable();
+        drainFailureCompletions(maxTurns);
       };
 
       const onComplete = (): void => {
