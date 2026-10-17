@@ -883,18 +883,6 @@ export class ConcurrencyController<Logger extends DurableLogger> {
         resolve(result);
       };
 
-      const waitForQueuedCheckpoints = (): Promise<void> => {
-        const checkpoint = (
-          parentContext as unknown as {
-            checkpoint?: { waitForQueueCompletion?: () => Promise<void> };
-          }
-        ).checkpoint;
-        if (typeof checkpoint?.waitForQueueCompletion === "function") {
-          return checkpoint.waitForQueueCompletion();
-        }
-        return Promise.resolve();
-      };
-
       // Failure-driven early exit only (default fail-fast, or a tolerated
       // failure threshold being exceeded). minSuccessful / shouldComplete /
       // all-items-done snapshot immediately so later siblings that finish in
@@ -914,29 +902,24 @@ export class ConcurrencyController<Logger extends DurableLogger> {
           return;
         }
 
-        // Sibling items may have already finished and queued a terminal
-        // checkpoint, but their promise callbacks have not run yet (issue
-        // #967). Flush already-submitted checkpoints, then yield one
-        // setImmediate so those callbacks update resultItems. Repeat only
-        // while statuses keep changing, up to 2N+1 turns (START + terminal
-        // per item, plus the quiet stop). Never wait for items that are
-        // still pending after that — they stay STARTED.
+        // Sibling items may have already finished, but their promise
+        // callbacks have not run yet (issue #967). Yield one setImmediate
+        // so those callbacks update resultItems. Repeat only while statuses
+        // keep changing, up to 2N+1 turns (START + terminal per item, plus
+        // the quiet stop). Never wait for items that are still pending
+        // after that — they stay STARTED.
         //
-        // This is deterministic relative to work already submitted: we do
-        // not start new items, and we do not wait for user code or waits
-        // that have not yet queued a completion. The cap is explicit so a
-        // custom shouldComplete flip cannot spin the loop.
+        // Do not wait on CheckpointManager.waitForQueueCompletion: that
+        // API keeps only one waiter, so two concurrent fail-fast maps hang.
         const maxTurns = items.length * 2 + 1;
         const drainFailureCompletions = (turnsLeft: number): void => {
           const before = itemStatusesKey();
-          void waitForQueuedCheckpoints().finally(() => {
-            setImmediate(() => {
-              if (itemStatusesKey() !== before && turnsLeft > 1) {
-                drainFailureCompletions(turnsLeft - 1);
-                return;
-              }
-              resolveBatch();
-            });
+          setImmediate(() => {
+            if (itemStatusesKey() !== before && turnsLeft > 1) {
+              drainFailureCompletions(turnsLeft - 1);
+              return;
+            }
+            resolveBatch();
           });
         };
         drainFailureCompletions(maxTurns);

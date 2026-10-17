@@ -42,4 +42,33 @@ describe("map fail-fast completed items (issue #967)", () => {
     expect(output.replay.successCount).toBe(3);
     expect(output.replay.results).toEqual([0, 20, 30]);
   });
+
+  it("does not hang when two fail-fast maps run concurrently", async () => {
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+    const execution = await runner.run({
+      payload: { concurrentMaps: true },
+    });
+
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    const output = execution.getResult() as {
+      left: { statuses: string[]; successCount: number; results: number[] };
+      right: { statuses: string[]; successCount: number; results: number[] };
+    };
+    expect(output.left.statuses).toEqual([
+      "SUCCEEDED",
+      "FAILED",
+      "SUCCEEDED",
+      "SUCCEEDED",
+    ]);
+    expect(output.right.statuses).toEqual([
+      "SUCCEEDED",
+      "FAILED",
+      "SUCCEEDED",
+      "SUCCEEDED",
+    ]);
+    expect(output.left.successCount).toBe(3);
+    expect(output.right.successCount).toBe(3);
+    expect(output.left.results).toEqual([0, 20, 30]);
+    expect(output.right.results).toEqual([0, 20, 30]);
+  }, 10000);
 });
