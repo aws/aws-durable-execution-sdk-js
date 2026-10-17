@@ -396,6 +396,89 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
   });
 
   describe("Race condition prevention", () => {
+    it.each(["SUCCEEDED", "FAILED", "THROWN"] as const)(
+      "does not admit callback wakeups while recording a terminal %s response",
+      async (outcome) => {
+        jest.useFakeTimers();
+        const failure = new Error("handler failed");
+        if (outcome === "THROWN") mockInvoke.mockRejectedValue(failure);
+        else
+          mockInvoke.mockResolvedValue(
+            outcome === "SUCCEEDED"
+              ? { Status: InvocationStatus.SUCCEEDED, Result: '"saved"' }
+              : {
+                  Status: InvocationStatus.FAILED,
+                  Error: { ErrorMessage: "failed" },
+                },
+          );
+
+        let completeEntered!: () => void;
+        const completing = new Promise<void>((resolve) => {
+          completeEntered = resolve;
+        });
+        let releaseComplete!: (value: CompleteInvocationResponse) => void;
+        completeInvocationSpy.mockImplementationOnce(() => {
+          completeEntered();
+          return new Promise<CompleteInvocationResponse>((resolve) => {
+            releaseComplete = resolve;
+          });
+        });
+        let deliverCallback!: (
+          value: Awaited<ReturnType<CheckpointApiClient["pollCheckpointData"]>>,
+        ) => void;
+        jest.spyOn(checkpointApi, "pollCheckpointData").mockReturnValueOnce(
+          new Promise((resolve) => {
+            deliverCallback = resolve;
+          }),
+        );
+        const update = {
+          operations: [
+            {
+              operation: {
+                Id: "late-callback",
+                Type: OperationType.CALLBACK,
+                Status: OperationStatus.FAILED,
+                StartTimestamp: new Date(),
+              },
+              update: undefined,
+              events: [],
+            },
+          ],
+        };
+        // Notifications must still be collected during the final drain, but
+        // neither those nor an already-queued wakeup may start another handler.
+        jest
+          .spyOn(checkpointApi, "drainCheckpointData")
+          .mockResolvedValue(update);
+        const execution = orchestrator.executeHandler().then(
+          (value) => ({ value, error: undefined }),
+          (error) => ({ value: undefined, error }),
+        );
+        try {
+          await jest.advanceTimersByTimeAsync(1);
+          await completing;
+          deliverCallback(update);
+          await jest.advanceTimersByTimeAsync(1);
+          expect(checkpointApi.startInvocation).not.toHaveBeenCalled();
+          expect(mockInvoke).toHaveBeenCalledTimes(1);
+          releaseComplete(mockInvocationCompletedEvent);
+          const result = await execution;
+          if (outcome === "THROWN") expect(result.error).toBe(failure);
+          else expect(result.value?.status).toBe(outcome);
+          await jest.advanceTimersByTimeAsync(1);
+          expect(checkpointApi.startInvocation).not.toHaveBeenCalled();
+          expect(mockInvoke).toHaveBeenCalledTimes(1);
+          expect(mockOperationStorage.populateOperations).toHaveBeenCalledWith(
+            update.operations,
+          );
+        } finally {
+          releaseComplete?.(mockInvocationCompletedEvent);
+          await execution;
+          jest.useRealTimers();
+        }
+      },
+    );
+
     it("should prevent duplicate startInvocation requests when multiple callback operations trigger concurrent invocations", async () => {
       let startInvocationCallCount = 0;
       let resolveStartInvocation: () => void;

@@ -72,7 +72,11 @@ describe("withDurableExecution Queue Completion", () => {
 
     // waitForQueueCompletion is called once in the success path
     expect(waitSpy).toHaveBeenCalled();
-    expect(clearSpy).not.toHaveBeenCalled();
+    // Disposal clears any leftover admission state only after the successful drain.
+    expect(clearSpy).toHaveBeenCalledTimes(1);
+    expect(waitSpy.mock.invocationCallOrder[0]).toBeLessThan(
+      clearSpy.mock.invocationCallOrder[0],
+    );
 
     waitSpy.mockRestore();
     clearSpy.mockRestore();

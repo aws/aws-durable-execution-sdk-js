@@ -161,7 +161,7 @@ it("keeps a parent recorded despite a suppressed checkpoint, without leaking tha
       } finally {
         releaseParent.open();
         releaseRoot.open();
-        await Promise.resolve(childWork).catch(() => undefined);
+        void Promise.resolve(childWork).catch(() => undefined);
         await execution.catch(() => undefined);
       }
     }
@@ -179,11 +179,12 @@ it("keeps a parent recorded despite a suppressed checkpoint, without leaking tha
 }, 30000);
 
 it.each(["first flush", "final flush", "never"] as const)(
-  "finalizes and flushes callback ancestry (parent finishes during %s)",
+  "finalizes and flushes callback ancestry (detached parent returns during %s)",
   async (parentFinishes) => {
     const ready = gate();
     const releaseParent = gate();
-    const parentEnded = gate();
+    const parentEnded = jest.fn();
+    const parentBodyReturned = gate();
     const rootLive = gate();
     const releaseRoot = gate();
     const flushEntered = gate();
@@ -235,6 +236,7 @@ it.each(["first flush", "final flush", "never"] as const)(
             await parent.createCallback("external");
             ready.open();
             await releaseParent.opened;
+            parentBodyReturned.open();
             return "parent result";
           });
           await ready.opened;
@@ -259,7 +261,7 @@ it.each(["first flush", "final flush", "never"] as const)(
           plugin,
           {
             async onOperationEnd(info) {
-              if (info.name === "parent") parentEnded.open();
+              if (info.name === "parent") parentEnded();
             },
           },
         ],
@@ -283,13 +285,13 @@ it.each(["first flush", "final flush", "never"] as const)(
       );
       if (parentFinishes === "first flush") {
         releaseParent.open();
-        await parentEnded.opened;
+        await parentBodyReturned.opened;
       }
       releaseFlush.open();
       await finalFlushEntered.opened;
       if (parentFinishes === "final flush") {
         releaseParent.open();
-        await parentEnded.opened;
+        await parentBodyReturned.opened;
       }
       releaseFinalFlush.open();
       const result = await execution;
@@ -301,11 +303,9 @@ it.each(["first flush", "final flush", "never"] as const)(
       const completions = spans.filter((span) => span.name === "external");
       const parents = spans.filter((span) => span.name === "parent");
       expect(completions).toHaveLength(1);
-      expect(parents).toHaveLength(parentFinishes === "first flush" ? 1 : 0);
-      const expectedParent =
-        parentFinishes === "first flush"
-          ? parents[0]
-          : spans.find((span) => span.name === "Workflow")!;
+      expect(parentEnded).not.toHaveBeenCalled();
+      expect(parents).toHaveLength(0);
+      const expectedParent = spans.find((span) => span.name === "Workflow")!;
       expect(expectedParent).toBeDefined();
       expect(completions[0].parentSpanContext?.spanId).toBe(
         expectedParent.spanContext().spanId,
@@ -315,7 +315,7 @@ it.each(["first flush", "final flush", "never"] as const)(
       releaseFinalFlush.open();
       releaseParent.open();
       releaseRoot.open();
-      await Promise.resolve(childWork).catch(() => undefined);
+      void Promise.resolve(childWork).catch(() => undefined);
       await execution.catch(() => undefined);
       await provider.shutdown();
       trace.disable();

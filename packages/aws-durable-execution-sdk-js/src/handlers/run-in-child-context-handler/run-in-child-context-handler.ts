@@ -26,6 +26,7 @@ import {
   ChildContextError,
 } from "../../errors/durable-error/durable-error";
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
+import { runInvocationCallback } from "../../utils/invocation-lifecycle/invocation-lifecycle";
 import { DurablePromise } from "../../types/durable-promise";
 import { DurableLogger } from "../../types/durable-logger";
 import { resolveChildArgs } from "./resolve-child-args";
@@ -256,7 +257,7 @@ export const handleCompletedChildContext = async <
     const replayedResult = await runWithContext(
       entityId,
       entityId,
-      () => fn(durableChildContext),
+      () => runInvocationCallback(context, () => fn(durableChildContext)),
       undefined,
       undefined,
       stepName,
@@ -373,7 +374,8 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
 
   try {
     // Execute the child context function with context tracking
-    const childContextFn = () => fn(durableChildContext);
+    const childContextFn = () =>
+      runInvocationCallback(context, () => fn(durableChildContext));
     const wrapInfo = {
       ...opInfo,
       isReplay: childReplayMode !== DurableExecutionMode.ExecutionMode,

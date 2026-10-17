@@ -248,6 +248,19 @@ export interface DurableExecutionConfig {
 }
 
 /**
+ * Optional cancellation for a single invocation's backend request.
+ * Existing transports that accept only params and logger remain compatible.
+ * @public
+ */
+export interface DurableExecutionRequestOptions {
+  /**
+   * Cancellation for this invocation's request, never for the shared client.
+   * Custom transports may ignore it; cancellation cannot undo an accepted request.
+   */
+  abortSignal?: AbortSignal;
+}
+
+/**
  * Client interface for durable execution backend operations.
  *
  * This interface defines the core operations needed to manage durable execution state
@@ -277,6 +290,7 @@ export interface DurableExecutionClient {
    *
    * @param params - Request parameters including execution ARN and state identifiers
    * @param logger - Optional logger instance for operation logging and debugging
+   * @param options - Optional invocation-owned cancellation signal
    *
    * @returns Promise resolving to the execution state response containing step history,
    *          checkpoint data, and execution metadata
@@ -287,6 +301,7 @@ export interface DurableExecutionClient {
   getExecutionState(
     params: GetDurableExecutionStateRequest,
     logger?: DurableLogger,
+    options?: DurableExecutionRequestOptions,
   ): Promise<GetDurableExecutionStateResponse>;
 
   /**
@@ -305,6 +320,7 @@ export interface DurableExecutionClient {
    *
    * @param params - Checkpoint request parameters including execution data and metadata
    * @param logger - Optional logger instance for operation logging and debugging
+   * @param options - Optional invocation-owned cancellation signal
    *
    * @returns Promise resolving to the checkpoint response with confirmation and metadata
    *
@@ -314,6 +330,7 @@ export interface DurableExecutionClient {
   checkpoint(
     params: CheckpointDurableExecutionRequest,
     logger?: DurableLogger,
+    options?: DurableExecutionRequestOptions,
   ): Promise<CheckpointDurableExecutionResponse>;
 }
 

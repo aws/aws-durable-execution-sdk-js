@@ -338,12 +338,22 @@ export class DurableContextImpl<Logger extends DurableLogger>
   }
 
   private withModeManagement<T>(operation: () => Promise<T>): Promise<T> {
+    if (
+      this._executionContext.invocationLifecycle &&
+      !this._executionContext.invocationLifecycle.allowsOperations()
+    )
+      return new Promise(() => {});
     return this.modeManagement.withModeManagement(operation);
   }
 
   private withDurableModeManagement<T>(
     operation: () => DurablePromise<T>,
   ): DurablePromise<T> {
+    if (
+      this._executionContext.invocationLifecycle &&
+      !this._executionContext.invocationLifecycle.allowsOperations()
+    )
+      return new DurablePromise(() => new Promise(() => {}));
     return this.modeManagement.withDurableModeManagement(operation);
   }
 
