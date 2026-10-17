@@ -69,6 +69,9 @@ export class TestExecutionOrchestrator {
   private runningInvocations = 0;
   private idleWaiters: (() => void)[] = [];
   private settled = false;
+  // A terminal handler response can precede asynchronous history recording.
+  // Its queued callback wakeups must not use that interval to invoke again.
+  private invocationAdmissionClosed = false;
   private resolveExecutionId!: (executionId: ExecutionId) => void;
   private rejectExecutionId!: (err: unknown) => void;
   private readonly executionId: Promise<ExecutionId> = new Promise(
@@ -706,6 +709,7 @@ export class TestExecutionOrchestrator {
     defaultLogger.debug("Resolving execution", {
       update,
     });
+    this.invocationAdmissionClosed = true;
     this.executionState.resolveWith({
       result: update.Payload,
       error: update.Error,
@@ -782,6 +786,7 @@ export class TestExecutionOrchestrator {
     executionId: ExecutionId,
     invocationParams?: Omit<InvocationResult, "executionId">,
   ): Promise<void> {
+    if (this.invocationAdmissionClosed || this.settled) return;
     if (this.paused) {
       defaultLogger.debug("Holding back invocation while execution is paused");
       // One held-back invocation stands for any number: each would replay the same state.
@@ -850,6 +855,13 @@ export class TestExecutionOrchestrator {
         value,
       );
 
+      if (
+        value.Status === InvocationStatus.SUCCEEDED ||
+        value.Status === InvocationStatus.FAILED
+      ) {
+        this.invocationAdmissionClosed = true;
+      }
+
       const { event, hasDirtyOperations } =
         await this.invocationTracker.completeInvocation(
           executionId,
@@ -916,6 +928,9 @@ export class TestExecutionOrchestrator {
         });
       }
     } catch (err) {
+      // Thrown handler errors reject this local execution below; they do not
+      // schedule an invocation retry. Durable PENDING/retry scheduling is separate.
+      this.invocationAdmissionClosed = true;
       defaultLogger.debug(
         `Handler failed for invocationId=${invocationId}:`,
         err,
