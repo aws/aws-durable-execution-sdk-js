@@ -139,6 +139,30 @@ describe("ConcurrentExecutionHandler Composed Tests", () => {
     expect(results).toEqual([10, 20]);
   });
 
+  it("keeps finished map items when fail-fast completes early (issue #967)", async () => {
+    const { context } = createTestDurableContext();
+
+    const mapped = await context.map("m", [0, 1, 2, 3], async (child, item) =>
+      child.step(
+        "s",
+        async () => {
+          if (item === 1) throw new Error("boom");
+          return item * 10;
+        },
+        { retryStrategy: () => ({ shouldRetry: false }) },
+      ),
+    );
+
+    expect(mapped.all.map((item) => item.status)).toEqual([
+      BatchItemStatus.SUCCEEDED,
+      BatchItemStatus.FAILED,
+      BatchItemStatus.SUCCEEDED,
+      BatchItemStatus.SUCCEEDED,
+    ]);
+    expect(mapped.successCount).toBe(3);
+    expect(mapped.getResults()).toEqual([0, 20, 30]);
+  });
+
   it("should support early termination with minSuccessful", async () => {
     const { context } = createTestDurableContext();
 

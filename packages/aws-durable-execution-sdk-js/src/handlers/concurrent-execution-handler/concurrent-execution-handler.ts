@@ -853,35 +853,71 @@ export class ConcurrencyController<Logger extends DurableLogger> {
         }
       };
 
+      const itemStatusesKey = (): string =>
+        resultItems.map((item) => item?.status ?? "").join(",");
+
+      const resolveBatch = (): void => {
+        // Convert sparse array to dense array - items are already in correct order by index
+        // Include all items that were started (have a value in resultItems)
+        // Create shallow copy to prevent mutations from affecting the returned result
+        const finalBatchItems: BatchItem<R>[] = [];
+        for (let i = 0; i < resultItems.length; i++) {
+          if (resultItems[i] !== undefined) {
+            finalBatchItems.push({ ...resultItems[i]! });
+          }
+        }
+
+        log("🎉", `${this.operationName} completed:`, {
+          successCount,
+          failureCount,
+          startedCount: finalBatchItems.filter(
+            (item) => item.status === BatchItemStatus.STARTED,
+          ).length,
+          totalCount: finalBatchItems.length,
+        });
+
+        const result = new BatchResultImpl(
+          finalBatchItems,
+          getCompletionReason(failureCount),
+        );
+        resolve(result);
+      };
+
+      // Fail-fast (and other early-completion) can fire before sibling items
+      // that have already finished report their status. Completions go through
+      // the checkpoint queue (setImmediate) and then the item promise
+      // callbacks, so a synchronous snapshot reports them as STARTED with no
+      // result (issue #967). Drain until a full setImmediate turn is stable,
+      // then snapshot. Items that are still pending after that (e.g. an
+      // in-flight wait) stay STARTED.
+      let finishing = false;
+      const finish = (): void => {
+        if (finishing) {
+          return;
+        }
+        finishing = true;
+
+        const drainUntilStable = (): void => {
+          const before = itemStatusesKey();
+          // Child completions go through the checkpoint queue, which is
+          // scheduled with setImmediate. A microtask drain is not enough.
+          setImmediate(() => {
+            if (itemStatusesKey() !== before) {
+              drainUntilStable();
+              return;
+            }
+            resolveBatch();
+          });
+        };
+        drainUntilStable();
+      };
+
       const onComplete = (): void => {
         activeCount--;
         completedCount++;
 
         if (isComplete() || !shouldContinue()) {
-          // Convert sparse array to dense array - items are already in correct order by index
-          // Include all items that were started (have a value in resultItems)
-          // Create shallow copy to prevent mutations from affecting the returned result
-          const finalBatchItems: BatchItem<R>[] = [];
-          for (let i = 0; i < resultItems.length; i++) {
-            if (resultItems[i] !== undefined) {
-              finalBatchItems.push({ ...resultItems[i]! });
-            }
-          }
-
-          log("🎉", `${this.operationName} completed:`, {
-            successCount,
-            failureCount,
-            startedCount: finalBatchItems.filter(
-              (item) => item.status === BatchItemStatus.STARTED,
-            ).length,
-            totalCount: finalBatchItems.length,
-          });
-
-          const result = new BatchResultImpl(
-            finalBatchItems,
-            getCompletionReason(failureCount),
-          );
-          resolve(result);
+          finish();
         } else {
           tryStartNext();
         }

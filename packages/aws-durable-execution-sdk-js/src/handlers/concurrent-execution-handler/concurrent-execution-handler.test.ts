@@ -638,6 +638,81 @@ describe("ConcurrencyController", () => {
       expect(result.failed()[0].error).toEqual(error);
     });
 
+    it("keeps already-finished items when fail-fast completes early (issue #967)", async () => {
+      const items = [0, 1, 2, 3].map((index) => ({
+        id: `item-${index}`,
+        data: index,
+        index,
+      }));
+      const executor = jest.fn();
+
+      // Failure settles first; successes are already queued as microtasks so
+      // they have finished by the time the batch completes, matching the
+      // LocalDurableTestRunner skipTime race in issue #967.
+      mockParentContext.runInChildContext.mockImplementation((name) => {
+        const index = Number(String(name).slice("item-".length));
+        if (index === 1) {
+          return new DurablePromise(() => Promise.reject(new Error("boom")));
+        }
+        return new DurablePromise(() =>
+          Promise.resolve().then(() => index * 10),
+        );
+      });
+
+      const result = await controller.executeItems(
+        items,
+        executor,
+        mockParentContext,
+        {},
+      );
+
+      expect(result.all.map((item) => item.status)).toEqual([
+        BatchItemStatus.SUCCEEDED,
+        BatchItemStatus.FAILED,
+        BatchItemStatus.SUCCEEDED,
+        BatchItemStatus.SUCCEEDED,
+      ]);
+      expect(result.successCount).toBe(3);
+      expect(result.getResults()).toEqual([0, 20, 30]);
+      expect(result.completionReason).toBe("FAILURE_TOLERANCE_EXCEEDED");
+    });
+
+    it("leaves items that are still running as STARTED when fail-fast completes early", async () => {
+      const items = [0, 1, 2].map((index) => ({
+        id: `item-${index}`,
+        data: index,
+        index,
+      }));
+      const executor = jest.fn();
+
+      mockParentContext.runInChildContext.mockImplementation((name) => {
+        const index = Number(String(name).slice("item-".length));
+        if (index === 0) {
+          return new DurablePromise(() => Promise.resolve().then(() => 0));
+        }
+        if (index === 1) {
+          return new DurablePromise(() => Promise.reject(new Error("boom")));
+        }
+        return new DurablePromise(() => new Promise(() => {}));
+      });
+
+      const result = await controller.executeItems(
+        items,
+        executor,
+        mockParentContext,
+        {},
+      );
+
+      expect(result.all.map((item) => item.status)).toEqual([
+        BatchItemStatus.SUCCEEDED,
+        BatchItemStatus.FAILED,
+        BatchItemStatus.STARTED,
+      ]);
+      expect(result.successCount).toBe(1);
+      expect(result.getResults()).toEqual([0]);
+      expect(result.startedCount).toBe(1);
+    });
+
     it("should respect maxConcurrency", async () => {
       const items = [
         { id: "item-0", data: "data1", index: 0 },

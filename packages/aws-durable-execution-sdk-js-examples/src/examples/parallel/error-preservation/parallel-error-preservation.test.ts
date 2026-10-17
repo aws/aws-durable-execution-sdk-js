@@ -10,8 +10,8 @@ createTests({
 
       expect(result).toBeDefined();
 
-      // With no-retry config, parallel operations fail completely when any task fails
-      expect(result.success).toHaveLength(0);
+      // Fail-fast still reports branches that already finished (issue #967)
+      expect(result.success).toHaveLength(1);
       expect(result.totalErrors).toBe(1);
       expect(result.errors).toHaveLength(1);
 
