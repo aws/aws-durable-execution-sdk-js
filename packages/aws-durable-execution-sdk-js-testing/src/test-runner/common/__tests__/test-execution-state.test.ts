@@ -104,4 +104,24 @@ describe("TestExecutionState", () => {
       }).not.toThrow();
     });
   });
+
+  describe("isSettled", () => {
+    it("is false until the execution is resolved", () => {
+      void executionState.createExecutionPromise();
+      expect(executionState.isSettled()).toBe(false);
+
+      executionState.resolveWith({ status: OperationStatus.SUCCEEDED });
+
+      expect(executionState.isSettled()).toBe(true);
+    });
+
+    it("is true once the execution is rejected", async () => {
+      const promise = executionState.createExecutionPromise();
+
+      executionState.rejectWith(new Error("failed"));
+
+      expect(executionState.isSettled()).toBe(true);
+      await expect(promise).rejects.toThrow("failed");
+    });
+  });
 });
