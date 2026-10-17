@@ -85,6 +85,7 @@ jobs:
       runs_on: codebuild-github-actions-runner-${{ github.run_id }}-${{ github.run_attempt }}
       language: javascript
       resource_prefix: js
+      case_count: 26
       sdk_repository: aws/aws-durable-execution-sdk-js
       sdk_ref: ${{ github.event.pull_request.head.sha || github.sha }}
       conformance_test_ref: ${{ inputs.conformance_test_ref || '05960beb6c81d7b24b53114f2581b3b6f9fef6d4' }}

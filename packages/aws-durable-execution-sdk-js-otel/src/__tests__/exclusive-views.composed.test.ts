@@ -11,18 +11,18 @@ import {
   type InvocationInfo,
 } from "@aws/durable-execution-sdk-js";
 import type * as PluginLoader from "../../../aws-durable-execution-sdk-js/dist-types/utils/plugin/plugin-loader";
-import type * as PluginRunner from "../../../aws-durable-execution-sdk-js/dist-types/utils/plugin/plugin-runner";
+import type * as PluginFactory from "../../../aws-durable-execution-sdk-js/dist-types/utils/plugin/plugin-factory";
 
 // Run the real core loader and runner. Use their built declarations so this
 // package's typecheck does not compile core sources with OTel compiler options.
 const { loadConfiguredPlugins } = jest.requireActual<typeof PluginLoader>(
   "../../../aws-durable-execution-sdk-js/src/utils/plugin/plugin-loader",
 );
-const { createPluginRunner } = jest.requireActual<typeof PluginRunner>(
-  "../../../aws-durable-execution-sdk-js/src/utils/plugin/plugin-runner",
-);
-import { ExecutionOtelPlugin } from "../execution-plugin";
-import { InvocationOtelPlugin } from "../invocation-plugin";
+const { createInvocationPluginRunner } = jest.requireActual<
+  typeof PluginFactory
+>("../../../aws-durable-execution-sdk-js/src/utils/plugin/plugin-factory");
+import { createExecutionOtelPluginFactory } from "../execution-plugin";
+import { createInvocationOtelPluginFactory } from "../invocation-plugin";
 
 const info: InvocationInfo = {
   requestId: "first",
@@ -49,9 +49,11 @@ describe("bundled OTel view registration", () => {
     trace.disable();
   });
   function make(
-    Plugin: typeof ExecutionOtelPlugin | typeof InvocationOtelPlugin,
+    createFactory:
+      | typeof createExecutionOtelPluginFactory
+      | typeof createInvocationOtelPluginFactory,
   ) {
-    return new Plugin({
+    return createFactory({
       contextExtractor: () => undefined,
       tracerProviderFactory: (ids) => {
         const provider = new NodeTracerProvider({
@@ -67,8 +69,8 @@ describe("bundled OTel view registration", () => {
     "rejects both views before any export or context change (reverse=%s)",
     async (reverse) => {
       const classes = reverse
-        ? [InvocationOtelPlugin, ExecutionOtelPlugin]
-        : [ExecutionOtelPlugin, InvocationOtelPlugin];
+        ? [createInvocationOtelPluginFactory, createExecutionOtelPluginFactory]
+        : [createExecutionOtelPluginFactory, createInvocationOtelPluginFactory];
       for (const explicitCount of [0, 1, 2]) {
         const plugins = classes.map((Plugin) => make(Plugin));
         const specifiers = classes
@@ -80,11 +82,7 @@ describe("bundled OTel view registration", () => {
             importModule: async (specifier) => {
               const i = Number(specifier.slice(-1));
               return {
-                durableExecutionPluginProvider: {
-                  pluginApiVersion: 1,
-                  pluginType: classes[i],
-                  createPlugin: () => plugins[i],
-                },
+                durableExecutionPluginProvider: plugins[i],
               };
             },
           }),
@@ -92,26 +90,68 @@ describe("bundled OTel view registration", () => {
           /(ExecutionOtelPlugin.*InvocationOtelPlugin|InvocationOtelPlugin.*ExecutionOtelPlugin).*Configure only one/,
         );
         expect(exporter.getFinishedSpans()).toHaveLength(0);
+        expect(providers).toHaveLength(0);
         expect(context.active()).toBe(ROOT_CONTEXT);
       }
     },
   );
-  it.each([ExecutionOtelPlugin, InvocationOtelPlugin])(
+  it.each([false, true])(
+    "retains the bundled view group on derived factories (reverse=%s)",
+    async (reverse) => {
+      const baseFactories = [
+        make(createExecutionOtelPluginFactory),
+        make(createInvocationOtelPluginFactory),
+      ];
+      const derived = baseFactories.map(
+        (factory, i) =>
+          Object.create(factory, {
+            [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: {
+              value: {
+                name: `derived view ${i}`,
+                exclusiveGroup: `own group ${i}`,
+              },
+            },
+          }) as typeof factory,
+      );
+      const entries = reverse ? derived.reverse() : derived;
+      await expect(
+        loadConfiguredPlugins(entries, { environment: {} }),
+      ).rejects.toThrow("durable-opentelemetry-view");
+      expect(providers).toHaveLength(0);
+      expect(exporter.getFinishedSpans()).toHaveLength(0);
+      expect(context.active()).toBe(ROOT_CONTEXT);
+    },
+  );
+
+  it.each([
+    createExecutionOtelPluginFactory,
+    createInvocationOtelPluginFactory,
+  ])(
     "keeps one view plus unrelated hooks valid across suspension and completion: %p",
     async (Plugin) => {
       for (const terminal of ["SUCCEEDED", "FAILED"] as const) {
         exporter.reset();
         const observer = { onInvocationStart: jest.fn(async () => undefined) };
-        const plugins = await loadConfiguredPlugins([make(Plugin), observer], {
-          environment: {},
-        });
-        const runner = createPluginRunner(plugins);
+        const plugins = await loadConfiguredPlugins(
+          [
+            make(Plugin),
+            {
+              createPlugin: () => ({
+                onInvocationStart: observer.onInvocationStart,
+              }),
+            },
+          ],
+          {
+            environment: {},
+          },
+        );
         for (const status of ["PENDING", terminal] as const) {
           const current = {
             ...info,
             isFirstInvocation: status === "PENDING",
             requestId: status,
           };
+          const runner = createInvocationPluginRunner(plugins, current);
           await runner.onInvocationStart?.(current);
           await runner.wrapInvocation!(current, async () => {
             expect(trace.getSpan(context.active())).toBeDefined();
@@ -144,102 +184,6 @@ describe("bundled OTel view registration", () => {
           1,
         );
       }
-    },
-  );
-
-  it.each([false, true])(
-    "rejects dynamic conflicts without constructing plugins or mutating the global tracer (reverse=%s)",
-    async (reverse) => {
-      const provider = new NodeTracerProvider({
-        spanProcessors: [new SimpleSpanProcessor(exporter)],
-      });
-      providers.push(provider);
-      trace.setGlobalTracerProvider(provider);
-      const tracer = provider.getTracer("aws-durable-execution-sdk-js");
-      const sampler = Reflect.get(tracer, "_sampler");
-      const idGenerator = Reflect.get(tracer, "_idGenerator");
-      const classes = reverse
-        ? [InvocationOtelPlugin, ExecutionOtelPlugin]
-        : [ExecutionOtelPlugin, InvocationOtelPlugin];
-      const factories = classes.map((Plugin) => jest.fn(() => new Plugin()));
-      await expect(
-        loadConfiguredPlugins([], {
-          environment: { DURABLE_EXECUTION_PLUGINS: "first,second" },
-          importModule: async (specifier) => {
-            const i = specifier === "first" ? 0 : 1;
-            return {
-              durableExecutionPluginProvider: {
-                pluginApiVersion: 1,
-                pluginType: classes[i],
-                createPlugin: factories[i],
-              },
-            };
-          },
-        }),
-      ).rejects.toThrow(/mutually exclusive/);
-      expect(Reflect.get(tracer, "_sampler")).toBe(sampler);
-      expect(Reflect.get(tracer, "_idGenerator")).toBe(idGenerator);
-      for (const factory of factories) expect(factory).not.toHaveBeenCalled();
-      expect(exporter.getFinishedSpans()).toHaveLength(0);
-      expect(context.active()).toBe(ROOT_CONTEXT);
-    },
-  );
-
-  it("uses inherited static metadata and the concrete bundled subclass names", async () => {
-    class CustomExecution extends ExecutionOtelPlugin {}
-    class CustomInvocation extends InvocationOtelPlugin {}
-    await expect(
-      loadConfiguredPlugins([make(CustomExecution), make(CustomInvocation)], {
-        environment: {},
-      }),
-    ).rejects.toThrow("Plugins 'CustomExecution' and 'CustomInvocation'");
-  });
-
-  it.each([false, true])(
-    "rejects regrouped OTel subclasses before factory side effects (reverse=%s)",
-    async (reverse) => {
-      class RegroupedExecution extends ExecutionOtelPlugin {
-        static readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION] = {
-          exclusiveGroup: "application-execution",
-        };
-      }
-      class RegroupedInvocation extends InvocationOtelPlugin {
-        static readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION] = {
-          exclusiveGroup: "application-invocation",
-        };
-      }
-      const provider = new NodeTracerProvider({
-        spanProcessors: [new SimpleSpanProcessor(exporter)],
-      });
-      providers.push(provider);
-      trace.setGlobalTracerProvider(provider);
-      const tracer = provider.getTracer("aws-durable-execution-sdk-js");
-      const sampler = Reflect.get(tracer, "_sampler");
-      const idGenerator = Reflect.get(tracer, "_idGenerator");
-      const classes = reverse
-        ? [RegroupedInvocation, RegroupedExecution]
-        : [RegroupedExecution, RegroupedInvocation];
-      const factories = classes.map((Plugin) => jest.fn(() => new Plugin()));
-      await expect(
-        loadConfiguredPlugins([], {
-          environment: { DURABLE_EXECUTION_PLUGINS: "first,second" },
-          importModule: async (specifier) => {
-            const i = specifier === "first" ? 0 : 1;
-            return {
-              durableExecutionPluginProvider: {
-                pluginApiVersion: 1,
-                pluginType: classes[i],
-                createPlugin: factories[i],
-              },
-            };
-          },
-        }),
-      ).rejects.toThrow("group 'durable-opentelemetry-view'");
-      for (const factory of factories) expect(factory).not.toHaveBeenCalled();
-      expect(Reflect.get(tracer, "_sampler")).toBe(sampler);
-      expect(Reflect.get(tracer, "_idGenerator")).toBe(idGenerator);
-      expect(exporter.getFinishedSpans()).toHaveLength(0);
-      expect(context.active()).toBe(ROOT_CONTEXT);
     },
   );
 });

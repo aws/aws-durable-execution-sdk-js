@@ -9,8 +9,8 @@ import {
   NodeTracerProvider,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
-import { ExecutionOtelPlugin } from "../execution-plugin";
-import { InvocationOtelPlugin } from "../invocation-plugin";
+import { createExecutionOtelPluginFactory } from "../execution-plugin";
+import { createInvocationOtelPluginFactory } from "../invocation-plugin";
 
 const gate = () => {
   let open!: () => void;
@@ -24,8 +24,8 @@ beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
 describe.each([
-  ["execution", ExecutionOtelPlugin],
-  ["invocation", InvocationOtelPlugin],
+  ["execution", createExecutionOtelPluginFactory],
+  ["invocation", createInvocationOtelPluginFactory],
 ] as const)("%s view caught callback failure", (_view, Plugin) => {
   it.each([false, true])(
     "keeps an ERROR leaf without an invented exception, including later replay (resume=%s)",
@@ -40,7 +40,7 @@ describe.each([
         return "saved";
       });
       const failures: Array<{ name: string; message: string }> = [];
-      const plugin = new Plugin({
+      const plugin = Plugin({
         contextExtractor: () => undefined,
         tracerProviderFactory: (ids) =>
           (provider = new NodeTracerProvider({
@@ -82,6 +82,10 @@ describe.each([
         await callback.waitForData(WaitingOperationStatus.STARTED);
         if (resume) {
           releaseStep.open();
+          // Replay may skip this side effect only after its success is persisted.
+          await runner
+            .getOperation("saved")
+            .waitForData(WaitingOperationStatus.COMPLETED);
           await runner.pauseExecution();
         }
         await callback.sendCallbackFailure();

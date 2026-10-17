@@ -1,5 +1,12 @@
 # Workflow Insight: End-to-End Design Document
 
+> **Historical.** The plugin API shown below was superseded before release:
+> the shipped surface is `workflowInsight(config)`, which returns a
+> `DurableInstrumentationPluginFactory` that goes into `plugins`. That factory is
+> an object whose `createPlugin` the SDK calls once per invocation, not a callable.
+> Do not copy the registration examples from this document — see
+> `plugin-contracts.md` and the package README.
+
 ## Overview
 
 Workflow Insight is an observability system for AWS Lambda Durable Executions that captures execution state into customer-owned storage and provides a rich query UI powered by natural language (Amazon Bedrock). It consists of three components:

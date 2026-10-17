@@ -19,8 +19,8 @@ import {
 } from "@opentelemetry/sdk-trace-node";
 import type { ReadableSpan, Sampler } from "@opentelemetry/sdk-trace-node";
 import { resourceFromAttributes } from "@opentelemetry/resources";
-import { ExecutionOtelPlugin } from "../execution-plugin";
-import { InvocationOtelPlugin } from "../invocation-plugin";
+import { createExecutionOtelPluginFactory } from "../execution-plugin";
+import { createInvocationOtelPluginFactory } from "../invocation-plugin";
 import { deriveExecutionRootSpanId } from "../deterministic-id-generator";
 import type { ContextExtractor } from "../context-extractors";
 
@@ -92,11 +92,13 @@ function assertAnchor(span: ReadableSpan) {
 }
 
 describe.each(
-  [ExecutionOtelPlugin, InvocationOtelPlugin].map((Plugin) => ({
-    name: Plugin.name,
-    Plugin,
-  })),
-)("$name stable synthetic anchors", ({ Plugin }) => {
+  [createExecutionOtelPluginFactory, createInvocationOtelPluginFactory].map(
+    (createFactory) => ({
+      name: createFactory.name,
+      createFactory,
+    }),
+  ),
+)("$name stable synthetic anchors", ({ createFactory }) => {
   const providers: NodeTracerProvider[] = [];
   function session(
     options: {
@@ -109,7 +111,7 @@ describe.each(
   ) {
     const exporter = new InMemorySpanExporter();
     let provider!: NodeTracerProvider;
-    const plugin = new Plugin({
+    const factory = createFactory({
       contextExtractor: options.extractor ?? (() => undefined),
       tracerProviderFactory: (createIdGenerator) => {
         provider = new NodeTracerProvider({
@@ -144,7 +146,7 @@ describe.each(
         return provider;
       },
     });
-    return { exporter, provider, plugin };
+    return { exporter, factory };
   }
   afterEach(async () => {
     for (const provider of providers.splice(0)) await provider.shutdown();
@@ -154,8 +156,9 @@ describe.each(
   });
 
   it("correlates every anchor with its execution ARN", async () => {
-    const { plugin, exporter } = session();
+    const { factory, exporter } = session();
     const info = start();
+    const plugin = factory.createPlugin(info);
     await plugin.onInvocationStart(info);
     await plugin.onInvocationEnd(end(info, "PENDING"));
     expect(roots(exporter)[0].attributes["durable.execution.arn"]).toBe(ARN);
@@ -165,7 +168,7 @@ describe.each(
     const shouldSample = jest.fn(() => ({
       decision: SamplingDecision.RECORD_AND_SAMPLED,
     }));
-    const { plugin, exporter } = session({
+    const { factory, exporter } = session({
       opaqueSampler: true,
       sampler: { shouldSample, toString: () => "opaque always on" },
     });
@@ -177,6 +180,7 @@ describe.each(
     ] as const) {
       const before = shouldSample.mock.calls.length;
       const info = start({ isFirstInvocation });
+      const plugin = factory.createPlugin(info);
       await plugin.onInvocationStart(info);
       await plugin.onInvocationEnd(end(info, status));
       calls.push(shouldSample.mock.calls.length - before);
@@ -187,7 +191,7 @@ describe.each(
 
   it("does not export a lone early root when an opaque sampler drops Invocation", async () => {
     let calls = 0;
-    const { plugin, exporter } = session({
+    const { factory, exporter } = session({
       opaqueSampler: true,
       sampler: {
         shouldSample: () => ({
@@ -200,6 +204,7 @@ describe.each(
       },
     });
     const info = start();
+    const plugin = factory.createPlugin(info);
     await plugin.onInvocationStart(info);
     await plugin.onInvocationEnd(end(info, "PENDING"));
     expect(exporter.getFinishedSpans()).toHaveLength(0);
@@ -208,7 +213,7 @@ describe.each(
 
   it("anchors an invocation sampled only in the middle of an execution", async () => {
     let calls = 0;
-    const { plugin, exporter } = session({
+    const { factory, exporter } = session({
       sampler: {
         shouldSample: () => ({
           decision:
@@ -227,6 +232,7 @@ describe.each(
     ] as const) {
       const before = roots(exporter).length;
       const info = start({ isFirstInvocation });
+      const plugin = factory.createPlugin(info);
       await plugin.onInvocationStart(info);
       await plugin.onInvocationEnd(end(info, status));
       emitted.push(roots(exporter).length - before);
@@ -243,7 +249,8 @@ describe.each(
 
   it("recovers an unflushed first anchor on a replay-mode suspension", async () => {
     const lost = session({ batch: true });
-    await lost.plugin.onInvocationStart(start());
+    const lostInfo = start();
+    await lost.factory.createPlugin(lostInfo).onInvocationStart(lostInfo);
     expect(lost.exporter.getFinishedSpans()).toHaveLength(0);
     // The first process is lost before its end hook/flush. The retry has checkpoints.
     const resumed = session({ batch: true });
@@ -251,8 +258,9 @@ describe.each(
       isFirstInvocation: false,
       requestId: "retry-with-history",
     });
-    await resumed.plugin.onInvocationStart(info);
-    await resumed.plugin.onInvocationEnd(end(info, "PENDING"));
+    const plugin = resumed.factory.createPlugin(info);
+    await plugin.onInvocationStart(info);
+    await plugin.onInvocationEnd(end(info, "PENDING"));
     expect(lost.exporter.getFinishedSpans()).toHaveLength(0);
     expect(roots(resumed.exporter)).toHaveLength(1);
     expect(workflows(resumed.exporter)).toHaveLength(0);
@@ -260,12 +268,13 @@ describe.each(
   });
 
   it("anchors a resume after a late-registered global provider", async () => {
-    const plugin = new Plugin({ contextExtractor: () => undefined });
+    const factory = createFactory({ contextExtractor: () => undefined });
     const warning = jest.spyOn(console, "warn").mockImplementation(() => {});
     try {
       const first = start();
-      await plugin.onInvocationStart(first);
-      await plugin.onInvocationEnd(end(first, "PENDING"));
+      const firstPlugin = factory.createPlugin(first);
+      await firstPlugin.onInvocationStart(first);
+      await firstPlugin.onInvocationEnd(end(first, "PENDING"));
       const exporter = new InMemorySpanExporter();
       const provider = new NodeTracerProvider({
         spanProcessors: [new SimpleSpanProcessor(exporter)],
@@ -276,6 +285,7 @@ describe.each(
         isFirstInvocation: false,
         requestId: "provider-now-ready",
       });
+      const plugin = factory.createPlugin(info);
       await plugin.onInvocationStart(info);
       await plugin.onInvocationEnd(end(info, "PENDING"));
       expect(roots(exporter)).toHaveLength(1);
@@ -288,8 +298,9 @@ describe.each(
   it.each(["PENDING", "RETRYING"] as const)(
     "exports the first anchor before %s returns, with no Workflow",
     async (status) => {
-      const { plugin, exporter } = session({ batch: true });
+      const { factory, exporter } = session({ batch: true });
       const info = start();
+      const plugin = factory.createPlugin(info);
       await plugin.onInvocationStart(info);
       expect(exporter.getFinishedSpans()).toHaveLength(0); // Batch timer has not run.
       await plugin.onInvocationEnd(end(info, status)); // Must flush without help from this test.
@@ -308,8 +319,9 @@ describe.each(
   it.each(["SUCCEEDED", "FAILED"] as const)(
     "does not double-export when the first invocation ends %s",
     async (status) => {
-      const { plugin, exporter } = session();
+      const { factory, exporter } = session();
       const info = start();
+      const plugin = factory.createPlugin(info);
       await plugin.onInvocationStart(info);
       expect(roots(exporter)).toHaveLength(1); // Ended before customer code can execute.
       await plugin.onInvocationEnd(end(info, status));
@@ -334,11 +346,12 @@ describe.each(
       { first: false, status: "FAILED", instance: "four" },
     ] as const;
     for (const [index, stage] of stages.entries()) {
-      const { plugin, exporter } = session({ instance: stage.instance });
+      const { factory, exporter } = session({ instance: stage.instance });
       const info = start({
         isFirstInvocation: stage.first,
         requestId: `request-${index}`,
       });
+      const plugin = factory.createPlugin(info);
       await plugin.onInvocationStart(info);
       await plugin.onInvocationEnd(end(info, stage.status));
       expect(roots(exporter)).toHaveLength(1);
@@ -362,13 +375,15 @@ describe.each(
 
   it("uses a terminal backup when the first invocation never reached its flush", async () => {
     const first = session({ batch: true });
-    await first.plugin.onInvocationStart(start());
+    const firstInfo = start();
+    await first.factory.createPlugin(firstInfo).onInvocationStart(firstInfo);
     expect(first.exporter.getFinishedSpans()).toHaveLength(0);
     // No onInvocationEnd on the first instance, as with a killed invocation.
     const last = session({ batch: true });
     const info = start({ isFirstInvocation: false, requestId: "last" });
-    await last.plugin.onInvocationStart(info);
-    await last.plugin.onInvocationEnd(end(info, "SUCCEEDED"));
+    const plugin = last.factory.createPlugin(info);
+    await plugin.onInvocationStart(info);
+    await plugin.onInvocationEnd(end(info, "SUCCEEDED"));
     expect(first.exporter.getFinishedSpans()).toHaveLength(0);
     expect(roots(last.exporter)).toHaveLength(1);
     assertAnchor(roots(last.exporter)[0]);
@@ -376,20 +391,22 @@ describe.each(
   });
 
   it("retains terminal-only materialization when the backend start timestamp is absent", async () => {
-    const { plugin, exporter } = session();
+    const { factory, exporter } = session();
     const first = start({ executionStartTimestamp: undefined });
-    await plugin.onInvocationStart(first);
+    const firstPlugin = factory.createPlugin(first);
+    await firstPlugin.onInvocationStart(first);
     expect(roots(exporter)).toHaveLength(0);
-    await plugin.onInvocationEnd(end(first, "PENDING"));
+    await firstPlugin.onInvocationEnd(end(first, "PENDING"));
     expect(roots(exporter)).toHaveLength(0);
     const last = start({
       isFirstInvocation: false,
       requestId: "last",
       executionStartTimestamp: undefined,
     });
-    await plugin.onInvocationStart(last);
+    const lastPlugin = factory.createPlugin(last);
+    await lastPlugin.onInvocationStart(last);
     expect(roots(exporter)).toHaveLength(0);
-    await plugin.onInvocationEnd(end(last, "SUCCEEDED"));
+    await lastPlugin.onInvocationEnd(end(last, "SUCCEEDED"));
     expect(roots(exporter)).toHaveLength(1);
     expect(roots(exporter)[0].startTime).toEqual(
       workflows(exporter)[0].startTime,
@@ -400,8 +417,9 @@ describe.each(
   });
 
   it("snapshots the backend Date so input mutation cannot retime the anchor or Workflow", async () => {
-    const { plugin, exporter } = session();
+    const { factory, exporter } = session();
     const info = start();
+    const plugin = factory.createPlugin(info);
     await plugin.onInvocationStart(info);
     info.executionStartTimestamp!.setTime(START.getTime() + 86_400_000);
     await plugin.onInvocationEnd(end(info, "SUCCEEDED"));
@@ -410,11 +428,12 @@ describe.each(
   });
 
   it("keeps first anchors ARN-scoped when different executions share a propagated Root", async () => {
-    const { plugin, exporter } = session({
+    const { factory, exporter } = session({
       extractor: () => ({ traceId: TRACE, sampling: "SAMPLED" }),
     });
     for (const executionArn of [ARN, ARN + "-other"]) {
       const info = start({ executionArn });
+      const plugin = factory.createPlugin(info);
       await plugin.onInvocationStart(info);
       await plugin.onInvocationEnd(end(info, "PENDING"));
     }
@@ -428,7 +447,7 @@ describe.each(
 
   it("never materializes a complete propagated remote parent", async () => {
     const parent = "1234567890123456";
-    const { plugin, exporter } = session({
+    const { factory, exporter } = session({
       extractor: () => ({
         traceId: TRACE,
         parentSpanId: parent,
@@ -436,11 +455,13 @@ describe.each(
       }),
     });
     const first = start();
-    await plugin.onInvocationStart(first);
-    await plugin.onInvocationEnd(end(first, "PENDING"));
+    const firstPlugin = factory.createPlugin(first);
+    await firstPlugin.onInvocationStart(first);
+    await firstPlugin.onInvocationEnd(end(first, "PENDING"));
     const last = start({ isFirstInvocation: false, requestId: "last" });
-    await plugin.onInvocationStart(last);
-    await plugin.onInvocationEnd(end(last, "SUCCEEDED"));
+    const lastPlugin = factory.createPlugin(last);
+    await lastPlugin.onInvocationStart(last);
+    await lastPlugin.onInvocationEnd(end(last, "SUCCEEDED"));
     expect(roots(exporter)).toHaveLength(0);
     expect(workflows(exporter)[0].parentSpanContext?.spanId).toBe(parent);
   });
@@ -454,7 +475,7 @@ describe.each(
             ? SamplingDecision.NOT_RECORD
             : SamplingDecision.RECORD_AND_SAMPLED,
       }));
-      const { plugin, exporter } = session({
+      const { factory, exporter } = session({
         extractor: () => ({ traceId: TRACE, sampling }),
         sampler: { shouldSample, toString: () => "opposite policy" },
       });
@@ -463,6 +484,7 @@ describe.each(
         [false, "SUCCEEDED"],
       ] as const) {
         const info = start({ isFirstInvocation });
+        const plugin = factory.createPlugin(info);
         await plugin.onInvocationStart(info);
         await plugin.onInvocationEnd(end(info, status));
       }
@@ -479,12 +501,13 @@ describe.each(
     async (ratio) => {
       const policy = new TraceIdRatioBasedSampler(ratio);
       const shouldSample = jest.spyOn(policy, "shouldSample");
-      const { plugin, exporter } = session({ sampler: policy });
+      const { factory, exporter } = session({ sampler: policy });
       for (const [isFirstInvocation, status] of [
         [true, "PENDING"],
         [false, "SUCCEEDED"],
       ] as const) {
         const info = start({ isFirstInvocation });
+        const plugin = factory.createPlugin(info);
         await plugin.onInvocationStart(info);
         await plugin.onInvocationEnd(end(info, status));
       }
@@ -507,7 +530,7 @@ describe.each(
             ? SamplingDecision.RECORD_AND_SAMPLED
             : SamplingDecision.NOT_RECORD,
       }));
-      const { plugin, exporter } = session({
+      const { factory, exporter } = session({
         sampler: { shouldSample, toString: () => "alternating policy" },
       });
       for (const [isFirstInvocation, status] of [
@@ -515,6 +538,7 @@ describe.each(
         [false, "SUCCEEDED"],
       ] as const) {
         const info = start({ isFirstInvocation });
+        const plugin = factory.createPlugin(info);
         await plugin.onInvocationStart(info);
         await plugin.onInvocationEnd(end(info, status));
       }
@@ -526,13 +550,14 @@ describe.each(
   );
 
   it("does not export an anchor for a RECORD_ONLY execution", async () => {
-    const { plugin, exporter } = session({
+    const { factory, exporter } = session({
       sampler: {
         shouldSample: () => ({ decision: SamplingDecision.RECORD }),
         toString: () => "record only",
       },
     });
     const info = start();
+    const plugin = factory.createPlugin(info);
     await plugin.onInvocationStart(info);
     await plugin.onInvocationEnd(end(info, "PENDING"));
     expect(roots(exporter)).toHaveLength(0);
@@ -545,8 +570,9 @@ describe.each(
     });
     providers.push(provider);
     provider.register();
-    const plugin = new Plugin({ contextExtractor: () => undefined });
+    const factory = createFactory({ contextExtractor: () => undefined });
     const info = start();
+    const plugin = factory.createPlugin(info);
     await plugin.onInvocationStart(info);
     expect(roots(exporter)).toHaveLength(1);
     await plugin.onInvocationEnd(end(info, "PENDING"));

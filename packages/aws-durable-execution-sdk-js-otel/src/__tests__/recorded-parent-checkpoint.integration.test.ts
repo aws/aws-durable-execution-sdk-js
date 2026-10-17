@@ -14,7 +14,7 @@ import {
   SimpleSpanProcessor,
   type SpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
-import { ExecutionOtelPlugin } from "../execution-plugin";
+import { createExecutionOtelPluginFactory } from "../execution-plugin";
 
 const gate = () => {
   let open!: () => void;
@@ -30,7 +30,7 @@ afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 it("keeps a parent recorded despite a suppressed checkpoint, without leaking that decision into reuse", async () => {
   const exporter = new InMemorySpanExporter();
   let provider!: NodeTracerProvider;
-  const plugin = new ExecutionOtelPlugin({
+  const plugin = createExecutionOtelPluginFactory({
     contextExtractor: () => undefined,
     tracerProviderFactory: (ids) =>
       (provider = new NodeTracerProvider({
@@ -45,7 +45,7 @@ it("keeps a parent recorded despite a suppressed checkpoint, without leaking tha
     expectedParent: string;
   }> = [];
   try {
-    // Reuse the same plugin with the same operation sequence. The second run's
+    // Reuse the same factory with the same operation sequence. The second run's
     // unfinished parent must still use the existing Workflow fallback.
     for (const finishParent of [true, false]) {
       const ready = gate();
@@ -83,18 +83,20 @@ it("keeps a parent recorded despite a suppressed checkpoint, without leaking tha
           plugins: [
             plugin,
             {
-              async onOperationEnd(info) {
-                if (info.name === "parent") parentEnded.open();
-              },
-              async onOperationChange(info) {
-                const completed = Object.values(info.updatedOperations).find(
-                  (op) => op.name === "external" && op.status === "SUCCEEDED",
-                );
-                if (completed) {
-                  callback = completed;
-                  snapshot = info.operations;
-                }
-              },
+              createPlugin: () => ({
+                async onOperationEnd(info) {
+                  if (info.name === "parent") parentEnded.open();
+                },
+                async onOperationChange(info) {
+                  const completed = Object.values(info.updatedOperations).find(
+                    (op) => op.name === "external" && op.status === "SUCCEEDED",
+                  );
+                  if (completed) {
+                    callback = completed;
+                    snapshot = info.operations;
+                  }
+                },
+              }),
             },
           ],
         },
@@ -211,7 +213,7 @@ it.each(["first flush", "final flush", "never"] as const)(
       },
       async shutdown() {},
     };
-    const plugin = new ExecutionOtelPlugin({
+    const plugin = createExecutionOtelPluginFactory({
       contextExtractor: () => undefined,
       flushTimeoutMillis: 1000,
       tracerProviderFactory: (ids) =>
@@ -246,21 +248,25 @@ it.each(["first flush", "final flush", "never"] as const)(
         pluginsConfig: { childOperationsDepth: 2 },
         plugins: [
           {
-            async onOperationChange(info) {
-              callback =
-                Object.values(info.updatedOperations).find(
-                  (op) => op.name === "external" && op.status === "SUCCEEDED",
-                ) ?? callback;
-            },
-            async onInvocationEnd() {
-              completionBeforeEnd = callback !== undefined;
-            },
+            createPlugin: () => ({
+              async onOperationChange(info) {
+                callback =
+                  Object.values(info.updatedOperations).find(
+                    (op) => op.name === "external" && op.status === "SUCCEEDED",
+                  ) ?? callback;
+              },
+              async onInvocationEnd() {
+                completionBeforeEnd = callback !== undefined;
+              },
+            }),
           },
           plugin,
           {
-            async onOperationEnd(info) {
-              if (info.name === "parent") parentEnded.open();
-            },
+            createPlugin: () => ({
+              async onOperationEnd(info) {
+                if (info.name === "parent") parentEnded.open();
+              },
+            }),
           },
         ],
       },

@@ -9,8 +9,8 @@ import {
   NodeTracerProvider,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
-import { ExecutionOtelPlugin } from "../execution-plugin";
-import { InvocationOtelPlugin } from "../invocation-plugin";
+import { createExecutionOtelPluginFactory } from "../execution-plugin";
+import { createInvocationOtelPluginFactory } from "../invocation-plugin";
 
 const gate = () => {
   let open!: () => void;
@@ -24,8 +24,8 @@ beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
 describe.each([
-  ["execution", ExecutionOtelPlugin],
-  ["invocation", InvocationOtelPlugin],
+  ["execution", createExecutionOtelPluginFactory],
+  ["invocation", createInvocationOtelPluginFactory],
 ] as const)("%s view callback error details", (_view, Plugin) => {
   it.each([
     [false, "none"],
@@ -46,7 +46,7 @@ describe.each([
         submitted.open();
         if (!resume) await release.opened;
       });
-      const plugin = new Plugin({
+      const plugin = Plugin({
         contextExtractor: () => undefined,
         tracerProviderFactory: (ids) =>
           (provider = new NodeTracerProvider({
@@ -127,7 +127,7 @@ describe.each([
     let provider!: NodeTracerProvider;
     const submitter = jest.fn(async () => undefined);
     const failures: Array<{ name: string; message: string }> = [];
-    const plugin = new Plugin({
+    const plugin = Plugin({
       contextExtractor: () => undefined,
       tracerProviderFactory: (ids) =>
         (provider = new NodeTracerProvider({

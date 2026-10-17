@@ -5,6 +5,7 @@ import {
   type OperationEndInfo,
   type OperationChangeInfo,
   type DurableContext,
+  type DurableInstrumentationPluginFactory,
 } from "@aws/durable-execution-sdk-js";
 import {
   LocalDurableTestRunner,
@@ -17,8 +18,8 @@ import {
   NodeTracerProvider,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
-import { ExecutionOtelPlugin } from "../execution-plugin";
-import { InvocationOtelPlugin } from "../invocation-plugin";
+import { createExecutionOtelPluginFactory } from "../execution-plugin";
+import { createInvocationOtelPluginFactory } from "../invocation-plugin";
 import { deriveSpanIdFromOperationId } from "../deterministic-id-generator";
 
 const nanoseconds = (time: HrTime): bigint =>
@@ -35,15 +36,15 @@ beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
 describe.each([
-  ["execution", ExecutionOtelPlugin],
-  ["invocation", InvocationOtelPlugin],
-] as const)("%s view deferred external completion", (view, Plugin) => {
+  ["execution", createExecutionOtelPluginFactory],
+  ["invocation", createInvocationOtelPluginFactory],
+] as const)("%s view deferred external completion", (view, createFactory) => {
   let exporter: InMemorySpanExporter;
   let provider: NodeTracerProvider;
-  let plugin: ExecutionOtelPlugin | InvocationOtelPlugin;
+  let plugin: DurableInstrumentationPluginFactory;
   beforeEach(() => {
     exporter = new InMemorySpanExporter();
-    plugin = new Plugin({
+    plugin = createFactory({
       contextExtractor: () => undefined,
       tracerProviderFactory(createIdGenerator) {
         provider = new NodeTracerProvider({
@@ -90,22 +91,24 @@ describe.each([
         plugins: [
           plugin,
           {
-            async onInvocationStart(info) {
-              starts.push(info);
-            },
-            async onOperationChange(info) {
-              changes.push(info);
-              if (
-                Object.values(info.updatedOperations).some(
-                  (op) => op.name === "external" && op.status === "SUCCEEDED",
+            createPlugin: () => ({
+              async onInvocationStart(info) {
+                starts.push(info);
+              },
+              async onOperationChange(info) {
+                changes.push(info);
+                if (
+                  Object.values(info.updatedOperations).some(
+                    (op) => op.name === "external" && op.status === "SUCCEEDED",
+                  )
                 )
-              )
-                order.push("update");
-            },
-            async onOperationEnd(info) {
-              ends.push(info);
-              if (info.name === "scope") order.push("parent-end");
-            },
+                  order.push("update");
+              },
+              async onOperationEnd(info) {
+                ends.push(info);
+                if (info.name === "scope") order.push("parent-end");
+              },
+            }),
           },
         ],
       },
@@ -204,21 +207,23 @@ describe.each([
         plugins: [
           plugin,
           {
-            async onInvocationStart(info) {
-              starts.push(info);
-            },
-            async onOperationEnd(info) {
-              ends.push(info);
-            },
-            async onInvocationEnd(info) {
-              if (
-                info.status === "PENDING" &&
-                Object.values(info.operations).some(
-                  (op) => op.name === "external" && op.status === "SUCCEEDED",
+            createPlugin: () => ({
+              async onInvocationStart(info) {
+                starts.push(info);
+              },
+              async onOperationEnd(info) {
+                ends.push(info);
+              },
+              async onInvocationEnd(info) {
+                if (
+                  info.status === "PENDING" &&
+                  Object.values(info.operations).some(
+                    (op) => op.name === "external" && op.status === "SUCCEEDED",
+                  )
                 )
-              )
-                resumedPending.open();
-            },
+                  resumedPending.open();
+              },
+            }),
           },
         ],
       },
@@ -351,15 +356,17 @@ describe.each([
           plugins: [
             plugin,
             {
-              async onInvocationStart(info) {
-                starts.push(info);
-              },
-              async onOperationEnd(info) {
-                if (info.name === "external") ends.push(info);
-              },
-              async onOperationChange(info) {
-                changes.push(info);
-              },
+              createPlugin: () => ({
+                async onInvocationStart(info) {
+                  starts.push(info);
+                },
+                async onOperationEnd(info) {
+                  if (info.name === "external") ends.push(info);
+                },
+                async onOperationChange(info) {
+                  changes.push(info);
+                },
+              }),
             },
           ],
         },
@@ -505,9 +512,11 @@ describe.each([
           plugins: [
             plugin,
             {
-              async onInvocationStart(info) {
-                starts.push(info);
-              },
+              createPlugin: () => ({
+                async onInvocationStart(info) {
+                  starts.push(info);
+                },
+              }),
             },
           ],
         },
@@ -571,21 +580,23 @@ describe.each([
         plugins: [
           plugin,
           {
-            async onOperationChange(info) {
-              changes.push(info);
-              if (
-                Object.values(info.updatedOperations).some(
-                  (operation) =>
-                    operation.name === "external" &&
-                    operation.status === "SUCCEEDED",
+            createPlugin: () => ({
+              async onOperationChange(info) {
+                changes.push(info);
+                if (
+                  Object.values(info.updatedOperations).some(
+                    (operation) =>
+                      operation.name === "external" &&
+                      operation.status === "SUCCEEDED",
+                  )
                 )
-              )
-                deliveryOrder.push("callback-update");
-            },
-            async onOperationEnd(info) {
-              ends.push(info);
-              if (info.name === "scope") deliveryOrder.push("context-end");
-            },
+                  deliveryOrder.push("callback-update");
+              },
+              async onOperationEnd(info) {
+                ends.push(info);
+                if (info.name === "scope") deliveryOrder.push("context-end");
+              },
+            }),
           },
         ],
       },
@@ -656,12 +667,14 @@ describe.each([
         plugins: [
           plugin,
           {
-            async onOperationChange(info) {
-              changes.push(info);
-            },
-            async onOperationEnd(info) {
-              ends.push(info);
-            },
+            createPlugin: () => ({
+              async onOperationChange(info) {
+                changes.push(info);
+              },
+              async onOperationEnd(info) {
+                ends.push(info);
+              },
+            }),
           },
         ],
       },
@@ -758,12 +771,14 @@ describe.each([
           plugins: [
             plugin,
             {
-              async onInvocationStart(info) {
-                starts.push(info);
-              },
-              async onOperationEnd(info) {
-                if (info.name === "external") ends.push(info);
-              },
+              createPlugin: () => ({
+                async onInvocationStart(info) {
+                  starts.push(info);
+                },
+                async onOperationEnd(info) {
+                  if (info.name === "external") ends.push(info);
+                },
+              }),
             },
           ],
         },

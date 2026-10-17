@@ -13,7 +13,6 @@ function isExternalOperation(info: OperationInfo): boolean {
 export class ExternalCompletions {
   readonly pending = new Map<string, OperationInfo>();
   private readonly exported = new Set<string>();
-
   observe(
     updates: Record<string, OperationInfo> = {},
     operations: Record<string, OperationInfo> = {},

@@ -6,8 +6,8 @@ import {
   LocalDurableTestRunner,
   WaitingOperationStatus,
 } from "@aws/durable-execution-sdk-js-testing";
-import { ExecutionOtelPlugin } from "../execution-plugin";
-import { InvocationOtelPlugin } from "../invocation-plugin";
+import { createExecutionOtelPluginFactory } from "../execution-plugin";
+import { createInvocationOtelPluginFactory } from "../invocation-plugin";
 import { context, propagation, trace } from "@opentelemetry/api";
 import {
   InMemorySpanExporter,
@@ -120,7 +120,7 @@ describe("createTracerProvider", () => {
   });
 });
 
-describe("ExecutionOtelPlugin provider resolution", () => {
+describe("createExecutionOtelPluginFactory provider resolution", () => {
   it("uses the global provider by default", async () => {
     const exporter = new InMemorySpanExporter();
     const globalProvider = new NodeTracerProvider({
@@ -128,17 +128,21 @@ describe("ExecutionOtelPlugin provider resolution", () => {
     });
     globalProvider.register();
 
-    const { ExecutionOtelPlugin } = await import("../execution-plugin");
-    const plugin = new ExecutionOtelPlugin();
-
-    await plugin.onInvocationStart({
+    const { createExecutionOtelPluginFactory } = await import(
+      "../execution-plugin"
+    );
+    // The factory the SDK calls once per invocation, with that invocation's info.
+    const info: InvocationInfo = {
       requestId: "req-1",
       executionArn: "arn:aws:states:us-east-1:123456789012:execution:sm:exec-1",
       isFirstInvocation: true,
       executionInput: {},
       operations: {},
       updatedOperations: {},
-    });
+    };
+    const plugin = createExecutionOtelPluginFactory().createPlugin(info);
+
+    await plugin.onInvocationStart(info);
     await plugin.onInvocationEnd({
       requestId: "req-1",
       executionArn: "arn:aws:states:us-east-1:123456789012:execution:sm:exec-1",
@@ -161,19 +165,22 @@ describe("ExecutionOtelPlugin provider resolution", () => {
     });
     globalProvider.register();
 
-    const { ExecutionOtelPlugin } = await import("../execution-plugin");
-    const plugin = new ExecutionOtelPlugin();
+    const { createExecutionOtelPluginFactory } = await import(
+      "../execution-plugin"
+    );
     const executionArn =
       "arn:aws:states:us-east-1:123456789012:execution:sm:exec-2";
-
-    await plugin.onInvocationStart({
+    const info: InvocationInfo = {
       requestId: "req-2",
       executionArn,
       isFirstInvocation: true,
       executionInput: {},
       operations: {},
       updatedOperations: {},
-    });
+    };
+    const plugin = createExecutionOtelPluginFactory().createPlugin(info);
+
+    await plugin.onInvocationStart(info);
     await plugin.onInvocationEnd({
       requestId: "req-2",
       executionArn,
@@ -194,8 +201,8 @@ describe("ExecutionOtelPlugin provider resolution", () => {
 });
 
 describe.each([
-  ["execution", ExecutionOtelPlugin],
-  ["invocation", InvocationOtelPlugin],
+  ["execution", createExecutionOtelPluginFactory],
+  ["invocation", createInvocationOtelPluginFactory],
 ] as const)("%s global provider batch export", (_view, Plugin) => {
   beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
   afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
@@ -210,7 +217,7 @@ describe.each([
     provider.register();
     const flush = jest.spyOn(provider, "forceFlush");
     const shutdown = jest.spyOn(provider, "shutdown");
-    const plugin = new Plugin({ contextExtractor: () => undefined });
+    const plugin = Plugin({ contextExtractor: () => undefined });
     const starts: InvocationInfo[] = [];
     const savedBody = jest.fn(async () => "saved");
     const handler = withDurableExecution(
@@ -226,9 +233,11 @@ describe.each([
         plugins: [
           plugin,
           {
-            async onInvocationStart(info) {
-              starts.push(info);
-            },
+            createPlugin: () => ({
+              async onInvocationStart(info) {
+                starts.push(info);
+              },
+            }),
           },
         ],
       },

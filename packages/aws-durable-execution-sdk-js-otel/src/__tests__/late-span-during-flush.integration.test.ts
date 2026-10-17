@@ -13,8 +13,8 @@ import {
   BatchSpanProcessor,
   type SpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
-import { ExecutionOtelPlugin } from "../execution-plugin";
-import { InvocationOtelPlugin } from "../invocation-plugin";
+import { createExecutionOtelPluginFactory } from "../execution-plugin";
+import { createInvocationOtelPluginFactory } from "../invocation-plugin";
 
 const gate = () => {
   let open!: () => void;
@@ -33,8 +33,8 @@ beforeEach(() => {
 });
 
 describe.each([
-  ["execution", ExecutionOtelPlugin],
-  ["invocation", InvocationOtelPlugin],
+  ["execution", createExecutionOtelPluginFactory],
+  ["invocation", createInvocationOtelPluginFactory],
 ] as const)("%s view late-span batch delivery", (view, Plugin) => {
   it.each([false, true])(
     "ends and delivers real spans created during flush (completes=%s)",
@@ -61,7 +61,7 @@ describe.each([
         },
         async shutdown() {},
       };
-      const plugin = new Plugin({
+      const plugin = Plugin({
         contextExtractor: () => undefined,
         flushTimeoutMillis: 5000,
         tracerProviderFactory: (ids) =>
@@ -95,9 +95,11 @@ describe.each([
           plugins: [
             plugin,
             {
-              async onOperationEnd(info) {
-                if (info.name === "child") childFinished.open();
-              },
+              createPlugin: () => ({
+                async onOperationEnd(info) {
+                  if (info.name === "child") childFinished.open();
+                },
+              }),
             },
           ],
         },

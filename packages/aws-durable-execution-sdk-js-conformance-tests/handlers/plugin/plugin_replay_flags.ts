@@ -4,7 +4,7 @@ import {
   withDurableExecution,
   createRetryStrategy,
   JitterStrategy,
-  DurableInstrumentationPlugin,
+  DurableInstrumentationPluginFactory,
 } from "@aws/durable-execution-sdk-js";
 
 const PLUGIN = "CONFPLUGIN";
@@ -13,38 +13,39 @@ function isStep(type?: string): boolean {
   return (type || "").toUpperCase() === "STEP";
 }
 
-function makePlugin(): DurableInstrumentationPlugin {
-  let executionArn = "";
-  const emit = (rec: Record<string, unknown>): void => {
-    process.stdout.write(
-      JSON.stringify({ ...rec, durableExecutionArn: executionArn }) + "\n",
-    );
-  };
+const makePlugin: DurableInstrumentationPluginFactory = {
+  createPlugin: (invocation) => {
+    const emit = (rec: Record<string, unknown>): void => {
+      process.stdout.write(
+        JSON.stringify({
+          ...rec,
+          durableExecutionArn: invocation.executionArn,
+        }) + "\n",
+      );
+    };
 
-  return {
-    async onInvocationStart(info): Promise<void> {
-      executionArn = info.executionArn;
-    },
-    async onOperationStart(info): Promise<void> {
-      if (!isStep(info.type)) return;
-      emit({
-        plugin: PLUGIN,
-        hook: "operation-start",
-        op: info.id,
-        replay: info.isReplay,
-      });
-    },
-    async onOperationEnd(info): Promise<void> {
-      if (!isStep(info.type)) return;
-      emit({
-        plugin: PLUGIN,
-        hook: "operation-end",
-        op: info.id,
-        status: info.status,
-      });
-    },
-  };
-}
+    return {
+      async onOperationStart(info): Promise<void> {
+        if (!isStep(info.type)) return;
+        emit({
+          plugin: PLUGIN,
+          hook: "operation-start",
+          op: info.id,
+          replay: info.isReplay,
+        });
+      },
+      async onOperationEnd(info): Promise<void> {
+        if (!isStep(info.type)) return;
+        emit({
+          plugin: PLUGIN,
+          hook: "operation-end",
+          op: info.id,
+          status: info.status,
+        });
+      },
+    };
+  },
+};
 
 export const handler = withDurableExecution(
   async (_event: any, context: DurableContext) => {
@@ -69,5 +70,5 @@ export const handler = withDurableExecution(
     );
     return "Operation succeeded";
   },
-  { plugins: [makePlugin()] },
+  { plugins: [makePlugin] },
 );

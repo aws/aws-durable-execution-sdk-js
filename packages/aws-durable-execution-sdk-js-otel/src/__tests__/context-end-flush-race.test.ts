@@ -8,8 +8,8 @@ import {
   NodeTracerProvider,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
-import { ExecutionOtelPlugin } from "../execution-plugin";
-import { InvocationOtelPlugin } from "../invocation-plugin";
+import { createExecutionOtelPluginFactory } from "../execution-plugin";
+import { createInvocationOtelPluginFactory } from "../invocation-plugin";
 const gate = () => {
   let open!: () => void;
   const opened = new Promise<void>((resolve) => {
@@ -19,31 +19,15 @@ const gate = () => {
 };
 
 describe.each([
-  ["execution", ExecutionOtelPlugin, 3],
-  ["invocation", InvocationOtelPlugin, 2],
+  ["execution", createExecutionOtelPluginFactory, 3],
+  ["invocation", createInvocationOtelPluginFactory, 2],
 ] as const)("%s context End / flush interleaving", (view, Plugin, turns) => {
   it("retains a live parent when flush completion interleaves with its End", async () => {
     const entered = gate(),
       release = gate();
     const exporter = new InMemorySpanExporter();
     let provider!: NodeTracerProvider;
-    const plugin = new Plugin({
-      contextExtractor: () => undefined,
-      tracerProviderFactory: (ids) =>
-        (provider = new NodeTracerProvider({
-          idGenerator: ids(),
-          spanProcessors: [new SimpleSpanProcessor(exporter)],
-        })),
-    });
-    provider.register();
-    const original = provider.forceFlush.bind(provider);
-    jest
-      .spyOn(provider, "forceFlush")
-      .mockImplementationOnce(() => {
-        entered.open();
-        return release.opened;
-      })
-      .mockImplementation(original);
+
     const parent: OperationInfo = {
       id: "parent",
       name: "parent",
@@ -68,6 +52,25 @@ describe.each([
       updatedOperations: {},
       isFirstInvocation: true,
     };
+    const factory = Plugin({
+      contextExtractor: () => undefined,
+      tracerProviderFactory: (ids) =>
+        (provider = new NodeTracerProvider({
+          idGenerator: ids(),
+          spanProcessors: [new SimpleSpanProcessor(exporter)],
+        })),
+    });
+    const plugin = factory.createPlugin(info);
+    provider.register();
+    const original = provider.forceFlush.bind(provider);
+    jest
+      .spyOn(provider, "forceFlush")
+      .mockImplementationOnce(() => {
+        entered.open();
+        return release.opened;
+      })
+      .mockImplementation(original);
+
     await plugin.onInvocationStart(info);
     await plugin.onOperationStart(parent);
     const ending = plugin.onInvocationEnd({ ...info, status: "SUCCEEDED" });
