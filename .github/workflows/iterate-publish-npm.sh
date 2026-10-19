@@ -20,6 +20,9 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 DECIDE="$SCRIPT_DIR/scripts/test-publish/decide-dist-tag.js"
 
 # Packages to publish. Tests override this with TEST_PACKAGES (space-separated).
+# Extras and MicroVM Worker await a separately prepared first npm publication.
+# Their initial attempts in sdk-2.7.0 failed; do not retry them implicitly during
+# maintenance releases. Add them back when that first publication is ready.
 if [ -n "${TEST_PACKAGES:-}" ]; then
   read -ra PACKAGES <<< "$TEST_PACKAGES"
 else
@@ -30,8 +33,6 @@ else
     "packages/aws-durable-execution-sdk-js-otel"
     "packages/aws-durable-execution-sdk-js-insight"
     "packages/aws-durable-execution-sdk-js-insight-mcp"
-    "packages/aws-durable-execution-sdk-js-extras"
-    "packages/aws-durable-execution-sdk-js-microvm-worker"
   )
 fi
 
