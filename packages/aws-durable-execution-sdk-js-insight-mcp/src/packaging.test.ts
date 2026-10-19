@@ -89,9 +89,17 @@ describe("published package is installable by a customer", () => {
  * correctly never published -- `cdk-bundling-integration-test`, `esm-integration-test`,
  * `lambda-runtime-detection-integration-test` -- so the broader rule would fail on
  * pre-existing, correct state. A scoped name is the actual signal of intent to publish:
- * nothing else can claim `@aws/`.
+ * nothing else can claim `@aws/`. Packages awaiting a separately prepared first
+ * publication are explicitly deferred below rather than retried in every release.
  */
 describe("release pipeline actually publishes what claims to be published", () => {
+  // These initial publications failed in sdk-2.7.0 and need a separate release.
+  // Remove each exception when its first publication is ready.
+  const deferredFirstPublication = new Set([
+    "aws-durable-execution-sdk-js-extras",
+    "aws-durable-execution-sdk-js-microvm-worker",
+  ]);
+
   const PUBLISH_SCRIPT = join(
     __dirname,
     "..",
@@ -115,12 +123,23 @@ describe("release pipeline actually publishes what claims to be published", () =
     expect(listedDirs).toContain("aws-durable-execution-sdk-js");
   });
 
-  it("lists every publishable @aws/-scoped workspace package", () => {
+  it.each([...deferredFirstPublication])(
+    "keeps %s out of automatic publishing until its first release is ready",
+    (dir) => {
+      const manifest = read(join(PACKAGES_DIR, dir, "package.json"));
+      expect(manifest?.name).toMatch(/^@aws\//);
+      expect(manifest?.private).toBe(false);
+      expect(listedDirs).not.toContain(dir);
+    },
+  );
+
+  it("lists every other publishable @aws/-scoped workspace package", () => {
     const missing: string[] = [];
     for (const dir of readdirSync(PACKAGES_DIR)) {
       const m = read(join(PACKAGES_DIR, dir, "package.json"));
       if (!m?.name || m.private === true) continue;
       if (!m.name.startsWith("@aws/")) continue;
+      if (deferredFirstPublication.has(dir)) continue;
       if (!listedDirs.has(dir)) missing.push(`${m.name} (packages/${dir})`);
     }
     // A package here is one a customer is told to install and cannot.
