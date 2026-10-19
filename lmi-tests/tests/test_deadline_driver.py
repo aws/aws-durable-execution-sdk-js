@@ -155,3 +155,85 @@ def test_delayed_invoke_response_does_not_override_timely_service_admission():
     # Response delivery is diagnostic; actual timely service acceptance and
     # handler entry remain valid recovery evidence.
     ev.recovery(events, probe, ("env", "worker", 1, 1), 100, 5, history)
+
+
+@pytest.mark.parametrize("visibility_delay", [0, 1])
+def test_close_case_recovers_lost_invoke_response_without_worker_events(setup, visibility_delay):
+    cloud, clock, _calls, _output = setup
+    lost = cloud.prepare("barrier")
+    prepared = cloud.prepare("barrier")
+
+    def lost_response(**_kwargs):
+        raise TimeoutError("Invoke was accepted but its response was lost")
+
+    cloud.lam.invoke = lost_response
+    with pytest.raises(TimeoutError):
+        cloud.invoke(lost)
+    assert not lost.get("arn")
+    visible_at = clock.time() + visibility_delay
+    cloud.s3.put_object = lambda **_kwargs: None
+    stopped, histories, discoveries = [], [], []
+
+    def running():
+        discoveries.append(clock.time())
+        # Other work and a prepared-only marker must not expand this case's
+        # cleanup scope, even when the service happens to list matching names.
+        executions = [
+            {"DurableExecutionArn": "unrelated", "DurableExecutionName": "another-case"},
+            {"DurableExecutionArn": "uninvoked", "DurableExecutionName": prepared["marker"]},
+        ]
+        if clock.time() >= visible_at:
+            executions.append(
+                {"DurableExecutionArn": "accepted", "DurableExecutionName": lost["marker"]}
+            )
+        return executions
+
+    cloud.running = running
+    cloud.s3.get_paginator = lambda _name: SimpleNamespace(paginate=lambda **_kwargs: [{}])
+    cloud.lam.get_durable_execution = lambda **_kwargs: {"Status": "RUNNING"}
+    cloud.lam.stop_durable_execution = lambda **kwargs: stopped.append(
+        kwargs["DurableExecutionArn"]
+    )
+    cloud.history = lambda item: histories.append(item["arn"])
+
+    def quiesce(_label):
+        assert stopped == ["accepted"], (
+            "Drain must not start before stopping the recovered execution"
+        )
+
+    cloud.quiesce = quiesce
+    cloud.close_case()  # The pytest fixture calls this directly, not settle_run().
+    assert stopped == histories == ["accepted"]
+    assert discoveries[-1] >= visible_at
+    if visibility_delay:
+        assert len(discoveries) > 1
+    assert cloud.cache == {}
+
+
+def test_close_case_bounds_ambiguous_discovery_and_still_stops_known_executions(setup):
+    cloud, clock, _calls, _output = setup
+    cloud.manifest["drainTimeout"] = 2
+    known = cloud.start("barrier")
+    lost = cloud.prepare("barrier")
+
+    def lost_response(**_kwargs):
+        raise TimeoutError("Invoke response unavailable")
+
+    cloud.lam.invoke = lost_response
+    with pytest.raises(TimeoutError):
+        cloud.invoke(lost)
+    cloud.running = lambda: []
+    cloud.s3.get_paginator = lambda _name: SimpleNamespace(paginate=lambda **_kwargs: [{}])
+    cloud.lam.get_durable_execution = lambda **_kwargs: {"Status": "RUNNING"}
+    stopped = []
+    cloud.lam.stop_durable_execution = lambda **kwargs: stopped.append(
+        kwargs["DurableExecutionArn"]
+    )
+    cloud.history = lambda _item: []
+    cloud.quiesce = lambda _label: None
+    cloud.gates.clear()  # Measure only the discovery budget, not control-write latency.
+    begin = clock.time()
+    with pytest.raises(ev.CollectionError, match="Could not resolve invoked executions"):
+        cloud.close_case()
+    assert stopped == [known["arn"]]
+    assert clock.time() - begin == 2

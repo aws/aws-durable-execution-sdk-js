@@ -361,6 +361,33 @@ class Cloud:
                 self.control(gate, "release")
             except Exception as error:
                 failures.append(str(error))
+        invoked = {
+            item["marker"]
+            for item in self.items
+            if item.get("arn") or "invokeBegin" in item.get("timing", {})
+        }
+        unresolved = {
+            item["marker"]
+            for item in self.items
+            if item["marker"] in invoked and not item.get("arn")
+        }
+        if unresolved:
+            # An Invoke timeout does not mean the service rejected it. Discover
+            # only this case's invoked markers, including executions whose first
+            # worker event has not arrived yet. Prepared-only probes are excluded.
+            def discover():
+                self.load_markers(invoked)
+                return unresolved <= {item["marker"] for item in self.items if item.get("arn")}
+
+            try:
+                self.poll(
+                    discover,
+                    seconds=min(30, self.manifest.get("drainTimeout", 150)),
+                    message="Could not resolve invoked executions during teardown: "
+                    + ", ".join(sorted(unresolved)),
+                )
+            except Exception as error:
+                failures.append(str(error))
         for item in self.items:
             if not item.get("arn"):
                 continue
