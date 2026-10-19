@@ -396,6 +396,88 @@ describe("TestExecutionOrchestrator - Invocation History Ordering", () => {
   });
 
   describe("Race condition prevention", () => {
+    it("does not admit callback wakeups while recording an invalid PENDING rejection", async () => {
+      jest.useFakeTimers();
+      mockInvoke.mockResolvedValue({ Status: InvocationStatus.PENDING });
+      completeInvocationSpy.mockResolvedValue(mockInvocationCompletedEvent);
+
+      let failureWriteEntered!: () => void;
+      const recordingFailure = new Promise<void>((resolve) => {
+        failureWriteEntered = resolve;
+      });
+      let releaseFailureWrite!: () => void;
+      jest.spyOn(checkpointApi, "updateCheckpointData").mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            releaseFailureWrite = resolve;
+            failureWriteEntered();
+          }),
+      );
+      let deliverCallback!: (
+        value: Awaited<ReturnType<CheckpointApiClient["pollCheckpointData"]>>,
+      ) => void;
+      jest.spyOn(checkpointApi, "pollCheckpointData").mockReturnValueOnce(
+        new Promise((resolve) => {
+          deliverCallback = resolve;
+        }),
+      );
+      const callback = {
+        operation: {
+          Id: "late-callback",
+          Type: OperationType.CALLBACK,
+          Status: OperationStatus.FAILED,
+          StartTimestamp: new Date(),
+        },
+        update: undefined,
+        events: [],
+      };
+      const finalCallback = {
+        ...callback,
+        operation: { ...callback.operation, Id: "final-callback" },
+      };
+      jest.spyOn(checkpointApi, "drainCheckpointData").mockResolvedValue({
+        operations: [finalCallback],
+      });
+      const execution = orchestrator.executeHandler().then(
+        (value) => ({ value, error: undefined }),
+        (error) => ({ value: undefined, error }),
+      );
+      try {
+        await jest.advanceTimersByTimeAsync(1);
+        await recordingFailure;
+        expect(checkpointApi.updateCheckpointData).toHaveBeenCalledWith(
+          expect.objectContaining({
+            operationData: { Status: OperationStatus.FAILED },
+          }),
+        );
+        deliverCallback({ operations: [callback] });
+        await jest.advanceTimersByTimeAsync(1);
+        expect(checkpointApi.startInvocation).not.toHaveBeenCalled();
+        expect(mockInvoke).toHaveBeenCalledTimes(1);
+
+        releaseFailureWrite();
+        const result = await execution;
+        expect(result.error).toEqual({
+          error: {
+            ErrorType: "InvalidParameterValueException",
+            ErrorMessage:
+              "Cannot return PENDING status with no pending operations.",
+          },
+          status: OperationStatus.FAILED,
+        });
+        await jest.advanceTimersByTimeAsync(1);
+        expect(checkpointApi.startInvocation).not.toHaveBeenCalled();
+        expect(mockInvoke).toHaveBeenCalledTimes(1);
+        expect(mockOperationStorage.populateOperations).toHaveBeenCalledWith([
+          finalCallback,
+        ]);
+      } finally {
+        releaseFailureWrite?.();
+        await execution;
+        jest.useRealTimers();
+      }
+    });
+
     it.each(["SUCCEEDED", "FAILED", "THROWN"] as const)(
       "does not admit callback wakeups while recording a terminal %s response",
       async (outcome) => {
