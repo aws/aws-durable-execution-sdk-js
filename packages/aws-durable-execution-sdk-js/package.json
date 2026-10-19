@@ -20,6 +20,11 @@
       "types": "./dist-types/index.d.ts",
       "require": "./dist-cjs/index.js",
       "import": "./dist/index.mjs"
+    },
+    "./powertools": {
+      "types": "./dist-types/powertools/index.d.ts",
+      "require": "./dist-cjs/powertools.js",
+      "import": "./dist/powertools.mjs"
     }
   },
   "files": [

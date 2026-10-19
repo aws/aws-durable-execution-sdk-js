@@ -576,6 +576,31 @@ context.configureLogger({
 context.configureLogger({ modeAware: false });
 ```
 
+### Powertools for AWS Lambda (TypeScript)
+
+`createPowertoolsLogger` wraps a [Powertools `Logger`](https://docs.powertools.aws.dev/lambda/typescript/latest/features/logger/). Every log entry then contains the durable execution metadata: `executionArn`, `requestId`, `tenantId`, `operationId`, `operationName`, and `attempt`. Keys without a value are omitted.
+
+```typescript
+import { Logger } from "@aws-lambda-powertools/logger";
+import { withDurableExecution } from "@aws/durable-execution-sdk-js";
+import { createPowertoolsLogger } from "@aws/durable-execution-sdk-js/powertools";
+
+const logger = new Logger({ serviceName: "my-service" });
+
+export const handler = withDurableExecution(async (event, context) => {
+  context.configureLogger({ customLogger: createPowertoolsLogger(logger) });
+  context.logger.info("workflow-started", { orderId: event.orderId });
+});
+```
+
+- The keys use the same names as the default logger and the Python SDK.
+- A key that you pass replaces the metadata key with the same name.
+- The adapter reads the metadata on every call. So one adapter instance logs the correct `operationId` and `attempt` for concurrent steps and child contexts.
+- The SDK does not depend on `@aws-lambda-powertools/logger`. Install it in your function.
+- To add the Powertools Lambda context fields, such as `cold_start` and `function_name`, call `logger.addContext(context.lambdaContext)` in the handler.
+
+Leave the `POWERTOOLS_DEV` environment variable unset in deployed functions. When it is set, Powertools writes through the global `console`. With Lambda's JSON log format, Lambda wraps each `console` line in a JSON object. So each Powertools entry then appears as a string inside the `message` field of a second JSON object.
+
 ## Runtime requirements
 
 The SDK targets the Lambda managed Node.js runtimes (`nodejs22.x`, `nodejs24.x`), where
