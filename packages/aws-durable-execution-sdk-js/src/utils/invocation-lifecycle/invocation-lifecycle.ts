@@ -39,6 +39,10 @@ export class InvocationLifecycle {
   // telemetry finishes must not turn it into an abandoned result.
   checkpointedExecutionResult?: DurableExecutionInvocationOutput;
 
+  // A withdrawn checkpoint token cannot be retried. Preserve the service's
+  // suspension even if an already-entered telemetry hook outlives the budget.
+  serviceRequestedSuspension = false;
+
   constructor(private readonly remainingTime: () => number) {
     // Runtime time is separate from the virtual durable clock used by skipTime.
     // Global performance/Date can advance by a day while an invocation uses milliseconds.

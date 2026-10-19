@@ -444,6 +444,47 @@ describe("invocation-owned lifecycle through the public wrapper", () => {
     expect(store.calls).toHaveLength(1);
   });
 
+  it("preserves service-requested suspension when invocation-end exceeds its deadline", async () => {
+    const store = recorder();
+    store.checkpoint.mockResolvedValue({
+      CheckpointToken: undefined,
+      NewExecutionState: undefined,
+    });
+    const release = deferred();
+    const ended = jest.fn(async () => release.promise);
+    const next = jest.fn(async () => "forbidden");
+    const result = withDurableExecution(
+      async (_event, ctx) => {
+        await ctx.step("withdraw-token", async () => "accepted");
+        return ctx.step("next", next);
+      },
+      {
+        durableExecutionClient: store.client,
+        plugins: [{ onInvocationEnd: ended }],
+      },
+    )(input(), runtime(1000));
+    // Observe both outcomes immediately so the negative control does not leave
+    // an unhandled rejection when the deadline wins the wrapper's race.
+    const outcome = result.then(
+      (value) => value,
+      (error: unknown) => error,
+    );
+    try {
+      await tickUntil(() => ended.mock.calls.length === 1);
+      expect(ended).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "PENDING" }),
+      );
+      await jest.advanceTimersByTimeAsync(1000);
+      expect(await outcome).toEqual({ Status: InvocationStatus.PENDING });
+      expect(next).not.toHaveBeenCalled();
+      expect(store.checkpoint).toHaveBeenCalledTimes(1);
+    } finally {
+      release.resolve();
+      await jest.advanceTimersByTimeAsync(10);
+      await outcome;
+    }
+  });
+
   it("preserves ordinary suspension and replay without unwinding the original stack", async () => {
     const store = recorder();
     const completed = jest.fn(async () => "saved");

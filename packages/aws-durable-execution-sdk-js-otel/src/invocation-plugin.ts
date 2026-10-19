@@ -90,6 +90,9 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   private globalIdGeneratorInstalled: boolean;
   private durableSampler: DurableSampler | undefined;
   private tracingEnabled = false;
+  // An expired wrapper can return before End's provider flush settles. A later
+  // invocation owns the cached plugin as soon as its Start hook runs.
+  private invocationGeneration = 0;
   // Operation and attempt spans ended after a flush starts need a final batch.
   private operationSpansNeedFlush = false;
   private readonly externalCompletions = new ExternalCompletions();
@@ -156,6 +159,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onInvocationStart(info: InvocationInfo): Promise<void> {
+    this.invocationGeneration++;
     this.resetInvocationState();
     this.tracingEnabled = this.ensureGlobalIdGeneratorInstalled();
     if (!this.tracingEnabled) {
@@ -298,6 +302,7 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
   }
 
   async onInvocationEnd(info: InvocationEndInfo): Promise<void> {
+    const generation = this.invocationGeneration;
     if (!this.tracingEnabled) {
       this.resetInvocationState();
       return;
@@ -414,6 +419,9 @@ export class InvocationOtelPlugin implements DurableInstrumentationPlugin {
       }
       this.operationSpansNeedFlush = false;
       await flush();
+      // Only this invocation may drain notifications, end spans, or reset the
+      // mutable plugin state after an asynchronous provider wait.
+      if (generation !== this.invocationGeneration) return;
     } while (
       this.externalCompletions.pending.size > 0 &&
       performance.now() < flushDeadline

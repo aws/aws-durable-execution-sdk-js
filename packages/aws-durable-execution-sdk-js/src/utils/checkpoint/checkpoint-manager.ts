@@ -751,6 +751,9 @@ export class CheckpointManager implements Checkpoint {
    */
   private handleRevokedCheckpointToken(): void {
     this.checkpointTokenRevoked = true;
+    if (this.invocationLifecycle) {
+      this.invocationLifecycle.serviceRequestedSuspension = true;
+    }
 
     const message =
       "Checkpoint response contained no CheckpointToken: the service will accept no " +

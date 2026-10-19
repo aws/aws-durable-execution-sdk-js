@@ -755,11 +755,13 @@ export const withDurableExecution = <
         }
       });
     } catch (error) {
-      if (
-        error instanceof InvocationDeadlineError &&
-        lifecycle.checkpointedExecutionResult
-      ) {
-        return lifecycle.checkpointedExecutionResult;
+      if (error instanceof InvocationDeadlineError) {
+        if (lifecycle.serviceRequestedSuspension) {
+          return { Status: InvocationStatus.PENDING };
+        }
+        if (lifecycle.checkpointedExecutionResult) {
+          return lifecycle.checkpointedExecutionResult;
+        }
       }
       throw error;
     } finally {
