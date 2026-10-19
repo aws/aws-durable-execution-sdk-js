@@ -13,19 +13,12 @@
  * server keeps the offset between that time and its own clock. Between requests, the main
  * thread's clock advances with real time, so real time plus the latest offset is the main
  * thread's current time. Without skipTime the offset stays close to zero.
+ *
+ * Each `setupTestEnvironment` starts a new worker, and so a new copy of this module. So one
+ * copy only ever observes one main-thread clock.
  */
 
 let offsetMs = 0;
-let lastReportedMs: number | undefined;
-
-/**
- * The longest backward step that {@link currentTime} hides. The fake clock follows real
- * time in steps of its advance interval, 20 ms by default. So the offset observed from one
- * request to the next can shrink by up to that step, and the time read between requests
- * would go backward. A larger step back means the main thread installed a new clock, for
- * example in a new `setupTestEnvironment`, and is reported as is.
- */
-const MAX_HIDDEN_REGRESSION_MS = 1000;
 
 /**
  * Records the main thread's clock as carried by a request.
@@ -40,20 +33,40 @@ export function observeClientTime(clientTimestampMs: number | undefined): void {
 }
 
 /**
- * @returns the current time on the main thread's clock. Successive calls never go back by
- * less than {@link MAX_HIDDEN_REGRESSION_MS}, so recorded event times stay in order.
+ * @returns the current time on the main thread's clock, as last observed. Use an
+ * {@link ExecutionClock} for times recorded in an execution, so they never go back.
  */
 export function currentTime(): Date {
-  let nowMs = Date.now() + offsetMs;
-  if (
-    lastReportedMs !== undefined &&
-    nowMs < lastReportedMs &&
-    lastReportedMs - nowMs <= MAX_HIDDEN_REGRESSION_MS
-  ) {
-    nowMs = lastReportedMs;
+  return new Date(Date.now() + offsetMs);
+}
+
+/**
+ * The main thread's clock as seen by one execution. Successive times never go back, so an
+ * execution's recorded times stay in the order in which the server recorded them.
+ *
+ * The estimate from {@link currentTime} can run ahead of the main thread's clock, and a
+ * later request then reports an earlier time. Two causes are known:
+ *
+ * 1. The fake clock follows real time in steps of its advance interval, 20 ms by default.
+ * 2. A step that blocks the main thread synchronously also stops the fake clock. The worker
+ *    keeps running meanwhile. It can record a time, for example when a callback times out.
+ *
+ * So the time holds at the latest time returned until the main thread's clock passes it.
+ * A delay that starts during that hold ends later by up to the length of the hold. Each
+ * execution has its own clock, so a hold in one execution does not affect the next one.
+ */
+export class ExecutionClock {
+  private lastMs: number | undefined;
+
+  /** @returns the current time on the main thread's clock, never before an earlier result */
+  now(): Date {
+    let nowMs = currentTime().getTime();
+    if (this.lastMs !== undefined && nowMs < this.lastMs) {
+      nowMs = this.lastMs;
+    }
+    this.lastMs = nowMs;
+    return new Date(nowMs);
   }
-  lastReportedMs = nowMs;
-  return new Date(nowMs);
 }
 
 /**
@@ -62,5 +75,4 @@ export function currentTime(): Date {
  */
 export function resetClientTimeForTesting(): void {
   offsetMs = 0;
-  lastReportedMs = undefined;
 }

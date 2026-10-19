@@ -482,6 +482,55 @@ describe("skip-time clock", () => {
     },
   );
 
+  it("keeps history times in order when the main thread stalls past a callback timeout", async () => {
+    // A blocking step stops the main thread's fake clock. Meanwhile the checkpoint server
+    // times out the callback and records that time. The events after the stall must not
+    // be recorded earlier than the timeout.
+    const handler = withDurableExecution(
+      async (_event: unknown, context: DurableContext) => {
+        await context.parallel("stall", [
+          async (child) => {
+            try {
+              const [result] = await child.createCallback("times out", {
+                timeout: { seconds: 2 },
+              });
+              return await result;
+            } catch {
+              return "timed out";
+            }
+          },
+          async (child) => {
+            // Lets the callback's START reach the checkpoint server before the block.
+            await child.step("settle", async () => {
+              await sleep(500);
+            });
+            await child.step("block", async () => {
+              Atomics.wait(
+                new Int32Array(new SharedArrayBuffer(4)),
+                0,
+                0,
+                3000,
+              );
+            });
+          },
+        ]);
+        await context.step("after stall", async () => "after");
+        return "done";
+      },
+    );
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+
+    const result = await runner.run();
+
+    const times = result
+      .getHistoryEvents()
+      .map((event) => event.EventTimestamp!.getTime());
+    expect(times.length).toBeGreaterThan(0);
+    for (let i = 1; i < times.length; i++) {
+      expect(times[i]).toBeGreaterThanOrEqual(times[i - 1]);
+    }
+  }, 15_000);
+
   it("applies no pending end after the handler returns its result", async () => {
     // The parallel completes on the 1 h wait. The 3 h wait is still pending when the
     // handler returns, and must not complete after the execution does.

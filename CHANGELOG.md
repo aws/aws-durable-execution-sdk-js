@@ -108,7 +108,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Every request from the local runner to the checkpoint server carries the runner's clock. The
     server records every timestamp on that clock: scheduled ends, retry times, start and end
     times, and history event times. So a wait's `ScheduledEndTimestamp` is its start time plus its
-    duration, and both match `Date.now()` inside the handler.
+    duration, and both match `Date.now()` inside the handler. An execution's recorded times never go back, even
+    when a step blocks the main thread while the server records a callback timeout.
   - When no invocation is running or about to start, the runner advances the fake clock to the
     earliest pending wait or retry end only, and applies the next end after the invocation that
     one releases has run. So a branch that resumes after its own wait ends starts its next delay

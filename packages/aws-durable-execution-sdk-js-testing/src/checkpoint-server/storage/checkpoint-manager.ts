@@ -17,7 +17,7 @@ import { waitHistoryDetails } from "./wait-details";
 import { chainedInvokeHistoryDetails } from "./chained-invoke-details";
 import { executionDetails } from "./execution-details";
 import { pruneReplayChildren } from "./prune-replay-children";
-import { currentTime } from "../utils/client-clock";
+import { ExecutionClock } from "../utils/client-clock";
 
 export interface CheckpointOperation extends OperationEvents {
   // required for test execution orchestrator to process retries
@@ -33,8 +33,10 @@ export class CheckpointManager {
   private readonly pendingUpdates: CheckpointOperation[] = [];
   private resolvePendingUpdatePromise: (() => void) | undefined = undefined;
   private readonly callbackManager: CallbackManager;
+  /** Every time this execution records. Never goes back. See ExecutionClock. */
+  private readonly clock = new ExecutionClock();
   // TODO: add execution timeout
-  readonly eventProcessor = new EventProcessor();
+  readonly eventProcessor = new EventProcessor(undefined, this.clock);
   private readonly invocationsMap = new Map<InvocationId, Date>();
   private readonly dirtyOperationIds = new Set<string>();
 
@@ -116,7 +118,7 @@ export class CheckpointManager {
     operationEvents: OperationEvents[];
     updatedOperationIds: string[];
   } {
-    this.invocationsMap.set(invocationId, currentTime());
+    this.invocationsMap.set(invocationId, this.clock.now());
 
     // Capture the IDs of operations that were updated externally between invocations
     // (e.g., wait timers expired, callbacks received, chained invokes completed).
@@ -150,7 +152,7 @@ export class CheckpointManager {
 
     return {
       startTimestamp,
-      endTimestamp: currentTime(),
+      endTimestamp: this.clock.now(),
     };
   }
 
@@ -176,7 +178,7 @@ export class CheckpointManager {
       Id: initialId,
       Type: OperationType.EXECUTION,
       Status: OperationStatus.STARTED,
-      StartTimestamp: currentTime(),
+      StartTimestamp: this.clock.now(),
       ExecutionDetails: {
         InputPayload: payload,
       },
@@ -285,7 +287,7 @@ export class CheckpointManager {
     const result: Operation = {
       ...operation,
       Status: status,
-      EndTimestamp: currentTime(),
+      EndTimestamp: this.clock.now(),
     };
 
     if (operation.Type === OperationType.STEP) {
@@ -303,7 +305,7 @@ export class CheckpointManager {
     attempt: number,
     retryDelaySeconds = 0,
   ): void {
-    const scheduledEndTimestamp = currentTime();
+    const scheduledEndTimestamp = this.clock.now();
     scheduledEndTimestamp.setSeconds(
       scheduledEndTimestamp.getSeconds() + retryDelaySeconds,
     );
@@ -626,14 +628,14 @@ export class CheckpointManager {
       ParentId: update.ParentId,
       Name: update.Name,
       Type: update.Type,
-      StartTimestamp: currentTime(),
+      StartTimestamp: this.clock.now(),
       Status: OperationStatus.STARTED,
       SubType: update.SubType,
     };
 
     switch (update.Type) {
       case OperationType.WAIT: {
-        const scheduledEndTimestamp = currentTime();
+        const scheduledEndTimestamp = this.clock.now();
         const waitSeconds = update.WaitOptions?.WaitSeconds ?? 0;
         scheduledEndTimestamp.setSeconds(
           scheduledEndTimestamp.getSeconds() + waitSeconds,
