@@ -538,6 +538,17 @@ application I/O can continue and must remain idempotent; this
 does not add a cancellation signal or cleanup callback to `StepContext`. Durable suspension
 continues to leave the original business stack suspended instead of running its catch/finally.
 
+On deadline expiry, the SDK calls `onInvocationEnd` at most once for each plugin whose
+invocation start was admitted and which is still owned by that invocation. Ordinary expiry
+reports `RETRYING`, without recording a business failure. A service-requested suspension or
+an already acknowledged terminal result keeps its known status. Built-in OTel plugins close
+owned spans before starting their bounded flush; the SDK does not wait for this cleanup
+past the deadline. Export remains best-effort and may not complete before Lambda freezes.
+Cleanup skips a cached plugin already reused by another invocation; it cannot recover spans
+that v1 plugin reuse has already discarded. This does not provide concurrent isolation for
+cached v1 plugins, cancel code already running inside a custom hook, or preempt blocking
+synchronous JavaScript.
+
 Without a stated scope, every failure is treated as transient, so a permanent one is retried
 until the execution times out. Note that a stated scope is believed ahead of the SDK's own
 error inspection, so a transport that wraps another one takes over responsibility for

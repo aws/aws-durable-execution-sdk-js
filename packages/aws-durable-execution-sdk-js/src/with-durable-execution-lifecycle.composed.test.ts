@@ -190,6 +190,87 @@ describe("invocation-owned lifecycle through the public wrapper", () => {
     });
   });
 
+  it.each(["throw", "reject", "hang"] as const)(
+    "does not await deadline cleanup or call End for an unstarted plugin (%s)",
+    async (failure) => {
+      const store = recorder();
+      let remaining = 1000;
+      const cleanup = jest.fn((): Promise<void> => {
+        if (failure === "throw") throw new Error("sync cleanup failure");
+        if (failure === "reject")
+          return Promise.reject(new Error("async cleanup failure"));
+        return new Promise(() => {});
+      });
+      const laterStart = jest.fn();
+      const laterEnd = jest.fn();
+      const body = jest.fn(async () => "forbidden");
+      const handler = withDurableExecution(body, {
+        durableExecutionClient: store.client,
+        plugins: [
+          {
+            onInvocationStart: async () => {
+              remaining = 0;
+            },
+            onInvocationEnd: cleanup,
+          },
+          { onInvocationStart: laterStart, onInvocationEnd: laterEnd },
+        ],
+      });
+      await expect(
+        handler(input(), {
+          ...runtime(),
+          getRemainingTimeInMillis: () => remaining,
+        }),
+      ).rejects.toBeInstanceOf(InvocationDeadlineError);
+      expect(cleanup).toHaveBeenCalledTimes(1);
+      expect(cleanup).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "RETRYING" }),
+      );
+      expect(laterStart).not.toHaveBeenCalled();
+      expect(laterEnd).not.toHaveBeenCalled();
+      expect(body).not.toHaveBeenCalled();
+      expect(store.checkpoint).not.toHaveBeenCalled();
+      await jest.advanceTimersByTimeAsync(10);
+      expect(cleanup).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("finishes only the remaining End hooks if expiry interrupts their dispatch", async () => {
+    const store = recorder();
+    store.checkpoint.mockResolvedValue({
+      CheckpointToken: undefined,
+      NewExecutionState: undefined,
+    });
+    let remaining = 1000;
+    const firstEnd = jest.fn(async () => {
+      remaining = 0;
+    });
+    const secondEnd = jest.fn();
+    const handler = withDurableExecution(
+      async (_event, ctx) => ctx.step("withdraw-token", async () => "accepted"),
+      {
+        durableExecutionClient: store.client,
+        plugins: [
+          { onInvocationEnd: firstEnd },
+          { onInvocationEnd: secondEnd },
+        ],
+      },
+    );
+    const result = handler(input(), {
+      ...runtime(),
+      getRemainingTimeInMillis: () => remaining,
+    });
+    await jest.advanceTimersByTimeAsync(10);
+    expect(await result).toEqual({ Status: InvocationStatus.PENDING });
+    expect(firstEnd).toHaveBeenCalledTimes(1);
+    expect(secondEnd).toHaveBeenCalledTimes(1);
+    for (const end of [firstEnd, secondEnd]) {
+      expect(end).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "PENDING" }),
+      );
+    }
+  });
+
   it("does not start the handler or send a checkpoint with an expired deadline", async () => {
     const store = recorder();
     const body = jest.fn(async () => "done");
@@ -465,7 +546,13 @@ describe("invocation-owned lifecycle through the public wrapper", () => {
     });
     release.resolve();
     await jest.advanceTimersByTimeAsync(10);
-    expect(ended).not.toHaveBeenCalled();
+    expect(ended).toHaveBeenCalledTimes(1);
+    expect(ended).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "SUCCEEDED",
+        executionError: undefined,
+      }),
+    );
     expect(store.calls).toHaveLength(1);
   });
 
@@ -501,6 +588,7 @@ describe("invocation-owned lifecycle through the public wrapper", () => {
       );
       await jest.advanceTimersByTimeAsync(1000);
       expect(await outcome).toEqual({ Status: InvocationStatus.PENDING });
+      expect(ended).toHaveBeenCalledTimes(1);
       expect(next).not.toHaveBeenCalled();
       expect(store.checkpoint).toHaveBeenCalledTimes(1);
     } finally {

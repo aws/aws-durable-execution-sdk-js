@@ -45,11 +45,13 @@ import {
   DurableExecutionHandler,
   DurableLambdaHandler,
 } from "./types/durable-execution";
-import { createPluginRunner } from "./utils/plugin/plugin-runner";
+import {
+  createPluginRunner,
+  type InvocationPluginRunner,
+} from "./utils/plugin/plugin-runner";
 import { loadConfiguredPlugins } from "./utils/plugin/plugin-loader";
 import { toOperationInfoMap } from "./utils/operation/operation";
 import {
-  DurableInstrumentationPlugin,
   InvocationBaseInfo,
   InvocationInfo,
   InvocationEndInfo,
@@ -71,7 +73,7 @@ async function runHandler<
   durableExecutionMode: DurableExecutionMode,
   checkpointToken: string,
   handler: DurableExecutionHandler<Input, Output, Logger>,
-  plugin: DurableInstrumentationPlugin,
+  plugin: InvocationPluginRunner,
   config: DurableExecutionConfig | undefined,
 ): Promise<DurableExecutionInvocationOutput> {
   // Create checkpoint manager and step data emitter
@@ -130,6 +132,22 @@ async function runHandler<
       durableExecutionMode === DurableExecutionMode.ExecutionMode,
     updatedOperations,
   };
+  lifecycle?.onDeadline((error) => {
+    // Expiry interrupts an invocation; it does not manufacture a business
+    // failure or a terminal Workflow. Retain outcomes already fixed by service.
+    const status = lifecycle.serviceRequestedSuspension
+      ? PluginInvocationStatus.PENDING
+      : lifecycle.checkpointedExecutionResult
+        ? PluginInvocationStatus.SUCCEEDED
+        : PluginInvocationStatus.RETRYING;
+    plugin.endInvocationOnDeadline?.({
+      ...invocationBaseInfo,
+      operations: toOperationInfoMap(executionContext._stepData),
+      status,
+      executionError:
+        status === PluginInvocationStatus.RETRYING ? error : undefined,
+    });
+  });
   lifecycle?.throwIfExpired();
   await plugin.onInvocationStart?.(invocationInfo);
   lifecycle?.throwIfExpired();
@@ -698,7 +716,7 @@ export const withDurableExecution = <
     );
     try {
       return await lifecycle.run(async () => {
-        let plugin: DurableInstrumentationPlugin;
+        let plugin: InvocationPluginRunner;
         try {
           const plugins = await pluginPromise;
           lifecycle.throwIfExpired();

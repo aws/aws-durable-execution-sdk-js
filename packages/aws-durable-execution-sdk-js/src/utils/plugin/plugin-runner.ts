@@ -15,6 +15,16 @@ import { DurableExecutionInvocationOutput } from "../../types/core";
 import { collectPropagationMetadata } from "./propagation-metadata";
 import type { InvocationLifecycle } from "../invocation-lifecycle/invocation-lifecycle";
 
+// A v1 plugin instance may be reused by a later invocation before old cleanup
+// runs. Ownership is per instance, including when the same instance is shared
+// by more than one wrapped handler.
+const invocationOwners = new WeakMap<DurableInstrumentationPlugin, object>();
+
+/** @internal Runner-only deadline dispatch, not a custom plugin hook. */
+export interface InvocationPluginRunner extends DurableInstrumentationPlugin {
+  endInvocationOnDeadline?(info: InvocationEndInfo): void;
+}
+
 type CallbackResult = unknown;
 type CallbackFn = () => CallbackResult;
 type PluginInfo =
@@ -41,13 +51,16 @@ type PluginHookFn = (info: PluginInfo) => CallbackResult;
 export function createPluginRunner(
   plugins: DurableInstrumentationPlugin[],
   lifecycle?: InvocationLifecycle,
-): DurableInstrumentationPlugin {
+): InvocationPluginRunner {
   if (plugins.length === 0) return {};
 
   // Closing admission still allows final checkpoint/telemetry drain. Disposal
   // stops new hook dispatch and leaves old SDK continuations suspended.
   const isActive = () => !lifecycle || lifecycle.allowsRequests();
   const suspended = () => new Promise<never>(() => {});
+  const owner = {};
+  const started = new Set<DurableInstrumentationPlugin>();
+  const ended = new Set<DurableInstrumentationPlugin>();
 
   const runAsCallback = <K extends keyof DurableInstrumentationPlugin>(
     method: K,
@@ -155,6 +168,14 @@ export function createPluginRunner(
     await Promise.allSettled(
       plugins.map(async (p) => {
         if (!isActive()) return suspended();
+        if (method === "onInvocationStart") {
+          started.add(p);
+          invocationOwners.set(p, owner);
+        } else if (method === "onInvocationEnd" && lifecycle) {
+          if (ended.has(p)) return;
+          // Mark admission before calling a hook, including one that throws.
+          ended.add(p);
+        }
         const result = (p[method] as PluginHookFn)?.(info as PluginInfo);
         if (
           result != null &&
@@ -168,6 +189,20 @@ export function createPluginRunner(
   };
 
   return {
+    endInvocationOnDeadline: (info) => {
+      for (const plugin of started) {
+        if (ended.has(plugin) || invocationOwners.get(plugin) !== owner)
+          continue;
+        ended.add(plugin);
+        try {
+          // Built-in plugins end owned spans before their bounded provider wait.
+          // Observe rejection, but never wait past the invocation deadline.
+          void Promise.resolve(plugin.onInvocationEnd?.(info)).catch(() => {});
+        } catch {
+          // A synchronous custom hook failure cannot change the invocation result.
+        }
+      }
+    },
     providePropagationMetadata: (input) =>
       isActive() ? collectPropagationMetadata(plugins, input) : {},
     onInvocationStart: (info: InvocationInfo): Promise<void> =>

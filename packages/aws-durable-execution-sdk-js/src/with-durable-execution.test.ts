@@ -395,11 +395,12 @@ describe("withDurableExecution", () => {
       release = resolve;
     });
     const started = jest.fn();
+    const ended = jest.fn();
     const loader = jest
       .spyOn(pluginLoader, "loadConfiguredPlugins")
       .mockImplementation(async () => {
         await loading;
-        return [{ onInvocationStart: started }];
+        return [{ onInvocationStart: started, onInvocationEnd: ended }];
       });
     try {
       const body = jest.fn(async () => "forbidden");
@@ -414,6 +415,7 @@ describe("withDurableExecution", () => {
       await jest.advanceTimersByTimeAsync(10);
       expect(initializeExecutionContext).not.toHaveBeenCalled();
       expect(started).not.toHaveBeenCalled();
+      expect(ended).not.toHaveBeenCalled();
       expect(body).not.toHaveBeenCalled();
       expect(jest.getTimerCount()).toBe(0);
     } finally {

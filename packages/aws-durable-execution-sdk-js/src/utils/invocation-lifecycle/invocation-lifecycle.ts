@@ -30,6 +30,9 @@ export class InvocationLifecycle {
   private deadlineError?: InvocationDeadlineError;
   private readonly controller = new AbortController();
   private readonly cleanup = new Set<() => void>();
+  private readonly deadlineCleanup = new Set<
+    (error: InvocationDeadlineError) => void
+  >();
   private rejectDeadline!: (error: InvocationDeadlineError) => void;
   private readonly expired = new Promise<never>((_, reject) => {
     this.rejectDeadline = reject;
@@ -90,8 +93,18 @@ export class InvocationLifecycle {
     this.deadlineError = new InvocationDeadlineError();
     // Publish the invocation error before aborting transports, so their AbortError
     // cannot change the classification of this interruption.
+    const cleanup = [...this.deadlineCleanup];
     this.rejectDeadline(this.deadlineError);
     this.dispose();
+    // Dispatch before the rejection reaches the caller, after requests/admission
+    // have closed. Cleanup never adds an asynchronous wait to an expired invocation.
+    for (const callback of cleanup) {
+      try {
+        callback(this.deadlineError);
+      } catch {
+        /* Instrumentation cannot replace the deadline. */
+      }
+    }
   }
 
   throwIfExpired(): void {
@@ -116,6 +129,18 @@ export class InvocationLifecycle {
     if (this.state === "open") this.state = "closing";
   }
 
+  onDeadline(cleanup: (error: InvocationDeadlineError) => void): void {
+    if (this.deadlineError) {
+      try {
+        cleanup(this.deadlineError);
+      } catch {
+        /* Preserve the original deadline. */
+      }
+    } else if (this.state !== "disposed") {
+      this.deadlineCleanup.add(cleanup);
+    }
+  }
+
   onDispose(cleanup: () => void): void {
     if (this.state === "disposed") cleanup();
     else this.cleanup.add(cleanup);
@@ -129,6 +154,7 @@ export class InvocationLifecycle {
     this.controller.abort();
     for (const cleanup of this.cleanup) cleanup();
     this.cleanup.clear();
+    this.deadlineCleanup.clear();
   }
 
   async run<T>(action: () => Promise<T>): Promise<T> {
