@@ -1,6 +1,7 @@
 import {
   getActiveContext,
   runWithContext,
+  runWithRootContext,
   validateContextUsage,
 } from "./context-tracker";
 import { TerminationManager } from "../../termination-manager/termination-manager";
@@ -55,6 +56,64 @@ describe("context-tracker", () => {
         },
       );
       expect(result).toBe("async-success");
+    });
+  });
+
+  describe("execution identity", () => {
+    const identity = {
+      executionArn: "arn:execution-1",
+      requestId: "request-1",
+      tenantId: "tenant-1",
+    };
+
+    it("records the identity on the root context", () => {
+      runWithRootContext(identity, () => {
+        expect(getActiveContext()).toEqual({
+          contextId: "root",
+          execution: identity,
+        });
+      });
+    });
+
+    it("keeps the identity in nested contexts", () => {
+      runWithRootContext(identity, () => {
+        runWithContext("step-1", "root", () => {
+          runWithContext("step-1-1", "step-1", () => {
+            expect(getActiveContext()?.execution).toBe(identity);
+          });
+        });
+      });
+    });
+
+    it("keeps the identity across an await in a nested context", async () => {
+      await runWithRootContext(identity, async () => {
+        await runWithContext("step-1", "root", async () => {
+          await new Promise((resolve) => setTimeout(resolve, 1));
+          expect(getActiveContext()?.execution).toBe(identity);
+        });
+      });
+    });
+
+    it("keeps each execution's identity when two executions interleave", async () => {
+      const other = { executionArn: "arn:execution-2", requestId: "request-2" };
+      const seen: string[] = [];
+      const run = (id: typeof identity | typeof other, pause: number) =>
+        runWithRootContext(id, () =>
+          runWithContext("step-1", "root", async () => {
+            await new Promise((resolve) => setTimeout(resolve, pause));
+            seen.push(getActiveContext()?.execution?.executionArn ?? "none");
+          }),
+        );
+
+      await Promise.all([run(identity, 10), run(other, 1)]);
+
+      expect(seen).toEqual(["arn:execution-2", "arn:execution-1"]);
+    });
+
+    it("has no identity outside a root context", () => {
+      runWithContext("context-1", undefined, () => {
+        expect(getActiveContext()?.execution).toBeUndefined();
+      });
     });
   });
 

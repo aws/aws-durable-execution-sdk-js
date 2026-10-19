@@ -162,10 +162,20 @@ export class DurableContextImpl<Logger extends DurableLogger>
       getDurableLogData: (): DurableLogData => {
         const activeContext = getActiveContext();
 
-        const result: DurableLogData = {
+        // One logger instance can serve several executions in one process. It keeps only the
+        // last logging context it was given, so this closure can belong to another execution.
+        // The active context records the execution it runs in. So prefer its identity, and use
+        // this context's identity only when no active context records one.
+        const execution = activeContext?.execution ?? {
           executionArn: this._executionContext.durableExecutionArn,
           requestId: this._executionContext.requestId,
           tenantId: this._executionContext.tenantId,
+        };
+
+        const result: DurableLogData = {
+          executionArn: execution.executionArn,
+          requestId: execution.requestId,
+          tenantId: execution.tenantId,
           operationId:
             !activeContext || activeContext?.contextId === "root"
               ? undefined

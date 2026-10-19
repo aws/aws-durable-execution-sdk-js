@@ -3,12 +3,26 @@ import { TerminationManager } from "../../termination-manager/termination-manage
 import { TerminationReason } from "../../termination-manager/types";
 import { DurableExecutionMode } from "../../types";
 
+/**
+ * The execution that an active context belongs to.
+ *
+ * Loggers read these values for each log entry. A logger instance can be shared by several
+ * executions in one process. So the values must come from the active context, not from the
+ * `DurableContext` that configured the logger.
+ */
+export interface ActiveExecutionIdentity {
+  executionArn: string;
+  requestId: string;
+  tenantId?: string;
+}
+
 interface ContextInfo {
   contextId: string;
   parentId?: string;
   attempt?: number;
   durableExecutionMode?: DurableExecutionMode;
   operationName?: string;
+  execution?: ActiveExecutionIdentity;
 }
 
 const asyncLocalStorage = createContextStorage<ContextInfo>();
@@ -19,6 +33,9 @@ export const getActiveContext = (): ContextInfo | undefined => {
 
 /**
  * Runs `fn` with the given operation as the active context.
+ *
+ * The new context keeps the execution identity of the context that is active when this is
+ * called. Only the root context sets the identity, through {@link runWithRootContext}.
  *
  * On a runtime without `AsyncLocalStorage` the storage is a synchronous fallback, which is only
  * safe because every call site passes an async callback whose promise the caller awaits: the
@@ -35,9 +52,27 @@ export const runWithContext = <T>(
   operationName?: string,
 ): T => {
   return asyncLocalStorage.run(
-    { contextId, parentId, attempt, durableExecutionMode, operationName },
+    {
+      contextId,
+      parentId,
+      attempt,
+      durableExecutionMode,
+      operationName,
+      execution: asyncLocalStorage.getStore()?.execution,
+    },
     fn,
   );
+};
+
+/**
+ * Runs the customer handler with the root context active, and records which execution it
+ * belongs to. Every context that the handler starts keeps this identity.
+ */
+export const runWithRootContext = <T>(
+  execution: ActiveExecutionIdentity,
+  fn: () => T,
+): T => {
+  return asyncLocalStorage.run({ contextId: "root", execution }, fn);
 };
 
 export const validateContextUsage = (
