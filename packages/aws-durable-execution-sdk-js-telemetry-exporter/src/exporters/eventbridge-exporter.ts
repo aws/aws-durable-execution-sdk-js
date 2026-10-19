@@ -11,7 +11,6 @@ import { applyOperationsFormat } from "../operations-index";
 
 /**
  * Configuration for the EventBridge exporter.
- * @experimental This interface is experimental and may change in future releases.
  */
 export interface EventBridgeExporterConfig {
   /**
@@ -53,8 +52,6 @@ export interface EventBridgeExporterConfig {
  *
  * Customers can create EventBridge rules to react to execution state changes
  * (trigger notifications, fan out to multiple consumers, invoke workflows).
- *
- * @experimental This class is experimental and may change in future releases.
  */
 export class EventBridgeExporter implements TelemetryExporter {
   private readonly eventBusName: string;

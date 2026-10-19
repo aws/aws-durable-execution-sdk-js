@@ -6,7 +6,6 @@ import type {
 
 /**
  * Configuration for the S3 exporter.
- * @experimental This interface is experimental and may change in future releases.
  */
 export interface S3ExporterConfig {
   /** S3 bucket name to write records to. */
@@ -40,8 +39,6 @@ export interface S3ExporterConfig {
  * Each record is written as a JSON object keyed by execution name, so
  * subsequent updates to the same execution **overwrite** the same object.
  * This makes the data queryable via Amazon Athena without deduplication.
- *
- * @experimental This class is experimental and may change in future releases.
  */
 export class S3Exporter implements TelemetryExporter {
   private readonly bucket: string;

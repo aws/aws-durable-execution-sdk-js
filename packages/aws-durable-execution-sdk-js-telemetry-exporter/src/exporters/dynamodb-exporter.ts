@@ -8,7 +8,6 @@ import { withOperationsByName } from "../operations-index";
 
 /**
  * Configuration for the DynamoDB exporter.
- * @experimental This interface is experimental and may change in future releases.
  */
 export interface DynamoDBExporterConfig {
   /** DynamoDB table name. */
@@ -44,8 +43,6 @@ export interface DynamoDBExporterConfig {
  * With the default sort key ("sk" = emittedAt), each export creates a new
  * item — giving you a full history. Without a sort key, subsequent exports
  * for the same execution **overwrite** the previous item (upsert).
- *
- * @experimental This class is experimental and may change in future releases.
  */
 export class DynamoDBExporter implements TelemetryExporter {
   private readonly tableName: string;
