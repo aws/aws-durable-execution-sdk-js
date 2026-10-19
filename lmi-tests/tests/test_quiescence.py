@@ -389,3 +389,96 @@ def test_fresh_settlement_releases_full_pool_before_delayed_service_visibility(d
     assert listings[0] == 0
     assert stopped == ["accepted"]
     assert released == [("blocked-pool", "release")]
+
+
+def test_quiet_window_excludes_the_first_probe_delivery_delay(quiet_cloud):
+    import json
+
+    cloud, clock, output = quiet_cloud
+    calls = 0
+
+    def probe():
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            clock["time"] += 10
+        return {"requests": [], "activityVersion": 0}
+
+    cloud.worker_snapshot = probe
+    cloud.quiesce("first-delayed")
+    assert calls == 4
+    assert clock["time"] == 16
+    samples = json.loads((output / "quiescence/first-delayed.json").read_text())["samples"]
+    assert samples[0]["probeStart"]["monotonic"] == 0
+    assert samples[0]["probeEnd"]["monotonic"] == 10
+    assert samples[-1]["probeStart"]["monotonic"] - samples[0]["probeEnd"]["monotonic"] >= 5
+
+
+def test_later_probe_delivery_delay_cannot_satisfy_quiet_window(quiet_cloud):
+    cloud, clock, _output = quiet_cloud
+    calls = 0
+
+    def probe():
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            clock["time"] += 4
+        return {"requests": [], "activityVersion": 0}
+
+    cloud.worker_snapshot = probe
+    cloud.quiesce("later-delayed")
+    assert calls == 3
+    assert clock["time"] == 8
+
+
+@pytest.mark.parametrize("field", ["activityVersion", "worker", "environment"])
+def test_activity_during_probe_delivery_restarts_quiet_from_fresh_probe_end(quiet_cloud, field):
+    import json
+
+    cloud, clock, output = quiet_cloud
+    calls = 0
+    live = {"requests": [], "activityVersion": 0, "worker": "worker", "environment": "env"}
+
+    def probe():
+        nonlocal calls
+        calls += 1
+        captured = dict(live)
+        if calls == 2:
+            clock["time"] += 1
+            live[field] = 1 if field == "activityVersion" else "changed"
+            clock["time"] += 3  # Deliver stale pre-activity evidence at t=6.
+        elif calls == 3:
+            clock["time"] += 4  # Changed evidence acquired at t=8 arrives at t=12.
+        return captured
+
+    cloud.worker_snapshot = probe
+    cloud.quiesce("activity-during-delivery")
+    assert calls == 6
+    assert clock["time"] == 18
+    samples = json.loads((output / "quiescence/activity-during-delivery.json").read_text())[
+        "samples"
+    ]
+    assert samples[2]["probeStart"]["monotonic"] == 8
+    assert samples[2]["probeEnd"]["monotonic"] == 12
+    assert samples[-1]["probeStart"]["monotonic"] - samples[2]["probeEnd"]["monotonic"] >= 5
+
+
+@pytest.mark.parametrize("delivered_at", [10, 16])
+def test_probe_delivered_at_or_after_drain_deadline_cannot_claim_quiet(quiet_cloud, delivered_at):
+    cloud, clock, _output = quiet_cloud
+    cloud.manifest["drainTimeout"] = 10
+    calls = 0
+
+    def probe():
+        nonlocal calls
+        calls += 1
+        if calls == 4:
+            assert clock["time"] == 6  # Start minus initial end already exceeds quietSeconds.
+            clock["time"] = delivered_at
+        return {"requests": [], "activityVersion": 0}
+
+    cloud.worker_snapshot = probe
+    with pytest.raises(CollectionError, match="did not become quiescent"):
+        cloud.quiesce("late-delivery")
+    assert calls == 4
+    assert clock["time"] == delivered_at

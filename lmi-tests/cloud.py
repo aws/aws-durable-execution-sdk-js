@@ -198,21 +198,24 @@ class Cloud:
             **kwargs,
         )
 
+    def read_execution(self, item):
+        """Read once; an accepted ARN may still be invisible or throttled."""
+        try:
+            return self.lam.get_durable_execution(DurableExecutionArn=item["arn"])
+        except ClientError as error:
+            if error.response["Error"]["Code"] not in {
+                "ResourceNotFoundException",
+                "TooManyRequestsException",
+            }:
+                raise
+            # The caller owns the deadline. Do not repeat Invoke, infer
+            # completion, or start a new per-execution polling budget here.
+            return None
+
     def finish(self, item, status="SUCCEEDED", seconds=150):
         def terminal():
-            try:
-                response = self.lam.get_durable_execution(DurableExecutionArn=item["arn"])
-            except ClientError as error:
-                if error.response["Error"]["Code"] not in {
-                    "ResourceNotFoundException",
-                    "TooManyRequestsException",
-                }:
-                    raise
-                # An accepted asynchronous Invoke can precede read visibility.
-                # Retry this ARN only within the existing poll deadline; never
-                # repeat Invoke, infer completion, or extend recovery windows.
-                return None
-            return response if response["Status"] != "RUNNING" else None
+            response = self.read_execution(item)
+            return response if response is not None and response["Status"] != "RUNNING" else None
 
         result = self.poll(terminal, seconds=seconds)
         save(ARTIFACTS / f"executions/{item['marker']}.json", result)
@@ -302,7 +305,9 @@ class Cloud:
         }
 
     def unresolved_markers(self):
-        return self.invoked_markers() - {item["marker"] for item in self.items if item.get("arn")}
+        return self.invoked_markers() - {
+            item["marker"] for item in self.items if item.get("arn") in self.cleaned_executions
+        }
 
     def restore_invocations(self, markers=None):
         """Recover this run's invocation intent after a driver/child process exits."""
@@ -406,11 +411,23 @@ class Cloud:
                 # Release known held work before asking the same bounded worker
                 # pool to admit a diagnostic invocation.
                 on_activity({"requests": []}, running)
+            probe_start = self.timestamp()
             snapshot = self.worker_snapshot()
-            samples.append({"time": self.timestamp(), "worker": snapshot, "running": running})
+            probe_end = self.timestamp()
+            samples.append(
+                {
+                    "time": probe_end,
+                    "probeStart": probe_start,
+                    "probeEnd": probe_end,
+                    "worker": snapshot,
+                    "running": running,
+                }
+            )
             save(
                 ARTIFACTS / f"quiescence/{label}.json", {"quietSeconds": quiet, "samples": samples}
             )
+            if probe_end["monotonic"] >= deadline:
+                break
             activity = (
                 snapshot.get("environment"),
                 snapshot.get("worker"),
@@ -419,8 +436,12 @@ class Cloud:
             if not snapshot["requests"] and not running and not self.unresolved_markers():
                 if activity != previous_activity:
                     quiet_since = None
-                quiet_since = time.monotonic() if quiet_since is None else quiet_since
-                if time.monotonic() - quiet_since >= quiet:
+                # Acquisition happened somewhere inside each probe interval.
+                # Exclude both boundary probes' delivery latency: even the
+                # latest possible first acquisition and earliest possible last
+                # acquisition must be at least quietSeconds apart.
+                quiet_since = probe_end["monotonic"] if quiet_since is None else quiet_since
+                if probe_start["monotonic"] - quiet_since >= quiet:
                     return
             else:
                 quiet_since = None
@@ -467,19 +488,19 @@ class Cloud:
             if not item.get("arn") or item["arn"] in self.cleaned_executions:
                 continue
             try:
-                result = self.lam.get_durable_execution(DurableExecutionArn=item["arn"])
+                result = self.read_execution(item)
+                if result is None:
+                    continue
                 if result["Status"] == "RUNNING":
                     try:
                         self.lam.stop_durable_execution(DurableExecutionArn=item["arn"])
                     except ClientError as error:
                         if error.response["Error"]["Code"] != "ResourceConflictException":
                             raise
-                        if (
-                            self.lam.get_durable_execution(DurableExecutionArn=item["arn"])[
-                                "Status"
-                            ]
-                            == "RUNNING"
-                        ):
+                        confirmed = self.read_execution(item)
+                        if confirmed is None:
+                            continue
+                        if confirmed["Status"] == "RUNNING":
                             raise
                 self.history(item)
                 save(ARTIFACTS / f"executions/{item['marker']}.json", result)
@@ -492,9 +513,26 @@ class Cloud:
             raise CollectionError("Failed to release/stop this case: " + "; ".join(failures))
         return label
 
+    def remember_worker_requests(self, snapshot, markers=None):
+        known = {item["marker"]: item for item in self.items}
+        for request in snapshot["requests"]:
+            if markers is not None and request["marker"] not in markers:
+                continue
+            item = known.setdefault(request["marker"], {"marker": request["marker"], "gates": {}})
+            if not item.get("arn"):
+                item["arn"] = request["execution"]
+        self.items = list(known.values())
+
     def close_case(self):
+        markers = self.invoked_markers()
         label = self.release_and_stop()
-        self.quiesce(label)
+
+        def cleanup(snapshot, running):
+            self.remember_worker_requests(snapshot, markers)
+            self.load_markers(markers, running=running)
+            self.release_and_stop(discover=False)
+
+        self.quiesce(label, on_activity=cleanup)
         self.refresh()
         self.mark_settled()
 
@@ -513,14 +551,7 @@ class Cloud:
         self.release_and_stop(discover=False)
 
         def cleanup(snapshot, running):
-            known = {item["marker"]: item for item in self.items}
-            for request in snapshot["requests"]:
-                item = known.setdefault(
-                    request["marker"], {"marker": request["marker"], "gates": {}}
-                )
-                if not item.get("arn"):
-                    item["arn"] = request["execution"]
-            self.items = list(known.values())
+            self.remember_worker_requests(snapshot)
             events = self.refresh(full=True)
             markers = {
                 event["marker"] for event in events if not event["marker"].startswith("quiescence-")

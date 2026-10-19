@@ -49,7 +49,13 @@ clear SDK timers or destroy shared clients to manufacture an idle result.
 Both the service's running-execution list and the worker activity inventory must
 remain empty for at least **five continuous seconds**, with a **150-second drain
 budget**. A non-diagnostic activity counter also resets the quiet window if
-work occurs between samples; diagnostic probes do not reset it themselves. The SDK intentionally leaves suspended user stacks unresolved; those
+work occurs between samples; diagnostic probes do not reset it themselves.
+Probe delivery latency does not count toward quiet time: the later probe's start
+must be at least five seconds after the first quiet probe's delivery. Worker or
+activity changes reset that anchor, and delivery after the drain deadline cannot
+claim success. Known execution ARNs whose status reads are not yet visible stay
+pending and retry within the same cleanup window.
+The SDK intentionally leaves suspended user stacks unresolved; those
 stacks alone do not count as active work after the wrapper has returned and its
 resources have settled. Quiet waiting is separate from the assertions already
 made by the case: cleanup does not turn a regression failure into a pass.

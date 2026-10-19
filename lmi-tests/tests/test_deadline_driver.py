@@ -95,7 +95,7 @@ def test_prepared_but_uninvoked_probe_is_not_treated_as_execution_during_cleanup
     cloud, _clock, calls, _output = setup
     cloud.prepare("barrier")
     cloud.refresh = lambda: []
-    cloud.quiesce = lambda _label: None
+    cloud.quiesce = lambda _label, **_kwargs: None
     cloud.close_case()
     assert all(call[0] == "put" for call in calls)
     assert all(call[2]["Body"] == b"release" for call in calls[4:])
@@ -196,7 +196,7 @@ def test_close_case_recovers_lost_invoke_response_without_worker_events(setup, v
     )
     cloud.history = lambda item: histories.append(item["arn"])
 
-    def quiesce(_label):
+    def quiesce(_label, **_kwargs):
         assert stopped == ["accepted"], (
             "Drain must not start before stopping the recovered execution"
         )
@@ -230,7 +230,7 @@ def test_close_case_bounds_ambiguous_discovery_and_still_stops_known_executions(
         kwargs["DurableExecutionArn"]
     )
     cloud.history = lambda _item: []
-    cloud.quiesce = lambda _label: None
+    cloud.quiesce = lambda _label, **_kwargs: None
     cloud.gates.clear()  # Measure only the discovery budget, not control-write latency.
     begin = clock.time()
     with pytest.raises(ev.CollectionError, match="Could not resolve invoked executions"):
