@@ -22,7 +22,7 @@ Build **resilient, long-running AWS Lambda functions** with automatic state pers
 - **Cost Efficient** – Pay only for active compute time; waits suspend without charges
 - **Type Safety** – Full TypeScript support with comprehensive type definitions
 - **Local Testing** – Run durable functions in unit tests with time skipping, no AWS deployment needed
-- **Observability** – OpenTelemetry traces and Workflow Insight records for every execution
+- **Observability** – OpenTelemetry traces and Durable Execution Telemetry records for every execution
 - **Replay Safety Checks** – ESLint rules that flag non-deterministic code outside steps and other mistakes that break replay
 
 ## 📦 Packages
@@ -42,18 +42,18 @@ This monorepo contains the following packages. Most developers need only the fir
 | Package                                                                                          | Description                                                                                                  | npm                                                                                                                                                       |
 | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [@aws/durable-execution-sdk-js-otel](./packages/aws-durable-execution-sdk-js-otel)               | OpenTelemetry plugin that emits spans for the workflow, each invocation, and each durable operation          | [![npm](https://img.shields.io/npm/v/@aws/durable-execution-sdk-js-otel)](https://www.npmjs.com/package/@aws/durable-execution-sdk-js-otel)               |
-| [@aws/durable-execution-sdk-js-insight](./packages/aws-durable-execution-sdk-js-insight)         | Workflow Insight plugin that exports a record of each execution to CloudWatch Logs, S3, DynamoDB, and others | [![npm](https://img.shields.io/npm/v/@aws/durable-execution-sdk-js-insight)](https://www.npmjs.com/package/@aws/durable-execution-sdk-js-insight)         |
-| [@aws/durable-execution-sdk-js-insight-mcp](./packages/aws-durable-execution-sdk-js-insight-mcp) | MCP server that lets an AI assistant query Workflow Insight data, read-only                                  | [![npm](https://img.shields.io/npm/v/@aws/durable-execution-sdk-js-insight-mcp)](https://www.npmjs.com/package/@aws/durable-execution-sdk-js-insight-mcp) |
+| [@aws/durable-execution-sdk-js-telemetry-exporter](./packages/aws-durable-execution-sdk-js-telemetry-exporter)         | Durable Execution Telemetry plugin that exports a record of each execution to CloudWatch Logs, S3, DynamoDB, and others | [![npm](https://img.shields.io/npm/v/@aws/durable-execution-sdk-js-telemetry-exporter)](https://www.npmjs.com/package/@aws/durable-execution-sdk-js-telemetry-exporter)         |
+| [@aws/durable-execution-sdk-js-telemetry-mcp](./packages/aws-durable-execution-sdk-js-telemetry-mcp) | MCP server that lets an AI assistant query Durable Execution Telemetry data, read-only                                  | [![npm](https://img.shields.io/npm/v/@aws/durable-execution-sdk-js-telemetry-mcp)](https://www.npmjs.com/package/@aws/durable-execution-sdk-js-telemetry-mcp) |
 
-Workflow Insight is in preview (`0.1.0-alpha`). Its explorer apps are not published to npm:
+Durable Execution Telemetry is in preview (`0.1.0-alpha`). Its explorer apps are not published to npm:
 
-- [Workflow Insight Explorer for VS Code](./packages/aws-durable-execution-sdk-js-insight-vscode) –
-  query Insight data in plain English from inside VS Code. Download the `.vsix` from the
+- [Durable Execution Telemetry VSCode](./packages/aws-durable-execution-sdk-js-telemetry-vscode) –
+  query telemetry data in plain English from inside VS Code. Download the `.vsix` from the
   [Releases](https://github.com/aws/aws-durable-execution-sdk-js/releases) page.
-- [Workflow Insight Explorer, desktop app](./packages/aws-durable-execution-sdk-js-insight-desktop) –
+- [Durable Execution Telemetry Desktop](./packages/aws-durable-execution-sdk-js-telemetry-desktop) –
   the same explorer as a standalone app. Run it from a checkout of this repository.
 
-Both apps use [insight-core](./packages/aws-durable-execution-sdk-js-insight-core), an internal
+Both apps use [telemetry-core](./packages/aws-durable-execution-sdk-js-telemetry-core), an internal
 package that holds the query engines and the safety checks. The MCP server uses it too.
 
 ### Experimental
@@ -168,7 +168,7 @@ aws lambda invoke \
 - **[Concepts & Use Cases](./packages/aws-durable-execution-sdk-js/src/documents/CONCEPTS.md)** – Replay model, best practices, and real-world patterns
 - **[Examples](./packages/aws-durable-execution-sdk-js-examples)** – Working examples including hello-world, callbacks, parallel processing, and more
 - **[OpenTelemetry plugin](./packages/aws-durable-execution-sdk-js-otel/README.md)** – Emit traces from your durable functions
-- **[Workflow Insight](./packages/aws-durable-execution-sdk-js-insight/README.md)** – Export execution records and query them
+- **[Durable Execution Telemetry](./packages/aws-durable-execution-sdk-js-telemetry-exporter/README.md)** – Export execution records and query them
 
 ## 🧪 Testing
 

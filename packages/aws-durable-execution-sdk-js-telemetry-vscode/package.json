@@ -1,0 +1,307 @@
+{
+  "name": "aws-durable-execution-sdk-js-telemetry-vscode",
+  "displayName": "Durable Execution Telemetry VSCode",
+  "description": "Query AWS Durable Execution Durable Execution Telemetry data from CloudWatch Logs using plain English.",
+  "version": "0.1.0-alpha.3",
+  "license": "Apache-2.0",
+  "publisher": "aws",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/aws/aws-durable-execution-sdk-js.git",
+    "directory": "packages/aws-durable-execution-sdk-js-telemetry-vscode"
+  },
+  "engines": {
+    "vscode": "^1.90.0",
+    "node": ">=22.12.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
+  "enabledApiProposals": [],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "durableExecutionTelemetry.openExplorer",
+        "title": "Durable Execution Telemetry: Open Explorer"
+      }
+    ],
+    "configuration": {
+      "title": "Durable Execution Telemetry VSCode",
+      "properties": {
+        "durableExecutionTelemetry.region": {
+          "type": "string",
+          "default": "",
+          "description": "AWS region of the CloudWatch log group (e.g. us-east-1). Falls back to AWS_REGION."
+        },
+        "durableExecutionTelemetry.logGroupName": {
+          "type": "string",
+          "default": "",
+          "description": "CloudWatch log group that receives Durable Execution Telemetry records. With the default LambdaLogExporter this is the function's own log group, e.g. /aws/lambda/my-durable-fn. Comma-separate multiple groups."
+        },
+        "durableExecutionTelemetry.destinationType": {
+          "type": "string",
+          "default": "cloudwatch-logs-exporter",
+          "enum": [
+            "cloudwatch-logs-exporter",
+            "lambda-log-exporter",
+            "dynamodb",
+            "aurora",
+            "redshift",
+            "opensearch",
+            "s3",
+            "sqs"
+          ],
+          "enumDescriptions": [
+            "Dedicated log group via CloudWatchLogsExporter — records are raw JSON, fields queryable directly",
+            "Function's own log group via LambdaLogExporter — records nested in Lambda JSON envelope (message field)",
+            "DynamoDB table via DynamoDBExporter — records queryable via PartiQL",
+            "Aurora PostgreSQL/MySQL via AuroraExporter — full SQL with GROUP BY, JOIN, aggregations",
+            "Amazon Redshift via RedshiftExporter — full SQL; record_json is a SUPER column navigated with PartiQL",
+            "Amazon OpenSearch via OpenSearchExporter — queried through the SQL plugin (_plugins/_sql), SigV4-signed",
+            "S3 via S3Exporter — queried through Amazon Athena (Trino/Presto SQL) over a Glue table",
+            "Amazon SQS via SQSExporter — live view that listens to the queue as records arrive (no query engine)"
+          ],
+          "description": "Where and how records are stored. Determines query engine and format."
+        },
+        "durableExecutionTelemetry.sqsQueueUrl": {
+          "type": "string",
+          "default": "",
+          "description": "SQS queue URL to listen to (required when destinationType is 'sqs')."
+        },
+        "durableExecutionTelemetry.sqsDeleteAfterRead": {
+          "type": "boolean",
+          "default": false,
+          "description": "Delete messages from the queue after displaying them in the live view. Off by default so the Explorer only observes — other consumers still receive every message. Enable only if this Explorer should be the sole consumer of the queue."
+        },
+        "durableExecutionTelemetry.dynamodbTableName": {
+          "type": "string",
+          "default": "",
+          "description": "DynamoDB table name (required when destinationType is 'dynamodb')."
+        },
+        "durableExecutionTelemetry.auroraResourceArn": {
+          "type": "string",
+          "default": "",
+          "description": "Aurora cluster ARN (required when destinationType is 'aurora')."
+        },
+        "durableExecutionTelemetry.auroraSecretArn": {
+          "type": "string",
+          "default": "",
+          "description": "Secrets Manager ARN for Aurora Data API auth (required when destinationType is 'aurora')."
+        },
+        "durableExecutionTelemetry.auroraDatabase": {
+          "type": "string",
+          "default": "postgres",
+          "description": "Aurora database name."
+        },
+        "durableExecutionTelemetry.auroraTable": {
+          "type": "string",
+          "default": "durable_execution_telemetry",
+          "description": "Aurora table name containing telemetry records."
+        },
+        "durableExecutionTelemetry.redshiftWorkgroupName": {
+          "type": "string",
+          "default": "",
+          "description": "Redshift Serverless workgroup name (required for Serverless when destinationType is 'redshift'). Leave empty if using a provisioned cluster."
+        },
+        "durableExecutionTelemetry.redshiftClusterIdentifier": {
+          "type": "string",
+          "default": "",
+          "description": "Provisioned Redshift cluster identifier (alternative to redshiftWorkgroupName). Leave empty if using Redshift Serverless."
+        },
+        "durableExecutionTelemetry.redshiftDbUser": {
+          "type": "string",
+          "default": "",
+          "description": "Database user for a provisioned Redshift cluster (used with GetClusterCredentials). Not needed for Serverless or when redshiftSecretArn is set."
+        },
+        "durableExecutionTelemetry.redshiftSecretArn": {
+          "type": "string",
+          "default": "",
+          "description": "Secrets Manager ARN for Redshift Data API auth (optional; alternative to IAM/dbUser)."
+        },
+        "durableExecutionTelemetry.redshiftDatabase": {
+          "type": "string",
+          "default": "dev",
+          "description": "Redshift database name."
+        },
+        "durableExecutionTelemetry.redshiftTable": {
+          "type": "string",
+          "default": "durable_execution_telemetry",
+          "description": "Redshift table name containing telemetry records."
+        },
+        "durableExecutionTelemetry.redshiftSchema": {
+          "type": "string",
+          "default": "public",
+          "description": "Redshift schema containing the telemetry table (queried as <schema>.<table>)."
+        },
+        "durableExecutionTelemetry.opensearchEndpoint": {
+          "type": "string",
+          "default": "",
+          "description": "Amazon OpenSearch domain endpoint, e.g. https://my-domain.us-east-1.es.amazonaws.com (required when destinationType is 'opensearch'). Queried via the SQL plugin with SigV4 auth. Note: the SQL plugin caps results at ~200 rows by default (plugins.query.size_limit) even without a LIMIT, so prefer aggregations for whole-dataset questions."
+        },
+        "durableExecutionTelemetry.opensearchIndex": {
+          "type": "string",
+          "default": "durable-execution-telemetry",
+          "description": "OpenSearch index containing the telemetry records."
+        },
+        "durableExecutionTelemetry.athenaDatabase": {
+          "type": "string",
+          "default": "",
+          "description": "Glue/Athena database containing the durable execution telemetry table (required when destinationType is 's3')."
+        },
+        "durableExecutionTelemetry.athenaTable": {
+          "type": "string",
+          "default": "durable_execution_telemetry",
+          "description": "Glue table name for records written by S3Exporter."
+        },
+        "durableExecutionTelemetry.athenaWorkgroup": {
+          "type": "string",
+          "default": "",
+          "description": "Athena workgroup to run queries in. Leave empty to use the 'primary' workgroup and set athenaOutputLocation instead. Recommended: configure the workgroup's per-query data-scanned limit (bytes_scanned_cutoff_per_query) — the assistant runs multiple autonomous queries per question (up to durableExecutionTelemetry.agenticMaxIterations), and this is the only per-query Athena scan-cost guard."
+        },
+        "durableExecutionTelemetry.athenaOutputLocation": {
+          "type": "string",
+          "default": "",
+          "description": "S3 location for Athena query results, e.g. s3://my-bucket/athena-results/. Required unless the chosen workgroup has its own output location configured."
+        },
+        "durableExecutionTelemetry.athenaS3Location": {
+          "type": "string",
+          "default": "",
+          "description": "S3 location the S3Exporter writes records to, e.g. s3://my-bucket/durable-execution-telemetry/. Used to auto-create the Glue table (JSON SerDe, Hive year=/month=/day= partitioning) if it doesn't already exist."
+        },
+        "durableExecutionTelemetry.awsProfile": {
+          "type": "string",
+          "default": "",
+          "description": "Named AWS profile to use. Leave empty to use the default credential provider chain (env, SSO, default profile)."
+        },
+        "durableExecutionTelemetry.llmProvider": {
+          "type": "string",
+          "default": "bedrock",
+          "enum": [
+            "bedrock",
+            "copilot",
+            "local-server",
+            "local"
+          ],
+          "enumDescriptions": [
+            "Amazon Bedrock (Converse API) — requires AWS credentials and model access. When you use an AI feature (Ask/Agent/Visualize), your request text and limited data (result column names and a small sample of rows) are sent to Amazon Bedrock in the AWS account and region you configure, and processed under your AWS agreement and the Amazon Bedrock service terms.",
+            "GitHub Copilot (VS Code Language Model API) — requires a Copilot subscription. AI requests and the limited data described above are sent to GitHub Copilot via VS Code, and are processed under your GitHub Copilot subscription terms and privacy policy.",
+            "Local server — an OpenAI-compatible endpoint you run yourself (Ollama, LM Studio, llama.cpp). AI requests are sent only to the endpoint you run and control (configured via durableExecutionTelemetry.localServerUrl); nothing is sent to a third-party cloud, provided that endpoint is local/self-hosted.",
+            "Local LLM (on-device) — runs entirely on your machine; your request and data do not leave your computer. Downloads the model on first use (configurable via durableExecutionTelemetry.localModel). Included in the platform-specific .vsix (darwin-arm64, win32-x64, win32-arm64, linux-x64). GPU-accelerated via Metal on macOS; CPU-only on Windows and Linux (no CUDA/Vulkan in the packaged build)."
+          ],
+          "description": "Which LLM provider converts your natural-language questions into queries and builds summaries/charts. Used only by the AI features — the 'ask' and 'agent' modes and the Visualize page. In those features your request text and, in some cases, limited portions of your data (result column names and a small sample of rows) are sent to the provider selected here; the 'query' mode uses no AI and sends nothing to any provider. Data you send is subject to the terms and privacy policy of the selected provider — review them before sending sensitive data. See each option below for where your data goes."
+        },
+        "durableExecutionTelemetry.bedrockModelId": {
+          "type": "string",
+          "default": "us.anthropic.claude-sonnet-5",
+          "description": "Amazon Bedrock model id (or inference profile id) used by the AI features when LLM Provider is 'bedrock'. Requests and the limited data described for the AI features are sent to this model in Amazon Bedrock in your configured AWS account and region, and processed under your AWS agreement and the Amazon Bedrock service terms. You are responsible for having access to the model and for the content you submit."
+        },
+        "durableExecutionTelemetry.localServerUrl": {
+          "type": "string",
+          "default": "http://localhost:11434/v1",
+          "description": "Base URL of the OpenAI-compatible chat-completions API for the 'local-server' provider (e.g. Ollama at http://localhost:11434/v1); '/chat/completions' is appended. AI requests are sent to this endpoint only. Point it at a server you run and control (e.g. localhost or your private network) to keep data off third-party clouds; if you set it to a remote/hosted URL, your requests and data go to that operator under their terms."
+        },
+        "durableExecutionTelemetry.localServerModel": {
+          "type": "string",
+          "default": "llama3.1",
+          "description": "Model name the local server should use for the 'local-server' provider (e.g. 'llama3.1' for Ollama). Load/pull it in your server first. Your data is handled entirely by that server; no data is sent to this extension's maintainers."
+        },
+        "durableExecutionTelemetry.localModel": {
+          "type": "string",
+          "default": "llama-3-groq-8b-tool-use",
+          "enum": [
+            "llama-3-groq-8b-tool-use",
+            "phi-3.5-mini",
+            "qwen2.5-coder-3b"
+          ],
+          "enumDescriptions": [
+            "Llama-3-Groq-8B Tool-Use — best tool-calling accuracy (~89% on the Berkeley Function-Calling Leaderboard), ~4.9 GB download, needs ~6 GB RAM. Recommended default.",
+            "Phi-3.5-mini — smaller with strong quality-per-GB, ~2.4 GB download. Good when memory is tight.",
+            "Qwen2.5-Coder-3B — smallest footprint, ~2.2 GB. Fastest/lightest, weakest at multi-step tool use."
+          ],
+          "description": "Which local model to download and run when LLM Provider is 'local'. Runs entirely on-device: your request and data are processed locally and do not leave your machine, and no data is sent to any third party or to this extension's maintainers. Only used for the 'local' provider; ignored for Bedrock/Copilot/local-server."
+        },
+        "durableExecutionTelemetry.agenticMaxIterations": {
+          "type": "number",
+          "default": 8,
+          "minimum": 1,
+          "maximum": 20,
+          "description": "The maximum number of queries the assistant will run for one question before stopping — one per verify/refine round, or per agent-loop query with parallel tool calls counted individually. Higher values let it work harder on difficult questions but cost more model/query calls (billable). The loop also stops early if it starts repeating a query it already tried. This is the universal cost/effort guard — it applies to every data source. NOTE: it bounds the NUMBER of queries, not the data scanned per query. For the S3/Athena destination, also set a per-query scan cap on your Athena workgroup (bytes_scanned_cutoff_per_query) to bound scan cost."
+        },
+        "durableExecutionTelemetry.queryMode": {
+          "type": "string",
+          "enum": [
+            "query",
+            "ask",
+            "agent"
+          ],
+          "enumDescriptions": [
+            "Query: run the text you type verbatim as a read-only query (no LLM).",
+            "Ask: turn a plain-English question into one query and run it (no agent loop).",
+            "Agent: let the assistant explore across multiple queries to answer."
+          ],
+          "default": "agent",
+          "description": "Default mode used by the Explorer composer's Send button. Remembered across sessions; you can switch it per-question from the Send dropdown. Note: 'ask' and 'agent' use the configured LLM provider and send data to it (see durableExecutionTelemetry.llmProvider); 'query' uses no AI and sends nothing to any provider."
+        },
+        "durableExecutionTelemetry.aiDisclosureAcceptedVersion": {
+          "type": "string",
+          "default": "",
+          "description": "Records the version of the AI-usage disclosure you accepted. Set automatically when you agree to the in-app AI notice before first using an AI feature (Ask/Agent/Visualize); the notice is re-shown when the disclosure is updated. Clearing this value withdraws your consent and re-prompts you before the next AI use. The AI-free 'query' mode remains usable regardless."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "cd webview-ui && npm run build && cd .. && node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "package": "mkdir -p vsix && npx --yes @vscode/vsce@3.9.2 package --out vsix/",
+    "package:target": "mkdir -p vsix && VER=$(node -p \"require('./package.json').version\") && npx --yes @vscode/vsce@3.9.2 package --target \"$VSCE_TARGET\" --out \"vsix/aws-durable-execution-sdk-js-telemetry-vscode-${VER}-${VSCE_TARGET}.vsix\"",
+    "clean": "rm -rf dist media/webview.js media/webview.css"
+  },
+  "dependencies": {
+    "@aws/durable-execution-sdk-js-telemetry-core": "0.1.0-alpha.0",
+    "node-llama-cpp": "^3.22.1"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20.19.43",
+    "@types/vscode": "^1.140.0",
+    "esbuild": "^0.28.2",
+    "jest": "^30.5.2",
+    "ts-jest": "^29.4.14",
+    "typescript": "^6.0.3"
+  },
+  "overrides": {
+    "simple-git": "4.0.2"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/src/**/*.test.ts"
+    ],
+    "modulePathIgnorePatterns": [
+      "<rootDir>/webview-ui"
+    ],
+    "transform": {
+      "^.+\\.ts$": [
+        "ts-jest",
+        {
+          "tsconfig": "tsconfig.test.json",
+          "diagnostics": false,
+          "isolatedModules": true
+        }
+      ]
+    }
+  }
+}

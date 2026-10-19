@@ -1,9 +1,9 @@
-# Builds the Workflow Insight Explorer VS Code extension for each supported
+# Builds the Durable Execution Telemetry VSCode extension for each supported
 # platform/arch, creates a DRAFT GitHub Release, attaches all 4 platform
 # .vsix files to it, then publishes the release as the final step. This
 # extension is not published to npm (it's "private": true) or, during
 # preview, to the VS Code Marketplace — see
-# packages/aws-durable-execution-sdk-js-insight-vscode/README.md.
+# packages/aws-durable-execution-sdk-js-telemetry-vscode/README.md.
 # Testers/customers install it by downloading the .vsix matching their
 # platform from the release and side-loading it with
 # `code --install-extension`.
@@ -38,7 +38,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release (must exactly match packages/aws-durable-execution-sdk-js-insight-vscode/package.json's version on the ref you're running this from). The release tag will be workflow-insight-vscode-v<version>."
+        description: "Version to release (must exactly match packages/aws-durable-execution-sdk-js-telemetry-vscode/package.json's version on the ref you're running this from). The release tag will be telemetry-vscode-v<version>."
         required: true
         type: string
 
@@ -73,13 +73,13 @@ jobs:
           INPUT_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          PKG_VERSION=$(node -p "require('./packages/aws-durable-execution-sdk-js-insight-vscode/package.json').version")
+          PKG_VERSION=$(node -p "require('./packages/aws-durable-execution-sdk-js-telemetry-vscode/package.json').version")
           if [[ "$INPUT_VERSION" != "$PKG_VERSION" ]]; then
             echo "Input version '$INPUT_VERSION' does not match package.json version '$PKG_VERSION' on this ref. Aborting before creating any release."
             exit 1
           fi
           echo "vsix_version=$PKG_VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag_name=workflow-insight-vscode-v${PKG_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag_name=telemetry-vscode-v${PKG_VERSION}" >> "$GITHUB_OUTPUT"
 
   create-draft-release:
     needs: [check-version]
@@ -105,7 +105,7 @@ jobs:
             echo "Draft release '$TAG' already exists; reusing it."
           else
             gh release create "$TAG" --repo "$REPO" \
-              --title "Workflow Insight Explorer ${VSIX_VERSION} (Preview)" \
+              --title "Durable Execution Telemetry VSCode ${VSIX_VERSION} (Preview)" \
               --notes "Preview build — multi-platform .vsix release. Includes darwin-arm64, win32-x64, win32-arm64, and linux-x64 builds with on-device LLM support." \
               --draft
           fi
@@ -133,7 +133,7 @@ jobs:
       contents: write # required to upload a release asset
     defaults:
       run:
-        working-directory: packages/aws-durable-execution-sdk-js-insight-vscode
+        working-directory: packages/aws-durable-execution-sdk-js-telemetry-vscode
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -151,7 +151,7 @@ jobs:
       - name: Install webview-ui dependencies
         # webview-ui is a nested package outside the root workspaces glob
         # (packages/*), so it needs its own explicit install.
-        working-directory: packages/aws-durable-execution-sdk-js-insight-vscode/webview-ui
+        working-directory: packages/aws-durable-execution-sdk-js-telemetry-vscode/webview-ui
         run: npm ci
       - run: npm run typecheck
       - run: npm run test
@@ -206,7 +206,7 @@ jobs:
           # end user on first use of the local (on-device) LLM provider.
           # Stage the private, unpublished workspace packages this extension
           # depends on. Without this, `npm install --no-workspaces` tries to
-          # resolve @aws/durable-execution-sdk-js-insight-core from the public registry and fails
+          # resolve @aws/durable-execution-sdk-js-telemetry-core from the public registry and fails
           # with E404 -- that package is `"private": true` and is never
           # published. This workflow is workflow_dispatch-only, so PR checks do
           # not exercise it; src/packaging.test.ts asserts every private
@@ -218,7 +218,7 @@ jobs:
           # package's own dependencies, so core's 16 AWS SDK deps would be
           # missing and esbuild would fail to resolve them. Installing from a
           # tarball pulls the full dependency tree, which the bundle needs.
-          for PRIVATE_DEP in aws-durable-execution-sdk-js-insight-core; do
+          for PRIVATE_DEP in aws-durable-execution-sdk-js-telemetry-core; do
             TGZ="$(cd "$WORKSPACE_DIR/../$PRIVATE_DEP" && npm pack --pack-destination "$ISOLATED" | tail -1)"
             DEP_NAME="$(node -p "require('$WORKSPACE_DIR/../$PRIVATE_DEP/package.json').name")"
             npm pkg set "dependencies.$DEP_NAME=file:./$TGZ"
@@ -303,7 +303,7 @@ jobs:
           mkdir -p vsix
           PKG_VERSION=$(node -p "require('./package.json').version")
           npx --yes @vscode/vsce@3.9.2 package --target "$VSCE_TARGET" \
-            --out "vsix/aws-durable-execution-sdk-js-insight-vscode-${PKG_VERSION}-${VSCE_TARGET}.vsix"
+            --out "vsix/aws-durable-execution-sdk-js-telemetry-vscode-${PKG_VERSION}-${VSCE_TARGET}.vsix"
           mkdir -p "$WORKSPACE_DIR/vsix"
           cp vsix/*.vsix "$WORKSPACE_DIR/vsix/"
         env:
@@ -354,7 +354,7 @@ jobs:
           ASSETS=$(gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name')
           MISSING=0
           for target in darwin-arm64 win32-x64 win32-arm64 linux-x64; do
-            EXPECTED="aws-durable-execution-sdk-js-insight-vscode-${VER}-${target}.vsix"
+            EXPECTED="aws-durable-execution-sdk-js-telemetry-vscode-${VER}-${target}.vsix"
             if echo "$ASSETS" | grep -qxF "$EXPECTED"; then
               echo "OK: $EXPECTED present"
             else

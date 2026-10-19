@@ -28,8 +28,8 @@ else
     "packages/aws-durable-execution-sdk-js-testing"
     "packages/aws-durable-execution-sdk-js-eslint-plugin"
     "packages/aws-durable-execution-sdk-js-otel"
-    "packages/aws-durable-execution-sdk-js-insight"
-    "packages/aws-durable-execution-sdk-js-insight-mcp"
+    "packages/aws-durable-execution-sdk-js-telemetry-exporter"
+    "packages/aws-durable-execution-sdk-js-telemetry-mcp"
     "packages/aws-durable-execution-sdk-js-extras"
     "packages/aws-durable-execution-sdk-js-microvm-worker"
   )

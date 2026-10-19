@@ -23,7 +23,7 @@ jobs:
   #
   # These share one job because they share one `npm ci`, which is the expensive
   # part. The same argument removed a duplicate boundary-lint step from the
-  # insight-hosts job in build.yml, and then merged the async-safety job into this
+  # telemetry-hosts job in build.yml, and then merged the async-safety job into this
   # one; folding in the durable-rules job takes the install count for lint work
   # from three to one. A different toolchain does not require a different job -- it
   # requires one extra build step, below.

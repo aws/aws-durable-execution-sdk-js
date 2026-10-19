@@ -1,0 +1,55 @@
+{
+  "name": "@aws/durable-execution-sdk-js-telemetry-mcp",
+  "version": "0.1.0-alpha.0",
+  "license": "Apache-2.0",
+  "private": false,
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/aws/aws-durable-execution-sdk-js.git",
+    "directory": "packages/aws-durable-execution-sdk-js-telemetry-mcp"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "bin": {
+    "durable-telemetry-mcp": "dist/server.js"
+  },
+  "files": [
+    "dist",
+    "src/skill/SKILL.md"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && jest",
+    "build": "node esbuild.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "esbuild": "^0.28.2",
+    "jest": "^30.5.2",
+    "ts-jest": "^29.4.14",
+    "typescript": "^6.0.3",
+    "@aws/durable-execution-sdk-js-telemetry-core": "0.1.0-alpha.0"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/src/**/*.test.ts"
+    ],
+    "transform": {
+      "^.+\\.ts$": [
+        "ts-jest",
+        {
+          "tsconfig": "tsconfig.test.json",
+          "diagnostics": false,
+          "isolatedModules": true
+        }
+      ]
+    }
+  }
+}

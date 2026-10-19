@@ -86,7 +86,7 @@ jobs:
             package.json
             package-lock.json
 
-  # Typecheck and actually *bundle* both Workflow Insight hosts.
+  # Typecheck and actually *bundle* both Durable Execution Telemetry hosts.
   #
   # Neither host package is in the root `build` script, so without this job
   # main.ts, preload.ts and the two esbuild configs are only ever typechecked —
@@ -97,7 +97,7 @@ jobs:
   # webview-ui gets its own `npm ci`: it is a nested package outside the root
   # workspaces glob, so the root install never covers it, and it is the one place
   # the renderer is typechecked at all.
-  insight-hosts:
+  telemetry-hosts:
     needs: lint-commits
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || format('codebuild-github-actions-runner-{0}-{1}', github.run_id, github.run_attempt) }}
     steps:
@@ -110,7 +110,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Install webview-ui dependencies
-        working-directory: packages/aws-durable-execution-sdk-js-insight-vscode/webview-ui
+        working-directory: packages/aws-durable-execution-sdk-js-telemetry-vscode/webview-ui
         run: npm ci
       # The boundary rules that used to run here are now enforced by the `lint` job
       # (biome ci over the whole monorepo), which did not exist when this step was
@@ -121,21 +121,21 @@ jobs:
       - name: Typecheck core and both hosts
         run: npm run typecheck:hosts
       - name: Typecheck the renderer
-        working-directory: packages/aws-durable-execution-sdk-js-insight-vscode/webview-ui
+        working-directory: packages/aws-durable-execution-sdk-js-telemetry-vscode/webview-ui
         run: npx tsc --noEmit
       - name: Bundle the VS Code extension (renderer + extension host)
-        run: npm run build -w packages/aws-durable-execution-sdk-js-insight-vscode
+        run: npm run build -w packages/aws-durable-execution-sdk-js-telemetry-vscode
       - name: Bundle the desktop app
-        run: npm run build -w packages/aws-durable-execution-sdk-js-insight-desktop
+        run: npm run build -w packages/aws-durable-execution-sdk-js-telemetry-desktop
       - name: Bundle the MCP server
-        run: npm run build -w packages/aws-durable-execution-sdk-js-insight-mcp
+        run: npm run build -w packages/aws-durable-execution-sdk-js-telemetry-mcp
 
   # The plugin's peer range is ESLint ^8.57.0 || ^9.0.0 || ^10.0.0, but the
   # repository installs only ESLint 10, and the RuleTester suites need that version
   # (ESLint 8 RuleTester takes a different config format). This job installs the
   # latest ESLint 8 and the latest ESLint 9 on top of the lockfile install, and
   # lints real code through ESLint's public API with the plugin's recommended
-  # config. It needs no build artifacts, so like insight-hosts it runs off
+  # config. It needs no build artifacts, so like telemetry-hosts it runs off
   # lint-commits.
   eslint-plugin-compat:
     needs: lint-commits

@@ -32,11 +32,11 @@ const SKIP_DIRS = new Set([
  * Every package.json in the repo, found recursively.
  *
  * Recursive rather than `packages/*​/package.json` on purpose: nested manifests
- * exist and are exactly where a divergent pin would hide. `insight-vscode/webview-ui`
+ * exist and are exactly where a divergent pin would hide. `telemetry-vscode/webview-ui`
  * has its own `npm ci` in CI and owns the .tsx files Biome formats, so a Biome pin
  * appearing there later is the most likely source of the silent two-way formatting
  * this script exists to prevent -- and a glob one level deep would not see it.
- * `insight/cdk` is the same shape. Neither declares these tools today; the point is
+ * `telemetry/cdk` is the same shape. Neither declares these tools today; the point is
  * that the check keeps working when one of them does.
  *
  * @returns {string[]}
