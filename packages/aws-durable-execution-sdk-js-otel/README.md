@@ -945,17 +945,24 @@ transport paths, and this change does not introduce a new operation API or
 invent the future Source/Processor/Destination structures.
 ## Core compatibility
 
-OTel 1.2 preserves valid core 2.4–2.x registrations, including separate
-OTel-only Lambda layers. Its core peer is optional (`>=2.4.0 <3.0.0`), and the
-dynamic provider contract remains version 1. Existing on-demand environment
-carrier behavior remains available on older cores; upgrading the plugin alone
-does not add fields to the invocation metadata those cores supply.
+This development branch preserves valid core 2.4–2.x registrations, including
+separate OTel-only Lambda layers. Its core peer is optional (`>=2.4.0 <3.0.0`),
+and the dynamic provider contract remains version 1. Existing on-demand
+environment-carrier behavior remains available on released cores; upgrading the
+plugin alone does not add fields to the invocation metadata those cores supply.
 
-The new invocation-local LMI carrier and core registration exclusivity require
-the coordinated core 2.7 / OTel 1.2 pair. Upgrade both for those capabilities.
-Older core/plugin combinations do not gain those guarantees. The two OTel views
-remain an unsupported combination, and the updated core rejects it with updated
-plugin metadata. The later core 3 factory migration is a separate major release.
+Published core 2.7.0/2.7.1 and OTel 1.2.0/1.2.1 do **not** include the
+invocation-local LMI carrier capability. It is available in matched core and
+OTel development builds containing this change; the package version labels in
+this branch do not distinguish those builds from the published artifacts.
+The carrier capability is planned for the coordinated core 3.0 / OTel 2.0 major
+release in [#924](https://github.com/aws/aws-durable-execution-sdk-js/pull/924),
+alongside the per-invocation factory migration.
+
+Core registration exclusivity is separate: it shipped in core 2.7.0 / OTel 1.2.0.
+The two OTel views remain an unsupported combination, and that released pair
+rejects it using the plugin registration metadata. Older core/plugin combinations
+do not gain that enforcement by upgrading only the plugin.
 
 Instrumentation error details are optional even for failed operations. The core
 metadata correction for an empty callback error payload no longer invents an
