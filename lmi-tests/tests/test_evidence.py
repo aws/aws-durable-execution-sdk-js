@@ -263,3 +263,33 @@ def test_post_return_gate_cannot_count_as_a_live_invocation():
     ]
     with pytest.raises(ev.PlacementError):
         ev.overlap(events, {"a", "b"})
+
+
+def timeout_retry_events():
+    return [
+        event("ENTER", request="original", execution="execution", time=1),
+        event("BODY", request="original", execution="execution", operation="success", time=2),
+        event("ENTER", request="retry", execution="execution", time=10),
+        event("BODY", request="retry", execution="execution", operation="after-deadline", time=11),
+    ]
+
+
+def test_timeout_retry_requires_expected_service_result():
+    events = timeout_retry_events()
+    ev.timeout_retry(
+        events, "original", {"Status": "SUCCEEDED", "Result": '"expected"'}, "expected"
+    )
+    with pytest.raises(AssertionError, match="wrong result"):
+        ev.timeout_retry(
+            events, "original", {"Status": "SUCCEEDED", "Result": '"wrong"'}, "expected"
+        )
+
+
+@pytest.mark.parametrize("request_id,time", [("original", 11), ("unknown-retry", 11), ("retry", 9)])
+def test_timeout_retry_progress_must_belong_to_an_observed_retry_after_entry(request_id, time):
+    events = timeout_retry_events()
+    events[-1].update(request=request_id, time=time)
+    with pytest.raises(AssertionError, match="did not execute after-deadline work"):
+        ev.timeout_retry(
+            events, "original", {"Status": "SUCCEEDED", "Result": '"expected"'}, "expected"
+        )

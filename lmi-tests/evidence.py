@@ -241,7 +241,9 @@ def recovery(events, probe, identity, deadline, grace, history):
     assert held, "Admitted probe did not progress to held work"
 
 
-def timeout_retry(events, original_request):
+def timeout_retry(events, original_request, result, expected_result):
+    import json
+
     retries = [e for e in require(events, "ENTER") if e["request"] != original_request]
     if not retries:
         raise CollectionError("No service retry of the same durable execution was observed")
@@ -251,3 +253,14 @@ def timeout_retry(events, original_request):
     assert len([e for e in select(events, "BODY") if e["operation"] == "success"]) == 1, (
         "Completed success body repeated across timeout/retry"
     )
+    assert result.get("Status") == "SUCCEEDED", "Timeout retry did not complete successfully"
+    assert result.get("Result") == json.dumps(expected_result), (
+        "Timeout retry returned the wrong result"
+    )
+    retry_entries = {event["request"]: event["time"] for event in retries}
+    assert any(
+        event.get("operation") == "after-deadline"
+        and event["request"] in retry_entries
+        and event["time"] >= retry_entries[event["request"]]
+        for event in select(events, "BODY")
+    ), "Timeout retry entered but did not execute after-deadline work"

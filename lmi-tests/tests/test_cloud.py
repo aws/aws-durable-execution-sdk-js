@@ -230,6 +230,7 @@ def test_platform_deadline_old_work_and_original_worker_recovery(cloud, scenario
             message="No service retry of the original execution was observed",
         ),
     )
+    observe("victim-result", lambda: cloud.finish(victim))
     time.sleep(2)  # Observe continuations after controlled release, not just responses.
     observe("victim-events", lambda: cloud.events(victim))
     observe("peer-events", lambda: cloud.events(peer))
@@ -288,7 +289,10 @@ def test_platform_deadline_old_work_and_original_worker_recovery(cloud, scenario
                 "worker-recovery": worker_recovery,
                 "healthy-peer": healthy_peer,
                 "retry-replay": lambda: ev.timeout_retry(
-                    recorded("victim-events"), blocked["request"]
+                    recorded("victim-events"),
+                    blocked["request"],
+                    recorded("victim-result"),
+                    victim["marker"],
                 ),
             }
         )
@@ -312,6 +316,7 @@ def test_platform_deadline_old_work_and_original_worker_recovery(cloud, scenario
             "probeEntry": ev.select(observations.get("probe-events", []), "ENTER"),
             "probeHeld": observations.get("probe-held"),
             "victimRequests": ev.select(observations.get("victim-events", []), "ENTER"),
+            "victimResult": observations.get("victim-result"),
         },
     )
     ev.require_checks(outcomes)

@@ -278,7 +278,17 @@ class Cloud:
                 )
         return running
 
+    def invoked_markers(self):
+        return {
+            item["marker"]
+            for item in self.items
+            if item.get("arn") or item.get("invoked") or "invokeBegin" in item.get("timing", {})
+        }
+
     def load_markers(self, markers, *, running=None):
+        """Restore invoked case markers, retaining attempts not yet observable."""
+        markers = set(markers)
+        previous = {item["marker"]: item for item in self.items}
         events = self.refresh(markers=markers)
         items = {
             item["arn"]: item
@@ -301,7 +311,11 @@ class Cloud:
                     "marker": item["DurableExecutionName"],
                     "gates": {},
                 }
-        self.items = list(items.values())
+        resolved = {item["marker"] for item in items.values()}
+        self.items = list(items.values()) + [
+            {**previous.get(marker, {"marker": marker, "gates": {}}), "invoked": True}
+            for marker in sorted(markers - resolved)
+        ]
 
     def worker_snapshot(self):
         item = self.start("quiescence")
@@ -361,11 +375,7 @@ class Cloud:
                 self.control(gate, "release")
             except Exception as error:
                 failures.append(str(error))
-        invoked = {
-            item["marker"]
-            for item in self.items
-            if item.get("arn") or "invokeBegin" in item.get("timing", {})
-        }
+        invoked = self.invoked_markers()
         unresolved = {
             item["marker"]
             for item in self.items
@@ -421,11 +431,7 @@ class Cloud:
         # Most runs were already drained after their final case. Avoid rereading
         # every old history/control on each deployment when the worker is idle.
         running = self.running()
-        if (
-            not running
-            and not any(item.get("arn") for item in self.items)
-            and not self.worker_snapshot()["requests"]
-        ):
+        if not running and not self.invoked_markers() and not self.worker_snapshot()["requests"]:
             self.quiesce("between-runs-" + uuid.uuid4().hex[:8])
             return
         # Release this run's latches without deleting persistent infrastructure.
@@ -442,7 +448,7 @@ class Cloud:
         # Queued executions may have no worker events at all. The dedicated
         # fixture's running list and accepted Invoke responses are independent
         # cleanup evidence; keep the captured list even if a later read changes.
-        markers.update(item["marker"] for item in self.items)
+        markers.update(self.invoked_markers())
         markers.update(item["DurableExecutionName"] for item in running)
         self.load_markers(markers, running=running)
         self.close_case()

@@ -23,11 +23,21 @@ class Clock:
 
 
 class TimelineCloud(driver.Cloud):
-    def __init__(self, clock, *, deadline=False, probe_entry=34.8):
+    def __init__(
+        self,
+        clock,
+        *,
+        deadline=False,
+        probe_entry=34.8,
+        retry_progress=True,
+        retry_status="SUCCEEDED",
+    ):
         self.clock = clock
         self.manifest = {"cleanupGrace": 5}
         self.deadline = deadline
         self.probe_entry = probe_entry
+        self.retry_progress = retry_progress
+        self.retry_status = retry_status
         self.timeline = []
         self.released = {}
         self.items = {}
@@ -55,7 +65,7 @@ class TimelineCloud(driver.Cloud):
 
     def start(self, scenario):
         marker = "peer" if scenario == "barrier" else "victim"
-        item = {"marker": marker, "arn": marker}
+        item = {"marker": marker, "arn": marker, "scenario": scenario}
         self.items[marker] = item
         self.emit(item, "ENTER", self.clock.now)
         if marker == "peer":
@@ -113,8 +123,23 @@ class TimelineCloud(driver.Cloud):
             self.emit(item, "RETURN", self.clock.now + 0.1, status="SUCCEEDED")
         if gate == "loser":
             self.emit(item, "OBSERVED", self.clock.now + 0.1)
+            if item["scenario"] == "deadline-checkpoint":
+                self.emit(item, "CHECKPOINT_SETTLED", self.clock.now)
+                self.emit(item, "BLOCKED", self.clock.now, gate="transport", deadline=30)
 
     def finish(self, item, _status="SUCCEEDED"):
+        if self.deadline and item["marker"] == "victim":
+            if self.retry_progress:
+                self.timeline.append(
+                    dict(
+                        self.timeline[0],
+                        phase="BODY",
+                        operation="after-deadline",
+                        request="victim-retry",
+                        time=self.clock.now,
+                    )
+                )
+            return {"Status": self.retry_status, "Result": '"victim"'}
         self.emit(item, "BODY", self.clock.now, operation="peer-after")
         self.emit(item, "RETURN", self.clock.now, status="SUCCEEDED")
         self.emit(item, "OBSERVED", self.clock.now)
@@ -153,10 +178,12 @@ def test_early_return_waits_for_delayed_winner_gate(timeline):
     assert cloud.released["victim", "winner"] >= 2
 
 
-def test_timely_probe_with_delayed_gate_keeps_live_peer_overlap(timeline):
+@pytest.mark.parametrize("scenario", ["deadline-step", "deadline-checkpoint"])
+def test_timely_probe_with_delayed_gate_keeps_live_peer_overlap(timeline, scenario):
     cloud = TimelineCloud(timeline, deadline=True)
-    cases.test_platform_deadline_old_work_and_original_worker_recovery(cloud, "deadline-step")
-    assert cloud.released["victim", "loser"] == pytest.approx(35.51)
+    cases.test_platform_deadline_old_work_and_original_worker_recovery(cloud, scenario)
+    gate = "transport" if scenario == "deadline-checkpoint" else "loser"
+    assert cloud.released["victim", gate] == pytest.approx(35.51)
     assert cloud.released["peer", "peer"] >= 36.5
     assert cloud.released["probe", "peer"] >= 36.5
 
@@ -164,4 +191,18 @@ def test_timely_probe_with_delayed_gate_keeps_live_peer_overlap(timeline):
 def test_waiting_for_gate_overlap_does_not_extend_handler_entry_deadline(timeline):
     cloud = TimelineCloud(timeline, deadline=True, probe_entry=35.2)
     with pytest.raises(AssertionError, match="exceeded the recovery window"):
+        cases.test_platform_deadline_old_work_and_original_worker_recovery(cloud, "deadline-step")
+
+
+@pytest.mark.parametrize("scenario", ["deadline-step", "deadline-checkpoint"])
+def test_retry_entry_without_after_deadline_progress_fails(timeline, scenario):
+    cloud = TimelineCloud(timeline, deadline=True, retry_progress=False)
+    with pytest.raises(AssertionError, match="did not execute after-deadline work"):
+        cases.test_platform_deadline_old_work_and_original_worker_recovery(cloud, scenario)
+
+
+@pytest.mark.parametrize("status", ["FAILED", "RUNNING"])
+def test_retry_must_complete_successfully(timeline, status):
+    cloud = TimelineCloud(timeline, deadline=True, retry_status=status)
+    with pytest.raises(AssertionError, match="did not complete successfully"):
         cases.test_platform_deadline_old_work_and_original_worker_recovery(cloud, "deadline-step")
