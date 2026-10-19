@@ -5,6 +5,7 @@
 from datetime import datetime, timezone
 
 import cloud as driver
+import evidence as ev
 import pytest
 import test_cloud as cases
 
@@ -69,7 +70,7 @@ class TimelineCloud(driver.Cloud):
         self.items[marker] = item
         self.emit(item, "ENTER", self.clock.now)
         if marker == "peer":
-            self.emit(item, "BLOCKED", self.clock.now, gate="peer")
+            self.emit(item, "BLOCKED", self.clock.now, gate="peer", deadline=self.clock.now + 60)
         else:
             self.emit(item, "BLOCKED", self.clock.now, gate="loser", deadline=30)
             if self.deadline:
@@ -206,3 +207,56 @@ def test_retry_must_complete_successfully(timeline, status):
     cloud = TimelineCloud(timeline, deadline=True, retry_status=status)
     with pytest.raises(AssertionError, match="did not complete successfully"):
         cases.test_platform_deadline_old_work_and_original_worker_recovery(cloud, "deadline-step")
+
+
+def test_healthy_companion_keeps_its_original_request_after_the_victim_boundary(timeline):
+    cloud = TimelineCloud(timeline)
+    peer = cloud.start("barrier")
+    original = cloud.phase(peer, "BLOCKED", "peer")[0]
+    timeline.sleep(2)
+    cases.healthy_after(cloud, peer, original, {"time": 1})
+
+
+@pytest.mark.parametrize(
+    "phases,exception,message",
+    [
+        (
+            {"ALIVE", "BODY", "RETURN", "OBSERVED"},
+            ev.CollectionError,
+            "heartbeat.*original healthy peer",
+        ),
+        ({"BODY"}, AssertionError, "peer-after.*outside the original healthy peer"),
+        ({"RETURN", "OBSERVED"}, AssertionError, "original healthy peer did not return"),
+    ],
+)
+def test_early_return_rejects_peer_retry_substitution(timeline, phases, exception, message):
+    cloud = TimelineCloud(timeline)
+    original_events = cloud.events
+
+    def observed(item):
+        boundaries = [
+            event["time"]
+            for event in cloud.timeline
+            if event["marker"] == "victim" and event["phase"] == "RETURN"
+        ]
+        boundary = min(boundaries, default=float("inf"))
+        return [
+            dict(event, request="peer-retry")
+            if event["marker"] == "peer" and event["phase"] in phases and event["time"] > boundary
+            else event
+            for event in original_events(item)
+        ]
+
+    cloud.events = observed
+    with pytest.raises(exception, match=message):
+        cases.test_early_return_rejects_late_work_and_preserves_peer(cloud, "race")
+
+
+def test_late_peer_release_is_a_harness_timing_failure(timeline):
+    cloud = TimelineCloud(timeline)
+    peer = cloud.start("barrier")
+    original = cloud.phase(peer, "BLOCKED", "peer")[0]
+    timeline.sleep(61)
+    with pytest.raises(ev.CollectionError, match="Harness held.*past its deadline"):
+        cases.healthy_after(cloud, peer, original, {"time": 1})
+    assert (peer["marker"], "peer") not in cloud.released

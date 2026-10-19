@@ -24,16 +24,48 @@ def overlap(cloud, *items, gates=None, requests=None):
     )
 
 
-def healthy_after(cloud, peer, boundary):
+def healthy_after(cloud, peer, original, boundary):
+    # These companions run the barrier workflow without a durable suspension.
+    # Holding their gate past the platform deadline is a driver timing failure,
+    # not evidence that the victim interrupted an otherwise healthy invocation.
+    def remaining_budget():
+        remaining = original["deadline"] - time.time()
+        if remaining <= 0:
+            raise ev.CollectionError("Harness held the original healthy peer past its deadline")
+        return remaining
+
     cloud.poll(
         lambda: [
-            e for e in cloud.events(peer) if e["phase"] == "ALIVE" and e["time"] > boundary["time"]
-        ]
+            e
+            for e in cloud.events(peer)
+            if e["phase"] == "ALIVE"
+            and e.get("gate") == "peer"
+            and e["request"] == original["request"]
+            and e["time"] > boundary["time"]
+        ],
+        seconds=remaining_budget(),
+        message="No post-boundary heartbeat from the original healthy peer",
     )
+    remaining_budget()
     cloud.release(peer, "peer")
     result = cloud.finish(peer)
     assert result["Result"] == '"' + peer["marker"] + '"'
-    assert len([e for e in cloud.events(peer) if e.get("operation") == "peer-after"]) == 1
+    events = cloud.events(peer)
+    progress = [e for e in events if e["phase"] == "BODY" and e.get("operation") == "peer-after"]
+    assert len(progress) == 1
+    assert progress[0]["time"] > boundary["time"], (
+        "peer-after did not progress after the victim boundary"
+    )
+    assert progress[0]["request"] == original["request"], (
+        "peer-after executed outside the original healthy peer request"
+    )
+    assert any(
+        e["phase"] == "RETURN"
+        and e["request"] == original["request"]
+        and e["status"] == "SUCCEEDED"
+        and e["time"] > boundary["time"]
+        for e in events
+    ), "The original healthy peer did not return successfully"
 
     def observed():
         events = cloud.events(peer)
@@ -71,7 +103,7 @@ def test_shared_decorated_handler_and_nested_progress(cloud):
 )
 def test_early_return_rejects_late_work_and_preserves_peer(cloud, scenario):
     peer = cloud.start("barrier")
-    cloud.phase(peer, "BLOCKED", "peer")
+    peer_blocked = min(cloud.phase(peer, "BLOCKED", "peer"), key=lambda event: event["time"])
     victim = cloud.start(scenario)
     cloud.phase(victim, "BLOCKED", "loser")
     overlap(cloud, peer, victim)
@@ -85,7 +117,7 @@ def test_early_return_rejects_late_work_and_preserves_peer(cloud, scenario):
     cloud.phase(victim, "OBSERVED")
     # An open observation interval catches callbacks scheduled by a released loser.
     time.sleep(2)
-    healthy_after(cloud, peer, boundary)
+    healthy_after(cloud, peer, peer_blocked, boundary)
     cloud.finish(victim, "FAILED" if scenario == "failure-inflight" else "SUCCEEDED")
     ev.no_late_work(cloud.events(victim), boundary)
 
@@ -103,7 +135,7 @@ def test_reused_worker_resources_after_repeated_success_failure_suspend(cloud):
     identity = None
     for scenario in ["success", "failure", "replay"] * 3:
         peer = cloud.start("barrier")
-        peer_event = cloud.phase(peer, "BLOCKED", "peer")[0]
+        peer_event = min(cloud.phase(peer, "BLOCKED", "peer"), key=lambda event: event["time"])
         current = (peer_event["environment"], peer_event["worker"])
         if identity is None:
             identity = current
@@ -118,7 +150,7 @@ def test_reused_worker_resources_after_repeated_success_failure_suspend(cloud):
                 >= len(ev.select(cloud.events(item), "RETURN"))
             )
         )
-        healthy_after(cloud, peer, ev.require(cloud.events(item), "RETURN")[-1])
+        healthy_after(cloud, peer, peer_event, ev.require(cloud.events(item), "RETURN")[-1])
     # Check after all cycles, so the first leaked timer does not skip later cases.
     ev.resources(cloud.refresh())
 
