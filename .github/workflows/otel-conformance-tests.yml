@@ -100,7 +100,7 @@ jobs:
       # the OTel plugin as workspace siblings, so there is no tarball install step: a root
       # npm ci links them and building them in place is enough.
       prepare_command: |
-        # The insight desktop app's electron devDependency downloads a ~100 MB binary that
+        # The telemetry desktop app's electron devDependency downloads a ~100 MB binary that
         # nothing in this job launches.
         export ELECTRON_SKIP_BINARY_DOWNLOAD=1
         cd "$SDK_CHECKOUT"
