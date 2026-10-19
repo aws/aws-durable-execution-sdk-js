@@ -75,6 +75,7 @@ def test_early_return_rejects_late_work_and_preserves_peer(cloud, scenario):
     victim = cloud.start(scenario)
     cloud.phase(victim, "BLOCKED", "loser")
     overlap(cloud, peer, victim)
+    cloud.phase(victim, "BLOCKED", "winner")
     cloud.release(victim, "winner")
     boundary = cloud.phase(victim, "RETURN")[0]
     assert boundary["status"] == ("FAILED" if scenario == "failure-inflight" else "SUCCEEDED")
@@ -175,10 +176,31 @@ def test_platform_deadline_old_work_and_original_worker_recovery(cloud, scenario
     # Keep the healthy peer and fault held for the entire five-second window.
     cloud.wait_until(deadline + grace + 0.5)
     observe("fault-release", lambda: cloud.release(victim, gate))
-    observe("peer-release", lambda: cloud.release(peer, "peer"))
     # All evidence I/O is now outside the measured admission window. Event times
     # (not arrival times) establish when the probe entered and overlapped the peer.
-    observe("probe-held", lambda: cloud.phase(probe, "BLOCKED", "peer", seconds=30))
+    # Timely handler entry can precede delayed gate progress. Keep both gates
+    # held until their heartbeats establish overlap on the original peer request.
+    observe("probe-entry", lambda: min(cloud.phase(probe, "ENTER"), key=lambda e: e["time"]))
+    observe(
+        "probe-held",
+        lambda: cloud.phase(
+            probe, "BLOCKED", "peer", request=recorded("probe-entry")["request"], seconds=30
+        ),
+    )
+    observe(
+        "probe-overlap",
+        lambda: overlap(
+            cloud,
+            peer,
+            probe,
+            gates={peer["marker"]: "peer", probe["marker"]: "peer"},
+            requests={
+                peer["marker"]: peer_blocked["request"],
+                probe["marker"]: recorded("probe-entry")["request"],
+            },
+        ),
+    )
+    observe("peer-release", lambda: cloud.release(peer, "peer"))
     observe("probe-release", lambda: cloud.release(probe, "peer"))
     if probe.get("arn"):
         observe("probe-result", lambda: cloud.finish(probe))
@@ -249,7 +271,10 @@ def test_platform_deadline_old_work_and_original_worker_recovery(cloud, scenario
                 events + recorded("probe-events"),
                 {peer["marker"], probe["marker"]},
                 gates={peer["marker"]: "peer", probe["marker"]: "peer"},
-                requests={peer["marker"]: peer_blocked["request"]},
+                requests={
+                    peer["marker"]: peer_blocked["request"],
+                    probe["marker"]: recorded("probe-entry")["request"],
+                },
             )
             == identity
         )

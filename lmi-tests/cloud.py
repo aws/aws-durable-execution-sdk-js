@@ -278,16 +278,23 @@ class Cloud:
                 )
         return running
 
-    def load_markers(self, markers):
+    def load_markers(self, markers, *, running=None):
         events = self.refresh(markers=markers)
         items = {
-            e["execution"]: {"arn": e["execution"], "marker": e["marker"], "gates": {}}
-            for e in events
-            if e["marker"] in markers
+            item["arn"]: item
+            for item in self.items
+            if item.get("arn") and item["marker"] in markers
         }
+        items.update(
+            {
+                e["execution"]: {"arn": e["execution"], "marker": e["marker"], "gates": {}}
+                for e in events
+                if e["marker"] in markers
+            }
+        )
         # Invoke can have been accepted even if a failed test did not receive its
         # response or the handler never entered. Match only this case's names.
-        for item in self.running():
+        for item in self.running() if running is None else running:
             if item.get("DurableExecutionName") in markers:
                 items[item["DurableExecutionArn"]] = {
                     "arn": item["DurableExecutionArn"],
@@ -386,7 +393,12 @@ class Cloud:
     def settle_run(self):
         # Most runs were already drained after their final case. Avoid rereading
         # every old history/control on each deployment when the worker is idle.
-        if not self.running() and not self.worker_snapshot()["requests"]:
+        running = self.running()
+        if (
+            not running
+            and not any(item.get("arn") for item in self.items)
+            and not self.worker_snapshot()["requests"]
+        ):
             self.quiesce("between-runs-" + uuid.uuid4().hex[:8])
             return
         # Release this run's latches without deleting persistent infrastructure.
@@ -400,5 +412,10 @@ class Cloud:
                     self.gates.add(gate)
         events = self.refresh(full=True)
         markers = {e["marker"] for e in events if not e["marker"].startswith("quiescence-")}
-        self.load_markers(markers)
+        # Queued executions may have no worker events at all. The dedicated
+        # fixture's running list and accepted Invoke responses are independent
+        # cleanup evidence; keep the captured list even if a later read changes.
+        markers.update(item["marker"] for item in self.items)
+        markers.update(item["DurableExecutionName"] for item in running)
+        self.load_markers(markers, running=running)
         self.close_case()

@@ -1,0 +1,167 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+"""Deterministic worker timelines exercise cloud-case orchestration without AWS."""
+
+from datetime import datetime, timezone
+
+import cloud as driver
+import pytest
+import test_cloud as cases
+
+
+class Clock:
+    now = 0.0
+
+    def time(self):
+        return self.now
+
+    def monotonic(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.now += seconds
+
+
+class TimelineCloud(driver.Cloud):
+    def __init__(self, clock, *, deadline=False, probe_entry=34.8):
+        self.clock = clock
+        self.manifest = {"cleanupGrace": 5}
+        self.deadline = deadline
+        self.probe_entry = probe_entry
+        self.timeline = []
+        self.released = {}
+        self.items = {}
+
+    def emit(self, item, phase, at, **fields):
+        self.timeline.append(
+            dict(
+                marker=item["marker"],
+                execution=item["marker"],
+                request=item["marker"] + "-request",
+                environment="env",
+                worker="worker",
+                pid=1,
+                threadId=1,
+                phase=phase,
+                time=at,
+                **fields,
+            )
+        )
+
+    def prepare(self, _scenario):
+        item = {"marker": "probe", "timing": {"prepareEnd": {"wall": self.clock.now}}}
+        self.items["probe"] = item
+        return item
+
+    def start(self, scenario):
+        marker = "peer" if scenario == "barrier" else "victim"
+        item = {"marker": marker, "arn": marker}
+        self.items[marker] = item
+        self.emit(item, "ENTER", self.clock.now)
+        if marker == "peer":
+            self.emit(item, "BLOCKED", self.clock.now, gate="peer")
+        else:
+            self.emit(item, "BLOCKED", self.clock.now, gate="loser", deadline=30)
+            if self.deadline:
+                self.emit(item, "BODY", 0.1, operation="success")
+                retry = dict(self.timeline[-1], phase="ENTER", time=36, request="victim-retry")
+                self.timeline.append(retry)
+            else:
+                # Overlap is possible at the loser gate before the winner enters.
+                self.emit(item, "BLOCKED", 2, gate="winner")
+        return item
+
+    def invoke_at(self, item, target):
+        self.wait_until(target)
+        item["arn"] = item["marker"]
+        item["timing"].update(
+            scheduledFor=target,
+            invokeBegin={"wall": target},
+            invokeEnd={"wall": target + 0.1},
+        )
+        self.emit(item, "ENTER", self.probe_entry)
+        # Handler admission meets the deadline, but the gate/heartbeat is slower.
+        self.emit(item, "BLOCKED", 36, gate="peer")
+        return item
+
+    def refresh(self):
+        events = [event for event in self.timeline if event["time"] <= self.clock.now]
+        for event in list(events):
+            if event["phase"] != "BLOCKED":
+                continue
+            release = self.released.get((event["marker"], event["gate"]), float("inf"))
+            tick = event["time"] + 0.5
+            while tick <= self.clock.now and tick < release:
+                events.append(dict(event, phase="ALIVE", time=tick))
+                tick += 0.5
+        return events
+
+    def events(self, item):
+        return [event for event in self.refresh() if event["marker"] == item["marker"]]
+
+    def release(self, item, gate):
+        held = [
+            event
+            for event in self.events(item)
+            if event["phase"] == "BLOCKED" and event.get("gate") == gate
+        ]
+        assert held, "Fixture gate was not held"
+        self.clock.sleep(0.01)  # The control write follows already-observed evidence.
+        self.released[item["marker"], gate] = self.clock.now
+        self.emit(item, "RELEASED", self.clock.now, gate=gate)
+        if gate == "winner":
+            self.emit(item, "RETURN", self.clock.now + 0.1, status="SUCCEEDED")
+        if gate == "loser":
+            self.emit(item, "OBSERVED", self.clock.now + 0.1)
+
+    def finish(self, item, _status="SUCCEEDED"):
+        self.emit(item, "BODY", self.clock.now, operation="peer-after")
+        self.emit(item, "RETURN", self.clock.now, status="SUCCEEDED")
+        self.emit(item, "OBSERVED", self.clock.now)
+        return {"Status": "SUCCEEDED", "Result": '"' + item["marker"] + '"'}
+
+    def history(self, item):
+        if item["marker"] == "probe":
+            return [
+                {
+                    "EventType": "ExecutionStarted",
+                    "EventTimestamp": datetime.fromtimestamp(29, timezone.utc),
+                }
+            ]
+        return [
+            {
+                "InvocationCompletedDetails": {
+                    "RequestId": "victim-request",
+                    "Error": {"ErrorMessage": "Invocation timed out"},
+                }
+            }
+        ]
+
+
+@pytest.fixture
+def timeline(monkeypatch, tmp_path):
+    clock = Clock()
+    monkeypatch.setattr(driver, "time", clock)
+    monkeypatch.setattr(cases, "time", clock)
+    monkeypatch.setattr(cases, "ARTIFACTS", tmp_path)
+    return clock
+
+
+def test_early_return_waits_for_delayed_winner_gate(timeline):
+    cloud = TimelineCloud(timeline)
+    cases.test_early_return_rejects_late_work_and_preserves_peer(cloud, "race")
+    assert cloud.released["victim", "winner"] >= 2
+
+
+def test_timely_probe_with_delayed_gate_keeps_live_peer_overlap(timeline):
+    cloud = TimelineCloud(timeline, deadline=True)
+    cases.test_platform_deadline_old_work_and_original_worker_recovery(cloud, "deadline-step")
+    assert cloud.released["victim", "loser"] == pytest.approx(35.51)
+    assert cloud.released["peer", "peer"] >= 36.5
+    assert cloud.released["probe", "peer"] >= 36.5
+
+
+def test_waiting_for_gate_overlap_does_not_extend_handler_entry_deadline(timeline):
+    cloud = TimelineCloud(timeline, deadline=True, probe_entry=35.2)
+    with pytest.raises(AssertionError, match="exceeded the recovery window"):
+        cases.test_platform_deadline_old_work_and_original_worker_recovery(cloud, "deadline-step")

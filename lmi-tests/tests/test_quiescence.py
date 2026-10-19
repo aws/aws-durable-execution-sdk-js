@@ -73,3 +73,30 @@ def test_activity_between_idle_samples_resets_quiet_window(quiet_cloud):
     cloud.worker_snapshot = lambda: {"requests": [], "activityVersion": next(versions)}
     cloud.quiesce("brief-late-work")
     assert clock["time"] == 10
+
+
+@pytest.mark.parametrize("source", ["service", "invoke-response"])
+def test_settlement_stops_accepted_execution_without_worker_events(quiet_cloud, source):
+    cloud, _clock, _output = quiet_cloud
+    cloud.manifest.update(bucket="bucket", commit="commit")
+    execution = {"DurableExecutionArn": "accepted", "DurableExecutionName": "queued-case"}
+    if source == "invoke-response":
+        cloud.items = [{"arn": "accepted", "marker": "queued-case", "gates": {}}]
+    stopped, histories, prefixes = [], [], []
+
+    def pages(**kwargs):
+        prefixes.append(kwargs["Prefix"])
+        return [{}]  # No control keys or worker events were ever written.
+
+    cloud.s3 = SimpleNamespace(get_paginator=lambda _name: SimpleNamespace(paginate=pages))
+    cloud.lam = SimpleNamespace(
+        get_durable_execution=lambda **_kwargs: {"Status": "STOPPED" if stopped else "RUNNING"},
+        stop_durable_execution=lambda **kwargs: stopped.append(kwargs["DurableExecutionArn"]),
+    )
+    cloud.running = lambda: [execution] if source == "service" and not stopped else []
+    cloud.worker_snapshot = lambda: {"requests": []}
+    cloud.history = lambda item: histories.append(item["arn"])
+    cloud.settle_run()
+    assert stopped == ["accepted"]
+    assert histories == ["accepted"]
+    assert "events/run/" in prefixes
