@@ -17,6 +17,8 @@ The automated npm publishing workflow covers the following packages:
 | `@aws/durable-execution-sdk-js-insight`        | `packages/aws-durable-execution-sdk-js-insight`       | `insight`  |
 | `@aws/durable-execution-sdk-js-insight-mcp`    | `packages/aws-durable-execution-sdk-js-insight-mcp`   | `mcp`      |
 
+Extras and MicroVM Worker are excluded from automatic publishing while their first npm publication is prepared separately. Both initial publication attempts in `sdk-2.7.0` failed. Before adding them to the automatic package list, prepare their first release and npm publisher setup, and remove their explicit deferral from the packaging test.
+
 The `packages/aws-durable-execution-sdk-js-insight-vscode` package is intentionally excluded from this table. Release it with the [Workflow Insight Explorer VS Code Extension](#workflow-insight-explorer-vs-code-extension-publishing) process instead.
 
 ## Versioning
