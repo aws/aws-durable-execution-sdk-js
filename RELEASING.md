@@ -201,4 +201,4 @@ Before publishing a release:
 - [ ] Changes merged to `main`
 - [ ] CI checks pass on `main`
 - [ ] Release notes written with separate sections per package
-- [ ] Tag follows the naming convention (`sdk-X.Y.Z`, `otel-X.Y.Z`, `test-X.Y.Z`, `eslint-X.Y.Z`, `telemetry-X.Y.Z`, `mcp-X.Y.Z`, or `/`-joined)
+- [ ] Tag follows the naming convention (`sdk-X.Y.Z`, `otel-X.Y.Z`, `test-X.Y.Z`, `eslint-X.Y.Z`, `telemetry-exporter-X.Y.Z`, `telemetry-mcp-X.Y.Z`, or `/`-joined)
