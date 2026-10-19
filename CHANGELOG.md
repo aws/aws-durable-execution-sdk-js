@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Checkpoint-derived `OperationInfo.error` can be absent when a failed callback
+  or invoke has missing wire error data or no defined diagnostic values.
+  Instrumentation should use
+  `status` to identify failure and `error` for available exception details.
+  Caller-facing callback and invoke failures are unchanged.
+
 - The testing SDK's local checkpoint server now validates checkpoints as the service does. Before,
   it accepted some updates that the service rejects, and it rejected others with different
   messages. So a test could pass locally for a handler that fails in AWS. The changes:
@@ -80,6 +86,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   SDK's set of invocation responses is unchanged.
 
 ### Fixed
+
+- **OpenTelemetry**: `FAILED`, `TIMED_OUT`, and `STOPPED` operations remain `ERROR` in both views,
+  including later-invocation continuations, even without error details.
+  Exception events still require an actual error object.
+- **OpenTelemetry**: flush the default global provider's public SDK delegate.
+  Both provider paths share a configurable `flushTimeoutMillis` wait budget
+  across invocation-end flush rounds (default 1000 ms). Expiry preserves one
+  bounded snapshot of already-received completion metadata; it does not cancel
+  export requests or shut down application-owned providers.
+- **OpenTelemetry**: retain external notifications received during a flush,
+  preserve an already-exported context's identity for delayed child completion,
+  and use the known backend end as a zero-duration start fallback when no start
+  was recorded. Existing supplied timestamps and caller outcomes are preserved.
 
 - The testing SDK's local runner no longer waits for the fake clock's 20 ms advancement interval
   before it starts each queued invocation when `skipTime` is enabled. QueueScheduler now yields

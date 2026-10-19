@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import { context, isSpanContextValid, trace } from "@opentelemetry/api";
+
 import {
   DurableContext,
   DurableExecutionHandler,
@@ -62,4 +64,20 @@ function requireScenario(event: ScenarioEvent, expected: string): void {
       `Expected scenario ${expected}, received ${String(event.scenario)}`,
     );
   }
+}
+
+/** Observe the context supplied by the SDK; never install or repair a parent. */
+export function recordUserFunctionSpan(callback: string): void {
+  const active = trace.getSpan(context.active())?.spanContext();
+  if (!active || !isSpanContextValid(active)) {
+    throw new Error(
+      `No valid active span context in user function ${callback}`,
+    );
+  }
+  const span = trace
+    .getTracer("durable-conformance-user-functions")
+    .startSpan(`conformance.${callback}`, {
+      attributes: { "conformance.callback": callback },
+    });
+  span.end();
 }
