@@ -196,7 +196,7 @@ on publishability, not on package kind:
 Both existing hosts are private because they ship as a VSIX and an app. This one
 ships through npm — `npx -y @aws/durable-execution-sdk-js-telemetry-mcp` cannot resolve anything
 else — so it is the first host needing `@aws/` scope and `private: false`. Version
-starts at `0.1.0-alpha.0` to match the telemetry family.
+started at `0.1.0-alpha.0` to match the telemetry family and is now `1.0.0`.
 
 ### 6.2 Prerequisite: extract `aws-durable-execution-sdk-js-telemetry-core`
 
