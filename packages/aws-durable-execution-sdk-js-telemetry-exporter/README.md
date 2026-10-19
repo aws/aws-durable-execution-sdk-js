@@ -696,7 +696,7 @@ aws events create-event-bus --name durable-execution-telemetry-bus
 
 ```bash
 aws events put-rule --name telemetry-failures \
-  --event-pattern '{"source":["aws.durable-execution.telemetry"],"detail-type":["FAILED"]}'
+  --event-pattern '{"source":["software.amazon.lambda.durable.telemetry"],"detail-type":["FAILED"]}'
 aws events put-targets --rule telemetry-failures --targets Id=1,Arn=arn:aws:sns:...
 ```
 
@@ -1180,7 +1180,7 @@ const telemetry = durableExecutionTelemetry({
   exporters: [
     new EventBridgeExporter({
       eventBusName: "default", // optional (default)
-      source: "aws.durable-execution.telemetry", // optional (default)
+      source: "software.amazon.lambda.durable.telemetry", // optional (default)
       region: "us-east-1", // optional
       operationsFormat: "array", // optional: "array" (default) | "by-name" | "both"
     }),
@@ -1190,14 +1190,14 @@ const telemetry = durableExecutionTelemetry({
 
 **Event structure:**
 
-- Source: `aws.durable-execution.telemetry`
+- Source: `software.amazon.lambda.durable.telemetry`
 - DetailType: `SUCCEEDED` | `FAILED` | `RUNNING`
 - Detail: full record JSON
 
 **Example rule pattern:**
 
 ```json
-{ "source": ["aws.durable-execution.telemetry"], "detail-type": ["FAILED"] }
+{ "source": ["software.amazon.lambda.durable.telemetry"], "detail-type": ["FAILED"] }
 ```
 
 **IAM required:** `events:PutEvents` on the event bus.

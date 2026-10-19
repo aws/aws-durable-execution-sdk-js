@@ -22,7 +22,7 @@ export interface EventBridgeExporterConfig {
 
   /**
    * Event source string.
-   * Default: "aws.durable-execution.telemetry"
+   * Default: "software.amazon.lambda.durable.telemetry"
    */
   source?: string;
 
@@ -47,7 +47,7 @@ export interface EventBridgeExporterConfig {
  * Exports durable execution telemetry records to Amazon EventBridge via PutEvents.
  *
  * Each record is published as a single event with:
- * - Source: configurable (default "aws.durable-execution.telemetry")
+ * - Source: configurable (default "software.amazon.lambda.durable.telemetry")
  * - DetailType: the record status (e.g. "SUCCEEDED", "RUNNING", "FAILED")
  * - Detail: the full DurableExecutionTelemetryRecord as JSON
  *
@@ -65,7 +65,7 @@ export class EventBridgeExporter implements TelemetryExporter {
 
   constructor(config: EventBridgeExporterConfig = {}) {
     this.eventBusName = config.eventBusName ?? "default";
-    this.source = config.source ?? "aws.durable-execution.telemetry";
+    this.source = config.source ?? "software.amazon.lambda.durable.telemetry";
     this.operationsFormat = config.operationsFormat ?? "array";
     this.maxRecordSizeBytes = config.maxRecordSizeBytes ?? 256_000;
     this.client = new EventBridgeClient(

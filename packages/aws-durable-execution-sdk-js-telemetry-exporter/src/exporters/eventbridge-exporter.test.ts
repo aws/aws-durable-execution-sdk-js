@@ -22,7 +22,9 @@ describe("EventBridgeExporter", () => {
     expect(mockSend).toHaveBeenCalledTimes(1);
     const entry = mockSend.mock.calls[0][0].__input.Entries[0];
     expect(entry.EventBusName).toBe("default");
-    expect(entry.Source).toBe("aws.durable-execution.telemetry");
+    expect(entry.Source).toBe("software.amazon.lambda.durable.telemetry");
+    // EventBridge reserves the "aws." source prefix for AWS services.
+    expect(entry.Source?.startsWith("aws.")).toBe(false);
     expect(entry.DetailType).toBe("SUCCEEDED");
     const detail = JSON.parse(entry.Detail);
     expect(detail.executionArn).toBe(
