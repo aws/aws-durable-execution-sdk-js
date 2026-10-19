@@ -29,6 +29,23 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
+ * Returns `data` without the keys that `input` has as own enumerable keys.
+ * A non-object `input`, such as a string, has no keys to omit.
+ */
+function omitKeysOf(
+  data: Record<string, unknown>,
+  input: unknown,
+): Record<string, unknown> {
+  if (typeof input !== "object" || input === null) {
+    return data;
+  }
+  const inputKeys = new Set(Object.keys(input));
+  return Object.fromEntries(
+    Object.entries(data).filter(([key]) => !inputKeys.has(key)),
+  );
+}
+
+/**
  * A {@link DurableLogger} that writes through a Powertools `Logger` and adds
  * the durable execution metadata to every log entry.
  *
@@ -91,6 +108,11 @@ export class PowertoolsDurableLogger<
    * An `Error` keeps `message` and `stack` in non-enumerable properties. Object
    * spread copies only enumerable properties. So the adapter does not spread an
    * `Error` or any other non-plain object. It passes the input unchanged.
+   *
+   * Powertools adds the own enumerable keys of a non-plain object input in
+   * step 1. The metadata object comes later, in step 2, so its keys would
+   * replace those keys. So the adapter omits from the metadata every key that
+   * the non-plain object input already has as an own enumerable key.
    */
   private write(method: LogMethod, params: readonly unknown[]): void {
     const [input, ...extraInput] = params;
@@ -104,7 +126,11 @@ export class PowertoolsDurableLogger<
       return;
     }
 
-    this.powertoolsLogger[method](input, durableData, ...extraInput);
+    this.powertoolsLogger[method](
+      input,
+      omitKeysOf(durableData, input),
+      ...extraInput,
+    );
   }
 
   /**

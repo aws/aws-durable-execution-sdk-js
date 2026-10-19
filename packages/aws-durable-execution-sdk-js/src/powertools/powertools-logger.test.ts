@@ -121,6 +121,37 @@ describe("createPowertoolsLogger", () => {
     );
   });
 
+  it("omits a metadata key that a class instance message already has, so the caller's value is kept", () => {
+    class Payload {
+      constructor(
+        readonly message: string,
+        readonly operationName: string,
+      ) {}
+    }
+    const stub = createStubLogger();
+    const logger = createPowertoolsLogger(stub);
+    logger.configureDurableLoggingContext(contextReturning(() => STEP_DATA));
+    const payload = new Payload("hello", "caller-value");
+
+    logger.info(payload);
+
+    const { operationName: _omitted, ...expected } =
+      STEP_DATA_WITHOUT_UNDEFINED;
+    expect(stub.info).toHaveBeenCalledWith(payload, expected);
+  });
+
+  it("omits a metadata key that an Error message has as an own enumerable key", () => {
+    const stub = createStubLogger();
+    const logger = createPowertoolsLogger(stub);
+    logger.configureDurableLoggingContext(contextReturning(() => STEP_DATA));
+    const error = Object.assign(new Error("boom"), { attempt: 9 });
+
+    logger.error(error);
+
+    const { attempt: _omitted, ...expected } = STEP_DATA_WITHOUT_UNDEFINED;
+    expect(stub.error).toHaveBeenCalledWith(error, expected);
+  });
+
   it("merges into an object with a null prototype", () => {
     const stub = createStubLogger();
     const logger = createPowertoolsLogger(stub);

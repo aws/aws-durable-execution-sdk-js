@@ -96,6 +96,28 @@ describe("createPowertoolsLogger with the real Powertools Logger", () => {
     expect(capture.entries()[0].operationName).toBe("caller");
   });
 
+  it("lets a caller key in a class instance message replace the metadata key", () => {
+    class Payload {
+      // Powertools types a message object as a record of attributes.
+      [key: string]: unknown;
+      constructor(
+        readonly message: string,
+        readonly operationName: string,
+      ) {}
+    }
+
+    createAdapter().info(new Payload("hello", "caller"));
+
+    const [entry] = capture.entries();
+    expect(entry).toEqual(
+      expect.objectContaining({
+        message: "hello",
+        operationName: "caller",
+        operationId: DURABLE_DATA.operationId,
+      }),
+    );
+  });
+
   it("keeps the message and the error details of an Error input", () => {
     // The Powertools types do not accept an Error as the first argument, but
     // Powertools accepts it at run time. JavaScript callers can pass one.
