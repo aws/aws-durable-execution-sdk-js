@@ -152,7 +152,7 @@ export class TestExecutionOrchestrator {
       this.scheduler.scheduleFunction(
         () => this.invokeHandler(executionId, deferred.params),
         (err) => {
-          this.executionState.rejectWith(err);
+          this.rejectExecution(err);
         },
       );
     }
@@ -172,6 +172,12 @@ export class TestExecutionOrchestrator {
     for (const waiter of waiters) {
       waiter();
     }
+  }
+
+  private rejectExecution(error: unknown): void {
+    // Failure checkpointing is asynchronous; close admission before queued wakeups run.
+    this.invocationAdmissionClosed = true;
+    this.executionState.rejectWith(error);
   }
 
   private async handleCompletedExecution(
@@ -277,7 +283,7 @@ export class TestExecutionOrchestrator {
             updatedOperationIds: [],
           }),
         (err) => {
-          this.executionState.rejectWith(err);
+          this.rejectExecution(err);
         },
       );
 
@@ -358,7 +364,7 @@ export class TestExecutionOrchestrator {
     } catch (err) {
       // A processing error from the poll loop is sent to this state too. The state has
       // already settled, so this preserves that behaviour whichever path got the update.
-      this.executionState.rejectWith(err);
+      this.rejectExecution(err);
     }
   }
 
@@ -417,7 +423,7 @@ export class TestExecutionOrchestrator {
           err.name === "AbortError"
         )
       ) {
-        this.executionState.rejectWith(err);
+        this.rejectExecution(err);
       }
     }
   }
@@ -472,7 +478,7 @@ export class TestExecutionOrchestrator {
         break;
       case OperationType.CHAINED_INVOKE:
         this.handleInvokeUpdate(update, executionId).catch((err: unknown) => {
-          this.executionState.rejectWith(err);
+          this.rejectExecution(err);
         });
         break;
     }
@@ -524,7 +530,7 @@ export class TestExecutionOrchestrator {
     this.scheduler.scheduleFunction(
       () => this.invokeHandler(executionId),
       (err) => {
-        this.executionState.rejectWith(err);
+        this.rejectExecution(err);
       },
       undefined,
       () => {
@@ -667,7 +673,7 @@ export class TestExecutionOrchestrator {
     this.scheduler.scheduleFunction(
       () => this.invokeHandler(executionId),
       (err) => {
-        this.executionState.rejectWith(err);
+        this.rejectExecution(err);
       },
       undefined,
       () => {
@@ -735,7 +741,7 @@ export class TestExecutionOrchestrator {
     this.scheduler.scheduleFunction(
       () => this.invokeHandler(executionId),
       (err) => {
-        this.executionState.rejectWith(err);
+        this.rejectExecution(err);
       },
       timestamp,
       () =>
@@ -908,7 +914,7 @@ export class TestExecutionOrchestrator {
         this.scheduler.scheduleFunction(
           () => this.invokeHandler(executionId),
           (err) => {
-            this.executionState.rejectWith(err);
+            this.rejectExecution(err);
           },
         );
         return;
@@ -918,7 +924,7 @@ export class TestExecutionOrchestrator {
         !this.scheduler.hasScheduledFunction() &&
         !this.pendingOperations.size
       ) {
-        this.executionState.rejectWith({
+        this.rejectExecution({
           error: {
             ErrorType: "InvalidParameterValueException",
             ErrorMessage:
@@ -947,7 +953,7 @@ export class TestExecutionOrchestrator {
       );
 
       this.operationStorage.addHistoryEvent(event);
-      this.executionState.rejectWith(err);
+      this.rejectExecution(err);
     }
   }
 }
