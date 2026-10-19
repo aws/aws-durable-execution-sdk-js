@@ -13,6 +13,7 @@ import {
 } from "../../types/plugin";
 import { DurableExecutionInvocationOutput } from "../../types/core";
 import { collectPropagationMetadata } from "./propagation-metadata";
+import type { InvocationLifecycle } from "../invocation-lifecycle/invocation-lifecycle";
 
 type CallbackResult = unknown;
 type CallbackFn = () => CallbackResult;
@@ -39,20 +40,28 @@ type PluginHookFn = (info: PluginInfo) => CallbackResult;
  */
 export function createPluginRunner(
   plugins: DurableInstrumentationPlugin[],
+  lifecycle?: InvocationLifecycle,
 ): DurableInstrumentationPlugin {
   if (plugins.length === 0) return {};
+
+  // Closing admission still allows final checkpoint/telemetry drain. Disposal
+  // stops new hook dispatch and leaves old SDK continuations suspended.
+  const isActive = () => !lifecycle || lifecycle.allowsRequests();
+  const suspended = () => new Promise<never>(() => {});
 
   const runAsCallback = <K extends keyof DurableInstrumentationPlugin>(
     method: K,
     info: Parameters<NonNullable<DurableInstrumentationPlugin[K]>>[0],
     fn: CustomerFn,
   ): CustomerFnResult => {
+    if (!isActive()) return suspended();
     let fnError: { error: unknown } | undefined;
     let fnCalled = false;
     let fnResult: CustomerFnResult;
 
     // Wrap the original fn to capture any error it throws and prevent double-calls
     const guardedFn: CallbackResult | CustomerFnResult = () => {
+      if (!isActive()) return suspended();
       if (fnCalled) return fnResult;
       fnCalled = true;
       try {
@@ -77,6 +86,7 @@ export function createPluginRunner(
 
     const chain: CallbackFn = plugins.reduceRight<CallbackFn>(
       (next, plugin) => () => {
+        if (!isActive()) return suspended();
         const hookFn = plugin[method] as PluginWrapperHookFn;
         if (hookFn) {
           try {
@@ -106,10 +116,17 @@ export function createPluginRunner(
       result != null &&
       typeof (result as PromiseLike<unknown>).then === "function"
     ) {
-      return (result as PromiseLike<unknown>).then((val: CustomerFnResult) => {
-        if (fnError) throw fnError.error;
-        return val;
-      });
+      return (result as PromiseLike<unknown>).then(
+        (val: CustomerFnResult) => {
+          if (!isActive()) return suspended();
+          if (fnError) throw fnError.error;
+          return val;
+        },
+        (error: unknown) => {
+          if (!isActive()) return suspended();
+          throw error;
+        },
+      );
     }
 
     // Sync path: if fn threw but the chain swallowed it, re-throw
@@ -134,8 +151,10 @@ export function createPluginRunner(
     method: K,
     info: Parameters<NonNullable<DurableInstrumentationPlugin[K]>>[0],
   ): Promise<void> => {
+    if (!isActive()) return suspended();
     await Promise.allSettled(
       plugins.map(async (p) => {
+        if (!isActive()) return suspended();
         const result = (p[method] as PluginHookFn)?.(info as PluginInfo);
         if (
           result != null &&
@@ -145,11 +164,12 @@ export function createPluginRunner(
         }
       }),
     );
+    if (!isActive()) return suspended();
   };
 
   return {
     providePropagationMetadata: (input) =>
-      collectPropagationMetadata(plugins, input),
+      isActive() ? collectPropagationMetadata(plugins, input) : {},
     onInvocationStart: (info: InvocationInfo): Promise<void> =>
       run("onInvocationStart", info),
     wrapInvocation: (
@@ -182,15 +202,17 @@ export function createPluginRunner(
     onOperationChange: (info: OperationChangeInfo): Promise<void> =>
       run("onOperationChange", info),
     enrichLogContext: () =>
-      plugins.reduce(
-        (acc, p) => {
-          try {
-            return { ...acc, ...p.enrichLogContext?.() };
-          } catch {
-            return acc;
-          }
-        },
-        {} as Record<string, string | number | boolean>,
-      ),
+      !isActive()
+        ? {}
+        : plugins.reduce(
+            (acc, p) => {
+              try {
+                return { ...acc, ...p.enrichLogContext?.() };
+              } catch {
+                return acc;
+              }
+            },
+            {} as Record<string, string | number | boolean>,
+          ),
   };
 }

@@ -149,6 +149,31 @@ describe("invocation-owned lifecycle through the public wrapper", () => {
     expect(jest.getTimerCount()).toBe(0);
   });
 
+  it("starts admitted work before its DurablePromise is awaited", async () => {
+    const store = recorder();
+    const entered = deferred();
+    const body = jest.fn(async () => {
+      entered.resolve();
+      return "done";
+    });
+    const handler = withDurableExecution(
+      async (_event, ctx) => {
+        const pending = ctx.step("eager", body);
+        expect(pending.isExecuted).toBe(false);
+        await entered.promise;
+        return pending;
+      },
+      { durableExecutionClient: store.client },
+    );
+    const result = handler(input(), runtime());
+    await jest.advanceTimersByTimeAsync(10);
+    expect(await result).toEqual({
+      Status: InvocationStatus.SUCCEEDED,
+      Result: '"done"',
+    });
+    expect(body).toHaveBeenCalledTimes(1);
+  });
+
   it("retains JavaScript step callbacks that return a plain value", async () => {
     const store = recorder();
     // JavaScript callers can return a value even though the TypeScript StepFunc
@@ -484,6 +509,124 @@ describe("invocation-owned lifecycle through the public wrapper", () => {
       await outcome;
     }
   });
+
+  it("keeps a created callback suspended when its result deserializes after expiry", async () => {
+    const store = recorder();
+    store.checkpoint.mockImplementation(async (request) => ({
+      CheckpointToken: "live-token",
+      NewExecutionState: {
+        Operations: (request.Updates ?? []).map((update) => ({
+          Id: update.Id,
+          Type: update.Type,
+          Name: update.Name,
+          ParentId: update.ParentId,
+          SubType: update.SubType,
+          Status: OperationStatus.SUCCEEDED,
+          StartTimestamp: new Date(),
+          EndTimestamp: new Date(),
+          CallbackDetails: { CallbackId: "callback-id", Result: "saved" },
+        })),
+      },
+    }));
+    const release = deferred();
+    const deserializing = jest.fn();
+    const resumed = jest.fn();
+    const finalized = jest.fn();
+    const handler = withDurableExecution(
+      async (_event, ctx) => {
+        try {
+          const [callback] = await ctx.createCallback("callback", {
+            serdes: {
+              deserialize: async () => {
+                deserializing();
+                await release.promise;
+                return "saved";
+              },
+            },
+          });
+          await callback;
+          resumed();
+          return "done";
+        } finally {
+          finalized();
+        }
+      },
+      { durableExecutionClient: store.client },
+    );
+    const result = handler(input(), runtime(1000)).catch(
+      (error: unknown) => error,
+    );
+    await tickUntil(() => deserializing.mock.calls.length === 1);
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(await result).toBeInstanceOf(InvocationDeadlineError);
+    release.resolve();
+    await jest.advanceTimersByTimeAsync(10);
+    expect(resumed).not.toHaveBeenCalled();
+    expect(finalized).not.toHaveBeenCalled();
+  });
+
+  it.each(["resolve", "reject"] as const)(
+    "keeps replay suspended when deserialization settles after expiry (%s)",
+    async (settlement) => {
+      const store = recorder();
+      const release = deferred();
+      const deserializing = jest.fn();
+      let holdDeserialization = false;
+      const resumed = jest.fn();
+      const caught = jest.fn();
+      const finalized = jest.fn();
+      const step = jest.fn(async () => "saved");
+      const handler = withDurableExecution(
+        async (_event, ctx) => {
+          try {
+            const value = await ctx.step("saved-step", step, {
+              serdes: {
+                serialize: async (value) => JSON.stringify(value),
+                deserialize: async () => {
+                  if (!holdDeserialization) return "saved";
+                  deserializing();
+                  await release.promise;
+                  if (settlement === "reject")
+                    throw new Error("late deserialize failure");
+                  return "saved";
+                },
+              },
+            });
+            resumed();
+            return value;
+          } catch (error) {
+            caught();
+            throw error;
+          } finally {
+            finalized();
+          }
+        },
+        { durableExecutionClient: store.client },
+      );
+      const first = handler(input(), runtime());
+      await jest.advanceTimersByTimeAsync(10);
+      expect(await first).toEqual({
+        Status: InvocationStatus.SUCCEEDED,
+        Result: '"saved"',
+      });
+      holdDeserialization = true;
+      const replay = handler(
+        input([...store.operations.values()]),
+        runtime(1000),
+      ).catch((error: unknown) => error);
+      await tickUntil(() => deserializing.mock.calls.length === 1);
+      await jest.advanceTimersByTimeAsync(1000);
+      expect(await replay).toBeInstanceOf(InvocationDeadlineError);
+      const callsAtExpiry = store.calls.length;
+      release.resolve();
+      await jest.advanceTimersByTimeAsync(10);
+      expect(step).toHaveBeenCalledTimes(1);
+      expect(resumed).toHaveBeenCalledTimes(1);
+      expect(finalized).toHaveBeenCalledTimes(1);
+      expect(caught).not.toHaveBeenCalled();
+      expect(store.calls).toHaveLength(callsAtExpiry);
+    },
+  );
 
   it("preserves ordinary suspension and replay without unwinding the original stack", async () => {
     const store = recorder();

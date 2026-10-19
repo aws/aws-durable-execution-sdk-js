@@ -65,6 +65,7 @@ import {
   AnySerdesDeserializer,
 } from "../../utils/serdes/serdes";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
+import { runInvocationCallback } from "../../utils/invocation-lifecycle/invocation-lifecycle";
 
 export interface DurableExecution {
   checkpointManager: CheckpointManager;
@@ -343,7 +344,9 @@ export class DurableContextImpl<Logger extends DurableLogger>
       !this._executionContext.invocationLifecycle.allowsOperations()
     )
       return new Promise(() => {});
-    return this.modeManagement.withModeManagement(operation);
+    return runInvocationCallback(this._executionContext, () =>
+      this.modeManagement.withModeManagement(operation),
+    );
   }
 
   private withDurableModeManagement<T>(
@@ -354,7 +357,12 @@ export class DurableContextImpl<Logger extends DurableLogger>
       !this._executionContext.invocationLifecycle.allowsOperations()
     )
       return new DurablePromise(() => new Promise(() => {}));
-    return this.modeManagement.withDurableModeManagement(operation);
+    // Start the operation eagerly, as before. Only its awaited settlement is
+    // fenced: replay deserialization can finish after the invocation has closed.
+    const result = this.modeManagement.withDurableModeManagement(operation);
+    return new DurablePromise(() =>
+      runInvocationCallback(this._executionContext, () => result),
+    );
   }
 
   step<T>(
@@ -631,7 +639,18 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this.durableExecution.plugin,
         pluginOperationName,
       );
-      return callbackFactory(nameOrConfig, maybeConfig);
+      const created = callbackFactory(nameOrConfig, maybeConfig);
+      return new DurablePromise<CreateCallbackResult<T>>(async () => {
+        const [callback, callbackId] = await created;
+        // Creation returns a second, independently awaited operation promise.
+        // Its live deserializer may still be running when the invocation closes.
+        return [
+          new DurablePromise(() =>
+            runInvocationCallback(this._executionContext, () => callback),
+          ),
+          callbackId,
+        ];
+      });
     });
   }
 

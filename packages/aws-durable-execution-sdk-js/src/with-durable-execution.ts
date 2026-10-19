@@ -666,9 +666,7 @@ export const withDurableExecution = <
   handler: DurableExecutionHandler<TEvent, TResult, TLogger>,
   config?: DurableExecutionConfig,
 ): DurableLambdaHandler => {
-  const pluginPromise = loadConfiguredPlugins(config?.plugins).then(
-    createPluginRunner,
-  );
+  const pluginPromise = loadConfiguredPlugins(config?.plugins);
   // Plugin loading starts during handler initialization. Attach a rejection handler
   // immediately so a cold-start configuration error cannot become an unhandled
   // rejection before Lambda invokes the exported handler; awaiting the original
@@ -702,8 +700,10 @@ export const withDurableExecution = <
       return await lifecycle.run(async () => {
         let plugin: DurableInstrumentationPlugin;
         try {
-          plugin = await pluginPromise;
+          const plugins = await pluginPromise;
           lifecycle.throwIfExpired();
+          // Instances remain cached, but dispatch belongs to this invocation.
+          plugin = createPluginRunner(plugins, lifecycle);
         } catch (error) {
           return {
             Status: InvocationStatus.FAILED,
