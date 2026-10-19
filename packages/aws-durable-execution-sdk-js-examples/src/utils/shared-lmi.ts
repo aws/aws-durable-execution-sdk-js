@@ -3,7 +3,7 @@
 import { LambdaClient, InvokeCommandInput } from "@aws-sdk/client-lambda";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, unlinkSync, writeFileSync } from "node:fs";
 import { promisify } from "node:util";
 
 const execute = promisify(execFile);
@@ -43,6 +43,7 @@ export function sharedLmi(client: LambdaClient, example: string) {
   if (!run || !script || !root || !quarantine)
     throw new Error("Shared LMI configuration is incomplete");
   const markers = new Set<string>();
+  let settlement: Promise<void> | undefined;
   client.middlewareStack.add(
     (next, context) => async (args) => {
       if (context.commandName === "InvokeCommand") {
@@ -68,29 +69,48 @@ export function sharedLmi(client: LambdaClient, example: string) {
         );
       markers.clear();
     },
-    async after() {
-      if (!markers.size) return;
-      try {
-        await execute(
-          process.env.LMI_PYTHON || "python",
-          [script, "settle-case", "--markers", [...markers].join(",")],
-          {
-            cwd: root,
-            env: process.env,
-            timeout: 180000,
-            maxBuffer: 1024 * 1024,
-          },
-        );
-      } catch (error) {
-        // The subprocess may fail before its own quarantine handler runs, or be
-        // killed by this timeout. Block later suites in either case.
+    after() {
+      // Jest still runs afterEach when a later beforeEach fails on quarantine.
+      // Reuse pending cleanup so only one subprocess can reopen the fixture.
+      if (settlement !== undefined) return settlement;
+      if (!markers.size) return Promise.resolve();
+      settlement = (async () => {
+        // Jest can time out this hook before the subprocess settles. Block later
+        // cases synchronously and reopen the fixture only after confirmed cleanup.
         writeFileSync(
           quarantine,
-          JSON.stringify({ error: String(error), markers: [...markers] }),
+          JSON.stringify({ run, markers: [...markers], state: "settling" }),
         );
-        throw error;
-      }
-      markers.clear();
+        try {
+          await execute(
+            process.env.LMI_PYTHON || "python",
+            [script, "settle-case", "--markers", [...markers].join(",")],
+            {
+              cwd: root,
+              env: process.env,
+              timeout: 180000,
+              maxBuffer: 1024 * 1024,
+            },
+          );
+          unlinkSync(quarantine);
+        } catch (error) {
+          // The subprocess may fail before its own quarantine handler runs, or be
+          // killed by this timeout. Keep later suites blocked in either case.
+          writeFileSync(
+            quarantine,
+            JSON.stringify({
+              run,
+              markers: [...markers],
+              error: String(error),
+            }),
+          );
+          throw error;
+        }
+        markers.clear();
+      })().finally(() => {
+        settlement = undefined;
+      });
+      return settlement;
     },
   };
 }

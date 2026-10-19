@@ -237,3 +237,59 @@ def test_close_case_bounds_ambiguous_discovery_and_still_stops_known_executions(
         cloud.close_case()
     assert stopped == [known["arn"]]
     assert clock.time() - begin == 2
+
+
+def test_delayed_intent_persistence_does_not_hide_late_probe_submission(setup):
+    cloud, clock, calls, output = setup
+    probe = cloud.prepare("barrier")
+    scheduled = clock.time() + 1
+    original_save = cloud.save_item
+
+    def delayed_save(item):
+        original_save(item)
+        if item.get("invoked") and "invokeBegin" not in item["timing"]:
+            clock.sleep(2)
+
+    cloud.save_item = delayed_save
+    cloud.invoke_at(probe, scheduled)
+    assert calls[-1][0] == "invoke" and calls[-1][1] == scheduled + 2
+    timing = probe["timing"]
+    assert timing["invokeIntent"]["wall"] == scheduled
+    assert timing["invokeBegin"]["wall"] == scheduled + 2
+    persisted = json.loads((output / "invocations" / f"{probe['marker']}.json").read_text())
+    assert persisted["run"] == "run" and persisted["invoked"] is True
+    with pytest.raises(ev.CollectionError, match="outside its pre-deadline window"):
+        ev.timely_probe(timing, scheduled + 1)
+
+
+def test_invoke_intent_is_already_durable_when_transport_starts(setup):
+    cloud, _clock, _calls, output = setup
+    item = cloud.prepare("barrier")
+
+    def invoke(**_kwargs):
+        persisted = json.loads((output / "invocations" / f"{item['marker']}.json").read_text())
+        assert persisted["run"] == "run" and persisted["invoked"] is True
+        assert "invokeIntent" in persisted["timing"]
+        assert "invokeBegin" not in persisted["timing"]
+        return {"DurableExecutionArn": "accepted"}
+
+    cloud.lam.invoke = invoke
+    cloud.invoke(item)
+
+
+def test_interrupted_intent_write_preserves_previous_record_and_never_invokes(setup, monkeypatch):
+    cloud, _clock, calls, output = setup
+    item = cloud.prepare("barrier")
+    path = output / "invocations" / f"{item['marker']}.json"
+    previous = path.read_bytes()
+
+    def interrupted_save(temporary, _item):
+        temporary.write_text('{"incomplete":')
+        raise OSError("record write interrupted")
+
+    monkeypatch.setattr(driver, "save", interrupted_save)
+    with pytest.raises(OSError, match="record write interrupted"):
+        cloud.invoke(item)
+    assert path.read_bytes() == previous
+    assert not list(path.parent.glob("*.tmp"))
+    assert all(call[0] == "put" for call in calls)

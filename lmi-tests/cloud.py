@@ -21,6 +21,8 @@ class Cloud:
         self.items, self.gates, self.cache = [], set(), {}
         self.next_history_read = 0.0
         self.completed_diagnostics = set()
+        self.cleaned_executions = set()
+        self.released_gates = set()
 
     def verify(self):
         for key, arn in self.manifest["functions"].items():
@@ -47,7 +49,16 @@ class Cloud:
         return {"wall": time.time(), "monotonic": time.monotonic()}
 
     def save_item(self, item):
-        save(ARTIFACTS / f"invocations/{item['marker']}.json", item)
+        path = ARTIFACTS / f"invocations/{item['marker']}.json"
+        temporary = path.with_suffix(".json." + uuid.uuid4().hex + ".tmp")
+        try:
+            save(
+                temporary,
+                {**item, "run": self.manifest["run"], "commit": self.manifest.get("commit")},
+            )
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)
 
     def prepare(self, scenario, fixture="shared"):
         marker = scenario + "-" + uuid.uuid4().hex[:12]
@@ -76,11 +87,16 @@ class Cloud:
         return item
 
     def invoke(self, item):
-        if "invokeBegin" in item["timing"]:
+        if item.get("invoked") or "invokeBegin" in item["timing"]:
             raise CollectionError("An Invoke attempt must not be silently repeated")
         payload = {key: item[key] for key in ("marker", "gates")}
         payload["scenario"] = item["scenario"]
         payload["run"] = self.manifest["run"]
+        # Persist ambiguous invocation ownership before submission. Disk latency
+        # belongs to preparation, never to the recorded Lambda Invoke timestamp.
+        item["invoked"] = True
+        item["timing"]["invokeIntent"] = self.timestamp()
+        self.save_item(item)
         # No control PUTs or evidence collection between this timestamp and Invoke.
         item["timing"]["invokeBegin"] = self.timestamp()
         try:
@@ -285,37 +301,77 @@ class Cloud:
             if item.get("arn") or item.get("invoked") or "invokeBegin" in item.get("timing", {})
         }
 
+    def unresolved_markers(self):
+        return self.invoked_markers() - {item["marker"] for item in self.items if item.get("arn")}
+
+    def restore_invocations(self, markers=None):
+        """Recover this run's invocation intent after a driver/child process exits."""
+        quarantine = ARTIFACTS / "quarantine.json"
+        pending = json.loads(quarantine.read_text()) if quarantine.exists() else {}
+        pending_markers = (
+            set(pending.get("markers", [])) if pending.get("run") == self.manifest["run"] else set()
+        )
+        if markers is not None:
+            markers = set(markers)
+            pending_markers &= markers
+        known = {item["marker"]: item for item in self.items}
+        for path in (ARTIFACTS / "invocations").glob("*.json"):
+            item = json.loads(path.read_text())
+            if item.get("run") != self.manifest["run"] or item.get("commit") != self.manifest.get(
+                "commit"
+            ):
+                continue
+            if markers is not None and item["marker"] not in markers:
+                continue
+            if item.get("settled") and item["marker"] not in pending_markers and markers is None:
+                continue
+            if item.get("arn") or item.get("invoked") or "invokeBegin" in item.get("timing", {}):
+                known.setdefault(item["marker"], item)
+                self.gates.update(item.get("gates", {}).values())
+        for marker in pending_markers:
+            known.setdefault(marker, {"marker": marker, "gates": {}, "invoked": True})
+        self.items = list(known.values())
+
     def load_markers(self, markers, *, running=None):
         """Restore invoked case markers, retaining attempts not yet observable."""
         markers = set(markers)
         previous = {item["marker"]: item for item in self.items}
-        events = self.refresh(markers=markers)
-        items = {
-            item["arn"]: item
-            for item in self.items
-            if item.get("arn") and item["marker"] in markers
-        }
-        items.update(
-            {
-                e["execution"]: {"arn": e["execution"], "marker": e["marker"], "gates": {}}
-                for e in events
-                if e["marker"] in markers
+
+        def record(marker, arn=None):
+            item = {
+                **previous.get(marker, {"marker": marker, "gates": {}}),
+                "invoked": True,
+                "settled": False,
             }
-        )
-        # Invoke can have been accepted even if a failed test did not receive its
-        # response or the handler never entered. Match only this case's names.
+            if arn:
+                item["arn"] = arn
+            return item
+
+        # The settle-case CLI may be the only surviving owner of these markers.
+        # Persist them before any discovery I/O can fail or the child can time out.
+        self.items = [record(marker) for marker in sorted(markers)]
+        for item in self.items:
+            self.save_item(item)
+        items = {item["arn"]: item for item in self.items if item.get("arn")}
+        for event in self.refresh(markers=markers):
+            if event["marker"] in markers:
+                items[event["execution"]] = record(event["marker"], event["execution"])
         for item in self.running() if running is None else running:
             if item.get("DurableExecutionName") in markers:
-                items[item["DurableExecutionArn"]] = {
-                    "arn": item["DurableExecutionArn"],
-                    "marker": item["DurableExecutionName"],
-                    "gates": {},
-                }
+                items[item["DurableExecutionArn"]] = record(
+                    item["DurableExecutionName"], item["DurableExecutionArn"]
+                )
         resolved = {item["marker"] for item in items.values()}
         self.items = list(items.values()) + [
-            {**previous.get(marker, {"marker": marker, "gates": {}}), "invoked": True}
-            for marker in sorted(markers - resolved)
+            record(marker) for marker in sorted(markers - resolved)
         ]
+        for item in self.items:
+            self.save_item(item)
+
+    def mark_settled(self):
+        for item in self.items:
+            item["settled"] = True
+            self.save_item(item)
 
     def worker_snapshot(self):
         item = self.start("quiescence")
@@ -332,19 +388,25 @@ class Cloud:
                 or not isinstance(snapshot.get("requests"), list)
             ):
                 raise CollectionError("Invalid quiescence snapshot or different deployed run")
+            item["settled"] = True
+            self.save_item(item)
             return snapshot
         finally:
             # Diagnostic invocations are not business test cases. Their own
             # lifecycle is excluded by the worker snapshot, not by clearing work.
             self.items.remove(item)
 
-    def quiesce(self, label):
+    def quiesce(self, label, on_activity=None):
         deadline = time.monotonic() + self.manifest.get("drainTimeout", 150)
         quiet = self.manifest.get("quietSeconds", 5)
         quiet_since, samples, previous_activity = None, [], None
         while time.monotonic() < deadline:
-            snapshot = self.worker_snapshot()
             running = self.running()
+            if running and on_activity:
+                # Release known held work before asking the same bounded worker
+                # pool to admit a diagnostic invocation.
+                on_activity({"requests": []}, running)
+            snapshot = self.worker_snapshot()
             samples.append({"time": self.timestamp(), "worker": snapshot, "running": running})
             save(
                 ARTIFACTS / f"quiescence/{label}.json", {"quietSeconds": quiet, "samples": samples}
@@ -354,7 +416,7 @@ class Cloud:
                 snapshot.get("worker"),
                 snapshot.get("activityVersion", 0),
             )
-            if not snapshot["requests"] and not running:
+            if not snapshot["requests"] and not running and not self.unresolved_markers():
                 if activity != previous_activity:
                     quiet_since = None
                 quiet_since = time.monotonic() if quiet_since is None else quiet_since
@@ -362,17 +424,20 @@ class Cloud:
                     return
             else:
                 quiet_since = None
+                if on_activity:
+                    on_activity(snapshot, running)
             previous_activity = activity
             time.sleep(2)
         raise CollectionError(
             "Shared LMI worker did not become quiescent; subsequent cases must not run"
         )
 
-    def close_case(self):
+    def release_and_stop(self, *, discover=True):
         failures = []
-        for gate in self.gates:
+        for gate in self.gates - self.released_gates:
             try:
                 self.control(gate, "release")
+                self.released_gates.add(gate)
             except Exception as error:
                 failures.append(str(error))
         invoked = self.invoked_markers()
@@ -381,7 +446,7 @@ class Cloud:
             for item in self.items
             if item["marker"] in invoked and not item.get("arn")
         }
-        if unresolved:
+        if unresolved and discover:
             # An Invoke timeout does not mean the service rejected it. Discover
             # only this case's invoked markers, including executions whose first
             # worker event has not arrived yet. Prepared-only probes are excluded.
@@ -399,7 +464,7 @@ class Cloud:
             except Exception as error:
                 failures.append(str(error))
         for item in self.items:
-            if not item.get("arn"):
+            if not item.get("arn") or item["arn"] in self.cleaned_executions:
                 continue
             try:
                 result = self.lam.get_durable_execution(DurableExecutionArn=item["arn"])
@@ -418,23 +483,25 @@ class Cloud:
                             raise
                 self.history(item)
                 save(ARTIFACTS / f"executions/{item['marker']}.json", result)
+                self.cleaned_executions.add(item["arn"])
             except Exception as error:
                 failures.append(str(error))
         label = self.items[0]["marker"] if self.items else "empty-" + uuid.uuid4().hex[:8]
         if failures:
             save(ARTIFACTS / f"quiescence/{label}-errors.json", failures)
             raise CollectionError("Failed to release/stop this case: " + "; ".join(failures))
+        return label
+
+    def close_case(self):
+        label = self.release_and_stop()
         self.quiesce(label)
         self.refresh()
+        self.mark_settled()
 
     def settle_run(self):
-        # Most runs were already drained after their final case. Avoid rereading
-        # every old history/control on each deployment when the worker is idle.
-        running = self.running()
-        if not running and not self.invoked_markers() and not self.worker_snapshot()["requests"]:
-            self.quiesce("between-runs-" + uuid.uuid4().hex[:8])
-            return
-        # Release this run's latches without deleting persistent infrastructure.
+        self.restore_invocations()
+        # Held work can occupy the whole pool before service listings expose
+        # its ARN. Release this run's controls before asking it to admit a probe.
         prefix = f"control/{self.manifest['run']}/"
         for page in self.s3.get_paginator("list_objects_v2").paginate(
             Bucket=self.manifest["bucket"], Prefix=prefix
@@ -443,12 +510,33 @@ class Cloud:
                 gate = obj["Key"][len(prefix) :]
                 if gate != "release-all":
                     self.gates.add(gate)
-        events = self.refresh(full=True)
-        markers = {e["marker"] for e in events if not e["marker"].startswith("quiescence-")}
-        # Queued executions may have no worker events at all. The dedicated
-        # fixture's running list and accepted Invoke responses are independent
-        # cleanup evidence; keep the captured list even if a later read changes.
-        markers.update(self.invoked_markers())
-        markers.update(item["DurableExecutionName"] for item in running)
-        self.load_markers(markers, running=running)
-        self.close_case()
+        self.release_and_stop(discover=False)
+
+        def cleanup(snapshot, running):
+            known = {item["marker"]: item for item in self.items}
+            for request in snapshot["requests"]:
+                item = known.setdefault(
+                    request["marker"], {"marker": request["marker"], "gates": {}}
+                )
+                if not item.get("arn"):
+                    item["arn"] = request["execution"]
+            self.items = list(known.values())
+            events = self.refresh(full=True)
+            markers = {
+                event["marker"] for event in events if not event["marker"].startswith("quiescence-")
+            }
+            markers.update(self.invoked_markers())
+            markers.update(item["DurableExecutionName"] for item in running)
+            self.load_markers(markers, running=running)
+            # The quiet loop owns this run's one drain budget and continues
+            # service/worker discovery for unresolved persisted attempts.
+            self.release_and_stop(discover=False)
+
+        running = self.running()
+        if running or self.invoked_markers():
+            cleanup({"requests": []}, running)
+        # Keep the cheap idle path, but switch to owned-run cleanup if service
+        # visibility or worker evidence appears during the same quiet window.
+        # This callback does not restart the drain deadline or another quiet loop.
+        self.quiesce("between-runs-" + uuid.uuid4().hex[:8], on_activity=cleanup)
+        self.mark_settled()

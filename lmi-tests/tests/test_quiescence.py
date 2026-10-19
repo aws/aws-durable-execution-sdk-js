@@ -159,3 +159,233 @@ def test_settle_run_rediscovers_unresolved_attempt_without_adopting_prepared_pro
     cloud.settle_run()
     assert stopped == ["accepted"]
     assert cloud.invoked_markers() == {"invoked-case"}
+
+
+@pytest.mark.parametrize("entrypoint", ["settle", "settle-previous"])
+def test_fresh_process_settlement_cleans_work_appearing_during_quiet_window(
+    delayed_execution, monkeypatch, entrypoint
+):
+    import io
+    import json
+    import sys
+
+    import deploy
+
+    cloud, stopped, listings, output = delayed_execution
+    assert cloud.items == []
+    cloud.verify = lambda: None
+    monkeypatch.setattr(driver, "Cloud", lambda _manifest: cloud)
+    monkeypatch.setattr(deploy, "ARTIFACTS", output)
+    if entrypoint == "settle":
+        (output / "manifest.json").write_text(json.dumps(cloud.manifest))
+        monkeypatch.setattr(sys, "argv", ["deploy.py", "settle"])
+        deploy.main()
+    else:
+        services = {
+            "lambda": SimpleNamespace(
+                get_function_configuration=lambda **_kwargs: {
+                    "Environment": {"Variables": {"LMI_RUN_ID": "run"}}
+                }
+            ),
+            "s3": SimpleNamespace(
+                get_object=lambda **_kwargs: {
+                    "Body": io.BytesIO(json.dumps(cloud.manifest).encode())
+                }
+            ),
+        }
+        monkeypatch.setattr(deploy, "client", lambda service, **_kwargs: services[service])
+        deploy.settle_previous(
+            {"Outputs": [{"OutputKey": "shared", "OutputValue": "function"}]}, "bucket"
+        )
+    assert listings[0] == 0
+    assert stopped == ["accepted"]
+    assert all(item["settled"] for item in cloud.items)
+    assert not (output / "quarantine.json").exists()
+
+
+def test_run_settlement_restores_scoped_invocation_intent_and_quarantine(quiet_cloud):
+    import json
+
+    cloud, _clock, output = quiet_cloud
+    cloud.manifest["commit"] = "commit"
+    records = output / "invocations"
+    records.mkdir()
+    for item in [
+        {
+            "marker": "owned",
+            "run": "run",
+            "commit": "commit",
+            "invoked": True,
+            "gates": {"loser": "owned-gate"},
+        },
+        {
+            "marker": "prepared",
+            "run": "run",
+            "commit": "commit",
+            "timing": {"prepareEnd": {"wall": 0}},
+        },
+        {"marker": "foreign", "run": "another-run", "commit": "commit", "arn": "foreign-arn"},
+        {"marker": "settled", "run": "run", "commit": "commit", "arn": "done", "settled": True},
+    ]:
+        (records / f"{item['marker']}.json").write_text(json.dumps(item))
+    (output / "quarantine.json").write_text(
+        json.dumps({"run": "run", "markers": ["example-owned"], "state": "settling"})
+    )
+    cloud.restore_invocations()
+    assert cloud.invoked_markers() == {"owned", "example-owned"}
+    assert cloud.gates == {"owned-gate"}
+    (output / "quarantine.json").write_text(
+        json.dumps({"run": "another-run", "markers": ["foreign-example"]})
+    )
+    cloud.restore_invocations()
+    assert "foreign-example" not in cloud.invoked_markers()
+
+
+def test_cleanup_during_quiet_verification_does_not_restart_drain_budget(quiet_cloud):
+    cloud, clock, _output = quiet_cloud
+    cloud.manifest.update(bucket="bucket", commit="commit", drainTimeout=5)
+    execution = {"DurableExecutionArn": "accepted", "DurableExecutionName": "late-case"}
+    stopped = []
+    cloud.running = lambda: [execution] if clock["time"] >= 1 else []
+    cloud.worker_snapshot = lambda: {"requests": []}
+    cloud.s3 = SimpleNamespace(
+        get_paginator=lambda _name: SimpleNamespace(paginate=lambda **_kwargs: [{}])
+    )
+    cloud.lam = SimpleNamespace(
+        get_durable_execution=lambda **_kwargs: {"Status": "RUNNING"},
+        stop_durable_execution=lambda **kwargs: stopped.append(kwargs["DurableExecutionArn"]),
+    )
+    cloud.history = lambda _item: []
+    with pytest.raises(CollectionError, match="did not become quiescent"):
+        cloud.settle_run()
+    assert stopped == ["accepted"]
+    assert clock["time"] == 6
+
+
+@pytest.mark.parametrize("persisted", [False, True])
+def test_quiet_verification_recovers_worker_evidence_before_service_visibility(
+    delayed_execution, persisted
+):
+    cloud, stopped, _listings, _output = delayed_execution
+    if persisted:
+        cloud.save_item({"marker": "invoked-case", "gates": {}, "invoked": True})
+    snapshots = 0
+    cloud.running = lambda: []
+
+    def worker():
+        nonlocal snapshots
+        snapshots += 1
+        return {
+            "requests": []
+            if snapshots < 3 or stopped
+            else [
+                {
+                    "marker": "invoked-case",
+                    "execution": "accepted",
+                    "request": "request",
+                    "active": {"holds": 1},
+                }
+            ]
+        }
+
+    cloud.worker_snapshot = worker
+    cloud.settle_run()
+    assert stopped == ["accepted"]
+
+
+def test_settle_case_cli_restores_only_its_own_saved_execution(delayed_execution, monkeypatch):
+    import json
+    import sys
+
+    import deploy
+
+    cloud, stopped, _listings, output = delayed_execution
+    cloud.running = lambda: []  # The saved ARN is the only available evidence.
+    cloud.verify = lambda: None
+    records = output / "invocations"
+    records.mkdir()
+    for item in [
+        {"marker": "invoked-case", "arn": "accepted", "gates": {}},
+        {"marker": "another-case", "arn": "unrelated", "gates": {"loser": "unrelated-gate"}},
+    ]:
+        (records / f"{item['marker']}.json").write_text(
+            json.dumps({**item, "run": "run", "commit": "commit", "invoked": True})
+        )
+    (output / "manifest.json").write_text(json.dumps(cloud.manifest))
+    monkeypatch.setattr(deploy, "ARTIFACTS", output)
+    monkeypatch.setattr(driver, "Cloud", lambda _manifest: cloud)
+    monkeypatch.setattr(sys, "argv", ["deploy.py", "settle-case", "--markers", "invoked-case"])
+    deploy.main()
+    assert stopped == ["accepted"]
+    assert cloud.gates == set()
+    assert cloud.invoked_markers() == {"invoked-case"}
+
+
+def test_settle_case_failure_preserves_quarantined_invocation_ownership(
+    delayed_execution, monkeypatch
+):
+    import json
+    import sys
+
+    import deploy
+
+    cloud, _stopped, _listings, output = delayed_execution
+    pending = {"run": "run", "markers": ["invoked-case"], "state": "settling"}
+    (output / "quarantine.json").write_text(json.dumps(pending))
+    (output / "manifest.json").write_text(json.dumps(cloud.manifest))
+
+    def unavailable():
+        raise OSError("configuration read failed")
+
+    cloud.verify = unavailable
+    monkeypatch.setattr(deploy, "ARTIFACTS", output)
+    monkeypatch.setattr(driver, "Cloud", lambda _manifest: cloud)
+    monkeypatch.setattr(sys, "argv", ["deploy.py", "settle-case", "--markers", "invoked-case"])
+    with pytest.raises(OSError, match="configuration read failed"):
+        deploy.main()
+    assert json.loads((output / "quarantine.json").read_text()) == {
+        **pending,
+        "error": "configuration read failed",
+    }
+
+
+def test_settlement_releases_busy_executions_before_requesting_worker_probe(delayed_execution):
+    cloud, stopped, _listings, _output = delayed_execution
+    cloud.running = lambda: (
+        []
+        if stopped
+        else [{"DurableExecutionArn": "accepted", "DurableExecutionName": "invoked-case"}]
+    )
+
+    def probe():
+        assert stopped == ["accepted"], "A blocked pool cannot admit the diagnostic yet"
+        return {"requests": []}
+
+    cloud.worker_snapshot = probe
+    cloud.settle_run()
+    assert stopped == ["accepted"]
+
+
+def test_fresh_settlement_releases_full_pool_before_delayed_service_visibility(delayed_execution):
+    cloud, stopped, listings, _output = delayed_execution
+    released = []
+    cloud.control = lambda gate, value: released.append((gate, value))
+
+    def pages(**kwargs):
+        if kwargs["Prefix"] == "control/run/":
+            return [{"Contents": [{"Key": "control/run/blocked-pool"}]}]
+        return [{}]
+
+    cloud.s3.get_paginator = lambda _name: SimpleNamespace(paginate=pages)
+
+    def probe():
+        assert released == [("blocked-pool", "release")], (
+            "No worker slot can admit the probe until owned gates are released"
+        )
+        return {"requests": []}
+
+    cloud.worker_snapshot = probe
+    cloud.settle_run()
+    assert listings[0] == 0
+    assert stopped == ["accepted"]
+    assert released == [("blocked-pool", "release")]

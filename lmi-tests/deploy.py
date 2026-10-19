@@ -466,7 +466,9 @@ def main():
             elif args.command == "settle":
                 cloud.settle_run()
             else:
-                cloud.load_markers([m for m in args.markers.split(",") if m])
+                markers = [marker for marker in args.markers.split(",") if marker]
+                cloud.restore_invocations(markers)
+                cloud.load_markers(markers)
                 cloud.close_case()
     except Exception as error:
         save(
@@ -474,7 +476,9 @@ def main():
             {"type": type(error).__name__, "message": str(error)},
         )
         if args.command in {"settle", "settle-case"}:
-            save(ARTIFACTS / "quarantine.json", {"error": str(error)})
+            quarantine = ARTIFACTS / "quarantine.json"
+            previous = json.loads(quarantine.read_text()) if quarantine.exists() else {}
+            save(quarantine, {**previous, "error": str(error)})
         raise
 
 

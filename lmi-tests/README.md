@@ -56,8 +56,18 @@ made by the case: cleanup does not turn a regression failure into a pass.
 
 If settlement fails, the suite quarantines the shared fixture and prevents later
 cases from invoking it. Quiescence samples and release/stop errors are retained.
-An idle previous run takes the short verification path; abandoned runs have their
-controls released before reuse. Shared AWS connection pools may remain open.
+Whole-run settlement releases its controls before asking the worker pool to
+admit a diagnostic probe. Idle runs then need only quiet verification. If work
+becomes visible during that verification, settlement discovers and stops it
+within the same drain window. Run-scoped invocation intent and quarantine
+markers survive driver or settlement-child failure; case cleanup restores only
+its explicitly selected markers. Intent is saved before the actual Invoke start
+timestamp, so a slow record write cannot hide late probe submission.
+
+Example teardown marks the fixture unavailable before awaiting its settlement
+child. Repeated teardown hooks share that child, and only successful settlement
+reopens the fixture. This remains true if Jest times out the hook first.
+Shared AWS connection pools may remain open.
 
 ## Existing example coverage
 
@@ -92,12 +102,20 @@ hold. Deadline admission explicitly selects the original request; retries cannot
 substitute for it. Environment/worker/request identifiers and live heartbeats
 are required; concurrent client requests alone do not establish overlap.
 
-Recovery controls are prepared before the deadline, and probe Invoke is scheduled
-one second before it without S3 preparation or evidence polling on that path.
+Peer and probe controls are prepared before the victim starts. The healthy peer
+is submitted twenty seconds before the victim's native deadline, and probe
+Invoke stays scheduled one second before that deadline without S3 preparation
+or evidence polling on those submission paths. Timestamped entry and live-gate
+evidence must show that the original peer overlapped the victim before timeout.
+
 The fault and healthy peer remain held through deadline + five seconds. The
 probe's handler-entry timestamp measures worker admission; its later blocked
-step proves progress. Wall-clock and monotonic driver timestamps separate
-preparation, Invoke, release, service registration and handler entry.
+step proves progress. Peer/probe evidence collection shares one cutoff ten
+seconds before the original peer's own native deadline, reserving time for
+release and completion. Late evidence/control writes are collection failures.
+The original peer must execute peer-after and return successfully; a retry cannot
+substitute for it. Wall-clock and monotonic timestamps separate preparation,
+actual Invoke submission, response delivery, release and handler entry.
 
 Late driver submission or late service registration is a collection error and
 never extends the five-second recovery target. Invoke response latency is

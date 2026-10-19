@@ -235,6 +235,31 @@ def test_retry_request_cannot_replace_original_request_in_overlap():
         ev.overlap(events, {"a", "b"}, requests={"a": "original"})
 
 
+def test_expired_original_request_cannot_establish_live_overlap():
+    events = [
+        event("BLOCKED", request="original", time=0, deadline=60),
+        event("ALIVE", request="original", time=61, deadline=60),
+        event("BLOCKED", "b", time=60.5, deadline=120),
+        event("ALIVE", "b", time=61, deadline=120),
+    ]
+    with pytest.raises(ev.PlacementError):
+        ev.overlap(events, {"a", "b"}, requests={"a": "original"})
+
+
+@pytest.mark.parametrize("phase", ["BODY", "RETURN"])
+def test_healthy_peer_cannot_progress_or_return_after_its_native_deadline(phase):
+    original = event("BLOCKED", time=0, deadline=60)
+    events = [
+        event("BODY", time=20, operation="peer-after"),
+        event("RETURN", time=21, status="SUCCEEDED"),
+    ]
+    next(e for e in events if e["phase"] == phase)["time"] = 61
+    with pytest.raises(AssertionError, match="deadline"):
+        ev.healthy_peer_completion(
+            events, original, {"time": 10}, {"Status": "SUCCEEDED", "Result": '"a"'}, "a"
+        )
+
+
 def test_recovery_failure_does_not_mask_independent_late_checkpoint():
     late = event("CHECKPOINT", time=12)
 

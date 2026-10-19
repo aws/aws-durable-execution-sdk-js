@@ -69,6 +69,8 @@ def overlap(events, markers, *, gates=None, requests=None):
                     )
                 )
             ]
+            if "deadline" in start:
+                ends.append(start["deadline"])
             end = min(ends, default=float("inf"))
             alive = [
                 e["time"]
@@ -96,6 +98,30 @@ def overlap(events, markers, *, gates=None, requests=None):
         if all(cutoff < end and last_alive >= cutoff for _, end, last_alive in group):
             return next(iter(identities))
     raise PlacementError("No overlapping live gates in the same Node.js worker")
+
+
+def healthy_peer_completion(events, original, boundary, result, expected_result):
+    """A barrier companion must finish on the request that overlapped the victim."""
+    import json
+
+    assert result.get("Status") == "SUCCEEDED", "Healthy peer did not complete successfully"
+    assert result.get("Result") == json.dumps(expected_result), (
+        "Healthy peer returned the wrong result"
+    )
+    progress = [e for e in select(events, "BODY") if e.get("operation") == "peer-after"]
+    assert len(progress) == 1, "Healthy peer must execute peer-after exactly once"
+    assert progress[0]["request"] == original["request"], (
+        "peer-after executed outside the original healthy peer request"
+    )
+    assert boundary["time"] < progress[0]["time"] < original["deadline"], (
+        "peer-after did not progress after the victim boundary within its original deadline"
+    )
+    assert any(
+        e["request"] == original["request"]
+        and e.get("status") == "SUCCEEDED"
+        and progress[0]["time"] <= e["time"] < original["deadline"]
+        for e in select(events, "RETURN")
+    ), "The original healthy peer did not return successfully within its deadline"
 
 
 def no_late_work(events, boundary):
