@@ -84,6 +84,11 @@ describe("package entry point", () => {
     expect(typeof sdk.buildPreview).toBe("function");
   });
 
+  it("exports the Powertools logger adapter", () => {
+    expect(typeof sdk.createPowertoolsLogger).toBe("function");
+    expect(typeof sdk.PowertoolsDurableLogger).toBe("function");
+  });
+
   it("exports the batch completion helpers", () => {
     expect(typeof sdk.completeBatch).toBe("function");
     expect(typeof sdk.continueBatch).toBe("function");

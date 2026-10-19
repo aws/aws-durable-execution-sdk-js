@@ -1,5 +1,5 @@
 import { Logger } from "@aws-lambda-powertools/logger";
-import { createPowertoolsLogger } from "@aws/durable-execution-sdk-js/powertools";
+import { createPowertoolsLogger } from "@aws/durable-execution-sdk-js";
 
 // These tests run the adapter against the real Powertools Logger. The adapter
 // depends on how Powertools merges its arguments into one log entry. So a

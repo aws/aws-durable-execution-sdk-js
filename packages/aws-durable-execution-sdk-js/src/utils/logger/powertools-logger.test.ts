@@ -1,10 +1,10 @@
-import { DurableLoggingContext } from "../types/durable-logger";
-import { DurableLogData } from "../types/logger";
+import { DurableLoggingContext } from "../../types/durable-logger";
+import { DurableLogData } from "../../types/logger";
 import {
   createPowertoolsLogger,
   PowertoolsDurableLogger,
   PowertoolsLoggerLike,
-} from "./index";
+} from "./powertools-logger";
 
 const METHODS = ["info", "warn", "error", "debug"] as const;
 

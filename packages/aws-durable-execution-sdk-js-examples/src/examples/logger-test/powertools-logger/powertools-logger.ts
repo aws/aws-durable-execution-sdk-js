@@ -1,11 +1,9 @@
 import {
   withDurableExecution,
   DurableContext,
-} from "@aws/durable-execution-sdk-js";
-import {
   createPowertoolsLogger,
   PowertoolsDurableLogger,
-} from "@aws/durable-execution-sdk-js/powertools";
+} from "@aws/durable-execution-sdk-js";
 import { ExampleConfig } from "../../../types";
 import { Logger, LogLevel } from "@aws-lambda-powertools/logger";
 

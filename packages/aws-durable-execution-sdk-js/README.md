@@ -582,8 +582,10 @@ context.configureLogger({ modeAware: false });
 
 ```typescript
 import { Logger } from "@aws-lambda-powertools/logger";
-import { withDurableExecution } from "@aws/durable-execution-sdk-js";
-import { createPowertoolsLogger } from "@aws/durable-execution-sdk-js/powertools";
+import {
+  createPowertoolsLogger,
+  withDurableExecution,
+} from "@aws/durable-execution-sdk-js";
 
 const logger = new Logger({ serviceName: "my-service" });
 
