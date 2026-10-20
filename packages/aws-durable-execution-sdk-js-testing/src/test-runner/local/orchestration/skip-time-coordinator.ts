@@ -224,6 +224,17 @@ export class SkipTimeCoordinator {
   /**
    * Removes an abandoned execution and the executions it invoked. Unlike {@link unregister},
    * this does not advance: the caller of this method advances once it is done.
+   *
+   * The removed execution keeps running, but the clock no longer skips its waits and
+   * retries. So they end in real time. No caller waits for it, so only a test that inspects
+   * the abandoned execution afterwards can observe this.
+   *
+   * An invoked runner cannot invoke a durable function today, because it has no registered
+   * functions. So the loop below has no effect through the public runner. If nested invokes
+   * become possible, one gap remains. The removed execution can start an invoke after this
+   * call. startInvoke does not track that invoke, because its caller is no longer a
+   * participant. But the invoked runner still registers, as an ordinary participant, and
+   * then holds the clock while it is busy.
    */
   private detach(participant: SkipTimeParticipant): void {
     if (!this.participants.delete(participant)) {

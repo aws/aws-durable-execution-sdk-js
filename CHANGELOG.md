@@ -123,8 +123,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `context.promise.race`. So the clock waits for a running non-durable function for at most
     1 s of real time. If the caller finishes without the result, or the context that contains the
     invoke completes without it, the clock no longer waits for it. That includes a durable
-    invoked function that is still running, and every function it invoked in turn. Once the
-    handler returns its final result, the runner applies no further wait or retry end.
+    invoked function that is still running. Such an abandoned function keeps running, but the
+    clock no longer skips its own waits and retries, so they take real time. Once the handler
+    returns its final result, the runner applies no further wait or retry end.
     While an invocation is running, the fake clock advances with real time, and an end is
     applied when that time reaches it. Waits also keep completing while an execution is
     paused.
