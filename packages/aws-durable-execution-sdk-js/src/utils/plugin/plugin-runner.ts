@@ -18,28 +18,59 @@ import util from "node:util";
 type CallbackResult = unknown;
 type CallbackOutcome =
   | { asynchronous: false; value: CallbackResult }
-  | { asynchronous: true; promise: Promise<CallbackResult> };
+  | {
+      asynchronous: true;
+      promise: Promise<CallbackResult>;
+      sourcePromise?: Promise<CallbackResult>;
+    };
 type CallbackFn = () => CallbackOutcome;
 const nativePromiseThen = Promise.prototype.then;
 
 // Call only inside the boundary that owns this value: getting or invoking `then`
 // can execute customer code. Capture the method once and preserve its receiver.
-function observeCallbackResult(value: CallbackResult): CallbackOutcome {
+function observeCallbackResult(
+  value: CallbackResult,
+  onFulfilled?: () => void,
+  onRejected?: (error: unknown) => void,
+): CallbackOutcome {
   const then = value == null ? undefined : (value as { then?: unknown }).then;
+  // Native promises remain asynchronous when their own `then` is replaced.
+  // Lightweight runtimes can omit util.types; retain a same-realm fallback.
+  const isPromise =
+    typeof util.types?.isPromise === "function"
+      ? util.types.isPromise(value)
+      : value instanceof Promise;
   if (typeof then !== "function") {
-    // Native promises remain asynchronous when their own `then` is replaced.
-    // Lightweight runtimes can omit util.types; retain a same-realm fallback.
-    const isPromise =
-      typeof util.types?.isPromise === "function"
-        ? util.types.isPromise(value)
-        : value instanceof Promise;
-    if (!isPromise) return { asynchronous: false, value };
+    if (!isPromise) {
+      onFulfilled?.();
+      return { asynchronous: false, value };
+    }
   }
   const method = typeof then === "function" ? then : nativePromiseThen;
   return {
     asynchronous: true,
+    sourcePromise: isPromise ? (value as Promise<CallbackResult>) : undefined,
     promise: new Promise((resolve, reject) => {
-      Reflect.apply(method, value, [resolve, reject]);
+      // Observe the first settlement directly, before our private promise adds
+      // another reaction. A thenable's later resolve/reject/throw is ignored.
+      let settled = false;
+      const fulfill = (result: unknown) => {
+        if (settled) return;
+        settled = true;
+        onFulfilled?.();
+        resolve(result);
+      };
+      const fail = (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        onRejected?.(error);
+        reject(error);
+      };
+      try {
+        Reflect.apply(method, value, [fulfill, fail]);
+      } catch (error) {
+        fail(error);
+      }
     }),
   };
 }
@@ -98,7 +129,9 @@ export function createPluginRunner(
     let fnError: { error: unknown } | undefined;
     const guardedFn = memoizeCallback(() => {
       try {
-        const outcome = observeCallbackResult(fn());
+        const outcome = observeCallbackResult(fn(), undefined, (error) => {
+          fnError = { error };
+        });
         if (outcome.asynchronous) {
           const promise = outcome.promise.catch((error: unknown) => {
             fnError = { error };
@@ -123,11 +156,15 @@ export function createPluginRunner(
         const outcome = nextOnce();
         if (!outcome.asynchronous) return outcome.value;
         if (!exposedPromise) {
-          // Keep the observed promise private. A wrapper can redefine `then`
-          // or `constructor` on the promise it receives without corrupting the
-          // cached outcome that recovery and the final error check rely on.
-          exposedPromise = outcome.promise.then((value) => value);
-          void exposedPromise.catch(() => undefined);
+          if (outcome.sourcePromise) {
+            // Healthy outer wrappers await the original native result, without
+            // SDK reaction hops that could change override/error precedence.
+            // The separately observed outcome remains private for recovery.
+            exposedPromise = outcome.sourcePromise;
+          } else {
+            exposedPromise = outcome.promise.then((value) => value);
+            void exposedPromise.catch(() => undefined);
+          }
         }
         return exposedPromise;
       };
@@ -141,15 +178,32 @@ export function createPluginRunner(
           if (exposedPromise !== undefined && result === exposedPromise) {
             return nextOnce();
           }
-          const outcome = observeCallbackResult(result);
-          if (!outcome.asynchronous) return outcome;
+          let errorAtSettlement: { error: unknown } | undefined;
+          const outcome = observeCallbackResult(result, () => {
+            errorAtSettlement = fnError;
+          });
+          const checkCallback = (value: CallbackResult): CallbackResult => {
+            // Later customer rejection must not change an already-chosen
+            // wrapper result while our observation/recovery promises settle.
+            if (errorAtSettlement) throw errorAtSettlement.error;
+            return value;
+          };
+          if (!outcome.asynchronous) {
+            return { asynchronous: false, value: checkCallback(outcome.value) };
+          }
+          const promise = outcome.promise.then(checkCallback, () => {
+            // The wrapper rejected; run or reuse the inner chain. Outer native
+            // wrappers unwind normally before their own boundary recovers.
+            const fallback = nextOnce();
+            return fallback.asynchronous ? fallback.promise : fallback.value;
+          });
+          // An outer wrapper may use the original native result directly. Keep
+          // its private recovery observed even when that wrapper short-circuits.
+          void promise.catch(() => undefined);
           return {
             asynchronous: true,
-            promise: outcome.promise.catch(() => {
-              // The wrapper rejected; run or reuse the inner chain.
-              const fallback = nextOnce();
-              return fallback.asynchronous ? fallback.promise : fallback.value;
-            }),
+            promise,
+            sourcePromise: outcome.sourcePromise,
           };
         } catch {
           // Getter, call and result-validation failures belong to this wrapper.
@@ -160,17 +214,8 @@ export function createPluginRunner(
       };
     }, guardedFn);
 
-    const checkCallback = (value: CallbackResult): CustomerFnResult => {
-      // Preserve wrapper settlement timing, including a deadline race or a
-      // synchronous override after next(). Only an already-observed callback
-      // failure wins here; later rejections remain observed without delaying it.
-      if (fnError) throw fnError.error;
-      return value;
-    };
     const outcome = chain();
-    return outcome.asynchronous
-      ? outcome.promise.then(checkCallback)
-      : checkCallback(outcome.value);
+    return outcome.asynchronous ? outcome.promise : outcome.value;
   };
 
   /**

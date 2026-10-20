@@ -232,6 +232,192 @@ describe("wrapper recovery and callback ownership", () => {
     },
   );
 
+  it.each(
+    [1, 2, 3].flatMap((layers) =>
+      [...new Set([0, layers - 1])].flatMap((overrideIndex) =>
+        [0, 1, 2].map((ticks) => ({ layers, overrideIndex, ticks })),
+      ),
+    ),
+  )(
+    "chooses asynchronous override precedence at source settlement (layers=$layers, override=$overrideIndex, callbackTicks=$ticks)",
+    async ({ layers, overrideIndex, ticks }) => {
+      const original = new Error("customer failure");
+      const body = jest.fn(async () => {
+        for (let i = 0; i < ticks; i++) await 0;
+        throw original;
+      });
+      const wrappers = Array.from({ length: layers }, (_, index) =>
+        jest.fn((_info, next: CustomerFn) => {
+          if (index !== overrideIndex) return next();
+          void (next() as Promise<unknown>).catch(() => undefined);
+          return Promise.resolve("override");
+        }),
+      );
+      const value = run(
+        wrappers.map((wrapOperationAttemptFn) => ({ wrapOperationAttemptFn })),
+        body,
+      );
+      if (ticks === 0) await expect(value).rejects.toBe(original);
+      else await expect(value).resolves.toBe("override");
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(body).toHaveBeenCalledTimes(1);
+      for (const wrap of wrappers) expect(wrap).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(
+    ["native", "wrapper-thenable", "callback-thenable"].flatMap((form) =>
+      [0, 1, 2].map((ticks) => ({ form, ticks })),
+    ),
+  )(
+    "preserves main's native await depth in outer wrappers (form=$form, callbackTicks=$ticks)",
+    async ({ form, ticks }) => {
+      const original = new Error("customer failure");
+      const forward = (source: Promise<unknown>) => ({
+        // biome-ignore lint/suspicious/noThenProperty: A forwarding PromiseLike is supported alongside native promises.
+        then(
+          resolve: (value: unknown) => unknown,
+          reject?: (error: unknown) => unknown,
+        ) {
+          return source.then(resolve, reject);
+        },
+        catch(reject: (error: unknown) => unknown) {
+          return source.catch(reject);
+        },
+      });
+      const body = jest.fn(() => {
+        const promise = (async () => {
+          for (let i = 0; i < ticks; i++) await 0;
+          throw original;
+        })();
+        return form === "callback-thenable" ? forward(promise) : promise;
+      });
+      const outer = jest.fn(async (_info, next: CustomerFn) => await next());
+      const inner = jest.fn((_info, next: CustomerFn) => {
+        void (next() as Promise<unknown>).catch(() => undefined);
+        const override = Promise.resolve("override");
+        return form === "wrapper-thenable" ? forward(override) : override;
+      });
+      const value = run(
+        [{ wrapOperationAttemptFn: outer }, { wrapOperationAttemptFn: inner }],
+        body,
+      );
+      if (ticks === 2 && form !== "wrapper-thenable") {
+        await expect(value).resolves.toBe("override");
+      } else {
+        await expect(value).rejects.toBe(original);
+      }
+      expect(body).toHaveBeenCalledTimes(1);
+      expect(outer).toHaveBeenCalledTimes(1);
+      expect(inner).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(
+    [false, true].flatMap((startInner) =>
+      [false, true].map((callbackFails) => ({ startInner, callbackFails })),
+    ),
+  )(
+    "unwinds outer wrappers and recovers cached work after an async plugin failure (started=$startInner, callbackFails=$callbackFails)",
+    async ({ startInner, callbackFails }) => {
+      const original = new Error("customer failure");
+      const body = jest.fn(async () => {
+        if (callbackFails) throw original;
+        return "body";
+      });
+      const finalized = jest.fn();
+      const postAwait = jest.fn();
+      const outer = jest.fn(async (_info, next: CustomerFn) => {
+        try {
+          const value = await next();
+          postAwait();
+          return value;
+        } finally {
+          finalized();
+        }
+      });
+      const inner = jest.fn(async (_info, next: CustomerFn) => {
+        if (startInner) {
+          try {
+            await next();
+          } catch {
+            /* Preserve the original error in the SDK. */
+          }
+        }
+        throw new Error("plugin failure");
+      });
+      const value = run(
+        [{ wrapOperationAttemptFn: outer }, { wrapOperationAttemptFn: inner }],
+        body,
+      );
+      if (callbackFails) await expect(value).rejects.toBe(original);
+      else await expect(value).resolves.toBe("body");
+      expect(body).toHaveBeenCalledTimes(1);
+      expect(inner).toHaveBeenCalledTimes(1);
+      expect(outer).toHaveBeenCalledTimes(1);
+      expect(finalized).toHaveBeenCalledTimes(1);
+      expect(postAwait).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([false, true])(
+    "retains the settlement chosen by a synchronous thenable (callbackRejectsImmediately=%s)",
+    async (immediate) => {
+      const original = new Error("customer failure");
+      const body = jest.fn(async () => {
+        if (!immediate) await 0;
+        throw original;
+      });
+      const value = run(
+        [
+          {
+            wrapOperationAttemptFn(_info, next) {
+              void (next() as Promise<unknown>).catch(() => undefined);
+              return {
+                // biome-ignore lint/suspicious/noThenProperty: Synchronous PromiseLike settlement precedes queued callback rejection.
+                then(resolve: (value: unknown) => unknown) {
+                  return resolve("override");
+                },
+              };
+            },
+          },
+        ],
+        body,
+      );
+      await expect(Promise.resolve(value)).resolves.toBe("override");
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(body).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("lets a genuinely asynchronous outer wrapper observe an intervening callback error", async () => {
+    const original = new Error("customer failure");
+    const body = jest.fn(async () => {
+      await 0;
+      throw original;
+    });
+    const value = run(
+      [
+        {
+          async wrapOperationAttemptFn(_info, next) {
+            const result = await next();
+            await 0;
+            return result;
+          },
+        },
+        {
+          wrapOperationAttemptFn(_info, next) {
+            void (next() as Promise<unknown>).catch(() => undefined);
+            return Promise.resolve("override");
+          },
+        },
+      ],
+      body,
+    );
+    await expect(value).rejects.toBe(original);
+    expect(body).toHaveBeenCalledTimes(1);
+  });
+
   it("returns a synchronous override without waiting for a started callback", () => {
     const body = jest.fn(() => new Promise(() => {}));
     const value = run(

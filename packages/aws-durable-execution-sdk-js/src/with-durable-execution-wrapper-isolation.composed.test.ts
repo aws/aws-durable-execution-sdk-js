@@ -202,3 +202,69 @@ describe.each(
     );
   },
 );
+
+it.each(
+  [0, 1, 2].flatMap((ticks) =>
+    [false, true].map((outerAwait) => ({ ticks, outerAwait })),
+  ),
+)(
+  "preserves public step override precedence across adjacent microtasks (callbackTicks=$ticks, outerAwait=$outerAwait)",
+  async ({ ticks, outerAwait }) => {
+    const original = new Error("step customer failure");
+    const body = jest.fn(async () => {
+      for (let i = 0; i < ticks; i++) await 0;
+      throw original;
+    });
+    const attemptEnd = jest.fn();
+    const handler = withDurableExecution(
+      async (_event, context) =>
+        context.step("work", body, {
+          retryStrategy: () => ({ shouldRetry: false }),
+        }),
+      {
+        plugins: [
+          ...(outerAwait
+            ? [
+                {
+                  async wrapOperationAttemptFn(
+                    _info: unknown,
+                    next: () => unknown,
+                  ) {
+                    return await next();
+                  },
+                },
+              ]
+            : []),
+          {
+            wrapOperationAttemptFn(_info, next) {
+              void (next() as Promise<unknown>).catch(() => undefined);
+              return Promise.resolve("override");
+            },
+            onOperationAttemptEnd: attemptEnd,
+          },
+        ],
+        durableExecutionClient: {
+          checkpoint: async () => ({
+            CheckpointToken: "token",
+            NewExecutionState: { Operations: [] },
+          }),
+          getExecutionState: async () => ({ Operations: [] }),
+        },
+      },
+    );
+    const output = await handler(event, context);
+    if (ticks === 0 || (outerAwait && ticks === 1)) {
+      expect(output).toMatchObject({
+        Status: "FAILED",
+        Error: { ErrorMessage: original.message },
+      });
+    } else {
+      expect(output).toEqual({
+        Status: "SUCCEEDED",
+        Result: JSON.stringify("override"),
+      });
+    }
+    expect(body).toHaveBeenCalledTimes(1);
+    expect(attemptEnd).toHaveBeenCalledTimes(1);
+  },
+);

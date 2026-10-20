@@ -210,6 +210,10 @@ export interface OperationChangeInfo {
  * synchronous and asynchronous paths. A later callback rejection is observed
  * without changing an outcome the wrapper already returned. Wrapper failures
  * themselves are isolated by running or reusing the healthy inner chain.
+ * An asynchronous inner wrapper failure unwinds outer wrappers normally:
+ * `finally` blocks run, while success-only code after `await next()` may not.
+ * The SDK then recovers using cached inner work, without rerunning wrappers
+ * or customer code.
  *
  * **Opting out (fire-and-forget):** to avoid blocking the SDK, start the
  * background work inside the hook but return without awaiting it, so the
