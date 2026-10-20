@@ -711,6 +711,7 @@ describe("DurableContext", () => {
         newCustomLogger.configureDurableLoggingContext,
       ).toHaveBeenCalledWith({
         getDurableLogData: expect.any(Function),
+        getLogEnrichment: expect.any(Function),
       });
     });
 
@@ -784,6 +785,7 @@ describe("DurableContext", () => {
 
       expect(configureMock).toHaveBeenCalledWith({
         getDurableLogData: expect.any(Function),
+        getLogEnrichment: expect.any(Function),
       });
     });
   });
@@ -815,6 +817,7 @@ describe("DurableContext", () => {
 
       expect(configureMock).toHaveBeenCalledWith({
         getDurableLogData: expect.any(Function),
+        getLogEnrichment: expect.any(Function),
       });
     });
 

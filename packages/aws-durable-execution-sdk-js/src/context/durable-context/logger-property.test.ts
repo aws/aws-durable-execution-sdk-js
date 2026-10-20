@@ -91,6 +91,7 @@ describe("DurableContext Logger Property", () => {
     // Verify configureDurableLoggingContext was called to set up the context
     expect(customLogger.configureDurableLoggingContext).toHaveBeenCalledWith({
       getDurableLogData: expect.any(Function),
+      getLogEnrichment: expect.any(Function),
     });
   });
 
@@ -126,6 +127,7 @@ describe("DurableContext Logger Property", () => {
     // Verify configureDurableLoggingContext was called to set up the context
     expect(customLogger.configureDurableLoggingContext).toHaveBeenCalledWith({
       getDurableLogData: expect.any(Function),
+      getLogEnrichment: expect.any(Function),
     });
   });
 
@@ -265,6 +267,7 @@ describe("DurableContext Logger Property", () => {
     expect(logger1.configureDurableLoggingContext).toHaveBeenCalledTimes(1);
     expect(logger1.configureDurableLoggingContext).toHaveBeenCalledWith({
       getDurableLogData: expect.any(Function),
+      getLogEnrichment: expect.any(Function),
     });
 
     // Capture the context passed to logger1
@@ -278,6 +281,7 @@ describe("DurableContext Logger Property", () => {
     expect(logger2.configureDurableLoggingContext).toHaveBeenCalledTimes(1);
     expect(logger2.configureDurableLoggingContext).toHaveBeenCalledWith({
       getDurableLogData: expect.any(Function),
+      getLogEnrichment: expect.any(Function),
     });
 
     // Verify logger1 was not called again
@@ -368,6 +372,7 @@ describe("DurableContext Logger Property", () => {
     // The operationId should be configured through configureDurableLoggingContext
     expect(childLogger.configureDurableLoggingContext).toHaveBeenCalledWith({
       getDurableLogData: expect.any(Function),
+      getLogEnrichment: expect.any(Function),
     });
 
     // Verify the getDurableLogData function returns the correct operationId
