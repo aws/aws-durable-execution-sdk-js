@@ -124,7 +124,14 @@ export interface MicrovmBaseConfig {
    */
   client?: LambdaMicrovmsClient;
 
-  /** The fetch implementation for HTTP delivery. Defaults to the global `fetch`. */
+  /**
+   * The fetch implementation for HTTP delivery. Defaults to the global `fetch`.
+   *
+   * A custom `fetch` must honor `init.redirect`. The request step sets it to
+   * `"manual"`. A redirect that the `fetch` follows anyway still fails the
+   * delivery, but only after the target has received the request and its
+   * auth token.
+   */
   fetch?: typeof fetch;
 }
 

@@ -200,6 +200,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gap is about 2.83 intervals. The Python worker measured a 32.39-second gap against a 30-second
   heartbeat timeout before the same change.
 
+- The `microvm` request step in `@aws/durable-execution-sdk-js-extras` followed redirects. A 301,
+  302, or 303 turned the job POST into a GET without the job, and a 2xx for that GET counted as
+  accepted, so the job never started. A redirect to another host also received the auth token.
+  The step no longer follows redirects: a 3xx fails the delivery at once with
+  `MicrovmRequestRejectedError`, and so does a redirect that a custom `fetch` follows. A 307 or
+  308 for a missing trailing slash used to deliver the job and now fails, so set the path with its
+  trailing slash.
+
 - An `InvalidRunHookPayloadError` for a `runHookPayload` that is not JSON now keeps the parser's
   `SyntaxError` as its `cause`. Its message names the position of the error.
 
