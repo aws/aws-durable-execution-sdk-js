@@ -15,7 +15,44 @@ import { DurableExecutionInvocationOutput } from "../../types/core";
 import { collectPropagationMetadata } from "./propagation-metadata";
 
 type CallbackResult = unknown;
-type CallbackFn = () => CallbackResult;
+type CallbackOutcome =
+  | { asynchronous: false; value: CallbackResult }
+  | { asynchronous: true; promise: Promise<CallbackResult> };
+type CallbackFn = () => CallbackOutcome;
+
+// Call only inside the boundary that owns this value: getting or invoking `then`
+// can execute customer code. Capture the method once and preserve its receiver.
+function observeCallbackResult(value: CallbackResult): CallbackOutcome {
+  const then = value == null ? undefined : (value as { then?: unknown }).then;
+  if (typeof then !== "function") return { asynchronous: false, value };
+  return {
+    asynchronous: true,
+    promise: new Promise((resolve, reject) => {
+      Reflect.apply(then, value, [resolve, reject]);
+    }),
+  };
+}
+
+// Recovery must reuse the inner chain, including its original synchronous error.
+// Mark entry before invoking it so even a reentrant call cannot execute it twice.
+function memoizeCallback(callback: CallbackFn): CallbackFn {
+  let called = false;
+  let outcome: CallbackOutcome = { asynchronous: false, value: undefined };
+  let failure: { error: unknown } | undefined;
+  return () => {
+    if (!called) {
+      called = true;
+      try {
+        outcome = callback();
+      } catch (error) {
+        failure = { error };
+      }
+    }
+    if (failure) throw failure.error;
+    return outcome;
+  };
+}
+
 type PluginInfo =
   | OperationInfo
   | OperationEndInfo
@@ -48,73 +85,84 @@ export function createPluginRunner(
     fn: CustomerFn,
   ): CustomerFnResult => {
     let fnError: { error: unknown } | undefined;
-    let fnCalled = false;
-    let fnResult: CustomerFnResult;
-
-    // Wrap the original fn to capture any error it throws and prevent double-calls
-    const guardedFn: CallbackResult | CustomerFnResult = () => {
-      if (fnCalled) return fnResult;
-      fnCalled = true;
+    let fnOutcome: CallbackOutcome | undefined;
+    const guardedFn = memoizeCallback(() => {
       try {
-        const result: CustomerFnResult = fn();
-        if (
-          result != null &&
-          typeof (result as Promise<unknown>).then === "function"
-        ) {
-          fnResult = (result as Promise<unknown>).catch((err: unknown) => {
-            fnError = { error: err };
-            throw err; // re-throw so plugins still see it
+        const outcome = observeCallbackResult(fn());
+        if (outcome.asynchronous) {
+          const promise = outcome.promise.catch((error: unknown) => {
+            fnError = { error };
+            throw error;
           });
-          return fnResult;
+          // A wrapper may start next() and return its own result without waiting.
+          // Retain the callback failure even if that wrapper ignores its promise.
+          void promise.catch(() => undefined);
+          fnOutcome = { asynchronous: true, promise };
+        } else {
+          fnOutcome = outcome;
         }
-        fnResult = result;
-        return result;
-      } catch (err) {
-        fnError = { error: err };
-        throw err; // re-throw so plugins still see it
+        return fnOutcome;
+      } catch (error) {
+        fnError = { error };
+        throw error;
       }
-    };
+    });
 
-    const chain: CallbackFn = plugins.reduceRight<CallbackFn>(
-      (next, plugin) => () => {
-        const hookFn = plugin[method] as PluginWrapperHookFn;
-        if (hookFn) {
-          try {
-            return hookFn.call(plugin, info, next);
-          } catch {
-            // Plugin errors are swallowed — fall through to the inner fn
-            return next();
-          }
+    const chain = plugins.reduceRight<CallbackFn>((next, plugin) => {
+      const nextOnce = memoizeCallback(next);
+      let exposedPromise: Promise<CallbackResult> | undefined;
+      const callNext: CustomerFn = () => {
+        const outcome = nextOnce();
+        if (!outcome.asynchronous) return outcome.value;
+        if (!exposedPromise) {
+          // Keep the observed promise private. A wrapper can redefine `then`
+          // or `constructor` on the promise it receives without corrupting the
+          // cached outcome that recovery and the final error check rely on.
+          exposedPromise = outcome.promise.then((value) => value);
+          void exposedPromise.catch(() => undefined);
         }
-        return next();
-      },
-      guardedFn as CallbackFn,
-    );
+        return exposedPromise;
+      };
+      return () => {
+        try {
+          const hook = plugin[method] as PluginWrapperHookFn;
+          if (!hook) return nextOnce();
+          const outcome = observeCallbackResult(
+            hook.call(plugin, info, callNext),
+          );
+          if (!outcome.asynchronous) return outcome;
+          return {
+            asynchronous: true,
+            promise: outcome.promise.catch(() => {
+              const fallback = nextOnce();
+              return fallback.asynchronous ? fallback.promise : fallback.value;
+            }),
+          };
+        } catch {
+          // Getter, call and result-validation failures belong to this wrapper.
+          // Continue through healthy inner wrappers, or reuse their outcome if
+          // the failed wrapper already called next().
+          return nextOnce();
+        }
+      };
+    }, guardedFn);
 
-    let result: CallbackResult;
-    try {
-      result = chain();
-    } catch (_err) {
-      // If the chain threw synchronously, check if it was from the customer fn
-      if (fnError) throw fnError.error;
-      // Otherwise it's a plugin error that escaped — swallow and call fn directly
-      result = (guardedFn as CallbackFn)();
-    }
-
-    // If the result is async, ensure fn errors are re-thrown even if swallowed by a plugin
-    if (
-      result != null &&
-      typeof (result as PromiseLike<unknown>).then === "function"
-    ) {
-      return (result as PromiseLike<unknown>).then((val: CustomerFnResult) => {
+    const checkCallback = (value: CallbackResult): CustomerFnResult => {
+      const finish = () => {
         if (fnError) throw fnError.error;
-        return val;
-      });
-    }
-
-    // Sync path: if fn threw but the chain swallowed it, re-throw
-    if (fnError) throw fnError.error;
-    return result;
+        return value;
+      };
+      // Overrides and short circuits remain supported. Once the callback has
+      // started, however, its original failure cannot be replaced by an override
+      // that happened to settle first.
+      return fnOutcome?.asynchronous
+        ? fnOutcome.promise.then(finish)
+        : finish();
+    };
+    const outcome = chain();
+    return outcome.asynchronous
+      ? outcome.promise.then(checkCallback)
+      : checkCallback(outcome.value);
   };
 
   /**
