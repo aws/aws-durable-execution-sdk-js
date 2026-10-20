@@ -330,7 +330,6 @@ describe("wrapper recovery and callback ownership", () => {
       );
       const inner = jest.fn((_info, next: CustomerFn) => {
         void (next() as Promise<unknown>).catch(() => undefined);
-        // biome-ignore lint/suspicious/noThenProperty: Adoption must preserve the outer await's ordering without a second source subscription.
         return { then };
       });
       const outers = Array.from({ length: layers }, () =>
@@ -363,7 +362,6 @@ describe("wrapper recovery and callback ownership", () => {
         expect(this).toBe(source);
         return transformed.then(resolve, reject);
       });
-      // biome-ignore lint/suspicious/noThenProperty: The source must only be subscribed once, even when an outer wrapper fails.
       const source = { then };
       let transformed: Promise<unknown>;
       const inner = jest.fn((_info, next: CustomerFn) => {
