@@ -51,18 +51,13 @@ createTests({
       if (isCloud) {
         expect(execution.getStatus()).toBe(ExecutionStatus.FAILED);
         expect(error.errorType).toBe("CallbackTimeoutError");
-        // The one-second timeout can arrive in a checkpoint response before
-        // this invocation suspends, or on the invocation after suspension.
-        const invocations = execution.getInvocations();
-        for (const invocation of invocations.slice(0, -1)) {
-          expect(invocation.error).toBeUndefined();
-        }
-        expect(invocations.at(-1)?.error).toMatchObject({
-          errorType: error.errorType,
-          errorMessage: error.errorMessage,
-        });
+        // The SDK returns this business error in the execution outcome.
+        // InvocationCompleted.Error is optional and describes invocation
+        // failures, so it need not contain the returned CallbackTimeoutError.
       }
 
+      // The one-second timeout can arrive before this invocation suspends,
+      // or on the invocation after suspension. Other signatures remain exact.
       assertEventSignatures(
         execution,
         "timed-out",

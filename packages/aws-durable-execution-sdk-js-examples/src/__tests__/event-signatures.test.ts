@@ -51,12 +51,17 @@ describe("event signature invocation alternatives", () => {
     ).toThrow();
   });
 
-  it("still rejects missing callback timeout events", () => {
-    const missingTimeout = withInvocationCount(1).filter(
-      (event) => event.EventType !== EventType.CallbackTimedOut,
+  it.each([
+    EventType.CallbackTimedOut,
+    EventType.ContextFailed,
+    EventType.StepStarted,
+    EventType.StepSucceeded,
+  ])("still rejects a missing %s event", (missingType) => {
+    const missingEvent = withInvocationCount(1).filter(
+      (event) => event.EventType !== missingType,
     );
     expect(() =>
-      assertEventSignatures(missingTimeout, history, false, cloudTimeoutConfig),
+      assertEventSignatures(missingEvent, history, false, cloudTimeoutConfig),
     ).toThrow();
   });
 });
