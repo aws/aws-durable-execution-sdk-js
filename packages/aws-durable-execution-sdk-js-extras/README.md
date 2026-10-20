@@ -303,6 +303,8 @@ Leave suspending off for such a workload. A shorter `autoSuspendIdleTime` saves 
 
 The session rejects these settings before it creates any durable operation: an `autoSuspendIdleTime` under 10 seconds, one longer than the session `timeout`, and an `autoSuspendIdleTime` while `autoSuspendOnIdle` is not `true`. With suspending on, a session whose `timeout` is under 10 seconds still does not suspend by default.
 
+The worker reads its idle time once, from the run hook payload of the launch. RunMicrovm sets the idle policy once, at the launch. So a deploy that changes `autoSuspendOnIdle` or `idlePolicy` does not change what a running MicroVM does. The launch checkpoint records whether the session checks the MicroVM state before each job. Replay follows the delivery that the launch recorded, and it also follows this resume mode. So a deploy changes the resume mode only for sessions that launch after it. A launch checkpoint from an earlier release has no resume mode. Such a session computes the mode from the current config, as that release did.
+
 A session MicroVM lives at most its session `timeout` plus 5 minutes, and never longer than 8 hours. What the next `vm.invoke` reports after the MicroVM ends depends on the state check:
 
 - With `autoSuspendOnIdle: true`, or an `idlePolicy` set, the request step calls GetMicrovm before each job. A MicroVM that no longer exists, or that is terminating, then fails the job at once with a `MicrovmNotRunningError`. It is a `MicrovmDeliveryError`, and it is not retried.

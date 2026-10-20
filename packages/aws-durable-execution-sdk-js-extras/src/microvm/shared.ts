@@ -128,6 +128,14 @@ export interface LaunchResult {
    * So every replay delivers the job the way the launch prepared for.
    */
   delivery: JobDelivery;
+  /**
+   * Whether each session job checks the MicroVM state, and resumes a
+   * suspended MicroVM, before delivery. Only a session launch records it.
+   * Replay reads it from the checkpoint. So every replay follows the mode
+   * that the launch prepared the MicroVM for. A launch checkpoint from an
+   * earlier release has no `resume` field.
+   */
+  resume?: boolean;
 }
 
 export type RetryStrategy = (
@@ -306,6 +314,8 @@ export function launch(
     defaultIngress: "NO_INGRESS" | "ALL_INGRESS";
     runHookPayload: string;
     delivery: JobDelivery;
+    /** The resume mode to record. Only a session launch sets it. */
+    resume?: boolean;
     extra?: Partial<RunMicrovmCommandInput>;
   },
 ): Promise<LaunchResult> {
@@ -347,6 +357,7 @@ export function launch(
         microvmId: response.microvmId,
         ...(overHttp && { endpoint: response.endpoint }),
         delivery: options.delivery,
+        ...(options.resume !== undefined && { resume: options.resume }),
       };
     },
     {
