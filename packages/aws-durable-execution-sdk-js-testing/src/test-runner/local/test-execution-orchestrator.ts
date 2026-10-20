@@ -100,6 +100,8 @@ export class TestExecutionOrchestrator implements SkipTimeParticipant {
   /** In-flight pause(), which resume() waits for so the two cannot interleave. */
   private pausing: Promise<void> = Promise.resolve();
   private runningInvocations = 0;
+  /** Counts the invocations started. See {@link runningInvocation}. */
+  private invocationSequence = 0;
   private idleWaiters: (() => void)[] = [];
   private settled = false;
   // A terminal handler response can precede asynchronous history recording.
@@ -945,6 +947,11 @@ export class TestExecutionOrchestrator implements SkipTimeParticipant {
     );
   }
 
+  /** See {@link SkipTimeParticipant.runningInvocation}. */
+  runningInvocation(): number | undefined {
+    return this.runningInvocations > 0 ? this.invocationSequence : undefined;
+  }
+
   /** See {@link SkipTimeParticipant.isBusy}. */
   isBusy(): boolean {
     return (
@@ -1039,6 +1046,7 @@ export class TestExecutionOrchestrator implements SkipTimeParticipant {
     }
 
     this.runningInvocations++;
+    this.invocationSequence++;
     try {
       await this.runInvocation(executionId, invocationParams);
     } finally {
