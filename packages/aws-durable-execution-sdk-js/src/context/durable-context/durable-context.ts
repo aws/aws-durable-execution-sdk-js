@@ -199,8 +199,14 @@ export class DurableContextImpl<Logger extends DurableLogger>
       getLogEnrichment: ():
         | Record<string, string | number | boolean>
         | undefined => {
+        // As with the identity above, the logger may hold the logging context of another
+        // handler, whose plugins differ. So prefer the plugins of the execution that the active
+        // context records, and use this context's plugins only when none is recorded.
+        const execution = getActiveContext()?.execution;
         try {
-          return this.durableExecution.plugin?.enrichLogContext?.();
+          return execution
+            ? execution.enrichLogContext?.()
+            : this.durableExecution.plugin?.enrichLogContext?.();
         } catch {
           // Plugin errors must never affect logging
           return undefined;

@@ -287,6 +287,58 @@ describe("DurableContext Composed Tests", () => {
         ).toBeUndefined();
       });
 
+      it("should use the plugins of the execution that the active context records", () => {
+        const { context } = createTestDurableContext({
+          plugin: { enrichLogContext: () => ({ traceId: "captured" }) },
+        });
+        const loggingContext = context.getDurableLoggingContext();
+
+        runWithRootContext(
+          {
+            executionArn: "arn:other",
+            requestId: "other-request",
+            enrichLogContext: () => ({ traceId: "active" }),
+          },
+          () => {
+            expect(loggingContext.getLogEnrichment?.()).toEqual({
+              traceId: "active",
+            });
+          },
+        );
+      });
+
+      it("should return undefined when the active execution has no plugin fields, even if this context's plugin has some", () => {
+        const { context } = createTestDurableContext({
+          plugin: { enrichLogContext: () => ({ traceId: "captured" }) },
+        });
+        const loggingContext = context.getDurableLoggingContext();
+
+        runWithRootContext(
+          { executionArn: "arn:other", requestId: "other-request" },
+          () => {
+            expect(loggingContext.getLogEnrichment?.()).toBeUndefined();
+          },
+        );
+      });
+
+      it("should return undefined when the active execution's plugin throws", () => {
+        const { context } = createTestDurableContext();
+        const loggingContext = context.getDurableLoggingContext();
+
+        runWithRootContext(
+          {
+            executionArn: "arn:other",
+            requestId: "other-request",
+            enrichLogContext: () => {
+              throw new Error("plugin failed");
+            },
+          },
+          () => {
+            expect(loggingContext.getLogEnrichment?.()).toBeUndefined();
+          },
+        );
+      });
+
       it("should work without active context", () => {
         const { context, executionContext } = createTestDurableContext({
           durableExecutionMode: DurableExecutionMode.ExecutionMode,

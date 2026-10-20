@@ -276,3 +276,102 @@ describe("createPowertoolsLogger in a durable execution with a plugin", () => {
     }
   });
 });
+
+describe("one createPowertoolsLogger shared by two handlers with different plugins", () => {
+  beforeAll(() =>
+    LocalDurableTestRunner.setupTestEnvironment({ skipTime: true }),
+  );
+  afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
+
+  const delay = (ms: number): Promise<void> =>
+    new Promise((resolve) => setTimeout(resolve, ms));
+
+  it("adds the plugin fields of the handler that writes each entry", async () => {
+    // One adapter at module scope, as users usually create it.
+    const shared = createPowertoolsLogger(
+      new Logger({ serviceName: "shared-adapter-test" }),
+    );
+
+    // Each handler configures the shared adapter, then waits. Handler "a" waits longer, so
+    // handler "b" configures the adapter after "a" has configured it and before "a" logs.
+    const makeHandler = (
+      name: string,
+      pause: number,
+      plugins: DurableInstrumentationPlugin[],
+    ) =>
+      withDurableExecution(
+        async (_event: unknown, context: DurableContext<DurableLogger>) => {
+          context.configureLogger({ customLogger: shared });
+          await delay(pause);
+          context.logger.info(`root-${name}`);
+          await context.step("work", async (stepContext) => {
+            await delay(pause);
+            stepContext.logger.info(`step-${name}`);
+          });
+          return name;
+        },
+        { plugins },
+      );
+
+    const handlerA = makeHandler("a", 50, [
+      { enrichLogContext: () => ({ traceId: "trace-a" }) },
+    ]);
+    const handlerB = makeHandler("b", 5, [
+      { enrichLogContext: () => ({ traceId: "trace-b" }) },
+    ]);
+    // A third handler with no plugin. Its entries must carry no plugin field.
+    const handlerC = makeHandler("c", 20, []);
+
+    const writes: string[] = [];
+    const capture = (chunk: unknown): boolean => {
+      writes.push(String(chunk));
+      return true;
+    };
+    const stdout = jest
+      .spyOn(process.stdout, "write")
+      .mockImplementation(capture);
+    const stderr = jest
+      .spyOn(process.stderr, "write")
+      .mockImplementation(capture);
+    try {
+      const results = await Promise.all(
+        [handlerA, handlerB, handlerC].map((handlerFunction) =>
+          new LocalDurableTestRunner({ handlerFunction }).run(),
+        ),
+      );
+      for (const result of results) {
+        expect(result.getStatus()).toBe(ExecutionStatus.SUCCEEDED);
+      }
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+    }
+
+    const entries = writes
+      .flatMap((chunk) => chunk.split("\n"))
+      .filter((line) => line.trim().startsWith("{"))
+      .map((line) => JSON.parse(line) as Record<string, unknown>)
+      .filter((entry) => entry.service === "shared-adapter-test");
+
+    expect(entries.map((entry) => entry.message).sort()).toEqual([
+      "root-a",
+      "root-b",
+      "root-c",
+      "step-a",
+      "step-b",
+      "step-c",
+    ]);
+    const expectedTraceId: Record<string, string | undefined> = {
+      a: "trace-a",
+      b: "trace-b",
+      c: undefined,
+    };
+    for (const entry of entries) {
+      const name = String(entry.message).slice(-1);
+      expect({ message: entry.message, traceId: entry.traceId }).toEqual({
+        message: entry.message,
+        traceId: expectedTraceId[name],
+      });
+    }
+  });
+});
