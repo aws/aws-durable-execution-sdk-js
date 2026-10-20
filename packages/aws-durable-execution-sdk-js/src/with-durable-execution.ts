@@ -97,8 +97,19 @@ async function runHandler<
   );
   const lifecycle = executionContext.invocationLifecycle;
   lifecycle?.onDispose(() => checkpointManager.dispose());
-  const endInvocation = async (info: InvocationEndInfo): Promise<void> => {
+  let preparedTerminalEnd: InvocationEndInfo | undefined;
+  const endInvocation = async (
+    info: InvocationEndInfo,
+    terminalResponse?: DurableExecutionInvocationOutput,
+  ): Promise<void> => {
     if (lifecycle && !lifecycle.allowsRequests()) return;
+    if (lifecycle && terminalResponse) {
+      // Callers finish serialization and their final checkpoint/termination
+      // checks before selecting a response. Check the live budget above before
+      // allowing cleanup to preserve it through a later deadline.
+      lifecycle.preparedTerminalResponse = terminalResponse;
+      preparedTerminalEnd = info;
+    }
     await plugin.onInvocationEnd?.(info);
   };
 
@@ -133,19 +144,24 @@ async function runHandler<
     updatedOperations,
   };
   lifecycle?.onDeadline((error) => {
-    // Expiry interrupts an invocation; it does not manufacture a business
-    // failure or a terminal Workflow. Retain outcomes already fixed by service.
+    // Expiry interrupts unfinished work. Cleanup retains outcomes already
+    // fixed by the service or selected before terminal hooks started.
     const status = lifecycle.serviceRequestedSuspension
       ? PluginInvocationStatus.PENDING
       : lifecycle.checkpointedExecutionResult
         ? PluginInvocationStatus.SUCCEEDED
-        : PluginInvocationStatus.RETRYING;
+        : (preparedTerminalEnd?.status ?? PluginInvocationStatus.RETRYING);
+    const selectedEnd =
+      preparedTerminalEnd?.status === status ? preparedTerminalEnd : undefined;
     plugin.endInvocationOnDeadline?.({
       ...invocationBaseInfo,
+      ...selectedEnd,
       operations: toOperationInfoMap(executionContext._stepData),
       status,
       executionError:
-        status === PluginInvocationStatus.RETRYING ? error : undefined,
+        status === PluginInvocationStatus.RETRYING
+          ? error
+          : selectedEnd?.executionError,
     });
   });
   lifecycle?.throwIfExpired();
@@ -163,18 +179,22 @@ async function runHandler<
   const configError = validateDurableExecutionConfig(config);
   if (configError) {
     const error = new Error(configError);
-    await endInvocation({
-      ...invocationBaseInfo,
-      status: PluginInvocationStatus.FAILED,
-      executionInput: customerHandlerEvent,
-      executionError: error,
-      executionResult: undefined,
-      operations: allOperations,
-    });
-    return {
+    const response: DurableExecutionInvocationOutput = {
       Status: InvocationStatus.FAILED,
       Error: createErrorObjectFromError(error),
     };
+    await endInvocation(
+      {
+        ...invocationBaseInfo,
+        status: PluginInvocationStatus.FAILED,
+        executionInput: customerHandlerEvent,
+        executionError: error,
+        executionResult: undefined,
+        operations: allOperations,
+      },
+      response,
+    );
+    return response;
   }
 
   // Set the checkpoint terminating callback on the termination manager
@@ -235,18 +255,21 @@ async function runHandler<
       const answerFailed = async (
         error: Error,
       ): Promise<DurableExecutionInvocationOutput> => {
-        const response = {
+        const response: DurableExecutionInvocationOutput = {
           Status: InvocationStatus.FAILED,
           Error: createErrorObjectFromError(error),
         };
-        await endInvocation({
-          ...invocationBaseInfo,
-          status: PluginInvocationStatus.FAILED,
-          executionInput: customerHandlerEvent,
-          executionError: error,
-          executionResult: undefined,
-          operations: toOperationInfoMap(executionContext._stepData),
-        });
+        await endInvocation(
+          {
+            ...invocationBaseInfo,
+            status: PluginInvocationStatus.FAILED,
+            executionInput: customerHandlerEvent,
+            executionError: error,
+            executionResult: undefined,
+            operations: toOperationInfoMap(executionContext._stepData),
+          },
+          response,
+        );
         return response;
       };
 
@@ -465,20 +488,23 @@ async function runHandler<
               // Continue anyway - the checkpoint will be retried on next invocation
             }
 
-            await endInvocation({
-              ...invocationBaseInfo,
-              status: PluginInvocationStatus.SUCCEEDED,
-              executionInput: customerHandlerEvent,
-              executionResult: result,
-              executionError: undefined,
-              operations: toOperationInfoMap(executionContext._stepData),
-            });
-
             // Return a response indicating the result was checkpointed
-            return {
+            const response: DurableExecutionInvocationOutput = {
               Status: InvocationStatus.SUCCEEDED,
               Result: "",
             };
+            await endInvocation(
+              {
+                ...invocationBaseInfo,
+                status: PluginInvocationStatus.SUCCEEDED,
+                executionInput: customerHandlerEvent,
+                executionResult: result,
+                executionError: undefined,
+                operations: toOperationInfoMap(executionContext._stepData),
+              },
+              response,
+            );
+            return response;
           } catch (checkpointError) {
             log("❌", "Failed to checkpoint large result:", checkpointError);
             // Re-throw - checkpoint.ts always classifies errors before terminating
@@ -501,19 +527,22 @@ async function runHandler<
           return lateAnswer;
         }
 
-        await endInvocation({
-          ...invocationBaseInfo,
-          status: PluginInvocationStatus.SUCCEEDED,
-          executionInput: customerHandlerEvent,
-          executionResult: result,
-          executionError: undefined,
-          operations: toOperationInfoMap(executionContext._stepData),
-        });
-
-        return {
+        const response: DurableExecutionInvocationOutput = {
           Status: InvocationStatus.SUCCEEDED,
           Result: serializedResult,
         };
+        await endInvocation(
+          {
+            ...invocationBaseInfo,
+            status: PluginInvocationStatus.SUCCEEDED,
+            executionInput: customerHandlerEvent,
+            executionResult: result,
+            executionError: undefined,
+            operations: toOperationInfoMap(executionContext._stepData),
+          },
+          response,
+        );
+        return response;
       } catch (error) {
         lifecycle?.closeAdmission();
         log("❌", "Handler threw an error:", error);
@@ -568,20 +597,23 @@ async function runHandler<
           );
         }
 
-        await endInvocation({
-          ...invocationBaseInfo,
-          status: PluginInvocationStatus.FAILED,
-          executionInput: customerHandlerEvent,
-          executionError:
-            error instanceof Error ? error : new Error(String(error)),
-          executionResult: undefined,
-          operations: toOperationInfoMap(executionContext._stepData),
-        });
-
-        return {
+        const response: DurableExecutionInvocationOutput = {
           Status: InvocationStatus.FAILED,
           Error: createErrorObjectFromError(error),
         };
+        await endInvocation(
+          {
+            ...invocationBaseInfo,
+            status: PluginInvocationStatus.FAILED,
+            executionInput: customerHandlerEvent,
+            executionError:
+              error instanceof Error ? error : new Error(String(error)),
+            executionResult: undefined,
+            operations: toOperationInfoMap(executionContext._stepData),
+          },
+          response,
+        );
+        return response;
       }
     };
 
@@ -785,6 +817,9 @@ export const withDurableExecution = <
         }
         if (lifecycle.checkpointedExecutionResult) {
           return lifecycle.checkpointedExecutionResult;
+        }
+        if (lifecycle.preparedTerminalResponse) {
+          return lifecycle.preparedTerminalResponse;
         }
       }
       throw error;

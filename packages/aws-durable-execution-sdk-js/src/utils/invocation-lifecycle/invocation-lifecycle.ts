@@ -42,6 +42,10 @@ export class InvocationLifecycle {
   // telemetry finishes must not turn it into an abandoned result.
   checkpointedExecutionResult?: DurableExecutionInvocationOutput;
 
+  // The response is fully prepared and only instrumentation cleanup remains.
+  // Cleanup expiry must preserve the same outcome already reported to plugins.
+  preparedTerminalResponse?: DurableExecutionInvocationOutput;
+
   // A withdrawn checkpoint token cannot be retried. Preserve the service's
   // suspension even if an already-entered telemetry hook outlives the budget.
   serviceRequestedSuspension = false;

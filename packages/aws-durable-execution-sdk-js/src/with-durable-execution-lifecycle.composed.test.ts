@@ -7,7 +7,10 @@ import type {
   DurableExecutionHandler,
 } from "./types";
 import { InvocationStatus } from "./types/core";
-import type { DurableInstrumentationPlugin } from "./types/plugin";
+import type {
+  DurableInstrumentationPlugin,
+  InvocationEndInfo,
+} from "./types/plugin";
 import type {
   CheckpointDurableExecutionRequest,
   CheckpointDurableExecutionResponse,
@@ -269,6 +272,165 @@ describe("invocation-owned lifecycle through the public wrapper", () => {
         expect.objectContaining({ status: "PENDING" }),
       );
     }
+  });
+
+  it.each(["success", "failure"] as const)(
+    "preserves selected terminal %s while cleanup exceeds the deadline, including replay",
+    async (outcome) => {
+      const store = recorder();
+      const completed = jest.fn(async () => ({ value: "saved" }));
+      const customerError = new Error("selected customer failure");
+      let remaining = 1000;
+      let release = deferred();
+      let captured!: DurableContext;
+      const firstEnd = jest.fn(async (_info: InvocationEndInfo) => {
+        remaining = 0;
+        await release.promise;
+      });
+      const secondEnd = jest.fn();
+      const handler = withDurableExecution(
+        async (_event, ctx) => {
+          captured = ctx;
+          const value = await ctx.step("completed", completed);
+          if (outcome === "failure") throw customerError;
+          return value;
+        },
+        {
+          durableExecutionClient: store.client,
+          plugins: [
+            { onInvocationEnd: firstEnd },
+            { onInvocationEnd: secondEnd },
+          ],
+        },
+      );
+
+      for (let invocation = 0; invocation < 2; invocation++) {
+        remaining = 1000;
+        release = deferred();
+        const result = handler(input([...store.operations.values()]), {
+          ...runtime(),
+          awsRequestId: `cleanup-${invocation}`,
+          getRemainingTimeInMillis: () => remaining,
+        }).then(
+          (value) => value,
+          (error: unknown) => error,
+        );
+        try {
+          await tickUntil(() => firstEnd.mock.calls.length === invocation + 1);
+          if (outcome === "success") {
+            expect(await result).toEqual({
+              Status: InvocationStatus.SUCCEEDED,
+              Result: '{"value":"saved"}',
+            });
+          } else {
+            expect(await result).toMatchObject({
+              Status: InvocationStatus.FAILED,
+              Error: {
+                ErrorType: "Error",
+                ErrorMessage: "selected customer failure",
+              },
+            });
+          }
+          for (const ended of [firstEnd, secondEnd]) {
+            expect(ended).toHaveBeenCalledTimes(invocation + 1);
+            const info = ended.mock.calls[invocation][0] as InvocationEndInfo;
+            expect(info.status).toBe(
+              outcome === "success" ? "SUCCEEDED" : "FAILED",
+            );
+            expect(info.executionError).toBe(
+              outcome === "failure" ? customerError : undefined,
+            );
+            expect(info.executionResult).toEqual(
+              outcome === "success" ? { value: "saved" } : undefined,
+            );
+          }
+          const callsAtReturn = store.calls.length;
+          const lateBody = jest.fn(async () => "forbidden");
+          void captured
+            .step("after-cleanup-expiry", lateBody)
+            .then(() => undefined);
+          release.resolve();
+          await jest.advanceTimersByTimeAsync(10);
+          expect(lateBody).not.toHaveBeenCalled();
+          expect(store.calls).toHaveLength(callsAtReturn);
+          expect(firstEnd).toHaveBeenCalledTimes(invocation + 1);
+          expect(secondEnd).toHaveBeenCalledTimes(invocation + 1);
+        } finally {
+          release.resolve();
+          await jest.advanceTimersByTimeAsync(10);
+          await result;
+        }
+      }
+      expect(completed).toHaveBeenCalledTimes(1);
+      expect(jest.getTimerCount()).toBe(0);
+    },
+  );
+
+  it("does not select a terminal response when serialization consumes the remaining budget", async () => {
+    const store = recorder();
+    let remaining = 1000;
+    const ended = jest.fn();
+    const result = withDurableExecution(
+      async () => ({
+        toJSON() {
+          remaining = 0;
+          return "too late";
+        },
+      }),
+      {
+        durableExecutionClient: store.client,
+        plugins: [{ onInvocationEnd: ended }],
+      },
+    )(input(), { ...runtime(), getRemainingTimeInMillis: () => remaining });
+
+    await expect(result).rejects.toBeInstanceOf(InvocationDeadlineError);
+    expect(ended).toHaveBeenCalledTimes(1);
+    expect(ended).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "RETRYING" }),
+    );
+    expect(store.checkpoint).not.toHaveBeenCalled();
+  });
+
+  it("preserves a prepared configuration failure when cleanup expires", async () => {
+    const store = recorder();
+    let remaining = 1000;
+    const release = deferred();
+    const firstEnd = jest.fn(async (_info: InvocationEndInfo) => {
+      remaining = 0;
+      await release.promise;
+    });
+    const secondEnd = jest.fn();
+    const body = jest.fn(async () => "must not run");
+    const result = withDurableExecution(body, {
+      durableExecutionClient: store.client,
+      pluginsConfig: { childOperationsDepth: -1 },
+      plugins: [{ onInvocationEnd: firstEnd }, { onInvocationEnd: secondEnd }],
+    })(input(), {
+      ...runtime(),
+      getRemainingTimeInMillis: () => remaining,
+    }).then(
+      (value) => value,
+      (error: unknown) => error,
+    );
+    try {
+      await tickUntil(() => firstEnd.mock.calls.length === 1);
+      const selectedError = firstEnd.mock.calls[0][0].executionError;
+      expect(await result).toMatchObject({
+        Status: InvocationStatus.FAILED,
+        Error: { ErrorType: "Error", ErrorMessage: selectedError?.message },
+      });
+      expect(secondEnd).toHaveBeenCalledTimes(1);
+      expect(secondEnd.mock.calls[0][0].status).toBe("FAILED");
+      expect(secondEnd.mock.calls[0][0].executionError).toBe(selectedError);
+      expect(body).not.toHaveBeenCalled();
+      expect(store.checkpoint).not.toHaveBeenCalled();
+    } finally {
+      release.resolve();
+      await jest.advanceTimersByTimeAsync(10);
+      await result;
+    }
+    expect(firstEnd).toHaveBeenCalledTimes(1);
+    expect(secondEnd).toHaveBeenCalledTimes(1);
   });
 
   it("does not start the handler or send a checkpoint with an expired deadline", async () => {
