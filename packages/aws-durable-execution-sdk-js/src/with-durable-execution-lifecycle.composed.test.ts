@@ -689,33 +689,85 @@ describe("invocation-owned lifecycle through the public wrapper", () => {
       await release.promise;
     });
     const ended = jest.fn();
-    const result = withDurableExecution(
-      async () => "x".repeat(6 * 1024 * 1024 + 100),
-      {
-        durableExecutionClient: store.client,
-        plugins: [{ onOperationChange: changed, onInvocationEnd: ended }],
-      },
-    )(input(), runtime(1000));
-    await tickUntil(() => changed.mock.calls.length === 1);
-    expect(store.calls[0].Updates?.[0]).toMatchObject({
+    const output = {
+      marker: "oversized-output",
+      payload: "x".repeat(6 * 1024 * 1024 + 100),
+    };
+    const result = withDurableExecution(async () => output, {
+      durableExecutionClient: store.client,
+      plugins: [{ onOperationChange: changed, onInvocationEnd: ended }],
+    })(input(), runtime(1000));
+    try {
+      await tickUntil(() => changed.mock.calls.length === 1);
+      expect(store.calls[0].Updates?.[0]).toMatchObject({
+        Type: OperationType.EXECUTION,
+        Action: "SUCCEED",
+      });
+      await jest.advanceTimersByTimeAsync(1000);
+      expect(await result).toEqual({
+        Status: InvocationStatus.SUCCEEDED,
+        Result: "",
+      });
+      expect(ended).toHaveBeenCalledTimes(1);
+      expect(ended).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: "SUCCEEDED",
+          executionError: undefined,
+        }),
+      );
+      // Check identity without printing a multi-megabyte payload on failure.
+      expect(ended.mock.calls[0][0].executionResult === output).toBe(true);
+    } finally {
+      release.resolve();
+      await jest.advanceTimersByTimeAsync(10);
+    }
+    expect(ended).toHaveBeenCalledTimes(1);
+    expect(store.calls).toHaveLength(1);
+  });
+
+  it("does not expose an oversized result before checkpoint acknowledgement", async () => {
+    const store = recorder();
+    const release = deferred<CheckpointDurableExecutionResponse>();
+    store.checkpoint.mockReturnValue(release.promise);
+    const changed = jest.fn();
+    const ended = jest.fn();
+    const output = {
+      marker: "not-acknowledged",
+      payload: "x".repeat(6 * 1024 * 1024 + 100),
+    };
+    const outcome = withDurableExecution(async () => output, {
+      durableExecutionClient: store.client,
+      plugins: [{ onOperationChange: changed, onInvocationEnd: ended }],
+    })(input(), runtime(1000)).then(
+      (value) => value,
+      (error: unknown) => error,
+    );
+    await tickUntil(() => store.checkpoint.mock.calls.length === 1);
+    expect(store.checkpoint.mock.calls[0][0].Updates?.[0]).toMatchObject({
       Type: OperationType.EXECUTION,
       Action: "SUCCEED",
     });
-    await jest.advanceTimersByTimeAsync(1000);
-    expect(await result).toEqual({
-      Status: InvocationStatus.SUCCEEDED,
-      Result: "",
-    });
-    release.resolve();
-    await jest.advanceTimersByTimeAsync(10);
+    try {
+      await jest.advanceTimersByTimeAsync(1000);
+      expect(await outcome).toBeInstanceOf(InvocationDeadlineError);
+      expect(ended).toHaveBeenCalledTimes(1);
+      expect(ended.mock.calls[0][0].status).toBe("RETRYING");
+      expect("executionResult" in ended.mock.calls[0][0]).toBe(false);
+      expect(changed).not.toHaveBeenCalled();
+      expect(store.checkpoint.mock.calls[0][2]?.abortSignal?.aborted).toBe(
+        true,
+      );
+    } finally {
+      release.resolve({
+        CheckpointToken: "late-token",
+        NewExecutionState: undefined,
+      });
+      await jest.advanceTimersByTimeAsync(10);
+    }
     expect(ended).toHaveBeenCalledTimes(1);
-    expect(ended).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: "SUCCEEDED",
-        executionError: undefined,
-      }),
-    );
-    expect(store.calls).toHaveLength(1);
+    expect("executionResult" in ended.mock.calls[0][0]).toBe(false);
+    expect(changed).not.toHaveBeenCalled();
+    expect(store.checkpoint).toHaveBeenCalledTimes(1);
   });
 
   it("preserves service-requested suspension when invocation-end exceeds its deadline", async () => {

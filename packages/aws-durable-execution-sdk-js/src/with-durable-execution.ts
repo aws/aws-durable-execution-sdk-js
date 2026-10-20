@@ -98,6 +98,7 @@ async function runHandler<
   const lifecycle = executionContext.invocationLifecycle;
   lifecycle?.onDispose(() => checkpointManager.dispose());
   let preparedTerminalEnd: InvocationEndInfo | undefined;
+  let oversizedExecutionResult: unknown;
   const endInvocation = async (
     info: InvocationEndInfo,
     terminalResponse?: DurableExecutionInvocationOutput,
@@ -156,6 +157,10 @@ async function runHandler<
     plugin.endInvocationOnDeadline?.({
       ...invocationBaseInfo,
       ...selectedEnd,
+      ...(status === PluginInvocationStatus.SUCCEEDED &&
+      lifecycle.checkpointedExecutionResult
+        ? { executionResult: oversizedExecutionResult }
+        : {}),
       operations: toOperationInfoMap(executionContext._stepData),
       status,
       executionError:
@@ -432,6 +437,9 @@ async function runHandler<
 
           // Create a checkpoint to save the large result
           const stepId = `execution-result-${Date.now()}`;
+          // ACK is published before state-change hooks finish. Keep the original
+          // value for deadline End metadata, gated on that acknowledgement above.
+          oversizedExecutionResult = result;
 
           try {
             // Reports whether the service accepted the update rather than waiting for a
