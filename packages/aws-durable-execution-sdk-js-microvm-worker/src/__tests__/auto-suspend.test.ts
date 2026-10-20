@@ -723,6 +723,29 @@ describe("auto-suspend when idle", () => {
       expect(microvms.suspended).toEqual(["mvm-1", "mvm-1"]);
     });
 
+    it("keeps the 30 seconds after a resume hook that arrived during the refused call", async () => {
+      // The resume hook came before the refusal for now. So the refusal
+      // decides the next idle time. The worker can start that idle time
+      // when the call ends, after the refusal is handled. The bound then
+      // still applies.
+      const microvms = new FakeMicrovmsClient();
+      microvms.failure = refusal;
+      microvms.hold = true;
+      const worker = start(microvms);
+
+      await runHook(worker, IDLE_SECONDS);
+      await advance(IDLE_MS);
+      expect(await resumeHook(worker)).toBe(200);
+      microvms.finish();
+      await advance(0);
+      microvms.hold = false;
+
+      await advance(GRACE_MS - 1);
+      expect(microvms.suspended).toEqual(["mvm-1"]);
+      await advance(1);
+      expect(microvms.suspended).toEqual(["mvm-1", "mvm-1"]);
+    });
+
     it("uses the normal idle time after a job that ran across the refused call", async () => {
       // The resume hook during the call ends the refusal, so the job starts
       // during the call. The call is refused for now while the job runs. So
