@@ -267,7 +267,7 @@ describe("wrapper recovery and callback ownership", () => {
 
   it.each(
     ["native", "wrapper-thenable", "callback-thenable"].flatMap((form) =>
-      [0, 1, 2].map((ticks) => ({ form, ticks })),
+      [0, 1, 2, 3, 4, 5].map((ticks) => ({ form, ticks })),
     ),
   )(
     "preserves main's native await depth in outer wrappers (form=$form, callbackTicks=$ticks)",
@@ -302,7 +302,7 @@ describe("wrapper recovery and callback ownership", () => {
         [{ wrapOperationAttemptFn: outer }, { wrapOperationAttemptFn: inner }],
         body,
       );
-      if (ticks === 2 && form !== "wrapper-thenable") {
+      if (ticks >= (form === "wrapper-thenable" ? 4 : 2)) {
         await expect(value).resolves.toBe("override");
       } else {
         await expect(value).rejects.toBe(original);
@@ -310,6 +310,95 @@ describe("wrapper recovery and callback ownership", () => {
       expect(body).toHaveBeenCalledTimes(1);
       expect(outer).toHaveBeenCalledTimes(1);
       expect(inner).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(
+    [1, 2, 3].flatMap((layers) =>
+      [layers + 3, layers + 4].map((ticks) => ({ layers, ticks })),
+    ),
+  )(
+    "preserves adopted PromiseLike await depth (layers=$layers, callbackTicks=$ticks)",
+    async ({ layers, ticks }) => {
+      const original = new Error("customer failure");
+      const body = jest.fn(async () => {
+        for (let i = 0; i < ticks; i++) await 0;
+        throw original;
+      });
+      const then = jest.fn((resolve: (value: unknown) => unknown) =>
+        resolve(Promise.resolve("override")),
+      );
+      const inner = jest.fn((_info, next: CustomerFn) => {
+        void (next() as Promise<unknown>).catch(() => undefined);
+        // biome-ignore lint/suspicious/noThenProperty: Adoption must preserve the outer await's ordering without a second source subscription.
+        return { then };
+      });
+      const outers = Array.from({ length: layers }, () =>
+        jest.fn(async (_info, next: CustomerFn) => await next()),
+      );
+      const value = run(
+        [...outers, inner].map((wrapOperationAttemptFn) => ({
+          wrapOperationAttemptFn,
+        })),
+        body,
+      );
+      if (ticks === layers + 3) await expect(value).rejects.toBe(original);
+      else await expect(value).resolves.toBe("override");
+      expect(then).toHaveBeenCalledTimes(1);
+      expect(body).toHaveBeenCalledTimes(1);
+      expect(inner).toHaveBeenCalledTimes(1);
+      for (const outer of outers) expect(outer).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(["await", "return-mutated", "throw", "await-mutated"])(
+    "observes a wrapper PromiseLike once and protects recovery from outer %s",
+    async (mode) => {
+      const body = jest.fn(async () => "body");
+      const then = jest.fn(function (
+        this: unknown,
+        resolve: (value: unknown) => unknown,
+        reject: (error: unknown) => unknown,
+      ) {
+        expect(this).toBe(source);
+        return transformed.then(resolve, reject);
+      });
+      // biome-ignore lint/suspicious/noThenProperty: The source must only be subscribed once, even when an outer wrapper fails.
+      const source = { then };
+      let transformed: Promise<unknown>;
+      const inner = jest.fn((_info, next: CustomerFn) => {
+        transformed = (next() as Promise<unknown>).then(
+          (value) => `inner:${value}`,
+        );
+        return source;
+      });
+      const outer = jest.fn((_info, next: CustomerFn) => {
+        const exposed = next();
+        if (mode === "throw") throw new Error("outer plugin failure");
+        if (mode !== "await") {
+          // biome-ignore lint/suspicious/noThenProperty: A broken outer wrapper must not corrupt the private cached outcome.
+          Object.defineProperty(exposed, "then", {
+            get() {
+              throw new Error("mutated outer observation");
+            },
+          });
+        }
+        if (mode === "return-mutated") return exposed;
+        return (async () => await exposed)();
+      });
+      await expect(
+        run(
+          [
+            { wrapOperationAttemptFn: outer },
+            { wrapOperationAttemptFn: inner },
+          ],
+          body,
+        ),
+      ).resolves.toBe("inner:body");
+      expect(then).toHaveBeenCalledTimes(1);
+      expect(body).toHaveBeenCalledTimes(1);
+      expect(inner).toHaveBeenCalledTimes(1);
+      expect(outer).toHaveBeenCalledTimes(1);
     },
   );
 

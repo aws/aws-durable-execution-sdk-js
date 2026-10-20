@@ -204,12 +204,14 @@ describe.each(
 );
 
 it.each(
-  [0, 1, 2].flatMap((ticks) =>
-    [false, true].map((outerAwait) => ({ ticks, outerAwait })),
+  [false, true].flatMap((thenable) =>
+    [0, 1, 2, 3, 4, 5].flatMap((ticks) =>
+      [false, true].map((outerAwait) => ({ thenable, ticks, outerAwait })),
+    ),
   ),
 )(
-  "preserves public step override precedence across adjacent microtasks (callbackTicks=$ticks, outerAwait=$outerAwait)",
-  async ({ ticks, outerAwait }) => {
+  "preserves public step override precedence across adjacent microtasks (thenable=$thenable, callbackTicks=$ticks, outerAwait=$outerAwait)",
+  async ({ thenable, ticks, outerAwait }) => {
     const original = new Error("step customer failure");
     const body = jest.fn(async () => {
       for (let i = 0; i < ticks; i++) await 0;
@@ -238,7 +240,17 @@ it.each(
           {
             wrapOperationAttemptFn(_info, next) {
               void (next() as Promise<unknown>).catch(() => undefined);
-              return Promise.resolve("override");
+              const override = Promise.resolve("override");
+              if (!thenable) return override;
+              return {
+                // biome-ignore lint/suspicious/noThenProperty: A wrapper can return a PromiseLike that forwards a native promise.
+                then(
+                  resolve: (value: unknown) => unknown,
+                  reject: (error: unknown) => unknown,
+                ) {
+                  return override.then(resolve, reject);
+                },
+              };
             },
             onOperationAttemptEnd: attemptEnd,
           },
@@ -253,7 +265,7 @@ it.each(
       },
     );
     const output = await handler(event, context);
-    if (ticks === 0 || (outerAwait && ticks === 1)) {
+    if (ticks < (outerAwait ? (thenable ? 4 : 2) : 1)) {
       expect(output).toMatchObject({
         Status: "FAILED",
         Error: { ErrorMessage: original.message },

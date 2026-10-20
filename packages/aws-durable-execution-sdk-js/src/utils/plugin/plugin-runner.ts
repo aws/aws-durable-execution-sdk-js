@@ -47,19 +47,33 @@ function observeCallbackResult(
     }
   }
   const method = typeof then === "function" ? then : nativePromiseThen;
+  let resolveSource: ((value: unknown) => void) | undefined;
+  let rejectSource: ((error: unknown) => void) | undefined;
+  const source = isPromise
+    ? (value as Promise<CallbackResult>)
+    : new Promise<CallbackResult>((resolve, reject) => {
+        resolveSource = resolve;
+        rejectSource = reject;
+      });
+  // A PromiseLike await has one assimilation reaction before the consumer
+  // resumes. Keep it separate from adopted-settlement tracking and recovery.
+  const sourcePromise = isPromise ? source : source.then((result) => result);
+  if (!isPromise) void sourcePromise.catch(() => undefined);
   return {
     asynchronous: true,
-    sourcePromise: isPromise ? (value as Promise<CallbackResult>) : undefined,
+    sourcePromise,
     promise: new Promise((resolve, reject) => {
       // Retain the first resolution choice, ignoring later resolve/reject/throw.
       // An adopted thenable must finish before its outcome takes precedence.
       let resolutionChosen = false;
       const fulfillResult = (result: unknown) => {
         onFulfilled?.();
+        resolveSource?.(result);
         resolve(result);
       };
       const rejectResult = (error: unknown) => {
         onRejected?.(error);
+        rejectSource?.(error);
         reject(error);
       };
       const fulfill = (result: unknown) => {
@@ -76,7 +90,7 @@ function observeCallbackResult(
           try {
             const adoptedThen = (result as { then?: unknown }).then;
             if (typeof adoptedThen === "function") {
-              const adoption = new Promise((resolveAdopted) => {
+              const adopt = (resolveAdopted: (value: unknown) => void) => {
                 resolveAdopted({
                   // biome-ignore lint/suspicious/noThenProperty: Preserve one captured then read and its original receiver during native assimilation.
                   then(
@@ -89,7 +103,11 @@ function observeCallbackResult(
                     ]);
                   },
                 });
-              });
+              };
+              // Reuse the same captured subscription for the exposed source
+              // and private settlement tracking; adopted then runs only once.
+              const adoption = isPromise ? new Promise(adopt) : source;
+              if (resolveSource) adopt(resolveSource);
               void adoption.then(fulfillResult, rejectResult);
               return;
             }
@@ -203,8 +221,8 @@ export function createPluginRunner(
         if (!outcome.asynchronous) return outcome.value;
         if (!exposedPromise) {
           if (outcome.sourcePromise) {
-            // Healthy outer wrappers await the original native result, without
-            // SDK reaction hops that could change override/error precedence.
+            // Outer wrappers await the native result or PromiseLike assimilation
+            // without settlement/recovery hops changing error precedence.
             // The separately observed outcome remains private for recovery.
             exposedPromise = outcome.sourcePromise;
           } else {
@@ -249,8 +267,8 @@ export function createPluginRunner(
             const fallback = nextOnce();
             return fallback.asynchronous ? fallback.promise : fallback.value;
           });
-          // An outer wrapper may use the original native result directly. Keep
-          // its private recovery observed even when that wrapper short-circuits.
+          // An outer wrapper awaits the original result or its PromiseLike
+          // assimilation, without private settlement or recovery reactions.
           void promise.catch(() => undefined);
           return {
             asynchronous: true,
