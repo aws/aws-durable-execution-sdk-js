@@ -655,3 +655,131 @@ def test_case_only_recovery_does_not_retire_other_run_quarantine(delayed_executi
     assert stopped == ["accepted"]
     assert quarantine.read_text() == original
     assert not list((output / "quarantine").glob("*.json"))
+
+
+@pytest.mark.parametrize("entrypoint", ["settle", "settle-case"])
+def test_failed_standalone_settlement_can_be_recovered_by_verified_whole_run(
+    delayed_execution, monkeypatch, entrypoint
+):
+    import json
+    import sys
+
+    import deploy
+
+    cloud, stopped, _listings, output = delayed_execution
+    cloud.verify = lambda: None
+    (output / "manifest.json").write_text(json.dumps(cloud.manifest))
+    monkeypatch.setattr(deploy, "ARTIFACTS", output)
+    monkeypatch.setattr(driver, "Cloud", lambda _manifest: cloud)
+    monkeypatch.setattr(sys, "argv", ["deploy.py", entrypoint, "--markers", "invoked-case"])
+    quiesce = cloud.quiesce
+
+    def unavailable(*_args, **_kwargs):
+        raise CollectionError("standalone settlement failed")
+
+    cloud.quiesce = unavailable
+    with pytest.raises(CollectionError, match="standalone settlement failed"):
+        deploy.main()
+    quarantine = output / "quarantine.json"
+    pending = json.loads(quarantine.read_text())
+    assert pending == {"run": "run", "error": "standalone settlement failed"}
+    assert not list((output / "quarantine").glob("*.json"))
+
+    cloud.quiesce = quiesce
+    monkeypatch.setattr(sys, "argv", ["deploy.py", "settle"])
+    deploy.main()
+    assert stopped == ["accepted"]
+    assert all(item["settled"] for item in cloud.items)
+    assert not quarantine.exists()
+    archives = list((output / "quarantine").glob("*.json"))
+    assert len(archives) == 1
+    recovery = json.loads(archives[0].read_text())
+    assert recovery["quarantine"] == pending
+    samples = json.loads((output / recovery["recovery"]["quiescence"]).read_text())["samples"]
+    assert samples[-1]["probeStart"]["monotonic"] - samples[-4]["probeEnd"]["monotonic"] >= 5
+
+
+@pytest.mark.parametrize("entrypoint", ["settle", "settle-case"])
+@pytest.mark.parametrize("owner", ["run", "another-run", None])
+def test_failed_standalone_settlement_preserves_existing_owner_and_markers(
+    delayed_execution, monkeypatch, entrypoint, owner
+):
+    import json
+    import sys
+
+    import deploy
+
+    cloud, _stopped, _listings, output = delayed_execution
+    pending = {"markers": ["invoked-case"], "state": "settling"}
+    if owner is not None:
+        pending["run"] = owner
+    quarantine = output / "quarantine.json"
+    quarantine.write_text(json.dumps(pending))
+    (output / "manifest.json").write_text(json.dumps(cloud.manifest))
+
+    def unavailable():
+        raise CollectionError("configuration unavailable")
+
+    cloud.verify = unavailable
+    monkeypatch.setattr(deploy, "ARTIFACTS", output)
+    monkeypatch.setattr(driver, "Cloud", lambda _manifest: cloud)
+    monkeypatch.setattr(sys, "argv", ["deploy.py", entrypoint])
+    with pytest.raises(CollectionError, match="configuration unavailable"):
+        deploy.main()
+    expected = {**pending, "error": "configuration unavailable"}
+    assert json.loads(quarantine.read_text()) == expected
+    cloud.settle_run()
+    if owner == "run":
+        assert not quarantine.exists()
+    else:
+        assert json.loads(quarantine.read_text()) == expected
+        assert not list((output / "quarantine").glob("*.json"))
+
+
+@pytest.mark.parametrize("entrypoint", ["settle", "settle-case"])
+@pytest.mark.parametrize("manifest", [None, "{", "{}", '{"run": ""}', '{"run": null}'])
+def test_failed_standalone_settlement_without_loaded_owner_remains_unowned(
+    tmp_path, monkeypatch, entrypoint, manifest
+):
+    import json
+    import sys
+
+    import deploy
+
+    def unavailable(_manifest):
+        raise CollectionError("configuration unavailable")
+
+    if manifest is not None:
+        (tmp_path / "manifest.json").write_text(manifest)
+    monkeypatch.setattr(deploy, "ARTIFACTS", tmp_path)
+    monkeypatch.setattr(driver, "Cloud", unavailable)
+    monkeypatch.setattr(sys, "argv", ["deploy.py", entrypoint])
+    with pytest.raises((OSError, ValueError, CollectionError)):
+        deploy.main()
+    assert "run" not in json.loads((tmp_path / "quarantine.json").read_text())
+
+
+@pytest.mark.parametrize("unreadable", ["{", "[]"])
+def test_settlement_failure_does_not_replace_unreadable_existing_ownership(
+    delayed_execution, monkeypatch, unreadable
+):
+    import json
+    import sys
+
+    import deploy
+
+    cloud, _stopped, _listings, output = delayed_execution
+    (output / "manifest.json").write_text(json.dumps(cloud.manifest))
+    quarantine = output / "quarantine.json"
+    quarantine.write_text(unreadable)
+
+    def unavailable():
+        raise CollectionError("configuration unavailable")
+
+    cloud.verify = unavailable
+    monkeypatch.setattr(deploy, "ARTIFACTS", output)
+    monkeypatch.setattr(driver, "Cloud", lambda _manifest: cloud)
+    monkeypatch.setattr(sys, "argv", ["deploy.py", "settle"])
+    with pytest.raises(CollectionError, match="configuration unavailable"):
+        deploy.main()
+    assert quarantine.read_text() == unreadable

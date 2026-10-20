@@ -450,6 +450,7 @@ def main():
     parser.add_argument("--concurrency", type=int, choices=[2], default=2)
     parser.add_argument("--markers", default="")
     args = parser.parse_args()
+    manifest = None
     try:
         if args.command == "build":
             build()
@@ -477,8 +478,20 @@ def main():
         )
         if args.command in {"settle", "settle-case"}:
             quarantine = ARTIFACTS / "quarantine.json"
-            previous = json.loads(quarantine.read_text()) if quarantine.exists() else {}
-            save(quarantine, {**previous, "error": str(error)})
+            if quarantine.exists():
+                try:
+                    previous = json.loads(quarantine.read_text())
+                except (OSError, ValueError):
+                    # Keep unreadable ownership blocked and preserve the original error.
+                    previous = None
+            else:
+                previous = {}
+                run = manifest.get("run") if isinstance(manifest, dict) else None
+                if isinstance(run, str) and run.strip():
+                    previous["run"] = run
+            # Never adopt an existing quarantine whose owner is missing or belongs to another run.
+            if isinstance(previous, dict):
+                save(quarantine, {**previous, "error": str(error)})
         raise
 
 
