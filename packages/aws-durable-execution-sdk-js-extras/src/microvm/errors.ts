@@ -62,7 +62,7 @@ export class MicrovmLaunchError extends MicrovmError {
 /**
  * The job could not be delivered over HTTP: the endpoint stayed unavailable
  * after all retries, the auth token was refused, or the route answered with a
- * client error such as 404.
+ * client error such as 404, or with a redirect.
  *
  * @public
  *
