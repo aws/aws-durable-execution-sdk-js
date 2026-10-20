@@ -61,11 +61,19 @@ export interface LocalDurableTestRunnerSetupParameters {
   /**
    * Whether to enable time skipping using fake timers during test execution.
    *
-   * When set to `true`, the test runner will install fake timers that allow tests
-   * to skip over time-based operations like `setTimeout`, `setInterval`, `context.wait`,
-   * and `context.step` retries without actually waiting for the specified duration.
-   * This significantly speeds up test execution for workflows that involve delays
-   * or timeouts.
+   * When set to `true`, the test runner installs a fake clock. The runner moves that clock
+   * to the end of each `context.wait` and each `context.step` retry delay without waiting
+   * for the delay in real time. It moves the clock only when no invocation is running.
+   * This significantly speeds up test execution for workflows that involve delays.
+   *
+   * While an invocation is running, the fake clock advances with real time. So a timer that
+   * your own code sets, such as `setTimeout` or `setInterval` inside a step or inside a
+   * non-durable invoked function, fires after its delay in real time. To keep such a test
+   * fast, shorten the delay in the test, or use `context.wait` for a durable delay.
+   *
+   * While a non-durable invoked function runs, the clock waits for its result for up to 1 s
+   * of real time. If the function takes longer, a later wait or retry end can be applied
+   * before its result arrives.
    *
    * When set to `false` or undefined, real timers will be used and any time-based
    * operations will execute with their actual delays.
