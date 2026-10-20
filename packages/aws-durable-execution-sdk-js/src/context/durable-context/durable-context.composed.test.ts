@@ -1,7 +1,10 @@
 import { createTestDurableContext } from "../../testing/create-test-durable-context";
 import { DurableExecutionMode } from "../../types";
 import { OperationStatus, OperationType } from "../../types/wire";
-import { runWithContext } from "../../utils/context-tracker/context-tracker";
+import {
+  runWithContext,
+  runWithRootContext,
+} from "../../utils/context-tracker/context-tracker";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
 describe("DurableContext Composed Tests", () => {
@@ -193,6 +196,47 @@ describe("DurableContext Composed Tests", () => {
           DurableExecutionMode.ExecutionMode,
           "root-op", // operation name should be ignored for root
         );
+      });
+
+      it("should use the execution identity of the active context, not of the context that created the logging context", () => {
+        const { context, executionContext } = createTestDurableContext({
+          durableExecutionMode: DurableExecutionMode.ExecutionMode,
+        });
+        const otherExecution = {
+          executionArn: `${executionContext.durableExecutionArn}-other`,
+          requestId: "other-request",
+          tenantId: "other-tenant",
+        };
+
+        const loggingContext = context.getDurableLoggingContext();
+
+        runWithRootContext(otherExecution, () =>
+          runWithContext("1", "root", () => {
+            expect(loggingContext.getDurableLogData()).toEqual({
+              executionArn: otherExecution.executionArn,
+              requestId: otherExecution.requestId,
+              tenantId: otherExecution.tenantId,
+              operationId: hashId("1"),
+            });
+          }),
+        );
+      });
+
+      it("should use the context's own execution identity when the active context records none", () => {
+        const { context, executionContext } = createTestDurableContext({
+          durableExecutionMode: DurableExecutionMode.ExecutionMode,
+        });
+
+        const loggingContext = context.getDurableLoggingContext();
+
+        runWithContext("1", undefined, () => {
+          expect(loggingContext.getDurableLogData()).toEqual({
+            executionArn: executionContext.durableExecutionArn,
+            requestId: executionContext.requestId,
+            tenantId: executionContext.tenantId,
+            operationId: hashId("1"),
+          });
+        });
       });
 
       it("should work without active context", () => {
