@@ -359,7 +359,9 @@ export interface MicrovmWorkerListener {
  *    state, resumes it, and delivers the job again.
  * 5. The refusal ends when the `resume` lifecycle hook arrives, or 30 seconds
  *    after the call returned. The 30-second case covers an image without the
- *    `resume` hook. In both cases the idle time then starts again.
+ *    `resume` hook. In both cases the idle time then starts again. At most
+ *    one call runs at a time. So a `resume` hook or a job end during the call
+ *    starts the idle time when the call ends, not at once.
  * 6. A call that the service rejected on its first attempt, for example for a
  *    missing permission, ends the refusal at once. The MicroVM keeps running,
  *    and the worker does not retry the call. The next job that ends starts
@@ -489,6 +491,13 @@ export function createMicrovmWorkerListener<
   // Set from the moment the idle time ends until the MicroVM runs again.
   // While set, the listener refuses jobs.
   let suspending = false;
+  // Set while the worker's own SuspendMicrovm call runs. At most one call
+  // runs at a time.
+  let suspendCallRunning = false;
+  // Set when the idle time could not start because a call was running, for
+  // example after a resume hook during the call. The idle time then starts
+  // when the call ends.
+  let idleAfterCall = false;
   let graceTimer: NodeJS.Timeout | undefined;
   // Counts the suspend hooks from Lambda. A suspend call of the worker's own
   // that the service rejected must not end a refusal that a suspend hook
@@ -545,6 +554,15 @@ export function createMicrovmWorkerListener<
     ) {
       return;
     }
+    if (suspendCallRunning) {
+      // A resume hook during the call ends the refusal. An idle time started
+      // now could end during the call, and start a second call. If the first
+      // call then failed with a rejection, it would end the refusal while the
+      // second call can still freeze the MicroVM. So the idle time starts
+      // when the call ends.
+      idleAfterCall = true;
+      return;
+    }
     const { idleMs, region, microvmId: target } = autoSuspend;
     idleTimer = setTimeout(() => {
       idleTimer = undefined;
@@ -552,7 +570,8 @@ export function createMicrovmWorkerListener<
       // covers a job that started in the same event loop turn.
       if (jobs.size === 0 && !closed) {
         suspending = true;
-        track(suspendSelf(region, idleMs, target));
+        suspendCallRunning = true;
+        track(suspendSelf(region, idleMs, target).finally(suspendCallEnded));
       }
     }, idleMs);
     // The timer must not keep a test process, or a closed worker, alive.
@@ -563,6 +582,19 @@ export function createMicrovmWorkerListener<
     clearTimeout(idleTimer);
     idleTimer = undefined;
   };
+
+  /**
+   * Marks the SuspendMicrovm call as ended, and starts the idle time that a
+   * resume hook or a job end asked for during the call. startIdleTime checks
+   * again that no job runs and that no refusal is in effect.
+   */
+  function suspendCallEnded(): void {
+    suspendCallRunning = false;
+    if (idleAfterCall) {
+      idleAfterCall = false;
+      startIdleTime();
+    }
+  }
 
   /**
    * Ends the refusal after the grace period, unless the `resume` hook ends it

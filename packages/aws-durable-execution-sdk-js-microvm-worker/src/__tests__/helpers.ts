@@ -23,36 +23,46 @@ export const FORWARDED_HEADERS: IncomingHttpHeaders = {
 
 /**
  * Records SuspendMicrovm calls. `failure` answers every call with an error.
- * With `hold`, each call stays pending until `finish()`.
+ * With `hold`, each call stays pending until `finish()`. `maxRunning` is the
+ * largest number of calls that ran at the same time.
  */
 export class FakeMicrovmsClient {
   readonly suspended: string[] = [];
   failure: Error | undefined;
   hold = false;
+  maxRunning = 0;
   /** The worker must never call it, because the test owns this client. */
   readonly destroy = jest.fn();
-  private pending: (() => void) | undefined;
+  private pending: (() => void)[] = [];
+  private running = 0;
 
   async send(command: unknown): Promise<unknown> {
     if (!(command instanceof SuspendMicrovmCommand)) {
       throw new Error("unexpected command");
     }
     this.suspended.push(command.input.microvmIdentifier as string);
-    if (this.hold) {
-      await new Promise<void>((resolve) => {
-        this.pending = resolve;
-      });
+    this.running++;
+    this.maxRunning = Math.max(this.maxRunning, this.running);
+    try {
+      if (this.hold) {
+        await new Promise<void>((resolve) => {
+          this.pending.push(resolve);
+        });
+      }
+      if (this.failure) {
+        throw this.failure;
+      }
+      return {};
+    } finally {
+      this.running--;
     }
-    if (this.failure) {
-      throw this.failure;
-    }
-    return {};
   }
 
-  /** Lets a held call return. */
+  /** Lets every held call return. */
   finish(): void {
-    this.pending?.();
-    this.pending = undefined;
+    for (const resolve of this.pending.splice(0)) {
+      resolve();
+    }
   }
 
   asClient(): LambdaMicrovmsClient {
