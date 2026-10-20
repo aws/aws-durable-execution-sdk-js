@@ -125,7 +125,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     invoked function for at most 1 s of real time. If the caller finishes without the result, or the context that contains the
     invoke completes without it, the clock no longer waits for it. That includes a durable
     invoked function that is still running. Such an abandoned function keeps running, and its
-    own waits and retries still skip time, but it no longer stops the clock from advancing.
+    own waits and retries still skip time. Like any durable invoked function, each running
+    invocation of it stops the clock for at most 1 s of real time.
     Once the handler returns its final result, the runner applies no further wait or retry end.
     While an invocation is running, the fake clock advances with real time, and an end is
     applied when that time reaches it. Waits also keep completing while an execution is

@@ -11,12 +11,17 @@ function participant(
     busy: boolean;
     pendingWork: boolean;
     deadline: number;
+    invocation: number;
   }> = {},
 ): jest.Mocked<SkipTimeParticipant> & { state: typeof overrides } {
   const state = { ...overrides };
   return {
     state,
     isBusy: jest.fn(() => state.busy ?? false),
+    // A busy participant runs invocation 1 unless the test says otherwise.
+    runningInvocation: jest.fn(() =>
+      state.busy ? (state.invocation ?? 1) : undefined,
+    ),
     hasPendingWork: jest.fn(
       () => state.pendingWork ?? state.deadline !== undefined,
     ),
@@ -214,7 +219,7 @@ describe("SkipTimeCoordinator", () => {
     expect(Date.now()).toBe(3000);
   });
 
-  it("stops counting an abandoned durable child and its descendants", () => {
+  it("stops counting an abandoned durable child and its descendants after the hold time", async () => {
     // The caller abandons the invoke, as when a parallel with minSuccessful 1 completes on
     // another branch. The child, and a grandchild it invoked, still have a step running.
     const caller = participant();
@@ -230,6 +235,11 @@ describe("SkipTimeCoordinator", () => {
     expect(Date.now()).toBe(0);
 
     end();
+    // Detached, the busy child and grandchild hold the clock only for the hold time.
+    expect(Date.now()).toBe(0);
+    await new Promise((resolve) =>
+      setTimeout(resolve, DURABLE_INVOKE_HOLD_MS + 100),
+    );
 
     expect(Date.now()).toBe(3000);
     expect(unrelated.applyDeadline).toHaveBeenCalledWith(3000);
@@ -323,7 +333,7 @@ describe("SkipTimeCoordinator", () => {
     expect(child.onClockAdvanced).not.toHaveBeenCalled();
   });
 
-  it("detaches a runner that an abandoned child invokes later", () => {
+  it("detaches a runner that an abandoned child invokes later", async () => {
     const caller = participant();
     coordinator.register(caller);
     const child = participant();
@@ -337,11 +347,55 @@ describe("SkipTimeCoordinator", () => {
     coordinator.register(participant({ deadline: 3000 }));
 
     coordinator.advance();
+    expect(Date.now()).toBe(0);
+    await new Promise((resolve) =>
+      setTimeout(resolve, DURABLE_INVOKE_HOLD_MS + 100),
+    );
+
+    // Detached, the busy grandchild holds the clock only for the hold time.
+    expect(Date.now()).toBe(3000);
+  });
+
+  it("holds the clock for a busy detached runner's new invocation", async () => {
+    // An abandoned child's live caller can still wait for a callback the child sends.
+    const caller = participant();
+    coordinator.register(caller);
+    const child = participant({ busy: true, invocation: 1 });
+    startInvoke(child, caller)();
+    const other = participant({ deadline: 3000 });
+    coordinator.register(other);
+    await new Promise((resolve) =>
+      setTimeout(resolve, DURABLE_INVOKE_HOLD_MS + 100),
+    );
+    expect(Date.now()).toBe(3000);
+
+    // A wakeup was queued before invocation 1 ended, so the child never looks idle. It
+    // then starts invocation 2, which gets a new hold.
+    child.state.invocation = 2;
+    other.state.deadline = 6000;
+    coordinator.advance();
 
     expect(Date.now()).toBe(3000);
   });
 
-  it("stops counting a durable child when its caller finishes without the result", () => {
+  it("holds the clock while a busy invoked runner's invocation is only queued", async () => {
+    const caller = participant();
+    coordinator.register(caller);
+    const child = participant({ busy: true });
+    // Busy, but no invocation running: one is queued.
+    child.runningInvocation.mockReturnValue(undefined);
+    startInvoke(child, caller);
+    coordinator.register(participant({ deadline: 3000 }));
+
+    coordinator.advance();
+    await new Promise((resolve) =>
+      setTimeout(resolve, DURABLE_INVOKE_HOLD_MS + 100),
+    );
+
+    expect(Date.now()).toBe(0);
+  });
+
+  it("stops counting a durable child when its caller finishes without the result", async () => {
     const caller = participant();
     coordinator.register(caller);
     startInvoke(participant({ busy: true }), caller);
@@ -349,6 +403,9 @@ describe("SkipTimeCoordinator", () => {
     coordinator.register(unrelated);
 
     coordinator.unregister(caller);
+    await new Promise((resolve) =>
+      setTimeout(resolve, DURABLE_INVOKE_HOLD_MS + 100),
+    );
 
     expect(Date.now()).toBe(3000);
   });
