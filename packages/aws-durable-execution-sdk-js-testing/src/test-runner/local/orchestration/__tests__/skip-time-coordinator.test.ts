@@ -1,5 +1,6 @@
 import { Clock, install } from "@sinonjs/fake-timers";
 import {
+  DURABLE_INVOKE_HOLD_MS,
   NON_DURABLE_INVOKE_HOLD_MS,
   SkipTimeCoordinator,
   SkipTimeParticipant,
@@ -247,6 +248,58 @@ describe("SkipTimeCoordinator", () => {
     expect(Date.now()).toBe(1000);
     expect(child.applyDeadline).toHaveBeenCalledWith(1000);
     expect(child.onClockAdvanced).toHaveBeenCalled();
+  });
+
+  it("waits for a busy invoked runner only for the hold time", async () => {
+    // The invoked function runs a step that never settles, and its caller does not wait.
+    const caller = participant();
+    coordinator.register(caller);
+    startInvoke(participant({ busy: true }), caller);
+    coordinator.register(participant({ deadline: 3000 }));
+
+    coordinator.advance();
+    expect(Date.now()).toBe(0);
+
+    await new Promise((resolve) =>
+      setTimeout(resolve, DURABLE_INVOKE_HOLD_MS + 100),
+    );
+
+    expect(Date.now()).toBe(3000);
+  });
+
+  it("starts a new hold each time an invoked runner becomes busy again", async () => {
+    const caller = participant();
+    coordinator.register(caller);
+    const invoked = participant({ busy: true });
+    startInvoke(invoked, caller);
+    const other = participant({ deadline: 3000 });
+    coordinator.register(other);
+    coordinator.advance();
+    await new Promise((resolve) =>
+      setTimeout(resolve, DURABLE_INVOKE_HOLD_MS + 100),
+    );
+    expect(Date.now()).toBe(3000);
+
+    // The invocation ends, and the runner is seen idle. Then a new invocation starts.
+    invoked.state.busy = false;
+    coordinator.advance();
+    invoked.state.busy = true;
+    other.state.deadline = 6000;
+    coordinator.advance();
+
+    expect(Date.now()).toBe(3000);
+  });
+
+  it("still holds the clock for a busy runner that was not invoked", async () => {
+    coordinator.register(participant({ busy: true }));
+    coordinator.register(participant({ deadline: 3000 }));
+
+    coordinator.advance();
+    await new Promise((resolve) =>
+      setTimeout(resolve, DURABLE_INVOKE_HOLD_MS + 100),
+    );
+
+    expect(Date.now()).toBe(0);
   });
 
   it("forgets a detached child once it unregisters", () => {

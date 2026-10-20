@@ -597,6 +597,63 @@ describe("skip-time clock", () => {
     },
   );
 
+  it.each([
+    [
+      "promise.race",
+      (context: DurableContext) =>
+        context.promise.race("race", [
+          context.invoke("stuck", "stuckChild", {}),
+          context.wait("short", { seconds: 1 }),
+        ]),
+    ],
+    [
+      "promise.any",
+      (context: DurableContext) =>
+        context.promise.any("any", [
+          context.invoke("stuck", "stuckChild", {}),
+          context.wait("short", { seconds: 1 }),
+        ]),
+    ],
+    [
+      "a handler that never awaits it",
+      async (context: DurableContext) => {
+        context.invoke("stuck", "stuckChild", {}).then(
+          () => undefined,
+          () => undefined,
+        );
+      },
+    ],
+  ] as const)(
+    "skips time with a durable invoke left running by %s",
+    async (_name, leaveInvokeRunning) => {
+      // The durable invoked function runs a step that never settles, and the handler does
+      // not wait for it. The invoke is not inside a completed context, so nothing detaches
+      // it. The clock waits for each invocation of it only for a bounded real time.
+      const handler = withDurableExecution(
+        async (_event: unknown, context: DurableContext) => {
+          await leaveInvokeRunning(context);
+          const start = await context.step("start", async () => Date.now());
+          await context.wait("later", { seconds: HOUR_SECONDS });
+          const end = await context.step("end", async () => Date.now());
+          return { start, end };
+        },
+      );
+      const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+      runner.registerDurableFunction(
+        "stuckChild",
+        withDurableExecution(async (_event: unknown, context: DurableContext) =>
+          context.step("never settles", () => new Promise(() => undefined)),
+        ),
+      );
+
+      const { start, end } = await runner
+        .run()
+        .then((result) => result.getResult());
+
+      expectDuration(end - start, HOUR_MS);
+    },
+  );
+
   it("keeps history times in order when the main thread stalls past a callback timeout", async () => {
     // A blocking step stops the main thread's fake clock. Meanwhile the checkpoint server
     // times out the callback and records that time. The events after the stall must not
