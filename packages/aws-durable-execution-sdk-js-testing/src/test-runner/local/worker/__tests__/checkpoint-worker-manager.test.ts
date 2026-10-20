@@ -342,6 +342,7 @@ describe("CheckpointWorkerManager", () => {
         type: "API_REQUEST",
         data: {
           requestId: expect.any(String),
+          clientTimestampMs: expect.any(Number),
           type: ApiType.StartDurableExecution,
           params,
         },
