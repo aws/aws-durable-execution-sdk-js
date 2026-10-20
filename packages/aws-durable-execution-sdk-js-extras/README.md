@@ -108,7 +108,7 @@ A step retry costs one durable operation and one more Lambda invocation. Most fa
 1. **Inside one step attempt.** The AWS SDK client retries throttling and server errors of `RunMicrovm`, `CreateMicrovmAuthToken`, and `TerminateMicrovm`. The request step retries the POST itself: connection errors, 429, and 5xx with a backoff from 250 ms to 4 s, and one 401 or 403 with a new auth token. The endpoint answers this way until the MicroVM's `run` hook returns. This tier ends after `request.retryWindow` (60 seconds by default, between 1 second and 10 minutes), or 10 seconds before the invocation times out.
 2. **The step retry strategy.** When the first tier gives up, the step retries after a longer backoff, outside the invocation. `retryStrategy` replaces the default, which allows 5 attempts. The default retries throttling, server errors, state conflicts, connection failures, and timeouts. It does not retry `ValidationException`, `AccessDeniedException`, `ResourceNotFoundException`, `ServiceQuotaExceededException`, or `InsufficientCapacityException`, because a later attempt fails the same way.
 
-A route that answers another 4xx status fails the operation without a retry.
+A route that answers another 4xx status fails the operation without a retry. So does a redirect, 3xx. The operation does not follow redirects, and the message names the `Location` without its query string. Set the path that the route serves, for example with its trailing slash. A custom `fetch` must honor `init.redirect`.
 
 ### Errors
 
@@ -117,7 +117,7 @@ Every MicroVM failure is a `MicrovmError`. Catch the base class for all of them,
 | Error | When |
 |---|---|
 | `MicrovmLaunchError` | `RunMicrovm` failed after all retries. When the last attempt timed out or lost its connection, the service may have created the MicroVM anyway, and it then runs the job. So running the job again after this error can run it twice. |
-| `MicrovmDeliveryError` | HTTP delivery failed after all retries, or the route answered a 4xx status such as 404. |
+| `MicrovmDeliveryError` | HTTP delivery failed after all retries, or the route answered a 4xx status such as 404, or a redirect. |
 | `MicrovmNotRunningError` | A `MicrovmDeliveryError` of a session job: the session's MicroVM is terminating, terminated, or removed. It is not retried. Only a session that checks the MicroVM state before each job reports it. See [Suspending the MicroVM between jobs](#suspending-the-microvm-between-jobs). |
 | `MicrovmJobFailedError` | The job handler in the MicroVM failed. The message includes the job's error type, and `errorData` is the data that the MicroVM reported. |
 | `MicrovmTimeoutError` | No result arrived within `timeout`, or no heartbeat within `heartbeatTimeout`. A MicroVM that crashed ends this way. |
