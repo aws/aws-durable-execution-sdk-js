@@ -51,20 +51,59 @@ function observeCallbackResult(
     asynchronous: true,
     sourcePromise: isPromise ? (value as Promise<CallbackResult>) : undefined,
     promise: new Promise((resolve, reject) => {
-      // Observe the first settlement directly, before our private promise adds
-      // another reaction. A thenable's later resolve/reject/throw is ignored.
-      let settled = false;
-      const fulfill = (result: unknown) => {
-        if (settled) return;
-        settled = true;
+      // Retain the first resolution choice, ignoring later resolve/reject/throw.
+      // An adopted thenable must finish before its outcome takes precedence.
+      let resolutionChosen = false;
+      const fulfillResult = (result: unknown) => {
         onFulfilled?.();
         resolve(result);
       };
-      const fail = (error: unknown) => {
-        if (settled) return;
-        settled = true;
+      const rejectResult = (error: unknown) => {
         onRejected?.(error);
         reject(error);
+      };
+      const fulfill = (result: unknown) => {
+        if (resolutionChosen) return;
+        resolutionChosen = true;
+        // A native fulfillment is already adopted. A custom thenable's first
+        // resolve call can instead choose another pending thenable: capture
+        // precedence when that adoption settles, not when it is selected.
+        if (
+          method !== nativePromiseThen &&
+          result !== null &&
+          (typeof result === "object" || typeof result === "function")
+        ) {
+          try {
+            const adoptedThen = (result as { then?: unknown }).then;
+            if (typeof adoptedThen === "function") {
+              const adoption = new Promise((resolveAdopted) => {
+                resolveAdopted({
+                  // biome-ignore lint/suspicious/noThenProperty: Preserve one captured then read and its original receiver during native assimilation.
+                  then(
+                    resolveNext: (value: unknown) => void,
+                    rejectNext: (error: unknown) => void,
+                  ) {
+                    Reflect.apply(adoptedThen, result, [
+                      resolveNext,
+                      rejectNext,
+                    ]);
+                  },
+                });
+              });
+              void adoption.then(fulfillResult, rejectResult);
+              return;
+            }
+          } catch (error) {
+            rejectResult(error);
+            return;
+          }
+        }
+        fulfillResult(result);
+      };
+      const fail = (error: unknown) => {
+        if (resolutionChosen) return;
+        resolutionChosen = true;
+        rejectResult(error);
       };
       try {
         Reflect.apply(method, value, [fulfill, fail]);
@@ -140,7 +179,14 @@ export function createPluginRunner(
           // A wrapper may start next() and return its own result without waiting.
           // Retain the callback failure even if that wrapper ignores its promise.
           void promise.catch(() => undefined);
-          return { asynchronous: true, promise };
+          return {
+            asynchronous: true,
+            promise,
+            // Match the callback's one-reaction catch path on main. The
+            // protected observer above is attached before a wrapper can mutate
+            // this exposed promise, so cached recovery stays private.
+            sourcePromise: outcome.promise,
+          };
         }
         return outcome;
       } catch (error) {
@@ -179,9 +225,14 @@ export function createPluginRunner(
             return nextOnce();
           }
           let errorAtSettlement: { error: unknown } | undefined;
-          const outcome = observeCallbackResult(result, () => {
+          const captureError = () => {
             errorAtSettlement = fnError;
-          });
+          };
+          const outcome = observeCallbackResult(
+            result,
+            captureError,
+            captureError,
+          );
           const checkCallback = (value: CallbackResult): CallbackResult => {
             // Later customer rejection must not change an already-chosen
             // wrapper result while our observation/recovery promises settle.
@@ -194,6 +245,7 @@ export function createPluginRunner(
           const promise = outcome.promise.then(checkCallback, () => {
             // The wrapper rejected; run or reuse the inner chain. Outer native
             // wrappers unwind normally before their own boundary recovers.
+            if (errorAtSettlement) throw errorAtSettlement.error;
             const fallback = nextOnce();
             return fallback.asynchronous ? fallback.promise : fallback.value;
           });

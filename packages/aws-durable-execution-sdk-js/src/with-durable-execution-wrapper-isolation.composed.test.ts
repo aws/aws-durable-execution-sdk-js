@@ -268,3 +268,149 @@ it.each(
     expect(attemptEnd).toHaveBeenCalledTimes(1);
   },
 );
+
+it.each([false, true])(
+  "preserves public step customer errors when an outer wrapper settles (rejectOuter=%s)",
+  async (rejectOuter) => {
+    const original = new Error("step customer failure");
+    const body = jest.fn(async () => {
+      await 0;
+      throw original;
+    });
+    const attemptEnd = jest.fn();
+    const handler = withDurableExecution(
+      async (_event, context) =>
+        context.step("work", body, {
+          retryStrategy: () => ({ shouldRetry: false }),
+        }),
+      {
+        plugins: [
+          {
+            async wrapOperationAttemptFn(_info, next) {
+              const value = await next();
+              await 0;
+              if (rejectOuter) throw new Error("outer plugin failure");
+              return value;
+            },
+          },
+          {
+            wrapOperationAttemptFn(_info, next) {
+              void (next() as Promise<unknown>).catch(() => undefined);
+              return Promise.resolve("override");
+            },
+            onOperationAttemptEnd: attemptEnd,
+          },
+        ],
+        durableExecutionClient: {
+          checkpoint: async () => ({
+            CheckpointToken: "token",
+            NewExecutionState: { Operations: [] },
+          }),
+          getExecutionState: async () => ({ Operations: [] }),
+        },
+      },
+    );
+    const output = await handler(event, context);
+    expect(output).toMatchObject({
+      Status: "FAILED",
+      Error: { ErrorMessage: original.message },
+    });
+    expect(body).toHaveBeenCalledTimes(1);
+    expect(attemptEnd).toHaveBeenCalledTimes(1);
+    expect(attemptEnd.mock.calls[0][0].error).toBe(original);
+  },
+);
+
+it.each([1, 3])(
+  "checkpoints the ready step result before a microtask deadline (wrappers=%s)",
+  async (layers) => {
+    const body = jest.fn(() => Promise.resolve("body"));
+    const wrappers = Array.from({ length: layers }, (_, index) =>
+      jest.fn((_info, next: () => unknown) =>
+        index === 0
+          ? Promise.race([next(), Promise.resolve().then(() => "deadline")])
+          : next(),
+      ),
+    );
+    const handler = withDurableExecution(
+      async (_event, context) => context.step("work", body),
+      {
+        plugins: wrappers.map((wrapOperationAttemptFn) => ({
+          wrapOperationAttemptFn,
+        })),
+        durableExecutionClient: {
+          checkpoint: async () => ({
+            CheckpointToken: "token",
+            NewExecutionState: { Operations: [] },
+          }),
+          getExecutionState: async () => ({ Operations: [] }),
+        },
+      },
+    );
+    expect(await handler(event, context)).toEqual({
+      Status: "SUCCEEDED",
+      Result: JSON.stringify("body"),
+    });
+    expect(body).toHaveBeenCalledTimes(1);
+    for (const wrap of wrappers) expect(wrap).toHaveBeenCalledTimes(1);
+  },
+);
+
+it.each([false, true])(
+  "preserves public step failure through pending wrapper adoption (adopted=%s)",
+  async (adopted) => {
+    const original = new Error("step customer failure");
+    const body = jest.fn(async () => {
+      await 0;
+      throw original;
+    });
+    const attemptEnd = jest.fn();
+    const handler = withDurableExecution(
+      async (_event, context) =>
+        context.step("work", body, {
+          retryStrategy: () => ({ shouldRetry: false }),
+        }),
+      {
+        plugins: [
+          {
+            wrapOperationAttemptFn(_info, next) {
+              const pending = Promise.resolve(next()).then(async () => {
+                await 0;
+                throw new Error("adopted plugin failure");
+              });
+              return adopted
+                ? {
+                    // biome-ignore lint/suspicious/noThenProperty: Exercise real pending native-Promise adoption through the public step API.
+                    then(resolve: (value: unknown) => unknown) {
+                      return resolve(pending);
+                    },
+                  }
+                : pending;
+            },
+          },
+          {
+            wrapOperationAttemptFn(_info, next) {
+              void (next() as Promise<unknown>).catch(() => undefined);
+              return Promise.resolve("override");
+            },
+            onOperationAttemptEnd: attemptEnd,
+          },
+        ],
+        durableExecutionClient: {
+          checkpoint: async () => ({
+            CheckpointToken: "token",
+            NewExecutionState: { Operations: [] },
+          }),
+          getExecutionState: async () => ({ Operations: [] }),
+        },
+      },
+    );
+    expect(await handler(event, context)).toMatchObject({
+      Status: "FAILED",
+      Error: { ErrorMessage: original.message },
+    });
+    expect(body).toHaveBeenCalledTimes(1);
+    expect(attemptEnd).toHaveBeenCalledTimes(1);
+    expect(attemptEnd.mock.calls[0][0].error).toBe(original);
+  },
+);

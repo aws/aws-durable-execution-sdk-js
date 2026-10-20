@@ -418,6 +418,152 @@ describe("wrapper recovery and callback ownership", () => {
     expect(body).toHaveBeenCalledTimes(1);
   });
 
+  it.each(
+    [1, 3].flatMap((callbackTicks) =>
+      [false, true].map((rejectOuter) => ({ callbackTicks, rejectOuter })),
+    ),
+  )(
+    "uses the callback error observed at outer fulfillment or rejection (ticks=$callbackTicks, reject=$rejectOuter)",
+    async ({ callbackTicks, rejectOuter }) => {
+      const original = new Error("customer failure");
+      const body = jest.fn(async () => {
+        for (let i = 0; i < callbackTicks; i++) await 0;
+        throw original;
+      });
+      const outer = jest.fn(async (_info, next: CustomerFn) => {
+        const value = await next();
+        await 0;
+        if (rejectOuter) throw new Error("outer plugin failure");
+        return value;
+      });
+      const inner = jest.fn((_info, next: CustomerFn) => {
+        void (next() as Promise<unknown>).catch(() => undefined);
+        return Promise.resolve("override");
+      });
+      const value = run(
+        [{ wrapOperationAttemptFn: outer }, { wrapOperationAttemptFn: inner }],
+        body,
+      );
+      if (callbackTicks === 1) await expect(value).rejects.toBe(original);
+      else await expect(value).resolves.toBe("override");
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(body).toHaveBeenCalledTimes(1);
+      expect(inner).toHaveBeenCalledTimes(1);
+      expect(outer).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(
+    [1, 2, 3].flatMap((layers) =>
+      [0, 1, 2].map((delay) => ({ layers, delay })),
+    ),
+  )(
+    "preserves a ready callback's race against a microtask deadline (layers=$layers, delay=$delay)",
+    async ({ layers, delay }) => {
+      const body = jest.fn(() => {
+        let result = Promise.resolve("body");
+        for (let i = 0; i < delay; i++) result = result.then((value) => value);
+        return result;
+      });
+      const wrappers = Array.from({ length: layers }, (_, index) =>
+        jest.fn((_info, next: CustomerFn) =>
+          index === 0
+            ? Promise.race([next(), Promise.resolve().then(() => "deadline")])
+            : next(),
+        ),
+      );
+      const value = run(
+        wrappers.map((wrapOperationAttemptFn) => ({ wrapOperationAttemptFn })),
+        body,
+      );
+      await expect(value).resolves.toBe(delay === 0 ? "body" : "deadline");
+      expect(body).toHaveBeenCalledTimes(1);
+      for (const wrap of wrappers) expect(wrap).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(
+    [false, true].flatMap((adopted) =>
+      [false, true].map((rejectAdopted) => ({ adopted, rejectAdopted })),
+    ),
+  )(
+    "captures errors when an adopted result actually settles (adopted=$adopted, rejects=$rejectAdopted)",
+    async ({ adopted, rejectAdopted }) => {
+      const original = new Error("customer failure");
+      const body = jest.fn(async () => {
+        await 0;
+        throw original;
+      });
+      let reads = 0;
+      const outer = jest.fn((_info, next: CustomerFn) => {
+        const pending = Promise.resolve(next()).then(async () => {
+          await 0;
+          if (rejectAdopted) throw new Error("adopted plugin failure");
+          return "outer override";
+        });
+        if (!adopted) return pending;
+        // biome-ignore lint/suspicious/noThenProperty: Native adoption must use the captured method once and preserve its receiver.
+        const thenable = Object.defineProperty({}, "then", {
+          get() {
+            reads++;
+            return function (
+              this: unknown,
+              resolve: (value: unknown) => void,
+              reject: (error: unknown) => void,
+            ) {
+              expect(this).toBe(thenable);
+              resolve(pending);
+              reject(new Error("ignored after resolution was selected"));
+              throw new Error("also ignored after resolution was selected");
+            };
+          },
+        });
+        return thenable;
+      });
+      const inner = jest.fn((_info, next: CustomerFn) => {
+        void (next() as Promise<unknown>).catch(() => undefined);
+        return Promise.resolve("override");
+      });
+      const value = run(
+        [{ wrapOperationAttemptFn: outer }, { wrapOperationAttemptFn: inner }],
+        body,
+      );
+      await expect(value).rejects.toBe(original);
+      expect(body).toHaveBeenCalledTimes(1);
+      expect(inner).toHaveBeenCalledTimes(1);
+      expect(outer).toHaveBeenCalledTimes(1);
+      expect(reads).toBe(adopted ? 1 : 0);
+    },
+  );
+
+  it("settles a synchronous thenable's ordinary object before a later callback error", async () => {
+    const original = new Error("customer failure");
+    const chosen = { answer: 42 };
+    const body = jest.fn(async () => {
+      await 0;
+      throw original;
+    });
+    const value = run(
+      [
+        {
+          wrapOperationAttemptFn(_info, next) {
+            void (next() as Promise<unknown>).catch(() => undefined);
+            return {
+              // biome-ignore lint/suspicious/noThenProperty: An ordinary object must not acquire an adoption reaction.
+              then(resolve: (value: unknown) => unknown) {
+                return resolve(chosen);
+              },
+            };
+          },
+        },
+      ],
+      body,
+    );
+    await expect(Promise.resolve(value)).resolves.toBe(chosen);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(body).toHaveBeenCalledTimes(1);
+  });
+
   it("returns a synchronous override without waiting for a started callback", () => {
     const body = jest.fn(() => new Promise(() => {}));
     const value = run(
