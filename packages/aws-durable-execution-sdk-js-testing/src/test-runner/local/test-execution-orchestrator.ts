@@ -69,6 +69,9 @@ export class TestExecutionOrchestrator {
   private runningInvocations = 0;
   private idleWaiters: (() => void)[] = [];
   private settled = false;
+  // A terminal handler response can precede asynchronous history recording.
+  // Its queued callback wakeups must not use that interval to invoke again.
+  private invocationAdmissionClosed = false;
   private resolveExecutionId!: (executionId: ExecutionId) => void;
   private rejectExecutionId!: (err: unknown) => void;
   private readonly executionId: Promise<ExecutionId> = new Promise(
@@ -149,7 +152,7 @@ export class TestExecutionOrchestrator {
       this.scheduler.scheduleFunction(
         () => this.invokeHandler(executionId, deferred.params),
         (err) => {
-          this.executionState.rejectWith(err);
+          this.rejectExecution(err);
         },
       );
     }
@@ -169,6 +172,12 @@ export class TestExecutionOrchestrator {
     for (const waiter of waiters) {
       waiter();
     }
+  }
+
+  private rejectExecution(error: unknown): void {
+    // Failure checkpointing is asynchronous; close admission before queued wakeups run.
+    this.invocationAdmissionClosed = true;
+    this.executionState.rejectWith(error);
   }
 
   private async handleCompletedExecution(
@@ -274,7 +283,7 @@ export class TestExecutionOrchestrator {
             updatedOperationIds: [],
           }),
         (err) => {
-          this.executionState.rejectWith(err);
+          this.rejectExecution(err);
         },
       );
 
@@ -355,7 +364,7 @@ export class TestExecutionOrchestrator {
     } catch (err) {
       // A processing error from the poll loop is sent to this state too. The state has
       // already settled, so this preserves that behaviour whichever path got the update.
-      this.executionState.rejectWith(err);
+      this.rejectExecution(err);
     }
   }
 
@@ -414,7 +423,7 @@ export class TestExecutionOrchestrator {
           err.name === "AbortError"
         )
       ) {
-        this.executionState.rejectWith(err);
+        this.rejectExecution(err);
       }
     }
   }
@@ -469,7 +478,7 @@ export class TestExecutionOrchestrator {
         break;
       case OperationType.CHAINED_INVOKE:
         this.handleInvokeUpdate(update, executionId).catch((err: unknown) => {
-          this.executionState.rejectWith(err);
+          this.rejectExecution(err);
         });
         break;
     }
@@ -521,7 +530,7 @@ export class TestExecutionOrchestrator {
     this.scheduler.scheduleFunction(
       () => this.invokeHandler(executionId),
       (err) => {
-        this.executionState.rejectWith(err);
+        this.rejectExecution(err);
       },
       undefined,
       () => {
@@ -664,7 +673,7 @@ export class TestExecutionOrchestrator {
     this.scheduler.scheduleFunction(
       () => this.invokeHandler(executionId),
       (err) => {
-        this.executionState.rejectWith(err);
+        this.rejectExecution(err);
       },
       undefined,
       () => {
@@ -706,6 +715,7 @@ export class TestExecutionOrchestrator {
     defaultLogger.debug("Resolving execution", {
       update,
     });
+    this.invocationAdmissionClosed = true;
     this.executionState.resolveWith({
       result: update.Payload,
       error: update.Error,
@@ -731,7 +741,7 @@ export class TestExecutionOrchestrator {
     this.scheduler.scheduleFunction(
       () => this.invokeHandler(executionId),
       (err) => {
-        this.executionState.rejectWith(err);
+        this.rejectExecution(err);
       },
       timestamp,
       () =>
@@ -782,6 +792,7 @@ export class TestExecutionOrchestrator {
     executionId: ExecutionId,
     invocationParams?: Omit<InvocationResult, "executionId">,
   ): Promise<void> {
+    if (this.invocationAdmissionClosed || this.settled) return;
     if (this.paused) {
       defaultLogger.debug("Holding back invocation while execution is paused");
       // One held-back invocation stands for any number: each would replay the same state.
@@ -850,6 +861,13 @@ export class TestExecutionOrchestrator {
         value,
       );
 
+      if (
+        value.Status === InvocationStatus.SUCCEEDED ||
+        value.Status === InvocationStatus.FAILED
+      ) {
+        this.invocationAdmissionClosed = true;
+      }
+
       const { event, hasDirtyOperations } =
         await this.invocationTracker.completeInvocation(
           executionId,
@@ -896,7 +914,7 @@ export class TestExecutionOrchestrator {
         this.scheduler.scheduleFunction(
           () => this.invokeHandler(executionId),
           (err) => {
-            this.executionState.rejectWith(err);
+            this.rejectExecution(err);
           },
         );
         return;
@@ -906,7 +924,7 @@ export class TestExecutionOrchestrator {
         !this.scheduler.hasScheduledFunction() &&
         !this.pendingOperations.size
       ) {
-        this.executionState.rejectWith({
+        this.rejectExecution({
           error: {
             ErrorType: "InvalidParameterValueException",
             ErrorMessage:
@@ -916,6 +934,9 @@ export class TestExecutionOrchestrator {
         });
       }
     } catch (err) {
+      // Thrown handler errors reject this local execution below; they do not
+      // schedule an invocation retry. Durable PENDING/retry scheduling is separate.
+      this.invocationAdmissionClosed = true;
       defaultLogger.debug(
         `Handler failed for invocationId=${invocationId}:`,
         err,
@@ -932,7 +953,7 @@ export class TestExecutionOrchestrator {
       );
 
       this.operationStorage.addHistoryEvent(event);
-      this.executionState.rejectWith(err);
+      this.rejectExecution(err);
     }
   }
 }
