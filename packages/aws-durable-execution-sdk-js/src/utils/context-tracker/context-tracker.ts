@@ -7,13 +7,20 @@ import { DurableExecutionMode } from "../../types";
  * The execution that an active context belongs to.
  *
  * Loggers read these values for each log entry. A logger instance can be shared by several
- * executions in one process. So the values must come from the active context, not from the
- * `DurableContext` that configured the logger.
+ * executions in one process, including executions of different handlers. So the values must
+ * come from the active context, not from the `DurableContext` that configured the logger.
  */
 export interface ActiveExecutionIdentity {
   executionArn: string;
   requestId: string;
   tenantId?: string;
+  /**
+   * Returns the log fields that this execution's plugins add. Absent when the handler has no
+   * plugin that adds log fields.
+   */
+  enrichLogContext?: () =>
+    | Record<string, string | number | boolean>
+    | undefined;
 }
 
 interface ContextInfo {

@@ -49,6 +49,8 @@ export interface TestDefinition<ResultType> {
 }
 
 export interface EventSignatureConfig {
+  /** Exact invocation counts for tests with multiple valid execution paths. */
+  invocationCompletedCounts?: readonly number[];
   /**
    * Due to API delays or other conditions, the number of invocations can change.
    * This property sets a threshold where the number of invocations in the actual history
@@ -119,7 +121,7 @@ function countEventSignatures(
   return counts;
 }
 
-function assertEventSignatures(
+export function assertEventSignatures(
   actualEvents: Event[],
   expectedEvents: EventSignature[],
   isTimeSkipping: boolean = false,
@@ -128,7 +130,16 @@ function assertEventSignatures(
   const actualCounts = countEventSignatures(actualEvents, isTimeSkipping);
   const expectedCounts = countEventSignatures(expectedEvents, isTimeSkipping);
 
-  if (eventSignatureConfig?.invocationCompletedDifference) {
+  if (eventSignatureConfig?.invocationCompletedCounts) {
+    const invocationCompletedSignature = JSON.stringify(
+      createEventSignature({ EventType: EventType.InvocationCompleted }),
+    );
+    expect(eventSignatureConfig.invocationCompletedCounts).toContain(
+      actualCounts.get(invocationCompletedSignature) ?? 0,
+    );
+    actualCounts.delete(invocationCompletedSignature);
+    expectedCounts.delete(invocationCompletedSignature);
+  } else if (eventSignatureConfig?.invocationCompletedDifference) {
     const invocationCompletedSignature = JSON.stringify(
       createEventSignature({ EventType: EventType.InvocationCompleted }),
     );

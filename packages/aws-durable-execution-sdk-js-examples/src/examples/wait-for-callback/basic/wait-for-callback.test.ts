@@ -1,5 +1,6 @@
 import {
   InvocationType,
+  ExecutionStatus,
   WaitingOperationStatus,
 } from "@aws/durable-execution-sdk-js-testing";
 import { handler } from "./wait-for-callback";
@@ -8,7 +9,7 @@ import { createTests } from "../../../utils/test-helper";
 createTests({
   handler,
   invocationType: InvocationType.Event,
-  tests: (runner, { assertEventSignatures }) => {
+  tests: (runner, { assertEventSignatures, isCloud }) => {
     it("function completes when callback succeeds - happy case", async () => {
       const executionPromise = runner.run();
 
@@ -44,9 +45,29 @@ createTests({
         },
       });
 
-      expect(execution.getError()).toBeDefined();
+      const error = execution.getError();
+      expect(error).toBeDefined();
 
-      assertEventSignatures(execution, "timed-out");
+      if (isCloud) {
+        expect(execution.getStatus()).toBe(ExecutionStatus.FAILED);
+        expect(error.errorType).toBe("CallbackTimeoutError");
+        // The one-second timeout can arrive in a checkpoint response before
+        // this invocation suspends, or on the invocation after suspension.
+        const invocations = execution.getInvocations();
+        for (const invocation of invocations.slice(0, -1)) {
+          expect(invocation.error).toBeUndefined();
+        }
+        expect(invocations.at(-1)?.error).toMatchObject({
+          errorType: error.errorType,
+          errorMessage: error.errorMessage,
+        });
+      }
+
+      assertEventSignatures(
+        execution,
+        "timed-out",
+        isCloud ? { invocationCompletedCounts: [1, 2] } : undefined,
+      );
     });
   },
 });
