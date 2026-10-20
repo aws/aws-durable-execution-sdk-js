@@ -39,37 +39,31 @@ createTests({
           const stderrLogs = parseLogCalls(stderrSpy.mock.calls);
 
           // Helper function to create expected log structure with correct field ordering
+          // The adapter adds the durable metadata with the same camelCase key
+          // names as the SDK's default logger.
           const createPowertoolsLogExpectation = (
             level: string,
             message: unknown,
-            hasoperation_id = false,
+            operationName?: string,
             attemptCount?: number,
-            extra?: unknown,
             additionalKeys?: Record<string, unknown>,
-          ) => {
-            const expectation: Record<string, unknown> = {
-              sampling_rate: 0,
-              service: "powertools-logger",
-              request_id: expect.any(String),
-              timestamp: expect.any(String),
-              level,
-              execution_arn: expect.any(String),
-              ...(hasoperation_id && {
-                operation_id: expect.any(String),
-              }),
-              ...(attemptCount && {
-                attempt: attemptCount,
-              }),
-              message: util.format(message),
-              ...additionalKeys,
-            };
-
-            if (extra !== undefined) {
-              expectation.extra = extra;
-            }
-
-            return expectation;
-          };
+          ) => ({
+            sampling_rate: 0,
+            service: "powertools-logger",
+            requestId: expect.any(String),
+            timestamp: expect.any(String),
+            level,
+            executionArn: expect.any(String),
+            ...(operationName !== undefined && {
+              operationId: expect.any(String),
+              operationName,
+            }),
+            ...(attemptCount !== undefined && {
+              attempt: attemptCount,
+            }),
+            message: util.format(message),
+            ...additionalKeys,
+          });
 
           // Expected stdout logs (INFO and DEBUG levels)
           const expectedStdoutLogs = [
@@ -93,19 +87,18 @@ createTests({
             createPowertoolsLogExpectation(
               "INFO",
               "Info log from child context",
-              true,
+              "child-context",
             ),
             createPowertoolsLogExpectation(
               "DEBUG",
               "Debug log from child context",
-              true,
+              "child-context",
             ),
             createPowertoolsLogExpectation(
               "INFO",
               "message",
-              true,
+              "direct-object-step",
               1,
-              undefined,
               { stepData: "value", num: 42 },
             ),
           ];
@@ -123,15 +116,16 @@ createTests({
             createPowertoolsLogExpectation(
               "WARN",
               "Warning log from child context",
-              true,
+              "child-context",
             ),
             // Error logging with message in context logger (error is formatted in message and details are attached)
             {
-              request_id: expect.any(String),
+              requestId: expect.any(String),
               timestamp: expect.any(String),
               level: "ERROR",
-              execution_arn: expect.any(String),
-              operation_id: expect.any(String),
+              executionArn: expect.any(String),
+              operationId: expect.any(String),
+              operationName: "child-context",
               message: "Error from child context with Error object:",
               error: {
                 location: expect.any(String),
@@ -144,10 +138,10 @@ createTests({
             },
             // Direct error logging (single parameter - Error becomes structured message)
             {
-              request_id: expect.any(String),
+              requestId: expect.any(String),
               timestamp: expect.any(String),
               level: "ERROR",
-              execution_arn: expect.any(String),
+              executionArn: expect.any(String),
               message: "message",
               sampling_rate: 0,
               error: {
@@ -157,15 +151,16 @@ createTests({
                 stack: expect.any(String),
               },
               attempt: 1,
-              operation_id: expect.any(String),
+              operationId: expect.any(String),
+              operationName: "direct-object-step",
               service: "powertools-logger",
             },
             // Multiple error logging in context
             {
-              request_id: expect.any(String),
+              requestId: expect.any(String),
               timestamp: expect.any(String),
               level: "ERROR",
-              execution_arn: expect.any(String),
+              executionArn: expect.any(String),
               message: "Errors in context:",
               error: {
                 location: expect.any(String),
