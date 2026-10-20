@@ -214,8 +214,8 @@
   // ON THE SEVEN EXACT PINS: @biomejs/biome is pinned exact in the root package.json
   // and in six workspace packages. Nothing else checks that those seven agree. `lint:versions` discovers manifests
   // recursively rather than one level deep, because nested ones exist
-  // (insight-vscode/webview-ui, which has its own `npm ci` and owns the .tsx files
-  // Biome formats, and insight/cdk) and are exactly where a divergent pin would hide. A skew would produce inconsistent
+  // (telemetry-vscode/webview-ui, which has its own `npm ci` and owns the .tsx files
+  // Biome formats, and telemetry/cdk) and are exactly where a divergent pin would hide. A skew would produce inconsistent
   // formatting between `npm run lint` at the root and in a package, with no failure
   // to reveal it, so `lint:versions` asserts they match and runs in CI alongside the
   // other gates. Bump all seven together, or delete the six and rely on hoisting --
@@ -459,7 +459,7 @@
 
       "nursery": {
         // Replaces `@typescript-eslint/explicit-function-return-type`, which the core SDK
-        // and insight configs set to "warn". Note this rule is in Biome's nursery group,
+        // and telemetry configs set to "warn". Note this rule is in Biome's nursery group,
         // so it is NOT covered by semver and may change between minor releases.
         "useExplicitReturnType": "warn",
 
@@ -653,7 +653,7 @@
       // Kebab-case filenames were only ever enforced in the core SDK's `src`, via the
       // local `eslint-plugin-filename-convention` package (now deleted). Keeping the same
       // scope matters: the conformance handlers use snake_case names that are part of the
-      // cross-SDK contract with aws-durable-execution-conformance-tests, and the insight
+      // cross-SDK contract with aws-durable-execution-conformance-tests, and the telemetry
       // packages use camelCase throughout. Neither should be renamed by a lint rule.
       "includes": [
         "packages/aws-durable-execution-sdk-js/src/**/*.ts",
@@ -746,23 +746,23 @@
     },
 
     /**
-     * Structural rules for the Workflow Insight packages.
+     * Structural rules for the Durable Execution Telemetry packages.
      *
      * These exist because the alternative is a convention nobody can enforce. The
-     * refactor that created `@aws/durable-execution-sdk-js-insight-core` was motivated by
+     * refactor that created `@aws/durable-execution-sdk-js-telemetry-core` was motivated by
      * a cross-package relative import that had grown up unnoticed, and review then showed
      * that a host-specific import in shared code was equally invisible: an `electron`
      * import in a core module that no test happened to cover passed every check and every
      * build.
      *
      * Modules that belong to exactly one host: `vscode`, `electron`,
-     * `@modelcontextprotocol/sdk`. Shared code (insight-core) may import none of them;
+     * `@modelcontextprotocol/sdk`. Shared code (telemetry-core) may import none of them;
      * each host may import only its own. This list mirrors `HOST_MODULES` in
-     * packages/aws-durable-execution-sdk-js-insight-core/src/hostModuleScan.ts, which is
+     * packages/aws-durable-execution-sdk-js-telemetry-core/src/hostModuleScan.ts, which is
      * where the tested, authoritative version lives.
      *
      * NOTE ON ENFORCEMENT: these were already gated before this migration -- the
-     * `insight-hosts` job ran `npm run lint` for exactly this purpose (added by #809).
+     * `telemetry-hosts` job ran `npm run lint` for exactly this purpose (added by #809).
      * That step is removed and the dedicated `lint` job (`biome ci`, see
      * .github/workflows/lint.yml) carries them now, so the gate moved rather than
      * appeared (though the `lint` job cannot block a merge until `lint / lint` is in
@@ -771,7 +771,7 @@
      */
     {
       "includes": [
-        "packages/aws-durable-execution-sdk-js-insight-core/**/*.ts"
+        "packages/aws-durable-execution-sdk-js-telemetry-core/**/*.ts"
       ],
       "linter": {
         "rules": {
@@ -780,9 +780,9 @@
               "level": "error",
               "options": {
                 "paths": {
-                  "vscode": "\"vscode\" belongs to a different host process and is not available here. Shared, host-free code belongs in @aws/durable-execution-sdk-js-insight-core; express what you need through the HostPort interface and let each host implement it.",
-                  "electron": "\"electron\" belongs to a different host process and is not available here. Shared, host-free code belongs in @aws/durable-execution-sdk-js-insight-core; express what you need through the HostPort interface and let each host implement it.",
-                  "@modelcontextprotocol/sdk": "\"@modelcontextprotocol/sdk\" belongs to a different host process and is not available here. Shared, host-free code belongs in @aws/durable-execution-sdk-js-insight-core; express what you need through the HostPort interface and let each host implement it."
+                  "vscode": "\"vscode\" belongs to a different host process and is not available here. Shared, host-free code belongs in @aws/durable-execution-sdk-js-telemetry-core; express what you need through the HostPort interface and let each host implement it.",
+                  "electron": "\"electron\" belongs to a different host process and is not available here. Shared, host-free code belongs in @aws/durable-execution-sdk-js-telemetry-core; express what you need through the HostPort interface and let each host implement it.",
+                  "@modelcontextprotocol/sdk": "\"@modelcontextprotocol/sdk\" belongs to a different host process and is not available here. Shared, host-free code belongs in @aws/durable-execution-sdk-js-telemetry-core; express what you need through the HostPort interface and let each host implement it."
                 },
                 "patterns": [
                   {
@@ -791,11 +791,11 @@
                       "electron/**",
                       "@modelcontextprotocol/sdk/**"
                     ],
-                    "message": "This module belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-insight-core."
+                    "message": "This module belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-telemetry-core."
                   },
                   {
                     "group": ["../../**"],
-                    "message": "Do not reach into a sibling package by relative path. Depend on it (e.g. `@aws/durable-execution-sdk-js-insight-core`) and import by name, so the dependency is declared and the boundary is real."
+                    "message": "Do not reach into a sibling package by relative path. Depend on it (e.g. `@aws/durable-execution-sdk-js-telemetry-core`) and import by name, so the dependency is declared and the boundary is real."
                   }
                 ]
               }
@@ -805,7 +805,9 @@
       }
     },
     {
-      "includes": ["packages/aws-durable-execution-sdk-js-insight-mcp/**/*.ts"],
+      "includes": [
+        "packages/aws-durable-execution-sdk-js-telemetry-mcp/**/*.ts"
+      ],
       "linter": {
         "rules": {
           "style": {
@@ -813,8 +815,8 @@
               "level": "error",
               "options": {
                 "paths": {
-                  "vscode": "\"vscode\" belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-insight-core.",
-                  "electron": "\"electron\" belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-insight-core."
+                  "vscode": "\"vscode\" belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-telemetry-core.",
+                  "electron": "\"electron\" belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-telemetry-core."
                 },
                 "patterns": [
                   {
@@ -834,8 +836,8 @@
     },
     {
       "includes": [
-        "packages/aws-durable-execution-sdk-js-insight-vscode/**/*.ts",
-        "packages/aws-durable-execution-sdk-js-insight-vscode/**/*.tsx"
+        "packages/aws-durable-execution-sdk-js-telemetry-vscode/**/*.ts",
+        "packages/aws-durable-execution-sdk-js-telemetry-vscode/**/*.tsx"
       ],
       "linter": {
         "rules": {
@@ -844,8 +846,8 @@
               "level": "error",
               "options": {
                 "paths": {
-                  "electron": "\"electron\" belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-insight-core.",
-                  "@modelcontextprotocol/sdk": "\"@modelcontextprotocol/sdk\" belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-insight-core."
+                  "electron": "\"electron\" belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-telemetry-core.",
+                  "@modelcontextprotocol/sdk": "\"@modelcontextprotocol/sdk\" belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-telemetry-core."
                 },
                 "patterns": [
                   {
@@ -865,7 +867,7 @@
     },
     {
       "includes": [
-        "packages/aws-durable-execution-sdk-js-insight-desktop/**/*.ts"
+        "packages/aws-durable-execution-sdk-js-telemetry-desktop/**/*.ts"
       ],
       "linter": {
         "rules": {
@@ -874,8 +876,8 @@
               "level": "error",
               "options": {
                 "paths": {
-                  "vscode": "\"vscode\" belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-insight-core.",
-                  "@modelcontextprotocol/sdk": "\"@modelcontextprotocol/sdk\" belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-insight-core."
+                  "vscode": "\"vscode\" belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-telemetry-core.",
+                  "@modelcontextprotocol/sdk": "\"@modelcontextprotocol/sdk\" belongs to a different host process and is not available here. Express what you need through the HostPort interface in @aws/durable-execution-sdk-js-telemetry-core."
                 },
                 "patterns": [
                   {
