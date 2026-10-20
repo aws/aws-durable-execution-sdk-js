@@ -16,6 +16,20 @@ import { realSetTimeout } from "../real-timers/real-timers";
 export const NON_DURABLE_INVOKE_HOLD_MS = 1000;
 
 /**
+ * How long, in real time, the clock waits for one running invocation of a durable invoked
+ * function.
+ *
+ * A durable invoked function runs in its own runner. While an invocation of it runs, the
+ * clock does not advance, so the work it does reaches its caller before a later end. But,
+ * as for a non-durable function, the runner cannot see whether the handler still awaits the
+ * invoke. `context.promise.race`, `context.promise.any`, and a handler that never awaits an
+ * invoke all leave it running unobserved. If its step never settles, the clock would never
+ * advance again. So the clock waits for each invocation of it only this long. After that,
+ * the clock may advance while the invocation still runs.
+ */
+export const DURABLE_INVOKE_HOLD_MS = NON_DURABLE_INVOKE_HOLD_MS;
+
+/**
  * One execution's view of the fake clock, as seen by {@link SkipTimeCoordinator}.
  */
 export interface SkipTimeParticipant {
@@ -24,6 +38,12 @@ export interface SkipTimeParticipant {
    * participant is busy, the fake clock is not advanced.
    */
   isBusy(): boolean;
+  /**
+   * A number that identifies the invocation running now, or undefined while none runs.
+   * Each invocation gets a new number. The execution can be busy without one running, while
+   * an invocation is queued to start.
+   */
+  runningInvocation(): number | undefined;
   /**
    * Whether the execution still waits for something outside an invocation: a wait or
    * retry end, a callback, or a durable invoke. False once the execution has finished.
@@ -76,10 +96,22 @@ export class SkipTimeCoordinator {
   >();
 
   private readonly participants = new Set<SkipTimeParticipant>();
+  /**
+   * Executions whose caller no longer waits for them. See {@link detach}. Their waits and
+   * retries still skip time, but they never stop the clock from advancing.
+   */
+  private readonly detached = new Set<SkipTimeParticipant>();
   /** Every invoke between {@link startInvoke} and its `end()`. */
   private readonly invokes = new Set<InvokeHandoff>();
   /** The invoke being started, which a participant registering now belongs to. */
   private startingInvoke: InvokeHandoff | undefined;
+  /** Whether an invoke from a caller that no one waits for is being started. */
+  private startingDetachedInvoke = false;
+  /**
+   * Every invoked function's runner that is still a participant. Each one stops the clock
+   * only for {@link DURABLE_INVOKE_HOLD_MS} of real time per invocation.
+   */
+  private readonly invokedHolds = new Map<SkipTimeParticipant, InvokedHold>();
 
   private constructor(private readonly clock: Clock) {}
 
@@ -94,9 +126,16 @@ export class SkipTimeCoordinator {
   }
 
   register(participant: SkipTimeParticipant): void {
+    if (this.startingDetachedInvoke) {
+      // No one waits for the caller, so no one waits for what it invokes.
+      this.detached.add(participant);
+      this.invokedHolds.set(participant, newHold());
+      return;
+    }
     this.participants.add(participant);
     if (this.startingInvoke && !this.startingInvoke.invoked) {
       this.startingInvoke.invoked = participant;
+      this.invokedHolds.set(participant, newHold());
     }
   }
 
@@ -106,7 +145,9 @@ export class SkipTimeCoordinator {
    * results.
    */
   unregister(participant: SkipTimeParticipant): void {
+    this.forgetInvokedHold(participant);
     this.participants.delete(participant);
+    this.detached.delete(participant);
     for (const invoke of this.invokes) {
       if (invoke.caller === participant) {
         this.deleteInvoke(invoke);
@@ -137,13 +178,17 @@ export class SkipTimeCoordinator {
   } {
     if (!this.participants.has(caller)) {
       // The caller has finished, as when the final checkpoint drain delivers the START of
-      // an invoke the handler did not await. No caller remains to resume with the result,
-      // and nothing would remove the hold once its caller has unregistered.
+      // an invoke the handler did not await. Or no one waits for the caller, because it was
+      // detached. No caller remains to resume with the result, and nothing would remove the
+      // hold once its caller has unregistered. So the invoked runner registers detached.
       let result: Promise<T>;
+      this.startingDetachedInvoke = true;
       try {
         result = start();
       } catch (err) {
         result = Promise.reject(err);
+      } finally {
+        this.startingDetachedInvoke = false;
       }
       return { result, end: () => undefined };
     }
@@ -195,13 +240,126 @@ export class SkipTimeCoordinator {
     };
   }
 
-  /** Stops tracking an invoke. @returns whether it was still tracked */
+  /**
+   * Stops tracking an invoke. The invoked function's runner, and every runner it invoked in
+   * turn, become detached. See {@link detach}.
+   *
+   * An invoke stops being tracked in three cases. Its caller resumes with the result. Its
+   * caller finishes. Or the context that contains the invoke completes without the result,
+   * as when a parallel with `minSuccessful: 1` completes on another branch. In the first
+   * case the invoked function has already finished and unregistered. In the other two, no
+   * caller waits for the invoked function any more, but it can still be running. A durable
+   * invoked function whose step never settles counts as busy forever. So, if it could still
+   * stop the clock, the clock would never advance again, for this execution or any later
+   * one.
+   *
+   * @returns whether the invoke was still tracked
+   */
   private deleteInvoke(invoke: InvokeHandoff): boolean {
     if (invoke.holdTimer) {
       clearTimeout(invoke.holdTimer);
       invoke.holdTimer = undefined;
     }
-    return this.invokes.delete(invoke);
+    const tracked = this.invokes.delete(invoke);
+    if (invoke.invoked) {
+      this.detach(invoke.invoked);
+    }
+    return tracked;
+  }
+
+  /**
+   * Detaches an abandoned execution and the executions it invoked. Unlike
+   * {@link unregister}, this does not advance: the caller of this method advances once it
+   * is done.
+   *
+   * Abandoning an invoke does not cancel the invoked execution, and its live caller can
+   * still depend on what it does later, such as a callback it sends. So a detached execution
+   * is treated like an invoked one. Its waits and retries still take part in choosing the
+   * next end, and it is still told when the clock moves. Each invocation of it stops the
+   * clock for at most {@link DURABLE_INVOKE_HOLD_MS} of real time, so short work in it still
+   * finishes before a later end, and work that never settles cannot stop the clock for good.
+   */
+  private detach(participant: SkipTimeParticipant): void {
+    if (!this.participants.delete(participant)) {
+      return;
+    }
+    this.detached.add(participant);
+    if (!this.invokedHolds.has(participant)) {
+      this.invokedHolds.set(participant, newHold());
+    }
+    for (const invoke of this.invokes) {
+      if (invoke.caller === participant) {
+        this.deleteInvoke(invoke);
+      }
+    }
+  }
+
+  /**
+   * Whether a participant stops the clock now.
+   *
+   * 1. An idle participant does not.
+   * 2. A busy participant that was not invoked always does.
+   * 3. An invoked or detached runner with an invocation queued but not yet running does.
+   *    That invocation starts as soon as the scheduler reaches it.
+   * 4. An invoked or detached runner with an invocation running does, for at most
+   *    {@link DURABLE_INVOKE_HOLD_MS} of real time from the first time this sees that
+   *    invocation. Each new invocation, identified by
+   *    {@link SkipTimeParticipant.runningInvocation}, gets a new hold.
+   */
+  private holdsClock(participant: SkipTimeParticipant): boolean {
+    const hold = this.invokedHolds.get(participant);
+    if (!participant.isBusy()) {
+      if (hold) {
+        this.resetInvokedHold(hold);
+      }
+      return false;
+    }
+    if (!hold) {
+      return true;
+    }
+    const invocation = participant.runningInvocation();
+    if (invocation === undefined) {
+      return true;
+    }
+    if (hold.invocation !== invocation) {
+      this.resetInvokedHold(hold);
+      hold.invocation = invocation;
+    }
+    if (hold.expired) {
+      return false;
+    }
+    if (!hold.timer) {
+      const timer = realSetTimeout(() => {
+        hold.timer = undefined;
+        hold.expired = true;
+        defaultLogger.debug(
+          `An invocation of an invoked function has run for ${DURABLE_INVOKE_HOLD_MS}ms of real time. The fake clock no longer waits for it.`,
+        );
+        this.advance();
+      }, DURABLE_INVOKE_HOLD_MS);
+      // A test can finish while the function still runs. The timer must not keep the
+      // process alive.
+      timer.unref?.();
+      hold.timer = timer;
+    }
+    return true;
+  }
+
+  private resetInvokedHold(hold: InvokedHold): void {
+    if (hold.timer) {
+      clearTimeout(hold.timer);
+      hold.timer = undefined;
+    }
+    hold.expired = false;
+    hold.invocation = undefined;
+  }
+
+  private forgetInvokedHold(participant: SkipTimeParticipant): void {
+    const hold = this.invokedHolds.get(participant);
+    if (hold) {
+      this.resetInvokedHold(hold);
+      this.invokedHolds.delete(participant);
+    }
   }
 
   /**
@@ -210,15 +368,22 @@ export class SkipTimeCoordinator {
    */
   advance(): void {
     const participants = [...this.participants];
-    if (participants.some((participant) => participant.isBusy())) {
+    // Check every participant, not only up to the first that holds the clock: the check
+    // also resets the hold of each invoked runner that is idle now. Detached runners hold
+    // the clock under the same bounded rule.
+    const holding = [...participants, ...this.detached].filter((participant) =>
+      this.holdsClock(participant),
+    );
+    if (holding.length > 0) {
       return;
     }
 
     for (const invoke of this.invokes) {
       if (invoke.invoked) {
         // An invoked function that is idle without pending work has finished, even if it
-        // has not unregistered yet. Its result is on its way back to its caller.
-        if (!invoke.invoked.hasPendingWork()) {
+        // has not unregistered yet. Its result is on its way back to its caller. One that is
+        // still busy here has run past its hold, so it does not stop the clock.
+        if (!invoke.invoked.isBusy() && !invoke.invoked.hasPendingWork()) {
           return;
         }
       } else if (invoke.returned || !invoke.holdExpired) {
@@ -228,9 +393,11 @@ export class SkipTimeCoordinator {
       }
     }
 
+    // Detached executions never stop the clock, but their ends still count.
+    const timed = [...participants, ...this.detached];
     let earliest: { participant: SkipTimeParticipant; deadlineMs: number } =
       undefined as never;
-    for (const participant of participants) {
+    for (const participant of timed) {
       const deadlineMs = participant.earliestDeadline();
       if (
         deadlineMs !== undefined &&
@@ -243,8 +410,10 @@ export class SkipTimeCoordinator {
       return;
     }
 
-    // No invocation is running, so no SDK timer is pending: a tick only moves Date.now()
-    // forward, and fires any timer the test itself has set.
+    // No invocation of a participant is running, so none of its SDK timers is pending: a
+    // tick only moves Date.now() forward, and fires any timer the test itself has set. An
+    // invoked or detached runner past its hold can be running; a tick can fire its timers
+    // early.
     const advanceMs = earliest.deadlineMs - Date.now();
     if (advanceMs > 0) {
       defaultLogger.debug(`Advancing fake clock by ${advanceMs}ms`);
@@ -254,10 +423,24 @@ export class SkipTimeCoordinator {
 
     // Every real timer armed for a later end was computed before the jump, so it would
     // fire too late by the length of the jump. Re-arm them all.
-    for (const participant of participants) {
+    for (const participant of timed) {
       participant.onClockAdvanced();
     }
   }
+}
+
+/** How long an invoked function's runner may still stop the clock. */
+interface InvokedHold {
+  /** The invocation this hold applies to. See {@link SkipTimeParticipant.runningInvocation}. */
+  invocation: number | undefined;
+  /** The real timer that sets `expired`, while that invocation runs. */
+  timer: ReturnType<typeof setTimeout> | undefined;
+  /** Whether that invocation has run past {@link DURABLE_INVOKE_HOLD_MS}. */
+  expired: boolean;
+}
+
+function newHold(): InvokedHold {
+  return { invocation: undefined, timer: undefined, expired: false };
 }
 
 /** One durable invoke tracked by {@link SkipTimeCoordinator.startInvoke}. */
