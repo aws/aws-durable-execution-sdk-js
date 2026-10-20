@@ -439,6 +439,27 @@ function runnerAcrossDeploy(
   return { runner, invocations: () => invocations };
 }
 
+/**
+ * Replaces the launch with a step that checkpoints a fixed result. The result
+ * has the MicroVM fields of a real launch, plus `fields`. So a test controls
+ * the launch checkpoint that every replay reads.
+ */
+function checkpointLaunchAs(fields: Record<string, unknown>): void {
+  jest.spyOn(shared, "launch").mockImplementation((child, scope) =>
+    child.step(
+      `${scope.name}.launch`,
+      async () =>
+        ({
+          microvmId: "mvm-1",
+          endpoint: "mvm-1.lambda-microvm.us-east-1.on.aws",
+          delivery: "http",
+          ...fields,
+        }) as shared.LaunchResult,
+      { subType: MicrovmOperationSubType.LAUNCH },
+    ),
+  );
+}
+
 const idlePolicy = {
   autoResumeEnabled: false,
   maxIdleDurationSeconds: 60,
@@ -454,7 +475,7 @@ describe("microvmSession resume mode", () => {
     ["the MicroVM cannot be suspended", {}, false],
   ])(
     "records the resume mode in the launch checkpoint when %s",
-    async (_label, overrides, resume) => {
+    async (_label, overrides, resumeBeforeDelivery) => {
       const client = new FakeMicrovmsClient();
       const endpoint = recordingEndpoint(client);
       const runner = runnerFor(client, endpoint, async () => "none", {
@@ -471,7 +492,7 @@ describe("microvmSession resume mode", () => {
         microvmId: "mvm-1",
         endpoint: "mvm-1.lambda-microvm.us-east-1.on.aws",
         delivery: "http",
-        resume,
+        resumeBeforeDelivery,
       });
     },
   );
@@ -567,19 +588,10 @@ describe("microvmSession resume mode", () => {
   ])(
     "for a launch checkpoint without a resume mode, %s",
     async (_label, overrides, events) => {
-      // An earlier release checkpointed the launch without `resume`. The
-      // replacement step writes that shape, so every replay reads it.
-      jest.spyOn(shared, "launch").mockImplementation((child, scope) =>
-        child.step(
-          `${scope.name}.launch`,
-          async () => ({
-            microvmId: "mvm-1",
-            endpoint: "mvm-1.lambda-microvm.us-east-1.on.aws",
-            delivery: "http" as const,
-          }),
-          { subType: MicrovmOperationSubType.LAUNCH },
-        ),
-      );
+      // An earlier release checkpointed the launch without
+      // `resumeBeforeDelivery`. The replacement step writes that shape, so
+      // every replay reads it.
+      checkpointLaunchAs({});
       const client = new FakeMicrovmsClient();
       const endpoint = recordingEndpoint(client);
       const runner = runnerFor(client, endpoint, twoJobsWithWait, overrides);
@@ -592,7 +604,52 @@ describe("microvmSession resume mode", () => {
       expect(execution.getStatus()).toBe("SUCCEEDED");
       expect(
         runner.getOperation("pipeline.launch").getStepDetails()?.result,
-      ).not.toHaveProperty("resume");
+      ).not.toHaveProperty("resumeBeforeDelivery");
+      expect(client.events).toEqual(events);
+    },
+  );
+
+  it.each<[unknown, Partial<MicrovmSessionConfig>, string[]]>([
+    [
+      "false",
+      { autoSuspendOnIdle: false },
+      ["request:/first", "request:/second", "terminate"],
+    ],
+    [
+      1,
+      { autoSuspendOnIdle: false },
+      ["request:/first", "request:/second", "terminate"],
+    ],
+    [
+      0,
+      { autoSuspendOnIdle: true },
+      [
+        "get:RUNNING",
+        "request:/first",
+        "get:RUNNING",
+        "request:/second",
+        "terminate",
+      ],
+    ],
+  ])(
+    "follows the current config for a checkpointed resume mode of %p",
+    async (recorded, overrides, events) => {
+      // Only a boolean is a resume mode. A truthy or falsy value of another
+      // type must not decide whether a job checks the MicroVM state.
+      checkpointLaunchAs({ resumeBeforeDelivery: recorded });
+      const client = new FakeMicrovmsClient();
+      const endpoint = recordingEndpoint(client);
+      const runner = runnerFor(client, endpoint, twoJobsWithWait, overrides);
+
+      const executionPromise = runner.run({ payload: {} });
+      await complete(runner, "first", "one");
+      await complete(runner, "second", "two");
+      const execution = await executionPromise;
+
+      expect(execution.getStatus()).toBe("SUCCEEDED");
+      expect(
+        runner.getOperation("pipeline.launch").getStepDetails()?.result,
+      ).toHaveProperty("resumeBeforeDelivery", recorded);
       expect(client.events).toEqual(events);
     },
   );
