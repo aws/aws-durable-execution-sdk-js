@@ -38,7 +38,7 @@ import {
 } from "./types";
 import { log } from "./utils/logger/logger";
 import { createErrorObjectFromError } from "./utils/error-object/error-object";
-import { runWithContext } from "./utils/context-tracker/context-tracker";
+import { runWithRootContext } from "./utils/context-tracker/context-tracker";
 import { createDefaultLogger } from "./utils/logger/default-logger";
 import {
   DurableExecutionConfig,
@@ -263,10 +263,16 @@ async function runHandler<
          */
         let termination: TerminationResponse | undefined;
 
-        const handlerPromise = runWithContext("root", undefined, () =>
-          runInvocationCallback(executionContext, () =>
-            handler(customerHandlerEvent, durableContext),
-          ),
+        const handlerPromise = runWithRootContext(
+          {
+            executionArn: executionContext.durableExecutionArn,
+            requestId: executionContext.requestId,
+            tenantId: executionContext.tenantId,
+          },
+          () =>
+            runInvocationCallback(executionContext, () =>
+              handler(customerHandlerEvent, durableContext),
+            ),
         ).then(
           (result) => {
             lifecycle?.closeAdmission();
