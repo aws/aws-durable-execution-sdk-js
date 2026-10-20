@@ -312,6 +312,27 @@ describe("SkipTimeCoordinator", () => {
     expect(Date.now()).toBe(0);
   });
 
+  it("advances again after applying an end of a runner past its hold", async () => {
+    // The owner of the earliest end stays busy, past its hold, and never calls advance().
+    const caller = participant();
+    coordinator.register(caller);
+    const child = participant({ busy: true, deadline: 1000 });
+    startInvoke(child, caller)();
+    const other = participant({ deadline: 2000 });
+    coordinator.register(other);
+    child.applyDeadline.mockImplementation(() => {
+      child.state.deadline = undefined;
+    });
+
+    await new Promise((resolve) =>
+      setTimeout(resolve, DURABLE_INVOKE_HOLD_MS + 100),
+    );
+
+    expect(child.applyDeadline).toHaveBeenCalledWith(1000);
+    expect(other.applyDeadline).toHaveBeenCalledWith(2000);
+    expect(Date.now()).toBe(2000);
+  });
+
   it("forgets a detached child once it unregisters", () => {
     const caller = participant();
     coordinator.register(caller);
