@@ -267,6 +267,7 @@ async function runHandler<
             executionArn: executionContext.durableExecutionArn,
             requestId: executionContext.requestId,
             tenantId: executionContext.tenantId,
+            enrichLogContext: plugin.enrichLogContext?.bind(plugin),
           },
           () => handler(customerHandlerEvent, durableContext),
         ).then((result) => {

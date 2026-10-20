@@ -225,6 +225,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `createPowertoolsLogger`, with the `PowertoolsDurableLogger` class and the `PowertoolsLoggerLike`
+  interface. It wraps a Powertools for AWS Lambda (TypeScript) `Logger` so that every entry
+  contains the durable execution metadata (`executionArn`, `requestId`, `tenantId`,
+  `operationId`, `operationName`, `attempt`) and the fields that the configured plugins add, such
+  as the OTel plugin's `traceId` and `spanId`. Pass it as `customLogger` to
+  `context.configureLogger`. The SDK does not depend on Powertools.
+- `DurableLoggingContext.getLogEnrichment()`, optional in the type. The SDK always provides it.
+  It returns the log fields that the configured plugins add. A custom logger that calls it on each
+  log call adds those fields, as the default logger does. Custom loggers that do not call it
+  produce the same entries as before.
+- The `powertools-logger` example now uses `createPowertoolsLogger` instead of its own adapter
+  class. So its log keys change from snake_case (`execution_arn`, `request_id`, `operation_id`)
+  to camelCase (`executionArn`, `requestId`, `operationId`), the names that the default logger
+  and the Python SDK use. Its entries also gain `operationName`. If you copied the old example,
+  update log queries and metric filters that use the snake_case names.
+
 - `LocalDurableTestRunner` gains `pauseExecution()` and `resumeExecution()`, **experimental**, to
   test a handler
   against the suspend path above. Pausing answers the running invocation's next checkpoint
