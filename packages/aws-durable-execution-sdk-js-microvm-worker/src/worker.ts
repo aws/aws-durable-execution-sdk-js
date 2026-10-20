@@ -365,7 +365,9 @@ export interface MicrovmWorkerListener {
  * 6. A call that the service rejected on its first attempt, for example for a
  *    missing permission, ends the refusal at once. The MicroVM keeps running,
  *    and the worker does not retry the call. The next job that ends starts
- *    the idle time again.
+ *    the idle time again. The exception is a `resume` hook that arrived
+ *    during the call. The idle time then starts when the call ends. So the
+ *    worker retries the call one idle time after the call ends.
  * 7. A call whose outcome is unknown, such as a timeout, a throttle, a
  *    conflict, or a server error, is handled like a successful call. The
  *    service may have suspended the MicroVM anyway. A rejection after the

@@ -379,7 +379,7 @@ describe("auto-suspend when idle", () => {
     // The session never sends an idle time under 10 seconds. The run hook
     // accepts any positive number, and with 1 second the idle time can end
     // during a call. The fake client ignores the 10-second abort, so a held
-    // call runs until finish().
+    // call runs until finish(), unless the test sets `deadline`.
     const SHORT_IDLE_SECONDS = 1;
     const SHORT_IDLE_MS = SHORT_IDLE_SECONDS * 1_000;
     let microvms: FakeMicrovmsClient;
@@ -492,6 +492,59 @@ describe("auto-suspend when idle", () => {
       microvms.finish();
       await advance(0);
       await advance(SHORT_IDLE_MS);
+      expect(microvms.suspended).toEqual(["mvm-1", "mvm-1"]);
+      expect(microvms.maxRunning).toBe(1);
+    });
+
+    it("does not retry a later rejected call after a resume hook during an earlier call", async () => {
+      // The resume hook during call 1 asks for the idle time at the call end.
+      // Call 1 succeeds, and its end clears that request. Call 2 gets no hook
+      // and is rejected. A request left set would start the idle time at the
+      // end of call 2. Then the worker would retry the rejected call after
+      // every idle time.
+      const worker = start(microvms);
+
+      await runHook(worker, SHORT_IDLE_SECONDS);
+      await advance(SHORT_IDLE_MS);
+      await resumeHook(worker);
+      microvms.finish();
+      await advance(0);
+
+      microvms.hold = false;
+      microvms.failure = Object.assign(new Error("not authorized"), {
+        name: "AccessDeniedException",
+        $metadata: { httpStatusCode: 403 },
+      });
+      await advance(SHORT_IDLE_MS);
+      expect(microvms.suspended).toEqual(["mvm-1", "mvm-1"]);
+
+      await advance(SHORT_IDLE_MS * 5);
+      expect(microvms.suspended).toEqual(["mvm-1", "mvm-1"]);
+      expect(await job(worker, "cb-1")).toBe(202);
+    });
+
+    it("starts the idle time when a call ends at its deadline, after a resume hook during the call", async () => {
+      // The worker aborts the call after 10 seconds. The outcome is then
+      // unknown. The resume hook has already ended the refusal, so the idle
+      // time starts when the call ends.
+      const SUSPEND_CALL_TIMEOUT_MS = 10_000;
+      microvms.deadline = true;
+      const worker = start(microvms);
+
+      await runHook(worker, SHORT_IDLE_SECONDS);
+      await advance(SHORT_IDLE_MS);
+      expect(microvms.suspended).toEqual(["mvm-1"]);
+      expect(await resumeHook(worker)).toBe(200);
+
+      await advance(SUSPEND_CALL_TIMEOUT_MS - 1);
+      expect(microvms.suspended).toEqual(["mvm-1"]);
+
+      // The call ends at its deadline. The idle time starts then.
+      await advance(1);
+      await advance(SHORT_IDLE_MS - 1);
+      expect(microvms.suspended).toEqual(["mvm-1"]);
+
+      await advance(1);
       expect(microvms.suspended).toEqual(["mvm-1", "mvm-1"]);
       expect(microvms.maxRunning).toBe(1);
     });
