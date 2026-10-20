@@ -195,13 +195,45 @@ export class SkipTimeCoordinator {
     };
   }
 
-  /** Stops tracking an invoke. @returns whether it was still tracked */
+  /**
+   * Stops tracking an invoke. The invoked function's runner, and every runner it invoked in
+   * turn, stop taking part in moving the clock.
+   *
+   * An invoke stops being tracked in three cases. Its caller resumes with the result. Its
+   * caller finishes. Or the context that contains the invoke completes without the result,
+   * as when a parallel with `minSuccessful: 1` completes on another branch. In the first
+   * case the invoked function has already finished and unregistered. In the other two, no
+   * caller waits for the invoked function any more, but it can still be running. A durable
+   * invoked function whose step never settles counts as busy forever. So, if it stayed a
+   * participant, the clock would never advance again, for this execution or any later one.
+   *
+   * @returns whether the invoke was still tracked
+   */
   private deleteInvoke(invoke: InvokeHandoff): boolean {
     if (invoke.holdTimer) {
       clearTimeout(invoke.holdTimer);
       invoke.holdTimer = undefined;
     }
-    return this.invokes.delete(invoke);
+    const tracked = this.invokes.delete(invoke);
+    if (invoke.invoked) {
+      this.detach(invoke.invoked);
+    }
+    return tracked;
+  }
+
+  /**
+   * Removes an abandoned execution and the executions it invoked. Unlike {@link unregister},
+   * this does not advance: the caller of this method advances once it is done.
+   */
+  private detach(participant: SkipTimeParticipant): void {
+    if (!this.participants.delete(participant)) {
+      return;
+    }
+    for (const invoke of this.invokes) {
+      if (invoke.caller === participant) {
+        this.deleteInvoke(invoke);
+      }
+    }
   }
 
   /**

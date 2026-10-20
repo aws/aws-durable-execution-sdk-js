@@ -427,6 +427,78 @@ describe("skip-time clock", () => {
     expectDuration(end - start, HOUR_MS);
   });
 
+  describe("with a durable invoked function whose step never settles", () => {
+    // The invoked function runs in its own runner. Its step never settles, so that runner
+    // has an invocation running for as long as the test environment lasts.
+    function registerStuckChild(runner: LocalDurableTestRunner<unknown>) {
+      runner.registerDurableFunction(
+        "stuckChild",
+        withDurableExecution(async (_event: unknown, context: DurableContext) =>
+          context.step("never settles", () => new Promise(() => undefined)),
+        ),
+      );
+    }
+
+    function race(context: DurableContext) {
+      return context.parallel(
+        "race",
+        [
+          async (child) => child.wait("short", { seconds: 1 }),
+          async (child) => child.invoke("stuck", "stuckChild", {}),
+        ],
+        { completionConfig: { minSuccessful: 1 } },
+      );
+    }
+
+    it("skips time later in the same run after a race abandons it", async () => {
+      const handler = withDurableExecution(
+        async (_event: unknown, context: DurableContext) => {
+          await race(context);
+          const start = await context.step("start", async () => Date.now());
+          await context.wait("after race", { seconds: HOUR_SECONDS });
+          const end = await context.step("end", async () => Date.now());
+          return { start, end };
+        },
+      );
+      const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+      registerStuckChild(runner);
+
+      const { start, end } = await runner
+        .run()
+        .then((result) => result.getResult());
+
+      expectDuration(end - start, HOUR_MS);
+    });
+
+    it("skips time for a later run after a run abandons it", async () => {
+      const racing = withDurableExecution(
+        async (_event: unknown, context: DurableContext) => {
+          await race(context);
+          return "raced";
+        },
+      );
+      const first = new LocalDurableTestRunner({ handlerFunction: racing });
+      registerStuckChild(first);
+      await first.run();
+
+      const waiting = withDurableExecution(
+        async (_event: unknown, context: DurableContext) => {
+          const start = await context.step("start", async () => Date.now());
+          await context.wait("long", { seconds: HOUR_SECONDS });
+          const end = await context.step("end", async () => Date.now());
+          return { start, end };
+        },
+      );
+      const { start, end } = await new LocalDurableTestRunner({
+        handlerFunction: waiting,
+      })
+        .run()
+        .then((result) => result.getResult());
+
+      expectDuration(end - start, HOUR_MS);
+    });
+  });
+
   it.each([
     [
       "promise.race",

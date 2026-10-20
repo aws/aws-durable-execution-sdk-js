@@ -213,6 +213,39 @@ describe("SkipTimeCoordinator", () => {
     expect(Date.now()).toBe(3000);
   });
 
+  it("stops counting an abandoned durable child and its descendants", () => {
+    // The caller abandons the invoke, as when a parallel with minSuccessful 1 completes on
+    // another branch. The child, and a grandchild it invoked, still have a step running.
+    const caller = participant();
+    coordinator.register(caller);
+    const child = participant({ busy: true });
+    const end = startInvoke(child, caller);
+    const grandchild = participant({ busy: true });
+    startInvoke(grandchild, child);
+    const unrelated = participant({ deadline: 3000 });
+    coordinator.register(unrelated);
+
+    coordinator.advance();
+    expect(Date.now()).toBe(0);
+
+    end();
+
+    expect(Date.now()).toBe(3000);
+    expect(unrelated.applyDeadline).toHaveBeenCalledWith(3000);
+  });
+
+  it("stops counting a durable child when its caller finishes without the result", () => {
+    const caller = participant();
+    coordinator.register(caller);
+    startInvoke(participant({ busy: true }), caller);
+    const unrelated = participant({ deadline: 3000 });
+    coordinator.register(unrelated);
+
+    coordinator.unregister(caller);
+
+    expect(Date.now()).toBe(3000);
+  });
+
   it("releases an invoke's hold on the clock when its caller finishes", () => {
     // The caller finished without the invoke's result, such as a parallel that completed
     // without that branch. The invoked function never returns.
