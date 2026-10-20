@@ -76,10 +76,17 @@ export class SkipTimeCoordinator {
   >();
 
   private readonly participants = new Set<SkipTimeParticipant>();
+  /**
+   * Executions whose caller no longer waits for them. See {@link detach}. Their waits and
+   * retries still skip time, but they never stop the clock from advancing.
+   */
+  private readonly detached = new Set<SkipTimeParticipant>();
   /** Every invoke between {@link startInvoke} and its `end()`. */
   private readonly invokes = new Set<InvokeHandoff>();
   /** The invoke being started, which a participant registering now belongs to. */
   private startingInvoke: InvokeHandoff | undefined;
+  /** Whether an invoke from a caller that no one waits for is being started. */
+  private startingDetachedInvoke = false;
 
   private constructor(private readonly clock: Clock) {}
 
@@ -94,6 +101,11 @@ export class SkipTimeCoordinator {
   }
 
   register(participant: SkipTimeParticipant): void {
+    if (this.startingDetachedInvoke) {
+      // No one waits for the caller, so no one waits for what it invokes.
+      this.detached.add(participant);
+      return;
+    }
     this.participants.add(participant);
     if (this.startingInvoke && !this.startingInvoke.invoked) {
       this.startingInvoke.invoked = participant;
@@ -107,6 +119,7 @@ export class SkipTimeCoordinator {
    */
   unregister(participant: SkipTimeParticipant): void {
     this.participants.delete(participant);
+    this.detached.delete(participant);
     for (const invoke of this.invokes) {
       if (invoke.caller === participant) {
         this.deleteInvoke(invoke);
@@ -137,13 +150,17 @@ export class SkipTimeCoordinator {
   } {
     if (!this.participants.has(caller)) {
       // The caller has finished, as when the final checkpoint drain delivers the START of
-      // an invoke the handler did not await. No caller remains to resume with the result,
-      // and nothing would remove the hold once its caller has unregistered.
+      // an invoke the handler did not await. Or no one waits for the caller, because it was
+      // detached. No caller remains to resume with the result, and nothing would remove the
+      // hold once its caller has unregistered. So the invoked runner registers detached.
       let result: Promise<T>;
+      this.startingDetachedInvoke = true;
       try {
         result = start();
       } catch (err) {
         result = Promise.reject(err);
+      } finally {
+        this.startingDetachedInvoke = false;
       }
       return { result, end: () => undefined };
     }
@@ -197,15 +214,16 @@ export class SkipTimeCoordinator {
 
   /**
    * Stops tracking an invoke. The invoked function's runner, and every runner it invoked in
-   * turn, stop taking part in moving the clock.
+   * turn, become detached. See {@link detach}.
    *
    * An invoke stops being tracked in three cases. Its caller resumes with the result. Its
    * caller finishes. Or the context that contains the invoke completes without the result,
    * as when a parallel with `minSuccessful: 1` completes on another branch. In the first
    * case the invoked function has already finished and unregistered. In the other two, no
    * caller waits for the invoked function any more, but it can still be running. A durable
-   * invoked function whose step never settles counts as busy forever. So, if it stayed a
-   * participant, the clock would never advance again, for this execution or any later one.
+   * invoked function whose step never settles counts as busy forever. So, if it could still
+   * stop the clock, the clock would never advance again, for this execution or any later
+   * one.
    *
    * @returns whether the invoke was still tracked
    */
@@ -222,24 +240,22 @@ export class SkipTimeCoordinator {
   }
 
   /**
-   * Removes an abandoned execution and the executions it invoked. Unlike {@link unregister},
-   * this does not advance: the caller of this method advances once it is done.
+   * Detaches an abandoned execution and the executions it invoked. Unlike
+   * {@link unregister}, this does not advance: the caller of this method advances once it
+   * is done.
    *
-   * The removed execution keeps running, but the clock no longer skips its waits and
-   * retries. So they end in real time. No caller waits for it, so only a test that inspects
-   * the abandoned execution afterwards can observe this.
-   *
-   * An invoked runner cannot invoke a durable function today, because it has no registered
-   * functions. So the loop below has no effect through the public runner. If nested invokes
-   * become possible, one gap remains. The removed execution can start an invoke after this
-   * call. startInvoke does not track that invoke, because its caller is no longer a
-   * participant. But the invoked runner still registers, as an ordinary participant, and
-   * then holds the clock while it is busy.
+   * A detached execution never stops the clock from advancing, even while an invocation of
+   * it runs. Its waits and retries still take part in choosing the next end, and it is still
+   * told when the clock moves. Abandoning an invoke does not cancel the invoked execution,
+   * and a test can depend on what it does later, so its delays still skip time. Because it
+   * never stops the clock, a delay that it starts after resuming can start after a later end
+   * that another execution owns.
    */
   private detach(participant: SkipTimeParticipant): void {
     if (!this.participants.delete(participant)) {
       return;
     }
+    this.detached.add(participant);
     for (const invoke of this.invokes) {
       if (invoke.caller === participant) {
         this.deleteInvoke(invoke);
@@ -271,9 +287,11 @@ export class SkipTimeCoordinator {
       }
     }
 
+    // Detached executions never stop the clock, but their ends still count.
+    const timed = [...participants, ...this.detached];
     let earliest: { participant: SkipTimeParticipant; deadlineMs: number } =
       undefined as never;
-    for (const participant of participants) {
+    for (const participant of timed) {
       const deadlineMs = participant.earliestDeadline();
       if (
         deadlineMs !== undefined &&
@@ -286,8 +304,9 @@ export class SkipTimeCoordinator {
       return;
     }
 
-    // No invocation is running, so no SDK timer is pending: a tick only moves Date.now()
-    // forward, and fires any timer the test itself has set.
+    // No invocation of a participant is running, so none of its SDK timers is pending: a
+    // tick only moves Date.now() forward, and fires any timer the test itself has set. A
+    // detached execution can be running; a tick can fire its timers early.
     const advanceMs = earliest.deadlineMs - Date.now();
     if (advanceMs > 0) {
       defaultLogger.debug(`Advancing fake clock by ${advanceMs}ms`);
@@ -297,7 +316,7 @@ export class SkipTimeCoordinator {
 
     // Every real timer armed for a later end was computed before the jump, so it would
     // fire too late by the length of the jump. Re-arm them all.
-    for (const participant of participants) {
+    for (const participant of timed) {
       participant.onClockAdvanced();
     }
   }

@@ -234,6 +234,39 @@ describe("SkipTimeCoordinator", () => {
     expect(unrelated.applyDeadline).toHaveBeenCalledWith(3000);
   });
 
+  it("still applies the ends of an abandoned durable child", () => {
+    // The abandoned child waits, then a test may depend on what it does next.
+    const caller = participant();
+    coordinator.register(caller);
+    const child = participant({ deadline: 1000 });
+    const end = startInvoke(child, caller);
+    end();
+
+    coordinator.advance();
+
+    expect(Date.now()).toBe(1000);
+    expect(child.applyDeadline).toHaveBeenCalledWith(1000);
+    expect(child.onClockAdvanced).toHaveBeenCalled();
+  });
+
+  it("detaches a runner that an abandoned child invokes later", () => {
+    const caller = participant();
+    coordinator.register(caller);
+    const child = participant();
+    startInvoke(child, caller)();
+    // The abandoned child starts an invoke after it was detached.
+    const grandchild = participant({ busy: true });
+    coordinator.startInvoke(child, () => {
+      coordinator.register(grandchild);
+      return Promise.resolve();
+    });
+    coordinator.register(participant({ deadline: 3000 }));
+
+    coordinator.advance();
+
+    expect(Date.now()).toBe(3000);
+  });
+
   it("stops counting a durable child when its caller finishes without the result", () => {
     const caller = participant();
     coordinator.register(caller);

@@ -427,6 +427,49 @@ describe("skip-time clock", () => {
     expectDuration(end - start, HOUR_MS);
   });
 
+  it("skips an abandoned durable child's own wait, so a test can wait for what it does next", async () => {
+    // The race abandons the invoke. The invoked function keeps running: it waits 1 h, then
+    // signals the test, and the test completes the caller's callback.
+    let signal!: () => void;
+    const childSignalled = new Promise<void>((resolve) => {
+      signal = resolve;
+    });
+    const handler = withDurableExecution(
+      async (_event: unknown, context: DurableContext) => {
+        await context.parallel(
+          "race",
+          [
+            async (child) => child.wait("short", { seconds: 1 }),
+            async (child) => child.invoke("child", "slowChild", {}),
+          ],
+          { completionConfig: { minSuccessful: 1 } },
+        );
+        const [result] = await context.createCallback("from child");
+        return result;
+      },
+    );
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+    runner.registerDurableFunction(
+      "slowChild",
+      withDurableExecution(async (_event: unknown, context: DurableContext) => {
+        await context.wait("child wait", { seconds: HOUR_SECONDS });
+        await context.step("signal", async () => {
+          signal();
+        });
+        return "child";
+      }),
+    );
+    const callback = runner.getOperation("from child");
+
+    const execution = runner.run();
+    await childSignalled;
+    await callback.waitForData();
+    await callback.sendCallbackSuccess(JSON.stringify("ok"));
+    const result = await execution;
+
+    expect(result.getResult()).toBe(JSON.stringify("ok"));
+  });
+
   describe("with a durable invoked function whose step never settles", () => {
     // The invoked function runs in its own runner. Its step never settles, so that runner
     // has an invocation running for as long as the test environment lasts.
