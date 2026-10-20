@@ -189,11 +189,12 @@ export class CloudDurableTestRunner<TResult = any>
           this.client.send(new GetDurableExecutionHistoryCommand(request)),
       },
       onOperationEventsReceived: (operationEvents: OperationEvents[]) => {
+        // Waiters inspect the current operation and its parent/children.
+        this.operationStorage.populateOperations(operationEvents);
         this.waitManager.handleCheckpointReceived(
           operationEvents,
           this.operationStorage.getTrackedOperations(),
         );
-        this.operationStorage.populateOperations(operationEvents);
       },
     });
 
