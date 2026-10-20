@@ -19,8 +19,9 @@ function createStubLogger(): jest.Mocked<PowertoolsLoggerLike> {
 
 function contextReturning(
   getData: () => DurableLogData,
+  getLogEnrichment?: DurableLoggingContext["getLogEnrichment"],
 ): DurableLoggingContext {
-  return { getDurableLogData: getData };
+  return { getDurableLogData: getData, getLogEnrichment };
 }
 
 const STEP_DATA: DurableLogData = {
@@ -197,10 +198,13 @@ describe("createPowertoolsLogger", () => {
 
     logger.info("root");
 
-    expect(stub.info).toHaveBeenCalledWith("root", {
-      executionArn: "arn",
-      requestId: "request-1",
-    });
+    // toHaveBeenCalledWith treats a key whose value is undefined as missing.
+    // So the test checks the key list.
+    const [, metadata] = stub.info.mock.calls[0];
+    expect(Object.keys(metadata as object).sort()).toEqual([
+      "executionArn",
+      "requestId",
+    ]);
   });
 
   it("passes an empty metadata object before the SDK configures the logging context", () => {
@@ -215,18 +219,141 @@ describe("createPowertoolsLogger", () => {
   it("uses the most recently configured logging context", () => {
     const stub = createStubLogger();
     const logger = createPowertoolsLogger(stub);
+    // The SDK configures the logger once for each durable context of one
+    // execution: the root context and every child context. All of them have
+    // the same executionArn.
     logger.configureDurableLoggingContext(
-      contextReturning(() => ({ executionArn: "first", requestId: "r" })),
+      contextReturning(() => ({
+        executionArn: "arn",
+        requestId: "r",
+        operationName: "root-context",
+      })),
     );
     logger.configureDurableLoggingContext(
-      contextReturning(() => ({ executionArn: "second", requestId: "r" })),
+      contextReturning(() => ({
+        executionArn: "arn",
+        requestId: "r",
+        operationName: "child-context",
+      })),
     );
 
     logger.info("hello");
 
     expect(stub.info).toHaveBeenCalledWith("hello", {
-      executionArn: "second",
+      executionArn: "arn",
       requestId: "r",
+      operationName: "child-context",
+    });
+  });
+
+  describe("plugin log fields", () => {
+    it("adds the plugin fields after the durable metadata", () => {
+      const stub = createStubLogger();
+      const logger = createPowertoolsLogger(stub);
+      logger.configureDurableLoggingContext(
+        contextReturning(
+          () => STEP_DATA,
+          () => ({ traceId: "trace-1", spanId: "span-1" }),
+        ),
+      );
+
+      logger.info("hello");
+
+      expect(stub.info).toHaveBeenCalledWith("hello", {
+        ...STEP_DATA_WITHOUT_UNDEFINED,
+        traceId: "trace-1",
+        spanId: "span-1",
+      });
+    });
+
+    it("lets a plugin field replace a metadata field, as the default logger does", () => {
+      const stub = createStubLogger();
+      const logger = createPowertoolsLogger(stub);
+      logger.configureDurableLoggingContext(
+        contextReturning(
+          () => STEP_DATA,
+          () => ({ operationName: "from-plugin" }),
+        ),
+      );
+
+      logger.info("hello");
+
+      expect(stub.info.mock.calls[0][1]).toEqual(
+        expect.objectContaining({ operationName: "from-plugin" }),
+      );
+    });
+
+    it("lets a caller key replace a plugin field", () => {
+      const stub = createStubLogger();
+      const logger = createPowertoolsLogger(stub);
+      logger.configureDurableLoggingContext(
+        contextReturning(
+          () => STEP_DATA,
+          () => ({ traceId: "trace-1" }),
+        ),
+      );
+
+      logger.info({ message: "hello", traceId: "caller" });
+
+      expect(stub.info.mock.calls[0][0]).toEqual(
+        expect.objectContaining({ traceId: "caller" }),
+      );
+    });
+
+    it("reads the plugin fields on every call", () => {
+      const stub = createStubLogger();
+      const logger = createPowertoolsLogger(stub);
+      let spanId = "span-1";
+      logger.configureDurableLoggingContext(
+        contextReturning(
+          () => STEP_DATA,
+          () => ({ spanId }),
+        ),
+      );
+
+      logger.info("first");
+      spanId = "span-2";
+      logger.info("second");
+
+      expect(stub.info.mock.calls[0][1]).toEqual(
+        expect.objectContaining({ spanId: "span-1" }),
+      );
+      expect(stub.info.mock.calls[1][1]).toEqual(
+        expect.objectContaining({ spanId: "span-2" }),
+      );
+    });
+
+    it("adds only the durable metadata when no plugin adds fields", () => {
+      const stub = createStubLogger();
+      const logger = createPowertoolsLogger(stub);
+      logger.configureDurableLoggingContext(
+        contextReturning(
+          () => STEP_DATA,
+          () => undefined,
+        ),
+      );
+
+      logger.info("hello");
+
+      expect(stub.info).toHaveBeenCalledWith(
+        "hello",
+        STEP_DATA_WITHOUT_UNDEFINED,
+      );
+    });
+
+    it("works with a logging context that has no getLogEnrichment method", () => {
+      const stub = createStubLogger();
+      const logger = createPowertoolsLogger(stub);
+      logger.configureDurableLoggingContext({
+        getDurableLogData: () => STEP_DATA,
+      });
+
+      logger.info("hello");
+
+      expect(stub.info).toHaveBeenCalledWith(
+        "hello",
+        STEP_DATA_WITHOUT_UNDEFINED,
+      );
     });
   });
 

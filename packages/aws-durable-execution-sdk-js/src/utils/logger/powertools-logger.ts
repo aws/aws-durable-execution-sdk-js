@@ -50,7 +50,7 @@ function omitKeysOf(
 
 /**
  * A {@link DurableLogger} that writes through a Powertools `Logger` and adds
- * the durable execution metadata to every log entry.
+ * the durable execution metadata and the plugin log fields to every log entry.
  *
  * Create it with {@link createPowertoolsLogger}.
  *
@@ -111,6 +111,8 @@ export class PowertoolsDurableLogger<
    * An `Error` keeps `message` and `stack` in non-enumerable properties. Object
    * spread copies only enumerable properties. So the adapter does not spread an
    * `Error` or any other non-plain object. It passes the input unchanged.
+   * Powertools reads only `message` from an `Error` first argument, and writes
+   * no stack. To log the stack, pass the `Error` as a later argument.
    *
    * Powertools adds the own enumerable keys of a non-plain object input in
    * step 1. The metadata object comes later, in step 2, so its keys would
@@ -137,14 +139,23 @@ export class PowertoolsDurableLogger<
   }
 
   /**
-   * Returns the durable metadata without keys whose value is `undefined`.
-   * The root context has no `operationId`, for example. So its log entries
-   * carry no `operationId` key.
+   * Returns the durable metadata followed by the plugin log fields, such as the
+   * OTel plugin's `traceId` and `spanId`. A plugin field replaces a metadata
+   * field with the same name, as it does in the SDK's default logger.
+   *
+   * Keys whose value is `undefined` are omitted. The root context has no
+   * `operationId`, for example. Powertools would otherwise let an `undefined`
+   * per-call value replace a value set with `appendKeys`. So root entries keep
+   * an `appendKeys` value for those keys.
    */
-  private getDurableData(): Partial<DurableLogData> {
-    const data = this.durableLoggingContext?.getDurableLogData() ?? {};
+  private getDurableData(): Record<string, unknown> {
+    const data: Partial<DurableLogData> =
+      this.durableLoggingContext?.getDurableLogData() ?? {};
+    const pluginFields = this.durableLoggingContext?.getLogEnrichment?.() ?? {};
     return Object.fromEntries(
-      Object.entries(data).filter(([, value]) => value !== undefined),
+      Object.entries({ ...data, ...pluginFields }).filter(
+        ([, value]) => value !== undefined,
+      ),
     );
   }
 }
@@ -153,10 +164,13 @@ export class PowertoolsDurableLogger<
  * Wraps a Powertools for AWS Lambda (TypeScript) `Logger` so that every log
  * entry contains the durable execution metadata: `executionArn`, `requestId`,
  * `tenantId`, `operationId`, `operationName`, and `attempt`. Keys without a
- * value are omitted.
+ * value are omitted. Every entry also contains the fields that the configured
+ * plugins add, such as the OTel plugin's `traceId` and `spanId`.
  *
  * The keys use the same names as the SDK's default logger and the Python SDK.
- * A key that the caller passes replaces the metadata key with the same name.
+ * A key passed in the log call replaces the metadata key with the same name.
+ * The metadata replaces keys set with `appendKeys` or `persistentKeys`,
+ * because Powertools applies per-call keys after those.
  *
  * Powertools writes through the global `console` when the `POWERTOOLS_DEV`
  * environment variable is set. Lambda's JSON log format then wraps each
@@ -168,15 +182,22 @@ export class PowertoolsDurableLogger<
  * import { Logger } from "@aws-lambda-powertools/logger";
  * import {
  *   createPowertoolsLogger,
+ *   DurableContext,
+ *   PowertoolsDurableLogger,
  *   withDurableExecution,
  * } from "@aws/durable-execution-sdk-js";
  *
  * const logger = new Logger({ serviceName: "my-service" });
  *
- * export const handler = withDurableExecution(async (event, context) => {
- *   context.configureLogger({ customLogger: createPowertoolsLogger(logger) });
- *   context.logger.info("workflow-started");
- * });
+ * export const handler = withDurableExecution(
+ *   async (
+ *     event,
+ *     context: DurableContext<PowertoolsDurableLogger<Logger>>,
+ *   ) => {
+ *     context.configureLogger({ customLogger: createPowertoolsLogger(logger) });
+ *     context.logger.info("workflow-started");
+ *   },
+ * );
  * ```
  *
  * @param powertoolsLogger - The Powertools `Logger` that writes the log entries

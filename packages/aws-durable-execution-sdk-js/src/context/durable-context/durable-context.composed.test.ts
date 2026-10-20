@@ -239,6 +239,54 @@ describe("DurableContext Composed Tests", () => {
         });
       });
 
+      it("should return the plugin log fields", () => {
+        const { context } = createTestDurableContext({
+          plugin: { enrichLogContext: () => ({ traceId: "trace-1" }) },
+        });
+
+        expect(context.getDurableLoggingContext().getLogEnrichment?.()).toEqual(
+          { traceId: "trace-1" },
+        );
+      });
+
+      it("should read the plugin log fields on every call", () => {
+        let spanId = "span-1";
+        const { context } = createTestDurableContext({
+          plugin: { enrichLogContext: () => ({ spanId }) },
+        });
+        const loggingContext = context.getDurableLoggingContext();
+
+        expect(loggingContext.getLogEnrichment?.()).toEqual({
+          spanId: "span-1",
+        });
+        spanId = "span-2";
+        expect(loggingContext.getLogEnrichment?.()).toEqual({
+          spanId: "span-2",
+        });
+      });
+
+      it("should return undefined when a plugin throws", () => {
+        const { context } = createTestDurableContext({
+          plugin: {
+            enrichLogContext: () => {
+              throw new Error("plugin failed");
+            },
+          },
+        });
+
+        expect(
+          context.getDurableLoggingContext().getLogEnrichment?.(),
+        ).toBeUndefined();
+      });
+
+      it("should return undefined when no plugin adds fields", () => {
+        const { context } = createTestDurableContext();
+
+        expect(
+          context.getDurableLoggingContext().getLogEnrichment?.(),
+        ).toBeUndefined();
+      });
+
       it("should work without active context", () => {
         const { context, executionContext } = createTestDurableContext({
           durableExecutionMode: DurableExecutionMode.ExecutionMode,

@@ -196,6 +196,16 @@ export class DurableContextImpl<Logger extends DurableLogger>
 
         return result;
       },
+      getLogEnrichment: ():
+        | Record<string, string | number | boolean>
+        | undefined => {
+        try {
+          return this.durableExecution.plugin?.enrichLogContext?.();
+        } catch {
+          // Plugin errors must never affect logging
+          return undefined;
+        }
+      },
     };
   }
 

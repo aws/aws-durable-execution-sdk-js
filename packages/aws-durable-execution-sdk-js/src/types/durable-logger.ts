@@ -8,6 +8,21 @@ import { DurableLogData, DurableLogLevel } from "./logger";
  */
 export interface DurableLoggingContext {
   getDurableLogData: () => DurableLogData;
+
+  /**
+   * Returns the log fields that the configured plugins add, such as the OTel plugin's
+   * `traceId` and `spanId`. The default logger adds these fields to every entry. A custom
+   * logger that calls this method on each log call can add them too.
+   *
+   * Returns `undefined` when no plugin adds fields. A plugin error also returns `undefined`,
+   * so a plugin can never break logging.
+   *
+   * The SDK always provides this method. It is optional so that existing implementations of
+   * this interface still compile.
+   */
+  getLogEnrichment?: () =>
+    | Record<string, string | number | boolean>
+    | undefined;
 }
 
 /**

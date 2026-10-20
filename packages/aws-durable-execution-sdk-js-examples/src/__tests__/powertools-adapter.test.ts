@@ -1,5 +1,15 @@
 import { Logger } from "@aws-lambda-powertools/logger";
-import { createPowertoolsLogger } from "@aws/durable-execution-sdk-js";
+import {
+  createPowertoolsLogger,
+  DurableContext,
+  DurableInstrumentationPlugin,
+  DurableLogger,
+  withDurableExecution,
+} from "@aws/durable-execution-sdk-js";
+import {
+  ExecutionStatus,
+  LocalDurableTestRunner,
+} from "@aws/durable-execution-sdk-js-testing";
 
 // These tests run the adapter against the real Powertools Logger. The adapter
 // depends on how Powertools merges its arguments into one log entry. So a
@@ -118,7 +128,7 @@ describe("createPowertoolsLogger with the real Powertools Logger", () => {
     );
   });
 
-  it("keeps the message and the error details of an Error input", () => {
+  it("keeps the message of an Error input, and Powertools writes no stack for it", () => {
     // The Powertools types do not accept an Error as the first argument, but
     // Powertools accepts it at run time. JavaScript callers can pass one.
     createAdapter().error(new Error("boom") as unknown as string);
@@ -131,6 +141,45 @@ describe("createPowertoolsLogger with the real Powertools Logger", () => {
         ...DURABLE_DATA,
       }),
     );
+    expect(entry).not.toHaveProperty("error");
+    expect(entry).not.toHaveProperty("stack");
+  });
+
+  it("keeps an appendKeys value for a key that the context has no value for", () => {
+    const powertools = new Logger({ serviceName: "adapter-test" });
+    powertools.appendKeys({ operationId: "appended", tenantId: "t-appended" });
+    const adapter = createPowertoolsLogger(powertools);
+    // The root context has no operationId, and this execution has no tenant.
+    adapter.configureDurableLoggingContext({
+      getDurableLogData: () => ({
+        executionArn: DURABLE_DATA.executionArn,
+        requestId: DURABLE_DATA.requestId,
+        tenantId: undefined,
+        operationId: undefined,
+      }),
+    });
+
+    adapter.info("root");
+
+    expect(capture.entries()[0]).toEqual(
+      expect.objectContaining({
+        operationId: "appended",
+        tenantId: "t-appended",
+      }),
+    );
+  });
+
+  it("lets the durable metadata replace an appendKeys value", () => {
+    const powertools = new Logger({ serviceName: "adapter-test" });
+    powertools.appendKeys({ operationName: "appended" });
+    const adapter = createPowertoolsLogger(powertools);
+    adapter.configureDurableLoggingContext({
+      getDurableLogData: () => DURABLE_DATA,
+    });
+
+    adapter.info("hello");
+
+    expect(capture.entries()[0].operationName).toBe(DURABLE_DATA.operationName);
   });
 
   it("keeps an Error extra argument under the error key", () => {
@@ -144,5 +193,86 @@ describe("createPowertoolsLogger with the real Powertools Logger", () => {
         error: expect.objectContaining({ name: "Error", message: "boom" }),
       }),
     );
+  });
+});
+
+describe("createPowertoolsLogger in a durable execution with a plugin", () => {
+  beforeAll(() =>
+    LocalDurableTestRunner.setupTestEnvironment({ skipTime: true }),
+  );
+  afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
+
+  // A plugin that adds a log field, as the OTel plugin adds traceId and spanId.
+  const plugin: DurableInstrumentationPlugin = {
+    enrichLogContext: () => ({ traceId: "trace-1" }),
+  };
+
+  async function runAndCapture(
+    useAdapter: boolean,
+  ): Promise<Record<string, unknown>[]> {
+    const powertools = new Logger({ serviceName: "adapter-plugin-test" });
+    const handler = withDurableExecution(
+      async (_event: unknown, context: DurableContext<DurableLogger>) => {
+        if (useAdapter) {
+          context.configureLogger({
+            customLogger: createPowertoolsLogger(powertools),
+          });
+        }
+        context.logger.info("root-entry");
+        await context.step("work", async (stepContext) => {
+          stepContext.logger.info("step-entry");
+        });
+        await context.runInChildContext("child", async (childContext) => {
+          childContext.logger.info("child-entry");
+        });
+        return "done";
+      },
+      { plugins: [plugin] },
+    );
+    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+
+    const writes: string[] = [];
+    const capture = (chunk: unknown): boolean => {
+      writes.push(String(chunk));
+      return true;
+    };
+    const stdout = jest
+      .spyOn(process.stdout, "write")
+      .mockImplementation(capture);
+    const stderr = jest
+      .spyOn(process.stderr, "write")
+      .mockImplementation(capture);
+    try {
+      const result = await runner.run();
+      expect(result.getStatus()).toBe(ExecutionStatus.SUCCEEDED);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+    }
+
+    return writes
+      .flatMap((chunk) => chunk.split("\n"))
+      .filter((line) => line.trim().startsWith("{"))
+      .map((line) => JSON.parse(line) as Record<string, unknown>)
+      .filter((entry) =>
+        ["root-entry", "step-entry", "child-entry"].includes(
+          String(entry.message),
+        ),
+      );
+  }
+
+  it("adds the plugin fields to every entry, as the default logger does", async () => {
+    const defaultEntries = await runAndCapture(false);
+    const adapterEntries = await runAndCapture(true);
+
+    expect(defaultEntries).toHaveLength(3);
+    expect(adapterEntries).toHaveLength(3);
+    for (const entry of [...defaultEntries, ...adapterEntries]) {
+      expect(entry.traceId).toBe("trace-1");
+    }
+    for (const entry of adapterEntries) {
+      expect(entry.service).toBe("adapter-plugin-test");
+      expect(entry.executionArn).toEqual(expect.any(String));
+    }
   });
 });
