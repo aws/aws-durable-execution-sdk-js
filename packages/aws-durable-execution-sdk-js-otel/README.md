@@ -608,6 +608,11 @@ const plugin = new ExecutionOtelPlugin({
 });
 ```
 
+The SDK adds these fields to the entries of its default logger and of the
+Powertools adapter (`createPowertoolsLogger`). A custom logger receives them only
+if it calls `getLogEnrichment()` on each log call. That method is on the
+`DurableLoggingContext` that the SDK passes to `configureDurableLoggingContext`.
+
 For `ExecutionOtelPlugin`, handler-level logs correlate with Workflow. For
 `InvocationOtelPlugin`, handler-level logs correlate with Invocation. Logs
 inside child contexts and attempts correlate with their active operation or
