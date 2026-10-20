@@ -1,0 +1,106 @@
+import {
+  EventBridgeClient,
+  PutEventsCommand,
+} from "@aws-sdk/client-eventbridge";
+import type {
+  TelemetryExporter,
+  OperationsFormat,
+  DurableExecutionTelemetryRecord,
+} from "../types";
+import { applyOperationsFormat } from "../operations-index";
+
+/**
+ * Configuration for the EventBridge exporter.
+ * @experimental This interface is experimental and may change in future releases.
+ */
+export interface EventBridgeExporterConfig {
+  /**
+   * EventBridge event bus name or ARN.
+   * Default: "default" (the account's default bus).
+   */
+  eventBusName?: string;
+
+  /**
+   * Event source string.
+   * Default: "software.amazon.lambda.durable.telemetry"
+   */
+  source?: string;
+
+  /** AWS region. If omitted, uses the SDK default. */
+  region?: string;
+
+  /**
+   * How operations are rendered in the event detail: the canonical `operations`
+   * array (`"array"`, default), the `operationsByName` map (`"by-name"`), or
+   * `"both"`. Choose based on what your rule targets consume.
+   */
+  operationsFormat?: OperationsFormat;
+
+  /**
+   * Max serialized record size before truncation.
+   * Default: 256_000 (EventBridge's 256 KB PutEvents entry limit).
+   */
+  maxRecordSizeBytes?: number;
+}
+
+/**
+ * Exports durable execution telemetry records to Amazon EventBridge via PutEvents.
+ *
+ * Each record is published as a single event with:
+ * - Source: configurable (default "software.amazon.lambda.durable.telemetry")
+ * - DetailType: the record status (e.g. "SUCCEEDED", "RUNNING", "FAILED")
+ * - Detail: the full DurableExecutionTelemetryRecord as JSON
+ *
+ * Customers can create EventBridge rules to react to execution state changes
+ * (trigger notifications, fan out to multiple consumers, invoke workflows).
+ *
+ * @experimental This class is experimental and may change in future releases.
+ */
+export class EventBridgeExporter implements TelemetryExporter {
+  private readonly eventBusName: string;
+  private readonly source: string;
+  private readonly operationsFormat: OperationsFormat;
+  private readonly client: EventBridgeClient;
+  readonly maxRecordSizeBytes: number;
+
+  constructor(config: EventBridgeExporterConfig = {}) {
+    this.eventBusName = config.eventBusName ?? "default";
+    this.source = config.source ?? "software.amazon.lambda.durable.telemetry";
+    this.operationsFormat = config.operationsFormat ?? "array";
+    this.maxRecordSizeBytes = config.maxRecordSizeBytes ?? 256_000;
+    this.client = new EventBridgeClient(
+      config.region ? { region: config.region } : {},
+    );
+  }
+
+  render(record: DurableExecutionTelemetryRecord): unknown {
+    return applyOperationsFormat(record, this.operationsFormat);
+  }
+
+  async export(record: DurableExecutionTelemetryRecord): Promise<void> {
+    const result = await this.client.send(
+      new PutEventsCommand({
+        Entries: [
+          {
+            EventBusName: this.eventBusName,
+            Source: this.source,
+            DetailType: record.status,
+            Detail: JSON.stringify(this.render(record)),
+            Time: new Date(record.emittedAt),
+          },
+        ],
+      }),
+    );
+
+    if (result.FailedEntryCount && result.FailedEntryCount > 0) {
+      const entry = result.Entries?.[0];
+      throw new Error(
+        `EventBridge PutEvents failed: ${entry?.ErrorCode} — ${entry?.ErrorMessage}`,
+      );
+    }
+  }
+
+  async flush(): Promise<void> {
+    // No buffering — each export is a single PutEvents call.
+  }
+}

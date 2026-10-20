@@ -168,15 +168,15 @@ describe("declared core SDK ranges across the monorepo", () => {
     expect(coreMajor).toBeDefined();
   });
 
-  it("includes the Insight factory in the contract-bound peer ranges", () => {
-    const insight = declared.find(
+  it("includes the Telemetry exporter factory in the contract-bound peer ranges", () => {
+    const telemetry = declared.find(
       ({ pkgName, field }) =>
-        pkgName === "@aws/durable-execution-sdk-js-insight" &&
+        pkgName === "@aws/durable-execution-sdk-js-telemetry-exporter" &&
         field === "peerDependencies",
     );
-    expect(insight).toBeDefined();
+    expect(telemetry).toBeDefined();
     expect(
-      sourceContains(join(insight!.dir, "src"), FACTORY_CONTRACT_MARKER),
+      sourceContains(join(telemetry!.dir, "src"), FACTORY_CONTRACT_MARKER),
     ).toBe(true);
   });
 
