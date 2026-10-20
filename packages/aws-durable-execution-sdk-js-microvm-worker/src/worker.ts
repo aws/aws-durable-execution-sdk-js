@@ -21,6 +21,7 @@ import {
   ResultSerializationError,
   ResultTooLargeError,
   safeGet,
+  TRANSIENT_4XX_NAMES,
   textOr,
 } from "./callback-reporter";
 import {
@@ -364,12 +365,18 @@ export interface MicrovmWorkerListener {
  *    missing permission, ends the refusal at once. The MicroVM keeps running,
  *    and the worker does not retry the call. The next job that ends starts
  *    the idle time again.
- * 7. A call whose outcome is unknown, such as a timeout, a throttle, a
- *    conflict, or a server error, is handled like a successful call. The
- *    service may have suspended the MicroVM anyway. A rejection after the
- *    client retried an earlier attempt also counts as unknown, because the
- *    earlier attempt may have suspended the MicroVM. When the refusal ends,
- *    the idle time starts again, so the worker tries the call again.
+ * 7. A call that the service refused for now on its first attempt also ends
+ *    the refusal at once. This covers a throttle, expired credentials, and a
+ *    clock offset, whatever the HTTP status, and HTTP 429. The service
+ *    answers these before it acts, and a later call can succeed. So the idle
+ *    time starts again, and the worker tries the call again.
+ * 8. A call whose outcome is unknown, such as a timeout, a conflict, or a
+ *    server error, is handled like a successful call. The service may have
+ *    suspended the MicroVM anyway. An error after the client retried an
+ *    earlier attempt also counts as unknown, because the earlier attempt may
+ *    have suspended the MicroVM. The client retries a throttle, so a
+ *    throttle usually ends here. When the refusal ends, the idle time starts
+ *    again, so the worker tries the call again.
  *
  * The listener counts only jobs. It cannot see background processes, or
  * inbound traffic that is not a job. A MicroVM that must keep such work
@@ -629,26 +636,39 @@ export function createMicrovmWorkerListener<
         { abortSignal: AbortSignal.timeout(SUSPEND_CALL_TIMEOUT_MS) },
       );
     } catch (error) {
-      if (isRejectedRequest(error)) {
-        logger.warn(
-          "could not suspend the idle MicroVM, because the service rejected the call. It keeps running. A missing permission needs lambda:SuspendMicrovm on the MicroVM image in its execution role.",
-          { microvmId: target, error: describe(error) },
-        );
-        // The service did nothing. So jobs can run again at once. The idle
-        // time does not start again, so a missing permission is not retried.
-        // A suspend hook that arrived during the call means that the
-        // MicroVM is suspending anyway, so its refusal stays.
+      const outcome = classifySuspendError(error);
+      if (outcome !== "unknown") {
+        if (outcome === "rejected") {
+          logger.warn(
+            "could not suspend the idle MicroVM, because the service rejected the call. It keeps running. A missing permission needs lambda:SuspendMicrovm on the MicroVM image in its execution role.",
+            { microvmId: target, error: describe(error) },
+          );
+        } else {
+          logger.warn(
+            "could not suspend the idle MicroVM, because the service refused the call for now. It keeps running, and the worker tries again after the next idle time.",
+            { microvmId: target, error: describe(error) },
+          );
+        }
+        // The service did nothing. So jobs can run again at once. A suspend
+        // hook that arrived during the call means that the MicroVM is
+        // suspending anyway, so its refusal stays.
         if (suspendHooks === hooksBefore) {
           clearTimeout(graceTimer);
           graceTimer = undefined;
           suspending = false;
           startDeferredJobs();
+          // A rejection, such as a missing permission, is not retried until
+          // a job ends. A refusal for now, such as a throttle, can clear. So
+          // it is retried after the next idle time.
+          if (outcome === "refusedForNow") {
+            startIdleTime();
+          }
         }
         return;
       }
-      // A timeout, a throttle, a conflict, a server error, or a rejection
-      // after a retried attempt does not show whether the service suspended
-      // the MicroVM. So the refusal continues, as after a successful call.
+      // A timeout, a conflict, a server error, or an error after a retried
+      // attempt does not show whether the service suspended the MicroVM. So
+      // the refusal continues, as after a successful call.
       logger.warn(
         "the suspend call for the idle MicroVM had an unknown outcome. The worker refuses jobs until the MicroVM resumes, or for 30 seconds.",
         { microvmId: target, error: describe(error) },
@@ -1643,36 +1663,73 @@ const REJECTION_NAMES = new Set([
 ]);
 
 /**
- * Whether a failed call shows that the service did nothing: a known rejection,
- * or a 4xx other than 408, 409, and 429, on the client's first attempt.
+ * What a failed SuspendMicrovm call shows about the MicroVM.
  *
- * The client retries a 5xx, a throttle, and a network error, and reports only
- * the last attempt's error. An earlier attempt may have suspended the
- * MicroVM before its response was lost. So a rejection after more than one
- * attempt does not show that the service did nothing.
+ * - `rejected`: the service did nothing, and a later call would most likely
+ *   fail the same way, for example for a missing permission.
+ * - `refusedForNow`: the service did nothing, and a later call can succeed:
+ *   a throttle, expired credentials, or a clock offset.
+ * - `unknown`: the service may have suspended the MicroVM.
  */
-function isRejectedRequest(error: unknown): boolean {
+type SuspendOutcome = "rejected" | "refusedForNow" | "unknown";
+
+/**
+ * Classifies a failed SuspendMicrovm call. The rules match the Python
+ * worker's `classify_suspend_error`, with one difference in order: Python
+ * checks missing credentials before the attempt count. Here missing
+ * credentials after a retried attempt are `unknown`, because the earlier
+ * attempt was sent.
+ *
+ * 1. A value that is not an `Error` is `unknown`.
+ * 2. The client retries a 5xx, a throttle, and a network error, and reports
+ *    only the last attempt's error. An earlier attempt may have suspended
+ *    the MicroVM before its response was lost. So any error after more than
+ *    one attempt is `unknown`.
+ * 3. A known rejection name is `rejected`. Missing credentials count as a
+ *    rejection, because they stop the request before it is sent.
+ * 4. `ConflictException` is `unknown`, whatever its status. It can mean that
+ *    the MicroVM is already suspending.
+ * 5. A throttle, expired credentials, or a clock offset is `refusedForNow`,
+ *    whatever its status. The service answers them before it acts. Some
+ *    services answer a throttle with HTTP 400.
+ * 6. HTTP 429 is `refusedForNow`.
+ * 7. Any other 4xx except 408 and 409 is `rejected`.
+ * 8. Any other error, such as a timeout, a dropped connection, a 408, or a
+ *    server error, is `unknown`.
+ */
+function classifySuspendError(error: unknown): SuspendOutcome {
   if (!(error instanceof Error)) {
-    return false;
+    return "unknown";
   }
   const metadata = (
     error as { $metadata?: { httpStatusCode?: number; attempts?: number } }
   ).$metadata;
   if (metadata?.attempts !== undefined && metadata.attempts > 1) {
-    return false;
+    return "unknown";
   }
   if (REJECTION_NAMES.has(error.name)) {
-    return true;
+    return "rejected";
+  }
+  if (error.name === "ConflictException") {
+    return "unknown";
+  }
+  if (TRANSIENT_4XX_NAMES.has(error.name)) {
+    return "refusedForNow";
   }
   const status = metadata?.httpStatusCode;
-  return (
+  if (status === 429) {
+    return "refusedForNow";
+  }
+  if (
     status !== undefined &&
     status >= 400 &&
     status < 500 &&
     status !== 408 &&
-    status !== 409 &&
-    status !== 429
-  );
+    status !== 409
+  ) {
+    return "rejected";
+  }
+  return "unknown";
 }
 
 /** Describes an error for a log line, and never throws. */

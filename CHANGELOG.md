@@ -193,6 +193,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A heartbeat that met the completion while it was in flight logged "the callback no longer
     accepts heartbeats". It is no longer logged.
 
+- The MicroVM worker now classifies a throttle, expired credentials, and a clock offset on the
+  first attempt of its own `SuspendMicrovm` call as refused for now. The service answers these
+  before it acts, so the MicroVM did not suspend. The worker then accepts jobs again at once, and
+  starts the idle time again, so it tries the call again. The error name decides, whatever the
+  HTTP status. Any HTTP 429 counts too. Before, the worker decided by HTTP status
+  alone. A 429, or one of these errors without a 4xx status, counted as an unknown outcome. So
+  the worker refused every job with HTTP 503 for 30 seconds. One of these errors with another 4xx
+  status counted as a rejection. So the worker did not try the call again until a job ended. A
+  `ConflictException` is now an unknown outcome whatever its status. An error after the client
+  retried an earlier attempt stays an unknown outcome. The Python worker classifies these errors
+  the same way.
+
 - A MicroVM worker job could reach its heartbeat timeout after two failed heartbeats in a row.
   Each heartbeat call could take half the interval. The service times the heartbeat timeout from
   when it receives a call, which can be at the call's start. So the worst gap was 3.5 intervals,
