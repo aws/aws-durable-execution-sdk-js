@@ -405,6 +405,45 @@ describe("microvmSession with a MicroVM that suspends itself", () => {
     ]);
   });
 
+  it("fails the job at once when the MicroVM is removed before the ResumeMicrovm of a recheck", async () => {
+    const client = new FakeMicrovmsClient();
+    const endpoint = recordingEndpoint(client);
+    // The state check sees RUNNING. The worker suspends the MicroVM before
+    // the request arrives, so the endpoint answers 502. The recheck sees
+    // SUSPENDED. The MicroVM is then removed before the resume.
+    endpoint.responses = [502];
+    client.getResponses = [
+      async () => ({ state: "RUNNING" }),
+      async () => ({ state: "SUSPENDED" }),
+    ];
+    client.resumeResponses = [
+      throwing(
+        Object.assign(new Error("MicroVM not found: mvm-1"), {
+          name: "ResourceNotFoundException",
+        }),
+      ),
+    ];
+    const runner = runnerFor(client, endpoint, async (vm, ctx) =>
+      vm.invoke(ctx, "only", 1, { ...job, path: "/only" }),
+    );
+
+    const execution = await runner.run({ payload: {} });
+
+    expect(execution.getStatus()).toBe("FAILED");
+    expect(execution.getError()).toMatchObject({
+      errorType: MicrovmNotRunningError.name,
+      errorMessage: expect.stringContaining("only"),
+    });
+    // One request, one recheck, and one resume: the error is not retried.
+    expect(client.events).toEqual([
+      "get:RUNNING",
+      "request:/only",
+      "get:SUSPENDED",
+      "resume",
+      "terminate",
+    ]);
+  });
+
   it("lets the handler catch MicrovmNotRunningError, on the first run and on replay", async () => {
     const client = new FakeMicrovmsClient();
     const endpoint = recordingEndpoint(client);

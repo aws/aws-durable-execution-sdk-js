@@ -170,7 +170,9 @@ export async function ensureRunning(
         await resumeMicrovm();
       } catch (error) {
         // ConflictException means a transition is already in progress, for
-        // example an auto-resume. Polling continues either way.
+        // example an auto-resume. Polling continues after a successful resume
+        // or a ConflictException. ResourceNotFoundException means that the
+        // MicroVM was removed after the state check.
         const errorName = (error as Error).name;
         if (errorName === "ResourceNotFoundException") {
           throw notFound();
