@@ -13,22 +13,33 @@ import {
 } from "../../types/plugin";
 import { DurableExecutionInvocationOutput } from "../../types/core";
 import { collectPropagationMetadata } from "./propagation-metadata";
+import util from "node:util";
 
 type CallbackResult = unknown;
 type CallbackOutcome =
   | { asynchronous: false; value: CallbackResult }
   | { asynchronous: true; promise: Promise<CallbackResult> };
 type CallbackFn = () => CallbackOutcome;
+const nativePromiseThen = Promise.prototype.then;
 
 // Call only inside the boundary that owns this value: getting or invoking `then`
 // can execute customer code. Capture the method once and preserve its receiver.
 function observeCallbackResult(value: CallbackResult): CallbackOutcome {
   const then = value == null ? undefined : (value as { then?: unknown }).then;
-  if (typeof then !== "function") return { asynchronous: false, value };
+  if (typeof then !== "function") {
+    // Native promises remain asynchronous when their own `then` is replaced.
+    // Lightweight runtimes can omit util.types; retain a same-realm fallback.
+    const isPromise =
+      typeof util.types?.isPromise === "function"
+        ? util.types.isPromise(value)
+        : value instanceof Promise;
+    if (!isPromise) return { asynchronous: false, value };
+  }
+  const method = typeof then === "function" ? then : nativePromiseThen;
   return {
     asynchronous: true,
     promise: new Promise((resolve, reject) => {
-      Reflect.apply(then, value, [resolve, reject]);
+      Reflect.apply(method, value, [resolve, reject]);
     }),
   };
 }
@@ -85,7 +96,6 @@ export function createPluginRunner(
     fn: CustomerFn,
   ): CustomerFnResult => {
     let fnError: { error: unknown } | undefined;
-    let fnOutcome: CallbackOutcome | undefined;
     const guardedFn = memoizeCallback(() => {
       try {
         const outcome = observeCallbackResult(fn());
@@ -97,11 +107,9 @@ export function createPluginRunner(
           // A wrapper may start next() and return its own result without waiting.
           // Retain the callback failure even if that wrapper ignores its promise.
           void promise.catch(() => undefined);
-          fnOutcome = { asynchronous: true, promise };
-        } else {
-          fnOutcome = outcome;
+          return { asynchronous: true, promise };
         }
-        return fnOutcome;
+        return outcome;
       } catch (error) {
         fnError = { error };
         throw error;
@@ -127,13 +135,18 @@ export function createPluginRunner(
         try {
           const hook = plugin[method] as PluginWrapperHookFn;
           if (!hook) return nextOnce();
-          const outcome = observeCallbackResult(
-            hook.call(plugin, info, callNext),
-          );
+          const result = hook.call(plugin, info, callNext);
+          // Returning next's native promise preserves its cached asynchronous
+          // outcome even if the wrapper replaced its `then` property.
+          if (exposedPromise !== undefined && result === exposedPromise) {
+            return nextOnce();
+          }
+          const outcome = observeCallbackResult(result);
           if (!outcome.asynchronous) return outcome;
           return {
             asynchronous: true,
             promise: outcome.promise.catch(() => {
+              // The wrapper rejected; run or reuse the inner chain.
               const fallback = nextOnce();
               return fallback.asynchronous ? fallback.promise : fallback.value;
             }),
@@ -148,16 +161,11 @@ export function createPluginRunner(
     }, guardedFn);
 
     const checkCallback = (value: CallbackResult): CustomerFnResult => {
-      const finish = () => {
-        if (fnError) throw fnError.error;
-        return value;
-      };
-      // Overrides and short circuits remain supported. Once the callback has
-      // started, however, its original failure cannot be replaced by an override
-      // that happened to settle first.
-      return fnOutcome?.asynchronous
-        ? fnOutcome.promise.then(finish)
-        : finish();
+      // Preserve wrapper settlement timing, including a deadline race or a
+      // synchronous override after next(). Only an already-observed callback
+      // failure wins here; later rejections remain observed without delaying it.
+      if (fnError) throw fnError.error;
+      return value;
     };
     const outcome = chain();
     return outcome.asynchronous

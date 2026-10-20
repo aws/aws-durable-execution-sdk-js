@@ -79,6 +79,29 @@ describe("wrapper recovery and callback ownership", () => {
     expect(inner).toHaveBeenCalledTimes(1);
   });
 
+  it("retains an observed asynchronous customer error when the wrapper rethrows a replacement", async () => {
+    const original = new Error("customer failure");
+    const body = jest.fn(async () => {
+      throw original;
+    });
+    const value = run(
+      [
+        {
+          async wrapOperationAttemptFn(_info, next) {
+            try {
+              await next();
+            } catch {
+              throw new Error("plugin replacement error");
+            }
+          },
+        },
+      ],
+      body,
+    );
+    await expect(value).rejects.toBe(original);
+    expect(body).toHaveBeenCalledTimes(1);
+  });
+
   it.each(["resolve", "reject"])(
     "reads a wrapper then method once, retains its receiver and ignores a late throw (%s)",
     async (settlement) => {
@@ -209,39 +232,119 @@ describe("wrapper recovery and callback ownership", () => {
     },
   );
 
-  it("does not let an early override hide a later rejection from an already-started callback", async () => {
-    const original = new Error("late customer failure");
+  it("returns a synchronous override without waiting for a started callback", () => {
+    const body = jest.fn(() => new Promise(() => {}));
+    const value = run(
+      [
+        {
+          wrapOperationAttemptFn(_info, next) {
+            void next();
+            return "override";
+          },
+        },
+      ],
+      body,
+    );
+    expect(value).toBe("override");
+    expect(body).toHaveBeenCalledTimes(1);
+  });
+
+  it("observes a later callback rejection after a synchronous override", async () => {
     let reject!: (error: unknown) => void;
     const callback = new Promise((_resolve, fail) => {
       reject = fail;
     });
     const body = jest.fn(() => callback);
-    const value = Promise.resolve(
-      run(
-        [
-          {
-            wrapOperationAttemptFn(_info, next) {
-              next();
-              return "override";
-            },
+    const value = run(
+      [
+        {
+          wrapOperationAttemptFn(_info, next) {
+            void next();
+            return "override";
           },
-        ],
-        body,
-      ),
+        },
+      ],
+      body,
     );
-    let settled = false;
-    void value.then(
-      () => {
-        settled = true;
-      },
-      () => {
-        settled = true;
-      },
+    expect(value).toBe("override");
+    reject(new Error("late customer failure"));
+    // Let the rejection reach the runner's observation handlers. Jest also
+    // fails the test if it becomes an unhandled rejection.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(body).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["slow", "never"])(
+    "lets a 50ms resolve-deadline wrapper finish while next is %s",
+    async (mode) => {
+      let bodyTimer: ReturnType<typeof setTimeout> | undefined;
+      let guardTimer: ReturnType<typeof setTimeout> | undefined;
+      let completed = false;
+      const callback = new Promise((resolve) => {
+        if (mode === "slow")
+          bodyTimer = setTimeout(() => {
+            completed = true;
+            resolve("callback");
+          }, 1000);
+      });
+      const body = jest.fn(() => callback);
+      try {
+        const value = run(
+          [
+            {
+              wrapOperationAttemptFn: (_info, next) =>
+                Promise.race([
+                  next(),
+                  new Promise((resolve) =>
+                    setTimeout(() => resolve("timed-out"), 50),
+                  ),
+                ]),
+            },
+          ],
+          body,
+        );
+        const bounded = await Promise.race([
+          Promise.resolve(value),
+          new Promise((resolve) => {
+            guardTimer = setTimeout(() => resolve("still-pending"), 500);
+          }),
+        ]);
+        expect(bounded).toBe("timed-out");
+        expect(completed).toBe(false);
+        expect(body).toHaveBeenCalledTimes(1);
+      } finally {
+        clearTimeout(bodyTimer);
+        clearTimeout(guardTimer);
+      }
+    },
+  );
+
+  it("preserves an undefined short circuit without entering next", () => {
+    const body = jest.fn(() => "must not run");
+    expect(
+      run([{ wrapOperationAttemptFn: () => undefined }], body),
+    ).toBeUndefined();
+    expect(body).not.toHaveBeenCalled();
+  });
+
+  it("keeps a distinct transformed result when next's then becomes non-callable", async () => {
+    const original = { value: "callback" };
+    const transformed = { value: "wrapper" };
+    const body = jest.fn(() => Promise.resolve(original));
+    const value = await run(
+      [
+        {
+          wrapOperationAttemptFn(_info, next) {
+            const promise = next();
+            // biome-ignore lint/suspicious/noThenProperty: The identity shortcut must not replace a different wrapper result.
+            Object.defineProperty(promise, "then", { value: undefined });
+            return Promise.resolve(transformed);
+          },
+        },
+      ],
+      body,
     );
-    await Promise.resolve();
-    expect(settled).toBe(false);
-    reject(original);
-    await expect(value).rejects.toBe(original);
+    expect(value).toBe(transformed);
     expect(body).toHaveBeenCalledTimes(1);
   });
 });

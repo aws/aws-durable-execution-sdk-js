@@ -2,7 +2,10 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import type { Context } from "aws-lambda";
 import { withDurableExecution } from "./with-durable-execution";
 import type { DurableInstrumentationPlugin } from "./types/plugin";
-import type { DurableExecutionInvocationInput } from "./types/core";
+import type {
+  DurableExecutionInvocationInput,
+  DurableExecutionInvocationOutput,
+} from "./types/core";
 
 const faults = ["hook-getter", "result-proxy", "next-then-getter"] as const;
 type Fault = (typeof faults)[number];
@@ -119,3 +122,83 @@ describe.each(faults)("public wrapper isolation: %s", (fault) => {
     },
   );
 });
+
+describe.each(
+  [undefined, null, 42].flatMap((then) =>
+    [false, true].map((transformed) => ({ then, transformed })),
+  ),
+)(
+  "returned native promise with then=$then (transformed=$transformed)",
+  ({ then, transformed }) => {
+    it.each([false, true])(
+      "returns the invocation output, not the promise object (failure=%s)",
+      async (failure) => {
+        const scope = new AsyncLocalStorage<string>();
+        const bodyError = new Error("customer failure");
+        const end = jest.fn();
+        const wrap = jest.fn(
+          (_info, next: () => Promise<DurableExecutionInvocationOutput>) =>
+            scope.run("healthy", async () => {
+              const output = await next();
+              expect(scope.getStore()).toBe("healthy");
+              return output;
+            }),
+        );
+        const body = jest.fn(async () => {
+          expect(scope.getStore()).toBe("healthy");
+          if (failure) throw bodyError;
+          return "customer result";
+        });
+        const handler = withDurableExecution(body, {
+          plugins: [
+            {
+              wrapInvocation(_info, next) {
+                const original = next();
+                const promise = transformed
+                  ? original.then((output) => ({
+                      ...output,
+                      reviewTransform: true,
+                    }))
+                  : original;
+                // biome-ignore lint/suspicious/noThenProperty: A native promise remains awaitable when this property is non-callable.
+                Object.defineProperty(promise, "then", { value: then });
+                return promise;
+              },
+            },
+            { wrapInvocation: wrap, onInvocationEnd: end },
+          ],
+          durableExecutionClient: {
+            checkpoint: async () => ({
+              CheckpointToken: "token",
+              NewExecutionState: { Operations: [] },
+            }),
+            getExecutionState: async () => ({ Operations: [] }),
+          },
+        });
+        await scope.run("caller", async () => {
+          const output = await handler(event, context);
+          expect(scope.getStore()).toBe("caller");
+          expect(output).not.toBeInstanceOf(Promise);
+          if (failure) {
+            expect(output).toMatchObject({
+              Status: "FAILED",
+              Error: { ErrorMessage: bodyError.message },
+              ...(transformed ? { reviewTransform: true } : {}),
+            });
+            expect(end.mock.calls[0][0].executionError).toBe(bodyError);
+          } else {
+            expect(output).toEqual({
+              Status: "SUCCEEDED",
+              Result: '"customer result"',
+              ...(transformed ? { reviewTransform: true } : {}),
+            });
+          }
+        });
+        expect(scope.getStore()).toBeUndefined();
+        expect(body).toHaveBeenCalledTimes(1);
+        expect(wrap).toHaveBeenCalledTimes(1);
+        expect(end).toHaveBeenCalledTimes(1);
+      },
+    );
+  },
+);
