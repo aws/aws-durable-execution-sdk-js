@@ -249,6 +249,27 @@ describe("SkipTimeCoordinator", () => {
     expect(child.onClockAdvanced).toHaveBeenCalled();
   });
 
+  it("forgets a detached child once it unregisters", () => {
+    const caller = participant();
+    coordinator.register(caller);
+    const child = participant();
+    startInvoke(child, caller)();
+    // The detached child finishes. A deadline it still reports must no longer be chosen.
+    coordinator.unregister(child);
+    child.state.deadline = 1000;
+    child.applyDeadline.mockClear();
+    child.onClockAdvanced.mockClear();
+    const unrelated = participant({ deadline: 3000 });
+    coordinator.register(unrelated);
+
+    coordinator.advance();
+
+    expect(Date.now()).toBe(3000);
+    expect(unrelated.applyDeadline).toHaveBeenCalledWith(3000);
+    expect(child.applyDeadline).not.toHaveBeenCalled();
+    expect(child.onClockAdvanced).not.toHaveBeenCalled();
+  });
+
   it("detaches a runner that an abandoned child invokes later", () => {
     const caller = participant();
     coordinator.register(caller);
