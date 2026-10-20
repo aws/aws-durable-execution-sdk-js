@@ -194,8 +194,8 @@ async function checkFunctionExists(
   functionName: string,
 ): Promise<boolean> {
   try {
-    await lambdaClient.send(
-      new GetFunctionCommand({ FunctionName: functionName }),
+    await retryOnConflict(() =>
+      lambdaClient.send(new GetFunctionCommand({ FunctionName: functionName })),
     );
     return true;
   } catch (error: unknown) {

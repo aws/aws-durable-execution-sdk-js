@@ -17,6 +17,8 @@ The automated npm publishing workflow covers the following packages:
 | `@aws/durable-execution-sdk-js-telemetry-exporter`        | `packages/aws-durable-execution-sdk-js-telemetry-exporter`       | `telemetry-exporter` |
 | `@aws/durable-execution-sdk-js-telemetry-mcp`    | `packages/aws-durable-execution-sdk-js-telemetry-mcp`   | `telemetry-mcp` |
 
+Extras and MicroVM Worker are excluded from automatic publishing while their first npm publication is prepared separately. Both initial publication attempts in `sdk-2.7.0` failed. Before adding them to the automatic package list, prepare their first release and npm publisher setup, and remove their explicit deferral from the packaging test.
+
 The `packages/aws-durable-execution-sdk-js-telemetry-vscode` package is intentionally excluded from this table. Release it with the [Durable Execution Telemetry VSCode Extension](#durable-execution-telemetry-vscode-extension-publishing) process instead.
 
 ## Versioning
