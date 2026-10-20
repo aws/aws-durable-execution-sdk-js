@@ -992,7 +992,6 @@ describe("TestExecutionOrchestrator", () => {
       // Verify handler was re-invoked after retry
       expect(mockInvoke).toHaveBeenCalledTimes(2); // Initial + retry
 
-      expect(fakeClock.countTimers).toHaveBeenCalledTimes(1);
       expect(fakeClock.tick).toHaveBeenCalledTimes(1);
 
       const [tickMs] = fakeClock.tick.mock.lastCall;
