@@ -77,6 +77,7 @@ export class WorkerClientApiHandler {
         requestId,
         type: apiType,
         params,
+        clientTimestampMs: Date.now(),
       } satisfies WorkerApiRequest<TApiType>,
     });
 

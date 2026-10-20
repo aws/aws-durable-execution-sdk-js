@@ -1,0 +1,106 @@
+{
+  "name": "aws-durable-execution-sdk-js-telemetry-desktop",
+  "displayName": "Durable Execution Telemetry Desktop",
+  "description": "Standalone desktop app for Durable Execution Telemetry Desktop — the same UI and logic as the VS Code extension, for users who don't run VS Code.",
+  "version": "0.1.0-alpha.3",
+  "license": "Apache-2.0",
+  "private": true,
+  "main": "dist/main.js",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/aws/aws-durable-execution-sdk-js.git",
+    "directory": "packages/aws-durable-execution-sdk-js-telemetry-desktop"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "node esbuild.mjs",
+    "start": "npm run build && electron .",
+    "clean": "rm -rf dist release",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@aws/durable-execution-sdk-js-telemetry-core": "0.1.0-alpha.0",
+    "node-llama-cpp": "^3.22.1"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20.19.43",
+    "electron": "^44.7.0",
+    "electron-builder": "26.15.3",
+    "esbuild": "^0.28.2",
+    "jest": "^30.5.2",
+    "ts-jest": "^29.4.14",
+    "typescript": "^6.0.3"
+  },
+  "build": {
+    "appId": "com.amazon.aws.durable-execution-sdk-js-telemetry-desktop",
+    "productName": "Durable Execution Telemetry Desktop",
+    "electronVersion": "44.7.0",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../aws-durable-execution-sdk-js-telemetry-vscode/media",
+        "to": "media"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "category": "Development",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    }
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/src/**/*.test.ts"
+    ],
+    "transform": {
+      "^.+\\.ts$": [
+        "ts-jest",
+        {
+          "tsconfig": "tsconfig.test.json",
+          "diagnostics": false,
+          "isolatedModules": true
+        }
+      ]
+    }
+  }
+}
