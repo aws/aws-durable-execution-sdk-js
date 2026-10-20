@@ -537,6 +537,8 @@ class Cloud:
         self.mark_settled()
 
     def settle_run(self):
+        quarantine = ARTIFACTS / "quarantine.json"
+        pending = quarantine.read_bytes() if quarantine.exists() else None
         self.restore_invocations()
         # Held work can occupy the whole pool before service listings expose
         # its ARN. Release this run's controls before asking it to admit a probe.
@@ -569,5 +571,29 @@ class Cloud:
         # Keep the cheap idle path, but switch to owned-run cleanup if service
         # visibility or worker evidence appears during the same quiet window.
         # This callback does not restart the drain deadline or another quiet loop.
-        self.quiesce("between-runs-" + uuid.uuid4().hex[:8], on_activity=cleanup)
+        label = "between-runs-" + uuid.uuid4().hex[:8]
+        self.quiesce(label, on_activity=cleanup)
         self.mark_settled()
+        # Whole-run recovery may reopen only the quarantine it actually restored.
+        # Keep unknown ownership or a changed record blocked for its own recovery.
+        if (
+            pending is not None
+            and json.loads(pending).get("run") == self.manifest["run"]
+            and quarantine.exists()
+            and quarantine.read_bytes() == pending
+        ):
+            save(
+                ARTIFACTS / f"quarantine/recovered-{uuid.uuid4().hex}.json",
+                {
+                    "quarantine": json.loads(pending),
+                    "recovery": {
+                        "run": self.manifest["run"],
+                        "commit": self.manifest.get("commit"),
+                        "time": self.timestamp(),
+                        "quiescence": f"quiescence/{label}.json",
+                    },
+                },
+            )
+            # Archive failure leaves the original admission block in place.
+            if quarantine.exists() and quarantine.read_bytes() == pending:
+                quarantine.unlink()

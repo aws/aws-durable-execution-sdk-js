@@ -482,3 +482,176 @@ def test_probe_delivered_at_or_after_drain_deadline_cannot_claim_quiet(quiet_clo
         cloud.quiesce("late-delivery")
     assert calls == 4
     assert clock["time"] == delivered_at
+
+
+@pytest.mark.parametrize("entrypoint", ["settle", "settle-previous"])
+def test_successful_run_recovery_archives_quarantine_and_allows_new_examples(
+    delayed_execution, monkeypatch, entrypoint
+):
+    import io
+    import json
+    import subprocess
+    import sys
+
+    import deploy
+
+    cloud, stopped, _listings, output = delayed_execution
+    pending = {"run": "run", "markers": ["invoked-case"], "error": "previous cleanup failed"}
+    quarantine = output / "quarantine.json"
+    quarantine.write_text(json.dumps(pending))
+    cloud.verify = lambda: None
+    monkeypatch.setattr(driver, "Cloud", lambda _manifest: cloud)
+    monkeypatch.setattr(deploy, "ARTIFACTS", output)
+
+    # Exercise the real example-runner admission check without invoking AWS/Jest.
+    root = output / "example-checkout"
+    artifacts = root / "lmi-tests/artifacts"
+    artifacts.parent.mkdir(parents=True)
+    artifacts.symlink_to(output, target_is_directory=True)
+    (root / "lmi-tests/build").mkdir()
+    (root / "lmi-tests/build/examples.json").write_text("[]")
+    (root / "packages/aws-durable-execution-sdk-js-examples").mkdir(parents=True)
+    jest = root / "node_modules/.bin/jest"
+    jest.parent.mkdir(parents=True)
+    jest.write_text("#!/usr/bin/env node\nprocess.exit(0);\n")
+    jest.chmod(0o755)
+    (output / "manifest.json").write_text(json.dumps({**cloud.manifest, "run": "new-run"}))
+
+    def run_examples():
+        return subprocess.run(
+            ["node", str(deploy.ROOT / "lmi-tests/run-examples.mjs")],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    blocked = run_examples()
+    assert blocked.returncode != 0 and "Shared fixture has not settled" in blocked.stderr
+    if entrypoint == "settle":
+        (output / "manifest.json").write_text(json.dumps(cloud.manifest))
+        monkeypatch.setattr(sys, "argv", ["deploy.py", "settle"])
+        deploy.main()
+    else:
+        services = {
+            "lambda": SimpleNamespace(
+                get_function_configuration=lambda **_kwargs: {
+                    "Environment": {"Variables": {"LMI_RUN_ID": "run"}}
+                }
+            ),
+            "s3": SimpleNamespace(
+                get_object=lambda **_kwargs: {
+                    "Body": io.BytesIO(json.dumps(cloud.manifest).encode())
+                }
+            ),
+        }
+        monkeypatch.setattr(deploy, "client", lambda service, **_kwargs: services[service])
+        deploy.settle_previous(
+            {"Outputs": [{"OutputKey": "shared", "OutputValue": "function"}]}, "bucket"
+        )
+    assert stopped == ["accepted"]
+    assert all(item["settled"] for item in cloud.items)
+    assert not quarantine.exists()
+    archives = list((output / "quarantine").glob("*.json"))
+    assert len(archives) == 1
+    recovery = json.loads(archives[0].read_text())
+    assert recovery["quarantine"] == pending
+    assert recovery["recovery"]["run"] == "run"
+    samples = json.loads((output / recovery["recovery"]["quiescence"]).read_text())["samples"]
+    assert samples[-1]["probeStart"]["monotonic"] - samples[-4]["probeEnd"]["monotonic"] >= 5
+    (output / "manifest.json").write_text(json.dumps({**cloud.manifest, "run": "new-run"}))
+    admitted = run_examples()
+    assert admitted.returncode == 0, admitted.stderr
+
+
+@pytest.mark.parametrize("failure", ["release", "quiescence", "persist", "archive"])
+def test_incomplete_run_recovery_retains_original_quarantine(
+    delayed_execution, failure, monkeypatch
+):
+    import json
+
+    cloud, _stopped, _listings, output = delayed_execution
+    pending = {"run": "run", "markers": ["invoked-case"], "error": "previous cleanup failed"}
+    quarantine = output / "quarantine.json"
+    original = json.dumps(pending)
+    quarantine.write_text(original)
+
+    def unavailable(*_args, **_kwargs):
+        raise OSError("recovery incomplete")
+
+    if failure == "release":
+        cloud.release_and_stop = unavailable
+    elif failure == "quiescence":
+        cloud.manifest["drainTimeout"] = 5
+    elif failure == "persist":
+        cloud.mark_settled = unavailable
+    else:
+        save = driver.save
+
+        def save_with_failed_archive(path, data):
+            if path.parent == output / "quarantine":
+                unavailable()
+            save(path, data)
+
+        monkeypatch.setattr(driver, "save", save_with_failed_archive)
+    with pytest.raises((OSError, CollectionError)):
+        cloud.settle_run()
+    assert quarantine.read_text() == original
+    assert not list((output / "quarantine").glob("*.json"))
+
+
+@pytest.mark.parametrize("owner", ["another-run", None])
+def test_run_recovery_cannot_retire_unowned_quarantine(delayed_execution, owner):
+    import json
+
+    cloud, _stopped, _listings, output = delayed_execution
+    pending = {"markers": ["unowned-case"], "error": "unowned cleanup failed"}
+    if owner is not None:
+        pending["run"] = owner
+    quarantine = output / "quarantine.json"
+    original = json.dumps(pending)
+    quarantine.write_text(original)
+    cloud.settle_run()
+    assert quarantine.read_text() == original
+    assert not list((output / "quarantine").glob("*.json"))
+
+
+def test_new_quarantine_during_recovery_is_not_retired(delayed_execution):
+    import json
+
+    cloud, _stopped, _listings, output = delayed_execution
+    quarantine = output / "quarantine.json"
+    quarantine.write_text(json.dumps({"run": "run", "markers": ["invoked-case"]}))
+    mark_settled = cloud.mark_settled
+    changed = {"run": "run", "markers": ["new-case"], "error": "new cleanup failed"}
+
+    def record_new_quarantine():
+        mark_settled()
+        quarantine.write_text(json.dumps(changed))
+
+    cloud.mark_settled = record_new_quarantine
+    cloud.settle_run()
+    assert json.loads(quarantine.read_text()) == changed
+    assert not list((output / "quarantine").glob("*.json"))
+
+
+def test_case_only_recovery_does_not_retire_other_run_quarantine(delayed_execution, monkeypatch):
+    import json
+    import sys
+
+    import deploy
+
+    cloud, stopped, _listings, output = delayed_execution
+    pending = {"run": "another-run", "markers": ["other-case"], "error": "cleanup failed"}
+    quarantine = output / "quarantine.json"
+    original = json.dumps(pending)
+    quarantine.write_text(original)
+    (output / "manifest.json").write_text(json.dumps(cloud.manifest))
+    cloud.verify = lambda: None
+    monkeypatch.setattr(driver, "Cloud", lambda _manifest: cloud)
+    monkeypatch.setattr(deploy, "ARTIFACTS", output)
+    monkeypatch.setattr(sys, "argv", ["deploy.py", "settle-case", "--markers", "invoked-case"])
+    deploy.main()
+    assert stopped == ["accepted"]
+    assert quarantine.read_text() == original
+    assert not list((output / "quarantine").glob("*.json"))

@@ -62,6 +62,12 @@ made by the case: cleanup does not turn a regression failure into a pass.
 
 If settlement fails, the suite quarantines the shared fixture and prevents later
 cases from invoking it. Quiescence samples and release/stop errors are retained.
+After successful whole-run settlement, including settlement of the previous
+run before a deployment update, the matching quarantine record is archived under
+`artifacts/quarantine/` with a reference to its quiet-window evidence. Only then
+is the admission block removed, allowing a new run in the same checkout. Failed
+or partial recovery, unknown ownership, and changed quarantine records remain
+blocked. Case-only cleanup does not retire another run's quarantine.
 Whole-run settlement releases its controls before asking the worker pool to
 admit a diagnostic probe. Idle runs then need only quiet verification. If work
 becomes visible during that verification, settlement discovers and stops it
