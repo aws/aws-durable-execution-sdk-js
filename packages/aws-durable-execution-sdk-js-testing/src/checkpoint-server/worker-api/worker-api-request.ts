@@ -65,6 +65,11 @@ export interface WorkerApiRequest<TApiType extends ApiType> {
   type: TApiType;
   params: WorkerApiRequestMapping[TApiType];
   requestId: string;
+  /**
+   * `Date.now()` on the main thread when the request was sent. With skipTime that clock is
+   * fake, and the checkpoint server records every timestamp on it. See client-clock.ts.
+   */
+  clientTimestampMs?: number;
 }
 
 export type WorkerApiRequestMessage =

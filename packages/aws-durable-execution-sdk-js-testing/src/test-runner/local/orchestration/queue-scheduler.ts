@@ -170,6 +170,14 @@ export class QueueScheduler implements Scheduler {
   }
 
   /**
+   * Checks whether a function is waiting in the queue to start. Unlike
+   * {@link hasScheduledFunction}, this ignores the function that is running now.
+   */
+  hasQueuedFunction(): boolean {
+    return this.functionQueue.length > 0;
+  }
+
+  /**
    * Checks whether there are any functions queued or currently being processed.
    *
    * @returns true if there are queued functions or if the queue processor is currently running, false otherwise
