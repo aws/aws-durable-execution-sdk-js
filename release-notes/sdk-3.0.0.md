@@ -1,7 +1,7 @@
 # SDK 3.0.0 / OTel 2.0.0 / Testing SDK 1.3.2 release draft
 
 This draft describes changes merged through
-[`c709da6d`](https://github.com/aws/aws-durable-execution-sdk-js/commit/c709da6d983a10713e87938edfb246523b9da5a8).
+[`6682c39e`](https://github.com/aws/aws-durable-execution-sdk-js/commit/6682c39e3ba7737ee5ae4a3a949cd47606104cf8).
 These versions have not been published by this preparation PR. Refresh the
 source range and pending-work table against the commit selected for the final
 release.
@@ -116,7 +116,7 @@ If you copied the former Powertools example, update log queries from snake_case
 keys to the adapter's `executionArn`, `requestId`, `operationId` and
 `operationName` fields. See the [SDK logging guide](../packages/aws-durable-execution-sdk-js/README.md).
 
-**Full changelog:** [sdk-2.7.1...c709da6d](https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-2.7.1...c709da6d983a10713e87938edfb246523b9da5a8).
+**Full changelog:** [sdk-2.7.1...6682c39e](https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-2.7.1...6682c39e3ba7737ee5ae4a3a949cd47606104cf8).
 
 # @aws/durable-execution-sdk-js-otel 2.0.0
 
@@ -152,7 +152,7 @@ after timeout, exporter failure or runtime freezing. One invocation's cleanup
 does not shut down a shared provider or another invocation's plugin instance.
 See the [OTel migration guide](../packages/aws-durable-execution-sdk-js-otel/README.md#migration-from-the-v1-provider-contract).
 
-**Full changelog:** [sdk-2.7.1...c709da6d](https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-2.7.1...c709da6d983a10713e87938edfb246523b9da5a8), from the release containing OTel 1.2.1.
+**Full changelog:** [sdk-2.7.1...6682c39e](https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-2.7.1...6682c39e3ba7737ee5ae4a3a949cd47606104cf8), from the release containing OTel 1.2.1.
 
 # @aws/durable-execution-sdk-js-testing 1.3.2
 
@@ -176,7 +176,7 @@ durable delay. Corrected scheduling can change recorded invocation counts and
 history ordering. The [detailed changelog](../CHANGELOG.md) describes the clock
 behavior and the bounds around unresolved invocations.
 
-**Full changelog:** [sdk-2.7.0...c709da6d](https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-2.7.0...c709da6d983a10713e87938edfb246523b9da5a8), from the release containing Testing SDK 1.3.1.
+**Full changelog:** [sdk-2.7.0...6682c39e](https://github.com/aws/aws-durable-execution-sdk-js/compare/sdk-2.7.0...6682c39e3ba7737ee5ae4a3a949cd47606104cf8), from the release containing Testing SDK 1.3.1.
 
 # @aws/durable-execution-sdk-js-telemetry-exporter 0.1.0-alpha.0
 
