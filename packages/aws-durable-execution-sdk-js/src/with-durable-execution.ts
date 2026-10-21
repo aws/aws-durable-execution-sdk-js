@@ -445,6 +445,9 @@ async function runHandler<
         }
 
         log("✅", "Returning normal completion response");
+        // Deadline disposal can release the queue drain without completing its work.
+        // Do not evaluate result getters or toJSON after that invocation has expired.
+        lifecycle?.throwIfExpired();
         // Stringify the result once to avoid multiple JSON.stringify calls
         const serializedResult = JSON.stringify(result);
         const serializedSize = new TextEncoder().encode(

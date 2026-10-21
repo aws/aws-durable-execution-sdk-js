@@ -503,14 +503,14 @@ describe("invocation-owned lifecycle through the public wrapper", () => {
       }
       expect(await first).toEqual({
         Status: InvocationStatus.SUCCEEDED,
-        Result: '\"live result\"',
+        Result: '"live result"',
       });
       expect(toJSON).toHaveBeenCalledTimes(1);
       const replay = handler(input([...store.operations.values()]), runtime());
       await jest.advanceTimersByTimeAsync(10);
       expect(await replay).toEqual({
         Status: InvocationStatus.SUCCEEDED,
-        Result: '\"live result\"',
+        Result: '"live result"',
       });
       expect(child).toHaveBeenCalledTimes(1);
       expect(held).toHaveBeenCalledTimes(1);
