@@ -255,7 +255,6 @@ export interface DurableInstrumentationPlugin {
 
 /**
  * Immutable identity of a prospective chained-invoke operation.
- * @experimental This interface is experimental and may change.
  */
 export interface PropagationInput {
   readonly executionArn: string;
@@ -266,7 +265,6 @@ export interface PropagationInput {
 
 /**
  * SDK-owned propagation values, independent of Lambda wire and OTel types.
- * @experimental This interface is experimental and may change.
  */
 export interface PropagationMetadata {
   readonly xAmznTraceId?: string;
@@ -324,8 +322,6 @@ export interface PropagationMetadata {
  *   ],
  * });
  * ```
- *
- * @experimental This type is experimental and may be changed or removed in future releases.
  */
 export interface DurableInstrumentationPluginFactory<
   Plugin extends DurableInstrumentationPlugin = DurableInstrumentationPlugin,
@@ -343,9 +339,7 @@ export interface DurableInstrumentationPluginFactory<
 }
 
 /**
- * Internal type aliases used by the plugin.
- *
- * @experimental These types are experimental and may be changed or removed in future releases.
+ * Callback types used by the plugin wrapper hooks.
  */
 export type CustomerFnResult = unknown;
 export type CustomerFn = () => CustomerFnResult;
@@ -353,13 +347,12 @@ export type CustomerFn = () => CustomerFnResult;
 /**
  * Opt-in registration metadata key. Ordinary plugin properties remain untouched.
  * Symbol.for keeps the protocol shared across application and Lambda-layer copies.
- * @experimental
  */
 export const DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION = Symbol.for(
   "aws.lambda.durable.instrumentation.plugin-registration",
 );
 
-/** @experimental Optional registration protocol, separate from the hook interface. */
+/** Optional registration protocol, separate from the hook interface. */
 export interface RegisteredDurableInstrumentationPlugin
   extends DurableInstrumentationPlugin {
   readonly [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: {
@@ -373,7 +366,6 @@ export interface RegisteredDurableInstrumentationPlugin
  * group on the factory's prototype chain applies; an own declaration adds a
  * constraint rather than replacing an inherited one. Diagnostics retain the
  * nearest declared registration name.
- * @experimental
  */
 export interface RegisteredDurableInstrumentationPluginFactory
   extends DurableInstrumentationPluginFactory {

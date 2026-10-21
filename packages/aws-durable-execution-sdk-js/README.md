@@ -291,6 +291,16 @@ The service accepts 1 to 32 characters from `[a-zA-Z0-9-_]`. An empty string sel
 
 ### Dynamic Instrumentation Plugins
 
+The public SDK 3.x instrumentation contracts are stable. This includes lifecycle
+hooks and payloads, per-invocation factories, explicit and environment-based
+installation, registration metadata, propagation metadata, wrapper callback
+types, plugin configuration, and plugin-load errors. Internal dispatch and
+conversion helpers are not public APIs. Earlier plugin installation contracts
+are not supported by SDK 3.x; see [SDK 3.x plugin migration](#sdk-3x-plugin-migration).
+
+Trace propagation still requires the Lambda model and backend to support
+`ChainedInvokeOptions.XAmznTraceId`.
+
 Instrumentation plugins can be selected at Lambda cold start without importing
 them in the function artifact. Install a provider package in the function or a
 Lambda layer, then set an ordered list of package or module specifiers:
