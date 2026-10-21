@@ -130,7 +130,8 @@ export async function ensureRunning(
 
   // GetMicrovm and ResumeMicrovm both return ResourceNotFoundException for
   // a removed MicroVM. ResumeMicrovm returns it when the MicroVM is removed
-  // after the state check. So both calls throw the same error.
+  // after the state check. So `ensureRunning` throws the same
+  // `MicrovmStateError` for both.
   const notFound = (): MicrovmStateError =>
     new MicrovmStateError(
       `MicroVM ${options.microvmId} no longer exists. A session MicroVM lives at most its session timeout plus 5 minutes, and never longer than 8 hours.`,
