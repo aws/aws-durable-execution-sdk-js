@@ -1,8 +1,7 @@
 # Shared persistent LMI tests
 
-The 14 selected example suites (24 tests) and 12 lifecycle cases share **one**
-persistent function, `js-lmi-e2e-shared:$LATEST.PUBLISHED`. This replaces the
-previous 14 example functions plus three lifecycle functions. The function uses
+The 15 selected example suites (25 tests) and 12 lifecycle cases share **one**
+persistent function, `js-lmi-e2e-shared:$LATEST.PUBLISHED`. The function uses
 Node.js 24 / arm64, 2 GiB, a 60-second invocation timeout, a 300-second durable
 execution timeout, environment concurrency 2, one execution environment and
 `AWS_LAMBDA_NODEJS_WORKER_COUNT=1`.

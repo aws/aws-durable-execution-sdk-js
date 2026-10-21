@@ -164,8 +164,8 @@ Conformance tests verify cross-SDK behavioral parity and live in a separate repo
 
 ## Lambda Managed Instances coverage
 
-`.github/workflows/lmi-lifecycle-tests.yml` runs the 14 selected example suites
-(24 tests) and the lifecycle regressions against one persistent LMI function.
+`.github/workflows/lmi-lifecycle-tests.yml` runs the 15 selected example suites
+(25 tests) and the lifecycle regressions against one persistent LMI function.
 The workflow serializes all runs, updates the existing function, and waits for
 quiescence between cases. It does not delete functions after a run. See
 [lmi-tests/README.md](lmi-tests/README.md) for commands, routing, ownership,

@@ -124,7 +124,7 @@ jobs:
       - name: Create or update the persistent shared function
         id: deploy
         run: python lmi-tests/deploy.py deploy --stack-name "$LMI_STACK_NAME" --run-id "${{ github.run_id }}-${{ github.run_attempt }}" --concurrency 2
-      - name: Run 14 existing example suites through the shared function
+      - name: Run 15 existing example suites through the shared function
         run: node lmi-tests/run-examples.mjs
       - name: Run real-service lifecycle regressions
         if: ${{ !cancelled() && steps.deploy.outcome == 'success' && !hashFiles('lmi-tests/artifacts/quarantine.json') && hashFiles('lmi-tests/artifacts/manifest.json') }}
