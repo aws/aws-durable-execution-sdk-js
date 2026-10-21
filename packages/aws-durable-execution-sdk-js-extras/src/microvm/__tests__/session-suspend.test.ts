@@ -367,6 +367,83 @@ describe("microvmSession with a MicroVM that suspends itself", () => {
     expect(client.events).not.toContain("request:/second");
   });
 
+  it("fails the job at once when the MicroVM is removed before ResumeMicrovm", async () => {
+    const client = new FakeMicrovmsClient();
+    const endpoint = recordingEndpoint(client);
+    const runner = runnerFor(client, endpoint, twoJobsWithWait);
+    // The worker suspended the MicroVM during the wait. The MicroVM is then
+    // removed between the state check and the resume.
+    client.getResponses = [
+      async () => ({ state: "RUNNING" }),
+      async () => ({ state: "SUSPENDED" }),
+    ];
+    client.resumeResponses = [
+      throwing(
+        Object.assign(new Error("MicroVM not found: mvm-1"), {
+          name: "ResourceNotFoundException",
+        }),
+      ),
+    ];
+
+    const executionPromise = runner.run({ payload: {} });
+    await complete(runner, "first", "one");
+    const execution = await executionPromise;
+
+    expect(execution.getStatus()).toBe("FAILED");
+    expect(execution.getError()).toMatchObject({
+      errorType: MicrovmNotRunningError.name,
+      errorMessage: expect.stringContaining("second"),
+    });
+    // One state check and one resume for the second job: the error is not
+    // retried.
+    expect(client.events).toEqual([
+      "get:RUNNING",
+      "request:/first",
+      "get:SUSPENDED",
+      "resume",
+      "terminate",
+    ]);
+  });
+
+  it("fails the job at once when the MicroVM is removed before the ResumeMicrovm of a recheck", async () => {
+    const client = new FakeMicrovmsClient();
+    const endpoint = recordingEndpoint(client);
+    // The state check sees RUNNING. The worker suspends the MicroVM before
+    // the request arrives, so the endpoint answers 502. The recheck sees
+    // SUSPENDED. The MicroVM is then removed before the resume.
+    endpoint.responses = [502];
+    client.getResponses = [
+      async () => ({ state: "RUNNING" }),
+      async () => ({ state: "SUSPENDED" }),
+    ];
+    client.resumeResponses = [
+      throwing(
+        Object.assign(new Error("MicroVM not found: mvm-1"), {
+          name: "ResourceNotFoundException",
+        }),
+      ),
+    ];
+    const runner = runnerFor(client, endpoint, async (vm, ctx) =>
+      vm.invoke(ctx, "only", 1, { ...job, path: "/only" }),
+    );
+
+    const execution = await runner.run({ payload: {} });
+
+    expect(execution.getStatus()).toBe("FAILED");
+    expect(execution.getError()).toMatchObject({
+      errorType: MicrovmNotRunningError.name,
+      errorMessage: expect.stringContaining("only"),
+    });
+    // One request, one recheck, and one resume: the error is not retried.
+    expect(client.events).toEqual([
+      "get:RUNNING",
+      "request:/only",
+      "get:SUSPENDED",
+      "resume",
+      "terminate",
+    ]);
+  });
+
   it("lets the handler catch MicrovmNotRunningError, on the first run and on replay", async () => {
     const client = new FakeMicrovmsClient();
     const endpoint = recordingEndpoint(client);
