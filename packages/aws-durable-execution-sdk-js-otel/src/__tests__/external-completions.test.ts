@@ -11,8 +11,8 @@ import {
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
 import { ExternalCompletions } from "../external-completions";
-import { ExecutionOtelPlugin } from "../execution-plugin";
-import { InvocationOtelPlugin } from "../invocation-plugin";
+import { createExecutionOtelPluginFactory } from "../execution-plugin";
+import { createInvocationOtelPluginFactory } from "../invocation-plugin";
 import { deriveSpanIdFromOperationId } from "../deterministic-id-generator";
 
 const nanoseconds = (time: HrTime): bigint =>
@@ -42,13 +42,13 @@ const operation: OperationInfo = {
 };
 
 describe.each([
-  ["execution", ExecutionOtelPlugin],
-  ["invocation", InvocationOtelPlugin],
-] as const)("%s view completion notifications", (view, Plugin) => {
+  ["execution", createExecutionOtelPluginFactory],
+  ["invocation", createInvocationOtelPluginFactory],
+] as const)("%s view completion notifications", (view, createFactory) => {
   let exporter: InMemorySpanExporter;
   let providers: NodeTracerProvider[];
-  const createPlugin = () =>
-    new Plugin({
+  const createPlugin = (info: InvocationInfo = invocation) =>
+    createFactory({
       contextExtractor: () => undefined,
       tracerProviderFactory(createIdGenerator) {
         const provider = new NodeTracerProvider({
@@ -58,7 +58,7 @@ describe.each([
         providers.push(provider);
         return provider;
       },
-    });
+    }).createPlugin(info);
   beforeEach(() => {
     exporter = new InMemorySpanExporter();
     providers = [];
@@ -70,6 +70,77 @@ describe.each([
   });
   const spans = () =>
     exporter.getFinishedSpans().filter((span) => span.name === "external");
+
+  it.each(
+    ["WAIT", "INVOKE", "CHAINED_INVOKE", "CALLBACK"].flatMap((type) =>
+      [false, true].map((started) => ({ type, started })),
+    ),
+  )(
+    "flushes a $type completion during shutdown (started=$started) and deduplicates later hooks",
+    async ({ type, started: operationStarted }) => {
+      const current = createPlugin();
+      await current.onInvocationStart(invocation);
+      if (operationStarted)
+        await current.onOperationStart({
+          ...operation,
+          type,
+          status: "STARTED",
+          endTimestamp: undefined,
+        });
+      const completed = () =>
+        spans().filter(
+          (span) => span.attributes["durable.operation.status"] === "SUCCEEDED",
+        );
+      let unblock!: () => void;
+      let flushing!: () => void;
+      const blocked = new Promise<void>((resolve) => {
+        unblock = resolve;
+      });
+      const started = new Promise<void>((resolve) => {
+        flushing = resolve;
+      });
+      const provider = providers[0];
+      const originalFlush = provider.forceFlush.bind(provider);
+      const flushed: number[] = [];
+      let activeFlushes = 0;
+      let maximumActiveFlushes = 0;
+      const flush = jest
+        .spyOn(provider, "forceFlush")
+        .mockImplementation(async () => {
+          activeFlushes++;
+          maximumActiveFlushes = Math.max(maximumActiveFlushes, activeFlushes);
+          flushed.push(completed().length);
+          if (flushed.length === 1) {
+            flushing();
+            await blocked;
+          }
+          await originalFlush();
+          activeFlushes--;
+        });
+      const ending = current.onInvocationEnd({
+        ...invocation,
+        status: "PENDING",
+      });
+      await started;
+      const completion = { ...operation, type };
+      const changed = current.onOperationChange({
+        ...invocation,
+        updatedOperations: { external: completion },
+      });
+      unblock();
+      await Promise.all([ending, changed]);
+      expect(completed()).toHaveLength(1);
+      expect(flushed).toContain(1);
+      expect(maximumActiveFlushes).toBe(1);
+      await current.onOperationChange({
+        ...invocation,
+        updatedOperations: { external: completion },
+      });
+      await current.onOperationEnd(completion);
+      expect(completed()).toHaveLength(1);
+      flush.mockRestore();
+    },
+  );
 
   it("drains a completion delivered while invocation-end flush is awaiting", async () => {
     const current = createPlugin();
@@ -135,9 +206,11 @@ describe.each([
       expect(completed()[0].startTime).toEqual(timeInputToHrTime(start));
       expect(completed()[0].endTime).toEqual(timeInputToHrTime(end));
     }
-    await current.onInvocationStart({ ...invocation, requestId: "request-2" });
-    await current.onOperationEnd({ ...completion, isReplay: true });
-    await current.onInvocationEnd({ ...invocation, status: "SUCCEEDED" });
+    const nextInfo = { ...invocation, requestId: "request-2" };
+    const next = createPlugin(nextInfo);
+    await next.onInvocationStart(nextInfo);
+    await next.onOperationEnd({ ...completion, isReplay: true });
+    await next.onInvocationEnd({ ...nextInfo, status: "SUCCEEDED" });
     expect(completed()).toHaveLength(1);
     flush.mockRestore();
   });
@@ -256,7 +329,7 @@ describe.each([
     async (type) => {
       for (const source of ["start", "change"] as const) {
         exporter.reset();
-        const current = createPlugin();
+        let current = createPlugin();
         const completion = Object.freeze({ ...operation, type });
         const replay = Object.freeze({ ...completion, isReplay: true });
         await current.onInvocationStart({
@@ -283,7 +356,8 @@ describe.each([
         await current.onOperationEnd(replay);
         await current.onInvocationEnd({ ...invocation, status: "RETRYING" });
         expect(spans()).toHaveLength(1);
-        // A redelivery in the next invocation is still eligible for recovery.
+        // Each major invocation receives a fresh instance; redelivery remains eligible.
+        current = createPlugin();
         await current.onInvocationStart({
           ...invocation,
           updatedOperations: { external: completion },
@@ -292,6 +366,7 @@ describe.each([
         await current.onInvocationEnd({ ...invocation, status: "PENDING" });
         expect(spans()).toHaveLength(2);
         // Full history without a fresh update is ordinary replay and adds none.
+        current = createPlugin();
         await current.onInvocationStart({
           ...invocation,
           operations: { external: completion },
@@ -306,7 +381,7 @@ describe.each([
   it.each(["update-first", "end-first"])(
     "deduplicates a normal completion and repeated notifications (%s)",
     async (order) => {
-      const current = createPlugin();
+      let current = createPlugin();
       const info: InvocationInfo = {
         ...invocation,
         updatedOperations:
@@ -321,11 +396,13 @@ describe.each([
       await current.onOperationEnd(operation);
       await current.onInvocationEnd({ ...invocation, status: "PENDING" });
       expect(spans()).toHaveLength(1);
-      // The same plugin must clear both pending updates and dedup IDs on resume.
-      await current.onInvocationStart({
+      // The major API creates a fresh instance for every invocation.
+      const resumed = {
         ...invocation,
         updatedOperations: { external: operation },
-      });
+      };
+      current = createPlugin(resumed);
+      await current.onInvocationStart(resumed);
       await current.onInvocationEnd({ ...invocation, status: "PENDING" });
       expect(spans()).toHaveLength(2);
     },

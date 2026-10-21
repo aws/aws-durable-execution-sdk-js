@@ -1324,6 +1324,31 @@ Resources:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
+  OtelRuntimeCarrier:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: OTelRuntimeCarrier-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: otel-runtime-carrier.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 10
+      DurableConfig:
+        ExecutionTimeout: 120
+        RetentionPeriodInDays: 7
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      Environment:
+        Variables:
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+    Metadata:
+      SkipBuild: "True"
   ParallelBasic:
     Type: AWS::Serverless::Function
     Properties:

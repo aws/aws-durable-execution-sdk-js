@@ -197,12 +197,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A heartbeat that met the completion while it was in flight logged "the callback no longer
     accepts heartbeats". It is no longer logged.
 
+- The MicroVM worker classified a failed `SuspendMicrovm` call of its own by HTTP status alone. So
+  expired credentials or a signature error with a 4xx status counted as a rejection. After a
+  rejection, the worker did not try the call again until a job ended. The service answers these
+  errors before it acts. So a first attempt that fails with one of them did not suspend the
+  MicroVM, and a later call can succeed. The worker now classifies such a first-attempt error as
+  refused for now. It accepts jobs again at once, and tries the call again. The same error can
+  repeat on every call, for example after a wrong secret key. So the next call starts after the
+  next idle time. That idle time lasts at least 30 seconds, unless a job or a resume hook starts
+  the idle time again. The error name decides,
+  whatever the HTTP status. A throttle, a clock-skew error, and any HTTP 429 are refused for now
+  too, on the first attempt. The worker's default client retries a throttle and a clock-skew error
+  itself. So with the default client, these errors usually end after a retried attempt. An error
+  after a retried attempt stays an unknown outcome. So the worker refuses jobs for up to 30
+  seconds, as before. A throttle is refused for now only from a client that does not retry, for
+  example a client from `createMicrovmsClient` with `maxAttempts: 1`. A `ConflictException` is
+  now an unknown outcome whatever its status. The Python worker classifies these errors the same
+  way.
+
 - A MicroVM worker job could reach its heartbeat timeout after two failed heartbeats in a row.
   Each heartbeat call could take half the interval. The service times the heartbeat timeout from
   when it receives a call, which can be at the call's start. So the worst gap was 3.5 intervals,
   above the 3-interval timeout. Each call now ends after a third of the interval, and the worst
   gap is about 2.83 intervals. The Python worker measured a 32.39-second gap against a 30-second
   heartbeat timeout before the same change.
+
+- The MicroVM worker could run two `SuspendMicrovm` calls at once. A `resume` hook that arrived
+  during the worker's own call ended the refusal and started the idle time. The session sends an
+  `autoSuspendIdleSeconds` of at least 10, but the `run` hook accepts any positive number. With an
+  idle time under 10 seconds, the idle time could end during the call. The worker then started a
+  second call on a MicroVM that was already suspending. If the first call then failed with a
+  rejection, it ended the refusal while the second call could still freeze the MicroVM. The worker
+  now runs one call at a time. A `resume` hook or a job end during the call starts the idle time
+  when the call ends. The idle time then starts only if no job runs and no `suspend` hook refusal
+  is in effect. The Python worker made the same change. (#1038)
 
 - The `microvm` request step in `@aws/durable-execution-sdk-js-extras` followed redirects. A 301,
   302, or 303 turned the job POST into a GET without the job, and a 2xx for that GET counted as
@@ -212,6 +240,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   308 for a missing trailing slash used to deliver the job and now fails, so set the path with its
   trailing slash.
 
+- A `microvmSession` job in `@aws/durable-execution-sdk-js-extras` could fail with a plain
+  `MicrovmDeliveryError` for a removed MicroVM. ResumeMicrovm answers `ResourceNotFoundException`
+  when the MicroVM is removed between the state check and the resume. The request step rethrew
+  that error, and the default retry strategy does not retry it. So a handler that catches
+  `MicrovmNotRunningError` to start a new session did not catch this case. The step now treats
+  this answer as it treats the same answer from GetMicrovm. The job fails at once with
+  `MicrovmNotRunningError`.
 - A `microvmSession` in `@aws/durable-execution-sdk-js-extras` computed its resume mode from the
   current config on every replay. The resume mode says whether each job checks the MicroVM state,
   and resumes a suspended MicroVM, before delivery. The worker reads its idle time once, from the
