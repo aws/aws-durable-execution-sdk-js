@@ -21,6 +21,7 @@ import {
   ResultSerializationError,
   ResultTooLargeError,
   safeGet,
+  TRANSIENT_4XX_NAMES,
   textOr,
 } from "./callback-reporter";
 import {
@@ -259,6 +260,13 @@ export interface MicrovmWorkerOptions<TInput = unknown, TOutput = unknown> {
    * Called only when the session asks the worker to suspend when idle. The
    * worker never destroys a client that this function returns; it destroys
    * only the default clients it creates itself.
+   *
+   * A client that retries must set `$metadata.attempts` on the error that it
+   * throws, as the AWS SDK does. The worker counts an error without it as a
+   * first attempt. So a throttle after a retried attempt would count as
+   * refused for now, and the worker would accept jobs again. An earlier
+   * attempt may have suspended the MicroVM, so such a job could freeze with
+   * it.
    */
   createMicrovmsClient?: (region: string) => LambdaMicrovmsClient;
   /**
@@ -359,17 +367,37 @@ export interface MicrovmWorkerListener {
  *    state, resumes it, and delivers the job again.
  * 5. The refusal ends when the `resume` lifecycle hook arrives, or 30 seconds
  *    after the call returned. The 30-second case covers an image without the
- *    `resume` hook. In both cases the idle time then starts again.
+ *    `resume` hook. In both cases the idle time then starts again. At most
+ *    one call runs at a time. So a `resume` hook or a job end during the call
+ *    starts the idle time when the call ends, not at once.
  * 6. A call that the service rejected on its first attempt, for example for a
  *    missing permission, ends the refusal at once. The MicroVM keeps running,
  *    and the worker does not retry the call. The next job that ends starts
- *    the idle time again.
- * 7. A call whose outcome is unknown, such as a timeout, a throttle, a
- *    conflict, or a server error, is handled like a successful call. The
- *    service may have suspended the MicroVM anyway. A rejection after the
- *    client retried an earlier attempt also counts as unknown, because the
- *    earlier attempt may have suspended the MicroVM. When the refusal ends,
- *    the idle time starts again, so the worker tries the call again.
+ *    the idle time again. The exception is a `resume` hook that arrived
+ *    during the call. The idle time then starts when the call ends. So the
+ *    worker retries the call one idle time after the call ends, if no job
+ *    runs and no `suspend` hook refusal is in effect when the call ends.
+ * 7. A call that the service refused for now on its first attempt also ends
+ *    the refusal at once. The service answers these errors before it acts,
+ *    so the MicroVM did not suspend. A later call can succeed, so the worker
+ *    tries the call again. The same error can repeat on every call, for
+ *    example after a wrong secret key. So the next call starts after the
+ *    next idle time. That idle time lasts at least 30 seconds, unless a job
+ *    or a `resume` hook starts the idle time again. A `resume` hook or a job
+ *    that ends during the call does not shorten the wait, because the
+ *    refused outcome arrives after it. With the default client, this item
+ *    covers expired credentials and a signature error without clock skew.
+ *    It covers a throttle, a clock-skew error, and HTTP 429 only from a
+ *    client that does not retry, for example a client from
+ *    `createMicrovmsClient` with `maxAttempts: 1`.
+ * 8. A call whose outcome is unknown, such as a timeout, a conflict, or a
+ *    server error, is handled like a successful call. The service may have
+ *    suspended the MicroVM anyway. An error after the client retried an
+ *    earlier attempt also counts as unknown, because the earlier attempt may
+ *    have suspended the MicroVM. The default client retries a throttle and a
+ *    clock-skew error itself. So with the default client, these errors
+ *    usually end here. When the refusal ends, the idle time starts again, so
+ *    the worker tries the call again.
  *
  * The listener counts only jobs. It cannot see background processes, or
  * inbound traffic that is not a job. A MicroVM that must keep such work
@@ -489,11 +517,26 @@ export function createMicrovmWorkerListener<
   // Set from the moment the idle time ends until the MicroVM runs again.
   // While set, the listener refuses jobs.
   let suspending = false;
+  // Set while the worker's own SuspendMicrovm call runs. At most one call
+  // runs at a time.
+  let suspendCallRunning = false;
+  // Set when the idle time could not start because a call was running, for
+  // example after a resume hook during the call. The idle time then starts
+  // when the call ends.
+  let idleAfterCall = false;
   let graceTimer: NodeJS.Timeout | undefined;
   // Counts the suspend hooks from Lambda. A suspend call of the worker's own
   // that the service rejected must not end a refusal that a suspend hook
   // started meanwhile.
   let suspendHooks = 0;
+  // Set when the service refused the worker's own call for now. Such an
+  // error can repeat on every call, for example after a wrong secret key.
+  // The idle time can be 0 milliseconds. So without a lower bound, the
+  // worker would call SuspendMicrovm in a loop. So the next idle time that
+  // starts lasts at least SUSPEND_GRACE_MS. startIdleTime clears the flag
+  // when it starts that idle time. A job that ends clears it too, because
+  // the job's end starts the normal idle time.
+  let idleAfterRefusalForNow = false;
   // Set by the terminate hook. The MicroVM is about to end, so no job can
   // start again.
   let terminating = false;
@@ -545,16 +588,34 @@ export function createMicrovmWorkerListener<
     ) {
       return;
     }
+    if (suspendCallRunning) {
+      // A resume hook during the call ends the refusal. An idle time started
+      // now could end during the call, and start a second call. If the first
+      // call then failed with a rejection, it would end the refusal while the
+      // second call can still freeze the MicroVM. So the idle time starts
+      // when the call ends.
+      idleAfterCall = true;
+      return;
+    }
     const { idleMs, region, microvmId: target } = autoSuspend;
+    const delayMs = idleAfterRefusalForNow
+      ? Math.max(idleMs, SUSPEND_GRACE_MS)
+      : idleMs;
+    idleAfterRefusalForNow = false;
     idleTimer = setTimeout(() => {
       idleTimer = undefined;
       // A job that started after the timer was set cancels it. This check
       // covers a job that started in the same event loop turn.
       if (jobs.size === 0 && !closed) {
         suspending = true;
-        track(suspendSelf(region, idleMs, target));
+        suspendCallRunning = true;
+        track(
+          suspendSelf(region, idleMs, delayMs, target).finally(
+            suspendCallEnded,
+          ),
+        );
       }
-    }, idleMs);
+    }, delayMs);
     // The timer must not keep a test process, or a closed worker, alive.
     idleTimer.unref();
   };
@@ -563,6 +624,19 @@ export function createMicrovmWorkerListener<
     clearTimeout(idleTimer);
     idleTimer = undefined;
   };
+
+  /**
+   * Marks the SuspendMicrovm call as ended, and starts the idle time that a
+   * resume hook or a job end asked for during the call. startIdleTime checks
+   * again that no job runs and that no refusal is in effect.
+   */
+  function suspendCallEnded(): void {
+    suspendCallRunning = false;
+    if (idleAfterCall) {
+      idleAfterCall = false;
+      startIdleTime();
+    }
+  }
 
   /**
    * Ends the refusal after the grace period, unless the `resume` hook ends it
@@ -598,6 +672,7 @@ export function createMicrovmWorkerListener<
   async function suspendSelf(
     region: string,
     idleMs: number,
+    waitedMs: number,
     target: string,
   ): Promise<void> {
     let client: LambdaMicrovmsClient;
@@ -618,9 +693,12 @@ export function createMicrovmWorkerListener<
       startDeferredJobs();
       return;
     }
+    // waitedMs differs from idleMs after a refusal for now, because that
+    // idle time lasts at least SUSPEND_GRACE_MS.
     logger.info("suspending the idle MicroVM", {
       microvmId: target,
       idleMs,
+      waitedMs,
     });
     const hooksBefore = suspendHooks;
     try {
@@ -629,26 +707,49 @@ export function createMicrovmWorkerListener<
         { abortSignal: AbortSignal.timeout(SUSPEND_CALL_TIMEOUT_MS) },
       );
     } catch (error) {
-      if (isRejectedRequest(error)) {
-        logger.warn(
-          "could not suspend the idle MicroVM, because the service rejected the call. It keeps running. A missing permission needs lambda:SuspendMicrovm on the MicroVM image in its execution role.",
-          { microvmId: target, error: describe(error) },
-        );
-        // The service did nothing. So jobs can run again at once. The idle
-        // time does not start again, so a missing permission is not retried.
-        // A suspend hook that arrived during the call means that the
-        // MicroVM is suspending anyway, so its refusal stays.
+      const outcome = classifySuspendError(error);
+      if (outcome !== "unknown") {
+        if (outcome === "rejected") {
+          logger.warn(
+            "could not suspend the idle MicroVM, because the service rejected the call. It keeps running. A missing permission needs lambda:SuspendMicrovm on the MicroVM image in its execution role.",
+            { microvmId: target, error: describe(error) },
+          );
+        } else if (suspendHooks === hooksBefore) {
+          logger.warn(
+            "could not suspend the idle MicroVM, because the service refused the call for now. It keeps running. The worker tries the call again after the next idle time. That idle time lasts at least 30 seconds, unless a job or a resume hook starts the idle time again.",
+            { microvmId: target, error: describe(error) },
+          );
+        } else {
+          // The branch below keeps the hook's refusal and sets no lower
+          // bound. So the warning above would be false here.
+          logger.warn(
+            "could not suspend the idle MicroVM, because the service refused the call for now. A suspend hook arrived during the call, so this call does not end the hook's refusal. The idle time starts again after the resume hook, or 30 seconds after the last suspend hook.",
+            { microvmId: target, error: describe(error) },
+          );
+        }
+        // The service did nothing. So jobs can run again at once. A suspend
+        // hook that arrived during the call means that the MicroVM is
+        // suspending anyway, so its refusal stays.
         if (suspendHooks === hooksBefore) {
           clearTimeout(graceTimer);
           graceTimer = undefined;
           suspending = false;
           startDeferredJobs();
+          // A rejection, such as a missing permission, is not retried until
+          // a job ends. A refusal for now, such as expired credentials, can
+          // clear. So it is retried after the next idle time. That idle
+          // time lasts at least SUSPEND_GRACE_MS, because the same error
+          // can repeat on every call.
+          if (outcome === "refusedForNow") {
+            idleAfterRefusalForNow = true;
+            startIdleTime();
+          }
         }
         return;
       }
-      // A timeout, a throttle, a conflict, a server error, or a rejection
-      // after a retried attempt does not show whether the service suspended
-      // the MicroVM. So the refusal continues, as after a successful call.
+      // A timeout, a conflict, a server error, or an error after a retried
+      // attempt does not show whether the service suspended the MicroVM. So
+      // the refusal continues, as after a successful call.
       logger.warn(
         "the suspend call for the idle MicroVM had an unknown outcome. The worker refuses jobs until the MicroVM resumes, or for 30 seconds.",
         { microvmId: target, error: describe(error) },
@@ -1082,6 +1183,9 @@ export function createMicrovmWorkerListener<
       .finally(() => {
         jobs.delete(job.callbackId);
         remember(job.callbackId);
+        // A job that ran across a refusal for now ends now. Its end starts
+        // the normal idle time, without the lower bound.
+        idleAfterRefusalForNow = false;
         startIdleTime();
       })
       // A last guard: nothing above should reject, and a rejection here
@@ -1638,41 +1742,90 @@ const REJECTION_NAMES = new Set([
   "AccessDeniedException",
   "ValidationException",
   "ResourceNotFoundException",
-  // Missing credentials stop the request before it is sent.
+  // Missing credentials count as a rejection. A later call in the same
+  // MicroVM most likely finds no credentials either.
   "CredentialsProviderError",
 ]);
 
 /**
- * Whether a failed call shows that the service did nothing: a known rejection,
- * or a 4xx other than 408, 409, and 429, on the client's first attempt.
+ * What a failed SuspendMicrovm call shows about the MicroVM.
  *
- * The client retries a 5xx, a throttle, and a network error, and reports only
- * the last attempt's error. An earlier attempt may have suspended the
- * MicroVM before its response was lost. So a rejection after more than one
- * attempt does not show that the service did nothing.
+ * - `rejected`: the service did nothing, and a later call would most likely
+ *   fail the same way, for example for a missing permission.
+ * - `refusedForNow`: the service did nothing, and a later call can succeed:
+ *   for example expired credentials, a signature error, or a throttle.
+ * - `unknown`: the service may have suspended the MicroVM.
  */
-function isRejectedRequest(error: unknown): boolean {
+type SuspendOutcome = "rejected" | "refusedForNow" | "unknown";
+
+/**
+ * Classifies a failed SuspendMicrovm call. The rules match the Python
+ * worker's `classify_suspend_error`.
+ *
+ * 1. A value that is not an `Error` is `unknown`.
+ * 2. The client retries a 5xx, a throttle, a clock-skew error, and a network
+ *    error, and reports only the last attempt's error. An earlier attempt
+ *    may have suspended the MicroVM before its response was lost. So any
+ *    error after more than one attempt is `unknown`. The worker's default
+ *    client retries a throttle and a clock-skew error itself. So with the
+ *    default client, these errors usually end here.
+ * 3. A known rejection name is `rejected`. Missing credentials count as a
+ *    rejection. A later call in the same MicroVM most likely finds no
+ *    credentials either.
+ * 4. `ConflictException` is `unknown`, whatever its status. It can mean that
+ *    the MicroVM is already suspending.
+ * 5. A name in `TRANSIENT_4XX_NAMES` is `refusedForNow`, whatever its
+ *    status. The set covers expired credentials, clock-skew and signature
+ *    errors, and throttles. The service answers them before it acts. Some
+ *    services answer a throttle with HTTP 400. With the default client, a
+ *    first attempt reaches this rule for expired credentials and for a
+ *    signature error without clock skew. A throttle or a clock-skew error
+ *    reaches it from a client that does not retry, for example a client
+ *    from `createMicrovmsClient` with `maxAttempts: 1`.
+ * 6. HTTP 429 is `refusedForNow`.
+ * 7. Any other 4xx except 408 and 409 is `rejected`.
+ * 8. Any other error, such as a timeout, a dropped connection, a 408, or a
+ *    server error, is `unknown`.
+ *
+ * Python checks missing credentials before the attempt count. This function
+ * checks the attempt count first. The difference is defensive only. The SDK
+ * resolves credentials before its retry step runs. So the SDK never reports
+ * a `CredentialsProviderError` after a retried attempt, and both orders give
+ * the same result for its errors.
+ */
+function classifySuspendError(error: unknown): SuspendOutcome {
   if (!(error instanceof Error)) {
-    return false;
+    return "unknown";
   }
   const metadata = (
     error as { $metadata?: { httpStatusCode?: number; attempts?: number } }
   ).$metadata;
   if (metadata?.attempts !== undefined && metadata.attempts > 1) {
-    return false;
+    return "unknown";
   }
   if (REJECTION_NAMES.has(error.name)) {
-    return true;
+    return "rejected";
+  }
+  if (error.name === "ConflictException") {
+    return "unknown";
+  }
+  if (TRANSIENT_4XX_NAMES.has(error.name)) {
+    return "refusedForNow";
   }
   const status = metadata?.httpStatusCode;
-  return (
+  if (status === 429) {
+    return "refusedForNow";
+  }
+  if (
     status !== undefined &&
     status >= 400 &&
     status < 500 &&
     status !== 408 &&
-    status !== 409 &&
-    status !== 429
-  );
+    status !== 409
+  ) {
+    return "rejected";
+  }
+  return "unknown";
 }
 
 /** Describes an error for a log line, and never throws. */

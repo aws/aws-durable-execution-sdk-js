@@ -162,10 +162,20 @@ export class DurableContextImpl<Logger extends DurableLogger>
       getDurableLogData: (): DurableLogData => {
         const activeContext = getActiveContext();
 
-        const result: DurableLogData = {
+        // One logger instance can serve several executions in one process. It keeps only the
+        // last logging context it was given, so this closure can belong to another execution.
+        // The active context records the execution it runs in. So prefer its identity, and use
+        // this context's identity only when no active context records one.
+        const execution = activeContext?.execution ?? {
           executionArn: this._executionContext.durableExecutionArn,
           requestId: this._executionContext.requestId,
           tenantId: this._executionContext.tenantId,
+        };
+
+        const result: DurableLogData = {
+          executionArn: execution.executionArn,
+          requestId: execution.requestId,
+          tenantId: execution.tenantId,
           operationId:
             !activeContext || activeContext?.contextId === "root"
               ? undefined
@@ -185,6 +195,22 @@ export class DurableContextImpl<Logger extends DurableLogger>
         }
 
         return result;
+      },
+      getLogEnrichment: ():
+        | Record<string, string | number | boolean>
+        | undefined => {
+        // As with the identity above, the logger may hold the logging context of another
+        // handler, whose plugins differ. So prefer the plugins of the execution that the active
+        // context records, and use this context's plugins only when none is recorded.
+        const execution = getActiveContext()?.execution;
+        try {
+          return execution
+            ? execution.enrichLogContext?.()
+            : this.durableExecution.plugin?.enrichLogContext?.();
+        } catch {
+          // Plugin errors must never affect logging
+          return undefined;
+        }
       },
     };
   }

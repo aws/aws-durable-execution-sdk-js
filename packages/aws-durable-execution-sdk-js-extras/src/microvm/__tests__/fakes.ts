@@ -154,24 +154,30 @@ export interface RecordedRequest {
   url: string;
   headers: Record<string, string>;
   body: MicrovmJobRequest<unknown>;
+  redirect: RequestInit["redirect"];
 }
 
 /**
- * Answers each POST from a queue. A number is an HTTP status. An Error is a
- * connection failure. "hang" is a request that never answers: it rejects
- * only when its abort signal fires. An empty queue answers 202.
+ * Answers each POST from a queue. A number is an HTTP status. A Response is
+ * returned as it is, for example a redirect with a `Location` header. An
+ * Error is a connection failure. "hang" is a request that never answers: it
+ * rejects only when its abort signal fires. An empty queue answers 202.
  */
 export class FakeEndpoint {
   readonly requests: RecordedRequest[] = [];
-  responses: (number | Error | "hang")[] = [];
+  responses: (number | Response | Error | "hang")[] = [];
 
   readonly fetch = (async (url: string, init: RequestInit) => {
     this.requests.push({
       url,
       headers: init.headers as Record<string, string>,
       body: JSON.parse(init.body as string),
+      redirect: init.redirect,
     });
     const next = this.responses.shift() ?? 202;
+    if (next instanceof Response) {
+      return next;
+    }
     if (next === "hang") {
       return new Promise((_resolve, reject) => {
         init.signal?.addEventListener("abort", () =>

@@ -34,26 +34,26 @@ Each package maintains its own version in the `version` field of its `package.js
 
 Bump the version in the appropriate `package.json` file(s) and merge to `main` before creating a release.
 
-### Coordinated OTel 1.2 minor release
+### Released minor versions and the next major release
 
-Core **2.7.0**, OTel **1.2.0**, and testing **1.3.1** prepare the coordinated
-minor release. Merge #953 through #956 before release so the new core/plugin
-pair supplies invocation-local headers and rejects competing OTel views.
-These version edits do not publish packages.
+The published `sdk-2.7.0` release contains core **2.7.0**, OTel **1.2.0**, and
+testing **1.3.1**. The `sdk-2.7.1` patch releases core **2.7.1** and OTel
+**1.2.1** with the operation telemetry corrections from #960. The major factory
+migration retains those fixes and the current conformance handlers.
 
-Preserve supported older combinations: OTel's optional core peer is
-`>=2.4.0 <3.0.0`, its dynamic provider API remains version 1, and separate
-OTel-only Lambda layers remain supported. Existing valid on-demand registrations
-keep their environment carrier behavior. New LMI-header and registration
-exclusivity capabilities require the new core/plugin pair; updating a plugin
-cannot retrofit an older core's metadata or registration path. Testing 1.3.1
-admits compatible core versions with `>=1.0.1 <3.0.0`, including later patches.
+Those released core/OTel pairs include registration exclusivity from #956,
+but do not include invocation-local LMI carrier forwarding or extraction from
+#955. That carrier capability is planned for core **3.0.0** / OTel **2.0.0** in
+#924, together with per-invocation plugin factories. Until that release, it is
+available only in matched development builds containing the change; existing
+package version labels do not identify those builds.
 
-Installed-package tests load pinned published core 2.4/2.6 and OTel 1.1 alongside
-candidate packages, check source and runtime compatibility, and exercise separate
-application/layer trees. Provider-version rejection and a raised dependency
-floor are not substitutes for backward-compatibility evidence. Core 3's factory
-migration remains separate and must use its matching major plugin release.
+The released OTel 1.2 packages preserve their optional `>=2.4.0 <3.0.0` core
+peer, provider API version 1, and separate OTel-only layers. Core 3 uses the new
+factory contract and requires matching plugin packages/layers. Installed-package
+tests retain released-version controls and verify both the declared major-pair
+compatibility and explicit rejection of legacy providers. Version edits do not
+publish packages.
 
 ## Cutting a Release
 
@@ -202,3 +202,13 @@ Before publishing a release:
 - [ ] CI checks pass on `main`
 - [ ] Release notes written with separate sections per package
 - [ ] Tag follows the naming convention (`sdk-X.Y.Z`, `otel-X.Y.Z`, `test-X.Y.Z`, `eslint-X.Y.Z`, `telemetry-exporter-X.Y.Z`, `telemetry-mcp-X.Y.Z`, or `/`-joined)
+
+## SDK 3.x migration release order
+
+The published minor releases use testing SDK 1.3.1 with core 2.x. This major
+migration uses testing SDK 1.3.2 with its broadened `>=1.0.1 <4.0.0` peer range,
+so publication cannot skip the new range because 1.3.1 already exists. Core
+3.0.0 and OTel 2.0.0 carry the explicit factory migration; testing remains a
+compatible patch. The renamed Telemetry Exporter retains the upstream
+0.1.0-alpha.0 version and requires core `>=3.0.0 <4.0.0` for its factory API.
+Version metadata does not authorize a merge or publication.

@@ -183,7 +183,11 @@ export class InstalledCoreFixture {
     return { status: result.status, output: result.stdout + result.stderr };
   }
 
-  typecheckConsumer(source: string): { status: number | null; output: string } {
+  typecheckConsumer(
+    source: string,
+    exactOptionalPropertyTypes = false,
+    skipLibCheck = false,
+  ): { status: number | null; output: string } {
     const input = join(this.applicationDirectory, "consumer.ts");
     writeFileSync(input, source);
     writeFileSync(
@@ -192,7 +196,8 @@ export class InstalledCoreFixture {
         compilerOptions: {
           noEmit: true,
           strict: true,
-          skipLibCheck: false,
+          exactOptionalPropertyTypes,
+          skipLibCheck,
           module: "esnext",
           moduleResolution: "bundler",
           target: "ES2022",

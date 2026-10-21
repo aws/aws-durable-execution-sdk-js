@@ -306,30 +306,40 @@ their configured order; environment-selected plugins follow in the order listed
 in `DURABLE_EXECUTION_PLUGINS`. Both sources are additive, including when they
 create the same plugin type.
 
-Provider modules export a versioned factory named
-`durableExecutionPluginProvider`:
+Provider modules export a factory named `durableExecutionPluginProvider`. A
+factory is an object with a `createPlugin(info)` method; a bare function is not
+one and is rejected. The SDK calls `createPlugin` once per invocation, with that
+invocation's `InvocationInfo`, so the instance it returns serves exactly one
+invocation:
 
 ```typescript
 import type {
   DurableInstrumentationPlugin,
-  DurableInstrumentationPluginProvider,
+  DurableInstrumentationPluginFactory,
 } from "@aws/durable-execution-sdk-js";
 
 class AuditPlugin implements DurableInstrumentationPlugin {
+  constructor(
+    private readonly exporter: Exporter,
+    private readonly executionArn: string,
+  ) {}
   // Implement the lifecycle hooks needed by this plugin.
 }
 
-export const durableExecutionPluginProvider = {
-  pluginApiVersion: 1,
-  pluginType: AuditPlugin,
-  createPlugin: () => new AuditPlugin(),
-} satisfies DurableInstrumentationPluginProvider<AuditPlugin>;
+// Built once for the execution environment and shared by every instance.
+const exporter = new Exporter();
+
+export const durableExecutionPluginProvider: DurableInstrumentationPluginFactory<AuditPlugin> =
+  {
+    createPlugin: (info) => new AuditPlugin(exporter, info.executionArn),
+  };
 ```
 
-Declare `pluginApiVersion` as a literal instead of importing the SDK constant
-at runtime. The provider type checks the literal against the supported version,
-while the SDK loader performs the runtime compatibility check. This allows a
-provider package to depend on the SDK only for TypeScript types.
+Because an instance is dropped when its invocation returns, a plugin never has
+to key per-execution state by execution ARN, and two executions running
+concurrently in one execution environment cannot observe each other's state.
+State that belongs to the execution environment — an exporter, a tracer
+provider, a scheduler — belongs outside the factory, as above.
 
 The module specifier must be resolvable through normal application module
 resolution or Node.js module paths. For a Lambda layer, package the provider and
@@ -343,9 +353,14 @@ plugin-layer.zip
             `-- durable-audit
 ```
 
-Malformed configuration, missing modules or exports, incompatible provider API
-versions, invalid plugin types, and provider construction failures are reported
-as `PluginLoadError` failures before execution state is read.
+Malformed configuration, missing modules or exports, a
+`durableExecutionPluginProvider` without a `createPlugin` method, and an entry in
+`DurableExecutionConfig.plugins` without one are reported as `PluginLoadError`
+failures before execution state is read — the two sources are checked by the same
+rule, because an entry with no `createPlugin` could never produce a plugin. A
+`createPlugin` that throws when it runs, or returns nothing, is contained like
+any other plugin failure: that plugin sits out the invocation and the execution
+is unaffected.
 
 ### Instrumentation Operation Status and Errors
 
@@ -576,6 +591,44 @@ context.configureLogger({
 context.configureLogger({ modeAware: false });
 ```
 
+### Powertools for AWS Lambda (TypeScript)
+
+`createPowertoolsLogger` wraps a [Powertools `Logger`](https://docs.powertools.aws.dev/lambda/typescript/latest/features/logger/). Every log entry then contains the durable execution metadata: `executionArn`, `requestId`, `tenantId`, `operationId`, `operationName`, and `attempt`. Keys without a value are omitted. Every entry also contains the fields that the configured plugins add, such as the OTel plugin's `traceId` and `spanId`, as entries of the default logger do.
+
+```typescript
+import { Logger } from "@aws-lambda-powertools/logger";
+import {
+  createPowertoolsLogger,
+  DurableContext,
+  PowertoolsDurableLogger,
+  withDurableExecution,
+} from "@aws/durable-execution-sdk-js";
+
+const logger = new Logger({ serviceName: "my-service" });
+
+export const handler = withDurableExecution(
+  async (
+    event: { orderId: string },
+    context: DurableContext<PowertoolsDurableLogger<Logger>>,
+  ) => {
+    context.configureLogger({ customLogger: createPowertoolsLogger(logger) });
+    context.logger.info("workflow-started", { orderId: event.orderId });
+  },
+);
+```
+
+- Declare `context` as `DurableContext<PowertoolsDurableLogger<Logger>>`, as above. Then `context.logger` and the step loggers accept the Powertools argument types. Without the declaration, `context.logger` accepts any arguments.
+- The keys use the same names as the default logger and the Python SDK.
+- A key passed in the log call replaces the metadata key with the same name. The metadata replaces keys set with `appendKeys` or `persistentKeys`, because Powertools applies per-call keys after those.
+- The adapter reads the metadata on every call. So one adapter instance logs the correct `operationId` and `attempt` for concurrent steps and child contexts.
+- Powertools reads only `message` from an `Error` passed as the first argument, and writes no stack. To log the stack, pass the `Error` as a later argument: `context.logger.error("charge failed", error)`.
+- The SDK does not depend on `@aws-lambda-powertools/logger`. Install it in your function.
+- `logger.addContext(context.lambdaContext)` adds the Powertools Lambda context fields, such as `cold_start` and `function_name`. It also adds `function_request_id`, which repeats `requestId`. For a tenant-scoped execution it adds `tenant_id`, which repeats `tenantId`. Powertools stores these fields on the `Logger` instance. So when several invocations run at the same time in one process, as on Lambda Managed Instances, they carry the values of the invocation that called `addContext` last. The durable metadata fields do not have this problem.
+
+Leave the `POWERTOOLS_DEV` environment variable unset in deployed functions. When it is set, Powertools writes through the global `console`. With Lambda's JSON log format, Lambda wraps each `console` line in a JSON object. So each Powertools entry then appears as a string inside the `message` field of a second JSON object.
+
+The `powertools-logger` example used to define its own adapter class, which wrote snake_case keys (`execution_arn`, `request_id`, `operation_id`). `createPowertoolsLogger` writes camelCase keys. If you copied that example, update log queries and metric filters to the camelCase names.
+
 ## Runtime requirements
 
 The SDK targets the Lambda managed Node.js runtimes (`nodejs22.x`, `nodejs24.x`), where
@@ -626,3 +679,34 @@ Measure your own workload before switching.
 ## License
 
 This project is licensed under the Apache-2.0 License.
+
+## SDK 3.x plugin migration
+
+SDK 3.x requires an explicit migration from the legacy v1 provider contract.
+Providers declaring `pluginApiVersion` are rejected with `PluginLoadError` in
+both `plugins` and `DURABLE_EXECUTION_PLUGINS` registration. They are not silently
+called with a different lifetime: v1 `createPlugin()` ran once per handler,
+whereas a 3.x factory's `createPlugin(info)` runs once per invocation.
+
+Replace legacy provider/instance registrations with a factory object:
+
+```typescript
+import { withDurableExecution, type InvocationInfo } from "@aws/durable-execution-sdk-js";
+
+const factory = {
+  createPlugin(info: InvocationInfo) {
+    return new MyPlugin(info);
+  },
+};
+const handler = withDurableExecution(myHandler, { plugins: [factory] });
+```
+
+Return a fresh plugin instance for each invocation. Keep intentionally shared
+resources, such as a tracer provider/exporter, outside the invocation instance;
+keep invocation-specific spans, operation maps and buffers inside it. Remove
+legacy `pluginApiVersion` and `pluginType` metadata after migrating the factory.
+Environment-loaded modules still export `durableExecutionPluginProvider`, whose
+value is now this factory shape. Upgrade bundled OTel layers together with core
+3.x and use their factory builders; an old 1.x layer is rejected rather than
+silently reinterpreted. Core 2.x's supported v1 providers are unaffected by this
+major-only policy.
