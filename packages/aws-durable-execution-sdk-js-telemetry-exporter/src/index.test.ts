@@ -1,4 +1,4 @@
-import { durableExecutionTelemetry } from "./index";
+import { durableExecutionTelemetry, withOperationsByName } from "./index";
 import type {
   TelemetryExporter,
   OperationResult,
@@ -9,6 +9,12 @@ import type {
   InvocationInfo,
   OperationChangeInfo,
   OperationInfo,
+} from "@aws/durable-execution-sdk-js";
+import {
+  CallbackTimeoutError,
+  DurableOperationError,
+  StepError,
+  StepInterruptedError,
 } from "@aws/durable-execution-sdk-js";
 import { setFlagsFromString as setV8Flags } from "node:v8";
 import { runInNewContext } from "node:vm";
@@ -403,6 +409,171 @@ describe("operation detail capture", () => {
       name: "StepError",
       message: "card declined",
     });
+  });
+});
+
+describe("error.name", () => {
+  // The error a user's step throws.
+  class PaymentError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = "PaymentError";
+    }
+  }
+
+  /**
+   * What the SDK hands the plugin for a failed step, live or replayed: the step
+   * handler checkpoints the user's error as an `ErrorObject` whose `ErrorType` is
+   * the error's `name`, and both the error it throws and the operation it
+   * reports to plugins are rebuilt from that object with
+   * `DurableOperationError.fromErrorObject`, a `StepError` whose `cause.name`
+   * is the `ErrorType`.
+   */
+  const fromCheckpoint = (ErrorType: string, ErrorMessage = "card declined") =>
+    DurableOperationError.fromErrorObject({ ErrorType, ErrorMessage });
+
+  const failedCharge = (error: Error): Record<string, OperationInfo> => ({
+    o1: op({ id: "o1", name: "validate", status: "SUCCEEDED" }),
+    o2: op({ id: "o2", name: "charge", status: "FAILED", attempt: 1, error }),
+  });
+
+  async function failedRecord(
+    executionError: Error | undefined,
+    operations: Record<string, OperationInfo> = {},
+  ): Promise<DurableExecutionTelemetryRecord> {
+    const exporter = new CapturingExporter();
+    await endAndDrain(
+      durableExecutionTelemetry({ exporters: [exporter] }),
+      endInfo({ status: "FAILED", executionError, operations }),
+    );
+    expect(exporter.records).toHaveLength(1);
+    return exporter.records[0];
+  }
+
+  const chargeError = (record: DurableExecutionTelemetryRecord) =>
+    record.operations.find((o) => o.name === "charge")?.error;
+  const chargeByNameError = (record: DurableExecutionTelemetryRecord) =>
+    withOperationsByName(record).operationsByName.charge?.error;
+
+  it("reports the user's error type for a live step failure, not StepError", async () => {
+    const thrown = new PaymentError("card declined");
+    // The wrapper the step handler throws carries the user's error as `cause`.
+    const live = new StepError(thrown.message, thrown);
+    expect(live.name).toBe("StepError");
+
+    const record = await failedRecord(live, failedCharge(live));
+
+    const expected = { name: "PaymentError", message: "card declined" };
+    expect(record.error).toEqual(expected);
+    expect(chargeError(record)).toEqual(expected);
+    expect(chargeByNameError(record)).toEqual(expected);
+  });
+
+  it("reports the same name for a failure read back from checkpointed state", async () => {
+    const exporter = new CapturingExporter();
+    const factory = durableExecutionTelemetry({
+      exporters: [exporter],
+      emitMode: "on-change",
+    });
+    const arn = arnFor("error-name-replay");
+
+    // Invocation 1: the step fails, the handler catches the StepError and
+    // suspends on a wait. The live wrapper wraps the user's own error.
+    const thrown = new PaymentError("card declined");
+    const live = new StepError(thrown.message, thrown);
+    const first = startFor(arn);
+    const plugin1 = factory.createPlugin(first);
+    await plugin1.onInvocationStart?.(first);
+    await plugin1.onInvocationEnd?.(
+      endFor(arn, {
+        status: "PENDING",
+        executionResult: undefined,
+        operations: failedCharge(live),
+      }),
+    );
+
+    // Invocation 2: the step replays from its checkpointed ErrorObject, the
+    // handler rethrows it, and the execution fails.
+    const replayed = fromCheckpoint(thrown.name);
+    const operations = failedCharge(fromCheckpoint(thrown.name));
+    const second = startFor(arn, { isFirstInvocation: false, operations });
+    const plugin2 = factory.createPlugin(second);
+    await plugin2.onInvocationStart?.(second);
+    await plugin2.onInvocationEnd?.(
+      endFor(arn, {
+        status: "FAILED",
+        executionResult: undefined,
+        executionError: replayed,
+        operations,
+      }),
+    );
+
+    const expected = { name: "PaymentError", message: "card declined" };
+    const pending = exporter.records.filter(
+      (r) => r.status === "RUNNING" && chargeError(r),
+    );
+    expect(pending.length).toBeGreaterThan(0);
+    for (const r of pending) expect(chargeError(r)).toEqual(expected);
+    const failed = exporter.records.filter((r) => r.status === "FAILED");
+    expect(failed).toHaveLength(1);
+    expect(failed[0].error).toEqual(expected);
+    expect(chargeError(failed[0])).toEqual(expected);
+    expect(chargeByNameError(failed[0])).toEqual(expected);
+  });
+
+  it("reports the user's error when the handler throws it directly", async () => {
+    const record = await failedRecord(new PaymentError("card declined"));
+
+    expect(record.error).toEqual({
+      name: "PaymentError",
+      message: "card declined",
+    });
+  });
+
+  it("reports the SDK error's own name when no user error is behind it", async () => {
+    // A callback timeout raised by the SDK, with no cause.
+    const timeout = new CallbackTimeoutError("Callback timed out");
+    // An interrupted at-most-once step: the SDK's own error, checkpointed and
+    // read back like any step error.
+    const interrupted = fromCheckpoint(
+      new StepInterruptedError("s1").name,
+      "interrupted",
+    );
+
+    const record = await failedRecord(timeout, {
+      o1: op({
+        id: "o1",
+        name: "wait-callback",
+        type: "CALLBACK",
+        status: "FAILED",
+        error: timeout,
+      }),
+      o2: op({ id: "o2", name: "once", status: "FAILED", error: interrupted }),
+    });
+
+    expect(record.error).toEqual({
+      name: "CallbackTimeoutError",
+      message: "Callback timed out",
+    });
+    expect(record.operations.map((o) => o.error)).toEqual([
+      { name: "CallbackTimeoutError", message: "Callback timed out" },
+      { name: "StepInterruptedError", message: "interrupted" },
+    ]);
+  });
+
+  it.each([
+    ["PaymentError", "PaymentError"],
+    ["a.b.Outer$PaymentError", "PaymentError"],
+    ["__main__.PaymentError", "PaymentError"],
+    ["software.amazon.lambda.Probe$PaymentError", "PaymentError"],
+    ["Outer$Inner$PaymentError", "PaymentError"],
+    ["trailing.", "trailing."],
+  ])("reduces the checkpointed type string %p to %p", async (type, name) => {
+    const error = fromCheckpoint(type);
+    const record = await failedRecord(error, failedCharge(error));
+
+    expect(record.error).toEqual({ name, message: "card declined" });
+    expect(chargeError(record)).toEqual({ name, message: "card declined" });
   });
 });
 

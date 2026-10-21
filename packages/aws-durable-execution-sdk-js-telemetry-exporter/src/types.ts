@@ -242,6 +242,11 @@ export interface OperationRecord {
   durationMs?: number;
   attempt?: number;
   error?: {
+    /**
+     * Simple type name of the error the user's code raised (e.g.
+     * `"PaymentError"`), not the SDK wrapper (`StepError`). An SDK error with no
+     * user error behind it reports its own name.
+     */
     name: string;
     message: string;
   };
@@ -300,6 +305,11 @@ export interface OperationSummary {
   result?: OperationResult;
   /** Error — only present when this name occurs exactly once (and it failed, errors included). */
   error?: {
+    /**
+     * Simple type name of the error the user's code raised (e.g.
+     * `"PaymentError"`), not the SDK wrapper (`StepError`). An SDK error with no
+     * user error behind it reports its own name.
+     */
     name: string;
     message: string;
   };
@@ -332,6 +342,11 @@ export interface DurableExecutionTelemetryRecord {
   input?: ExecutionInput;
   output?: ExecutionOutput;
   error?: {
+    /**
+     * Simple type name of the error the user's code raised (e.g.
+     * `"PaymentError"`), not the SDK wrapper (`StepError`). An SDK error with no
+     * user error behind it reports its own name.
+     */
     name: string;
     message: string;
   };

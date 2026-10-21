@@ -44,7 +44,7 @@ interface DurableExecutionTelemetryRecord {
   output?: unknown; // Execution result (on success)
   error?: {
     // Error details (on failure)
-    name: string;
+    name: string; // Simple type name of the user's error, e.g. "PaymentError" (see below)
     message: string;
   };
 
@@ -71,12 +71,25 @@ interface OperationRecord {
   attempt?: number; // Retry attempt count
   error?: {
     // Per-operation error
-    name: string;
+    name: string; // Simple type name of the user's error, e.g. "PaymentError" (see below)
     message: string;
   };
   truncated?: boolean; // true if the size limiter dropped this operation's result
 }
 ```
+
+**`error.name`** is the simple type name of the error your code raised — for
+example `"PaymentError"` for `throw new PaymentError("card declined")` inside a
+step — rather than the SDK wrapper it reached the plugin in (`StepError`,
+`CallbackError`, ...). The same rule applies to the execution-level `error`, every
+`operations[].error` and `operationsByName.<name>.error`, and gives the same name
+whether the failure happened in the current invocation or is read back from
+checkpointed state on a later one. A type string with namespace or nesting
+separators is reduced to its last segment after any `.` and `$`
+(`"a.b.Outer$PaymentError"` → `"PaymentError"`). When no user error is behind a
+failure (for example a callback timeout), `name` is the SDK error's own name
+(`"CallbackTimeoutError"`). `message` is the error message. The Python and Java
+exporters report `error.name` the same way.
 
 ### Example Record
 

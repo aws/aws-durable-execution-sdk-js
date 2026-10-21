@@ -173,6 +173,68 @@ function mapStatus(
   return STATUS_MAP[status] ?? "RUNNING";
 }
 
+// --- Error Records ---
+
+/**
+ * Reduces an error type string to its simple type name: the last segment after
+ * any `.` or `$` (`"a.b.Outer$PaymentError"` -> `"PaymentError"`). This is the
+ * form every SDK reports, whether the type string came from a live error or
+ * from checkpointed state (`ErrorObject.ErrorType`). A string with no segment
+ * after its last separator is returned unchanged.
+ */
+function simpleErrorName(typeName: string): string {
+  const segment = typeName.slice(
+    Math.max(typeName.lastIndexOf("."), typeName.lastIndexOf("$")) + 1,
+  );
+  return segment || typeName;
+}
+
+/**
+ * Whether `error` is one of the SDK's wrapper errors (`DurableOperationError`:
+ * `StepError`, `CallbackError`, `ChildContextError`, ...) carrying the error the
+ * user's code raised as its `cause`.
+ *
+ * Detected structurally (a string `errorType` plus an error-like `cause`) rather
+ * than with `instanceof`, so it holds when the plugin and the SDK resolve to
+ * different copies of the SDK module (CommonJS and ES module builds).
+ */
+function wrappedCause(error: Error): { name: unknown } | undefined {
+  const { errorType, cause } = error as {
+    errorType?: unknown;
+    cause?: unknown;
+  };
+  if (typeof errorType !== "string") return undefined;
+  if (typeof cause !== "object" || cause === null || !("name" in cause)) {
+    return undefined;
+  }
+  return cause as { name: unknown };
+}
+
+/**
+ * Builds a record `error` from an error the SDK handed to the plugin.
+ *
+ * `name` is the simple type name of the error the user's code raised, so the
+ * same failure is reported under the same name by every SDK and on every
+ * invocation:
+ * - A live failure arrives as an SDK wrapper (`StepError`, ...) whose `cause` is
+ *   the user's error, so the cause's name is used.
+ * - The same failure read back from checkpointed state on a later invocation is
+ *   rebuilt by the SDK as a wrapper whose `cause.name` is the checkpointed
+ *   `ErrorType` string, so it resolves the same way.
+ * - Any other error (one the user's code threw directly, or an SDK error with no
+ *   user error behind it) reports its own name.
+ * The chosen name is reduced to its simple form by {@link simpleErrorName}.
+ * `message` is the message of the error passed in, unchanged.
+ */
+function toErrorRecord(error: Error): { name: string; message: string } {
+  const source = wrappedCause(error) ?? error;
+  const name = source.name;
+  return {
+    name: typeof name === "string" ? simpleErrorName(name) : (name as string),
+    message: error.message,
+  };
+}
+
 // --- Operation Records ---
 
 /**
@@ -224,9 +286,7 @@ function toOperationRecord(op: OperationInfo): OperationRecord {
     endTime: toIsoString(op.endTimestamp),
     durationMs,
     attempt: op.attempt,
-    error: op.error
-      ? { name: op.error.name, message: op.error.message }
-      : undefined,
+    error: op.error ? toErrorRecord(op.error) : undefined,
   };
 }
 
@@ -889,9 +949,7 @@ class DurableExecutionTelemetryInvocation
       durationMs,
       input: applyDataContent(args.input, content?.input),
       output: applyDataContent(args.output, content?.output),
-      error: args.error
-        ? { name: args.error.name, message: args.error.message }
-        : undefined,
+      error: args.error ? toErrorRecord(args.error) : undefined,
       operations: args.operations,
     };
   }
