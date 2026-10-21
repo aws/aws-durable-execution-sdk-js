@@ -26,9 +26,10 @@ const MAX_POLL_MS = 2_000;
  * then reports `MicrovmNotRunningError`.
  *
  * For a MicroVM that no longer exists, `cause` is the AWS SDK error. Only
- * code inside the step attempt sees `cause`: the retry strategy and the
- * plugin hooks. The SDK checkpoints the message, not the cause. So the
- * message carries the request ID.
+ * the retry strategy and the plugin hooks of a live step attempt see
+ * `cause`. The SDK checkpoints the message, not the cause. A replayed step
+ * rebuilds the error from the checkpoint, without it. So the message carries
+ * the request ID.
  */
 export class MicrovmStateError extends Error {
   override readonly name = MICROVM_STATE_ERROR_NAME;

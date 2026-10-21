@@ -263,8 +263,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `MicrovmNotRunningError` message now ends with `GetMicrovm request ID: <id>.` or
   `ResumeMicrovm request ID: <id>.`. The SDK checkpoints the message. So the handler sees the ID
   on the first run and on replay, and the execution history keeps it. A message has no ID when the
-  AWS SDK error carries none. Inside the request step, `MicrovmStateError` also keeps the AWS SDK
-  error as its `cause`.
+  AWS SDK error carries none. `MicrovmStateError` also keeps the AWS SDK error as its `cause`.
+  Only the retry strategy and the plugin hooks of a live step attempt see `cause`. A replayed step
+  rebuilds the error from the checkpoint, without it.
 
 - An `InvalidRunHookPayloadError` for a `runHookPayload` that is not JSON now keeps the parser's
   `SyntaxError` as its `cause`. Its message names the position of the error.
