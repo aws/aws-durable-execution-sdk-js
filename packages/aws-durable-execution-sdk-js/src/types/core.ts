@@ -332,6 +332,8 @@ export type Duration =
  * @internal
  */
 export interface ExecutionContext {
+  /** @internal Invocation-owned admission and deadline, absent in isolated fixtures. */
+  invocationLifecycle?: import("../utils/invocation-lifecycle/invocation-lifecycle").InvocationLifecycle;
   durableExecutionClient: DurableExecutionClient;
   _stepData: Record<string, Operation>; // Private, use getStepData() instead
   terminationManager: TerminationManager;

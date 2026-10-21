@@ -23,7 +23,7 @@ beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
 it.each([1, 8, 16])(
-  "finishes the real parent when flush resumes during a drain of %s children",
+  "preserves %s queued completions without ending a detached parent after handler return",
   async (count) => {
     const parentReady = gate(),
       releaseParent = gate(),
@@ -40,6 +40,8 @@ it.each([1, 8, 16])(
       (_, index) => `external-${index}`,
     );
     const observed = new Set<string>();
+    const parentBodyReturned = gate();
+    const parentEnded = jest.fn();
     let completionsBeforeEnd = 0;
     const processor: SpanProcessor = {
       onStart(span, parent) {
@@ -79,6 +81,7 @@ it.each([1, 8, 16])(
             for (const name of names) await parent.createCallback(name);
             parentReady.open();
             await releaseParent.opened;
+            parentBodyReturned.open();
             return "parent result";
           });
           await parentReady.opened;
@@ -95,6 +98,9 @@ it.each([1, 8, 16])(
                 if (names.includes(op.name ?? "") && op.status === "SUCCEEDED")
                   observed.add(op.name!);
               }
+            },
+            async onOperationEnd(info) {
+              if (info.name === "parent") parentEnded();
             },
             async onInvocationEnd() {
               completionsBeforeEnd = observed.size;
@@ -117,31 +123,35 @@ it.each([1, 8, 16])(
       await flushEntered.opened;
       expect(completionsBeforeEnd).toBe(count);
       releaseParent.open();
+      await parentBodyReturned.opened;
+      releaseFlush.open();
       const result = await execution;
       expect(result.getStatus()).toBe("SUCCEEDED");
       expect(result.getResult()).toBe("saved");
       expect(body).toHaveBeenCalledTimes(1);
-      // The parent hook has actually settled: a missing parent here is not just
-      // a span that finishes after the caller receives the result.
-      await Promise.resolve(childWork);
+      // The SDK fences this losing continuation after the root handler settles.
+      // Its user callback may return, but no late durable parent End is admitted.
+      expect(parentEnded).not.toHaveBeenCalled();
       const spans = exporter.getFinishedSpans();
       const callbacks = spans.filter((span) => names.includes(span.name));
       expect(callbacks).toHaveLength(count);
       const parents = spans.filter((span) => span.name === "parent");
-      expect(parents).toHaveLength(1);
+      expect(parents).toHaveLength(0);
+      const workflow = spans.find((span) => span.name === "Workflow")!;
+      expect(workflow).toBeDefined();
       for (const callback of callbacks) {
         expect(callback.parentSpanContext?.spanId).toBe(
-          parents[0].spanContext().spanId,
+          workflow.spanContext().spanId,
         );
         expect(callback.spanContext().traceId).toBe(
-          parents[0].spanContext().traceId,
+          workflow.spanContext().traceId,
         );
       }
     } finally {
       releaseFlush.open();
       releaseParent.open();
       releaseRoot.open();
-      await Promise.resolve(childWork).catch(() => undefined);
+      void Promise.resolve(childWork).catch(() => undefined);
       await execution.catch(() => undefined);
       await provider.shutdown();
       trace.disable();

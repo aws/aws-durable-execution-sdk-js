@@ -39,6 +39,8 @@ import {
 import { OperationLifecycleState } from "../../types/operation-lifecycle-state";
 import { DurableInstrumentationPlugin } from "../../types/plugin";
 import { normalizeOperations } from "../operation/normalize-operation";
+import { InvocationStatus } from "../../types/core";
+import type { InvocationLifecycle } from "../invocation-lifecycle/invocation-lifecycle";
 
 export const STEP_DATA_UPDATED_EVENT = "stepDataUpdated";
 
@@ -93,6 +95,11 @@ export class CheckpointManager implements Checkpoint {
   private readonly MAX_ITEMS_IN_BATCH = 250;
   private isTerminating = false;
   private disposed = false;
+  private resolveDisposed!: () => void;
+  private readonly whenDisposed = new Promise<void>((resolve) => {
+    this.resolveDisposed = resolve;
+  });
+  private processingImmediate?: ReturnType<typeof setImmediate>;
   /**
    * Set once the service answers a checkpoint without a token. See
    * {@link CheckpointManager.handleRevokedCheckpointToken}.
@@ -128,6 +135,7 @@ export class CheckpointManager implements Checkpoint {
      * `() => Infinity`. Nothing below this constructor needs the platform type to answer it.
      */
     private getRemainingTimeMs: () => number,
+    private invocationLifecycle?: InvocationLifecycle,
   ) {
     this.currentTaskToken = initialTaskToken;
   }
@@ -172,6 +180,10 @@ export class CheckpointManager implements Checkpoint {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.resolveDisposed();
+    clearImmediate(this.processingImmediate);
+    this.processingImmediate = undefined;
+    this.clearQueue();
 
     if (this.terminationTimer) {
       clearTimeout(this.terminationTimer);
@@ -219,7 +231,11 @@ export class CheckpointManager implements Checkpoint {
   }
 
   async forceCheckpoint(): Promise<void> {
-    if (this.isTerminating) {
+    if (
+      this.disposed ||
+      this.isTerminating ||
+      (this.invocationLifecycle && !this.invocationLifecycle.allowsOperations())
+    ) {
       log("⚠️", "Force checkpoint skipped - termination in progress");
       return new Promise(() => {}); // Never resolves during termination
     }
@@ -228,15 +244,18 @@ export class CheckpointManager implements Checkpoint {
       this.forceCheckpointPromises.push({ resolve, reject });
 
       if (!this.isProcessing) {
-        setImmediate(() => {
-          this.processQueue();
-        });
+        this.scheduleProcessing();
       }
     });
   }
 
   async waitForQueueCompletion(): Promise<void> {
-    if (this.queue.length === 0 && !this.isProcessing) {
+    if (
+      this.disposed ||
+      (this.queue.length === 0 &&
+        !this.isProcessing &&
+        this.forceCheckpointPromises.length === 0)
+    ) {
       return;
     }
 
@@ -296,7 +315,12 @@ export class CheckpointManager implements Checkpoint {
     stepId: string,
     data: Partial<OperationUpdate>,
   ): Promise<CheckpointOutcome> {
-    if (this.isTerminating || this.checkpointTokenRevoked) {
+    if (
+      this.disposed ||
+      this.isTerminating ||
+      this.checkpointTokenRevoked ||
+      (this.invocationLifecycle && !this.invocationLifecycle.allowsRequests())
+    ) {
       log("⚠️", "Execution result not checkpointed - manager is terminating:", {
         stepId,
         checkpointTokenRevoked: this.checkpointTokenRevoked,
@@ -324,9 +348,7 @@ export class CheckpointManager implements Checkpoint {
       this.queue.push(queuedItem);
 
       if (!this.isProcessing) {
-        setImmediate(() => {
-          this.processQueue();
-        });
+        this.scheduleProcessing();
       }
     });
   }
@@ -335,7 +357,11 @@ export class CheckpointManager implements Checkpoint {
     stepId: string,
     data: Partial<OperationUpdate>,
   ): Promise<void> {
-    if (this.isTerminating) {
+    if (
+      this.disposed ||
+      this.isTerminating ||
+      (this.invocationLifecycle && !this.invocationLifecycle.allowsOperations())
+    ) {
       log("⚠️", "Checkpoint skipped - termination in progress:", { stepId });
       return new Promise(() => {}); // Never resolves during termination
     }
@@ -372,9 +398,7 @@ export class CheckpointManager implements Checkpoint {
       }));
 
       if (!this.isProcessing) {
-        setImmediate(() => {
-          this.processQueue();
-        });
+        this.scheduleProcessing();
       }
     });
   }
@@ -467,6 +491,14 @@ export class CheckpointManager implements Checkpoint {
     );
   }
 
+  private scheduleProcessing(): void {
+    if (this.disposed || this.processingImmediate) return;
+    this.processingImmediate = setImmediate(() => {
+      this.processingImmediate = undefined;
+      void this.processQueue();
+    });
+  }
+
   private async processQueue(): Promise<void> {
     if (this.isProcessing) {
       return;
@@ -478,7 +510,11 @@ export class CheckpointManager implements Checkpoint {
     // away is set by the termination manager's callback, which a directly constructed
     // manager need not have wired, and forceCheckpoint() reaches processQueue without
     // enqueueing anything at all.
-    if (this.checkpointTokenRevoked) {
+    if (
+      this.disposed ||
+      this.checkpointTokenRevoked ||
+      (this.invocationLifecycle && !this.invocationLifecycle.allowsRequests())
+    ) {
       log("⚠️", "Checkpoint skipped - checkpoint token was withdrawn", {
         queueLength: this.queue.length,
       });
@@ -536,7 +572,12 @@ export class CheckpointManager implements Checkpoint {
       // The batch was accepted, but resolving its callers would let the handler run on past
       // the point where the service can be told anything -- the same reason the response's
       // NewExecutionState is not applied. Left unresolved, as on every other termination.
-      if (this.checkpointTokenRevoked) {
+      if (
+        this.disposed ||
+        this.checkpointTokenRevoked ||
+        (this.invocationLifecycle && !this.invocationLifecycle.allowsRequests())
+      ) {
+        this.notifyAbandoned(batch);
         return;
       }
 
@@ -555,6 +596,10 @@ export class CheckpointManager implements Checkpoint {
         newTaskToken: this.currentTaskToken,
       });
     } catch (error) {
+      if (this.disposed) {
+        this.notifyAbandoned(batch);
+        return;
+      }
       log("❌", "Checkpoint batch failed:", {
         batchSize: batch.length,
         error,
@@ -579,9 +624,7 @@ export class CheckpointManager implements Checkpoint {
       this.isProcessing = false;
 
       if (this.queue.length > 0) {
-        setImmediate(() => {
-          this.processQueue();
-        });
+        this.scheduleProcessing();
       } else {
         // Queue is empty and processing is done - notify all waiting promises
         this.notifyQueueCompletion();
@@ -633,6 +676,27 @@ export class CheckpointManager implements Checkpoint {
     }));
 
     const response = await this.storage.checkpoint(checkpointData, this.logger);
+    if (
+      response &&
+      this.invocationLifecycle &&
+      updates.some(
+        (update) =>
+          update.Type === OperationType.EXECUTION &&
+          update.Action === "SUCCEED",
+      )
+    ) {
+      // Acknowledgement precedes state publication/plugin hooks, which may themselves
+      // await until the invocation deadline. The terminal result is already durable.
+      this.invocationLifecycle.checkpointedExecutionResult = {
+        Status: InvocationStatus.SUCCEEDED,
+        Result: "",
+      };
+    }
+    if (
+      this.disposed ||
+      (this.invocationLifecycle && !this.invocationLifecycle.allowsRequests())
+    )
+      return;
 
     if (!response.CheckpointToken) {
       // A batch carrying the execution's own terminal update -- the oversized-result
@@ -687,6 +751,9 @@ export class CheckpointManager implements Checkpoint {
    */
   private handleRevokedCheckpointToken(): void {
     this.checkpointTokenRevoked = true;
+    if (this.invocationLifecycle) {
+      this.invocationLifecycle.serviceRequestedSuspension = true;
+    }
 
     const message =
       "Checkpoint response contained no CheckpointToken: the service will accept no " +
@@ -760,6 +827,11 @@ export class CheckpointManager implements Checkpoint {
     });
   }
   private resolveWaitingOperation(hashedStepId: string): void {
+    if (
+      this.disposed ||
+      (this.invocationLifecycle && !this.invocationLifecycle.allowsOperations())
+    )
+      return;
     // O(1) lookup via reverse index instead of hashing every tracked operation
     const stepId = this.hashedIdIndex.get(hashedStepId);
     if (stepId === undefined) {
@@ -797,6 +869,11 @@ export class CheckpointManager implements Checkpoint {
       endTimestamp?: Date;
     },
   ): void {
+    if (
+      this.disposed ||
+      (this.invocationLifecycle && !this.invocationLifecycle.allowsOperations())
+    )
+      return;
     let op = this.operations.get(stepId);
 
     if (!op) {
@@ -833,6 +910,7 @@ export class CheckpointManager implements Checkpoint {
   }
 
   waitForRetryTimer(stepId: string): Promise<void> {
+    if (this.disposed) return new Promise(() => {});
     const op = this.operations.get(stepId);
     if (!op) {
       throw new Error(`Operation ${stepId} not found`);
@@ -860,6 +938,7 @@ export class CheckpointManager implements Checkpoint {
   }
 
   waitForStatusChange(stepId: string): Promise<void> {
+    if (this.disposed) return new Promise(() => {});
     const op = this.operations.get(stepId);
     if (!op) {
       throw new Error(`Operation ${stepId} not found`);
@@ -1007,10 +1086,20 @@ export class CheckpointManager implements Checkpoint {
   }
 
   private checkAndTerminate(): void {
+    if (
+      this.disposed ||
+      this.isTerminating ||
+      (this.invocationLifecycle && !this.invocationLifecycle.allowsOperations())
+    )
+      return;
     // The invocation is already ending, and every reason this would schedule is a suspend
     // the termination manager would discard. Arming a cooldown timer for it only leaves a
     // timer pending past the invocation.
-    if (this.checkpointTokenRevoked) {
+    if (
+      this.disposed ||
+      this.checkpointTokenRevoked ||
+      (this.invocationLifecycle && !this.invocationLifecycle.allowsRequests())
+    ) {
       return;
     }
 
@@ -1050,6 +1139,15 @@ export class CheckpointManager implements Checkpoint {
     });
 
     this.terminationTimer = setTimeout(() => {
+      if (
+        this.disposed ||
+        this.isTerminating ||
+        (this.invocationLifecycle &&
+          !this.invocationLifecycle.allowsOperations())
+      ) {
+        this.abortTermination();
+        return;
+      }
       if (!this.shouldTerminate()) {
         log(
           "🔄",
@@ -1184,7 +1282,14 @@ export class CheckpointManager implements Checkpoint {
     const oldStatus = this.stepData[hashId(stepId)]?.Status;
 
     // Force checkpoint to refresh state from backend
-    await this.forceCheckpoint();
+    // Settle SDK-owned polling on disposal without resolving operation waiters.
+    await Promise.race([this.forceCheckpoint(), this.whenDisposed]);
+    if (
+      this.disposed ||
+      this.isTerminating ||
+      (this.invocationLifecycle && !this.invocationLifecycle.allowsOperations())
+    )
+      return;
 
     // Get new status after refresh
     const newStatus = this.stepData[hashId(stepId)]?.Status;

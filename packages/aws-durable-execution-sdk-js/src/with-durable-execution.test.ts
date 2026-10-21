@@ -1,3 +1,5 @@
+import * as pluginLoader from "./utils/plugin/plugin-loader";
+import { InvocationDeadlineError } from "./utils/invocation-lifecycle/invocation-lifecycle";
 import { withDurableExecution } from "./with-durable-execution";
 import { initializeExecutionContext } from "./context/execution-context/execution-context";
 import { createDurableContext } from "./context/durable-context/durable-context";
@@ -9,7 +11,6 @@ import {
 } from "./errors/unrecoverable-error/unrecoverable-error";
 import { TerminationReason } from "./termination-manager/types";
 import { Context } from "aws-lambda";
-import { log } from "./utils/logger/logger";
 import { DurableExecutionInvocationInput, InvocationStatus } from "./types";
 import { TEST_CONSTANTS } from "./testing/test-constants";
 import { createErrorObjectFromError } from "./utils/error-object/error-object";
@@ -388,66 +389,48 @@ describe("withDurableExecution", () => {
     });
   });
 
-  // Test for the timeout logging branch
-  it("should set up timeout for logging promise race status", async () => {
-    // Use real timers for this test
-    jest.useRealTimers();
-
-    // Setup with verbose mode enabled
-    const verboseExecutionContext = {
-      ...mockExecutionContext,
-      isVerbose: true,
-    };
-    (initializeExecutionContext as jest.Mock).mockResolvedValue({
-      executionContext: verboseExecutionContext,
-      checkpointToken: TEST_CONSTANTS.CHECKPOINT_TOKEN,
+  it("does not start initialization or hooks when plugin loading finishes after expiry", async () => {
+    let release!: () => void;
+    const loading = new Promise<void>((resolve) => {
+      release = resolve;
     });
+    const started = jest.fn();
+    const ended = jest.fn();
+    const loader = jest
+      .spyOn(pluginLoader, "loadConfiguredPlugins")
+      .mockImplementation(async () => {
+        await loading;
+        return [{ onInvocationStart: started, onInvocationEnd: ended }];
+      });
+    try {
+      const body = jest.fn(async () => "forbidden");
+      const handler = withDurableExecution(body);
+      const deadline = performance.now() + 1000;
+      const invocation = handler(mockEvent, {
+        getRemainingTimeInMillis: () => deadline - performance.now(),
+      } as Context).catch((error) => error);
+      await jest.advanceTimersByTimeAsync(1000);
+      expect(await invocation).toBeInstanceOf(InvocationDeadlineError);
+      release();
+      await jest.advanceTimersByTimeAsync(10);
+      expect(initializeExecutionContext).not.toHaveBeenCalled();
+      expect(started).not.toHaveBeenCalled();
+      expect(ended).not.toHaveBeenCalled();
+      expect(body).not.toHaveBeenCalled();
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      loader.mockRestore();
+    }
+  });
 
-    const mockResult = { success: true };
-    const mockHandler = jest.fn().mockResolvedValue(mockResult);
+  it("does not leave a diagnostic timer after normal completion", async () => {
+    const before = jest.getTimerCount();
     mockTerminationManager.getTerminationPromise.mockReturnValue(
       new Promise(() => {}),
     );
-
-    // Mock waitForQueueCompletion to resolve immediately
-    const waitForQueueCompletionSpy = jest
-      .spyOn(CheckpointManager.prototype, "waitForQueueCompletion")
-      .mockResolvedValue(undefined);
-
-    // Spy on setTimeout
-    const setTimeoutSpy = jest.spyOn(global, "setTimeout");
-
-    // Mock the callback execution to ensure the log function is called
-    setTimeoutSpy.mockImplementation((callback, timeout) => {
-      expect(timeout).toBe(500);
-      // Execute the callback immediately
-      callback();
-      return 123 as any; // Return a timeout ID
-    });
-
-    // Execute
-    const wrappedHandler = withDurableExecution(mockHandler);
-    await wrappedHandler(mockEvent, mockContext);
-
-    // Verify setTimeout was called with 500ms for logging
-    expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 500);
-
-    // Verify log was called with the right parameters
-    expect(log).toHaveBeenCalledWith(
-      "⏱️",
-      "Promise race status check:",
-      expect.objectContaining({
-        handlerResolved: false,
-        terminationResolved: false,
-      }),
-    );
-
-    // Clean up
-    setTimeoutSpy.mockRestore();
-    waitForQueueCompletionSpy.mockRestore();
-
-    // Restore fake timers for other tests
-    jest.useFakeTimers();
+    const handler = withDurableExecution(async () => "done");
+    await handler(mockEvent, mockContext);
+    expect(jest.getTimerCount()).toBe(before);
   });
 
   it("should handle non-Error objects thrown by handler", async () => {
@@ -743,6 +726,10 @@ describe("withDurableExecution", () => {
       mockEvent,
       mockContext,
       config,
+      expect.objectContaining({
+        closeAdmission: expect.any(Function),
+        dispose: expect.any(Function),
+      }),
     );
     expect(mockHandler).toHaveBeenCalledWith(
       mockCustomerHandlerEvent,

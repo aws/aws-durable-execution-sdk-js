@@ -29,6 +29,7 @@ export {
   DurableLoggingContext,
   DurableExecutionConfig,
   DurableExecutionClient,
+  DurableExecutionRequestOptions,
   BatchItem,
   BatchItemStatus,
   BatchResult,

@@ -1,4 +1,9 @@
 import { OperationType } from "./types/wire";
+import {
+  InvocationDeadlineError,
+  InvocationLifecycle,
+  runInvocationCallback,
+} from "./utils/invocation-lifecycle/invocation-lifecycle";
 import { Context } from "aws-lambda";
 import { EventEmitter } from "events";
 import { createDurableContext } from "./context/durable-context/durable-context";
@@ -40,13 +45,16 @@ import {
   DurableExecutionHandler,
   DurableLambdaHandler,
 } from "./types/durable-execution";
-import { createPluginRunner } from "./utils/plugin/plugin-runner";
+import {
+  createPluginRunner,
+  type InvocationPluginRunner,
+} from "./utils/plugin/plugin-runner";
 import { loadConfiguredPlugins } from "./utils/plugin/plugin-loader";
 import { toOperationInfoMap } from "./utils/operation/operation";
 import {
-  DurableInstrumentationPlugin,
   InvocationBaseInfo,
   InvocationInfo,
+  InvocationEndInfo,
   OperationInfo,
   PluginInvocationStatus,
 } from "./types/plugin";
@@ -65,7 +73,7 @@ async function runHandler<
   durableExecutionMode: DurableExecutionMode,
   checkpointToken: string,
   handler: DurableExecutionHandler<Input, Output, Logger>,
-  plugin: DurableInstrumentationPlugin,
+  plugin: InvocationPluginRunner,
   config: DurableExecutionConfig | undefined,
 ): Promise<DurableExecutionInvocationOutput> {
   // Create checkpoint manager and step data emitter
@@ -85,7 +93,26 @@ async function runHandler<
     plugin,
     executionContext.requestId,
     executionContext.getRemainingTimeMs,
+    executionContext.invocationLifecycle,
   );
+  const lifecycle = executionContext.invocationLifecycle;
+  lifecycle?.onDispose(() => checkpointManager.dispose());
+  let preparedTerminalEnd: InvocationEndInfo | undefined;
+  let oversizedExecutionResult: unknown;
+  const endInvocation = async (
+    info: InvocationEndInfo,
+    terminalResponse?: DurableExecutionInvocationOutput,
+  ): Promise<void> => {
+    if (lifecycle && !lifecycle.allowsRequests()) return;
+    if (lifecycle && terminalResponse) {
+      // Callers finish serialization and their final checkpoint/termination
+      // checks before selecting a response. Check the live budget above before
+      // allowing cleanup to preserve it through a later deadline.
+      lifecycle.preparedTerminalResponse = terminalResponse;
+      preparedTerminalEnd = info;
+    }
+    await plugin.onInvocationEnd?.(info);
+  };
 
   // Extract customerHandlerEvent early so it's available for plugins in onInvocationStart
   const initialExecutionEvent =
@@ -117,7 +144,34 @@ async function runHandler<
       durableExecutionMode === DurableExecutionMode.ExecutionMode,
     updatedOperations,
   };
+  lifecycle?.onDeadline((error) => {
+    // Expiry interrupts unfinished work. Cleanup retains outcomes already
+    // fixed by the service or selected before terminal hooks started.
+    const status = lifecycle.serviceRequestedSuspension
+      ? PluginInvocationStatus.PENDING
+      : lifecycle.checkpointedExecutionResult
+        ? PluginInvocationStatus.SUCCEEDED
+        : (preparedTerminalEnd?.status ?? PluginInvocationStatus.RETRYING);
+    const selectedEnd =
+      preparedTerminalEnd?.status === status ? preparedTerminalEnd : undefined;
+    plugin.endInvocationOnDeadline?.({
+      ...invocationBaseInfo,
+      ...selectedEnd,
+      ...(status === PluginInvocationStatus.SUCCEEDED &&
+      lifecycle.checkpointedExecutionResult
+        ? { executionResult: oversizedExecutionResult }
+        : {}),
+      operations: toOperationInfoMap(executionContext._stepData),
+      status,
+      executionError:
+        status === PluginInvocationStatus.RETRYING
+          ? error
+          : selectedEnd?.executionError,
+    });
+  });
+  lifecycle?.throwIfExpired();
   await plugin.onInvocationStart?.(invocationInfo);
+  lifecycle?.throwIfExpired();
 
   // Reject invalid configuration before running the handler. It's a non-retryable
   // error and no durable operations have started yet, so fail fast: return FAILED
@@ -130,22 +184,27 @@ async function runHandler<
   const configError = validateDurableExecutionConfig(config);
   if (configError) {
     const error = new Error(configError);
-    await plugin.onInvocationEnd?.({
-      ...invocationBaseInfo,
-      status: PluginInvocationStatus.FAILED,
-      executionInput: customerHandlerEvent,
-      executionError: error,
-      executionResult: undefined,
-      operations: allOperations,
-    });
-    return {
+    const response: DurableExecutionInvocationOutput = {
       Status: InvocationStatus.FAILED,
       Error: createErrorObjectFromError(error),
     };
+    await endInvocation(
+      {
+        ...invocationBaseInfo,
+        status: PluginInvocationStatus.FAILED,
+        executionInput: customerHandlerEvent,
+        executionError: error,
+        executionResult: undefined,
+        operations: allOperations,
+      },
+      response,
+    );
+    return response;
   }
 
   // Set the checkpoint terminating callback on the termination manager
   executionContext.terminationManager.setCheckpointTerminatingCallback(() => {
+    lifecycle?.closeAdmission();
     checkpointManager.setTerminating();
   });
 
@@ -184,7 +243,7 @@ async function runHandler<
       const answerPending = async (
         executionError?: Error,
       ): Promise<DurableExecutionInvocationOutput> => {
-        await plugin.onInvocationEnd?.({
+        await endInvocation({
           ...invocationBaseInfo,
           status: PluginInvocationStatus.PENDING,
           executionInput: customerHandlerEvent,
@@ -201,18 +260,21 @@ async function runHandler<
       const answerFailed = async (
         error: Error,
       ): Promise<DurableExecutionInvocationOutput> => {
-        const response = {
+        const response: DurableExecutionInvocationOutput = {
           Status: InvocationStatus.FAILED,
           Error: createErrorObjectFromError(error),
         };
-        await plugin.onInvocationEnd?.({
-          ...invocationBaseInfo,
-          status: PluginInvocationStatus.FAILED,
-          executionInput: customerHandlerEvent,
-          executionError: error,
-          executionResult: undefined,
-          operations: toOperationInfoMap(executionContext._stepData),
-        });
+        await endInvocation(
+          {
+            ...invocationBaseInfo,
+            status: PluginInvocationStatus.FAILED,
+            executionInput: customerHandlerEvent,
+            executionError: error,
+            executionResult: undefined,
+            operations: toOperationInfoMap(executionContext._stepData),
+          },
+          response,
+        );
         return response;
       };
 
@@ -221,8 +283,6 @@ async function runHandler<
           "🎯",
           `Starting handler execution, handler event: ${customerHandlerEvent}`,
         );
-        let handlerPromiseResolved = false;
-        let terminationPromiseResolved = false;
         /**
          * The termination details, once a termination has happened. Read after the race as
          * well as inside it: a termination can arrive while the checkpoint queue drains, so
@@ -238,31 +298,31 @@ async function runHandler<
             tenantId: executionContext.tenantId,
             enrichLogContext: plugin.enrichLogContext?.bind(plugin),
           },
-          () => handler(customerHandlerEvent, durableContext),
-        ).then((result) => {
-          handlerPromiseResolved = true;
-          log("🏆", "Handler promise resolved first!");
-          return ["handler", result] as const;
-        });
+          () =>
+            runInvocationCallback(executionContext, () =>
+              handler(customerHandlerEvent, durableContext),
+            ),
+        ).then(
+          (result) => {
+            lifecycle?.closeAdmission();
+            log("🏆", "Handler promise resolved first!");
+            return ["handler", result] as const;
+          },
+          (error: unknown) => {
+            lifecycle?.closeAdmission();
+            throw error;
+          },
+        );
 
         const terminationPromise = executionContext.terminationManager
           .getTerminationPromise()
           .then((result) => {
-            terminationPromiseResolved = true;
             termination = result;
             log("💥", "Termination promise resolved first!");
             // Set checkpoint manager as terminating when termination starts
             durableExecution.setTerminating();
             return ["termination", result] as const;
           });
-
-        // Set up a timeout to log the state of promises after a short delay
-        setTimeout(() => {
-          log("⏱️", "Promise race status check:", {
-            handlerResolved: handlerPromiseResolved,
-            terminationResolved: terminationPromiseResolved,
-          });
-        }, 500);
 
         const [resultType, result] = await Promise.race([
           handlerPromise,
@@ -377,6 +437,9 @@ async function runHandler<
 
           // Create a checkpoint to save the large result
           const stepId = `execution-result-${Date.now()}`;
+          // ACK is published before state-change hooks finish. Keep the original
+          // value for deadline End metadata, gated on that acknowledgement above.
+          oversizedExecutionResult = result;
 
           try {
             // Reports whether the service accepted the update rather than waiting for a
@@ -415,6 +478,12 @@ async function runHandler<
             // termination arrived while the update was in flight, so nothing below consults
             // the termination.
             log("✅", "Large result successfully checkpointed");
+            if (lifecycle) {
+              lifecycle.checkpointedExecutionResult = {
+                Status: InvocationStatus.SUCCEEDED,
+                Result: "",
+              };
+            }
 
             // Wait for any pending checkpoints to complete before returning
             try {
@@ -428,20 +497,23 @@ async function runHandler<
               // Continue anyway - the checkpoint will be retried on next invocation
             }
 
-            await plugin.onInvocationEnd?.({
-              ...invocationBaseInfo,
-              status: PluginInvocationStatus.SUCCEEDED,
-              executionInput: customerHandlerEvent,
-              executionResult: result,
-              executionError: undefined,
-              operations: toOperationInfoMap(executionContext._stepData),
-            });
-
             // Return a response indicating the result was checkpointed
-            return {
+            const response: DurableExecutionInvocationOutput = {
               Status: InvocationStatus.SUCCEEDED,
               Result: "",
             };
+            await endInvocation(
+              {
+                ...invocationBaseInfo,
+                status: PluginInvocationStatus.SUCCEEDED,
+                executionInput: customerHandlerEvent,
+                executionResult: result,
+                executionError: undefined,
+                operations: toOperationInfoMap(executionContext._stepData),
+              },
+              response,
+            );
+            return response;
           } catch (checkpointError) {
             log("❌", "Failed to checkpoint large result:", checkpointError);
             // Re-throw - checkpoint.ts always classifies errors before terminating
@@ -464,20 +536,24 @@ async function runHandler<
           return lateAnswer;
         }
 
-        await plugin.onInvocationEnd?.({
-          ...invocationBaseInfo,
-          status: PluginInvocationStatus.SUCCEEDED,
-          executionInput: customerHandlerEvent,
-          executionResult: result,
-          executionError: undefined,
-          operations: toOperationInfoMap(executionContext._stepData),
-        });
-
-        return {
+        const response: DurableExecutionInvocationOutput = {
           Status: InvocationStatus.SUCCEEDED,
           Result: serializedResult,
         };
+        await endInvocation(
+          {
+            ...invocationBaseInfo,
+            status: PluginInvocationStatus.SUCCEEDED,
+            executionInput: customerHandlerEvent,
+            executionResult: result,
+            executionError: undefined,
+            operations: toOperationInfoMap(executionContext._stepData),
+          },
+          response,
+        );
+        return response;
       } catch (error) {
+        lifecycle?.closeAdmission();
         log("❌", "Handler threw an error:", error);
 
         // Check if this is an unrecoverable invocation error (includes checkpoint invocation failures)
@@ -501,7 +577,7 @@ async function runHandler<
             "🛑",
             "Unrecoverable invocation error - terminating Lambda execution",
           );
-          await plugin.onInvocationEnd?.({
+          await endInvocation({
             ...invocationBaseInfo,
             status: PluginInvocationStatus.RETRYING,
             executionInput: customerHandlerEvent,
@@ -530,20 +606,23 @@ async function runHandler<
           );
         }
 
-        await plugin.onInvocationEnd?.({
-          ...invocationBaseInfo,
-          status: PluginInvocationStatus.FAILED,
-          executionInput: customerHandlerEvent,
-          executionError:
-            error instanceof Error ? error : new Error(String(error)),
-          executionResult: undefined,
-          operations: toOperationInfoMap(executionContext._stepData),
-        });
-
-        return {
+        const response: DurableExecutionInvocationOutput = {
           Status: InvocationStatus.FAILED,
           Error: createErrorObjectFromError(error),
         };
+        await endInvocation(
+          {
+            ...invocationBaseInfo,
+            status: PluginInvocationStatus.FAILED,
+            executionInput: customerHandlerEvent,
+            executionError:
+              error instanceof Error ? error : new Error(String(error)),
+            executionResult: undefined,
+            operations: toOperationInfoMap(executionContext._stepData),
+          },
+          response,
+        );
+        return response;
       }
     };
 
@@ -652,9 +731,7 @@ export const withDurableExecution = <
   handler: DurableExecutionHandler<TEvent, TResult, TLogger>,
   config?: DurableExecutionConfig,
 ): DurableLambdaHandler => {
-  const pluginPromise = loadConfiguredPlugins(config?.plugins).then(
-    createPluginRunner,
-  );
+  const pluginPromise = loadConfiguredPlugins(config?.plugins);
   // Plugin loading starts during handler initialization. Attach a rejection handler
   // immediately so a cold-start configuration error cannot become an unhandled
   // rejection before Lambda invokes the exported handler; awaiting the original
@@ -681,56 +758,82 @@ export const withDurableExecution = <
       };
     }
 
-    let plugin: DurableInstrumentationPlugin;
+    const lifecycle = new InvocationLifecycle(
+      () => context.getRemainingTimeInMillis?.() ?? Infinity,
+    );
     try {
-      plugin = await pluginPromise;
-    } catch (error) {
-      return {
-        Status: InvocationStatus.FAILED,
-        Error: createErrorObjectFromError(error),
-      };
-    }
+      return await lifecycle.run(async () => {
+        let plugin: InvocationPluginRunner;
+        try {
+          const plugins = await pluginPromise;
+          lifecycle.throwIfExpired();
+          // Instances remain cached, but dispatch belongs to this invocation.
+          plugin = createPluginRunner(plugins, lifecycle);
+        } catch (error) {
+          return {
+            Status: InvocationStatus.FAILED,
+            Error: createErrorObjectFromError(error),
+          };
+        }
 
-    try {
-      const { executionContext, durableExecutionMode, checkpointToken } =
-        await initializeExecutionContext(event, context, config);
-      return await runHandler(
-        event,
-        context,
-        executionContext,
-        durableExecutionMode,
-        checkpointToken,
-        handler,
-        plugin,
-        config,
-      );
-    } catch (error) {
-      // A transport that states the failure is fatal for the execution is believed,
-      // wherever that error surfaces. In practice it comes from reading execution state
-      // during initialization, which is the one client call with no checkpoint classifier
-      // to consult; checkpoint failures are classified in CheckpointManager and reach this
-      // point already wrapped. The try also covers the handler, so an EXECUTION-scoped
-      // error thrown by handler code is honoured too -- see DurableExecutionClientError,
-      // which documents that.
-      if (
-        isDurableExecutionClientError(error) &&
-        error.scope === DurableExecutionClientErrorScope.EXECUTION
-      ) {
-        return {
-          Status: InvocationStatus.FAILED,
-          Error: createErrorObjectFromError(error),
-        };
-      }
+        try {
+          const { executionContext, durableExecutionMode, checkpointToken } =
+            await initializeExecutionContext(event, context, config, lifecycle);
+          lifecycle.throwIfExpired();
+          return await runHandler(
+            event,
+            context,
+            executionContext,
+            durableExecutionMode,
+            checkpointToken,
+            handler,
+            plugin,
+            config,
+          );
+        } catch (error) {
+          // A transport that states the failure is fatal for the execution is believed,
+          // wherever that error surfaces. In practice it comes from reading execution state
+          // during initialization, which is the one client call with no checkpoint classifier
+          // to consult; checkpoint failures are classified in CheckpointManager and reach this
+          // point already wrapped. The try also covers the handler, so an EXECUTION-scoped
+          // error thrown by handler code is honoured too -- see DurableExecutionClientError,
+          // which documents that.
+          if (
+            isDurableExecutionClientError(error) &&
+            error.scope === DurableExecutionClientErrorScope.EXECUTION
+          ) {
+            return {
+              Status: InvocationStatus.FAILED,
+              Error: createErrorObjectFromError(error),
+            };
+          }
 
-      // Non-retryable customer errors (e.g., KMS key misconfiguration) should
-      // fail the execution immediately rather than retrying the invocation.
-      if (isNonRetryableCustomerError(error)) {
-        return {
-          Status: InvocationStatus.FAILED,
-          Error: createErrorObjectFromError(error),
-        };
+          // Non-retryable customer errors (e.g., KMS key misconfiguration) should
+          // fail the execution immediately rather than retrying the invocation.
+          if (isNonRetryableCustomerError(error)) {
+            return {
+              Status: InvocationStatus.FAILED,
+              Error: createErrorObjectFromError(error),
+            };
+          }
+          throw error;
+        }
+      });
+    } catch (error) {
+      if (error instanceof InvocationDeadlineError) {
+        if (lifecycle.serviceRequestedSuspension) {
+          return { Status: InvocationStatus.PENDING };
+        }
+        if (lifecycle.checkpointedExecutionResult) {
+          return lifecycle.checkpointedExecutionResult;
+        }
+        if (lifecycle.preparedTerminalResponse) {
+          return lifecycle.preparedTerminalResponse;
+        }
       }
       throw error;
+    } finally {
+      lifecycle.dispose();
     }
   };
 };
