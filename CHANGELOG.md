@@ -200,7 +200,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   MicroVM, and a later call can succeed. The worker now classifies such a first-attempt error as
   refused for now. It accepts jobs again at once, and tries the call again. The same error can
   repeat on every call, for example after a wrong secret key. So the next call starts after the
-  idle time, and no sooner than 30 seconds after the refused call. The error name decides,
+  next idle time. That idle time lasts at least 30 seconds, unless a job or a resume hook starts
+  the idle time again. The error name decides,
   whatever the HTTP status. A throttle, a clock-skew error, and any HTTP 429 are refused for now
   too, on the first attempt. The worker's default client retries a throttle and a clock-skew error
   itself. So with the default client, these errors usually end after a retried attempt. An error

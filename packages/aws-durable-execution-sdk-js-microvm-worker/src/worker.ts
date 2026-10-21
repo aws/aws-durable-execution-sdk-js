@@ -377,12 +377,14 @@ export interface MicrovmWorkerListener {
  *    so the MicroVM did not suspend. A later call can succeed, so the worker
  *    tries the call again. The same error can repeat on every call, for
  *    example after a wrong secret key. So the next call starts after the
- *    idle time, and no sooner than 30 seconds after the refused call. A job
- *    or a `resume` hook after that starts the normal idle time. With the
- *    default client, this item covers expired credentials and a signature
- *    error without clock skew. It covers a throttle, a clock-skew error, and
- *    HTTP 429 only from a client that does not retry, for example a client
- *    from `createMicrovmsClient` with `maxAttempts: 1`.
+ *    next idle time. That idle time lasts at least 30 seconds, unless a job
+ *    or a `resume` hook starts the idle time again. A `resume` hook or a job
+ *    that ends during the call does not shorten the wait, because the
+ *    refused outcome arrives after it. With the default client, this item
+ *    covers expired credentials and a signature error without clock skew.
+ *    It covers a throttle, a clock-skew error, and HTTP 429 only from a
+ *    client that does not retry, for example a client from
+ *    `createMicrovmsClient` with `maxAttempts: 1`.
  * 8. A call whose outcome is unknown, such as a timeout, a conflict, or a
  *    server error, is handled like a successful call. The service may have
  *    suspended the MicroVM anyway. An error after the client retried an
@@ -585,7 +587,7 @@ export function createMicrovmWorkerListener<
       // covers a job that started in the same event loop turn.
       if (jobs.size === 0 && !closed) {
         suspending = true;
-        track(suspendSelf(region, idleMs, target));
+        track(suspendSelf(region, idleMs, delayMs, target));
       }
     }, delayMs);
     // The timer must not keep a test process, or a closed worker, alive.
@@ -631,6 +633,7 @@ export function createMicrovmWorkerListener<
   async function suspendSelf(
     region: string,
     idleMs: number,
+    waitedMs: number,
     target: string,
   ): Promise<void> {
     let client: LambdaMicrovmsClient;
@@ -651,9 +654,12 @@ export function createMicrovmWorkerListener<
       startDeferredJobs();
       return;
     }
+    // waitedMs differs from idleMs after a refusal for now, because that
+    // idle time lasts at least SUSPEND_GRACE_MS.
     logger.info("suspending the idle MicroVM", {
       microvmId: target,
       idleMs,
+      waitedMs,
     });
     const hooksBefore = suspendHooks;
     try {
@@ -669,9 +675,16 @@ export function createMicrovmWorkerListener<
             "could not suspend the idle MicroVM, because the service rejected the call. It keeps running. A missing permission needs lambda:SuspendMicrovm on the MicroVM image in its execution role.",
             { microvmId: target, error: describe(error) },
           );
-        } else {
+        } else if (suspendHooks === hooksBefore) {
           logger.warn(
-            "could not suspend the idle MicroVM, because the service refused the call for now. It keeps running. The worker tries the call again after the idle time, and no sooner than 30 seconds after this call.",
+            "could not suspend the idle MicroVM, because the service refused the call for now. It keeps running. The worker tries the call again after the next idle time. That idle time lasts at least 30 seconds, unless a job or a resume hook starts the idle time again.",
+            { microvmId: target, error: describe(error) },
+          );
+        } else {
+          // The branch below keeps the hook's refusal and sets no lower
+          // bound. So the warning above would be false here.
+          logger.warn(
+            "could not suspend the idle MicroVM, because the service refused the call for now. A suspend hook arrived during the call, so this call does not end the hook's refusal. The idle time starts again after the resume hook, or 30 seconds after the last suspend hook.",
             { microvmId: target, error: describe(error) },
           );
         }
@@ -1690,7 +1703,8 @@ const REJECTION_NAMES = new Set([
   "AccessDeniedException",
   "ValidationException",
   "ResourceNotFoundException",
-  // Missing credentials stop the request before it is sent.
+  // Missing credentials count as a rejection. A later call in the same
+  // MicroVM most likely finds no credentials either.
   "CredentialsProviderError",
 ]);
 
@@ -1717,7 +1731,8 @@ type SuspendOutcome = "rejected" | "refusedForNow" | "unknown";
  *    client retries a throttle and a clock-skew error itself. So with the
  *    default client, these errors usually end here.
  * 3. A known rejection name is `rejected`. Missing credentials count as a
- *    rejection, because they stop the request before it is sent.
+ *    rejection. A later call in the same MicroVM most likely finds no
+ *    credentials either.
  * 4. `ConflictException` is `unknown`, whatever its status. It can mean that
  *    the MicroVM is already suspending.
  * 5. A name in `TRANSIENT_4XX_NAMES` is `refusedForNow`, whatever its
