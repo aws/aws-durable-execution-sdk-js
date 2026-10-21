@@ -247,6 +247,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `MicrovmNotRunningError` to start a new session did not catch this case. The step now treats
   this answer as it treats the same answer from GetMicrovm. The job fails at once with
   `MicrovmNotRunningError`.
+- A `microvmSession` in `@aws/durable-execution-sdk-js-extras` computed its resume mode from the
+  current config on every replay. The resume mode says whether each job checks the MicroVM state,
+  and resumes a suspended MicroVM, before delivery. The worker reads its idle time once, from the
+  run hook payload of the launch. So a deploy that turned `autoSuspendOnIdle` off did not stop a
+  running worker from suspending its MicroVM. The next job then skipped the state check, and the
+  suspended endpoint answered 502. The request step retries a 502 as a MicroVM that is still
+  starting. So the job failed with `MicrovmDeliveryError` only after both retry tiers. The launch
+  checkpoint now records the resume mode as `"resumeBeforeDelivery": true` or
+  `"resumeBeforeDelivery": false`, and replay follows it.
 
 - An `InvalidRunHookPayloadError` for a `runHookPayload` that is not JSON now keeps the parser's
   `SyntaxError` as its `cause`. Its message names the position of the error.
