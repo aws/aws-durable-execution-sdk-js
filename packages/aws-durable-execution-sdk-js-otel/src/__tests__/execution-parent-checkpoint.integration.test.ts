@@ -14,7 +14,7 @@ import {
   NodeTracerProvider,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
-import { ExecutionOtelPlugin } from "../execution-plugin";
+import { createExecutionOtelPluginFactory } from "../execution-plugin";
 
 beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
@@ -33,7 +33,7 @@ it("retains the real context when an earlier callback completion arrives with it
   const order: string[] = [];
   const phases: string[] = [];
   const terminalResponses: CheckpointDurableExecutionResponse[] = [];
-  const plugin = new ExecutionOtelPlugin({
+  const plugin = createExecutionOtelPluginFactory({
     contextExtractor: () => undefined,
     tracerProviderFactory: (ids) => {
       provider = new NodeTracerProvider({
@@ -60,21 +60,23 @@ it("retains the real context when an earlier callback completion arrives with it
       plugins: [
         plugin,
         {
-          async onOperationEnd(info) {
-            if (info.name === "scope") {
-              order.push("parent-end-hook");
-              parentEnded();
-            }
-          },
-          async onOperationChange(info) {
-            if (
-              Object.values(info.updatedOperations).some(
-                (op) => op.name === "external" && op.status === "SUCCEEDED",
-              )
-            ) {
-              order.push("callback-change-hook");
-            }
-          },
+          createPlugin: () => ({
+            async onOperationEnd(info) {
+              if (info.name === "scope") {
+                order.push("parent-end-hook");
+                parentEnded();
+              }
+            },
+            async onOperationChange(info) {
+              if (
+                Object.values(info.updatedOperations).some(
+                  (op) => op.name === "external" && op.status === "SUCCEEDED",
+                )
+              ) {
+                order.push("callback-change-hook");
+              }
+            },
+          }),
         },
       ],
     },

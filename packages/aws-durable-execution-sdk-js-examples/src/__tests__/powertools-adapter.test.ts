@@ -2,7 +2,7 @@ import { Logger } from "@aws-lambda-powertools/logger";
 import {
   createPowertoolsLogger,
   DurableContext,
-  DurableInstrumentationPlugin,
+  DurableInstrumentationPluginFactory,
   DurableLogger,
   withDurableExecution,
 } from "@aws/durable-execution-sdk-js";
@@ -203,8 +203,10 @@ describe("createPowertoolsLogger in a durable execution with a plugin", () => {
   afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
   // A plugin that adds a log field, as the OTel plugin adds traceId and spanId.
-  const plugin: DurableInstrumentationPlugin = {
-    enrichLogContext: () => ({ traceId: "trace-1" }),
+  const pluginFactory: DurableInstrumentationPluginFactory = {
+    createPlugin: () => ({
+      enrichLogContext: () => ({ traceId: "trace-1" }),
+    }),
   };
 
   async function runAndCapture(
@@ -227,7 +229,7 @@ describe("createPowertoolsLogger in a durable execution with a plugin", () => {
         });
         return "done";
       },
-      { plugins: [plugin] },
+      { plugins: [pluginFactory] },
     );
     const runner = new LocalDurableTestRunner({ handlerFunction: handler });
 
@@ -297,7 +299,7 @@ describe("one createPowertoolsLogger shared by two handlers with different plugi
     const makeHandler = (
       name: string,
       pause: number,
-      plugins: DurableInstrumentationPlugin[],
+      plugins: DurableInstrumentationPluginFactory[],
     ) =>
       withDurableExecution(
         async (_event: unknown, context: DurableContext<DurableLogger>) => {
@@ -314,10 +316,18 @@ describe("one createPowertoolsLogger shared by two handlers with different plugi
       );
 
     const handlerA = makeHandler("a", 50, [
-      { enrichLogContext: () => ({ traceId: "trace-a" }) },
+      {
+        createPlugin: () => ({
+          enrichLogContext: () => ({ traceId: "trace-a" }),
+        }),
+      },
     ]);
     const handlerB = makeHandler("b", 5, [
-      { enrichLogContext: () => ({ traceId: "trace-b" }) },
+      {
+        createPlugin: () => ({
+          enrichLogContext: () => ({ traceId: "trace-b" }),
+        }),
+      },
     ]);
     // A third handler with no plugin. Its entries must carry no plugin field.
     const handlerC = makeHandler("c", 20, []);

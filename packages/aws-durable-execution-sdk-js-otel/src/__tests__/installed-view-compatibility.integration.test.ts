@@ -13,12 +13,11 @@ function viewProbe(views: string[], explicitCount: number): string {
   const views = ${JSON.stringify(views)};
   process.env.DURABLE_EXECUTION_PLUGINS = views.slice(${explicitCount}).map(view => '@aws/durable-execution-sdk-js-otel/otel-' + (view === 'ExecutionOtelPlugin' ? 'execution' : 'invocation')).join(',');
   let handlerCalls = 0;
-  const plugins = [...views.slice(0, ${explicitCount}).map(view => new otel[view]()), {}];
   const tracer = provider.getTracer('aws-durable-execution-sdk-js');
   const samplerBefore = tracer._sampler;
   const idGeneratorBefore = tracer._idGenerator;
   const handler = core.withDurableExecution(async () => { handlerCalls++; return 'ok'; }, {
-    plugins,
+    plugins: [...views.slice(0, ${explicitCount}).map(view => otel['create' + view + 'Factory']()), {createPlugin: () => ({})}],
   });
   let result, error;
   try { result = await handler(event, lambdaContext); }
@@ -43,27 +42,19 @@ type ProbeResult = {
 };
 
 describe("installed core compatibility for exclusive OTel views", () => {
-  let previous: InstalledCoreFixture;
   let current: InstalledCoreFixture;
   beforeAll(() => {
-    previous = new InstalledCoreFixture(true);
     current = new InstalledCoreFixture(false);
   }, 30000);
   afterAll(() => {
-    previous?.cleanup();
     current?.cleanup();
   });
 
-  it("preserves old valid peers while the new pair enforces exclusive views", () => {
-    expect(previous.coreVersion).toBe("2.6.0");
-    expect(previous.peerAccepted).toBe(true);
-    expect(previous.validateInstalledPeers().status).toBe(0);
+  it("declares the major factory pair while keeping the core peer optional for layers", () => {
     expect(current.coreRequired).toBe(false);
-    expect(satisfies("2.4.0", current.peerRange)).toBe(true);
-    expect(satisfies("2.5.0", current.peerRange)).toBe(true);
-    expect(satisfies("2.7.0", current.peerRange)).toBe(true);
-    expect(satisfies("2.7.1", current.peerRange)).toBe(true);
-    expect(satisfies("3.0.0", current.peerRange)).toBe(false);
+    expect(satisfies("2.7.0", current.peerRange)).toBe(false);
+    expect(satisfies("3.0.0", current.peerRange)).toBe(true);
+    expect(satisfies("4.0.0", current.peerRange)).toBe(false);
     expect(current.peerAccepted).toBe(true);
     expect(current.validateInstalledPeers().status).toBe(0);
   });
@@ -82,17 +73,7 @@ describe("installed core compatibility for exclusive OTel views", () => {
         ? ["InvocationOtelPlugin", "ExecutionOtelPlugin"]
         : ["ExecutionOtelPlugin", "InvocationOtelPlugin"];
       const probe = viewProbe(views, explicitCount);
-      const oldResult = previous.run<ProbeResult>(probe);
       const newResult = current.run<ProbeResult>(probe);
-      expect(oldResult.corePath).toContain(previous.directory);
-      expect(oldResult.result?.Status).toBe("SUCCEEDED");
-      expect(oldResult.handlerCalls).toBe(1);
-      expect(
-        oldResult.spanNames.filter((name) => name === "Workflow"),
-      ).toHaveLength(2);
-      expect(
-        oldResult.spanNames.filter((name) => name === "Invocation"),
-      ).toHaveLength(2);
       expect(newResult.corePath).toContain(current.directory);
       expect(newResult.error).toBeUndefined();
       expect(newResult.result?.Status).toBe("FAILED");
