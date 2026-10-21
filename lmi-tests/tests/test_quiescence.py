@@ -225,6 +225,7 @@ def test_run_settlement_restores_scoped_invocation_intent_and_quarantine(quiet_c
             "timing": {"prepareEnd": {"wall": 0}},
         },
         {"marker": "foreign", "run": "another-run", "commit": "commit", "arn": "foreign-arn"},
+        {"marker": "foreign-commit", "run": "run", "commit": "other", "arn": "foreign-arn"},
         {"marker": "settled", "run": "run", "commit": "commit", "arn": "done", "settled": True},
     ]:
         (records / f"{item['marker']}.json").write_text(json.dumps(item))
@@ -239,6 +240,79 @@ def test_run_settlement_restores_scoped_invocation_intent_and_quarantine(quiet_c
     )
     cloud.restore_invocations()
     assert "foreign-example" not in cloud.invoked_markers()
+
+
+@pytest.mark.parametrize("response_delivered", [False, True])
+def test_example_driver_exit_before_teardown_retains_delayed_execution(
+    quiet_cloud, response_delivered
+):
+    import json
+    import os
+    import subprocess
+    from pathlib import Path
+
+    cloud, clock, output = quiet_cloud
+    cloud.manifest.update(bucket="bucket", commit="commit")
+    root = Path(__file__).resolve().parents[2]
+    helper = root / "packages/aws-durable-execution-sdk-js-examples/src/utils/shared-lmi.ts"
+    script = f"""
+import shared from {json.dumps(helper.as_uri())};
+import {{ writeFileSync }} from "node:fs";
+let factory;
+const hooks = shared.sharedLmi({{
+  middlewareStack: {{ add(value) {{ factory = value; }} }}
+}}, "step-basic");
+hooks.before();
+const invoke = factory(async ({{ input }}) => {{
+  writeFileSync(1, input.DurableExecutionName);
+  if ({str(not response_delivered).lower()}) process.exit(23);
+  return {{ output: {{ DurableExecutionArn: "accepted" }} }};
+}}, {{ commandName: "InvokeCommand" }});
+await invoke({{ input: {{}} }});
+process.exit(23);
+"""
+    result = subprocess.run(
+        ["node", "--import", "tsx", "--input-type=module", "-e", script],
+        cwd=root,
+        env={
+            **os.environ,
+            "LMI_SHARED_EXAMPLES": "1",
+            "LMI_RUN_ID": "run",
+            "LMI_COMMIT": "commit",
+            "LMI_CONTROL_SCRIPT": "unused.py",
+            "LMI_REPO_ROOT": str(root),
+            "LMI_QUARANTINE_FILE": str(output / "quarantine.json"),
+        },
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert result.returncode == 23, result.stderr
+    marker = result.stdout
+    assert marker.startswith("example-")
+    assert not (output / "quarantine.json").exists(), "Teardown never ran"
+    stopped = []
+    cloud.running = lambda: (
+        []
+        if clock["time"] < 10 or stopped
+        else [{"DurableExecutionArn": "accepted", "DurableExecutionName": marker}]
+    )
+    cloud.worker_snapshot = lambda: {"requests": []}
+    cloud.s3 = SimpleNamespace(
+        get_paginator=lambda _name: SimpleNamespace(paginate=lambda **_kwargs: [{}])
+    )
+    cloud.lam = SimpleNamespace(
+        get_durable_execution=lambda **_kwargs: {"Status": "RUNNING"},
+        stop_durable_execution=lambda **kwargs: stopped.append(kwargs["DurableExecutionArn"]),
+    )
+    cloud.history = lambda _item: []
+    cloud.settle_run()
+    assert stopped == ["accepted"], "Missing intent would falsely finish quiet at t=6"
+    assert clock["time"] >= (6 if response_delivered else 16)
+    record = json.loads((output / "invocations" / f"{marker}.json").read_text())
+    assert record["run"] == "run" and record["commit"] == "commit"
+    assert record["arn"] == "accepted" and record["settled"]
 
 
 def test_cleanup_during_quiet_verification_does_not_restart_drain_budget(quiet_cloud):

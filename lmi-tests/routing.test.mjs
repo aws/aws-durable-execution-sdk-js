@@ -89,6 +89,7 @@ setInterval(() => {
     const settings = {
       LMI_SHARED_EXAMPLES: "1",
       LMI_RUN_ID: "run",
+      LMI_COMMIT: "commit",
       LMI_CONTROL_SCRIPT: script,
       LMI_REPO_ROOT: directory,
       LMI_QUARANTINE_FILE: quarantine,
@@ -209,3 +210,72 @@ setInterval(() => {
     }
   });
 }
+
+test("example invocation intent is durable before submission and retains the response ARN", async () => {
+  const { mkdtempSync, readFileSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const path = await import("node:path");
+  const directory = mkdtempSync(path.join(tmpdir(), "lmi-intent-test-"));
+  const settings = {
+    LMI_SHARED_EXAMPLES: "1",
+    LMI_RUN_ID: "run",
+    LMI_COMMIT: "commit",
+    LMI_CONTROL_SCRIPT: "unused.py",
+    LMI_REPO_ROOT: directory,
+    LMI_QUARANTINE_FILE: path.join(directory, "quarantine.json"),
+  };
+  const previous = Object.fromEntries(
+    Object.keys(settings).map((key) => [key, process.env[key]]),
+  );
+  Object.assign(process.env, settings);
+  try {
+    let factory;
+    const hooks = sharedModule.sharedLmi(
+      {
+        middlewareStack: {
+          add(value) {
+            factory = value;
+          },
+        },
+      },
+      "step-basic",
+    );
+    const read = (marker) =>
+      JSON.parse(
+        readFileSync(
+          path.join(directory, "invocations", `${marker}.json`),
+          "utf8",
+        ),
+      );
+    const response = {
+      output: {
+        DurableExecutionArn: "accepted",
+        $metadata: { requestId: "request" },
+      },
+    };
+    const invoke = factory(
+      async ({ input }) => {
+        const intent = read(input.DurableExecutionName);
+        assert.equal(intent.run, "run");
+        assert.equal(intent.commit, "commit");
+        assert.equal(intent.invoked, true);
+        assert.deepEqual(intent.gates, {});
+        assert.equal(intent.arn, undefined);
+        return response;
+      },
+      { commandName: "InvokeCommand" },
+    );
+    hooks.before();
+    const input = {};
+    assert.equal(await invoke({ input }), response);
+    const saved = read(input.DurableExecutionName);
+    assert.equal(saved.arn, "accepted");
+    assert.equal(saved.invokeRequestId, "request");
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
