@@ -373,6 +373,153 @@ describe("invocation-owned lifecycle through the public wrapper", () => {
     },
   );
 
+  it.each([false, true])(
+    "does not serialize a returned result after deadline disposal drains a held child checkpoint (plugins=%s)",
+    async (plugins) => {
+      const store = recorder();
+      const send = store.checkpoint.getMockImplementation()!;
+      const release = deferred();
+      const held = jest.fn();
+      const returned = jest.fn();
+      const toJSON = jest.fn(() => "must not serialize");
+      const ended = jest.fn();
+      store.checkpoint.mockImplementation(async (request, logger, options) => {
+        if (
+          request.Updates?.some(
+            (update) =>
+              update.Type === OperationType.CONTEXT &&
+              update.Action === "SUCCEED",
+          )
+        ) {
+          held(options?.abortSignal);
+          await release.promise;
+        }
+        return send(request, logger, options);
+      });
+      const outcome = withDurableExecution(
+        async (_event, ctx) => {
+          await ctx.runInChildContext("child", async () => "saved child");
+          returned();
+          return { toJSON };
+        },
+        {
+          durableExecutionClient: store.client,
+          plugins: plugins
+            ? [{ createPlugin: () => ({ onInvocationEnd: ended }) }]
+            : [],
+        },
+      )(input(), runtime(1000)).then(
+        (value) => value,
+        (error: unknown) => error,
+      );
+      try {
+        await tickUntil(
+          () =>
+            held.mock.calls.length === 1 && returned.mock.calls.length === 1,
+        );
+        expect(toJSON).not.toHaveBeenCalled();
+        expect(held.mock.calls[0][0]?.aborted).toBe(false);
+        await jest.advanceTimersByTimeAsync(1000);
+        const failure = await outcome;
+        expect(failure).toBeInstanceOf(InvocationDeadlineError);
+        expect(held.mock.calls[0][0]?.aborted).toBe(true);
+        expect(toJSON).not.toHaveBeenCalled();
+        expect(ended).toHaveBeenCalledTimes(plugins ? 1 : 0);
+        if (plugins) {
+          expect(ended).toHaveBeenCalledWith(
+            expect.objectContaining({
+              status: "RETRYING",
+              executionError: failure,
+            }),
+          );
+          expect(ended.mock.calls[0][0].executionResult).toBeUndefined();
+        }
+      } finally {
+        release.resolve();
+        await jest.advanceTimersByTimeAsync(10);
+        await outcome;
+      }
+      expect(toJSON).not.toHaveBeenCalled();
+      expect(held).toHaveBeenCalledTimes(1);
+      expect(ended).toHaveBeenCalledTimes(plugins ? 1 : 0);
+      expect(
+        store.checkpoint.mock.calls
+          .flatMap(([request]) => request.Updates ?? [])
+          .some((update) => update.Action === "FAIL"),
+      ).toBe(false);
+      expect(jest.getTimerCount()).toBe(0);
+    },
+  );
+
+  it.each([false, true])(
+    "serializes once after a live child checkpoint drains and replays the saved child (plugins=%s)",
+    async (plugins) => {
+      const store = recorder();
+      const send = store.checkpoint.getMockImplementation()!;
+      const release = deferred();
+      const held = jest.fn();
+      const returned = jest.fn();
+      const child = jest.fn(async () => "saved child");
+      const toJSON = jest.fn(() => "live result");
+      const ended = jest.fn();
+      store.checkpoint.mockImplementation(async (request, logger, options) => {
+        if (
+          request.Updates?.some(
+            (update) =>
+              update.Type === OperationType.CONTEXT &&
+              update.Action === "SUCCEED",
+          )
+        ) {
+          held();
+          await release.promise;
+        }
+        return send(request, logger, options);
+      });
+      const handler = withDurableExecution(
+        async (_event, ctx) => {
+          expect(await ctx.runInChildContext("child", child)).toBe(
+            "saved child",
+          );
+          returned();
+          return { toJSON };
+        },
+        {
+          durableExecutionClient: store.client,
+          plugins: plugins
+            ? [{ createPlugin: () => ({ onInvocationEnd: ended }) }]
+            : [],
+        },
+      );
+      const first = handler(input(), runtime());
+      try {
+        await tickUntil(
+          () =>
+            held.mock.calls.length === 1 && returned.mock.calls.length === 1,
+        );
+        expect(toJSON).not.toHaveBeenCalled();
+      } finally {
+        release.resolve();
+        await jest.advanceTimersByTimeAsync(10);
+      }
+      expect(await first).toEqual({
+        Status: InvocationStatus.SUCCEEDED,
+        Result: '\"live result\"',
+      });
+      expect(toJSON).toHaveBeenCalledTimes(1);
+      const replay = handler(input([...store.operations.values()]), runtime());
+      await jest.advanceTimersByTimeAsync(10);
+      expect(await replay).toEqual({
+        Status: InvocationStatus.SUCCEEDED,
+        Result: '\"live result\"',
+      });
+      expect(child).toHaveBeenCalledTimes(1);
+      expect(held).toHaveBeenCalledTimes(1);
+      expect(toJSON).toHaveBeenCalledTimes(2);
+      expect(ended).toHaveBeenCalledTimes(plugins ? 2 : 0);
+      expect(jest.getTimerCount()).toBe(0);
+    },
+  );
+
   it("does not select a terminal response when serialization consumes the remaining budget", async () => {
     const store = recorder();
     let remaining = 1000;
