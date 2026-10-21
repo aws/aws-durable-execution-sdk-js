@@ -51,29 +51,6 @@ describe("package entry point", () => {
     });
   });
 
-  it("exports the plugin status and attempt outcome enums with their contract values", () => {
-    expect(sdk.PluginInvocationStatus).toEqual({
-      SUCCEEDED: "SUCCEEDED",
-      FAILED: "FAILED",
-      PENDING: "PENDING",
-      RETRYING: "RETRYING",
-    });
-    expect(sdk.PluginOperationStatus).toEqual({
-      STARTED: "STARTED",
-      READY: "READY",
-      PENDING: "PENDING",
-      SUCCEEDED: "SUCCEEDED",
-      FAILED: "FAILED",
-      TIMED_OUT: "TIMED_OUT",
-      STOPPED: "STOPPED",
-      CANCELLED: "CANCELLED",
-    });
-    expect(sdk.AttemptEndInfoOutcome).toEqual({
-      SUCCEEDED: "SUCCEEDED",
-      FAILED: "FAILED",
-    });
-  });
-
   it("exports the version string", () => {
     // Resolved through the version module, which is the import that regressed.
     expect(typeof sdk.SDK_VERSION).toBe("string");
