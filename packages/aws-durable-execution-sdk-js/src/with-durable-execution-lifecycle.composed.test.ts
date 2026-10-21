@@ -520,6 +520,127 @@ describe("invocation-owned lifecycle through the public wrapper", () => {
     },
   );
 
+  it.each([
+    [false, false],
+    [false, true],
+    [true, false],
+    [true, true],
+  ])(
+    "guards error accessors after a held child checkpoint drains (expired=%s, plugins=%s)",
+    async (expired, plugins) => {
+      const store = recorder();
+      const send = store.checkpoint.getMockImplementation()!;
+      const release = deferred();
+      const held = jest.fn();
+      const thrown = jest.fn();
+      const child = jest.fn(async () => "saved child");
+      const ended = jest.fn();
+      const failure = new Error("customer failure");
+      failure.stack = "CustomFailure: customer failure";
+      const message = jest.fn(() => "customer failure");
+      const name = jest.fn(() => "CustomFailure");
+      Object.defineProperties(failure, {
+        message: { get: message },
+        name: { get: name },
+      });
+      store.checkpoint.mockImplementation(async (request, logger, options) => {
+        if (
+          request.Updates?.some(
+            (update) =>
+              update.Type === OperationType.CONTEXT &&
+              update.Action === "SUCCEED",
+          )
+        ) {
+          held(options?.abortSignal);
+          await release.promise;
+        }
+        return send(request, logger, options);
+      });
+      const handler = withDurableExecution(
+        async (_event, ctx) => {
+          expect(await ctx.runInChildContext("child", child)).toBe(
+            "saved child",
+          );
+          thrown();
+          throw failure;
+        },
+        {
+          durableExecutionClient: store.client,
+          plugins: plugins
+            ? [{ createPlugin: () => ({ onInvocationEnd: ended }) }]
+            : [],
+        },
+      );
+      const outcome = handler(input(), runtime(expired ? 1000 : Infinity)).then(
+        (value) => value,
+        (error: unknown) => error,
+      );
+      try {
+        await tickUntil(
+          () => held.mock.calls.length === 1 && thrown.mock.calls.length === 1,
+        );
+        expect(message).not.toHaveBeenCalled();
+        expect(name).not.toHaveBeenCalled();
+        expect(held.mock.calls[0][0]?.aborted).toBe(false);
+        if (expired) {
+          await jest.advanceTimersByTimeAsync(1000);
+          const interruption = await outcome;
+          expect(interruption).toBeInstanceOf(InvocationDeadlineError);
+          expect(held.mock.calls[0][0]?.aborted).toBe(true);
+          expect(message).not.toHaveBeenCalled();
+          expect(name).not.toHaveBeenCalled();
+          if (plugins) {
+            expect(ended).toHaveBeenCalledWith(
+              expect.objectContaining({
+                status: "RETRYING",
+                executionError: interruption,
+              }),
+            );
+          }
+        }
+      } finally {
+        release.resolve();
+        await jest.advanceTimersByTimeAsync(10);
+        await outcome;
+      }
+      if (expired) {
+        expect(message).not.toHaveBeenCalled();
+        expect(name).not.toHaveBeenCalled();
+      } else {
+        expect(await outcome).toEqual({
+          Status: InvocationStatus.FAILED,
+          Error: expect.objectContaining({
+            ErrorMessage: "customer failure",
+            ErrorType: "CustomFailure",
+          }),
+        });
+        expect(message).toHaveBeenCalledTimes(1);
+        expect(name).toHaveBeenCalledTimes(1);
+        if (plugins) {
+          expect(ended.mock.calls[0][0].executionError).toBe(failure);
+          expect(ended.mock.calls[0][0].status).toBe("FAILED");
+        }
+        const replay = handler(
+          input([...store.operations.values()]),
+          runtime(),
+        );
+        await jest.advanceTimersByTimeAsync(10);
+        expect((await replay).Status).toBe(InvocationStatus.FAILED);
+        expect(message).toHaveBeenCalledTimes(2);
+        expect(name).toHaveBeenCalledTimes(2);
+      }
+      expect(child).toHaveBeenCalledTimes(1);
+      expect(held).toHaveBeenCalledTimes(1);
+      expect(ended).toHaveBeenCalledTimes(plugins ? (expired ? 1 : 2) : 0);
+      expect(
+        store.checkpoint.mock.calls
+          .flatMap(([request]) => request.Updates ?? [])
+          .some((update) => update.Action === "FAIL"),
+      ).toBe(false);
+      expect(jest.getTimerCount()).toBe(0);
+    },
+  );
+
   it("does not select a terminal response when serialization consumes the remaining budget", async () => {
     const store = recorder();
     let remaining = 1000;
