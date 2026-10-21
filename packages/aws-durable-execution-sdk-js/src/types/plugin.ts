@@ -6,8 +6,6 @@ import { DurableExecutionInvocationOutput } from "./core";
  * This enum is separate from the core InvocationStatus and provides
  * richer status information for plugin authors, including a RETRYING
  * state that indicates the Lambda runtime will automatically retry.
- *
- * @experimental This enum is experimental and may be changed or removed in future releases.
  */
 export const PluginInvocationStatus = {
   SUCCEEDED: "SUCCEEDED",
@@ -24,8 +22,6 @@ export type PluginInvocationStatus =
  *
  * These represent the lifecycle states that an operation can be in
  * during durable execution.
- *
- * @experimental This enum is experimental and may be changed or removed in future releases.
  */
 export const PluginOperationStatus = {
   STARTED: "STARTED",
@@ -43,8 +39,6 @@ export type PluginOperationStatus =
 
 /**
  * Information about a durable operation.
- *
- * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface OperationInfo {
   id: string;
@@ -76,8 +70,6 @@ export interface OperationInfo {
 
 /**
  * Information provided when a durable operation ends.
- *
- * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface OperationEndInfo extends OperationInfo {
   error?: Error;
@@ -85,8 +77,6 @@ export interface OperationEndInfo extends OperationInfo {
 
 /**
  * Information about an operation attempt.
- *
- * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface AttemptInfo extends OperationInfo {
   attempt: number;
@@ -94,8 +84,6 @@ export interface AttemptInfo extends OperationInfo {
 
 /**
  * Possible outcomes for an operation attempt.
- *
- * @experimental This enum is experimental and may be changed or removed in future releases.
  */
 export const AttemptEndInfoOutcome = {
   SUCCEEDED: "SUCCEEDED",
@@ -107,8 +95,6 @@ export type AttemptEndInfoOutcome =
 
 /**
  * Information provided when an operation attempt ends.
- *
- * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface AttemptEndInfo extends AttemptInfo {
   outcome: AttemptEndInfoOutcome;
@@ -117,8 +103,6 @@ export interface AttemptEndInfo extends AttemptInfo {
 
 /**
  * Base information identifying a durable execution invoke.
- *
- * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface InvocationBaseInfo {
   requestId: string;
@@ -136,8 +120,6 @@ export interface InvocationBaseInfo {
 /**
  * Information about a durable execution invocation, including whether it is
  * the first invocation (execution mode) or a subsequent replay.
- *
- * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface InvocationInfo extends InvocationBaseInfo {
   /**
@@ -163,8 +145,6 @@ export interface InvocationInfo extends InvocationBaseInfo {
 /**
  * Information provided when a durable execution invocation ends, including
  * the invocation status and contextual details about the outcome.
- *
- * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface InvocationEndInfo extends InvocationBaseInfo {
   status: PluginInvocationStatus;
@@ -174,8 +154,6 @@ export interface InvocationEndInfo extends InvocationBaseInfo {
 
 /**
  * Information provided when operations change during execution.
- *
- * @experimental This interface is experimental and may be changed or removed in future releases.
  */
 export interface OperationChangeInfo {
   executionArn: string;

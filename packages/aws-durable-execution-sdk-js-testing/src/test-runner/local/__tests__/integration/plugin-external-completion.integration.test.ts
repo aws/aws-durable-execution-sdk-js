@@ -115,6 +115,29 @@ it.each([
       starts.filter((start) => start.updatedOperations[ends[0].id]),
     ).toHaveLength(1);
     expect(starts[0].updatedOperations).toEqual({});
+    // The payload is part of the plugin contract: every observation of the
+    // completion, live or replayed, carries the same result or error.
+    const resumed = starts
+      .map((start) => start.updatedOperations[ends[0].id])
+      .filter((op) => op !== undefined);
+    for (const observed of [...ends, ...resumed]) {
+      if (fails) {
+        expect(observed.result).toBeUndefined();
+        expect(observed.error?.message).toBe("external failure");
+      } else if (kind === "wait") {
+        expect(observed.result).toBeUndefined();
+        expect(observed.error).toBeUndefined();
+      } else {
+        // A callback result is the payload as sent; an invoke result is the
+        // callee's serialized return value.
+        expect(
+          kind === "callback"
+            ? observed.result
+            : JSON.parse(observed.result as string),
+        ).toBe("external result");
+        expect(observed.error).toBeUndefined();
+      }
+    }
   },
   30000,
 );
