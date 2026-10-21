@@ -16,8 +16,8 @@ import {
   SimpleSpanProcessor,
   type SpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
-import { ExecutionOtelPlugin } from "../execution-plugin";
-import { InvocationOtelPlugin } from "../invocation-plugin";
+import { createExecutionOtelPluginFactory } from "../execution-plugin";
+import { createInvocationOtelPluginFactory } from "../invocation-plugin";
 
 const gate = () => {
   let open!: () => void;
@@ -43,8 +43,8 @@ const input = (name: string) => ({
 });
 
 describe.each([
-  ["execution", ExecutionOtelPlugin],
-  ["invocation", InvocationOtelPlugin],
+  ["execution", createExecutionOtelPluginFactory],
+  ["invocation", createInvocationOtelPluginFactory],
 ] as const)("%s view deadline instrumentation", (_view, Plugin) => {
   it.each([false, true])(
     "ends only the expired invocation's owned spans (next already started=%s)",
@@ -71,7 +71,7 @@ describe.each([
         async shutdown() {},
       };
       let provider!: NodeTracerProvider;
-      const plugin = new Plugin({
+      const plugin = Plugin({
         contextExtractor: () => undefined,
         flushTimeoutMillis: 5000,
         tracerProviderFactory: (ids) =>
@@ -80,7 +80,13 @@ describe.each([
             spanProcessors: [observer, new SimpleSpanProcessor(exporter)],
           })),
       });
-      const end = jest.spyOn(plugin, "onInvocationEnd");
+      const end: jest.SpyInstance[] = [];
+      const createPlugin = plugin.createPlugin.bind(plugin);
+      jest.spyOn(plugin, "createPlugin").mockImplementation((info) => {
+        const instance = createPlugin(info);
+        end.push(jest.spyOn(instance, "onInvocationEnd"));
+        return instance;
+      });
       const finalized = jest.fn();
       const client: DurableExecutionClient = {
         getExecutionState: async () => ({ Operations: [] }),
@@ -140,9 +146,9 @@ describe.each([
           }),
         );
         expect(finalized).not.toHaveBeenCalled();
-        if (!overlap) {
-          expect(end).toHaveBeenCalledTimes(1);
-          expect(end).toHaveBeenCalledWith(
+        {
+          expect(end[0]).toHaveBeenCalledTimes(1);
+          expect(end[0]).toHaveBeenCalledWith(
             expect.objectContaining({ requestId: "first", status: "RETRYING" }),
           );
           expect(attempts[0].isRecording()).toBe(false);
@@ -169,16 +175,12 @@ describe.each([
             firstSpans.filter((span) => span.name === "Workflow"),
           ).toHaveLength(0);
           expect(flushCount).toBe(1); // Caller returned while this flush is still held.
-          await startSecond();
-        } else {
-          // v1 cached instances do not isolate overlapping invocations. A's state
-          // was already replaced by B, so cleanup must skip it, not end B's spans.
-          expect(end).not.toHaveBeenCalled();
+          if (!overlap) await startSecond();
         }
         expect(attempts[1].isRecording()).toBe(true);
         expect(invocations[1].isRecording()).toBe(true);
         releaseFlush.open();
-        if (!overlap) await end.mock.results[0].value;
+        await end[0].mock.results[0].value;
         expect(attempts[1].isRecording()).toBe(true);
         release[0].open();
         await new Promise<void>((resolve) => setImmediate(resolve));
@@ -190,15 +192,13 @@ describe.each([
         });
         expect(finalized.mock.calls).toEqual([["second"]]);
         expect(
-          end.mock.calls.map(([info]) => [info.requestId, info.status]),
-        ).toEqual(
-          overlap
-            ? [["second", "SUCCEEDED"]]
-            : [
-                ["first", "RETRYING"],
-                ["second", "SUCCEEDED"],
-              ],
-        );
+          end.flatMap((spy) =>
+            spy.mock.calls.map(([info]) => [info.requestId, info.status]),
+          ),
+        ).toEqual([
+          ["first", "RETRYING"],
+          ["second", "SUCCEEDED"],
+        ]);
       } finally {
         releaseFlush.open();
         release[0].open();

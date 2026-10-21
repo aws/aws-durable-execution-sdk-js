@@ -15,9 +15,9 @@ import { DurableExecutionInvocationOutput } from "../../types/core";
 import { collectPropagationMetadata } from "./propagation-metadata";
 import type { InvocationLifecycle } from "../invocation-lifecycle/invocation-lifecycle";
 
-// A v1 plugin instance may be reused by a later invocation before old cleanup
-// runs. Ownership is per instance, including when the same instance is shared
-// by more than one wrapped handler.
+// Factories normally create distinct instances. Track identity defensively so
+// an accidentally shared instance cannot receive an old invocation's resumed
+// hook after a later invocation has started using it.
 const invocationOwners = new WeakMap<DurableInstrumentationPlugin, object>();
 
 /** @internal Runner-only deadline dispatch, not a custom plugin hook. */

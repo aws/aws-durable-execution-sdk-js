@@ -400,7 +400,14 @@ describe("withDurableExecution", () => {
       .spyOn(pluginLoader, "loadConfiguredPlugins")
       .mockImplementation(async () => {
         await loading;
-        return [{ onInvocationStart: started, onInvocationEnd: ended }];
+        return [
+          {
+            createPlugin: () => ({
+              onInvocationStart: started,
+              onInvocationEnd: ended,
+            }),
+          },
+        ];
       });
     try {
       const body = jest.fn(async () => "forbidden");

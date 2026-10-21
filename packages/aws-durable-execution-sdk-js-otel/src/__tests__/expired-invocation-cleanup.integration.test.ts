@@ -10,8 +10,8 @@ import {
   SimpleSpanProcessor,
   type SpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
-import { ExecutionOtelPlugin } from "../execution-plugin";
-import { InvocationOtelPlugin } from "../invocation-plugin";
+import { createExecutionOtelPluginFactory } from "../execution-plugin";
+import { createInvocationOtelPluginFactory } from "../invocation-plugin";
 
 const gate = () => {
   let open!: () => void;
@@ -38,8 +38,8 @@ const input = (name: string, first: boolean) => ({
 });
 
 describe.each([
-  ["execution", ExecutionOtelPlugin],
-  ["invocation", InvocationOtelPlugin],
+  ["execution", createExecutionOtelPluginFactory],
+  ["invocation", createInvocationOtelPluginFactory],
 ] as const)("%s view detached invocation cleanup", (_view, Plugin) => {
   it("does not end or discard the next invocation's spans when an expired flush resumes", async () => {
     trace.disable();
@@ -66,7 +66,7 @@ describe.each([
       },
       async shutdown() {},
     };
-    const plugin = new Plugin({
+    const plugin = Plugin({
       contextExtractor: () => undefined,
       flushTimeoutMillis: 5000,
       tracerProviderFactory: (ids) =>
@@ -75,7 +75,13 @@ describe.each([
           spanProcessors: [flushGate, new SimpleSpanProcessor(exporter)],
         })),
     });
-    const end = jest.spyOn(plugin, "onInvocationEnd");
+    const end: jest.SpyInstance[] = [];
+    const createPlugin = plugin.createPlugin.bind(plugin);
+    jest.spyOn(plugin, "createPlugin").mockImplementation((info) => {
+      const instance = createPlugin(info);
+      end.push(jest.spyOn(instance, "onInvocationEnd"));
+      return instance;
+    });
     const client: DurableExecutionClient = {
       getExecutionState: async () => ({ Operations: [] }),
       checkpoint: async (request) => ({
@@ -117,7 +123,7 @@ describe.each([
       // The service acknowledged the oversized result, so the deadline returns
       // success while the already-entered plugin End is still suspended.
       expect(await first).toEqual({ Status: "SUCCEEDED", Result: "" });
-      expect(end).toHaveBeenCalledTimes(1);
+      expect(end[0]).toHaveBeenCalledTimes(1);
       second = handler(input("second", false), {
         awsRequestId: "request-second",
         getRemainingTimeInMillis: () => 30000,
@@ -126,7 +132,7 @@ describe.each([
       expect(attempts).toHaveLength(1);
       expect(attempts[0].isRecording()).toBe(true);
       releaseFirstFlush.open();
-      await end.mock.results[0].value;
+      await end[0].mock.results[0].value;
       expect(attempts[0].isRecording()).toBe(true);
       releaseSecondBody.open();
       expect(await second).toEqual({

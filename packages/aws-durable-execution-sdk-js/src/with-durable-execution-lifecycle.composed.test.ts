@@ -211,12 +211,19 @@ describe("invocation-owned lifecycle through the public wrapper", () => {
         durableExecutionClient: store.client,
         plugins: [
           {
-            onInvocationStart: async () => {
-              remaining = 0;
-            },
-            onInvocationEnd: cleanup,
+            createPlugin: () => ({
+              onInvocationStart: async () => {
+                remaining = 0;
+              },
+              onInvocationEnd: cleanup,
+            }),
           },
-          { onInvocationStart: laterStart, onInvocationEnd: laterEnd },
+          {
+            createPlugin: () => ({
+              onInvocationStart: laterStart,
+              onInvocationEnd: laterEnd,
+            }),
+          },
         ],
       });
       await expect(
@@ -254,8 +261,8 @@ describe("invocation-owned lifecycle through the public wrapper", () => {
       {
         durableExecutionClient: store.client,
         plugins: [
-          { onInvocationEnd: firstEnd },
-          { onInvocationEnd: secondEnd },
+          { createPlugin: () => ({ onInvocationEnd: firstEnd }) },
+          { createPlugin: () => ({ onInvocationEnd: secondEnd }) },
         ],
       },
     );
@@ -298,8 +305,8 @@ describe("invocation-owned lifecycle through the public wrapper", () => {
         {
           durableExecutionClient: store.client,
           plugins: [
-            { onInvocationEnd: firstEnd },
-            { onInvocationEnd: secondEnd },
+            { createPlugin: () => ({ onInvocationEnd: firstEnd }) },
+            { createPlugin: () => ({ onInvocationEnd: secondEnd }) },
           ],
         },
       );
@@ -379,7 +386,7 @@ describe("invocation-owned lifecycle through the public wrapper", () => {
       }),
       {
         durableExecutionClient: store.client,
-        plugins: [{ onInvocationEnd: ended }],
+        plugins: [{ createPlugin: () => ({ onInvocationEnd: ended }) }],
       },
     )(input(), { ...runtime(), getRemainingTimeInMillis: () => remaining });
 
@@ -404,7 +411,10 @@ describe("invocation-owned lifecycle through the public wrapper", () => {
     const result = withDurableExecution(body, {
       durableExecutionClient: store.client,
       pluginsConfig: { childOperationsDepth: -1 },
-      plugins: [{ onInvocationEnd: firstEnd }, { onInvocationEnd: secondEnd }],
+      plugins: [
+        { createPlugin: () => ({ onInvocationEnd: firstEnd }) },
+        { createPlugin: () => ({ onInvocationEnd: secondEnd }) },
+      ],
     })(input(), {
       ...runtime(),
       getRemainingTimeInMillis: () => remaining,
@@ -586,7 +596,10 @@ describe("invocation-owned lifecycle through the public wrapper", () => {
           await entered.promise;
           return "done";
         },
-        { durableExecutionClient: store.client, plugins: [plugin] },
+        {
+          durableExecutionClient: store.client,
+          plugins: [{ createPlugin: () => plugin }],
+        },
       );
       const result = handler(input(), runtime());
       await jest.advanceTimersByTimeAsync(10);
@@ -658,7 +671,7 @@ describe("invocation-owned lifecycle through the public wrapper", () => {
     const event = input();
     const invocation = withDurableExecution(body, {
       durableExecutionClient: store.client,
-      plugins: [{ onInvocationStart: start }],
+      plugins: [{ createPlugin: () => ({ onInvocationStart: start }) }],
     })(
       {
         ...event,
@@ -695,7 +708,14 @@ describe("invocation-owned lifecycle through the public wrapper", () => {
     };
     const result = withDurableExecution(async () => output, {
       durableExecutionClient: store.client,
-      plugins: [{ onOperationChange: changed, onInvocationEnd: ended }],
+      plugins: [
+        {
+          createPlugin: () => ({
+            onOperationChange: changed,
+            onInvocationEnd: ended,
+          }),
+        },
+      ],
     })(input(), runtime(1000));
     try {
       await tickUntil(() => changed.mock.calls.length === 1);
@@ -737,7 +757,14 @@ describe("invocation-owned lifecycle through the public wrapper", () => {
     };
     const outcome = withDurableExecution(async () => output, {
       durableExecutionClient: store.client,
-      plugins: [{ onOperationChange: changed, onInvocationEnd: ended }],
+      plugins: [
+        {
+          createPlugin: () => ({
+            onOperationChange: changed,
+            onInvocationEnd: ended,
+          }),
+        },
+      ],
     })(input(), runtime(1000)).then(
       (value) => value,
       (error: unknown) => error,
@@ -786,7 +813,7 @@ describe("invocation-owned lifecycle through the public wrapper", () => {
       },
       {
         durableExecutionClient: store.client,
-        plugins: [{ onInvocationEnd: ended }],
+        plugins: [{ createPlugin: () => ({ onInvocationEnd: ended }) }],
       },
     )(input(), runtime(1000));
     // Observe both outcomes immediately so the negative control does not leave

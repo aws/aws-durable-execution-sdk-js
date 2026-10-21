@@ -45,13 +45,11 @@ import {
   DurableExecutionHandler,
   DurableLambdaHandler,
 } from "./types/durable-execution";
-import {
-  createPluginRunner,
-  type InvocationPluginRunner,
-} from "./utils/plugin/plugin-runner";
+import { createInvocationPluginRunner } from "./utils/plugin/plugin-factory";
 import { loadConfiguredPlugins } from "./utils/plugin/plugin-loader";
 import { toOperationInfoMap } from "./utils/operation/operation";
 import {
+  DurableInstrumentationPluginFactory,
   InvocationBaseInfo,
   InvocationInfo,
   InvocationEndInfo,
@@ -73,47 +71,10 @@ async function runHandler<
   durableExecutionMode: DurableExecutionMode,
   checkpointToken: string,
   handler: DurableExecutionHandler<Input, Output, Logger>,
-  plugin: InvocationPluginRunner,
+  pluginFactories: readonly DurableInstrumentationPluginFactory[],
   config: DurableExecutionConfig | undefined,
 ): Promise<DurableExecutionInvocationOutput> {
-  // Create checkpoint manager and step data emitter
-  const stepDataEmitter = new EventEmitter();
-  const checkpointManager = new CheckpointManager(
-    executionContext.durableExecutionArn,
-    executionContext._stepData,
-    executionContext.durableExecutionClient,
-    executionContext.terminationManager,
-    checkpointToken,
-    stepDataEmitter,
-    createDefaultLogger(
-      executionContext,
-      plugin.enrichLogContext?.bind(plugin),
-    ),
-    new Set<string>(),
-    plugin,
-    executionContext.requestId,
-    executionContext.getRemainingTimeMs,
-    executionContext.invocationLifecycle,
-  );
   const lifecycle = executionContext.invocationLifecycle;
-  lifecycle?.onDispose(() => checkpointManager.dispose());
-  let preparedTerminalEnd: InvocationEndInfo | undefined;
-  let oversizedExecutionResult: unknown;
-  const endInvocation = async (
-    info: InvocationEndInfo,
-    terminalResponse?: DurableExecutionInvocationOutput,
-  ): Promise<void> => {
-    if (lifecycle && !lifecycle.allowsRequests()) return;
-    if (lifecycle && terminalResponse) {
-      // Callers finish serialization and their final checkpoint/termination
-      // checks before selecting a response. Check the live budget above before
-      // allowing cleanup to preserve it through a later deadline.
-      lifecycle.preparedTerminalResponse = terminalResponse;
-      preparedTerminalEnd = info;
-    }
-    await plugin.onInvocationEnd?.(info);
-  };
-
   // Extract customerHandlerEvent early so it's available for plugins in onInvocationStart
   const initialExecutionEvent =
     executionContext._stepData[Object.keys(executionContext._stepData)[0]];
@@ -138,12 +99,75 @@ async function runHandler<
     executionStartTimestamp: initialExecutionEvent?.StartTimestamp ?? undefined,
   };
 
+  let runtimeTraceInfo: Pick<InvocationInfo, "xRayTraceId"> = {};
+  // Factories need the same safe carrier snapshot as invocation hooks. Without
+  // any configured factory, optional instrumentation metadata is never read.
+  if (pluginFactories.length > 0) {
+    try {
+      const xRayTraceId = (context as Context & { xRayTraceId?: string })
+        .xRayTraceId;
+      if (xRayTraceId !== undefined || "xRayTraceId" in context) {
+        runtimeTraceInfo = { xRayTraceId: xRayTraceId ?? "" };
+      }
+    } catch {
+      // Optional runtime getters/proxies must not fail the handler or cause
+      // another invocation's process-wide header to be used as a fallback.
+      runtimeTraceInfo = { xRayTraceId: "" };
+    }
+  }
   const invocationInfo: InvocationInfo = {
     ...invocationBaseInfo,
     isFirstInvocation:
       durableExecutionMode === DurableExecutionMode.ExecutionMode,
     updatedOperations,
+    ...runtimeTraceInfo,
   };
+  lifecycle?.throwIfExpired();
+  // Factories receive the same invocation snapshot as Start. The runner and
+  // checkpoint manager share this invocation's admission and disposal fence.
+  const plugin = createInvocationPluginRunner(
+    pluginFactories,
+    invocationInfo,
+    lifecycle,
+  );
+
+  // Create checkpoint manager and step data emitter
+  const stepDataEmitter = new EventEmitter();
+  const checkpointManager = new CheckpointManager(
+    executionContext.durableExecutionArn,
+    executionContext._stepData,
+    executionContext.durableExecutionClient,
+    executionContext.terminationManager,
+    checkpointToken,
+    stepDataEmitter,
+    createDefaultLogger(
+      executionContext,
+      plugin.enrichLogContext?.bind(plugin),
+    ),
+    new Set<string>(),
+    plugin,
+    executionContext.requestId,
+    executionContext.getRemainingTimeMs,
+    executionContext.invocationLifecycle,
+  );
+  lifecycle?.onDispose(() => checkpointManager.dispose());
+  let preparedTerminalEnd: InvocationEndInfo | undefined;
+  let oversizedExecutionResult: unknown;
+  const endInvocation = async (
+    info: InvocationEndInfo,
+    terminalResponse?: DurableExecutionInvocationOutput,
+  ): Promise<void> => {
+    if (lifecycle && !lifecycle.allowsRequests()) return;
+    if (lifecycle && terminalResponse) {
+      // Callers finish serialization and their final checkpoint/termination
+      // checks before selecting a response. Check the live budget above before
+      // allowing cleanup to preserve it through a later deadline.
+      lifecycle.preparedTerminalResponse = terminalResponse;
+      preparedTerminalEnd = info;
+    }
+    await plugin.onInvocationEnd?.(info);
+  };
+
   lifecycle?.onDeadline((error) => {
     // Expiry interrupts unfinished work. Cleanup retains outcomes already
     // fixed by the service or selected before terminal hooks started.
@@ -731,12 +755,12 @@ export const withDurableExecution = <
   handler: DurableExecutionHandler<TEvent, TResult, TLogger>,
   config?: DurableExecutionConfig,
 ): DurableLambdaHandler => {
-  const pluginPromise = loadConfiguredPlugins(config?.plugins);
+  const pluginFactoriesPromise = loadConfiguredPlugins(config?.plugins);
   // Plugin loading starts during handler initialization. Attach a rejection handler
   // immediately so a cold-start configuration error cannot become an unhandled
   // rejection before Lambda invokes the exported handler; awaiting the original
   // promise below still reports the same error to the invocation.
-  void pluginPromise.catch(() => undefined);
+  void pluginFactoriesPromise.catch(() => undefined);
 
   return async (
     event: DurableExecutionInvocationInput,
@@ -763,12 +787,10 @@ export const withDurableExecution = <
     );
     try {
       return await lifecycle.run(async () => {
-        let plugin: InvocationPluginRunner;
+        let pluginFactories: readonly DurableInstrumentationPluginFactory[];
         try {
-          const plugins = await pluginPromise;
+          pluginFactories = await pluginFactoriesPromise;
           lifecycle.throwIfExpired();
-          // Instances remain cached, but dispatch belongs to this invocation.
-          plugin = createPluginRunner(plugins, lifecycle);
         } catch (error) {
           return {
             Status: InvocationStatus.FAILED,
@@ -787,7 +809,7 @@ export const withDurableExecution = <
             durableExecutionMode,
             checkpointToken,
             handler,
-            plugin,
+            pluginFactories,
             config,
           );
         } catch (error) {

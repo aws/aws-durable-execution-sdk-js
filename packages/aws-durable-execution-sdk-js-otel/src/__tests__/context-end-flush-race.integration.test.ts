@@ -10,7 +10,7 @@ import {
   SimpleSpanProcessor,
   type SpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
-import { ExecutionOtelPlugin } from "../execution-plugin";
+import { createExecutionOtelPluginFactory } from "../execution-plugin";
 
 const gate = () => {
   let open!: () => void;
@@ -60,7 +60,7 @@ it.each([1, 8, 16])(
       },
       shutdown: () => delegate.shutdown(),
     };
-    const plugin = new ExecutionOtelPlugin({
+    const plugin = createExecutionOtelPluginFactory({
       contextExtractor: () => undefined,
       flushTimeoutMillis: 5000,
       tracerProviderFactory: (ids) =>
@@ -93,18 +93,23 @@ it.each([1, 8, 16])(
         pluginsConfig: { childOperationsDepth: 2 },
         plugins: [
           {
-            async onOperationChange(info) {
-              for (const op of Object.values(info.updatedOperations)) {
-                if (names.includes(op.name ?? "") && op.status === "SUCCEEDED")
-                  observed.add(op.name!);
-              }
-            },
-            async onOperationEnd(info) {
-              if (info.name === "parent") parentEnded();
-            },
-            async onInvocationEnd() {
-              completionsBeforeEnd = observed.size;
-            },
+            createPlugin: () => ({
+              async onOperationChange(info) {
+                for (const op of Object.values(info.updatedOperations)) {
+                  if (
+                    names.includes(op.name ?? "") &&
+                    op.status === "SUCCEEDED"
+                  )
+                    observed.add(op.name!);
+                }
+              },
+              async onOperationEnd(info) {
+                if (info.name === "parent") parentEnded();
+              },
+              async onInvocationEnd() {
+                completionsBeforeEnd = observed.size;
+              },
+            }),
           },
           plugin,
         ],

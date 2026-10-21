@@ -2,8 +2,19 @@
 
 ## 1. Plugin Configuration Contract
 
+`durableExecutionTelemetry(config)` returns a `DurableInstrumentationPluginFactory`: the
+value goes straight into `plugins`. A factory is an object with a
+`createPlugin(info)` method, not a callable, so the SDK calls `createPlugin` once
+per invocation to build that invocation's plugin instance. The exporters and the
+export scheduler below are created once, when `durableExecutionTelemetry` is called, and
+are shared by every instance it hands out.
+
 ```typescript
-import { DurableInstrumentationPlugin } from "@aws/durable-execution-sdk-js";
+import type { DurableInstrumentationPluginFactory } from "@aws/durable-execution-sdk-js";
+
+declare function durableExecutionTelemetry(
+  config: DurableExecutionTelemetryConfig,
+): DurableInstrumentationPluginFactory;
 
 /**
  * Exporter interface — any class that knows how to send a DurableExecutionTelemetryRecord
@@ -520,9 +531,14 @@ interface OperationRecord {
 
 ### Critical constraint: `onInvocationEnd` must be awaited
 
-The current plugin runner fires `onInvocationEnd` as fire-and-forget. For Durable Execution Telemetry, this is the moment we flush to the destination. If Lambda terminates before the write completes, data is lost.
+The plugin runner awaits `onInvocationEnd` before returning the Lambda response.
+Each Durable Execution Telemetry plugin instance uses that hook to drain its
+queued records and await the shared exporter's flush. Export and flush failures
+are isolated from the execution result; exporters must settle promptly.
 
-**Proposed fix:** Use `wrapInvocation` instead (already awaited), or modify the plugin runner to await `onInvocationEnd` before returning the Lambda response.
+This drain belongs to the invocation's End hook, not a separate `wrapInvocation`
+cleanup path. Awaiting it does not guarantee delivery after runtime termination
+or an exporter failure.
 
 ---
 

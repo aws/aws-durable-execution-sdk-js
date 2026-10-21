@@ -10,8 +10,8 @@ import {
   SimpleSpanProcessor,
   type SpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
-import { ExecutionOtelPlugin } from "../execution-plugin";
-import { InvocationOtelPlugin } from "../invocation-plugin";
+import { createExecutionOtelPluginFactory } from "../execution-plugin";
+import { createInvocationOtelPluginFactory } from "../invocation-plugin";
 
 const gate = () => {
   let open!: () => void;
@@ -38,8 +38,8 @@ const input = () => ({
 });
 
 describe.each([
-  ["execution", ExecutionOtelPlugin],
-  ["invocation", InvocationOtelPlugin],
+  ["execution", createExecutionOtelPluginFactory],
+  ["invocation", createInvocationOtelPluginFactory],
 ] as const)("%s view expired operation hook", (_view, Plugin) => {
   it("does not dispatch an old attempt after a new invocation starts the same step", async () => {
     trace.disable();
@@ -60,7 +60,7 @@ describe.each([
       async shutdown() {},
     };
     let provider!: NodeTracerProvider;
-    const plugin = new Plugin({
+    const plugin = Plugin({
       contextExtractor: () => undefined,
       tracerProviderFactory: (ids) =>
         (provider = new NodeTracerProvider({
@@ -74,7 +74,13 @@ describe.each([
         await releaseFirstStart.opened;
       }
     });
-    const attemptStart = jest.spyOn(plugin, "onOperationAttemptStart");
+    const attemptStart: jest.SpyInstance[] = [];
+    const createPlugin = plugin.createPlugin.bind(plugin);
+    jest.spyOn(plugin, "createPlugin").mockImplementation((info) => {
+      const instance = createPlugin(info);
+      attemptStart.push(jest.spyOn(instance, "onOperationAttemptStart"));
+      return instance;
+    });
     const client: DurableExecutionClient = {
       getExecutionState: async () => ({ Operations: [] }),
       checkpoint: async (request) => ({
@@ -104,7 +110,10 @@ describe.each([
       async (_, ctx) => ctx.step("same-step", body),
       {
         durableExecutionClient: client,
-        plugins: [plugin, { onOperationStart: starts }],
+        plugins: [
+          plugin,
+          { createPlugin: () => ({ onOperationStart: starts }) },
+        ],
       },
     );
     const first = handler(input(), {
@@ -124,7 +133,9 @@ describe.each([
       expect(attempts).toHaveLength(1);
       releaseFirstStart.open();
       await new Promise<void>((resolve) => setImmediate(resolve));
-      expect(attemptStart).toHaveBeenCalledTimes(1);
+      expect(attemptStart).toHaveLength(2);
+      expect(attemptStart[0]).not.toHaveBeenCalled();
+      expect(attemptStart[1]).toHaveBeenCalledTimes(1);
       expect(attempts).toHaveLength(1);
       expect(attempts[0].isRecording()).toBe(true);
       releaseSecondBody.open();
