@@ -240,6 +240,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   308 for a missing trailing slash used to deliver the job and now fails, so set the path with its
   trailing slash.
 
+- A `microvmSession` job in `@aws/durable-execution-sdk-js-extras` could fail with a plain
+  `MicrovmDeliveryError` for a removed MicroVM. ResumeMicrovm answers `ResourceNotFoundException`
+  when the MicroVM is removed between the state check and the resume. The request step rethrew
+  that error, and the default retry strategy does not retry it. So a handler that catches
+  `MicrovmNotRunningError` to start a new session did not catch this case. The step now treats
+  this answer as it treats the same answer from GetMicrovm. The job fails at once with
+  `MicrovmNotRunningError`.
+
 - An `InvalidRunHookPayloadError` for a `runHookPayload` that is not JSON now keeps the parser's
   `SyntaxError` as its `cause`. Its message names the position of the error.
 

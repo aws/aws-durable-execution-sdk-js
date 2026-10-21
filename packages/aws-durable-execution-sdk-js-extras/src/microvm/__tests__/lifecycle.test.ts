@@ -104,6 +104,40 @@ describe("ensureRunning", () => {
     expect(error.message).toContain("session timeout plus 5 minutes");
   });
 
+  it("throws MicrovmStateError when the MicroVM is removed before ResumeMicrovm", async () => {
+    const client = new FakeMicrovmsClient();
+    client.getResponses = [state("SUSPENDED")];
+    client.resumeResponses = [
+      throwing(
+        Object.assign(new Error("MicroVM not found"), {
+          name: "ResourceNotFoundException",
+        }),
+      ),
+    ];
+    const opts = options(client);
+
+    const error = await ensureRunning(opts).catch((e) => e);
+    expect(error).toBeInstanceOf(MicrovmStateError);
+    expect(error.state).toBeUndefined();
+    expect(error.message).toBe(
+      "MicroVM mvm-1 no longer exists. A session MicroVM lives at most its session timeout plus 5 minutes, and never longer than 8 hours.",
+    );
+    // The function stops at once. It does not poll a removed MicroVM.
+    expect(client.events).toEqual(["get:SUSPENDED", "resume"]);
+    expect(opts.sleep).not.toHaveBeenCalled();
+  });
+
+  it("rethrows any other ResumeMicrovm error", async () => {
+    const client = new FakeMicrovmsClient();
+    client.getResponses = [state("SUSPENDED")];
+    const denied = Object.assign(new Error("denied"), {
+      name: "AccessDeniedException",
+    });
+    client.resumeResponses = [throwing(denied)];
+
+    await expect(ensureRunning(options(client))).rejects.toBe(denied);
+  });
+
   it("gives up after maxWaitMs", async () => {
     const client = new FakeMicrovmsClient();
     client.getResponses = Array.from({ length: 5 }, () => state("SUSPENDING"));

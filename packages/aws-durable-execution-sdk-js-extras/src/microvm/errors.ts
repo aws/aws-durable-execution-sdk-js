@@ -85,9 +85,10 @@ export class MicrovmDeliveryError extends MicrovmError {
  *
  * Only a session that checks the MicroVM state before each job reports this
  * error. It checks when `autoSuspendOnIdle` is `true`, or when an
- * `idlePolicy` is set. The check calls GetMicrovm, and a later
- * attempt finds the same state. So the job is not retried. To continue,
- * start a new session.
+ * `idlePolicy` is set. The check calls GetMicrovm. It also calls
+ * ResumeMicrovm when the MicroVM is suspended. Either call can report a
+ * MicroVM that no longer exists. A later attempt finds the same state. So
+ * the job is not retried. To continue, start a new session.
  *
  * By default, with no `idlePolicy`, the session makes no GetMicrovm call. The endpoint of a terminated MicroVM answers 502, and the
  * request step retries a 502 as a MicroVM that is still starting. So the job
