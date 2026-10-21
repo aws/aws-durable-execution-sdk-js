@@ -121,9 +121,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     function. A non-durable invoked function runs outside the fake clock, and the runner
     cannot see whether the handler still awaits it, as with the other operands of
     `context.promise.race`. So the clock waits for a running non-durable function for at most
-    1 s of real time. If the caller finishes without the result, or the context that contains the
-    invoke completes without it, the clock no longer waits for it. Once the handler returns
-    its final result, the runner applies no further wait or retry end.
+    1 s of real time. For the same reason, it waits for each running invocation of a durable
+    invoked function for at most 1 s of real time. If the caller finishes without the result, or the context that contains the
+    invoke completes without it, the clock no longer waits for it. That includes a durable
+    invoked function that is still running. Such an abandoned function keeps running, and its
+    own waits and retries still skip time. Like any durable invoked function, each running
+    invocation of it stops the clock for at most 1 s of real time.
+    Once the handler returns its final result, the runner applies no further wait or retry end.
     While an invocation is running, the fake clock advances with real time, and an end is
     applied when that time reaches it. Waits also keep completing while an execution is
     paused.
