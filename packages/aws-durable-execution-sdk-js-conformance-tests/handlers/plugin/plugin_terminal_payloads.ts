@@ -3,7 +3,7 @@ import {
   DurableContext,
   withDurableExecution,
   createRetryStrategy,
-  DurableInstrumentationPlugin,
+  DurableInstrumentationPluginFactory,
 } from "@aws/durable-execution-sdk-js";
 
 const PLUGIN = "CONFPLUGIN";
@@ -12,33 +12,34 @@ function isStep(type?: string): boolean {
   return (type || "").toUpperCase() === "STEP";
 }
 
-function makePlugin(): DurableInstrumentationPlugin {
-  let executionArn = "";
-  const emit = (rec: Record<string, unknown>): void => {
-    process.stdout.write(
-      JSON.stringify({ ...rec, durableExecutionArn: executionArn }) + "\n",
-    );
-  };
+const makePlugin: DurableInstrumentationPluginFactory = {
+  createPlugin: (invocation) => {
+    const emit = (rec: Record<string, unknown>): void => {
+      process.stdout.write(
+        JSON.stringify({
+          ...rec,
+          durableExecutionArn: invocation.executionArn,
+        }) + "\n",
+      );
+    };
 
-  return {
-    async onInvocationStart(info): Promise<void> {
-      executionArn = info.executionArn;
-    },
-    async onOperationEnd(info): Promise<void> {
-      if (!isStep(info.type)) return;
-      emit({
-        plugin: PLUGIN,
-        hook: "operation-end",
-        op: info.id,
-        status: info.status,
-        // Raw serialized result exactly as checkpointed (e.g. '"task-a"'), or
-        // the literal NONE when absent.
-        result: info.result != null ? info.result : "NONE",
-        error: info.error?.message != null ? info.error.message : "NONE",
-      });
-    },
-  };
-}
+    return {
+      async onOperationEnd(info): Promise<void> {
+        if (!isStep(info.type)) return;
+        emit({
+          plugin: PLUGIN,
+          hook: "operation-end",
+          op: info.id,
+          status: info.status,
+          // Raw serialized result exactly as checkpointed (e.g. '"task-a"'), or
+          // the literal NONE when absent.
+          result: info.result != null ? info.result : "NONE",
+          error: info.error?.message != null ? info.error.message : "NONE",
+        });
+      },
+    };
+  },
+};
 
 export const handler = withDurableExecution(
   async (_event: any, context: DurableContext) => {
@@ -54,5 +55,5 @@ export const handler = withDurableExecution(
     );
     return "unreachable";
   },
-  { plugins: [makePlugin()] },
+  { plugins: [makePlugin] },
 );
