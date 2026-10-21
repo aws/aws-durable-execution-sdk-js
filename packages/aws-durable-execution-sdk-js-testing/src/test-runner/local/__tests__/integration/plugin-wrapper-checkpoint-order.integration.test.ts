@@ -1,6 +1,6 @@
 import {
   withDurableExecution,
-  type DurableInstrumentationPlugin,
+  type DurableInstrumentationPluginFactory,
 } from "@aws/durable-execution-sdk-js";
 import { LocalDurableTestRunner } from "../../local-durable-test-runner";
 
@@ -17,19 +17,21 @@ it("checkpoints completed descendants before a minSuccessful map and skips them 
     child: 0,
     attempt: 0,
   }));
-  const plugins: DurableInstrumentationPlugin[] = calls.map((count) => ({
-    wrapInvocation(_info, next) {
-      count.invocation++;
-      return next();
-    },
-    wrapChildContextFn(_info, next) {
-      count.child++;
-      return next();
-    },
-    wrapOperationAttemptFn(_info, next) {
-      count.attempt++;
-      return next();
-    },
+  const plugins: DurableInstrumentationPluginFactory[] = calls.map((count) => ({
+    createPlugin: () => ({
+      wrapInvocation(_info, next) {
+        count.invocation++;
+        return next();
+      },
+      wrapChildContextFn(_info, next) {
+        count.child++;
+        return next();
+      },
+      wrapOperationAttemptFn(_info, next) {
+        count.attempt++;
+        return next();
+      },
+    }),
   }));
   const handler = withDurableExecution(
     async (_event, context) => {

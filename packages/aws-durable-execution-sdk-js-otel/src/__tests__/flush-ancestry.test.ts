@@ -8,7 +8,7 @@ import {
   NodeTracerProvider,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
-import { ExecutionOtelPlugin } from "../execution-plugin";
+import { createExecutionOtelPluginFactory } from "../execution-plugin";
 import {
   deriveSpanIdFromOperationId,
   deriveWorkflowSpanId,
@@ -33,14 +33,7 @@ describe("execution view ancestry received during flush", () => {
     async (_, parentStatus, ancestorStatus, expectedParent) => {
       const exporter = new InMemorySpanExporter();
       let provider!: NodeTracerProvider;
-      const plugin = new ExecutionOtelPlugin({
-        contextExtractor: () => undefined,
-        tracerProviderFactory: (ids) =>
-          (provider = new NodeTracerProvider({
-            idGenerator: ids(),
-            spanProcessors: [new SimpleSpanProcessor(exporter)],
-          })),
-      });
+
       const ancestor: OperationInfo = {
         id: "ancestor",
         type: "CONTEXT",
@@ -73,6 +66,15 @@ describe("execution view ancestry received during flush", () => {
         operations: { ancestor, parent },
         updatedOperations: {},
       };
+      const factory = createExecutionOtelPluginFactory({
+        contextExtractor: () => undefined,
+        tracerProviderFactory: (ids) =>
+          (provider = new NodeTracerProvider({
+            idGenerator: ids(),
+            spanProcessors: [new SimpleSpanProcessor(exporter)],
+          })),
+      });
+      let plugin = factory.createPlugin(info);
       const entered = gate(),
         release = gate();
       const flush = jest
@@ -110,11 +112,9 @@ describe("execution view ancestry received during flush", () => {
         );
         expect(flush).toHaveBeenCalledTimes(2);
         // A replay has no fresh completion to export, even with the same IDs.
-        await plugin.onInvocationStart({
-          ...info,
-          requestId: "later",
-          operations,
-        });
+        const next = { ...info, requestId: "later", operations };
+        plugin = factory.createPlugin(next);
+        await plugin.onInvocationStart(next);
         await plugin.onInvocationEnd({
           ...info,
           requestId: "later",
@@ -142,14 +142,7 @@ it.each(["SUCCEEDED", "FAILED", "PENDING"] as const)(
   async (status) => {
     const exporter = new InMemorySpanExporter();
     let provider!: NodeTracerProvider;
-    const plugin = new ExecutionOtelPlugin({
-      contextExtractor: () => undefined,
-      tracerProviderFactory: (ids) =>
-        (provider = new NodeTracerProvider({
-          idGenerator: ids(),
-          spanProcessors: [new SimpleSpanProcessor(exporter)],
-        })),
-    });
+
     const parent: OperationInfo = {
       id: "parent",
       type: "CONTEXT",
@@ -174,6 +167,15 @@ it.each(["SUCCEEDED", "FAILED", "PENDING"] as const)(
       operations: {},
       updatedOperations: {},
     };
+    const factory = createExecutionOtelPluginFactory({
+      contextExtractor: () => undefined,
+      tracerProviderFactory: (ids) =>
+        (provider = new NodeTracerProvider({
+          idGenerator: ids(),
+          spanProcessors: [new SimpleSpanProcessor(exporter)],
+        })),
+    });
+    const plugin = factory.createPlugin(info);
     const entered = gate(),
       release = gate();
     const flush = jest

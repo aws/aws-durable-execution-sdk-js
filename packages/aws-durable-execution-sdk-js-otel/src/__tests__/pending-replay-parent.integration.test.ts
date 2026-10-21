@@ -19,8 +19,8 @@ import {
   NodeTracerProvider,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
-import { ExecutionOtelPlugin } from "../execution-plugin";
-import { InvocationOtelPlugin } from "../invocation-plugin";
+import { createExecutionOtelPluginFactory } from "../execution-plugin";
+import { createInvocationOtelPluginFactory } from "../invocation-plugin";
 import { deriveSpanIdFromOperationId } from "../deterministic-id-generator";
 
 const gate = () => {
@@ -34,15 +34,15 @@ beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
 describe.each([
-  ["execution", ExecutionOtelPlugin],
-  ["invocation", InvocationOtelPlugin],
-] as const)("%s view pending replay traversal", (view, Plugin) => {
+  ["execution", createExecutionOtelPluginFactory],
+  ["invocation", createInvocationOtelPluginFactory],
+] as const)("%s view pending replay traversal", (view, createFactory) => {
   it.each([false, true])(
     "exports the completion under the active child before it closes (failure=%s)",
     async (fails) => {
       const exporter = new InMemorySpanExporter();
       let provider!: NodeTracerProvider;
-      const plugin = new Plugin({
+      const plugin = createFactory({
         contextExtractor: () => undefined,
         tracerProviderFactory(createIdGenerator) {
           provider = new NodeTracerProvider({
@@ -131,25 +131,29 @@ describe.each([
           plugins: [
             plugin,
             {
-              async onInvocationStart(info) {
-                starts.push(info);
-              },
-              async onOperationChange(info) {
-                for (const operation of Object.values(info.updatedOperations)) {
-                  if (
-                    operation.name === "external" &&
-                    operation.status === (fails ? "FAILED" : "SUCCEEDED")
-                  ) {
-                    updates.push(operation);
-                    updateReceived.open();
+              createPlugin: () => ({
+                async onInvocationStart(info) {
+                  starts.push(info);
+                },
+                async onOperationChange(info) {
+                  for (const operation of Object.values(
+                    info.updatedOperations,
+                  )) {
+                    if (
+                      operation.name === "external" &&
+                      operation.status === (fails ? "FAILED" : "SUCCEEDED")
+                    ) {
+                      updates.push(operation);
+                      updateReceived.open();
+                    }
                   }
-                }
-              },
-              async onOperationEnd(info) {
-                if (info.name === "external") ends.push(info);
-                if (info.name === "scope")
-                  exportsAtChildEnd.push(terminalSpans().length);
-              },
+                },
+                async onOperationEnd(info) {
+                  if (info.name === "external") ends.push(info);
+                  if (info.name === "scope")
+                    exportsAtChildEnd.push(terminalSpans().length);
+                },
+              }),
             },
           ],
         },

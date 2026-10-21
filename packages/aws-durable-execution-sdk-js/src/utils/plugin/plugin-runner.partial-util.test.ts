@@ -69,15 +69,17 @@ describe.each(["missing-types", "missing-isPromise"])(
         const handler = withDurableExecution(body, {
           plugins: [
             {
-              wrapInvocation(_info, next) {
-                const transformed = next().then((output) => ({
-                  ...output,
-                  reviewTransform: true,
-                }));
-                // biome-ignore lint/suspicious/noThenProperty: Prove the same-realm fallback without util.types, not the exact-next shortcut.
-                Object.defineProperty(transformed, "then", { value: then });
-                return transformed;
-              },
+              createPlugin: () => ({
+                wrapInvocation(_info, next) {
+                  const transformed = next().then((output) => ({
+                    ...output,
+                    reviewTransform: true,
+                  }));
+                  // biome-ignore lint/suspicious/noThenProperty: Prove the same-realm fallback without util.types, not the exact-next shortcut.
+                  Object.defineProperty(transformed, "then", { value: then });
+                  return transformed;
+                },
+              }),
             },
           ],
           durableExecutionClient: {

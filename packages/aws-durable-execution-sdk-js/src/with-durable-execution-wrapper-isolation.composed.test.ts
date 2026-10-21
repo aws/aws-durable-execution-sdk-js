@@ -83,7 +83,11 @@ describe.each(faults)("public wrapper isolation: %s", (fault) => {
         return { result: "customer result" };
       });
       const handler = withDurableExecution(body, {
-        plugins: [healthy("outer"), brokenWrapper(fault), healthy("inner")],
+        plugins: [
+          { createPlugin: () => healthy("outer") },
+          { createPlugin: () => brokenWrapper(fault) },
+          { createPlugin: () => healthy("inner") },
+        ],
         durableExecutionClient: {
           checkpoint: async () => ({
             CheckpointToken: "token",
@@ -152,20 +156,27 @@ describe.each(
         const handler = withDurableExecution(body, {
           plugins: [
             {
-              wrapInvocation(_info, next) {
-                const original = next();
-                const promise = transformed
-                  ? original.then((output) => ({
-                      ...output,
-                      reviewTransform: true,
-                    }))
-                  : original;
-                // biome-ignore lint/suspicious/noThenProperty: A native promise remains awaitable when this property is non-callable.
-                Object.defineProperty(promise, "then", { value: then });
-                return promise;
-              },
+              createPlugin: () => ({
+                wrapInvocation(_info, next) {
+                  const original = next();
+                  const promise = transformed
+                    ? original.then((output) => ({
+                        ...output,
+                        reviewTransform: true,
+                      }))
+                    : original;
+                  // biome-ignore lint/suspicious/noThenProperty: A native promise remains awaitable when this property is non-callable.
+                  Object.defineProperty(promise, "then", { value: then });
+                  return promise;
+                },
+              }),
             },
-            { wrapInvocation: wrap, onInvocationEnd: end },
+            {
+              createPlugin: () => ({
+                wrapInvocation: wrap,
+                onInvocationEnd: end,
+              }),
+            },
           ],
           durableExecutionClient: {
             checkpoint: async () => ({
@@ -228,31 +239,35 @@ it.each(
           ...(outerAwait
             ? [
                 {
-                  async wrapOperationAttemptFn(
-                    _info: unknown,
-                    next: () => unknown,
-                  ) {
-                    return await next();
-                  },
+                  createPlugin: () => ({
+                    async wrapOperationAttemptFn(
+                      _info: unknown,
+                      next: () => unknown,
+                    ) {
+                      return await next();
+                    },
+                  }),
                 },
               ]
             : []),
           {
-            wrapOperationAttemptFn(_info, next) {
-              void (next() as Promise<unknown>).catch(() => undefined);
-              const override = Promise.resolve("override");
-              if (!thenable) return override;
-              return {
-                // biome-ignore lint/suspicious/noThenProperty: A wrapper can return a PromiseLike that forwards a native promise.
-                then(
-                  resolve: (value: unknown) => unknown,
-                  reject: (error: unknown) => unknown,
-                ) {
-                  return override.then(resolve, reject);
-                },
-              };
-            },
-            onOperationAttemptEnd: attemptEnd,
+            createPlugin: () => ({
+              wrapOperationAttemptFn(_info, next) {
+                void (next() as Promise<unknown>).catch(() => undefined);
+                const override = Promise.resolve("override");
+                if (!thenable) return override;
+                return {
+                  // biome-ignore lint/suspicious/noThenProperty: A wrapper can return a PromiseLike that forwards a native promise.
+                  then(
+                    resolve: (value: unknown) => unknown,
+                    reject: (error: unknown) => unknown,
+                  ) {
+                    return override.then(resolve, reject);
+                  },
+                };
+              },
+              onOperationAttemptEnd: attemptEnd,
+            }),
           },
         ],
         durableExecutionClient: {
@@ -298,19 +313,23 @@ it.each([false, true])(
       {
         plugins: [
           {
-            async wrapOperationAttemptFn(_info, next) {
-              const value = await next();
-              await 0;
-              if (rejectOuter) throw new Error("outer plugin failure");
-              return value;
-            },
+            createPlugin: () => ({
+              async wrapOperationAttemptFn(_info, next) {
+                const value = await next();
+                await 0;
+                if (rejectOuter) throw new Error("outer plugin failure");
+                return value;
+              },
+            }),
           },
           {
-            wrapOperationAttemptFn(_info, next) {
-              void (next() as Promise<unknown>).catch(() => undefined);
-              return Promise.resolve("override");
-            },
-            onOperationAttemptEnd: attemptEnd,
+            createPlugin: () => ({
+              wrapOperationAttemptFn(_info, next) {
+                void (next() as Promise<unknown>).catch(() => undefined);
+                return Promise.resolve("override");
+              },
+              onOperationAttemptEnd: attemptEnd,
+            }),
           },
         ],
         durableExecutionClient: {
@@ -348,7 +367,9 @@ it.each([1, 3])(
       async (_event, context) => context.step("work", body),
       {
         plugins: wrappers.map((wrapOperationAttemptFn) => ({
-          wrapOperationAttemptFn,
+          createPlugin: () => ({
+            wrapOperationAttemptFn,
+          }),
         })),
         durableExecutionClient: {
           checkpoint: async () => ({
@@ -385,27 +406,31 @@ it.each([false, true])(
       {
         plugins: [
           {
-            wrapOperationAttemptFn(_info, next) {
-              const pending = Promise.resolve(next()).then(async () => {
-                await 0;
-                throw new Error("adopted plugin failure");
-              });
-              return adopted
-                ? {
-                    // biome-ignore lint/suspicious/noThenProperty: Exercise real pending native-Promise adoption through the public step API.
-                    then(resolve: (value: unknown) => unknown) {
-                      return resolve(pending);
-                    },
-                  }
-                : pending;
-            },
+            createPlugin: () => ({
+              wrapOperationAttemptFn(_info, next) {
+                const pending = Promise.resolve(next()).then(async () => {
+                  await 0;
+                  throw new Error("adopted plugin failure");
+                });
+                return adopted
+                  ? {
+                      // biome-ignore lint/suspicious/noThenProperty: Exercise real pending native-Promise adoption through the public step API.
+                      then(resolve: (value: unknown) => unknown) {
+                        return resolve(pending);
+                      },
+                    }
+                  : pending;
+              },
+            }),
           },
           {
-            wrapOperationAttemptFn(_info, next) {
-              void (next() as Promise<unknown>).catch(() => undefined);
-              return Promise.resolve("override");
-            },
-            onOperationAttemptEnd: attemptEnd,
+            createPlugin: () => ({
+              wrapOperationAttemptFn(_info, next) {
+                void (next() as Promise<unknown>).catch(() => undefined);
+                return Promise.resolve("override");
+              },
+              onOperationAttemptEnd: attemptEnd,
+            }),
           },
         ],
         durableExecutionClient: {
