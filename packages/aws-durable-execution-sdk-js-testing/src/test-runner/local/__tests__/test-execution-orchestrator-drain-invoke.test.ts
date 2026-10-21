@@ -148,6 +148,7 @@ describe("TestExecutionOrchestrator invoke started by the final drain", () => {
     // An unrelated execution on the same clock waits 3 s. Nothing runs, so the clock moves.
     const unrelated: jest.Mocked<SkipTimeParticipant> = {
       isBusy: jest.fn(() => false),
+      runningInvocation: jest.fn(() => undefined),
       hasPendingWork: jest.fn(() => true),
       earliestDeadline: jest.fn(() => 3000),
       applyDeadline: jest.fn(),
