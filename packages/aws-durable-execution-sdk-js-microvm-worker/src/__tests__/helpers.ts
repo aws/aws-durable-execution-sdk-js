@@ -21,38 +21,72 @@ export const FORWARDED_HEADERS: IncomingHttpHeaders = {
   "x-amzn-requestid": "6f1c0e0a-0000-4000-8000-000000000000",
 };
 
+/** The worker aborts each SuspendMicrovm call after this many milliseconds. */
+const SUSPEND_CALL_TIMEOUT_MS = 10_000;
+
 /**
  * Records SuspendMicrovm calls. `failure` answers every call with an error.
- * With `hold`, each call stays pending until `finish()`.
+ * With `hold`, each call stays pending until `finish()`. `maxRunning` is the
+ * largest number of calls that ran at the same time.
+ *
+ * Jest's fake timers do not drive `AbortSignal.timeout`, so the worker's
+ * 10-second abort never fires in a test. With `hold` and `deadline`, a held
+ * call that `finish()` did not release rejects with a TimeoutError after 10
+ * fake seconds. So a test can end a call at its deadline.
  */
 export class FakeMicrovmsClient {
   readonly suspended: string[] = [];
   failure: Error | undefined;
   hold = false;
+  deadline = false;
+  maxRunning = 0;
   /** The worker must never call it, because the test owns this client. */
   readonly destroy = jest.fn();
-  private pending: (() => void) | undefined;
+  private pending: (() => void)[] = [];
+  private running = 0;
 
   async send(command: unknown): Promise<unknown> {
     if (!(command instanceof SuspendMicrovmCommand)) {
       throw new Error("unexpected command");
     }
     this.suspended.push(command.input.microvmIdentifier as string);
-    if (this.hold) {
-      await new Promise<void>((resolve) => {
-        this.pending = resolve;
-      });
+    this.running++;
+    this.maxRunning = Math.max(this.maxRunning, this.running);
+    try {
+      if (this.hold) {
+        await new Promise<void>((resolve, reject) => {
+          const release = (): void => {
+            clearTimeout(timer);
+            resolve();
+          };
+          // finish() clears the timer. So a released call leaves no timer.
+          const timer = this.deadline
+            ? setTimeout(() => {
+                this.pending.splice(this.pending.indexOf(release), 1);
+                reject(
+                  Object.assign(new Error("The operation was aborted"), {
+                    name: "TimeoutError",
+                  }),
+                );
+              }, SUSPEND_CALL_TIMEOUT_MS)
+            : undefined;
+          this.pending.push(release);
+        });
+      }
+      if (this.failure) {
+        throw this.failure;
+      }
+      return {};
+    } finally {
+      this.running--;
     }
-    if (this.failure) {
-      throw this.failure;
-    }
-    return {};
   }
 
-  /** Lets a held call return. */
+  /** Lets every held call return. */
   finish(): void {
-    this.pending?.();
-    this.pending = undefined;
+    for (const resolve of this.pending.splice(0)) {
+      resolve();
+    }
   }
 
   asClient(): LambdaMicrovmsClient {

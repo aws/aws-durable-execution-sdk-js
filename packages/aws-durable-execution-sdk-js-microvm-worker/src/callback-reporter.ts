@@ -198,8 +198,13 @@ const EXPIRED_CREDENTIAL_NAMES: ReadonlySet<string> = new Set([
  * `@smithy/service-error-classification` 4.2.12. The AWS SDK retries some of
  * them itself, but not a clock offset below its 240 second correction
  * threshold, for example a stale offset after a clock step.
+ *
+ * The worker also uses this set for its own SuspendMicrovm call. A first
+ * attempt that fails with one of these names did not suspend the MicroVM.
+ *
+ * @internal
  */
-const TRANSIENT_4XX_NAMES: ReadonlySet<string> = new Set([
+export const TRANSIENT_4XX_NAMES: ReadonlySet<string> = new Set([
   ...EXPIRED_CREDENTIAL_NAMES,
   // Clock skew.
   "AuthFailure",
