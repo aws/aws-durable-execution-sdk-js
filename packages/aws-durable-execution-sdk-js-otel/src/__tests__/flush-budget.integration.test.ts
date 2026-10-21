@@ -7,8 +7,8 @@ import {
   NodeTracerProvider,
 } from "@opentelemetry/sdk-trace-node";
 import type { SpanExporter } from "@opentelemetry/sdk-trace-node";
-import { ExecutionOtelPlugin } from "../execution-plugin";
-import { InvocationOtelPlugin } from "../invocation-plugin";
+import { createExecutionOtelPluginFactory } from "../execution-plugin";
+import { createInvocationOtelPluginFactory } from "../invocation-plugin";
 import type { OtelPluginConfig } from "../otel-plugin-config";
 
 const gate = () => {
@@ -28,8 +28,8 @@ beforeEach(() => {
 });
 
 describe.each([
-  ["execution", ExecutionOtelPlugin],
-  ["invocation", InvocationOtelPlugin],
+  ["execution", createExecutionOtelPluginFactory],
+  ["invocation", createInvocationOtelPluginFactory],
 ] as const)("%s view flush wait budget", (_view, Plugin) => {
   it.each(["global", "factory"] as const)(
     "returns the real handler result while an exporter is still waiting (%s)",
@@ -72,7 +72,7 @@ describe.each([
       const step = jest.fn(async () => "done");
       const handler = withDurableExecution(
         async (_, durable) => durable.step("saved", step),
-        { plugins: [new Plugin(config)] },
+        { plugins: [Plugin(config)] },
       );
       const runner = new LocalDurableTestRunner({ handlerFunction: handler });
       const execution = runner.run();
