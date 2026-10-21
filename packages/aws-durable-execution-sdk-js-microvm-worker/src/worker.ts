@@ -367,7 +367,8 @@ export interface MicrovmWorkerListener {
  *    and the worker does not retry the call. The next job that ends starts
  *    the idle time again. The exception is a `resume` hook that arrived
  *    during the call. The idle time then starts when the call ends. So the
- *    worker retries the call one idle time after the call ends.
+ *    worker retries the call one idle time after the call ends, if no job
+ *    runs and no `suspend` hook refusal is in effect when the call ends.
  * 7. A call whose outcome is unknown, such as a timeout, a throttle, a
  *    conflict, or a server error, is handled like a successful call. The
  *    service may have suspended the MicroVM anyway. A rejection after the
