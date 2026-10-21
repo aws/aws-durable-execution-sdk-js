@@ -204,6 +204,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gap is about 2.83 intervals. The Python worker measured a 32.39-second gap against a 30-second
   heartbeat timeout before the same change.
 
+- The MicroVM worker could run two `SuspendMicrovm` calls at once. A `resume` hook that arrived
+  during the worker's own call ended the refusal and started the idle time. The session sends an
+  `autoSuspendIdleSeconds` of at least 10, but the `run` hook accepts any positive number. With an
+  idle time under 10 seconds, the idle time could end during the call. The worker then started a
+  second call on a MicroVM that was already suspending. If the first call then failed with a
+  rejection, it ended the refusal while the second call could still freeze the MicroVM. The worker
+  now runs one call at a time. A `resume` hook or a job end during the call starts the idle time
+  when the call ends. The idle time then starts only if no job runs and no `suspend` hook refusal
+  is in effect. The Python worker made the same change. (#1038)
+
 - The `microvm` request step in `@aws/durable-execution-sdk-js-extras` followed redirects. A 301,
   302, or 303 turned the job POST into a GET without the job, and a 2xx for that GET counted as
   accepted, so the job never started. A redirect to another host also received the auth token.
