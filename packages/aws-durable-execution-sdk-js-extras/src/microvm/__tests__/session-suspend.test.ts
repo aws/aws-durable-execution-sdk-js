@@ -13,6 +13,8 @@ import {
   type MicrovmSessionHandler,
   microvmSession,
 } from "..";
+import * as shared from "../shared";
+import { MicrovmOperationSubType } from "../subtypes";
 import {
   baseConfig,
   FakeEndpoint,
@@ -480,4 +482,252 @@ describe("microvmSession with a MicroVM that suspends itself", () => {
     expect(caught.length).toBeGreaterThanOrEqual(2);
     expect(caught.every((c) => c.notRunning && c.delivery)).toBe(true);
   });
+});
+
+/**
+ * A runner whose first invocation uses `first`, and every later invocation
+ * uses `later`. So it behaves as a deploy between the launch and a replay.
+ */
+function runnerAcrossDeploy(
+  client: FakeMicrovmsClient,
+  endpoint: FakeEndpoint,
+  first: Partial<MicrovmSessionConfig>,
+  later: Partial<MicrovmSessionConfig>,
+): { runner: Runner; invocations: () => number } {
+  let invocations = 0;
+  const runner = new LocalDurableTestRunner({
+    handlerFunction: withDurableExecution(
+      async (_event: unknown, context: DurableContext) => {
+        invocations++;
+        return microvmSession(
+          context,
+          "pipeline",
+          {
+            ...baseConfig(client),
+            timeout: { hours: 1 },
+            fetch: endpoint.fetch,
+            ...(invocations === 1 ? first : later),
+          },
+          twoJobsWithWait,
+        );
+      },
+    ),
+  }) as Runner;
+  return { runner, invocations: () => invocations };
+}
+
+/**
+ * Replaces the launch with a step that checkpoints a fixed result. The result
+ * has the MicroVM fields of a real launch, plus `fields`. So a test controls
+ * the launch checkpoint that every replay reads.
+ */
+function checkpointLaunchAs(fields: Record<string, unknown>): void {
+  jest.spyOn(shared, "launch").mockImplementation((child, scope) =>
+    child.step(
+      `${scope.name}.launch`,
+      async () =>
+        ({
+          microvmId: "mvm-1",
+          endpoint: "mvm-1.lambda-microvm.us-east-1.on.aws",
+          delivery: "http",
+          ...fields,
+        }) as shared.LaunchResult,
+      { subType: MicrovmOperationSubType.LAUNCH },
+    ),
+  );
+}
+
+const idlePolicy = {
+  autoResumeEnabled: false,
+  maxIdleDurationSeconds: 60,
+  suspendedDurationSeconds: 3_600,
+};
+
+describe("microvmSession resume mode", () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it.each<[string, Partial<MicrovmSessionConfig>, boolean]>([
+    ["autoSuspendOnIdle is true", { autoSuspendOnIdle: true }, true],
+    ["an idle policy is set", { idlePolicy }, true],
+    ["the MicroVM cannot be suspended", {}, false],
+  ])(
+    "records the resume mode in the launch checkpoint when %s",
+    async (_label, overrides, resumeBeforeDelivery) => {
+      const client = new FakeMicrovmsClient();
+      const endpoint = recordingEndpoint(client);
+      const runner = runnerFor(client, endpoint, async () => "none", {
+        autoSuspendOnIdle: undefined,
+        ...overrides,
+      });
+
+      const execution = await runner.run({ payload: {} });
+
+      expect(execution.getStatus()).toBe("SUCCEEDED");
+      expect(
+        runner.getOperation("pipeline.launch").getStepDetails()?.result,
+      ).toEqual({
+        microvmId: "mvm-1",
+        endpoint: "mvm-1.lambda-microvm.us-east-1.on.aws",
+        delivery: "http",
+        resumeBeforeDelivery,
+      });
+    },
+  );
+
+  it.each<[string, Partial<MicrovmSessionConfig>]>([
+    ["autoSuspendOnIdle", { autoSuspendOnIdle: true }],
+    ["the idle policy", { idlePolicy }],
+  ])(
+    "still resumes before each job when a deploy after the launch removes %s",
+    async (_label, first) => {
+      const client = new FakeMicrovmsClient();
+      const endpoint = recordingEndpoint(client);
+      const { runner, invocations } = runnerAcrossDeploy(
+        client,
+        endpoint,
+        first,
+        {},
+      );
+      // The MicroVM was suspended during the wait. The worker and the idle
+      // policy keep the settings of the launch.
+      client.getResponses = [
+        async () => ({ state: "RUNNING" }),
+        async () => {
+          client.microvmState = "SUSPENDED";
+          return { state: "SUSPENDED" };
+        },
+      ];
+
+      const executionPromise = runner.run({ payload: {} });
+      await complete(runner, "first", "one");
+      await complete(runner, "second", "two");
+      const execution = await executionPromise;
+
+      expect(execution.getStatus()).toBe("SUCCEEDED");
+      expect(invocations()).toBeGreaterThan(1);
+      expect(client.events).toEqual([
+        "get:RUNNING",
+        "request:/first",
+        "get:SUSPENDED",
+        "resume",
+        "get:RUNNING",
+        "request:/second",
+        "terminate",
+      ]);
+    },
+  );
+
+  it("makes no state check when a deploy after the launch turns suspending on", async () => {
+    // The launch asked the worker for no suspend and set no idle policy. So
+    // the MicroVM never suspends, and a state check would need
+    // lambda:GetMicrovm for nothing.
+    const client = new FakeMicrovmsClient();
+    const endpoint = recordingEndpoint(client);
+    const { runner, invocations } = runnerAcrossDeploy(
+      client,
+      endpoint,
+      {},
+      { autoSuspendOnIdle: true },
+    );
+
+    const executionPromise = runner.run({ payload: {} });
+    await complete(runner, "first", "one");
+    await complete(runner, "second", "two");
+    const execution = await executionPromise;
+
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    expect(invocations()).toBeGreaterThan(1);
+    expect(client.payload()).not.toHaveProperty("autoSuspendIdleSeconds");
+    expect(client.events).toEqual([
+      "request:/first",
+      "request:/second",
+      "terminate",
+    ]);
+  });
+
+  it.each<[string, Partial<MicrovmSessionConfig>, string[]]>([
+    [
+      "checks the state when the current config can suspend",
+      { autoSuspendOnIdle: true },
+      [
+        "get:RUNNING",
+        "request:/first",
+        "get:RUNNING",
+        "request:/second",
+        "terminate",
+      ],
+    ],
+    [
+      "makes no state check when the current config cannot suspend",
+      { autoSuspendOnIdle: false },
+      ["request:/first", "request:/second", "terminate"],
+    ],
+  ])(
+    "for a launch checkpoint without a resume mode, %s",
+    async (_label, overrides, events) => {
+      // The code before this change checkpointed the launch without
+      // `resumeBeforeDelivery`. The replacement step writes that shape, so
+      // every replay reads it.
+      checkpointLaunchAs({});
+      const client = new FakeMicrovmsClient();
+      const endpoint = recordingEndpoint(client);
+      const runner = runnerFor(client, endpoint, twoJobsWithWait, overrides);
+
+      const executionPromise = runner.run({ payload: {} });
+      await complete(runner, "first", "one");
+      await complete(runner, "second", "two");
+      const execution = await executionPromise;
+
+      expect(execution.getStatus()).toBe("SUCCEEDED");
+      expect(
+        runner.getOperation("pipeline.launch").getStepDetails()?.result,
+      ).not.toHaveProperty("resumeBeforeDelivery");
+      expect(client.events).toEqual(events);
+    },
+  );
+
+  it.each<[unknown, Partial<MicrovmSessionConfig>, string[]]>([
+    [
+      "false",
+      { autoSuspendOnIdle: false },
+      ["request:/first", "request:/second", "terminate"],
+    ],
+    [
+      1,
+      { autoSuspendOnIdle: false },
+      ["request:/first", "request:/second", "terminate"],
+    ],
+    [
+      0,
+      { autoSuspendOnIdle: true },
+      [
+        "get:RUNNING",
+        "request:/first",
+        "get:RUNNING",
+        "request:/second",
+        "terminate",
+      ],
+    ],
+  ])(
+    "follows the current config for a checkpointed resume mode of %p",
+    async (recorded, overrides, events) => {
+      // Only a boolean is a resume mode. A truthy or falsy value of another
+      // type must not decide whether a job checks the MicroVM state.
+      checkpointLaunchAs({ resumeBeforeDelivery: recorded });
+      const client = new FakeMicrovmsClient();
+      const endpoint = recordingEndpoint(client);
+      const runner = runnerFor(client, endpoint, twoJobsWithWait, overrides);
+
+      const executionPromise = runner.run({ payload: {} });
+      await complete(runner, "first", "one");
+      await complete(runner, "second", "two");
+      const execution = await executionPromise;
+
+      expect(execution.getStatus()).toBe("SUCCEEDED");
+      expect(
+        runner.getOperation("pipeline.launch").getStepDetails()?.result,
+      ).toHaveProperty("resumeBeforeDelivery", recorded);
+      expect(client.events).toEqual(events);
+    },
+  );
 });

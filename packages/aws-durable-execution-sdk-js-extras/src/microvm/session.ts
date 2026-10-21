@@ -66,7 +66,9 @@ import type {
  * no separate readiness wait, which would cost one more invocation. When the
  * MicroVM can be suspended, the request step calls GetMicrovm before each
  * job. It resumes a suspended MicroVM, and it returns at once for a new
- * MicroVM that is still booting.
+ * MicroVM that is still booting. The launch checkpoint records whether the
+ * MicroVM can be suspended. Replay follows that record, not the current
+ * config.
  *
  * A failed `vm.invoke` rejects inside the handler. The handler can catch the
  * error and continue with the same MicroVM. An error that leaves the handler
@@ -142,6 +144,10 @@ export function microvmSession<TOutput = unknown>(
         region: scope.region,
         ...(autoSuspendIdleSeconds !== undefined && { autoSuspendIdleSeconds }),
       };
+      // The worker suspends the MicroVM when it has been idle, and an idle
+      // policy can suspend it too. Either way, each job must resume it first.
+      const resumeFromConfig =
+        autoSuspendIdleSeconds !== undefined || config.idlePolicy !== undefined;
       const launched = await inStage(name, "launch", () =>
         launch(child, scope, {
           tokenSource: sessionId,
@@ -149,14 +155,28 @@ export function microvmSession<TOutput = unknown>(
           defaultIngress: "ALL_INGRESS",
           runHookPayload: JSON.stringify(payload),
           delivery: "http",
+          resumeBeforeDelivery: resumeFromConfig,
           extra: config.idlePolicy ? { idlePolicy: config.idlePolicy } : {},
         }),
       );
 
-      // The worker suspends the MicroVM when it has been idle, and an idle
-      // policy can suspend it too. Either way, each job must resume it first.
+      // 1. The worker reads its idle time once, from the run hook payload of
+      //    the launch. RunMicrovm sets the idle policy once, at the launch.
+      // 2. The launch step's result comes from the checkpoint on replay.
+      // 3. So a deploy that changes autoSuspendOnIdle or idlePolicy does not
+      //    change what the running MicroVM does.
+      // 4. A job that skips the state check of a suspended MicroVM gets a
+      //    502. The request step retries a 502 until both retry tiers end.
+      // 5. So each job follows the resume mode that the launch recorded, not
+      //    the current config.
+      // A launch checkpoint written before this change has no
+      // `resumeBeforeDelivery` field. The code before this change computed
+      // the mode from the current config on every replay. So the session does
+      // the same for such a checkpoint.
       const resumeBeforeDelivery =
-        autoSuspendIdleSeconds !== undefined || config.idlePolicy !== undefined;
+        typeof launched.resumeBeforeDelivery === "boolean"
+          ? launched.resumeBeforeDelivery
+          : resumeFromConfig;
 
       try {
         return await handler(
