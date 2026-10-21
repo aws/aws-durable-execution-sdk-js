@@ -89,7 +89,6 @@ setInterval(() => {
     const settings = {
       LMI_SHARED_EXAMPLES: "1",
       LMI_RUN_ID: "run",
-      LMI_COMMIT: "commit",
       LMI_CONTROL_SCRIPT: script,
       LMI_REPO_ROOT: directory,
       LMI_QUARANTINE_FILE: quarantine,
@@ -99,6 +98,14 @@ setInterval(() => {
       Object.keys(settings).map((key) => [key, process.env[key]]),
     );
     Object.assign(process.env, settings);
+    writeFileSync(
+      path.join(directory, "manifest.json"),
+      JSON.stringify({
+        run: "run",
+        commit: "commit",
+        functions: { shared: "function" },
+      }),
+    );
     let settlement;
     let repeatedSettlement;
     try {
@@ -118,7 +125,7 @@ setInterval(() => {
       };
       const invoke = factory(next, { commandName: "InvokeCommand" });
       hooks.before();
-      const input = {};
+      const input = { FunctionName: "function" };
       await invoke({ input });
       settlement = hooks.after();
       let settled = false;
@@ -181,7 +188,7 @@ setInterval(() => {
         assert(!existsSync(quarantine));
         hooks.before();
         later.before();
-        await invoke({ input: {} });
+        await invoke({ input: { FunctionName: "function" } });
         assert.equal(invocations, 2);
         await hooks.after();
         assert.equal(childStarts(), 2, "the next case gets a new settlement");
@@ -212,14 +219,14 @@ setInterval(() => {
 }
 
 test("example invocation intent is durable before submission and retains the response ARN", async () => {
-  const { mkdtempSync, readFileSync, rmSync } = await import("node:fs");
+  const { mkdtempSync, readFileSync, rmSync, writeFileSync, unlinkSync } =
+    await import("node:fs");
   const { tmpdir } = await import("node:os");
   const path = await import("node:path");
   const directory = mkdtempSync(path.join(tmpdir(), "lmi-intent-test-"));
   const settings = {
     LMI_SHARED_EXAMPLES: "1",
     LMI_RUN_ID: "run",
-    LMI_COMMIT: "commit",
     LMI_CONTROL_SCRIPT: "unused.py",
     LMI_REPO_ROOT: directory,
     LMI_QUARANTINE_FILE: path.join(directory, "quarantine.json"),
@@ -228,18 +235,41 @@ test("example invocation intent is durable before submission and retains the res
     Object.keys(settings).map((key) => [key, process.env[key]]),
   );
   Object.assign(process.env, settings);
+  const manifestPath = path.join(directory, "manifest.json");
+  const manifest = {
+    run: "run",
+    commit: "commit",
+    functions: { shared: "function" },
+  };
+  writeFileSync(manifestPath, JSON.stringify(manifest));
   try {
     let factory;
-    const hooks = sharedModule.sharedLmi(
-      {
-        middlewareStack: {
-          add(value) {
-            factory = value;
-          },
+    const client = {
+      middlewareStack: {
+        add(value) {
+          factory = value;
         },
       },
-      "step-basic",
+    };
+    for (const invalid of [
+      null,
+      { ...manifest, run: "different" },
+      { ...manifest, commit: "" },
+      { ...manifest, functions: {} },
+    ]) {
+      writeFileSync(manifestPath, JSON.stringify(invalid));
+      assert.throws(
+        () => sharedModule.sharedLmi(client, "step-basic"),
+        /manifest/,
+      );
+    }
+    writeFileSync(manifestPath, "{");
+    assert.throws(
+      () => sharedModule.sharedLmi(client, "step-basic"),
+      SyntaxError,
     );
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+    const hooks = sharedModule.sharedLmi(client, "step-basic");
     const read = (marker) =>
       JSON.parse(
         readFileSync(
@@ -253,8 +283,10 @@ test("example invocation intent is durable before submission and retains the res
         $metadata: { requestId: "request" },
       },
     };
+    let calls = 0;
     const invoke = factory(
       async ({ input }) => {
+        calls++;
         const intent = read(input.DurableExecutionName);
         assert.equal(intent.run, "run");
         assert.equal(intent.commit, "commit");
@@ -266,7 +298,18 @@ test("example invocation intent is durable before submission and retains the res
       { commandName: "InvokeCommand" },
     );
     hooks.before();
-    const input = {};
+    writeFileSync(path.join(directory, "invocations"), "blocked");
+    await assert.rejects(invoke({ input: { FunctionName: "function" } }), {
+      code: "EEXIST",
+    });
+    assert.equal(calls, 0, "A failed intent write must not submit Invoke");
+    unlinkSync(path.join(directory, "invocations"));
+    await assert.rejects(
+      invoke({ input: { FunctionName: "different" } }),
+      /different function/,
+    );
+    assert.equal(calls, 0);
+    const input = { FunctionName: "function" };
     assert.equal(await invoke({ input }), response);
     const saved = read(input.DurableExecutionName);
     assert.equal(saved.arn, "accepted");

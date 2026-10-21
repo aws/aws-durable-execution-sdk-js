@@ -1,12 +1,36 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
-import { LambdaClient, InvokeCommandInput } from "@aws-sdk/client-lambda";
+import {
+  LambdaClient,
+  InvokeCommandInput,
+  InvokeCommandOutput,
+} from "@aws-sdk/client-lambda";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 
 const execute = promisify(execFile);
+
+function saveInvocation(directory: string, marker: string, record: unknown) {
+  mkdirSync(directory, { recursive: true });
+  const target = join(directory, `${marker}.json`);
+  const temporary = `${target}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporary, JSON.stringify(record));
+    renameSync(temporary, target);
+  } finally {
+    if (existsSync(temporary)) unlinkSync(temporary);
+  }
+}
 
 export function wrapLmiPayload(
   payload: InvokeCommandInput["Payload"],
@@ -42,6 +66,20 @@ export function sharedLmi(client: LambdaClient, example: string) {
   const quarantine = process.env.LMI_QUARANTINE_FILE;
   if (!run || !script || !root || !quarantine)
     throw new Error("Shared LMI configuration is incomplete");
+  const manifest = JSON.parse(
+    readFileSync(join(dirname(quarantine), "manifest.json"), "utf8"),
+  );
+  const commit = manifest?.commit;
+  const functionName = manifest?.functions?.shared;
+  if (
+    manifest?.run !== run ||
+    typeof commit !== "string" ||
+    !commit ||
+    typeof functionName !== "string" ||
+    !functionName
+  )
+    throw new Error("Shared LMI manifest does not identify this deployment");
+  const records = join(dirname(quarantine), "invocations");
   const markers = new Set<string>();
   let settlement: Promise<void> | undefined;
   client.middlewareStack.add(
@@ -52,10 +90,32 @@ export function sharedLmi(client: LambdaClient, example: string) {
             "Shared LMI fixture is quarantined; later cases cannot run",
           );
         const input = args.input as InvokeCommandInput;
+        if (input.FunctionName !== functionName)
+          throw new Error("Shared LMI invocation targets a different function");
         const marker = `example-${randomUUID()}`;
-        markers.add(marker);
         input.Payload = wrapLmiPayload(input.Payload, example, marker, run);
         input.DurableExecutionName = marker;
+        const record = {
+          marker,
+          run,
+          commit,
+          scenario: `example:${example}`,
+          fixture: "shared",
+          gates: {},
+          invoked: true,
+        };
+        // The driver may exit after Lambda accepts Invoke but before teardown
+        // or its response arrives. Retain ownership before handing off to I/O.
+        saveInvocation(records, marker, record);
+        markers.add(marker);
+        const result = await next(args);
+        const output = result.output as InvokeCommandOutput;
+        saveInvocation(records, marker, {
+          ...record,
+          arn: output.DurableExecutionArn,
+          invokeRequestId: output.$metadata?.requestId,
+        });
+        return result;
       }
       return next(args);
     },

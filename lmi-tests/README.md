@@ -78,6 +78,11 @@ timestamp, so a slow record write cannot hide late probe submission.
 Example teardown marks the fixture unavailable before awaiting its settlement
 child. Repeated teardown hooks share that child, and only successful settlement
 reopens the fixture. This remains true if Jest times out the hook first.
+Each example invocation first validates the manifest's run, commit and shared
+function, then atomically saves its invocation intent under `artifacts/invocations/`.
+The response adds its execution ARN to that record. Whole-run settlement can
+therefore recover accepted attempts after Jest exits before teardown, even when
+service listings and worker evidence appear after the usual quiet window.
 Shared AWS connection pools may remain open.
 
 ## Existing example coverage

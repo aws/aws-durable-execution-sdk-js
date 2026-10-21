@@ -252,7 +252,8 @@ def test_example_driver_exit_before_teardown_retains_delayed_execution(
     from pathlib import Path
 
     cloud, clock, output = quiet_cloud
-    cloud.manifest.update(bucket="bucket", commit="commit")
+    cloud.manifest.update(bucket="bucket", commit="commit", functions={"shared": "function"})
+    (output / "manifest.json").write_text(json.dumps(cloud.manifest))
     root = Path(__file__).resolve().parents[2]
     helper = root / "packages/aws-durable-execution-sdk-js-examples/src/utils/shared-lmi.ts"
     script = f"""
@@ -268,7 +269,7 @@ const invoke = factory(async ({{ input }}) => {{
   if ({str(not response_delivered).lower()}) process.exit(23);
   return {{ output: {{ DurableExecutionArn: "accepted" }} }};
 }}, {{ commandName: "InvokeCommand" }});
-await invoke({{ input: {{}} }});
+await invoke({{ input: {{ FunctionName: "function" }} }});
 process.exit(23);
 """
     result = subprocess.run(
@@ -278,7 +279,6 @@ process.exit(23);
             **os.environ,
             "LMI_SHARED_EXAMPLES": "1",
             "LMI_RUN_ID": "run",
-            "LMI_COMMIT": "commit",
             "LMI_CONTROL_SCRIPT": "unused.py",
             "LMI_REPO_ROOT": str(root),
             "LMI_QUARANTINE_FILE": str(output / "quarantine.json"),
