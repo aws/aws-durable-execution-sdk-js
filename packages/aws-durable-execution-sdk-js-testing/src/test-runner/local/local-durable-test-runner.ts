@@ -73,7 +73,9 @@ export interface LocalDurableTestRunnerSetupParameters {
    *
    * While a non-durable invoked function runs, the clock waits for its result for up to 1 s
    * of real time. If the function takes longer, a later wait or retry end can be applied
-   * before its result arrives.
+   * before its result arrives. The clock also waits for each invocation of a durable invoked
+   * function for up to 1 s of real time. If a step in it runs longer, the clock can move to a
+   * later end while that step still runs.
    *
    * When set to `false` or undefined, real timers will be used and any time-based
    * operations will execute with their actual delays.
