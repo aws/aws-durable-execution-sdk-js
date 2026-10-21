@@ -70,22 +70,36 @@ describe.each([
           ],
         })),
     });
-    // Both attempts enter the real SDK before the root returns. Delay only
-    // forwarding their actual OTel notifications, so open-drain/final-snapshot
-    // coverage does not depend on admitting new business work after return.
+    // Both operations enter the real SDK before the root returns. Delay only
+    // forwarding the first attempt-start and second operation-start notification,
+    // so snapshot coverage does not admit new business work after return.
     const createPlugin = factory.createPlugin.bind(factory);
-    factory.createPlugin = (info) => {
+    jest.spyOn(factory, "createPlugin").mockImplementation((info) => {
       const plugin = createPlugin(info);
+      const operationStart = plugin.onOperationStart.bind(plugin);
+      plugin.onOperationStart = async (operation) => {
+        if (operation.name === "final-step") {
+          finalReady.open();
+          await finalFlush.opened;
+          await operationStart(operation);
+          finalHook.open();
+        } else {
+          await operationStart(operation);
+        }
+      };
       const attemptStart = plugin.onOperationAttemptStart.bind(plugin);
       plugin.onOperationAttemptStart = async (attempt) => {
-        const first = attempt.name === "first-step";
-        (first ? firstReady : finalReady).open();
-        await (first ? firstFlush : finalFlush).opened;
-        await attemptStart(attempt);
-        (first ? firstHook : finalHook).open();
+        if (attempt.name === "first-step") {
+          firstReady.open();
+          await firstFlush.opened;
+          await attemptStart(attempt);
+          firstHook.open();
+        } else {
+          await attemptStart(attempt);
+        }
       };
       return plugin;
-    };
+    });
     const firstStep = jest.fn(async () => {
       await releaseBodies.opened;
     });
