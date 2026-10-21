@@ -633,6 +633,9 @@ async function runHandler<
           );
         }
 
+        // Disposal can release the error-path drain while a checkpoint is still in flight.
+        // Do not evaluate custom error accessors after the invocation has expired.
+        lifecycle?.throwIfExpired();
         const response: DurableExecutionInvocationOutput = {
           Status: InvocationStatus.FAILED,
           Error: createErrorObjectFromError(error),
