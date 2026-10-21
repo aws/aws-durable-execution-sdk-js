@@ -29,6 +29,7 @@ jobs:
       - run: npm ci
       - run: npm run build -w packages/aws-durable-execution-sdk-js
       - run: npm run build -w packages/aws-durable-execution-sdk-js-testing
+      - run: npm run build -w packages/aws-durable-execution-sdk-js-otel
       - run: npm run build -w packages/aws-durable-execution-sdk-js-extras
       - run: npm run generate-examples -w packages/aws-durable-execution-sdk-js-examples
       - run: npm run test:lmi:harness
@@ -40,12 +41,16 @@ jobs:
         if: always()
         with:
           name: lmi-fixture
+          # Transfer build/test inputs, never seed deployment or quarantine state.
           path: |
             lmi-tests/build/function.zip
             lmi-tests/build/examples.json
-            lmi-tests/artifacts/
+            lmi-tests/artifacts/build.json
+            lmi-tests/artifacts/harness.xml
             packages/aws-durable-execution-sdk-js/dist*/**
             packages/aws-durable-execution-sdk-js-testing/dist*/**
+            packages/aws-durable-execution-sdk-js-otel/dist*/**
+            packages/aws-durable-execution-sdk-js-extras/dist*/**
 
   local-regressions:
     runs-on: ubuntu-latest

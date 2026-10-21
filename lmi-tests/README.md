@@ -156,6 +156,7 @@ From the repository root, with Node.js 24 and Python 3.12:
 npm ci
 npm run build -w packages/aws-durable-execution-sdk-js
 npm run build -w packages/aws-durable-execution-sdk-js-testing
+npm run build -w packages/aws-durable-execution-sdk-js-otel
 npm run build -w packages/aws-durable-execution-sdk-js-extras
 npm run generate-examples -w packages/aws-durable-execution-sdk-js-examples
 pip install -r lmi-tests/requirements.txt
@@ -174,6 +175,11 @@ python -m pytest lmi-tests/tests/test_cloud.py --cloud -v
 python lmi-tests/deploy.py collect
 python lmi-tests/deploy.py settle
 ```
+
+The harness handoff includes built Core, Testing SDK, OTel and Extras outputs,
+plus build metadata and the Python harness report. The cloud job consumes those
+outputs without relying on a warm workspace. Deployment manifests, invocation
+intent and quarantine records stay with the cloud run and its retained evidence.
 
 Use a fresh run ID each time. Set `LMI_RUNTIME_VERSION_ARN` if the temporary managed
 runtime connectivity workaround in the workflow is still needed. The workflow
