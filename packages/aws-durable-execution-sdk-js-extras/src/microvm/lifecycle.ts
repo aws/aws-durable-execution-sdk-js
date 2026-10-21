@@ -69,7 +69,8 @@ export interface EnsureRunningOptions {
  * - `SUSPENDING`: it waits. The MicroVM becomes `SUSPENDED`, and the function
  *   then resumes it.
  * - `TERMINATING`, `TERMINATED`, or not found: it throws
- *   {@link MicrovmStateError}.
+ *   {@link MicrovmStateError}. GetMicrovm or ResumeMicrovm can report that
+ *   the MicroVM is not found.
  *
  * It polls after 250 milliseconds, doubling the wait up to 2 seconds. It
  * stops after `maxWaitMs`, or 10 seconds before the invocation times out. It
@@ -127,6 +128,15 @@ export async function ensureRunning(
       unavailable,
     );
 
+  // GetMicrovm and ResumeMicrovm both return ResourceNotFoundException for
+  // a removed MicroVM. ResumeMicrovm returns it when the MicroVM is removed
+  // after the state check. So `ensureRunning` throws the same
+  // `MicrovmStateError` for both.
+  const notFound = (): MicrovmStateError =>
+    new MicrovmStateError(
+      `MicroVM ${options.microvmId} no longer exists. A session MicroVM lives at most its session timeout plus 5 minutes, and never longer than 8 hours.`,
+    );
+
   for (;;) {
     let state: string | undefined;
     let endpoint: string | undefined;
@@ -139,9 +149,7 @@ export async function ensureRunning(
       stateReason = current.stateReason;
     } catch (error) {
       if ((error as Error).name === "ResourceNotFoundException") {
-        throw new MicrovmStateError(
-          `MicroVM ${options.microvmId} no longer exists. A session MicroVM lives at most its session timeout plus 5 minutes, and never longer than 8 hours.`,
-        );
+        throw notFound();
       }
       throw error;
     }
@@ -163,8 +171,14 @@ export async function ensureRunning(
         await resumeMicrovm();
       } catch (error) {
         // ConflictException means a transition is already in progress, for
-        // example an auto-resume. Polling continues either way.
-        if ((error as Error).name !== "ConflictException") {
+        // example an auto-resume. Polling continues after a successful resume
+        // or a ConflictException. ResourceNotFoundException means that the
+        // MicroVM was removed after the state check.
+        const errorName = (error as Error).name;
+        if (errorName === "ResourceNotFoundException") {
+          throw notFound();
+        }
+        if (errorName !== "ConflictException") {
           throw error;
         }
       }
