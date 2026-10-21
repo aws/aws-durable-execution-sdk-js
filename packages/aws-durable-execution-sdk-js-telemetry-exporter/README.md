@@ -1232,7 +1232,7 @@ const telemetry = durableExecutionTelemetry({
 });
 ```
 
-**FIFO support:** Auto-detected from `.fifo` URL suffix. Dedup ID = `executionArn:emittedAt`. Message attributes include `status` and `functionName` for SQS message filtering.
+**FIFO support:** Auto-detected from `.fifo` URL suffix. Group ID = `messageGroupId` (default: `executionArn`). Dedup ID = `executionArn:emittedAt`. SQS limits both IDs to 128 characters and durable execution ARNs are usually longer, so an ID over 128 characters is replaced by the lowercase hex SHA-256 digest of its UTF-8 bytes (64 characters) — the same IDs the Python and Java exporters send for the same record. Message attributes include `status` and `functionName` for SQS message filtering.
 
 **IAM required:** `sqs:SendMessage` on the queue.
 
