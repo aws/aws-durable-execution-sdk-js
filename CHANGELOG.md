@@ -216,12 +216,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   suspended endpoint answered 502. The request step retries a 502 as a MicroVM that is still
   starting. So the job failed with `MicrovmDeliveryError` only after both retry tiers. The launch
   checkpoint now records the resume mode as `"resumeBeforeDelivery": true` or
-  `"resumeBeforeDelivery": false`, and replay follows it. A launch checkpoint from an earlier
-  release has no `resumeBeforeDelivery` field. Such a session computes the mode from the current
-  config, as before. So a deploy that installs this release and also turns suspending off keeps
-  the failure for a session that an earlier release launched with suspending on. So release this
-  version first. Change `autoSuspendOnIdle` or `idlePolicy` in a later deploy, after every session
-  that an earlier release launched has ended.
+  `"resumeBeforeDelivery": false`, and replay follows it.
 
 - An `InvalidRunHookPayloadError` for a `runHookPayload` that is not JSON now keeps the parser's
   `SyntaxError` as its `cause`. Its message names the position of the error.

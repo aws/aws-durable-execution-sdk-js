@@ -132,8 +132,8 @@ export interface LaunchResult {
    * Whether each session job checks the MicroVM state, and resumes a
    * suspended MicroVM, before delivery. Only a session launch records it.
    * Replay reads it from the checkpoint. So every replay follows the mode
-   * that the launch prepared the MicroVM for. A launch checkpoint from an
-   * earlier release has no `resumeBeforeDelivery` field.
+   * that the launch prepared the MicroVM for. A launch checkpoint written
+   * before this change has no `resumeBeforeDelivery` field.
    */
   resumeBeforeDelivery?: boolean;
 }

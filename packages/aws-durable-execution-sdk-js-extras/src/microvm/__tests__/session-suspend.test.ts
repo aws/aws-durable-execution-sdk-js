@@ -588,7 +588,7 @@ describe("microvmSession resume mode", () => {
   ])(
     "for a launch checkpoint without a resume mode, %s",
     async (_label, overrides, events) => {
-      // An earlier release checkpointed the launch without
+      // The code before this change checkpointed the launch without
       // `resumeBeforeDelivery`. The replacement step writes that shape, so
       // every replay reads it.
       checkpointLaunchAs({});
