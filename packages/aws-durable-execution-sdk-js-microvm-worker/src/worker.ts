@@ -669,6 +669,53 @@ export function createMicrovmWorkerListener<
     }
   }
 
+  /**
+   * Returns the warning for a SuspendMicrovm call that the service rejected
+   * or refused for now. Each text states only what the worker does next.
+   *
+   * 1. A terminate hook during the call: the MicroVM is about to end, and
+   *    startIdleTime starts no idle time. So the worker never calls again.
+   *    A rejection keeps its permission hint.
+   * 2. A rejection otherwise: the MicroVM keeps running.
+   * 3. A refusal for now after close() during the call: startIdleTime
+   *    starts no idle time. So the worker never calls again.
+   * 4. A refusal for now with a suspend hook during the call, while the
+   *    hook's refusal is still in effect: the refusal stays. It ends on the
+   *    resume hook or 30 seconds after the last suspend hook.
+   * 5. A refusal for now with a suspend hook during the call, when a resume
+   *    hook or the 30-second limit already ended the hook's refusal: jobs
+   *    run. That end asked startIdleTime for an idle time. startIdleTime
+   *    defers it while the call runs. So the idle time starts when the call
+   *    ends. If jobs run then, the last job's end starts it. No 30-second
+   *    lower bound applies. The worker sets the bound only after a refused
+   *    call during which no suspend hook arrived.
+   * 6. A refusal for now otherwise: the next idle time lasts at least 30
+   *    seconds, unless a job or a resume hook starts the idle time again.
+   */
+  function failedCallWarning(
+    outcome: "rejected" | "refusedForNow",
+    suspendHookArrived: boolean,
+  ): string {
+    if (outcome === "rejected") {
+      return terminating
+        ? "could not suspend the idle MicroVM, because the service rejected the call. The MicroVM is terminating, so the worker does not try the call again. A missing permission needs lambda:SuspendMicrovm on the MicroVM image in its execution role."
+        : "could not suspend the idle MicroVM, because the service rejected the call. It keeps running. A missing permission needs lambda:SuspendMicrovm on the MicroVM image in its execution role.";
+    }
+    if (terminating) {
+      return "could not suspend the idle MicroVM, because the service refused the call for now. The MicroVM is terminating, so the worker does not try the call again.";
+    }
+    if (closed) {
+      return "could not suspend the idle MicroVM, because the service refused the call for now. The worker is closed, so it does not try the call again.";
+    }
+    if (suspendHookArrived && suspending) {
+      return "could not suspend the idle MicroVM, because the service refused the call for now. A suspend hook arrived during the call, so this call does not end the hook's refusal. The idle time starts again after the resume hook, or 30 seconds after the last suspend hook.";
+    }
+    if (suspendHookArrived) {
+      return "could not suspend the idle MicroVM, because the service refused the call for now. A suspend hook arrived during the call. A resume hook or the 30-second limit ended that hook's refusal of jobs before the call ended. So the worker accepts jobs. It tries the call again after the next idle time. That idle time starts when the call ends. If jobs run then, it starts when the last of them ends.";
+    }
+    return "could not suspend the idle MicroVM, because the service refused the call for now. It keeps running. The worker tries the call again after the next idle time. That idle time lasts at least 30 seconds, unless a job or a resume hook starts the idle time again.";
+  }
+
   async function suspendSelf(
     region: string,
     idleMs: number,
@@ -709,24 +756,10 @@ export function createMicrovmWorkerListener<
     } catch (error) {
       const outcome = classifySuspendError(error);
       if (outcome !== "unknown") {
-        if (outcome === "rejected") {
-          logger.warn(
-            "could not suspend the idle MicroVM, because the service rejected the call. It keeps running. A missing permission needs lambda:SuspendMicrovm on the MicroVM image in its execution role.",
-            { microvmId: target, error: describe(error) },
-          );
-        } else if (suspendHooks === hooksBefore) {
-          logger.warn(
-            "could not suspend the idle MicroVM, because the service refused the call for now. It keeps running. The worker tries the call again after the next idle time. That idle time lasts at least 30 seconds, unless a job or a resume hook starts the idle time again.",
-            { microvmId: target, error: describe(error) },
-          );
-        } else {
-          // The branch below keeps the hook's refusal and sets no lower
-          // bound. So the warning above would be false here.
-          logger.warn(
-            "could not suspend the idle MicroVM, because the service refused the call for now. A suspend hook arrived during the call, so this call does not end the hook's refusal. The idle time starts again after the resume hook, or 30 seconds after the last suspend hook.",
-            { microvmId: target, error: describe(error) },
-          );
-        }
+        logger.warn(failedCallWarning(outcome, suspendHooks !== hooksBefore), {
+          microvmId: target,
+          error: describe(error),
+        });
         // The service did nothing. So jobs can run again at once. A suspend
         // hook that arrived during the call means that the MicroVM is
         // suspending anyway, so its refusal stays.
