@@ -197,6 +197,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A heartbeat that met the completion while it was in flight logged "the callback no longer
     accepts heartbeats". It is no longer logged.
 
+- The MicroVM worker classified a failed `SuspendMicrovm` call of its own by HTTP status alone. So
+  expired credentials or a signature error with a 4xx status counted as a rejection. After a
+  rejection, the worker did not try the call again until a job ended. The service answers these
+  errors before it acts. So a first attempt that fails with one of them did not suspend the
+  MicroVM, and a later call can succeed. The worker now classifies such a first-attempt error as
+  refused for now. It accepts jobs again at once, and tries the call again. The same error can
+  repeat on every call, for example after a wrong secret key. So the next call starts after the
+  next idle time. That idle time lasts at least 30 seconds, unless a job or a resume hook starts
+  the idle time again. The error name decides,
+  whatever the HTTP status. A throttle, a clock-skew error, and any HTTP 429 are refused for now
+  too, on the first attempt. The worker's default client retries a throttle and a clock-skew error
+  itself. So with the default client, these errors usually end after a retried attempt. An error
+  after a retried attempt stays an unknown outcome. So the worker refuses jobs for up to 30
+  seconds, as before. A throttle is refused for now only from a client that does not retry, for
+  example a client from `createMicrovmsClient` with `maxAttempts: 1`. A `ConflictException` is
+  now an unknown outcome whatever its status. The Python worker classifies these errors the same
+  way.
+
 - A MicroVM worker job could reach its heartbeat timeout after two failed heartbeats in a row.
   Each heartbeat call could take half the interval. The service times the heartbeat timeout from
   when it receives a call, which can be at the call's start. So the worst gap was 3.5 intervals,
