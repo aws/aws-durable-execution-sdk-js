@@ -186,7 +186,7 @@ export function createScope(
 
 /**
  * Returns a retry strategy that calls `strategy` with the original message of
- * the error.
+ * an AWS SDK error.
  *
  * @remarks
  * Each step adds the request ID to the message of an AWS SDK error. See

@@ -111,8 +111,11 @@ const changedMessages = new WeakMap<
  * 6. A custom strategy can also match the message, for example with
  *    `createRetryStrategy({ retryableErrors: [...] })`. The longer message
  *    could change its decision. So each step calls the strategy through
- *    {@link withOriginalMessage}. The strategy then decides on the original
- *    message, and every retry decision stays the same.
+ *    {@link withOriginalMessage}. For an AWS SDK error, the strategy then
+ *    decides on the original message, and every retry decision stays the
+ *    same. An error that the SDK creates itself, such as
+ *    `MicrovmStateError` or "RunMicrovm returned no microvmId", has the
+ *    request ID in its message when the strategy receives it.
  * 7. The AWS SDK creates a new error object for each failed call. No AWS SDK
  *    code reads the error after it throws. So the change affects only the
  *    code that receives the error from the step.

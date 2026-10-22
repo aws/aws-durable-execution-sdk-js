@@ -16,6 +16,7 @@ import {
   MicrovmDeliveryError,
   MicrovmLaunchError,
   microvm,
+  microvmSession,
 } from "..";
 import { addRequestId } from "../aws-errors";
 import { createScope, type RetryStrategy } from "../shared";
@@ -306,6 +307,78 @@ describe("a message-based retry strategy for an error of another service", () =>
     expect(
       runner.getOperation("job.launch").getStepDetails()?.error,
     ).toMatchObject({ errorMessage: "Rate exceeded" });
+  });
+});
+
+describe("a message-based retry strategy for a throttled GetMicrovm in a session", () => {
+  // A session with `autoSuspendOnIdle: true` calls GetMicrovm in the request
+  // step of each job. The session passes its scope to the job. So the
+  // request step calls the strategy with the original message too.
+  it("matches an anchored pattern against the original message, and retries up to maxAttempts", async () => {
+    const client = new FakeMicrovmsClient();
+    const thrown: Error[] = [];
+    client.getResponses = throttled(true, thrown);
+    const { strategy, seen } = recording(
+      createRetryStrategy({ retryableErrors: [/^Rate exceeded$/] }),
+    );
+    const caught: unknown[] = [];
+    const runner = new LocalDurableTestRunner({
+      handlerFunction: withDurableExecution(
+        async (_event: unknown, context: DurableContext) => {
+          try {
+            await microvmSession(
+              context,
+              "pipeline",
+              {
+                ...baseConfig(client),
+                fetch: new FakeEndpoint().fetch,
+                retryStrategy: strategy,
+                timeout: { hours: 1 },
+                autoSuspendOnIdle: true,
+              },
+              (vm, ctx) =>
+                vm.invoke(ctx, "job", 1, {
+                  path: "/job",
+                  timeout: { minutes: 10 },
+                }),
+            );
+            return "unexpected";
+          } catch (error) {
+            caught.push(error);
+          }
+          const [resumed] = await context.createCallback("go");
+          await resumed;
+          return "caught";
+        },
+      ),
+    }) as LocalDurableTestRunner<unknown>;
+
+    const executionPromise = runner.run({ payload: {} });
+    const go = runner.getOperation("go");
+    await go.waitForData(WaitingOperationStatus.STARTED);
+    await go.sendCallbackSuccess(JSON.stringify("go"));
+    const execution = await executionPromise;
+
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    expect(execution.getResult()).toBe("caught");
+    // createRetryStrategy allows 3 attempts by default. A thrown GetMicrovm
+    // records no event. So the test counts the error objects.
+    expect(thrown).toHaveLength(3);
+    expect(seen).toEqual(["Rate exceeded", "Rate exceeded", "Rate exceeded"]);
+    const stepMessage = "Rate exceeded. GetMicrovm request ID: req-3.";
+    expect(caught.length).toBeGreaterThanOrEqual(2);
+    for (const error of caught) {
+      expect(error).toBeInstanceOf(MicrovmDeliveryError);
+      expect((error as Error).message).toBe(
+        `MicroVM "job": the job could not be delivered: ${stepMessage}`,
+      );
+    }
+    expect(
+      runner.getOperation("job.request").getStepDetails()?.error,
+    ).toMatchObject({
+      errorType: "ThrottlingException",
+      errorMessage: stepMessage,
+    });
   });
 });
 
