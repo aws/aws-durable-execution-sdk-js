@@ -531,8 +531,15 @@ describe("error.name", () => {
   });
 
   it("reports the SDK error's own name when no user error is behind it", async () => {
-    // A callback timeout raised by the SDK, with no cause.
-    const timeout = new CallbackTimeoutError("Callback timed out");
+    // A callback timeout as the SDK reports it: the callback handler throws
+    // CallbackTimeoutError around a cause it synthesizes from the checkpointed
+    // error (no ErrorType, so the cause is named "Error"), and the operation is
+    // TIMED_OUT with that error rebuilt by fromErrorObject.
+    const cause = new Error("Callback timed out");
+    const timeout = new CallbackTimeoutError("Callback timed out", cause);
+    const timedOutOp = DurableOperationError.fromErrorObject({
+      ErrorMessage: "Callback timed out",
+    });
     // An interrupted at-most-once step: the SDK's own error, checkpointed and
     // read back like any step error.
     const interrupted = fromCheckpoint(
@@ -545,8 +552,8 @@ describe("error.name", () => {
         id: "o1",
         name: "wait-callback",
         type: "CALLBACK",
-        status: "FAILED",
-        error: timeout,
+        status: "TIMED_OUT",
+        error: timedOutOp,
       }),
       o2: op({ id: "o2", name: "once", status: "FAILED", error: interrupted }),
     });
@@ -568,6 +575,8 @@ describe("error.name", () => {
     ["software.amazon.lambda.Probe$PaymentError", "PaymentError"],
     ["Outer$Inner$PaymentError", "PaymentError"],
     ["trailing.", "trailing."],
+    ["Outer$", "Outer$"],
+    ["", "Error"],
   ])("reduces the checkpointed type string %p to %p", async (type, name) => {
     const error = fromCheckpoint(type);
     const record = await failedRecord(error, failedCharge(error));

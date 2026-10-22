@@ -243,9 +243,10 @@ export interface OperationRecord {
   attempt?: number;
   error?: {
     /**
-     * Simple type name of the error the user's code raised (e.g.
-     * `"PaymentError"`), not the SDK wrapper (`StepError`). An SDK error with no
-     * user error behind it reports its own name.
+     * Type name of the error that caused the failure (e.g. `"PaymentError"`),
+     * never an SDK wrapper such as `StepError`. An SDK error with no user error
+     * behind it reports its own class name (`"CallbackTimeoutError"`). See the
+     * README for the full rule.
      */
     name: string;
     message: string;
@@ -306,9 +307,10 @@ export interface OperationSummary {
   /** Error — only present when this name occurs exactly once (and it failed, errors included). */
   error?: {
     /**
-     * Simple type name of the error the user's code raised (e.g.
-     * `"PaymentError"`), not the SDK wrapper (`StepError`). An SDK error with no
-     * user error behind it reports its own name.
+     * Type name of the error that caused the failure (e.g. `"PaymentError"`),
+     * never an SDK wrapper such as `StepError`. An SDK error with no user error
+     * behind it reports its own class name (`"CallbackTimeoutError"`). See the
+     * README for the full rule.
      */
     name: string;
     message: string;
@@ -343,9 +345,10 @@ export interface DurableExecutionTelemetryRecord {
   output?: ExecutionOutput;
   error?: {
     /**
-     * Simple type name of the error the user's code raised (e.g.
-     * `"PaymentError"`), not the SDK wrapper (`StepError`). An SDK error with no
-     * user error behind it reports its own name.
+     * Type name of the error that caused the failure (e.g. `"PaymentError"`),
+     * never an SDK wrapper such as `StepError`. An SDK error with no user error
+     * behind it reports its own class name (`"CallbackTimeoutError"`). See the
+     * README for the full rule.
      */
     name: string;
     message: string;

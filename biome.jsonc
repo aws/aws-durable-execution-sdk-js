@@ -289,7 +289,11 @@
       // Recorded execution histories are generated fixtures, not sources. The largest is
       // ~10 MiB, well past Biome's per-file ceiling, and formatting them would produce an
       // unreviewable diff.
-      "!**/*.history.json"
+      "!**/*.history.json",
+
+      // Shared cross-SDK test vectors. The JS, Python and Java repos carry this file
+      // byte-for-byte identical, so it must not be reformatted here.
+      "!**/error-name-vectors.json"
     ]
   },
 

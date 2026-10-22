@@ -18,6 +18,7 @@ import type {
 } from "./types";
 import { withOperationsByName } from "./operations-index";
 import { truncateRecord } from "./truncation";
+import { ErrorNameResolver } from "./error-name";
 
 export type {
   TelemetryExporter,
@@ -176,63 +177,15 @@ function mapStatus(
 // --- Error Records ---
 
 /**
- * Reduces an error type string to its simple type name: the last segment after
- * any `.` or `$` (`"a.b.Outer$PaymentError"` -> `"PaymentError"`). This is the
- * form every SDK reports, whether the type string came from a live error or
- * from checkpointed state (`ErrorObject.ErrorType`). A string with no segment
- * after its last separator is returned unchanged.
+ * Builds a record `error`. `name` follows the shared `error.name` rule (see
+ * `error-name.ts`); `message` is the message of the error the SDK passed in,
+ * unchanged.
  */
-function simpleErrorName(typeName: string): string {
-  const segment = typeName.slice(
-    Math.max(typeName.lastIndexOf("."), typeName.lastIndexOf("$")) + 1,
-  );
-  return segment || typeName;
-}
-
-/**
- * Whether `error` is one of the SDK's wrapper errors (`DurableOperationError`:
- * `StepError`, `CallbackError`, `ChildContextError`, ...) carrying the error the
- * user's code raised as its `cause`.
- *
- * Detected structurally (a string `errorType` plus an error-like `cause`) rather
- * than with `instanceof`, so it holds when the plugin and the SDK resolve to
- * different copies of the SDK module (CommonJS and ES module builds).
- */
-function wrappedCause(error: Error): { name: unknown } | undefined {
-  const { errorType, cause } = error as {
-    errorType?: unknown;
-    cause?: unknown;
-  };
-  if (typeof errorType !== "string") return undefined;
-  if (typeof cause !== "object" || cause === null || !("name" in cause)) {
-    return undefined;
-  }
-  return cause as { name: unknown };
-}
-
-/**
- * Builds a record `error` from an error the SDK handed to the plugin.
- *
- * `name` is the simple type name of the error the user's code raised, so the
- * same failure is reported under the same name by every SDK and on every
- * invocation:
- * - A live failure arrives as an SDK wrapper (`StepError`, ...) whose `cause` is
- *   the user's error, so the cause's name is used.
- * - The same failure read back from checkpointed state on a later invocation is
- *   rebuilt by the SDK as a wrapper whose `cause.name` is the checkpointed
- *   `ErrorType` string, so it resolves the same way.
- * - Any other error (one the user's code threw directly, or an SDK error with no
- *   user error behind it) reports its own name.
- * The chosen name is reduced to its simple form by {@link simpleErrorName}.
- * `message` is the message of the error passed in, unchanged.
- */
-function toErrorRecord(error: Error): { name: string; message: string } {
-  const source = wrappedCause(error) ?? error;
-  const name = source.name;
-  return {
-    name: typeof name === "string" ? simpleErrorName(name) : (name as string),
-    message: error.message,
-  };
+function toErrorRecord(
+  error: Error,
+  name: string,
+): { name: string; message: string } {
+  return { name, message: error.message };
 }
 
 // --- Operation Records ---
@@ -269,7 +222,10 @@ function toIsoString(ts: unknown): string | undefined {
   return ms === undefined ? undefined : new Date(ms).toISOString();
 }
 
-function toOperationRecord(op: OperationInfo): OperationRecord {
+function toOperationRecord(
+  op: OperationInfo,
+  errorNames: ErrorNameResolver,
+): OperationRecord {
   const startMs = toEpochMs(op.startTimestamp);
   const endMs = toEpochMs(op.endTimestamp);
   const durationMs =
@@ -286,7 +242,9 @@ function toOperationRecord(op: OperationInfo): OperationRecord {
     endTime: toIsoString(op.endTimestamp),
     durationMs,
     attempt: op.attempt,
-    error: op.error ? toErrorRecord(op.error) : undefined,
+    error: op.error
+      ? toErrorRecord(op.error, errorNames.operationErrorName(op))
+      : undefined,
   };
 }
 
@@ -359,6 +317,7 @@ function applyDataContent(
 function buildOperationRecords(
   operations: Record<string, OperationInfo>,
   opts: OperationContentOptions,
+  errorNames: ErrorNameResolver,
 ): OperationRecord[] {
   const records: OperationRecord[] = [];
   for (const op of Object.values(operations)) {
@@ -384,7 +343,7 @@ function buildOperationRecords(
     const override = opts.overridesByName.get(op.name);
     if (override?.exclude) continue;
 
-    const record = toOperationRecord(op);
+    const record = toOperationRecord(op, errorNames);
 
     if (!opts.includeErrors) {
       record.error = undefined;
@@ -921,7 +880,8 @@ class DurableExecutionTelemetryInvocation
 
   private buildRecord(args: {
     status: DurableExecutionTelemetryRecord["status"];
-    operations: OperationRecord[];
+    /** The full operations map the SDK passed to the hook. */
+    operations: Record<string, OperationInfo>;
     endTime?: Date;
     input?: unknown;
     output?: unknown;
@@ -932,6 +892,16 @@ class DurableExecutionTelemetryInvocation
     const durationMs = args.endTime
       ? args.endTime.getTime() - this.startTime.getTime()
       : undefined;
+    // One resolver per record, over the full operations map, so the execution
+    // error and every operation error are named from the same state.
+    const errorNames = new ErrorNameResolver(args.operations);
+    // Built first, as before: the operation result transforms are customer code
+    // and run ahead of the input/output transforms.
+    const operations = buildOperationRecords(
+      args.operations,
+      this.env.opContentOptions,
+      errorNames,
+    );
 
     return {
       recordType: "DurableExecutionTelemetry" as const,
@@ -949,8 +919,10 @@ class DurableExecutionTelemetryInvocation
       durationMs,
       input: applyDataContent(args.input, content?.input),
       output: applyDataContent(args.output, content?.output),
-      error: args.error ? toErrorRecord(args.error) : undefined,
-      operations: args.operations,
+      error: args.error
+        ? toErrorRecord(args.error, errorNames.executionErrorName(args.error))
+        : undefined,
+      operations,
     };
   }
 
@@ -981,10 +953,7 @@ class DurableExecutionTelemetryInvocation
       this.buildAndSchedule(() =>
         this.buildRecord({
           status: "RUNNING",
-          operations: buildOperationRecords(
-            info.operations,
-            this.env.opContentOptions,
-          ),
+          operations: info.operations,
           input: info.executionInput,
         }),
       );
@@ -1034,10 +1003,7 @@ class DurableExecutionTelemetryInvocation
         this.buildAndSchedule(() =>
           this.buildRecord({
             status,
-            operations: buildOperationRecords(
-              info.operations,
-              this.env.opContentOptions,
-            ),
+            operations: info.operations,
             endTime: new Date(),
             input: info.executionInput,
             output: info.executionResult,
@@ -1078,10 +1044,7 @@ class DurableExecutionTelemetryInvocation
     this.buildAndSchedule(() =>
       this.buildRecord({
         status: "RUNNING",
-        operations: buildOperationRecords(
-          info.operations,
-          this.env.opContentOptions,
-        ),
+        operations: info.operations,
         input: this.cachedInput,
       }),
     );
