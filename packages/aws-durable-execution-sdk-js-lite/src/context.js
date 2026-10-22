@@ -1,7 +1,10 @@
 import { nonDeterministicError } from "./errors.js";
 import { hashId } from "./ids.js";
 import { createLogger } from "./logger.js";
+import { createCallback } from "./operations/callback.js";
+import { invoke } from "./operations/invoke.js";
 import { step } from "./operations/step.js";
+import { wait } from "./operations/wait.js";
 
 // Members that start with "_" are for operations, not for user code.
 export function createContext({ execution, prefix, parentId }) {
@@ -58,6 +61,9 @@ export function createContext({ execution, prefix, parentId }) {
     },
 
     step: (opts) => step(ctx, opts),
+    wait: (opts) => wait(ctx, opts),
+    createCallback: (opts) => createCallback(ctx, opts),
+    invoke: (opts) => invoke(ctx, opts),
   };
   ctx.logger = createLogger(() => ctx.replaying);
   return ctx;

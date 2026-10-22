@@ -25,8 +25,16 @@ or returns `undefined` to leave them open. `functions` maps function names to lo
 for `ctx.invoke`. `maxInvocations` (default 100) stops runaway executions. `pageSize` serves
 the state in pages, to exercise pagination.
 
-Best practice: export the workflow separately from the handler, so tests can run it with
-`runDurable`:
+## Best practices
+
+- After `ctx.createCallback`, await only durable operations (`ctx.step`, `ctx.wait`, ...)
+  until you await `result`. The SDK counts the open callback as blocked at once. A plain
+  `await` on something else, such as a timer or a fetch, can let the invocation suspend in
+  the middle of it.
+- A callback `result` is the raw string the sender sent. Call `JSON.parse` yourself if the
+  sender sends JSON.
+
+Export the workflow separately from the handler, so tests can run it with `runDurable`:
 
 ```js
 export const workflow = async ({ event, ctx }) => {

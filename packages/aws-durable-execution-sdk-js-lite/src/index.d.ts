@@ -73,12 +73,50 @@ export interface StepOptions<T> {
   semantics?: StepSemantics;
 }
 
+export interface WaitOptions {
+  name?: string;
+  /** Whole seconds. The service ends the wait. */
+  seconds: number;
+}
+
+export interface CreateCallbackOptions {
+  name?: string;
+  /** The callback times out after this many seconds. Default: no timeout. */
+  timeoutSeconds?: number;
+  /** The callback times out if no heartbeat arrives for this many seconds. */
+  heartbeatTimeoutSeconds?: number;
+}
+
+export interface Callback {
+  /** Give this id to the outside system that completes the callback. */
+  callbackId: string;
+  /**
+   * The raw result string the sender sent, not JSON-parsed. Rejects with a
+   * DurableOperationError when the callback fails or times out
+   * (errorType "CallbackTimeoutError").
+   */
+  result: Promise<string | undefined>;
+}
+
+export interface InvokeOptions<I> {
+  name?: string;
+  /** The durable function to invoke: a qualified function ARN or alias. */
+  functionName: string;
+  /** Sent as JSON. Omitted when undefined. */
+  input?: I;
+  tenantId?: string;
+}
+
 export interface DurableContext {
   /** True while this context replays operations that an earlier invocation completed. */
   readonly replaying: boolean;
   /** Writes to console. Silent while replaying. */
   readonly logger: Logger;
   step<T>(opts: StepOptions<T>): Promise<T>;
+  wait(opts: WaitOptions): Promise<void>;
+  createCallback(opts?: CreateCallbackOptions): Promise<Callback>;
+  /** Returns the invoked function's JSON result. Its errors keep their errorType. */
+  invoke<O = unknown, I = unknown>(opts: InvokeOptions<I>): Promise<O>;
 }
 
 /** A client for the two durable execution APIs. Field names follow the Lambda API. */
