@@ -25,7 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `PaymentError`.
   - Callback failed externally with `ErrorType: "PaymentError"`: execution
     `CallbackExternalError` → `PaymentError`; operation `StepError` → `PaymentError`. With no
-    `ErrorType`, both are `CallbackExternalError` (the operation was `StepError`).
+    `ErrorType`, both are `CallbackExternalError` (the operation was `StepError`). With the
+    explicit `ErrorType: "Error"`, both are `Error`.
   - Callback timeout: execution stays `CallbackTimeoutError`; operation `StepError` →
     `CallbackTimeoutError`. A `/Timeout/` match on `error.name` keeps working.
   - A qualified type string is reduced to its last segment after `.` or `$`
@@ -33,8 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `"Error"` (it was `""`). Only the six ASCII whitespace characters count as blank.
   - `context.promise.all` / `race` over a step that throws: execution `PromiseCombinatorError` →
     `PaymentError`; combinator operation `StepError` → `PaymentError`.
-  - Several failures with the same message and different types (for example two map items):
-    the execution reports the wrapper name `StepError` instead of one of the types.
+  - Several map items or parallel branches that fail: each is named by its own type, and the
+    execution by the type of the error that propagated.
+  - The names come from each operation's own checkpoint, which the core SDK now writes with
+    the wrapped error, so they no longer depend on `childOperationsDepth`. A checkpoint written
+    by an older SDK that holds a wrapper type is reported under that wrapper's name.
 - **Telemetry exporter**: the SQS exporter replaces a FIFO `MessageGroupId` or
   `MessageDeduplicationId` longer than 128 characters (the SQS limit, which a durable execution
   ARN usually exceeds) with the lowercase hex SHA-256 digest of its UTF-8 bytes. Before, such

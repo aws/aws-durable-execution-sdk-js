@@ -106,23 +106,22 @@ Python and Java exporters. It applies to the execution-level `error`, every
    replayed checkpoint.
 8. When the execution fails because an operation's error propagated, the
    execution `error.name` equals that operation's `error.name`.
-9. If the SDK cannot tell which of several failures caused a wrapper, it does
-   not guess. It reports the wrapper's name. Two map items or parallel branches
-   that fail with the same message but different types are an example.
+9. If a checkpoint holds only a wrapper type, which an older SDK can write, the
+   name is that wrapper's name. The exporter never guesses a cause from other
+   operations.
 
 A callback that is failed externally with an explicit `ErrorType` is named
-after that type, after the reduction of rule 6. Only a missing or blank type
-reports the SDK callback-failure class (see the `"Error"` exception below).
+after that type, after the reduction of rule 6. This includes the type
+`"Error"`, which reports `Error`. Only a missing or blank type reports the SDK
+callback-failure class.
 
 A non-string `name` is converted with `String(...)`.
 
-When the user's type is lost in a wrapper's checkpoint (see "Nested failures
-across invocations" below), the plugin finds the failed operation it came from
-by message: a failed child of the context, or, for a `context.promise.*`
-combinator, a failed sibling that ran inside it. Candidates that ended after the
-failed context are preferred. When the candidates left have different names,
-the wrapper's name (`"StepError"`) is reported instead of a guess (rule 9). The
-same applies to the execution-level error.
+The core SDK checkpoints a failed child context, map item, parallel branch,
+promise combinator or `waitForCallback` with the error its SDK wrappers carry,
+not the wrapper. So every operation is named from its own error, and the
+execution from the end of its error's cause chain. The names do not depend on
+other operations, or on [`childOperationsDepth`](#childoperationsdepth-on-withdurableexecution).
 
 In this SDK the wrapper types (rule 2) are matched by the error's `errorType`:
 `StepError`, `CallbackError`, `CallbackExternalError`, `CallbackSubmitterError`,
@@ -135,11 +134,12 @@ In this SDK the wrapper types (rule 2) are matched by the error's `errorType`:
 | A callback times out | `"CallbackTimeoutError"` |
 | A callback is failed externally with `ErrorType: "PaymentError"` | `"PaymentError"` |
 | A callback is failed externally with no or a blank `ErrorType` | `"CallbackExternalError"` |
-| A callback is failed externally with `ErrorType: "Error"` | `"CallbackExternalError"` (not `"Error"`: the SDK rebuilds a missing type as `"Error"`, so the plugin cannot tell the two apart) |
+| A callback is failed externally with `ErrorType: "Error"` | `"Error"` |
 | `context.promise.all` / `race` over a step that throws `PaymentError` | `"PaymentError"` (step, combinator and execution) |
 | `context.promise.any` over steps that all fail | `"AggregateError"` (combinator and execution; each step keeps its own type) |
-| Two map items or parallel branches fail with the same message and different types | each item: its own type; execution: `"StepError"` (rule 9) |
+| Two map items or parallel branches fail, item 0 with `PaymentError` and item 1 with `FraudError` | each item: its own type; execution: the type of the error `throwIfError` raised (`"PaymentError"`) |
 | A map or parallel completed as failed by `shouldComplete` | `"BatchCompletionError"` (execution) |
+| A context checkpointed by an older SDK version as `StepError` | `"StepError"` (rule 9) |
 | `"a.b.Outer$PaymentError"` / `"Payment$Error"` / `"trailing."` | `"PaymentError"` / `"Error"` / `"trailing."` |
 
 > **Set `name` on your error classes.** The name comes from the error's `name`
@@ -148,27 +148,6 @@ In this SDK the wrapper types (rule 2) are matched by the error's `errorType`:
 > it in the constructor (`this.name = "PaymentError";`) to get the same name as
 > the Python and Java SDKs, which use the class name. Do not rely on
 > `constructor.name`; bundlers rename classes when they minify.
-
-> **Nested failures across invocations.** When a step fails inside a child
-> context, a map item, a parallel branch or a `waitForCallback`, the SDK
-> checkpoints the context with the wrapper's type (`StepError`). The user's type
-> is kept only by the failed step inside the context, and the plugin takes the
-> name from there. In the invocation where the failure happens, that step is
-> always available. On a later invocation (the handler caught the error,
-> suspended, and rethrew it) the backend omits the children of a finished
-> context unless [`childOperationsDepth`](#childoperationsdepth-on-withdurableexecution)
-> preserves them down to the failed step. Without that, the context and the
-> execution are both reported as `"StepError"`. Records already exported keep
-> the name they had: with `emitMode: "on-change"`, the records of the first
-> invocation name the context `"PaymentError"`, and the records of the later
-> invocation name it `"StepError"`. A query over all the records of one
-> execution can see both names.
-
-> **Concurrent failures with the same message.** With plain `Promise.all` over
-> two child contexts that fail with the same message and different types, the
-> invocation where the first failure propagates names it (the second has not
-> failed yet). A later invocation sees both failures and reports `"StepError"`
-> (rule 9).
 
 ### Example Record
 

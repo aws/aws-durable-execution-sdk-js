@@ -3,12 +3,14 @@
  * LocalDurableTestRunner: the real SDK hands the real plugin the error shapes
  * it produces, once live and once replayed. "Replayed" means the handler
  * catches the error, waits so that a new invocation starts, and rethrows it, so
- * the failing operation is rebuilt from its checkpoint.
+ * the failing operation is rebuilt from its checkpoint. Every row runs with the
+ * default `pluginsConfig.childOperationsDepth` and with `Infinity`.
  *
  * Every row asserts that `error.message` is the original message, that the live
  * and replayed names are equal, and that `operationsByName` has the same error
  * as `operations[]`.
  */
+import { writeFileSync } from "node:fs";
 import {
   type DurableContext,
   withDurableExecution,
@@ -77,15 +79,23 @@ interface Row {
   ops: Record<string, string>;
   exec: string;
   message?: string;
-  /** Operations whose failure was caught and handled, so rule 8 does not apply. */
+  /**
+   * Operations whose failure did not propagate (caught and handled, or a
+   * sibling of the failure that did), so rule 8 does not apply.
+   */
   handled?: string[];
   /**
-   * Several failures could have caused the execution's failure, so the
-   * execution reports the wrapper (rule 9) and rule 8 does not apply.
+   * Operations nested in a context. With the default childOperationsDepth a
+   * later invocation does not see them, so a replayed record does not carry
+   * them.
    */
-  ambiguous?: boolean;
+  nested?: string[];
+  /** Expected operation `error.message`, when it differs from `message`. */
+  opMessage?: string;
   /** Fail the callback named "cb" externally with this error. */
   sendFailure?: { ErrorType?: string; ErrorMessage: string };
+  /** What the invoked function "payer" throws. */
+  invoked?: () => Error;
 }
 
 const TABLE_B: Record<string, Row> = {
@@ -143,6 +153,7 @@ const TABLE_B: Record<string, Row> = {
         ),
       ),
     ops: { charge: "PaymentError", child: "PaymentError" },
+    nested: ["charge"],
     exec: "PaymentError",
   },
   B5: {
@@ -154,6 +165,7 @@ const TABLE_B: Record<string, Row> = {
       result.throwIfError();
     },
     ops: { "map-item-0": "PaymentError" },
+    nested: ["map-item-0"],
     exec: "PaymentError",
   },
   B6: {
@@ -171,6 +183,7 @@ const TABLE_B: Record<string, Row> = {
       result.throwIfError();
     },
     ops: { "item-step": "PaymentError", "map-item-0": "PaymentError" },
+    nested: ["item-step", "map-item-0"],
     exec: "PaymentError",
   },
   B7: {
@@ -184,6 +197,7 @@ const TABLE_B: Record<string, Row> = {
       result.throwIfError();
     },
     ops: { "parallel-branch-0": "PaymentError" },
+    nested: ["parallel-branch-0"],
     exec: "PaymentError",
   },
   B8: {
@@ -204,6 +218,15 @@ const TABLE_B: Record<string, Row> = {
     run: (ctx) => ctx.invoke("pay", "payer", { amount: 1 }),
     ops: { pay: "PaymentError" },
     exec: "PaymentError",
+  },
+  "B9-empty-message": {
+    title: "an invoked function throws PaymentError with an empty message",
+    run: (ctx) => ctx.invoke("pay", "payer", { amount: 1 }),
+    invoked: () => new PaymentError(""),
+    ops: { pay: "PaymentError" },
+    exec: "PaymentError",
+    message: "Invoke failed",
+    opMessage: "Unknown error",
   },
   B10: {
     title: "the waitForCallback submitter throws PaymentError",
@@ -251,6 +274,30 @@ const TABLE_B: Record<string, Row> = {
       await promise;
     },
     sendFailure: { ErrorMessage: MSG },
+    ops: { cb: "CallbackExternalError" },
+    exec: "CallbackExternalError",
+  },
+  B13b: {
+    title: 'a callback is failed externally with type "Error"',
+    run: async (ctx) => {
+      const [promise] = await ctx.createCallback("cb", {
+        timeout: { seconds: 3600 },
+      });
+      await promise;
+    },
+    sendFailure: { ErrorType: "Error", ErrorMessage: MSG },
+    ops: { cb: "Error" },
+    exec: "Error",
+  },
+  "B13-blank": {
+    title: "a callback is failed externally with a blank type",
+    run: async (ctx) => {
+      const [promise] = await ctx.createCallback("cb", {
+        timeout: { seconds: 3600 },
+      });
+      await promise;
+    },
+    sendFailure: { ErrorType: " \t", ErrorMessage: MSG },
     ops: { cb: "CallbackExternalError" },
     exec: "CallbackExternalError",
   },
@@ -381,8 +428,10 @@ const TABLE_B: Record<string, Row> = {
       "map-item-0": "PaymentError",
       "map-item-1": "FraudError",
     },
-    ambiguous: true,
-    exec: "StepError",
+    // throwIfError raises the first failed item: item 0.
+    handled: ["step-b", "map-item-1"],
+    nested: ["step-a", "step-b", "map-item-0", "map-item-1"],
+    exec: "PaymentError",
   },
   B21: {
     title:
@@ -418,44 +467,94 @@ const TABLE_B: Record<string, Row> = {
       "parallel-branch-0": "PaymentError",
       "parallel-branch-1": "FraudError",
     },
-    ambiguous: true,
-    exec: "StepError",
+    // throwIfError raises the first failed branch: branch 0.
+    handled: ["step-b", "parallel-branch-1"],
+    nested: ["step-a", "step-b", "parallel-branch-0", "parallel-branch-1"],
+    exec: "PaymentError",
   },
-  "concurrent-same-message": {
+};
+
+/**
+ * Shapes outside Table B that a heuristic exporter got wrong. The core SDK now
+ * checkpoints each failed context with the wrapped error, so they need nothing
+ * special.
+ */
+const EXTRA_ROWS: Record<string, Row> = {
+  "X1-child-awaits-map": {
     title:
-      "two concurrent child contexts fail with the same message: TypeError, PaymentError",
-    run: async (ctx) => {
-      const settled = await Promise.allSettled([
-        ctx.runInChildContext("c1", (child) =>
-          child.step(
-            "s1",
-            async () => {
-              throw new TypeError(MSG);
-            },
-            noRetry,
-          ),
-        ),
-        ctx.runInChildContext("c2", (child) =>
-          child.step(
-            "s2",
+      "a child context awaits a map whose item's step throws, then throwIfError",
+    run: (ctx) =>
+      ctx.runInChildContext("child", async (child) => {
+        const result = await child.map("fanout", ["a"], (item) =>
+          item.step(
+            "item-step",
             async () => {
               throw new PaymentError(MSG);
             },
             noRetry,
           ),
+        );
+        result.throwIfError();
+      }),
+    ops: {
+      "item-step": "PaymentError",
+      "map-item-0": "PaymentError",
+      child: "PaymentError",
+    },
+    nested: ["item-step", "map-item-0"],
+    exec: "PaymentError",
+  },
+  "X2-staggered-combinator": {
+    title: "promise.all over a step started before an earlier awaited step",
+    run: async (ctx) => {
+      const charge = ctx.step(
+        "charge",
+        async () => {
+          await new Promise((r) => setTimeout(r, 50));
+          throw new PaymentError(MSG);
+        },
+        noRetry,
+      );
+      await ctx.step("prepare", async () => 1);
+      await ctx.promise.all("combo", [charge]);
+    },
+    ops: { charge: "PaymentError", combo: "PaymentError" },
+    exec: "PaymentError",
+  },
+  "X3-handled-context-then-map": {
+    title:
+      "a handled child context fails with PaymentError, then a map item with FraudError (same message)",
+    run: async (ctx) => {
+      await ctx
+        .runInChildContext("refund", (child) =>
+          child.step(
+            "refund-step",
+            async () => {
+              throw new PaymentError(MSG);
+            },
+            noRetry,
+          ),
+        )
+        .catch(() => undefined);
+      const result = await ctx.map("fanout", ["a"], (item) =>
+        item.step(
+          "item-step",
+          async () => {
+            throw new FraudError(MSG);
+          },
+          noRetry,
         ),
-      ]);
-      const failed = settled.find((r) => r.status === "rejected");
-      if (failed) throw failed.reason;
+      );
+      result.throwIfError();
     },
     ops: {
-      s1: "TypeError",
-      c1: "TypeError",
-      s2: "PaymentError",
-      c2: "PaymentError",
+      refund: "PaymentError",
+      "item-step": "FraudError",
+      "map-item-0": "FraudError",
     },
-    ambiguous: true,
-    exec: "StepError",
+    handled: ["refund"],
+    nested: ["item-step", "map-item-0"],
+    exec: "FraudError",
   },
 };
 
@@ -466,25 +565,27 @@ class CapturingExporter implements TelemetryExporter {
   }
 }
 
-/**
- * - `live`: the failure reaches the end of the invocation it happened in.
- * - `replayed`: the handler catches it, waits (a new invocation starts) and
- *   rethrows it, with `pluginsConfig.childOperationsDepth: Infinity` so the
- *   later invocation still sees the children of the failed context.
- * - `replayed-default`: the same, with the default depth (no children kept).
- */
-type Mode = "live" | "replayed" | "replayed-default";
+type Depth = "default" | "Infinity";
 
 interface Observed {
   status: string;
   exec?: { name: string; message: string };
   /** The final record's error per operation name. */
   ops: Record<string, { name: string; message: string } | undefined>;
+  /** Whether the final record carries the operation at all. */
+  present: Record<string, boolean>;
   /** The same, read from operationsByName. */
   opsByName: Record<string, { name: string; message: string } | undefined>;
 }
 
-async function observe(row: Row, mode: Mode): Promise<Observed> {
+/**
+ * - `live`: the failure reaches the end of the invocation it happened in.
+ * - `replayed`: the handler catches it, waits (a new invocation starts) and
+ *   rethrows it, so it is rebuilt from the checkpoint.
+ */
+type Mode = "live" | "replayed";
+
+async function observe(row: Row, mode: Mode, depth: Depth): Promise<Observed> {
   const exporter = new CapturingExporter();
   const telemetry = durableExecutionTelemetry({
     exporters: [exporter],
@@ -504,12 +605,12 @@ async function observe(row: Row, mode: Mode): Promise<Observed> {
     {
       plugins: [telemetry],
       pluginsConfig:
-        mode === "replayed" ? { childOperationsDepth: Infinity } : undefined,
+        depth === "Infinity" ? { childOperationsDepth: Infinity } : undefined,
     },
   );
   const runner = new LocalDurableTestRunner({ handlerFunction: handler });
   runner.registerFunction("payer", async () => {
-    throw new PaymentError(MSG);
+    throw row.invoked ? row.invoked() : new PaymentError(MSG);
   });
   const pending = runner.run({ payload: {} });
   if (row.sendFailure) {
@@ -523,146 +624,113 @@ async function observe(row: Row, mode: Mode): Promise<Observed> {
   if (!final) throw new Error("no record exported");
   const byName = withOperationsByName(final).operationsByName;
   const ops: Observed["ops"] = {};
+  const present: Observed["present"] = {};
   const opsByName: Observed["opsByName"] = {};
   for (const name of Object.keys(row.ops)) {
-    ops[name] = final.operations.find((o) => o.name === name)?.error;
+    const record = final.operations.find((o) => o.name === name);
+    present[name] = record !== undefined;
+    ops[name] = record?.error;
     opsByName[name] = byName[name]?.error;
   }
   return {
     status: String(result.getStatus()),
     exec: final.error,
     ops,
+    present,
     opsByName,
   };
 }
 
-describe.each(Object.entries(TABLE_B))("Table B %s", (_id, row) => {
-  const results: Partial<Record<Mode, Observed>> = {};
-  const message = row.message ?? MSG;
+/** Observed names, by row, depth and mode, for the summary grid. */
+const grid: Record<string, Record<string, string>> = {};
 
-  describe.each(["live", "replayed"] as const)("%s", (mode) => {
-    it(`${row.title}: execution ${row.exec}`, async () => {
-      const observed = await observe(row, mode);
-      results[mode] = observed;
-
-      expect(observed.status).toBe("FAILED");
-      expect(observed.exec).toEqual({ name: row.exec, message });
-      for (const [name, expected] of Object.entries(row.ops)) {
-        expect({ [name]: observed.ops[name] }).toEqual({
-          [name]: { name: expected, message },
-        });
-        expect(observed.opsByName[name]).toEqual(observed.ops[name]);
-        // Rule 8: the execution names the error of the operation it came from.
-        if (!row.ambiguous && !row.handled?.includes(name)) {
-          expect({ [name]: observed.ops[name]?.name }).toEqual({
-            [name]: observed.exec?.name,
-          });
-        }
-      }
-    });
-  });
-
-  if (row.exec.includes("Timeout")) {
-    it("still matches the telemetry-core few-shot query error.name like /Timeout/", () => {
-      expect(results.live?.exec?.name).toMatch(/Timeout/);
-      for (const error of Object.values(results.live?.ops ?? {})) {
-        expect(error?.name).toMatch(/Timeout/);
-      }
-    });
+afterAll(() => {
+  if (process.env.TABLE_B_GRID) {
+    writeFileSync(process.env.TABLE_B_GRID, JSON.stringify(grid, null, 2));
   }
-
-  it("names the failure the same live and replayed", () => {
-    expect(results.live).toBeDefined();
-    expect(results.replayed).toBeDefined();
-    expect(results.replayed?.exec).toEqual(results.live?.exec);
-    expect(results.replayed?.ops).toEqual(results.live?.ops);
-  });
 });
 
-/**
- * Known limitation, pinned so a change is noticed. When a step fails inside a
- * child context (B4), a map item (B6) or a waitForCallback (B10), the SDK
- * checkpoints the context with the wrapper's type, `StepError`; the user's type
- * is kept only by the failed step inside it. A later invocation sees that step
- * only when `pluginsConfig.childOperationsDepth` preserves it. Without it the
- * replayed execution is named after the checkpointed type.
- */
-const LOST_WITHOUT_CHILDREN = new Set([
-  "B4",
-  "B6",
-  "B10",
-  "concurrent-same-message",
-]);
-
-describe.each(Object.entries(TABLE_B))(
-  "Table B %s replayed with the default childOperationsDepth",
+describe.each(Object.entries({ ...TABLE_B, ...EXTRA_ROWS }))(
+  "Table B %s",
   (id, row) => {
-    it(`${row.title}`, async () => {
-      const observed = await observe(row, "replayed-default");
-      const expectedName = LOST_WITHOUT_CHILDREN.has(id)
-        ? "StepError"
-        : row.exec;
-      expect(observed.status).toBe("FAILED");
-      expect(observed.exec).toEqual({
-        name: expectedName,
-        message: row.message ?? MSG,
-      });
-      // Operations the record still carries keep their live name.
-      for (const [name, error] of Object.entries(observed.ops)) {
-        if (!error) continue;
-        expect(observed.opsByName[name]).toEqual(error);
-        if (LOST_WITHOUT_CHILDREN.has(id)) {
-          expect(error.name).toBe(observed.exec?.name);
-        } else {
-          expect({ [name]: error.name }).toEqual({ [name]: row.ops[name] });
+    describe.each(["default", "Infinity"] as const)(
+      "childOperationsDepth %s",
+      (depth) => {
+        const results: Partial<Record<Mode, Observed>> = {};
+        const message = row.message ?? MSG;
+        const opMessage = row.opMessage ?? message;
+
+        describe.each(["live", "replayed"] as const)("%s", (mode) => {
+          it(`${row.title}: execution ${row.exec}`, async () => {
+            const observed = await observe(row, mode, depth);
+            results[mode] = observed;
+            grid[id] ??= {};
+            grid[id][`${depth}/${mode}`] = [
+              `exec=${observed.exec?.name}`,
+              ...Object.entries(observed.ops).map(([name, error]) =>
+                observed.present[name]
+                  ? `${name}=${error?.name}`
+                  : `${name}=(not in record)`,
+              ),
+            ].join(" ");
+
+            expect(observed.status).toBe("FAILED");
+            expect(observed.exec).toEqual({ name: row.exec, message });
+            // A later invocation sees a context's children only within the
+            // configured depth; a replayed record then does not carry them.
+            const carried = (name: string) =>
+              mode === "live" ||
+              depth === "Infinity" ||
+              !row.nested?.includes(name);
+            for (const [name, expected] of Object.entries(row.ops)) {
+              expect({ [name]: observed.present[name] }).toEqual({
+                [name]: carried(name),
+              });
+              if (!carried(name)) continue;
+              expect({ [name]: observed.ops[name] }).toEqual({
+                [name]: { name: expected, message: opMessage },
+              });
+              expect(observed.opsByName[name]).toEqual(observed.ops[name]);
+              // Rule 8: the execution names the error of the operation it came from.
+              if (!row.handled?.includes(name)) {
+                expect({ [name]: observed.ops[name]?.name }).toEqual({
+                  [name]: observed.exec?.name,
+                });
+              }
+            }
+          });
+        });
+
+        if (row.exec.includes("Timeout")) {
+          it("still matches the telemetry-core few-shot query error.name like /Timeout/", () => {
+            expect(results.live?.exec?.name).toMatch(/Timeout/);
+            for (const error of Object.values(results.live?.ops ?? {})) {
+              expect(error?.name).toMatch(/Timeout/);
+            }
+          });
         }
-      }
-    });
+
+        it("names the failure the same live and replayed", () => {
+          expect(results.live).toBeDefined();
+          expect(results.replayed).toBeDefined();
+          expect(results.replayed?.exec).toEqual(results.live?.exec);
+          for (const [name, error] of Object.entries(
+            results.replayed?.ops ?? {},
+          )) {
+            if (results.replayed?.present[name]) {
+              expect({ [name]: error }).toEqual({
+                [name]: results.live?.ops[name],
+              });
+            }
+          }
+        });
+      },
+    );
   },
 );
 
-/** Rows that behave differently in JS from what the shared table expects. */
-describe("outside Table B, pinned so a change is noticed", () => {
-  const callback = (ErrorType: string): Row => ({
-    title: `a callback failed externally with type ${JSON.stringify(ErrorType)}`,
-    run: async (ctx) => {
-      const [promise] = await ctx.createCallback("cb", {
-        timeout: { seconds: 3600 },
-      });
-      await promise;
-    },
-    sendFailure: { ErrorType, ErrorMessage: MSG },
-    ops: { cb: "" },
-    exec: "",
-  });
-
-  /**
-   * B13b expects `Error`. The core SDK rebuilds a callback failure's cause with
-   * `name = ErrorType || "Error"`, so a plugin receives the same error for a
-   * missing type and for `"Error"`, and the exporter cannot tell them apart.
-   * The missing type wins (B13). Fixing this needs a core SDK change.
-   */
-  it.each(["live", "replayed"] as const)(
-    'B13b (%s): ErrorType "Error" is reported as CallbackExternalError',
-    async (mode) => {
-      const observed = await observe(callback("Error"), mode);
-      expect(observed.exec).toEqual({
-        name: "CallbackExternalError",
-        message: MSG,
-      });
-      expect(observed.ops.cb?.name).toBe("CallbackExternalError");
-    },
-  );
-
-  it.each(["live", "replayed"] as const)(
-    "a blank ErrorType is reported as CallbackExternalError (%s)",
-    async (mode) => {
-      const observed = await observe(callback(" \t"), mode);
-      expect(observed.exec?.name).toBe("CallbackExternalError");
-      expect(observed.ops.cb?.name).toBe("CallbackExternalError");
-    },
-  );
-
+/** Rows outside Table B, pinned so a change is noticed. */
+describe("outside Table B", () => {
   const failingStep = (ctx: DurableContext) =>
     ctx.step(
       "charge",
@@ -687,6 +755,7 @@ describe("outside Table B, pinned so a change is noticed", () => {
           exec: "",
         },
         mode,
+        "default",
       );
       expect(observed.status).toBe("FAILED");
       expect(observed.exec?.name).toBe("AggregateError");
@@ -710,54 +779,11 @@ describe("outside Table B, pinned so a change is noticed", () => {
         exec: "",
       },
       "live",
+      "default",
     );
     expect(observed.status).toBe("SUCCEEDED");
     expect(observed.exec).toBeUndefined();
     expect(observed.ops.combo).toBeUndefined();
     expect(observed.ops.charge).toEqual({ name: "PaymentError", message: MSG });
-  });
-
-  /**
-   * Plain `Promise.all` over two child contexts rejects as soon as the first
-   * fails. Live, the second has not failed yet, so the first is the only
-   * candidate. Replayed, both have failed with the same message and different
-   * types, and the exporter does not guess (rule 9). The concurrent-same-message row,
-   * where both have failed before the handler throws, is equal live and
-   * replayed.
-   */
-  it("Promise.all fast rejection: live names the first failure, replayed the wrapper", async () => {
-    const row: Row = {
-      title: "Promise.all fast rejection",
-      run: (ctx) =>
-        Promise.all([
-          ctx.runInChildContext("c1", (child) =>
-            child.step(
-              "s1",
-              async () => {
-                throw new TypeError(MSG);
-              },
-              noRetry,
-            ),
-          ),
-          ctx.runInChildContext("c2", (child) =>
-            child.step(
-              "s2",
-              async () => {
-                await new Promise((r) => setTimeout(r, 200));
-                throw new PaymentError(MSG);
-              },
-              noRetry,
-            ),
-          ),
-        ]),
-      ops: { c1: "", c2: "" },
-      exec: "",
-    };
-    const live = await observe(row, "live");
-    const replayed = await observe(row, "replayed");
-    expect(live.exec?.name).toBe("TypeError");
-    expect(replayed.exec?.name).toBe("StepError");
-    expect(replayed.ops.c1?.name).toBe("TypeError");
-    expect(replayed.ops.c2?.name).toBe("PaymentError");
   });
 });

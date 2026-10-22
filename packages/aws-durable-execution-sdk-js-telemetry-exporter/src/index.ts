@@ -18,7 +18,7 @@ import type {
 } from "./types";
 import { withOperationsByName } from "./operations-index";
 import { truncateRecord } from "./truncation";
-import { ErrorNameResolver } from "./error-name";
+import { executionErrorName, operationErrorName } from "./error-name";
 
 export type {
   TelemetryExporter,
@@ -222,10 +222,7 @@ function toIsoString(ts: unknown): string | undefined {
   return ms === undefined ? undefined : new Date(ms).toISOString();
 }
 
-function toOperationRecord(
-  op: OperationInfo,
-  errorNames: ErrorNameResolver,
-): OperationRecord {
+function toOperationRecord(op: OperationInfo): OperationRecord {
   const startMs = toEpochMs(op.startTimestamp);
   const endMs = toEpochMs(op.endTimestamp);
   const durationMs =
@@ -243,7 +240,7 @@ function toOperationRecord(
     durationMs,
     attempt: op.attempt,
     error: op.error
-      ? toErrorRecord(op.error, errorNames.operationErrorName(op))
+      ? toErrorRecord(op.error, operationErrorName(op))
       : undefined,
   };
 }
@@ -317,7 +314,6 @@ function applyDataContent(
 function buildOperationRecords(
   operations: Record<string, OperationInfo>,
   opts: OperationContentOptions,
-  errorNames: ErrorNameResolver,
 ): OperationRecord[] {
   const records: OperationRecord[] = [];
   for (const op of Object.values(operations)) {
@@ -343,7 +339,7 @@ function buildOperationRecords(
     const override = opts.overridesByName.get(op.name);
     if (override?.exclude) continue;
 
-    const record = toOperationRecord(op, errorNames);
+    const record = toOperationRecord(op);
 
     if (!opts.includeErrors) {
       record.error = undefined;
@@ -892,15 +888,11 @@ class DurableExecutionTelemetryInvocation
     const durationMs = args.endTime
       ? args.endTime.getTime() - this.startTime.getTime()
       : undefined;
-    // One resolver per record, over the full operations map, so the execution
-    // error and every operation error are named from the same state.
-    const errorNames = new ErrorNameResolver(args.operations);
     // Built first, as before: the operation result transforms are customer code
     // and run ahead of the input/output transforms.
     const operations = buildOperationRecords(
       args.operations,
       this.env.opContentOptions,
-      errorNames,
     );
 
     return {
@@ -920,7 +912,7 @@ class DurableExecutionTelemetryInvocation
       input: applyDataContent(args.input, content?.input),
       output: applyDataContent(args.output, content?.output),
       error: args.error
-        ? toErrorRecord(args.error, errorNames.executionErrorName(args.error))
+        ? toErrorRecord(args.error, executionErrorName(args.error))
         : undefined,
       operations,
     };
