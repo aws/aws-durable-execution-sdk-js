@@ -87,6 +87,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A failed `context.invoke` now throws an `InvokeError` whose `cause.name` is the invoked
+  function's error type (for example `"PaymentError"`), with the remote stack trace, as the
+  callback handlers and replayed operations already do. Before, `cause.name` was always
+  `"Error"`. A cause is now also created when the remote error has a type but no message.
+
 - **OpenTelemetry**: `FAILED`, `TIMED_OUT`, and `STOPPED` operations remain `ERROR` in both views,
   including later-invocation continuations, even without error details.
   Exception events still require an actual error object.
@@ -99,6 +104,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserve an already-exported context's identity for delayed child completion,
   and use the known backend end as a zero-duration start fallback when no start
   was recorded. Existing supplied timestamps and caller outcomes are preserved.
+
+- With `skipTime` enabled, the testing SDK's local runner now advances its fake clock by the full
+  duration of every wait and retry delay. The checkpoint server recorded times on its own real
+  clock, while the runner and the SDK read a fake clock that runs ahead after the first wait. So a
+  later wait or retry advanced by only a few milliseconds, and parallel waits stopped at the first
+  one to end. Two changes fix this:
+  - Every request from the local runner to the checkpoint server carries the runner's clock. The
+    server records every timestamp on that clock: scheduled ends, retry times, start and end
+    times, and history event times. So a wait's `ScheduledEndTimestamp` is its start time plus its
+    duration, and both match `Date.now()` inside the handler. An execution's recorded times never go back, even
+    when a step blocks the main thread while the server records a callback timeout.
+  - When no invocation is running or about to start, the runner advances the fake clock to the
+    earliest pending wait or retry end only, and applies the next end after the invocation that
+    one releases has run. So a branch that resumes after its own wait ends starts its next delay
+    from that end, not from a later branch's end. The runners that durable invokes start share
+    the fake clock, so the runner considers every one of them: the clock moves only when none
+    has an invocation to run, and only to the earliest end across all of them. Once an
+    invoked function finishes, the clock waits until its caller has resumed with the result.
+    This holds even while another invoked function still waits, and for a non-durable invoked
+    function. A non-durable invoked function runs outside the fake clock, and the runner
+    cannot see whether the handler still awaits it, as with the other operands of
+    `context.promise.race`. So the clock waits for a running non-durable function for at most
+    1 s of real time. For the same reason, it waits for each running invocation of a durable
+    invoked function for at most 1 s of real time. If the caller finishes without the result, or the context that contains the
+    invoke completes without it, the clock no longer waits for it. That includes a durable
+    invoked function that is still running. Such an abandoned function keeps running, and its
+    own waits and retries still skip time. Like any durable invoked function, each running
+    invocation of it stops the clock for at most 1 s of real time.
+    Once the handler returns its final result, the runner applies no further wait or retry end.
+    While an invocation is running, the fake clock advances with real time, and an end is
+    applied when that time reaches it. Waits also keep completing while an execution is
+    paused.
+
+  As a result:
+  - Each sequential wait advances fake time by its duration.
+  - Parallel waits advance fake time to the latest end, not by the sum of their durations.
+  - A delay starts when its checkpoint is sent, as in the service. Time spent earlier in the
+    invocation no longer shortens it.
+  - A wait ends after the invocation that started it, as in the service. So a test that counts
+    invocations or checks the order of history events across waits can see one more invocation,
+    with each `InvocationCompleted` before the matching `WaitSucceeded`.
+  - A timer that your own code sets inside a step or a non-durable invoked function, such as
+    `setTimeout`, fires after its delay in real time. Before, a wait ending beside a running step
+    moved the clock, which fired the step's timer early as a side effect. A step's timer without
+    a wait beside it already ran in real time. A test that relied on the side effect can get
+    slower or time out. Shorten the delay in the test, or use `context.wait` for a durable delay.
 
 - The testing SDK's local runner no longer waits for the fake clock's 20 ms advancement interval
   before it starts each queued invocation when `skipTime` is enabled. QueueScheduler now yields
@@ -151,12 +202,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A heartbeat that met the completion while it was in flight logged "the callback no longer
     accepts heartbeats". It is no longer logged.
 
+- The MicroVM worker classified a failed `SuspendMicrovm` call of its own by HTTP status alone. So
+  expired credentials or a signature error with a 4xx status counted as a rejection. After a
+  rejection, the worker did not try the call again until a job ended. The service answers these
+  errors before it acts. So a first attempt that fails with one of them did not suspend the
+  MicroVM, and a later call can succeed. The worker now classifies such a first-attempt error as
+  refused for now. It accepts jobs again at once, and tries the call again. The same error can
+  repeat on every call, for example after a wrong secret key. So the next call starts after the
+  next idle time. That idle time lasts at least 30 seconds, unless a job or a resume hook starts
+  the idle time again. The error name decides,
+  whatever the HTTP status. A throttle, a clock-skew error, and any HTTP 429 are refused for now
+  too, on the first attempt. The worker's default client retries a throttle and a clock-skew error
+  itself. So with the default client, these errors usually end after a retried attempt. An error
+  after a retried attempt stays an unknown outcome. So the worker refuses jobs for up to 30
+  seconds, as before. A throttle is refused for now only from a client that does not retry, for
+  example a client from `createMicrovmsClient` with `maxAttempts: 1`. A `ConflictException` is
+  now an unknown outcome whatever its status. The Python worker classifies these errors the same
+  way.
+
 - A MicroVM worker job could reach its heartbeat timeout after two failed heartbeats in a row.
   Each heartbeat call could take half the interval. The service times the heartbeat timeout from
   when it receives a call, which can be at the call's start. So the worst gap was 3.5 intervals,
   above the 3-interval timeout. Each call now ends after a third of the interval, and the worst
   gap is about 2.83 intervals. The Python worker measured a 32.39-second gap against a 30-second
   heartbeat timeout before the same change.
+
+- The MicroVM worker could run two `SuspendMicrovm` calls at once. A `resume` hook that arrived
+  during the worker's own call ended the refusal and started the idle time. The session sends an
+  `autoSuspendIdleSeconds` of at least 10, but the `run` hook accepts any positive number. With an
+  idle time under 10 seconds, the idle time could end during the call. The worker then started a
+  second call on a MicroVM that was already suspending. If the first call then failed with a
+  rejection, it ended the refusal while the second call could still freeze the MicroVM. The worker
+  now runs one call at a time. A `resume` hook or a job end during the call starts the idle time
+  when the call ends. The idle time then starts only if no job runs and no `suspend` hook refusal
+  is in effect. The Python worker made the same change. (#1038)
+
+- The `microvm` request step in `@aws/durable-execution-sdk-js-extras` followed redirects. A 301,
+  302, or 303 turned the job POST into a GET without the job, and a 2xx for that GET counted as
+  accepted, so the job never started. A redirect to another host also received the auth token.
+  The step no longer follows redirects: a 3xx fails the delivery at once with
+  `MicrovmRequestRejectedError`, and so does a redirect that a custom `fetch` follows. A 307 or
+  308 for a missing trailing slash used to deliver the job and now fails, so set the path with its
+  trailing slash.
+
+- A `microvmSession` job in `@aws/durable-execution-sdk-js-extras` could fail with a plain
+  `MicrovmDeliveryError` for a removed MicroVM. ResumeMicrovm answers `ResourceNotFoundException`
+  when the MicroVM is removed between the state check and the resume. The request step rethrew
+  that error, and the default retry strategy does not retry it. So a handler that catches
+  `MicrovmNotRunningError` to start a new session did not catch this case. The step now treats
+  this answer as it treats the same answer from GetMicrovm. The job fails at once with
+  `MicrovmNotRunningError`.
+- A `microvmSession` in `@aws/durable-execution-sdk-js-extras` computed its resume mode from the
+  current config on every replay. The resume mode says whether each job checks the MicroVM state,
+  and resumes a suspended MicroVM, before delivery. The worker reads its idle time once, from the
+  run hook payload of the launch. So a deploy that turned `autoSuspendOnIdle` off did not stop a
+  running worker from suspending its MicroVM. The next job then skipped the state check, and the
+  suspended endpoint answered 502. The request step retries a 502 as a MicroVM that is still
+  starting. So the job failed with `MicrovmDeliveryError` only after both retry tiers. The launch
+  checkpoint now records the resume mode as `"resumeBeforeDelivery": true` or
+  `"resumeBeforeDelivery": false`, and replay follows it.
+- A `microvmSession` job in `@aws/durable-execution-sdk-js-extras` reported a removed MicroVM
+  without the request ID of the AWS call. GetMicrovm and ResumeMicrovm answer
+  `ResourceNotFoundException` for a removed MicroVM, and the AWS SDK error carries the request ID.
+  The request step dropped that error. So a support case had no request ID to quote. The
+  `MicrovmNotRunningError` message now ends with `GetMicrovm request ID: <id>.` or
+  `ResumeMicrovm request ID: <id>.`. The SDK checkpoints the message. So the handler sees the ID
+  on the first run and on replay, and the execution history keeps it. A message has no ID when the
+  AWS SDK error carries none. `MicrovmStateError` also keeps the AWS SDK error as its `cause`.
+  Only the retry strategy and the plugin hooks of a live step attempt see `cause`. A replayed step
+  rebuilds the error from the checkpoint, without it.
+- A MicroVM job in `@aws/durable-execution-sdk-js-extras` could fail with a plain
+  `MicrovmDeliveryError` for a removed MicroVM. The request step calls CreateMicrovmAuthToken
+  before the first request, and again after a 401 or 403. The API model lists
+  `ResourceNotFoundException` for that call. The step rethrew that error. So a handler that catches
+  `MicrovmNotRunningError` to start a new session did not catch this case. The step now treats
+  this answer as it treats the same answer from GetMicrovm and ResumeMicrovm. The job fails at once
+  with `MicrovmNotRunningError`, and its message ends with
+  `CreateMicrovmAuthToken request ID: <id>.`. This applies to `microvm` jobs over HTTP and to every
+  session job. A custom retry strategy now receives `MicrovmStateError` for this answer, with the
+  AWS SDK error as its `cause`. Before, it received the AWS SDK error. The live service's answer for
+  a removed MicroVM is not verified.
+- Other failed AWS calls of the MicroVM operations in `@aws/durable-execution-sdk-js-extras`
+  reported no request ID. The SDK checkpoints only the message of a step failure, and an AWS SDK
+  message has no request ID. So a support case had no request ID to quote. The message now ends with
+  `<Operation> request ID: <id>.` in these cases:
+  - A GetMicrovm answer of `TERMINATING` or `TERMINATED`. `MicrovmNotRunningError` ends with
+    `GetMicrovm request ID: <id>.`.
+  - A RunMicrovm failure. `MicrovmLaunchError` ends with `RunMicrovm request ID: <id>.`.
+  - Any other error of GetMicrovm, ResumeMicrovm, or CreateMicrovmAuthToken, such as
+    `AccessDeniedException`. `MicrovmDeliveryError` ends with the request ID of that call.
+  - A TerminateMicrovm failure. The terminate step's record in the execution history ends with
+    `TerminateMicrovm request ID: <id>.`. The operation still returns the job's outcome.
+  - A RunMicrovm or CreateMicrovmAuthToken answer without a required field, such as `microvmId`.
+
+  For a rethrown AWS SDK error, each step adds the request ID to the message of the error object
+  itself. It does not wrap the error. So the error keeps its class, `name`, `code`, `$retryable`,
+  and `$metadata`. So the default and custom retry strategies decide as before for such an error.
+  A message has no request ID when the AWS SDK error or output carries none, for example after a
+  connection failure. Only an error of the Lambda MicroVMs service gets a request ID. An error of
+  another service keeps its message. For example, a credential provider that assumes a role calls
+  STS inside each call, and its error carries the request ID of STS. When a custom client throws one
+  error object for several calls, the message names only the last call. (#1050)
 
 - An `InvalidRunHookPayloadError` for a `runHookPayload` that is not JSON now keeps the parser's
   `SyntaxError` as its `cause`. Its message names the position of the error.
@@ -182,6 +328,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     with a token the service had already rejected. It now answers `PENDING`.
 
 ### Added
+
+- `createPowertoolsLogger`, with the `PowertoolsDurableLogger` class and the `PowertoolsLoggerLike`
+  interface. It wraps a Powertools for AWS Lambda (TypeScript) `Logger` so that every entry
+  contains the durable execution metadata (`executionArn`, `requestId`, `tenantId`,
+  `operationId`, `operationName`, `attempt`) and the fields that the configured plugins add, such
+  as the OTel plugin's `traceId` and `spanId`. Pass it as `customLogger` to
+  `context.configureLogger`. The SDK does not depend on Powertools.
+- `DurableLoggingContext.getLogEnrichment()`, optional in the type. The SDK always provides it.
+  It returns the log fields that the configured plugins add. A custom logger that calls it on each
+  log call adds those fields, as the default logger does. Custom loggers that do not call it
+  produce the same entries as before.
+- The `powertools-logger` example now uses `createPowertoolsLogger` instead of its own adapter
+  class. So its log keys change from snake_case (`execution_arn`, `request_id`, `operation_id`)
+  to camelCase (`executionArn`, `requestId`, `operationId`), the names that the default logger
+  and the Python SDK use. Its entries also gain `operationName`. If you copied the old example,
+  update log queries and metric filters that use the snake_case names.
 
 - `LocalDurableTestRunner` gains `pauseExecution()` and `resumeExecution()`, **experimental**, to
   test a handler

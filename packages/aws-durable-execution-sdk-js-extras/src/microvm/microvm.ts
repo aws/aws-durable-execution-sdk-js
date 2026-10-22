@@ -79,7 +79,8 @@ import type { MicrovmConfig, MicrovmRunHookPayload } from "./types";
  * or `request.retryWindow` is not between 1 second and 10 minutes.
  * @throws \{MicrovmLaunchError\} When `RunMicrovm` fails after all retries.
  * @throws \{MicrovmDeliveryError\} When HTTP delivery fails after all retries,
- * or the route rejects the job.
+ * or the route rejects the job. Its subclass `MicrovmNotRunningError` means
+ * that CreateMicrovmAuthToken reported the MicroVM removed.
  * @throws \{MicrovmJobFailedError\} When the MicroVM reports a failure.
  * @throws \{MicrovmTimeoutError\} When no result or heartbeat arrives in time.
  *

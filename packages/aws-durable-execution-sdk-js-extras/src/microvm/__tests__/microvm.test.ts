@@ -585,10 +585,21 @@ describe("microvm with request delivery", () => {
     const client = new FakeMicrovmsClient();
     const endpoint = new FakeEndpoint();
 
-    const { execution } = await run(client, endpoint, { path: "/clone-build" });
+    const { runner, execution } = await run(client, endpoint, {
+      path: "/clone-build",
+    });
 
     expect(execution.getStatus()).toBe("SUCCEEDED");
     expect(execution.getResult()).toEqual({ passed: true });
+    // A single job never resumes its MicroVM. So its launch checkpoint has
+    // no resume mode.
+    expect(
+      runner.getOperation("build.launch").getStepDetails()?.result,
+    ).toEqual({
+      microvmId: "mvm-1",
+      endpoint: "mvm-1.lambda-microvm.us-east-1.on.aws",
+      delivery: "http",
+    });
 
     const launch = client.runInputs[0];
     const region = process.env.AWS_REGION ?? "";

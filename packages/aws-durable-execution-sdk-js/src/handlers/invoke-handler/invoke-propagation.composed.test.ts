@@ -107,7 +107,11 @@ class InvokeService implements DurableExecutionClient {
     handler: (event: unknown, ctx: DurableContext) => Promise<unknown>,
     plugins: DurableInstrumentationPlugin[] = [],
   ) {
-    return withDurableExecution(handler, { plugins })(
+    return withDurableExecution(handler, {
+      plugins: plugins.map((plugin) => ({
+        createPlugin: () => ({ ...plugin }),
+      })),
+    })(
       new DurableExecutionInvocationInputWithClient(
         {
           DurableExecutionArn: executionArn,

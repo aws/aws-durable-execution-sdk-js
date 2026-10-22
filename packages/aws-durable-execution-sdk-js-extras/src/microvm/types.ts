@@ -124,7 +124,14 @@ export interface MicrovmBaseConfig {
    */
   client?: LambdaMicrovmsClient;
 
-  /** The fetch implementation for HTTP delivery. Defaults to the global `fetch`. */
+  /**
+   * The fetch implementation for HTTP delivery. Defaults to the global `fetch`.
+   *
+   * A custom `fetch` must honor `init.redirect`. The request step sets it to
+   * `"manual"`. A redirect that the `fetch` follows anyway still fails the
+   * delivery, but only after the target has received the request and its
+   * auth token.
+   */
   fetch?: typeof fetch;
 }
 
@@ -359,7 +366,9 @@ export interface MicrovmSession {
    * @throws \{MicrovmNotRunningError\} When the session's MicroVM has ended,
    * and the session checks the MicroVM state before each job. It checks with
    * `autoSuspendOnIdle: true` or an `idlePolicy`. Otherwise an ended MicroVM
-   * fails the job with {@link MicrovmDeliveryError} after the retries.
+   * fails the job with {@link MicrovmDeliveryError} after the retries. Every
+   * session also reports it when CreateMicrovmAuthToken reports the MicroVM
+   * removed.
    * @throws \{MicrovmDeliveryError\} When the request fails after all
    * retries, or the route rejects the job.
    * @throws \{TypeError\} When `context` is not a durable context, or

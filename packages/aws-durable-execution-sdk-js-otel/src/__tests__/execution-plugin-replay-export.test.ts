@@ -8,7 +8,10 @@ import type {
   InvocationInfo,
   OperationEndInfo,
 } from "@aws/durable-execution-sdk-js";
-import { ExecutionOtelPlugin } from "../execution-plugin";
+import {
+  ExecutionOtelPlugin,
+  createExecutionOtelPluginFactory,
+} from "../execution-plugin";
 import { deriveSpanIdFromOperationId } from "../deterministic-id-generator";
 
 const invocation: InvocationInfo = {
@@ -35,8 +38,8 @@ describe("execution view external completion exports", () => {
     context.disable();
     trace.disable();
   });
-  function plugin(): ExecutionOtelPlugin {
-    return new ExecutionOtelPlugin({
+  function plugin(info: InvocationInfo = invocation): ExecutionOtelPlugin {
+    return createExecutionOtelPluginFactory({
       contextExtractor: () => undefined,
       tracerProviderFactory: (createIdGenerator) => {
         const provider = new NodeTracerProvider({
@@ -46,7 +49,7 @@ describe("execution view external completion exports", () => {
         providers.push(provider);
         return provider;
       },
-    });
+    }).createPlugin(info);
   }
   it("uses a known completion time when a deferred failure has no start timestamp", async () => {
     const failure: OperationEndInfo = {
@@ -115,12 +118,12 @@ describe("execution view external completion exports", () => {
         await initial.onOperationStart(completion);
         await initial.onInvocationEnd({ ...invocation, status: "PENDING" });
         for (let resume = 0; resume < 3; resume++) {
-          const current = plugin();
           const info = {
             ...invocation,
             requestId: `resume-${resume}`,
             isFirstInvocation: false,
           };
+          const current = plugin(info);
           await current.onInvocationStart(info);
           await current.onOperationStart({
             ...completion,

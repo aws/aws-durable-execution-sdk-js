@@ -13,15 +13,16 @@ import {
   NodeTracerProvider,
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-node";
-import { ExecutionOtelPlugin } from "../execution-plugin";
-import { InvocationOtelPlugin } from "../invocation-plugin";
+import { createExecutionOtelPluginFactory } from "../execution-plugin";
+import { createInvocationOtelPluginFactory } from "../invocation-plugin";
 
 beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
 
 it.each(
-  [ExecutionOtelPlugin, InvocationOtelPlugin].flatMap((Plugin) =>
-    [false, true].map((callbackAtRoot) => ({ Plugin, callbackAtRoot })),
+  [createExecutionOtelPluginFactory, createInvocationOtelPluginFactory].flatMap(
+    (Plugin) =>
+      [false, true].map((callbackAtRoot) => ({ Plugin, callbackAtRoot })),
   ),
 )(
   "$Plugin preserves service-visible callback names (callbackAtRoot=$callbackAtRoot)",
@@ -63,7 +64,7 @@ it.each(
       await released;
       return "saved";
     });
-    const plugin = new Plugin({
+    const plugin = Plugin({
       contextExtractor: () => undefined,
       tracerProviderFactory: (ids) =>
         (provider = new NodeTracerProvider({
@@ -84,12 +85,14 @@ it.each(
         plugins: [
           plugin,
           {
-            async onInvocationStart(info) {
-              starts.push(info);
-            },
-            async onOperationStart(info) {
-              operations.push(info);
-            },
+            createPlugin: () => ({
+              async onInvocationStart(info) {
+                starts.push(info);
+              },
+              async onOperationStart(info) {
+                operations.push(info);
+              },
+            }),
           },
         ],
       },
