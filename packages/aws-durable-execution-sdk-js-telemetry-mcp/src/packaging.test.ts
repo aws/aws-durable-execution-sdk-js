@@ -50,16 +50,24 @@ for (const dir of readdirSync(PACKAGES_DIR)) {
 const self = read(join(__dirname, "..", "package.json")) as Manifest;
 
 describe("telemetry release versions", () => {
+  // The exporter and MCP server launched as stable 1.0.0. A change of major version is a
+  // breaking release and must be made deliberately, so the major is pinned here. Patch
+  // and minor releases (1.0.1, 1.2.0, 1.1.0-rc.1) must pass without editing this file.
+  const STABLE_MAJOR = 1;
+  const SEMVER = /^(\d+)\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+
   const lockfile = JSON.parse(
     readFileSync(join(PACKAGES_DIR, "..", "package-lock.json"), "utf-8"),
   ) as { packages: Record<string, Manifest> };
 
   it.each(["telemetry-exporter", "telemetry-mcp"])(
-    "keeps %s at 1.0.0 in its manifest and the root lockfile",
+    "keeps %s on major version 1 in its manifest and the root lockfile",
     (packageName) => {
       const dir = `aws-durable-execution-sdk-js-${packageName}`;
       const manifest = read(join(PACKAGES_DIR, dir, "package.json"));
-      expect(manifest?.version).toBe("1.0.0");
+      const match = SEMVER.exec(manifest?.version ?? "");
+      expect(match).not.toBeNull();
+      expect(Number(match?.[1])).toBe(STABLE_MAJOR);
       expect(lockfile.packages[`packages/${dir}`]?.version).toBe(
         manifest?.version,
       );
