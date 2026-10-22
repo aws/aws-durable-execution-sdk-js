@@ -1,0 +1,453 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { createRetryStrategy } from "../src/index.js";
+import { createInMemoryService, runDurable } from "../src/testing/index.js";
+
+const T0 = 1_700_000_000;
+
+// Applies updates with the current token, like one SDK request.
+async function checkpoint(service, token, ...Updates) {
+  const res = await service.client.checkpoint({
+    DurableExecutionArn: "arn",
+    CheckpointToken: token,
+    Updates,
+  });
+  return res;
+}
+const ids = (event) => event.InitialExecutionState.Operations.map((o) => o.Id);
+
+test("runDurable runs steps and returns the result and operations", async () => {
+  const run = await runDurable({
+    input: { n: 2 },
+    workflow: async ({ event, ctx }) => {
+      const a = await ctx.step({ name: "a", fn: () => event.n + 1 });
+      const b = await ctx.step({ name: "b", fn: () => a * 10 });
+      return { b };
+    },
+  });
+  assert.equal(run.status, "SUCCEEDED");
+  assert.deepEqual(run.result, { b: 30 });
+  assert.equal(run.invocations, 1);
+  assert.deepEqual(
+    run.operations.map((o) => [o.Type, o.Name, o.Status]),
+    [
+      ["EXECUTION", undefined, "SUCCEEDED"],
+      ["STEP", "a", "SUCCEEDED"],
+      ["STEP", "b", "SUCCEEDED"],
+    ],
+  );
+  assert.equal(
+    run.operations[0].ExecutionDetails.InputPayload,
+    JSON.stringify({ n: 2 }),
+  );
+  const a = run.getOperation("a");
+  assert.deepEqual(a.StepDetails, { Attempt: 1, Result: "3" });
+  assert.equal(a.StartTimestamp, T0);
+  assert.equal(run.getOperation("missing"), undefined);
+});
+
+test("step retry advances the virtual clock and re-invokes", async () => {
+  const attempts = [];
+  const run = await runDurable({
+    workflow: ({ ctx }) =>
+      ctx.step({
+        name: "flaky",
+        retryStrategy: () => ({ shouldRetry: true, delaySeconds: 10 }),
+        fn: ({ attempt }) => {
+          attempts.push(attempt);
+          if (attempt < 3) throw new Error(`fail ${attempt}`);
+          return "ok";
+        },
+      }),
+  });
+  assert.equal(run.status, "SUCCEEDED");
+  assert.equal(run.result, "ok");
+  assert.equal(run.invocations, 3);
+  assert.deepEqual(attempts, [1, 2, 3]);
+  const op = run.getOperation("flaky");
+  assert.equal(op.StepDetails.Attempt, 3);
+  // The second retry was scheduled 10 s after the first one became due.
+  assert.equal(op.StepDetails.NextAttemptTimestamp - op.StartTimestamp, 20);
+  assert.equal(op.EndTimestamp, T0 + 20);
+  assert.equal(op.StepDetails.Error, undefined);
+});
+
+test("a step that exhausts its retries fails the execution", async () => {
+  const run = await runDurable({
+    workflow: async ({ ctx }) => {
+      await ctx.step({
+        name: "bad",
+        retryStrategy: createRetryStrategy({ maxAttempts: 2, jitter: false }),
+        fn: () => {
+          throw new TypeError("nope");
+        },
+      });
+    },
+  });
+  assert.equal(run.status, "FAILED");
+  assert.equal(run.error.ErrorType, "TypeError");
+  assert.equal(run.error.ErrorMessage, "nope");
+  assert.equal(run.invocations, 2);
+  const op = run.getOperation("bad");
+  assert.equal(op.Status, "FAILED");
+  assert.equal(op.StepDetails.Attempt, 2);
+  assert.equal(op.StepDetails.Error.ErrorType, "TypeError");
+});
+
+test("replay does not call completed step functions again", async () => {
+  const calls = { a: 0, b: 0, c: 0 };
+  const run = await runDurable({
+    pageSize: 1,
+    workflow: async ({ ctx }) => {
+      await ctx.step({ name: "a", fn: () => ++calls.a });
+      await ctx.step({ name: "b", fn: () => ++calls.b });
+      return ctx.step({
+        name: "c",
+        retryStrategy: () => ({ shouldRetry: true, delaySeconds: 1 }),
+        fn: () => {
+          if (++calls.c < 3) throw new Error("again");
+          return "done";
+        },
+      });
+    },
+  });
+  assert.equal(run.status, "SUCCEEDED");
+  assert.equal(run.result, "done");
+  assert.equal(run.invocations, 3);
+  assert.deepEqual(calls, { a: 1, b: 1, c: 3 });
+});
+
+test("pageSize serves the state in pages through getExecutionState", async () => {
+  const service = createInMemoryService({ input: 1, pageSize: 1 });
+  let token = service.event().CheckpointToken;
+  for (const Id of ["s1", "s2"]) {
+    token = (
+      await checkpoint(service, token, { Id, Type: "STEP", Action: "START" })
+    ).CheckpointToken;
+  }
+  const event = service.event();
+  assert.deepEqual(ids(event), ["execution"]);
+  assert.equal(event.InitialExecutionState.NextMarker, "1");
+  const req = {
+    DurableExecutionArn: "arn",
+    CheckpointToken: event.CheckpointToken,
+  };
+  const p1 = await service.client.getExecutionState({ ...req, Marker: "1" });
+  assert.deepEqual(
+    [p1.Operations.map((o) => o.Id), p1.NextMarker],
+    [["s1"], "2"],
+  );
+  const p2 = await service.client.getExecutionState({ ...req, Marker: "2" });
+  assert.deepEqual(
+    [p2.Operations.map((o) => o.Id), p2.NextMarker],
+    [["s2"], undefined],
+  );
+});
+
+test("an invocation error is retried with a new invocation", async () => {
+  let first = true;
+  const run = await runDurable({
+    workflow: async ({ ctx }) => {
+      const v = await ctx.step({ name: "s", fn: () => 7 });
+      // A BigInt cannot be serialized, so the handler wrapper throws: an invocation error.
+      if (first) {
+        first = false;
+        return 1n;
+      }
+      return v;
+    },
+  });
+  assert.equal(run.status, "SUCCEEDED");
+  assert.equal(run.result, 7);
+  assert.equal(run.invocations, 2);
+});
+
+test("exceeding maxInvocations throws with the last invocation error", async () => {
+  await assert.rejects(
+    runDurable({ maxInvocations: 3, workflow: async () => 1n }),
+    (err) => {
+      assert.match(err.message, /did not finish in 3 invocations/);
+      assert.match(err.message, /BigInt/);
+      assert.equal(err.cause.name, "TypeError");
+      return true;
+    },
+  );
+});
+
+test("a large result arrives through the EXECUTION checkpoint", async () => {
+  const big = "x".repeat(6 * 1024 * 1024);
+  const run = await runDurable({ workflow: async () => big });
+  assert.equal(run.status, "SUCCEEDED");
+  assert.equal(run.result, big);
+  assert.equal(run.operations.length, 1);
+  assert.equal(run.operations[0].Status, "SUCCEEDED");
+});
+
+test("a stale checkpoint token is rejected", async () => {
+  const service = createInMemoryService();
+  const old = service.event().CheckpointToken;
+  const res = await checkpoint(service, old, {
+    Id: "s",
+    Type: "STEP",
+    Action: "START",
+  });
+  assert.notEqual(res.CheckpointToken, old);
+  await assert.rejects(checkpoint(service, old), {
+    name: "InvalidParameterValueException",
+    status: 400,
+    message: "Invalid checkpoint token",
+  });
+  // A new invocation gets a new token, which invalidates the previous one.
+  service.event();
+  await assert.rejects(checkpoint(service, res.CheckpointToken), {
+    name: "InvalidParameterValueException",
+  });
+});
+
+test("STEP RETRY stores Payload and becomes READY when due", async () => {
+  const service = createInMemoryService();
+  const token = service.event().CheckpointToken;
+  const step = {
+    Id: "w",
+    Type: "STEP",
+    SubType: "WaitForCondition",
+    Name: "n",
+  };
+  const res = await checkpoint(
+    service,
+    token,
+    { ...step, Action: "START" },
+    {
+      ...step,
+      Action: "RETRY",
+      Payload: '{"s":1}',
+      StepOptions: { NextAttemptDelaySeconds: 5 },
+    },
+  );
+  assert.deepEqual(res.NewExecutionState.Operations, [
+    {
+      ...step,
+      StartTimestamp: T0,
+      Status: "PENDING",
+      StepDetails: {
+        Attempt: 1,
+        Result: '{"s":1}',
+        NextAttemptTimestamp: T0 + 5,
+      },
+    },
+  ]);
+  assert.equal(service.advance(), true);
+  assert.equal(service.now, T0 + 5);
+  assert.equal(service.ops.get("w").Status, "READY");
+  assert.equal(service.advance(), false);
+});
+
+test("WAIT ends at ScheduledEndTimestamp when time advances", async () => {
+  const service = createInMemoryService();
+  const token = service.event().CheckpointToken;
+  const res = await checkpoint(service, token, {
+    Id: "w",
+    Type: "WAIT",
+    SubType: "Wait",
+    Action: "START",
+    WaitOptions: { WaitSeconds: 30 },
+  });
+  const [op] = res.NewExecutionState.Operations;
+  assert.equal(op.Status, "STARTED");
+  assert.equal(op.WaitDetails.ScheduledEndTimestamp, T0 + 30);
+  assert.equal(await service.boundary(), 0);
+  assert.equal(service.advance(), true);
+  assert.equal(service.now, T0 + 30);
+  assert.equal(service.ops.get("w").Status, "SUCCEEDED");
+  assert.equal(service.ops.get("w").EndTimestamp, T0 + 30);
+  assert.equal(service.advance(), false);
+});
+
+test("CALLBACK answers land at the boundary and timeouts when due", async () => {
+  const seen = [];
+  const service = createInMemoryService({
+    onCallback: ({ callbackId, name }) => {
+      seen.push([name, callbackId]);
+      if (name === "ok") return { result: '"yes"' };
+      if (name === "err")
+        return { error: { ErrorType: "Denied", ErrorMessage: "no" } };
+      return undefined;
+    },
+  });
+  const token = service.event().CheckpointToken;
+  const cb = (Name, CallbackOptions) => ({
+    Id: Name,
+    Name,
+    Type: "CALLBACK",
+    SubType: "Callback",
+    Action: "START",
+    ...(CallbackOptions && { CallbackOptions }),
+  });
+  const res = await checkpoint(
+    service,
+    token,
+    cb("ok"),
+    cb("err"),
+    cb("open"),
+    cb("late", { TimeoutSeconds: 60 }),
+  );
+  const ops = res.NewExecutionState.Operations;
+  assert.ok(ops.every((o) => o.Status === "STARTED"));
+  const cbIds = ops.map((o) => o.CallbackDetails.CallbackId);
+  assert.equal(new Set(cbIds).size, 4);
+
+  assert.equal(await service.boundary(), 2);
+  assert.deepEqual(
+    seen,
+    ops.map((o) => [o.Name, o.CallbackDetails.CallbackId]),
+  );
+  const get = (id) => service.ops.get(id);
+  assert.equal(get("ok").Status, "SUCCEEDED");
+  assert.deepEqual(get("ok").CallbackDetails, {
+    CallbackId: cbIds[0],
+    Result: '"yes"',
+  });
+  assert.equal(get("err").Status, "FAILED");
+  assert.deepEqual(get("err").CallbackDetails.Error, {
+    ErrorType: "Denied",
+    ErrorMessage: "no",
+  });
+  assert.equal(get("open").Status, "STARTED");
+
+  assert.equal(service.advance(), true);
+  assert.equal(service.now, T0 + 60);
+  assert.equal(get("late").Status, "TIMED_OUT");
+  assert.deepEqual(get("late").CallbackDetails, {
+    CallbackId: cbIds[3],
+    Error: { ErrorMessage: "Callback timed out" },
+  });
+  // The open callback has no timeout, so nothing can change any more.
+  assert.equal(service.advance(), false);
+  assert.equal(await service.boundary(), 0);
+  assert.equal(seen.length, 4);
+});
+
+test("CHAINED_INVOKE runs the registered function and lands at the boundary", async () => {
+  const service = createInMemoryService({
+    functions: {
+      double: async (x) => x * 2,
+      boom: () => {
+        throw new RangeError("bad");
+      },
+      nothing: () => undefined,
+    },
+  });
+  const token = service.event().CheckpointToken;
+  const inv = (Id, FunctionName, Payload) => ({
+    Id,
+    Type: "CHAINED_INVOKE",
+    SubType: "ChainedInvoke",
+    Action: "START",
+    ChainedInvokeOptions: { FunctionName },
+    ...(Payload !== undefined && { Payload }),
+  });
+  const res = await checkpoint(
+    service,
+    token,
+    inv("d", "double", "21"),
+    inv("b", "boom"),
+    inv("n", "nothing"),
+    inv("m", "missing"),
+  );
+  assert.ok(
+    res.NewExecutionState.Operations.every((o) => o.Status === "STARTED"),
+  );
+  assert.equal(await service.boundary(), 4);
+  const get = (id) => service.ops.get(id);
+  assert.deepEqual(
+    [get("d").Status, get("d").ChainedInvokeDetails],
+    ["SUCCEEDED", { Result: "42" }],
+  );
+  assert.deepEqual(
+    [get("b").Status, get("b").ChainedInvokeDetails],
+    ["FAILED", { Error: { ErrorType: "RangeError", ErrorMessage: "bad" } }],
+  );
+  assert.deepEqual(
+    [get("n").Status, get("n").ChainedInvokeDetails],
+    ["SUCCEEDED", {}],
+  );
+  assert.equal(get("m").Status, "FAILED");
+  assert.equal(
+    get("m").ChainedInvokeDetails.Error.ErrorType,
+    "ResourceNotFoundException",
+  );
+});
+
+test("completed contexts hide their descendants unless ReplayChildren is set", async () => {
+  const service = createInMemoryService();
+  let token = service.event().CheckpointToken;
+  const ctxOp = (Id, ParentId) => ({
+    Id,
+    ParentId,
+    Type: "CONTEXT",
+    SubType: "RunInChildContext",
+  });
+  const stepOp = (Id, ParentId) => ({
+    Id,
+    ParentId,
+    Type: "STEP",
+    SubType: "Step",
+  });
+  const send = async (...u) => {
+    const res = await checkpoint(service, token, ...u);
+    token = res.CheckpointToken;
+    return res;
+  };
+  await send(
+    { ...ctxOp("c"), Action: "START" },
+    { ...stepOp("c-s", "c"), Action: "START" },
+    { ...ctxOp("c-c", "c"), Action: "START" },
+    { ...stepOp("c-c-s", "c-c"), Action: "START" },
+    { ...ctxOp("r"), Action: "START" },
+    { ...stepOp("r-s", "r"), Action: "START" },
+    { ...ctxOp("f"), Action: "START" },
+    { ...stepOp("f-s", "f"), Action: "START" },
+  );
+  assert.deepEqual(ids(service.event()), [
+    "execution",
+    "c",
+    "c-s",
+    "c-c",
+    "c-c-s",
+    "r",
+    "r-s",
+    "f",
+    "f-s",
+  ]);
+  token = service.event().CheckpointToken;
+  const res = await send(
+    { ...ctxOp("c"), Action: "SUCCEED", Payload: "1" },
+    {
+      ...ctxOp("r"),
+      Action: "SUCCEED",
+      ContextOptions: { ReplayChildren: true },
+    },
+    { ...ctxOp("f"), Action: "FAIL", Error: { ErrorMessage: "x" } },
+  );
+  // Checkpoint responses are not pruned.
+  assert.deepEqual(
+    res.NewExecutionState.Operations.map((o) => o.Id),
+    ["c", "r", "f"],
+  );
+  assert.deepEqual(service.ops.get("c").ContextDetails, {
+    Result: "1",
+    ReplayChildren: false,
+  });
+  assert.equal(service.ops.get("r").ContextDetails.ReplayChildren, true);
+  assert.equal(service.ops.get("f").Status, "FAILED");
+  const event = service.event();
+  assert.deepEqual(ids(event), ["execution", "c", "r", "r-s", "f"]);
+  const state = await service.client.getExecutionState({
+    DurableExecutionArn: "arn",
+    CheckpointToken: event.CheckpointToken,
+  });
+  assert.deepEqual(
+    state.Operations.map((o) => o.Id),
+    ["execution", "c", "r", "r-s", "f"],
+  );
+});
