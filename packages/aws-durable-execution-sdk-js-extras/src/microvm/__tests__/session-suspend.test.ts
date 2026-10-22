@@ -523,7 +523,7 @@ describe("microvmSession with a MicroVM that suspends itself", () => {
       const execution = await executionPromise;
 
       expect(execution.getStatus()).toBe("SUCCEEDED");
-      const expected = `MicroVM "gone": the job could not be delivered: MicroVM mvm-1 no longer exists. A session MicroVM lives at most its session timeout plus 5 minutes, and never longer than 8 hours. ${operation} request ID: req-123.`;
+      const expected = `MicroVM "gone": the job could not be delivered: MicroVM mvm-1 no longer exists. A MicroVM lives at most its \`timeout\` plus 5 minutes, and never longer than 8 hours. ${operation} request ID: req-123.`;
       // The first entry is the first run. Each later entry is a replay.
       expect(caught.length).toBeGreaterThanOrEqual(2);
       for (const error of caught) {

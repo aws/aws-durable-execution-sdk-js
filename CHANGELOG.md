@@ -266,6 +266,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   AWS SDK error carries none. `MicrovmStateError` also keeps the AWS SDK error as its `cause`.
   Only the retry strategy and the plugin hooks of a live step attempt see `cause`. A replayed step
   rebuilds the error from the checkpoint, without it.
+- A MicroVM job in `@aws/durable-execution-sdk-js-extras` could fail with a plain
+  `MicrovmDeliveryError` for a removed MicroVM. The request step calls CreateMicrovmAuthToken
+  before the first request, and again after a 401 or 403. The API model lists
+  `ResourceNotFoundException` for that call. The step rethrew that error. So a handler that catches
+  `MicrovmNotRunningError` to start a new session did not catch this case. The step now treats
+  this answer as it treats the same answer from GetMicrovm and ResumeMicrovm. The job fails at once
+  with `MicrovmNotRunningError`, and its message ends with
+  `CreateMicrovmAuthToken request ID: <id>.`. This applies to `microvm` jobs over HTTP and to every
+  session job. A custom retry strategy now receives `MicrovmStateError` for this answer, with the
+  AWS SDK error as its `cause`. Before, it received the AWS SDK error. The live service's answer for
+  a removed MicroVM is not verified.
+- Other failed AWS calls of the MicroVM operations in `@aws/durable-execution-sdk-js-extras`
+  reported no request ID. The SDK checkpoints only the message of a step failure, and an AWS SDK
+  message has no request ID. So a support case had no request ID to quote. The message now ends with
+  `<Operation> request ID: <id>.` in these cases:
+  - A GetMicrovm answer of `TERMINATING` or `TERMINATED`. `MicrovmNotRunningError` ends with
+    `GetMicrovm request ID: <id>.`.
+  - A RunMicrovm failure. `MicrovmLaunchError` ends with `RunMicrovm request ID: <id>.`.
+  - Any other error of GetMicrovm, ResumeMicrovm, or CreateMicrovmAuthToken, such as
+    `AccessDeniedException`. `MicrovmDeliveryError` ends with the request ID of that call.
+  - A TerminateMicrovm failure. The terminate step's record in the execution history ends with
+    `TerminateMicrovm request ID: <id>.`. The operation still returns the job's outcome.
+  - A RunMicrovm or CreateMicrovmAuthToken answer without a required field, such as `microvmId`.
+
+  For a rethrown AWS SDK error, each step adds the request ID to the message of the error object
+  itself. It does not wrap the error. So the error keeps its class, `name`, `code`, `$retryable`,
+  and `$metadata`. So the default and custom retry strategies decide as before for such an error.
+  A message has no request ID when the AWS SDK error or output carries none, for example after a
+  connection failure. Only an error of the Lambda MicroVMs service gets a request ID. An error of
+  another service keeps its message. For example, a credential provider that assumes a role calls
+  STS inside each call, and its error carries the request ID of STS. When a custom client throws one
+  error object for several calls, the message names only the last call. (#1050)
 
 - An `InvalidRunHookPayloadError` for a `runHookPayload` that is not JSON now keeps the parser's
   `SyntaxError` as its `cause`. Its message names the position of the error.
