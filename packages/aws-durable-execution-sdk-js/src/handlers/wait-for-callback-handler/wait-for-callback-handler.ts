@@ -176,7 +176,12 @@ export const createWaitForCallbackHandler = <Logger extends DurableLogger>(
             ) {
               return originalError;
             }
-            // Map step errors to CallbackSubmitterError
+            // Map step errors to CallbackSubmitterError. The context's
+            // checkpoint holds the unwrapped error (for example the type the
+            // submitter threw), which fromErrorObject rebuilds as a StepError
+            // whose cause carries that type. A callback failed externally with
+            // an explicit ErrorType checkpoints that type too, so it is mapped
+            // here as well, on the live path and on replay alike.
             if (originalError.errorType === "StepError") {
               return new CallbackSubmitterError(
                 originalError.message,

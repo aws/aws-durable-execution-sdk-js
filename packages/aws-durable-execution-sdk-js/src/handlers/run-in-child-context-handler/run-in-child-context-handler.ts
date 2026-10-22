@@ -19,7 +19,7 @@ import {
   safeSerialize,
   safeDeserialize,
 } from "../../errors/serdes-errors/serdes-errors";
-import { createErrorObjectFromError } from "../../utils/error-object/error-object";
+import { createContextFailureErrorObject } from "../../utils/error-object/error-object";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import {
   DurableOperationError,
@@ -521,8 +521,10 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       },
     );
 
-    // Always wrap in ChildContextError for consistent error handling
-    const errorObject = createErrorObjectFromError(error);
+    // Checkpoint the error the SDK wrappers carry (for example the user's
+    // PaymentError rather than the StepError around it), and throw the error
+    // rebuilt from that checkpoint, so live and replay throw the same shape.
+    const errorObject = createContextFailureErrorObject(error);
     const reconstructedError =
       DurableOperationError.fromErrorObject(errorObject);
 
@@ -537,7 +539,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         Action: OperationAction.FAIL,
         SubType: subType,
         Type: OperationType.CONTEXT,
-        Error: createErrorObjectFromError(error),
+        Error: errorObject,
         // Preserve the children of a FAILED context too when within the
         // configured depth — failures are often the most important thing to
         // observe (e.g. emitMode "on-failure"). A failed context throws its

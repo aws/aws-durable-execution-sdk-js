@@ -314,6 +314,11 @@ export const SDK_ERROR_TYPES: ReadonlySet<string> = new Set([
  * `Error` thrown by the handler, as `StepError`, and keeps the original type
  * as `cause.name`. So `errorType` alone cannot tell a failed step from a
  * failed handler. So rule 2 also requires `cause.name` to match the type.
+ *
+ * The SDK checkpoints a failed context with the error its SDK wrappers carry,
+ * so a step or submitter that failed inside the session is wrapped by rule 3.
+ * Rule 2 applies to an SDK error that wraps nothing, and to a checkpoint
+ * written by an older SDK, which holds the wrapper's type.
  */
 export function sessionErrorMapper(
   error: DurableOperationError,

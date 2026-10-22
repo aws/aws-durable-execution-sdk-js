@@ -92,6 +92,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   callback handlers and replayed operations already do. Before, `cause.name` was always
   `"Error"`. A cause is now also created when the remote error has a type but no message.
 
+- A failed child context, map item, parallel branch, promise combinator, or `waitForCallback`
+  now checkpoints the error that caused the failure instead of the SDK wrapper around it. The
+  SDK unwraps its own wrappers (`StepError`, `CallbackError`, `CallbackExternalError`,
+  `CallbackSubmitterError`, `InvokeError`, `ChildContextError`, `PromiseCombinatorError`,
+  `WaitForConditionError`; at most 16, cycle-safe) and writes the wrapped error's type,
+  message, data, and stack trace. `CallbackTimeoutError` and `BatchCompletionError` are never
+  unwrapped. The live path now throws the error rebuilt from that checkpoint, so live and
+  replay throw the same shape. User-visible changes:
+  - A context whose step threw `PaymentError` throws `ChildContextError` → `StepError` →
+    cause named `"PaymentError"`. Before, the innermost cause was named `"StepError"`. The
+    same applies to `PromiseCombinatorError`, map items, parallel branches, and
+    `CallbackSubmitterError`.
+  - The context's checkpoint `ErrorType` (and `OperationInfo.error` for plugins) is the user's
+    type instead of `"StepError"`.
+  - `waitForCallback` failed externally with an explicit `ErrorType` now throws
+    `CallbackSubmitterError` (cause chain ends at that type), live and on replay. Before, it
+    threw `CallbackExternalError` whose cause was named `"CallbackExternalError"`. A failure
+    with no type still throws `CallbackExternalError`, and a timeout `CallbackTimeoutError`.
+  - A callback failed externally with no `ErrorType` (missing, empty, or blank) now has
+    `cause.name` `"CallbackExternalError"` (`"CallbackTimeoutError"` for a timeout) instead of
+    `"Error"`, so it is distinct from the explicit type `"Error"`.
+  - `OperationInfo.error` of a `CALLBACK` operation is the `CallbackExternalError` or
+    `CallbackTimeoutError` the callback handler throws, instead of a `StepError`.
+
+  Checkpoints written by older SDK versions still replay: their wrapper type is rebuilt as
+  before.
+
 - **OpenTelemetry**: `FAILED`, `TIMED_OUT`, and `STOPPED` operations remain `ERROR` in both views,
   including later-invocation continuations, even without error details.
   Exception events still require an actual error object.

@@ -201,10 +201,10 @@ describe("microvmSession", () => {
     expect(endpoint.requests).toHaveLength(2);
   });
 
-  it("reports a failed parallel job as PromiseCombinatorError, with the MicroVM type only in the cause chain", async () => {
-    // ctx.promise.all maps every failure to PromiseCombinatorError. The
-    // checkpoint of the failed session keeps only that outer type. So the
-    // caller of the session sees no MicroVM type at all.
+  it("reports a failed parallel job to the session's caller as the MicroVM error", async () => {
+    // ctx.promise.all maps every failure to PromiseCombinatorError. The SDK
+    // checkpoints the failed session with the error that wrapper carries, the
+    // MicroVM job failure, so the session's error mapper restores its class.
     const chain = (error: unknown): string[] => {
       const names: string[] = [];
       for (let e = error; e instanceof Error; e = e.cause) {
@@ -249,8 +249,8 @@ describe("microvmSession", () => {
         "Error(MicrovmJobFailedError)",
       ],
       outside: [
-        "PromiseCombinatorError(PromiseCombinatorError)",
-        "Error(PromiseCombinatorError)",
+        "MicrovmJobFailedError(MicrovmJobFailedError)",
+        "Error(MicrovmJobFailedError)",
       ],
     });
   });

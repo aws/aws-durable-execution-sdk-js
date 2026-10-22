@@ -7,8 +7,7 @@ import { OperationStatus } from "../../types/wire";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 import {
   CallbackError,
-  CallbackExternalError,
-  CallbackTimeoutError,
+  createCallbackFailureError,
 } from "../../errors/durable-error/durable-error";
 import { Serdes } from "../../utils/serdes/serdes";
 import { log } from "../../utils/logger/logger";
@@ -79,27 +78,7 @@ export const createCallbackPromise = <T>(
     const error = callbackData?.Error;
     const isTimeout = stepData?.Status === OperationStatus.TIMED_OUT;
 
-    const callbackError = error
-      ? ((): CallbackError => {
-          const cause = new Error(error.ErrorMessage);
-          cause.name = error.ErrorType || "Error";
-          cause.stack = error.StackTrace?.join("\n");
-          if (isTimeout) {
-            return new CallbackTimeoutError(
-              error.ErrorMessage || "Callback timed out",
-              cause,
-              error.ErrorData,
-            );
-          }
-          return new CallbackExternalError(
-            error.ErrorMessage || "Callback failed",
-            cause,
-            error.ErrorData,
-          );
-        })()
-      : isTimeout
-        ? new CallbackTimeoutError("Callback timed out")
-        : new CallbackExternalError("Callback failed");
+    const callbackError = createCallbackFailureError(error, isTimeout);
 
     const operationInfo = toOperationInfo(stepData);
     backfillOperationInfo(operationInfo, opInfo);
