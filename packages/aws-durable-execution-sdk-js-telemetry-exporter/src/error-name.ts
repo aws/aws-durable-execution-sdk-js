@@ -50,6 +50,8 @@ const SDK_WRAPPER_TYPES: ReadonlySet<string> = new Set([
 const CALLBACK_TIMEOUT_ERROR = "CallbackTimeoutError";
 /** Name of the SDK error thrown for a callback that was failed externally. */
 const CALLBACK_EXTERNAL_ERROR = "CallbackExternalError";
+/** Name of the SDK error thrown for a chained invoke that failed. */
+const INVOKE_ERROR = "InvokeError";
 
 /** Maximum number of SDK wrappers unwrapped, and of nested operations searched. */
 const MAX_DEPTH = 16;
@@ -100,11 +102,12 @@ function wrapperType(error: ErrorLike): string | undefined {
 }
 
 /**
- * Whether a cause name carries no type. The SDK names a callback failure's cause
- * `"Error"` when the external sender gave no `ErrorType`, so `"Error"` counts as
- * no type here (and only here).
+ * Whether a cause name carries no type. The SDK names the cause it synthesizes
+ * for a callback failure (and, in some SDK versions, for an invoke failure)
+ * `"Error"` when it has no `ErrorType`, so `"Error"` counts as no type here (and
+ * only for those two causes).
  */
-function isUntypedCallbackCause(name: unknown): boolean {
+function isUntypedCause(name: unknown): boolean {
   return (
     typeof name !== "string" ||
     name.trim() === "" ||
@@ -119,8 +122,20 @@ function isUntypedCallbackCause(name: unknown): boolean {
  * limit, or a callback failure with no type).
  */
 function chainEnd(error: ErrorLike): ErrorLike {
+  return walkChain(error).end;
+}
+
+/**
+ * {@link chainEnd}, plus the type of the last SDK wrapper unwrapped to reach the
+ * end (`undefined` when nothing was unwrapped).
+ */
+function walkChain(error: ErrorLike): {
+  end: ErrorLike;
+  via: string | undefined;
+} {
   const seen = new Set<ErrorLike>();
   let current = error;
+  let via: string | undefined;
   for (let depth = 0; depth < MAX_DEPTH; depth++) {
     const type = wrapperType(current);
     if (type === undefined) break;
@@ -128,16 +143,29 @@ function chainEnd(error: ErrorLike): ErrorLike {
     if (!isErrorLike(cause) || seen.has(cause) || cause === current) break;
     // An external callback failure without a type has no user error behind it
     // (the SDK synthesized the cause), so it keeps the SDK name (spec B13).
-    if (
-      type === CALLBACK_EXTERNAL_ERROR &&
-      isUntypedCallbackCause(cause.name)
-    ) {
+    if (type === CALLBACK_EXTERNAL_ERROR && isUntypedCause(cause.name)) {
       break;
     }
     seen.add(current);
+    via = type;
     current = cause;
   }
-  return current;
+  return { end: current, via };
+}
+
+/**
+ * Whether the chain of a failure ended at an invoke failure's cause that carries
+ * no type. The SDK may build the cause of a live or replayed `InvokeError` as a
+ * plain `Error` named `"Error"`, dropping the invoked function's `ErrorType`,
+ * while the failed invoke operation is rebuilt from its checkpoint with the
+ * type. Returns the cause's message, to find that operation.
+ */
+function untypedInvokeCause(
+  error: ErrorLike,
+): { message: unknown } | undefined {
+  const { end, via } = walkChain(error);
+  if (end === error || via !== INVOKE_ERROR) return undefined;
+  return isUntypedCause(end.name) ? { message: end.message } : undefined;
 }
 
 /**
@@ -214,6 +242,14 @@ export class ErrorNameResolver {
       const source = this.findFailedOperation(lost);
       if (source) return this.operationErrorName(source);
     }
+    // An invoke failure whose cause has no type: the invoked function's type is
+    // kept by the failed invoke operation's checkpoint. Without that operation,
+    // report the SDK wrapper rather than a generic "Error".
+    const invoke = untypedInvokeCause(error);
+    if (invoke) {
+      const source = this.findFailedInvoke(invoke.message);
+      return source ? this.operationErrorName(source) : INVOKE_ERROR;
+    }
     return reduceTypeName(end.name);
   }
 
@@ -227,7 +263,7 @@ export class ErrorNameResolver {
     if (op.type === "CALLBACK") {
       if (op.status === "TIMED_OUT") return CALLBACK_TIMEOUT_ERROR;
       const cause = wrapperType(error) ? error.cause : error;
-      if (!isErrorLike(cause) || isUntypedCallbackCause(cause.name)) {
+      if (!isErrorLike(cause) || isUntypedCause(cause.name)) {
         return CALLBACK_EXTERNAL_ERROR;
       }
     }
@@ -267,18 +303,37 @@ export class ErrorNameResolver {
    * to end.
    */
   private findFailedOperation(lost: LostType): OperationInfo | undefined {
+    return this.shallowestLatest((op) => {
+      if (op.type === "EXECUTION" || !isErrorLike(op.error)) return false;
+      const end = chainEnd(op.error);
+      return (
+        reduceTypeName(end.name) === lost.name && end.message === lost.message
+      );
+    });
+  }
+
+  /**
+   * The failed chained invoke an execution error with an untyped invoke cause
+   * came from: a `CHAINED_INVOKE` operation whose error chain ends at the same
+   * message. The shallowest wins; among equals, the latest to end.
+   */
+  private findFailedInvoke(message: unknown): OperationInfo | undefined {
+    return this.shallowestLatest(
+      (op) =>
+        op.type === "CHAINED_INVOKE" &&
+        isErrorLike(op.error) &&
+        chainEnd(op.error).message === message,
+    );
+  }
+
+  private shallowestLatest(
+    matches: (op: OperationInfo) => boolean,
+  ): OperationInfo | undefined {
     const depths = this.depthIndex();
     let best: OperationInfo[] = [];
     let bestDepth = Number.POSITIVE_INFINITY;
     for (const op of Object.values(this.operations)) {
-      if (op.type === "EXECUTION" || !isErrorLike(op.error)) continue;
-      const end = chainEnd(op.error);
-      if (
-        reduceTypeName(end.name) !== lost.name ||
-        end.message !== lost.message
-      ) {
-        continue;
-      }
+      if (!matches(op)) continue;
       const depth = depths.get(op.id) ?? 0;
       if (depth < bestDepth) {
         best = [op];

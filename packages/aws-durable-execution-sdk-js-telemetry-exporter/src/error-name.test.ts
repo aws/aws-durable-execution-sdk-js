@@ -188,6 +188,100 @@ describe("ErrorNameResolver.executionErrorName", () => {
     ).toBe("PaymentError");
   });
 
+  describe("an invoke failure whose cause has no type (B9, rule 8)", () => {
+    // The failed invoke operation, rebuilt from its checkpoint, keeps the type.
+    const invokeOp = (
+      partial: Partial<OperationInfo> & { id: string },
+    ): OperationInfo =>
+      op({
+        name: partial.id,
+        type: "CHAINED_INVOKE",
+        status: "FAILED",
+        error: checkpointed("PaymentError"),
+        ...partial,
+      });
+
+    it.each([
+      ["named Error", named("Error")],
+      ["with a blank name", named("")],
+    ])(
+      "takes the name from the failed invoke operation when the cause is %s",
+      (_label, cause) => {
+        expect(
+          resolve(new InvokeError("card declined", cause), [
+            invokeOp({ id: "pay" }),
+          ]),
+        ).toBe("PaymentError");
+      },
+    );
+
+    it("keeps a typed cause as it is (plain unwrap), even when an operation disagrees", () => {
+      expect(
+        resolve(new InvokeError("card declined", named("PaymentError")), [
+          invokeOp({ id: "pay", error: checkpointed("RefundError") }),
+        ]),
+      ).toBe("PaymentError");
+    });
+
+    it("finds the invoke operation through outer wrappers, by message, shallowest then latest", () => {
+      const ops = [
+        invokeOp({
+          id: "other",
+          error: checkpointed("RefundError", "other message"),
+        }),
+        op({ id: "child", name: "child", type: "CONTEXT", status: "FAILED" }),
+        invokeOp({
+          id: "deep",
+          parentId: "child",
+          error: checkpointed("DeepError"),
+        }),
+        invokeOp({
+          id: "early",
+          endTimestamp: new Date(1),
+          error: checkpointed("EarlyError"),
+        }),
+        invokeOp({ id: "late", endTimestamp: new Date(2) }),
+      ];
+      const error = new ChildContextError(
+        "card declined",
+        new InvokeError("card declined", named("Error")),
+      );
+      expect(resolve(error, ops)).toBe("PaymentError");
+    });
+
+    it("ignores operations that are not chained invokes", () => {
+      expect(
+        resolve(new InvokeError("card declined", named("Error")), [
+          op({
+            id: "charge",
+            name: "charge",
+            status: "FAILED",
+            error: checkpointed("PaymentError"),
+          }),
+        ]),
+      ).toBe("InvokeError");
+    });
+
+    it("reports InvokeError, never Error, when no failed invoke operation matches", () => {
+      expect(resolve(new InvokeError("card declined", named("Error")))).toBe(
+        "InvokeError",
+      );
+      expect(
+        resolve(new InvokeError("card declined", named("Error")), [
+          invokeOp({ id: "pay", error: checkpointed("PaymentError", "other") }),
+        ]),
+      ).toBe("InvokeError");
+    });
+
+    it("does not treat an untyped cause of another wrapper as an invoke failure", () => {
+      expect(
+        resolve(new StepError("card declined", named("Error")), [
+          invokeOp({ id: "pay" }),
+        ]),
+      ).toBe("Error");
+    });
+  });
+
   it("reduces the user's type name and reports Error for a blank one", () => {
     expect(resolve(new StepError("x", named("a.b.Outer$PaymentError")))).toBe(
       "PaymentError",
