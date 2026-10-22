@@ -150,6 +150,32 @@ export const throwing =
 
 export const metadata = { $metadata: {} };
 
+/**
+ * An error with the shape of `STSServiceException` from the AWS SDK. A
+ * credential provider that assumes a role calls STS inside `client.send`.
+ * When that call fails, `client.send` rejects with this error. The AWS SDK
+ * gives each service exception class a static `shapeId`, and `instanceof`
+ * compares it. So this error is not an instance of
+ * `LambdaMicrovmsServiceException`.
+ */
+export class FakeStsServiceException extends Error {
+  static readonly shapeId =
+    "smithy.ts.sdk.synthetic.com.amazonaws.sts#STSServiceException";
+  readonly $fault = "client";
+
+  constructor(
+    message: string,
+    readonly $metadata: Record<string, unknown> = {
+      httpStatusCode: 403,
+      requestId: "sts-req-1",
+    },
+    name = "AccessDenied",
+  ) {
+    super(message);
+    this.name = name;
+  }
+}
+
 export interface RecordedRequest {
   url: string;
   headers: Record<string, string>;

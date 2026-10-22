@@ -668,7 +668,9 @@ describe("auto-suspend when idle", () => {
 
       await runHook(worker, IDLE_SECONDS);
       await advance(IDLE_MS);
-      expect(warn.mock.calls[0][0]).toContain("unknown outcome");
+      expect(warn.mock.calls[0][0]).toBe(
+        "the suspend call for the idle MicroVM had an unknown outcome. The worker refuses jobs until the MicroVM resumes, or for 30 seconds.",
+      );
       expect(await job(worker, "cb-1")).toBe(503);
 
       await advance(GRACE_MS);
@@ -1009,6 +1011,317 @@ describe("auto-suspend when idle", () => {
     // No idle time started, so no second call runs during the refusal.
     await advance(GRACE_MS - 1);
     expect(microvms.suspended).toEqual(["mvm-1"]);
+  });
+
+  describe("warning after a refused call whose refusal already ended", () => {
+    // A suspend hook during the call starts a refusal of its own. A resume
+    // hook, or the 30-second limit of a call that runs that long, ends it
+    // before the call ends. The warning must then not say that jobs are
+    // refused.
+    const ENDED_WARNING =
+      "could not suspend the idle MicroVM, because the service refused the call for now. A suspend hook arrived during the call, and the hook's refusal of jobs ended before the call ended. So the worker accepts jobs. It tries the call again one idle time after the call and every job end.";
+
+    it.each<[string, (worker: MicrovmWorkerListener) => Promise<void>]>([
+      [
+        "a resume hook",
+        async (worker) => {
+          expect(await resumeHook(worker)).toBe(200);
+        },
+      ],
+      ["the 30-second limit", () => advance(GRACE_MS)],
+    ])(
+      "says the refusal ended, and calls again one idle time after the call, when %s ended it",
+      async (_label, endRefusal) => {
+        const microvms = new FakeMicrovmsClient();
+        microvms.hold = true;
+        microvms.failure = firstAttempt("ThrottlingException", 400);
+        const warn = jest.fn();
+        const worker = start(microvms, {
+          info: () => {},
+          warn,
+          error: () => {},
+        });
+
+        await runHook(worker, IDLE_SECONDS);
+        await advance(IDLE_MS);
+        expect(await call(worker, `${HOOK_PATH_PREFIX}suspend`, {})).toBe(200);
+        await endRefusal(worker);
+        microvms.finish();
+        await advance(0);
+        microvms.hold = false;
+
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][0]).toBe(ENDED_WARNING);
+        // The idle time started when the call ended. It has the normal
+        // length, without the 30-second lower bound.
+        await advance(IDLE_MS - 1);
+        expect(microvms.suspended).toEqual(["mvm-1"]);
+        await advance(1);
+        expect(microvms.suspended).toEqual(["mvm-1", "mvm-1"]);
+      },
+    );
+
+    it("accepts jobs, and calls again one idle time after the last job ends", async () => {
+      const microvms = new FakeMicrovmsClient();
+      microvms.hold = true;
+      microvms.failure = firstAttempt("ThrottlingException", 400);
+      const warn = jest.fn();
+      const worker = start(microvms, { info: () => {}, warn, error: () => {} });
+
+      await runHook(worker, IDLE_SECONDS);
+      await advance(IDLE_MS);
+      expect(await call(worker, `${HOOK_PATH_PREFIX}suspend`, {})).toBe(200);
+      expect(await resumeHook(worker)).toBe(200);
+      // A job during the call, after the resume hook, runs when the call
+      // ends.
+      expect(await job(worker, "cb-1")).toBe(202);
+      microvms.finish();
+      await advance(0);
+      microvms.hold = false;
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toBe(ENDED_WARNING);
+      // A job after the refused call is accepted too.
+      expect(await job(worker, "cb-2")).toBe(202);
+      expect(started).toEqual(["cb-1", "cb-2"]);
+      // No call runs while a job runs.
+      await advance(GRACE_MS * 2);
+      expect(microvms.suspended).toEqual(["mvm-1"]);
+      await finishJob("cb-1");
+      await advance(GRACE_MS * 2);
+      expect(microvms.suspended).toEqual(["mvm-1"]);
+
+      await finishJob("cb-2");
+      await advance(IDLE_MS - 1);
+      expect(microvms.suspended).toEqual(["mvm-1"]);
+      await advance(1);
+      expect(microvms.suspended).toEqual(["mvm-1", "mvm-1"]);
+    });
+  });
+
+  describe("warning after a refused call when the worker stops", () => {
+    const refusal = firstAttempt("InvalidSignatureException", 403);
+
+    it.each<[string, string[]]>([
+      ["a terminate hook", ["terminate"]],
+      // The terminate text also replaces the text for a suspend hook's
+      // refusal, because no call follows either way.
+      ["a suspend hook and then a terminate hook", ["suspend", "terminate"]],
+    ])(
+      "says that no call follows after %s during the call, and calls no more",
+      async (_label, hooks) => {
+        const microvms = new FakeMicrovmsClient();
+        microvms.hold = true;
+        microvms.failure = refusal;
+        const warn = jest.fn();
+        const worker = start(microvms, {
+          info: () => {},
+          warn,
+          error: () => {},
+        });
+
+        await runHook(worker, IDLE_SECONDS);
+        await advance(IDLE_MS);
+        for (const hook of hooks) {
+          expect(await call(worker, `${HOOK_PATH_PREFIX}${hook}`, {})).toBe(
+            200,
+          );
+        }
+        microvms.finish();
+        await advance(0);
+        microvms.hold = false;
+
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][0]).toBe(
+          "could not suspend the idle MicroVM, because the service refused the call for now. The MicroVM is terminating, so the worker does not try the call again.",
+        );
+        expect(await resumeHook(worker)).toBe(200);
+        expect(await job(worker, "cb-1")).toBe(503);
+        await advance(IDLE_MS + GRACE_MS * 4);
+        expect(microvms.suspended).toEqual(["mvm-1"]);
+      },
+    );
+
+    it("says that no call follows after close() during the call, and calls no more", async () => {
+      const microvms = new FakeMicrovmsClient();
+      microvms.hold = true;
+      microvms.failure = refusal;
+      const warn = jest.fn();
+      const worker = start(microvms, { info: () => {}, warn, error: () => {} });
+
+      await runHook(worker, IDLE_SECONDS);
+      await advance(IDLE_MS);
+      worker.close();
+      microvms.finish();
+      await advance(0);
+      microvms.hold = false;
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toBe(
+        "could not suspend the idle MicroVM, because the service refused the call for now. The worker is closed, so it does not try the call again.",
+      );
+      // The refused call ended the refusal, so the listener accepts jobs.
+      expect(await job(worker, "cb-1")).toBe(202);
+      await finishJob("cb-1");
+      expect(await resumeHook(worker)).toBe(200);
+      await advance(IDLE_MS + GRACE_MS * 4);
+      expect(microvms.suspended).toEqual(["mvm-1"]);
+    });
+
+    it.each<[string, string[]]>([
+      ["a terminate hook", ["terminate"]],
+      // The terminate text also replaces the text for a suspend hook's
+      // refusal, because the MicroVM ends instead of suspending.
+      ["a suspend hook and then a terminate hook", ["suspend", "terminate"]],
+    ])(
+      "says that no call follows after a rejection and %s during the call",
+      async (_label, hooks) => {
+        const microvms = new FakeMicrovmsClient();
+        microvms.hold = true;
+        microvms.failure = firstAttempt("AccessDeniedException", 403);
+        const warn = jest.fn();
+        const worker = start(microvms, {
+          info: () => {},
+          warn,
+          error: () => {},
+        });
+
+        await runHook(worker, IDLE_SECONDS);
+        await advance(IDLE_MS);
+        for (const hook of hooks) {
+          expect(await call(worker, `${HOOK_PATH_PREFIX}${hook}`, {})).toBe(
+            200,
+          );
+        }
+        microvms.finish();
+        await advance(0);
+        microvms.hold = false;
+
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][0]).toBe(
+          "could not suspend the idle MicroVM, because the service rejected the call. The MicroVM is terminating, so the worker does not try the call again. A missing permission needs lambda:SuspendMicrovm on the MicroVM image in its execution role.",
+        );
+        expect(await resumeHook(worker)).toBe(200);
+        expect(await job(worker, "cb-1")).toBe(503);
+        await advance(IDLE_MS + GRACE_MS * 4);
+        expect(microvms.suspended).toEqual(["mvm-1"]);
+      },
+    );
+
+    it("says that jobs stay refused and no call follows after an unknown outcome and a terminate hook during the call", async () => {
+      const microvms = new FakeMicrovmsClient();
+      microvms.hold = true;
+      microvms.failure = Object.assign(new Error("boom"), {
+        name: "InternalServerException",
+        $metadata: { httpStatusCode: 500, attempts: 3 },
+      });
+      const warn = jest.fn();
+      const worker = start(microvms, { info: () => {}, warn, error: () => {} });
+
+      await runHook(worker, IDLE_SECONDS);
+      await advance(IDLE_MS);
+      expect(await call(worker, `${HOOK_PATH_PREFIX}terminate`, {})).toBe(200);
+      microvms.finish();
+      await advance(0);
+      microvms.hold = false;
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toBe(
+        "the suspend call for the idle MicroVM had an unknown outcome. The MicroVM is terminating, so the worker refuses jobs and does not try the call again.",
+      );
+      // Neither the 30-second limit nor a resume hook ends the refusal.
+      await advance(GRACE_MS);
+      expect(await job(worker, "cb-1")).toBe(503);
+      expect(await resumeHook(worker)).toBe(200);
+      expect(await job(worker, "cb-2")).toBe(503);
+      expect(started).toEqual([]);
+      await advance(IDLE_MS + GRACE_MS * 4);
+      expect(microvms.suspended).toEqual(["mvm-1"]);
+    });
+  });
+
+  describe("warning after a rejected call during a suspend hook's refusal", () => {
+    // A suspend hook during the call means that the MicroVM is suspending
+    // anyway. So a rejection does not end that hook's refusal, and the
+    // MicroVM does not keep running.
+    it.each<[string, (worker: MicrovmWorkerListener) => Promise<void>]>([
+      [
+        "the resume hook",
+        async (worker) => {
+          expect(await resumeHook(worker)).toBe(200);
+        },
+      ],
+      [
+        "the 30-second limit",
+        async (worker) => {
+          await advance(GRACE_MS - 1);
+          expect(await job(worker, "cb-2")).toBe(503);
+          await advance(1);
+        },
+      ],
+    ])(
+      "says that the hook's refusal stays, and refuses jobs until %s",
+      async (_label, endRefusal) => {
+        const microvms = new FakeMicrovmsClient();
+        microvms.hold = true;
+        microvms.failure = firstAttempt("AccessDeniedException", 403);
+        const warn = jest.fn();
+        const worker = start(microvms, {
+          info: () => {},
+          warn,
+          error: () => {},
+        });
+
+        await runHook(worker, IDLE_SECONDS);
+        await advance(IDLE_MS);
+        expect(await call(worker, `${HOOK_PATH_PREFIX}suspend`, {})).toBe(200);
+        microvms.finish();
+        await advance(0);
+        microvms.hold = false;
+
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][0]).toBe(
+          "could not suspend the idle MicroVM, because the service rejected the call. A suspend hook arrived during the call, so the MicroVM is suspending anyway. The hook's refusal of jobs stays until the resume hook, or 30 seconds after the last suspend hook. A missing permission needs lambda:SuspendMicrovm on the MicroVM image in its execution role.",
+        );
+        expect(await job(worker, "cb-1")).toBe(503);
+        expect(started).toEqual([]);
+
+        // The end of the refusal starts the idle time again.
+        await endRefusal(worker);
+        await advance(IDLE_MS - 1);
+        expect(microvms.suspended).toEqual(["mvm-1"]);
+        await advance(1);
+        expect(microvms.suspended).toEqual(["mvm-1", "mvm-1"]);
+        // That second call is rejected without a suspend hook, so it ends
+        // its own refusal, and jobs run.
+        expect(warn).toHaveBeenCalledTimes(2);
+        expect(await job(worker, "cb-3")).toBe(202);
+        expect(started).toEqual(["cb-3"]);
+      },
+    );
+
+    it("says that the MicroVM keeps running when a resume hook ended the hook's refusal during the call", async () => {
+      const microvms = new FakeMicrovmsClient();
+      microvms.hold = true;
+      microvms.failure = firstAttempt("AccessDeniedException", 403);
+      const warn = jest.fn();
+      const worker = start(microvms, { info: () => {}, warn, error: () => {} });
+
+      await runHook(worker, IDLE_SECONDS);
+      await advance(IDLE_MS);
+      expect(await call(worker, `${HOOK_PATH_PREFIX}suspend`, {})).toBe(200);
+      expect(await resumeHook(worker)).toBe(200);
+      microvms.finish();
+      await advance(0);
+      microvms.hold = false;
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toBe(
+        "could not suspend the idle MicroVM, because the service rejected the call. It keeps running. A missing permission needs lambda:SuspendMicrovm on the MicroVM image in its execution role.",
+      );
+      expect(await job(worker, "cb-1")).toBe(202);
+      expect(started).toEqual(["cb-1"]);
+    });
   });
 
   it("tries the call again one idle time after the refusal that an unknown outcome started", async () => {
