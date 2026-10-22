@@ -1,0 +1,1 @@
+{"finding_digest":"7e0585be7acc56f9f85827082413c1445fc3532ad6b01767c778a042a62c9285","finding_id":"arf_v1_pycylpt2zrlpt6cye4ecie6bir","identity_key":"telemetry-exporter::sqsexporter.constructor::standard-queue-ignores-message-group-id","pull_request_number":1052,"repository":{"full_name":"aws/aws-durable-execution-sdk-js","id":1038735190},"reviewer":"codex","schema_version":1}
