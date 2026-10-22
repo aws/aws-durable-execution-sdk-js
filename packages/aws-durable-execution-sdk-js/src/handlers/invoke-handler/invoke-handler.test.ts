@@ -6,6 +6,7 @@ import {
   OperationAction,
 } from "../../types/wire";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import { InvokeError } from "../../errors/durable-error/durable-error";
 
 jest.mock("../../utils/logger/logger");
 jest.mock("../../errors/serdes-errors/serdes-errors");
@@ -172,6 +173,97 @@ describe("InvokeHandler", () => {
       await expect(
         invokeHandler("test-function", { test: "data" }),
       ).rejects.toThrow("Lambda function execution failed");
+    });
+
+    it.each([
+      {
+        path: "already completed (replay)",
+        stepData: (failed: object) => [failed],
+      },
+      {
+        path: "completed while waiting (live)",
+        stepData: (failed: object) => [
+          null,
+          { Status: OperationStatus.STARTED, ChainedInvokeDetails: {} },
+          failed,
+        ],
+      },
+    ])(
+      "names the cause after the invoked function's error type when $path",
+      async ({ stepData }) => {
+        const failed = {
+          Status: OperationStatus.FAILED,
+          ChainedInvokeDetails: {
+            Error: {
+              ErrorMessage: "card declined",
+              ErrorType: "PaymentError",
+              ErrorData: "data",
+              StackTrace: ["PaymentError: card declined", "    at remote"],
+            },
+          },
+        };
+        const mock = mockContext.getStepData as jest.Mock;
+        for (const value of stepData(failed)) mock.mockReturnValueOnce(value);
+        mock.mockReturnValue(failed);
+
+        const invokeHandler = createInvokeHandler(
+          mockContext,
+          mockCheckpoint,
+          mockCreateStepId,
+        );
+
+        const caught = await invokeHandler("test-function", {}).catch(
+          (e: unknown) => e,
+        );
+        expect(caught).toBeInstanceOf(InvokeError);
+        expect(caught).toMatchObject({
+          message: "card declined",
+          errorData: "data",
+          cause: {
+            name: "PaymentError",
+            message: "card declined",
+            stack: "PaymentError: card declined\n    at remote",
+          },
+        });
+      },
+    );
+
+    it.each([
+      [{ ErrorMessage: "boom" }, "Error"],
+      [{ ErrorType: "PaymentError" }, "PaymentError"],
+    ])("names the cause %j as %s", async (error, expectedName) => {
+      (mockContext.getStepData as jest.Mock).mockReturnValue({
+        Status: OperationStatus.FAILED,
+        ChainedInvokeDetails: { Error: error },
+      });
+      const invokeHandler = createInvokeHandler(
+        mockContext,
+        mockCheckpoint,
+        mockCreateStepId,
+      );
+      const caught = await invokeHandler("test-function", {}).catch(
+        (e: unknown) => e,
+      );
+      expect(caught).toBeInstanceOf(InvokeError);
+      expect((caught as InvokeError).cause?.name).toBe(expectedName);
+    });
+
+    it("creates no cause when the error has neither a message nor a type", async () => {
+      (mockContext.getStepData as jest.Mock).mockReturnValue({
+        Status: OperationStatus.FAILED,
+        ChainedInvokeDetails: { Error: { ErrorData: "d" } },
+      });
+      const invokeHandler = createInvokeHandler(
+        mockContext,
+        mockCheckpoint,
+        mockCreateStepId,
+      );
+      const caught = await invokeHandler("test-function", {}).catch(
+        (e: unknown) => e,
+      );
+      expect(caught).toBeInstanceOf(InvokeError);
+      expect((caught as InvokeError).cause).toBeUndefined();
+      expect((caught as InvokeError).message).toBe("Invoke failed");
     });
 
     it.each([
