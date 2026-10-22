@@ -20,6 +20,7 @@ import {
   assertTimeToDeliver,
   sendJob,
 } from "./request";
+import { addRequestId, withRequestId } from "./aws-errors";
 import { ensureRunning } from "./lifecycle";
 import { defaultMicrovmRetryStrategy } from "./retry";
 import { MicrovmOperationSubType } from "./subtypes";
@@ -323,35 +324,55 @@ export function launch(
   return child.step<LaunchResult>(
     `${scope.name}.launch`,
     async () => {
-      const response = await getClient(config, region).send(
-        new RunMicrovmCommand({
-          imageIdentifier: config.imageIdentifier,
-          imageVersion: config.imageVersion,
-          executionRoleArn: config.executionRoleArn,
-          // A callback ID can be 1024 characters, and the client token
-          // allows 128. The digest is 64 characters.
-          clientToken: sha256Hex(options.tokenSource),
-          ingressNetworkConnectors: config.ingressNetworkConnectors ?? [
-            connectorArn(partition, region, options.defaultIngress),
-          ],
-          egressNetworkConnectors: config.egressNetworkConnectors ?? [
-            connectorArn(partition, region, "INTERNET_EGRESS"),
-          ],
-          maximumDurationInSeconds: Math.min(
-            options.timeoutSeconds + LAUNCH_MARGIN_SECONDS,
-            MAX_MICROVM_DURATION_SECONDS,
-          ),
-          logging: config.logging,
-          runHookPayload: options.runHookPayload,
-          ...options.extra,
-        }),
-      );
+      // The core SDK checkpoints only the message of a step failure. So a
+      // RunMicrovm error of the Lambda MicroVMs service gets the request ID
+      // in its message, and keeps its class and retry fields. See
+      // `addRequestId`.
+      const response = await getClient(config, region)
+        .send(
+          new RunMicrovmCommand({
+            imageIdentifier: config.imageIdentifier,
+            imageVersion: config.imageVersion,
+            executionRoleArn: config.executionRoleArn,
+            // A callback ID can be 1024 characters, and the client token
+            // allows 128. The digest is 64 characters.
+            clientToken: sha256Hex(options.tokenSource),
+            ingressNetworkConnectors: config.ingressNetworkConnectors ?? [
+              connectorArn(partition, region, options.defaultIngress),
+            ],
+            egressNetworkConnectors: config.egressNetworkConnectors ?? [
+              connectorArn(partition, region, "INTERNET_EGRESS"),
+            ],
+            maximumDurationInSeconds: Math.min(
+              options.timeoutSeconds + LAUNCH_MARGIN_SECONDS,
+              MAX_MICROVM_DURATION_SECONDS,
+            ),
+            logging: config.logging,
+            runHookPayload: options.runHookPayload,
+            ...options.extra,
+          }),
+        )
+        .catch((error: unknown) => {
+          throw addRequestId("RunMicrovm", error);
+        });
       if (!response.microvmId) {
-        throw new Error("RunMicrovm returned no microvmId");
+        throw new Error(
+          withRequestId(
+            "RunMicrovm returned no microvmId",
+            "RunMicrovm",
+            response,
+          ),
+        );
       }
       const overHttp = options.delivery === "http";
       if (overHttp && !response.endpoint) {
-        throw new Error("RunMicrovm returned no endpoint");
+        throw new Error(
+          withRequestId(
+            "RunMicrovm returned no endpoint",
+            "RunMicrovm",
+            response,
+          ),
+        );
       }
       return {
         microvmId: response.microvmId,
@@ -515,7 +536,7 @@ export async function terminate(
           // MicroVM whose record the service has already removed returns
           // ResourceNotFoundException. Either way, the MicroVM is gone.
           if ((error as Error).name !== "ResourceNotFoundException") {
-            throw error;
+            throw addRequestId("TerminateMicrovm", error);
           }
         }
       },

@@ -4,7 +4,12 @@ import {
   type LambdaMicrovmsClient,
   ResumeMicrovmCommand,
 } from "@aws-sdk/client-lambda-microvms";
-import { MICROVM_STATE_ERROR_NAME } from "./errors";
+import {
+  addRequestId,
+  MicrovmStateError,
+  microvmNotFound,
+  withRequestId,
+} from "./aws-errors";
 import {
   callBeforeDeadline,
   MicrovmEndpointUnavailableError,
@@ -18,31 +23,6 @@ import {
  */
 const INITIAL_POLL_MS = 250;
 const MAX_POLL_MS = 2_000;
-
-/**
- * Thrown inside the request step when the MicroVM is terminating,
- * terminated, or removed. A later attempt finds the same state. So the name
- * is not in the retryable set, and the step fails at once. The delivery stage
- * then reports `MicrovmNotRunningError`.
- *
- * For a MicroVM that no longer exists, `cause` is the AWS SDK error. Only
- * the retry strategy and the plugin hooks of a live step attempt see
- * `cause`. The SDK checkpoints the message, not the cause. A replayed step
- * rebuilds the error from the checkpoint, without it. So the message carries
- * the request ID.
- */
-export class MicrovmStateError extends Error {
-  override readonly name = MICROVM_STATE_ERROR_NAME;
-
-  constructor(
-    message: string,
-    /** The MicroVM state, or `undefined` when the MicroVM no longer exists. */
-    readonly state?: string,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-  }
-}
 
 export interface EnsureRunningOptions {
   client: LambdaMicrovmsClient;
@@ -77,7 +57,15 @@ export interface EnsureRunningOptions {
  *   then resumes it.
  * - `TERMINATING`, `TERMINATED`, or not found: it throws
  *   {@link MicrovmStateError}. GetMicrovm or ResumeMicrovm can report that
- *   the MicroVM is not found.
+ *   the MicroVM is not found. The message ends with the request ID of the
+ *   call that reported the state, in the form
+ *   `GetMicrovm request ID: <id>.`.
+ *
+ * Any other GetMicrovm or ResumeMicrovm error, such as
+ * `AccessDeniedException`, is rethrown as the same error object. When it is
+ * an error of the Lambda MicroVMs service, its message then ends with the
+ * request ID of the call. See {@link addRequestId}. A `ConflictException`
+ * from ResumeMicrovm is not an error: polling continues.
  *
  * It polls after 250 milliseconds, doubling the wait up to 2 seconds. It
  * stops after `maxWaitMs`, or 10 seconds before the invocation times out. It
@@ -138,43 +126,28 @@ export async function ensureRunning(
   // GetMicrovm and ResumeMicrovm both return ResourceNotFoundException for
   // a removed MicroVM. ResumeMicrovm returns it when the MicroVM is removed
   // after the state check. So `ensureRunning` throws the same
-  // `MicrovmStateError` for both.
-  // The AWS SDK error carries the request ID in `$metadata.requestId`. A
-  // support case needs that ID. The SDK checkpoints only the message of a
-  // step failure. So the message names the call and its request ID, and the
-  // AWS SDK error becomes the cause.
-  const notFound = (
-    operation: "GetMicrovm" | "ResumeMicrovm",
-    error: unknown,
-  ): MicrovmStateError => {
-    const requestId = (error as { $metadata?: { requestId?: unknown } })
-      .$metadata?.requestId;
-    const requestIdText =
-      typeof requestId === "string" && requestId !== ""
-        ? ` ${operation} request ID: ${requestId}.`
-        : "";
-    return new MicrovmStateError(
-      `MicroVM ${options.microvmId} no longer exists. A session MicroVM lives at most its session timeout plus 5 minutes, and never longer than 8 hours.${requestIdText}`,
-      undefined,
-      { cause: error },
-    );
-  };
-
+  // `MicrovmStateError` for both. Every other error of either call keeps its
+  // class and its retry fields. An error of the Lambda MicroVMs service also
+  // gets the request ID in its message. See `addRequestId`.
   for (;;) {
     let state: string | undefined;
     let endpoint: string | undefined;
     let stateReason: string | undefined;
+    // The GetMicrovm output carries the request ID in `$metadata`. A
+    // terminating or terminated MicroVM fails the step, so its message names
+    // that request ID too.
+    let current: Awaited<ReturnType<typeof getMicrovm>>;
     try {
-      const current = await getMicrovm();
+      current = await getMicrovm();
       state = current.state;
       lastState = state;
       endpoint = current.endpoint;
       stateReason = current.stateReason;
     } catch (error) {
       if ((error as Error).name === "ResourceNotFoundException") {
-        throw notFound("GetMicrovm", error);
+        throw microvmNotFound(options.microvmId, "GetMicrovm", error);
       }
-      throw error;
+      throw addRequestId("GetMicrovm", error);
     }
 
     if (state === "RUNNING" || (state === "PENDING" && !resumeSent)) {
@@ -185,7 +158,11 @@ export async function ensureRunning(
     }
     if (state === "TERMINATING" || state === "TERMINATED") {
       throw new MicrovmStateError(
-        `MicroVM ${options.microvmId} is ${state}${stateReason ? `: ${stateReason}` : ""}.`,
+        withRequestId(
+          `MicroVM ${options.microvmId} is ${state}${stateReason ? `: ${stateReason}` : ""}.`,
+          "GetMicrovm",
+          current,
+        ),
         state,
       );
     }
@@ -199,10 +176,10 @@ export async function ensureRunning(
         // MicroVM was removed after the state check.
         const errorName = (error as Error).name;
         if (errorName === "ResourceNotFoundException") {
-          throw notFound("ResumeMicrovm", error);
+          throw microvmNotFound(options.microvmId, "ResumeMicrovm", error);
         }
         if (errorName !== "ConflictException") {
-          throw error;
+          throw addRequestId("ResumeMicrovm", error);
         }
       }
       resumeSent = true;

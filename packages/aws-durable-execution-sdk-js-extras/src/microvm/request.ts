@@ -1,7 +1,9 @@
 import {
   CreateMicrovmAuthTokenCommand,
+  type CreateMicrovmAuthTokenCommandOutput,
   type LambdaMicrovmsClient,
 } from "@aws-sdk/client-lambda-microvms";
+import { addRequestId, microvmNotFound, withRequestId } from "./aws-errors";
 
 /**
  * The MicroVM endpoint forwards to this port when no port header is sent.
@@ -255,6 +257,9 @@ export interface SendJobOptions {
  *   in the same attempt throws {@link MicrovmRequestUnauthorizedError}, and
  *   the step retry strategy takes over.
  * - Any other 4xx: throw {@link MicrovmRequestRejectedError} at once.
+ * - CreateMicrovmAuthToken answers `ResourceNotFoundException`, for the first
+ *   token or for the new one: throw `MicrovmStateError` at once. The MicroVM
+ *   no longer exists.
  * - A redirect, 3xx: throw {@link MicrovmRequestRejectedError} at once, with
  *   the `Location` in the message, without its query and cut to 200
  *   characters. A followed 301, 302, or 303 would turn the
@@ -453,20 +458,50 @@ function redirectTarget(url: string | null): string | undefined {
     : target;
 }
 
+/**
+ * Calls CreateMicrovmAuthToken and returns the auth token headers.
+ *
+ * The request step calls it before the first request, and again after a 401
+ * or 403. Each call handles a failure this way:
+ *
+ * - `ResourceNotFoundException`: the MicroVM was removed after the launch or
+ *   after the state check. So the call throws the same
+ *   `MicrovmStateError` as GetMicrovm and ResumeMicrovm. The step fails
+ *   at once, and the job fails with `MicrovmNotRunningError`.
+ * - Any other error: the call rethrows the same error object. An error of
+ *   the Lambda MicroVMs service gets the request ID in its message. See
+ *   {@link addRequestId}.
+ * - An answer without `authToken`: the call throws an `Error` whose message
+ *   ends with the request ID of the answer.
+ */
 async function createAuthToken(
   options: SendJobOptions,
   sendOptions: { abortSignal?: AbortSignal },
 ): Promise<Record<string, string>> {
-  const response = await options.client.send(
-    new CreateMicrovmAuthTokenCommand({
-      microvmIdentifier: options.microvmId,
-      expirationInMinutes: AUTH_TOKEN_MINUTES,
-      allowedPorts: [{ port: options.port }],
-    }),
-    sendOptions,
-  );
+  let response: CreateMicrovmAuthTokenCommandOutput;
+  try {
+    response = await options.client.send(
+      new CreateMicrovmAuthTokenCommand({
+        microvmIdentifier: options.microvmId,
+        expirationInMinutes: AUTH_TOKEN_MINUTES,
+        allowedPorts: [{ port: options.port }],
+      }),
+      sendOptions,
+    );
+  } catch (error) {
+    if ((error as Error).name === "ResourceNotFoundException") {
+      throw microvmNotFound(options.microvmId, "CreateMicrovmAuthToken", error);
+    }
+    throw addRequestId("CreateMicrovmAuthToken", error);
+  }
   if (!response.authToken) {
-    throw new Error("CreateMicrovmAuthToken returned no authToken");
+    throw new Error(
+      withRequestId(
+        "CreateMicrovmAuthToken returned no authToken",
+        "CreateMicrovmAuthToken",
+        response,
+      ),
+    );
   }
   return response.authToken;
 }
