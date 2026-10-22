@@ -1,4 +1,4 @@
-import { Operation } from "../../types/wire";
+import { Operation, OperationStatus, OperationType } from "../../types/wire";
 import {
   OperationInfo,
   PluginOperationStatus,
@@ -6,7 +6,10 @@ import {
   AttemptEndInfo,
   AttemptEndInfoOutcome,
 } from "../../types/plugin";
-import { DurableOperationError } from "../../errors/durable-error/durable-error";
+import {
+  DurableOperationError,
+  createCallbackFailureError,
+} from "../../errors/durable-error/durable-error";
 
 /**
  * Converts an Operation to an OperationInfo.
@@ -40,7 +43,14 @@ export function toOperationInfo(operation?: Operation): OperationInfo {
     error:
       errorObject &&
       Object.values(errorObject).some((value) => value !== undefined)
-        ? DurableOperationError.fromErrorObject(errorObject)
+        ? // A callback's error is rebuilt the way the callback handler builds
+          // the error it throws, so both name the same type.
+          operation?.Type === OperationType.CALLBACK
+          ? createCallbackFailureError(
+              errorObject,
+              operation.Status === OperationStatus.TIMED_OUT,
+            )
+          : DurableOperationError.fromErrorObject(errorObject)
         : undefined,
     attempt: operation?.StepDetails?.Attempt,
     isReplay: false,

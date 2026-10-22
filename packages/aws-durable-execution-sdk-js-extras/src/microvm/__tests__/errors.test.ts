@@ -312,7 +312,9 @@ describe("MicroVM errors", () => {
     },
   );
 
-  it("keeps the StepError of a step that failed inside the session handler", async () => {
+  it("wraps a step that failed inside the session handler in ChildContextError", async () => {
+    // The SDK checkpoints the failed session with the step's own error, not
+    // the StepError around it, so the session wraps it like runInChildContext.
     const runner = new LocalDurableTestRunner({
       handlerFunction: withDurableExecution(
         async (_event: unknown, context: DurableContext) =>
@@ -337,7 +339,7 @@ describe("MicroVM errors", () => {
 
     const execution = await runner.run({ payload: {} });
 
-    expect(execution.getResult()).toBe("StepError");
+    expect(execution.getResult()).toBe("ChildContextError");
   });
 
   it("reaches a caller outside another child context wrapped, with the MicroVM type in the cause chain", async () => {
@@ -405,7 +407,7 @@ describe("MicroVM errors", () => {
     expect(rebuiltTypes).not.toContain("BatchCompletionError");
   });
 
-  it("keeps the CallbackSubmitterError of a failed waitForCallback submitter in a session", async () => {
+  it("wraps a failed waitForCallback submitter in a session in ChildContextError", async () => {
     const runner = new LocalDurableTestRunner({
       handlerFunction: withDurableExecution(
         async (_event: unknown, context: DurableContext) =>
@@ -430,6 +432,6 @@ describe("MicroVM errors", () => {
 
     const execution = await runner.run({ payload: {} });
 
-    expect(execution.getResult()).toBe("CallbackSubmitterError");
+    expect(execution.getResult()).toBe("ChildContextError");
   });
 });

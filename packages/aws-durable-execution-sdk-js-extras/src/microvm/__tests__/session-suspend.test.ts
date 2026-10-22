@@ -1,3 +1,4 @@
+import { ResourceNotFoundException } from "@aws-sdk/client-lambda-microvms";
 import {
   type DurableContext,
   withDurableExecution,
@@ -482,6 +483,70 @@ describe("microvmSession with a MicroVM that suspends itself", () => {
     expect(caught.length).toBeGreaterThanOrEqual(2);
     expect(caught.every((c) => c.notRunning && c.delivery)).toBe(true);
   });
+
+  it.each<"GetMicrovm" | "ResumeMicrovm">(["GetMicrovm", "ResumeMicrovm"])(
+    "shows the handler the request ID of the %s call that reported the removed MicroVM, on the first run and on replay",
+    async (operation) => {
+      const client = new FakeMicrovmsClient();
+      const endpoint = recordingEndpoint(client);
+      const notFound = new ResourceNotFoundException({
+        message: "MicroVM not found: mvm-1",
+        $metadata: { httpStatusCode: 404, requestId: "req-123" },
+        resourceType: "MicroVM",
+        resourceId: "mvm-1",
+      });
+      if (operation === "GetMicrovm") {
+        client.getResponses = [throwing(notFound)];
+      } else {
+        client.getResponses = [async () => ({ state: "SUSPENDED" })];
+        client.resumeResponses = [throwing(notFound)];
+      }
+      const caught: unknown[] = [];
+      const runner = runnerFor(client, endpoint, async (vm, ctx) => {
+        try {
+          await vm.invoke(ctx, "gone", 1, job);
+          return "unexpected";
+        } catch (error) {
+          caught.push(error);
+        }
+        // A pending callback ends the invocation. The next invocation replays
+        // the failed job from its checkpoint and catches the error again.
+        const [resumed] = await ctx.createCallback("go");
+        await resumed;
+        return "caught";
+      });
+
+      const executionPromise = runner.run({ payload: {} });
+      const go = runner.getOperation("go");
+      await go.waitForData(WaitingOperationStatus.STARTED);
+      await go.sendCallbackSuccess(JSON.stringify("go"));
+      const execution = await executionPromise;
+
+      expect(execution.getStatus()).toBe("SUCCEEDED");
+      const expected = `MicroVM "gone": the job could not be delivered: MicroVM mvm-1 no longer exists. A session MicroVM lives at most its session timeout plus 5 minutes, and never longer than 8 hours. ${operation} request ID: req-123.`;
+      // The first entry is the first run. Each later entry is a replay.
+      expect(caught.length).toBeGreaterThanOrEqual(2);
+      for (const error of caught) {
+        expect(error).toBeInstanceOf(MicrovmNotRunningError);
+        expect((error as Error).message).toBe(expected);
+      }
+      // The execution history keeps the request ID too.
+      expect(
+        runner.getOperation("gone.request").getStepDetails()?.error,
+      ).toMatchObject({
+        errorType: "MicrovmStateError",
+        errorMessage: expect.stringContaining(
+          `${operation} request ID: req-123.`,
+        ),
+      });
+      expect(
+        runner.getOperation("gone").getContextDetails()?.error,
+      ).toMatchObject({
+        errorType: MicrovmNotRunningError.name,
+        errorMessage: expected,
+      });
+    },
+  );
 });
 
 /**

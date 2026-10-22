@@ -75,6 +75,33 @@ describe("operation plugin error metadata", () => {
     },
   );
 
+  it.each([
+    [
+      "FAILED",
+      { ErrorType: "PaymentError" },
+      "CallbackExternalError",
+      "PaymentError",
+    ],
+    ["FAILED", { ErrorType: "Error" }, "CallbackExternalError", "Error"],
+    ["FAILED", {}, "CallbackExternalError", "CallbackExternalError"],
+    ["TIMED_OUT", {}, "CallbackTimeoutError", "CallbackTimeoutError"],
+  ] as const)(
+    "builds a %s callback's error %j the way the callback handler throws it",
+    (status, type, errorType, causeName) => {
+      const info = toOperationInfo({
+        ...callback({ ...type, ErrorMessage: "card declined" }),
+        Status: status,
+      });
+      expect(info.error).toBeInstanceOf(DurableOperationError);
+      expect((info.error as DurableOperationError).errorType).toBe(errorType);
+      expect(info.error?.message).toBe("card declined");
+      expect(info.error?.cause).toMatchObject({
+        name: causeName,
+        message: "card declined",
+      });
+    },
+  );
+
   it("recognizes the actual Lambda client's empty error response", async () => {
     const client = new LambdaClient({
       region: "us-west-2",

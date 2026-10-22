@@ -278,3 +278,50 @@ export class BatchCompletionError extends DurableOperationError {
     );
   }
 }
+
+/** The six ASCII whitespace characters; nothing else counts as blank. */
+const BLANK_TYPE = /^[ \t\n\r\f\v]*$/;
+
+/**
+ * Builds the error thrown for a callback that failed or timed out.
+ *
+ * The cause carries the reported error: its message, its stack trace, and its
+ * `ErrorType` as `cause.name`. When the failure reports no `ErrorType` (missing,
+ * empty, or only blank characters), `cause.name` is the callback error's own
+ * class name (`"CallbackExternalError"` or `"CallbackTimeoutError"`), not
+ * `"Error"`. This keeps a failure with no type distinct from one whose type is
+ * the explicit string `"Error"`.
+ *
+ * @internal
+ */
+export function createCallbackFailureError(
+  error: ErrorObject | undefined,
+  isTimeout: boolean,
+): CallbackError {
+  if (!error) {
+    return isTimeout
+      ? new CallbackTimeoutError("Callback timed out")
+      : new CallbackExternalError("Callback failed");
+  }
+  const cause = new Error(error.ErrorMessage);
+  const hasType =
+    error.ErrorType !== undefined && !BLANK_TYPE.test(error.ErrorType);
+  cause.name = hasType
+    ? (error.ErrorType as string)
+    : isTimeout
+      ? "CallbackTimeoutError"
+      : "CallbackExternalError";
+  cause.stack = error.StackTrace?.join("\n");
+  if (isTimeout) {
+    return new CallbackTimeoutError(
+      error.ErrorMessage || "Callback timed out",
+      cause,
+      error.ErrorData,
+    );
+  }
+  return new CallbackExternalError(
+    error.ErrorMessage || "Callback failed",
+    cause,
+    error.ErrorData,
+  );
+}

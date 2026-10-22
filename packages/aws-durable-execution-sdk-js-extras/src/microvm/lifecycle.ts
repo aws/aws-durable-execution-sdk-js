@@ -24,6 +24,12 @@ const MAX_POLL_MS = 2_000;
  * terminated, or removed. A later attempt finds the same state. So the name
  * is not in the retryable set, and the step fails at once. The delivery stage
  * then reports `MicrovmNotRunningError`.
+ *
+ * For a MicroVM that no longer exists, `cause` is the AWS SDK error. Only
+ * the retry strategy and the plugin hooks of a live step attempt see
+ * `cause`. The SDK checkpoints the message, not the cause. A replayed step
+ * rebuilds the error from the checkpoint, without it. So the message carries
+ * the request ID.
  */
 export class MicrovmStateError extends Error {
   override readonly name = MICROVM_STATE_ERROR_NAME;
@@ -32,8 +38,9 @@ export class MicrovmStateError extends Error {
     message: string,
     /** The MicroVM state, or `undefined` when the MicroVM no longer exists. */
     readonly state?: string,
+    options?: ErrorOptions,
   ) {
-    super(message);
+    super(message, options);
   }
 }
 
@@ -132,10 +139,26 @@ export async function ensureRunning(
   // a removed MicroVM. ResumeMicrovm returns it when the MicroVM is removed
   // after the state check. So `ensureRunning` throws the same
   // `MicrovmStateError` for both.
-  const notFound = (): MicrovmStateError =>
-    new MicrovmStateError(
-      `MicroVM ${options.microvmId} no longer exists. A session MicroVM lives at most its session timeout plus 5 minutes, and never longer than 8 hours.`,
+  // The AWS SDK error carries the request ID in `$metadata.requestId`. A
+  // support case needs that ID. The SDK checkpoints only the message of a
+  // step failure. So the message names the call and its request ID, and the
+  // AWS SDK error becomes the cause.
+  const notFound = (
+    operation: "GetMicrovm" | "ResumeMicrovm",
+    error: unknown,
+  ): MicrovmStateError => {
+    const requestId = (error as { $metadata?: { requestId?: unknown } })
+      .$metadata?.requestId;
+    const requestIdText =
+      typeof requestId === "string" && requestId !== ""
+        ? ` ${operation} request ID: ${requestId}.`
+        : "";
+    return new MicrovmStateError(
+      `MicroVM ${options.microvmId} no longer exists. A session MicroVM lives at most its session timeout plus 5 minutes, and never longer than 8 hours.${requestIdText}`,
+      undefined,
+      { cause: error },
     );
+  };
 
   for (;;) {
     let state: string | undefined;
@@ -149,7 +172,7 @@ export async function ensureRunning(
       stateReason = current.stateReason;
     } catch (error) {
       if ((error as Error).name === "ResourceNotFoundException") {
-        throw notFound();
+        throw notFound("GetMicrovm", error);
       }
       throw error;
     }
@@ -176,7 +199,7 @@ export async function ensureRunning(
         // MicroVM was removed after the state check.
         const errorName = (error as Error).name;
         if (errorName === "ResourceNotFoundException") {
-          throw notFound();
+          throw notFound("ResumeMicrovm", error);
         }
         if (errorName !== "ConflictException") {
           throw error;

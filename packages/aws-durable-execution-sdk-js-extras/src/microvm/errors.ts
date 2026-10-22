@@ -90,6 +90,12 @@ export class MicrovmDeliveryError extends MicrovmError {
  * MicroVM that no longer exists. A later attempt finds the same state. So
  * the job is not retried. To continue, start a new session.
  *
+ * When GetMicrovm or ResumeMicrovm reports that the MicroVM no longer exists,
+ * the message ends with the request ID of that call, in the form
+ * `GetMicrovm request ID: <id>.` or `ResumeMicrovm request ID: <id>.`. A
+ * support case can quote it. The message has no request ID when the AWS SDK
+ * error carries none.
+ *
  * By default, with no `idlePolicy`, the session makes no GetMicrovm call. The endpoint of a terminated MicroVM answers 502, and the
  * request step retries a 502 as a MicroVM that is still starting. So the job
  * fails with a plain {@link MicrovmDeliveryError}, after the retries of both
@@ -308,6 +314,11 @@ export const SDK_ERROR_TYPES: ReadonlySet<string> = new Set([
  * `Error` thrown by the handler, as `StepError`, and keeps the original type
  * as `cause.name`. So `errorType` alone cannot tell a failed step from a
  * failed handler. So rule 2 also requires `cause.name` to match the type.
+ *
+ * The SDK checkpoints a failed context with the error its SDK wrappers carry,
+ * so a step or submitter that failed inside the session is wrapped by rule 3.
+ * Rule 2 applies to an SDK error that wraps nothing, and to a checkpoint
+ * written by an older SDK, which holds the wrapper's type.
  */
 export function sessionErrorMapper(
   error: DurableOperationError,

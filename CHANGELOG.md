@@ -119,6 +119,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A failed `context.invoke` now throws an `InvokeError` whose `cause.name` is the invoked
+  function's error type (for example `"PaymentError"`), with the remote stack trace, as the
+  callback handlers and replayed operations already do. Before, `cause.name` was always
+  `"Error"`. A cause is now also created when the remote error has a type but no message.
+
+- A failed child context, map item, parallel branch, promise combinator, or `waitForCallback`
+  now checkpoints the error that caused the failure instead of the SDK wrapper around it. The
+  SDK unwraps its own wrappers (`StepError`, `CallbackError`, `CallbackExternalError`,
+  `CallbackSubmitterError`, `InvokeError`, `ChildContextError`, `PromiseCombinatorError`,
+  `WaitForConditionError`; at most 16, cycle-safe) and writes the wrapped error's type,
+  message, data, and stack trace. `CallbackTimeoutError` and `BatchCompletionError` are never
+  unwrapped. The live path now throws the error rebuilt from that checkpoint, so live and
+  replay throw the same shape. User-visible changes:
+  - A context whose step threw `PaymentError` throws `ChildContextError` → `StepError` →
+    cause named `"PaymentError"`. Before, the innermost cause was named `"StepError"`. The
+    same applies to `PromiseCombinatorError`, map items, parallel branches, and
+    `CallbackSubmitterError`.
+  - The context's checkpoint `ErrorType` (and `OperationInfo.error` for plugins) is the user's
+    type instead of `"StepError"`.
+  - `waitForCallback` failed externally with an explicit `ErrorType` now throws
+    `CallbackSubmitterError` (cause chain ends at that type), live and on replay. Before, it
+    threw `CallbackExternalError` whose cause was named `"CallbackExternalError"`. A failure
+    with no type still throws `CallbackExternalError`, and a timeout `CallbackTimeoutError`.
+  - A callback failed externally with no `ErrorType` (missing, empty, or blank) now has
+    `cause.name` `"CallbackExternalError"` (`"CallbackTimeoutError"` for a timeout) instead of
+    `"Error"`, so it is distinct from the explicit type `"Error"`.
+  - `OperationInfo.error` of a `CALLBACK` operation is the `CallbackExternalError` or
+    `CallbackTimeoutError` the callback handler throws, instead of a `StepError`.
+
+  Checkpoints written by older SDK versions still replay: their wrapper type is rebuilt as
+  before.
+
 - **OpenTelemetry**: `FAILED`, `TIMED_OUT`, and `STOPPED` operations remain `ERROR` in both views,
   including later-invocation continuations, even without error details.
   Exception events still require an actual error object.
@@ -288,6 +320,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   starting. So the job failed with `MicrovmDeliveryError` only after both retry tiers. The launch
   checkpoint now records the resume mode as `"resumeBeforeDelivery": true` or
   `"resumeBeforeDelivery": false`, and replay follows it.
+- A `microvmSession` job in `@aws/durable-execution-sdk-js-extras` reported a removed MicroVM
+  without the request ID of the AWS call. GetMicrovm and ResumeMicrovm answer
+  `ResourceNotFoundException` for a removed MicroVM, and the AWS SDK error carries the request ID.
+  The request step dropped that error. So a support case had no request ID to quote. The
+  `MicrovmNotRunningError` message now ends with `GetMicrovm request ID: <id>.` or
+  `ResumeMicrovm request ID: <id>.`. The SDK checkpoints the message. So the handler sees the ID
+  on the first run and on replay, and the execution history keeps it. A message has no ID when the
+  AWS SDK error carries none. `MicrovmStateError` also keeps the AWS SDK error as its `cause`.
+  Only the retry strategy and the plugin hooks of a live step attempt see `cause`. A replayed step
+  rebuilds the error from the checkpoint, without it.
 
 - An `InvalidRunHookPayloadError` for a `runHookPayload` that is not JSON now keeps the parser's
   `SyntaxError` as its `cause`. Its message names the position of the error.
