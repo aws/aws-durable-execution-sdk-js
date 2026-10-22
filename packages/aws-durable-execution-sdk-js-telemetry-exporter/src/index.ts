@@ -215,16 +215,30 @@ function toIsoString(ts: unknown): string | undefined {
 const MAX_CAUSE_DEPTH = 16;
 
 /**
- * Longest `message` written for an error or a cause, in characters (UTF-16
- * code units). A longer message keeps this many characters followed by `…`.
+ * Longest `name` or `message` written for an error or a cause, in Unicode code
+ * points (not UTF-16 code units), so a cut never splits a surrogate pair and the
+ * cut point matches the Python and Java exporters. A longer value keeps this
+ * many code points followed by `…`.
  */
-const MAX_MESSAGE_LENGTH = 8192;
+const MAX_TEXT_LENGTH = 8192;
 
-/** Caps a message at {@link MAX_MESSAGE_LENGTH} characters, then appends `…`. */
-function capMessage(message: string): string {
-  return message.length > MAX_MESSAGE_LENGTH
-    ? `${message.slice(0, MAX_MESSAGE_LENGTH)}…`
-    : message;
+/**
+ * Caps a `name` or `message` at {@link MAX_TEXT_LENGTH} code points, then
+ * appends `…`. A string has at least as many UTF-16 units as code points, so a
+ * string of at most {@link MAX_TEXT_LENGTH} units is returned without scanning.
+ * A longer string is scanned only up to the cut point.
+ */
+function capText(text: string): string {
+  if (text.length <= MAX_TEXT_LENGTH) return text;
+  let units = 0;
+  let points = 0;
+  for (const ch of text) {
+    if (points === MAX_TEXT_LENGTH) return `${text.slice(0, units)}…`;
+    units += ch.length;
+    points++;
+  }
+  // More units than the cap, but at most MAX_TEXT_LENGTH code points.
+  return text;
 }
 
 /**
@@ -280,43 +294,51 @@ interface CauseLevel {
 }
 
 /**
+ * Reads an error object's `name` and `message` as strings, capped: a non-string
+ * value is converted with the same safe stringify used for non-error causes, a
+ * missing (`undefined`/`null`) `name` is `"Error"`, and a missing `message` is
+ * `""`. Does not catch: a throwing getter or proxy trap propagates to the
+ * caller, which decides what a failed read means.
+ */
+function readNameAndMessage(error: Error): ErrorRecord {
+  const name: unknown = error.name;
+  const message: unknown = error.message;
+  return {
+    name: capText(
+      typeof name === "string"
+        ? name
+        : name == null
+          ? "Error"
+          : causeToString(name),
+    ),
+    message: capText(
+      typeof message === "string"
+        ? message
+        : message == null
+          ? ""
+          : causeToString(message),
+    ),
+  };
+}
+
+/**
  * One cause level. Unlike the top-level error, a cause is customer data the
  * exporter did not ask for, so any throw while reading it — classifying it
  * (revoked proxy, throwing `Symbol.toStringTag`), or reading `name`/`message`
  * — ends the chain (returns `undefined`) instead of losing the whole record.
  *
- * `name` and `message` are always strings: a non-string value is converted with
- * the same safe stringify used for non-error causes, a missing `name` is
- * `"Error"`, and a missing `message` is `""`. The message is capped.
+ * `name` and `message` are read by {@link readNameAndMessage}, so they are
+ * always capped strings.
  */
 function toCauseLevel(cause: unknown): CauseLevel | undefined {
   try {
     if (!isErrorObject(cause)) {
       return {
-        record: { name: "Error", message: capMessage(causeToString(cause)) },
+        record: { name: "Error", message: capText(causeToString(cause)) },
         isError: false,
       };
     }
-    const name: unknown = cause.name;
-    const message: unknown = cause.message;
-    return {
-      record: {
-        name:
-          typeof name === "string"
-            ? name
-            : name == null
-              ? "Error"
-              : causeToString(name),
-        message: capMessage(
-          typeof message === "string"
-            ? message
-            : message == null
-              ? ""
-              : causeToString(message),
-        ),
-      },
-      isError: true,
-    };
+    return { record: readNameAndMessage(cause), isError: true };
   } catch {
     return undefined;
   }
@@ -333,18 +355,22 @@ function toCauseLevel(cause: unknown): CauseLevel | undefined {
  * already written, so a cycle cannot loop. A cause that is not an error object
  * is written as `{ name: "Error", message: String(cause) }` and ends the chain.
  * Any throw while reading a cause ends the chain; the levels already written
- * are kept. Every `message` (the error's and each cause's) is capped at
- * {@link MAX_MESSAGE_LENGTH} characters plus `…`. Levels that repeat the level
- * above are written as they are.
+ * are kept. The error's own `name` and `message` are read the same way as a
+ * cause's (converted to strings); if reading either throws, the error is
+ * written as `{ name: "Error", message: "" }` and its cause chain is still
+ * read, so the record is kept. Every `name` and `message` (the error's and each
+ * cause's) is capped at {@link MAX_TEXT_LENGTH} code points plus `…`. Levels
+ * that repeat the level above are written as they are.
  * `cause` is omitted, not `undefined`, when there is none, so the serialized
  * shape is `{ name, message }` exactly as before.
  */
 function toErrorRecord(error: Error): ErrorRecord {
-  const message = error.message;
-  const root: ErrorRecord = {
-    name: error.name,
-    message: typeof message === "string" ? capMessage(message) : message,
-  };
+  let root: ErrorRecord;
+  try {
+    root = readNameAndMessage(error);
+  } catch {
+    root = { name: "Error", message: "" };
+  }
   const visited = new Set<unknown>([error]);
   let tail = root;
   let current: unknown = readCause(error);

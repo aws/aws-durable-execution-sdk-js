@@ -8,7 +8,10 @@ import {
 } from "@aws/durable-execution-sdk-js";
 import { runInNewContext } from "node:vm";
 import { durableExecutionTelemetry, LambdaLogExporter } from "./index";
-import { withOperationsByName } from "./operations-index";
+import {
+  applyOperationsFormat,
+  withOperationsByName,
+} from "./operations-index";
 import { truncateRecord } from "./truncation";
 import type {
   ContentConfig,
@@ -81,6 +84,23 @@ function chain(levels: number): Error {
   let cause: Error | undefined;
   for (let i = levels; i >= 1; i--) cause = named(`Cause${i}`, `c${i}`, cause);
   return named("TopError", "top", cause);
+}
+
+/**
+ * True when `s` has no lone surrogate. Uses `String.prototype.isWellFormed`
+ * (Node 20+) when present, and an equivalent check otherwise.
+ */
+function wellFormed(s: string): boolean {
+  const native = (s as { isWellFormed?: () => boolean }).isWellFormed;
+  if (typeof native === "function") return native.call(s);
+  return !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(
+    s,
+  );
+}
+
+/** Number of code points in `s`. */
+function codePoints(s: string): number {
+  return [...s].length;
 }
 
 /** Number of `cause` levels below `error`. */
@@ -384,7 +404,7 @@ describe("error records", () => {
     });
   });
 
-  it("caps every message, on errors and on causes, at 8,192 characters plus '…'", async () => {
+  it("caps every message, on errors and on causes, at 8,192 code points plus '…'", async () => {
     const long = "m".repeat(10_000);
     const capped = `${"m".repeat(8192)}…`;
     const error = named("StepError", long, named("Inner", long, long));
@@ -410,13 +430,174 @@ describe("error records", () => {
     );
   });
 
-  it("keeps a message of exactly 8,192 characters unchanged", async () => {
+  it("keeps a message of exactly 8,192 code points unchanged", async () => {
     const exact = "m".repeat(8192);
     const rec = await failedRecord({
       executionError: named("StepError", exact, named("Inner", exact)),
     });
     expect(rec.error?.message).toBe(exact);
     expect(rec.error?.cause?.message).toBe(exact);
+  });
+
+  it("counts code points, so a cut never splits a surrogate pair", async () => {
+    // 8,193 code points in 8,195 UTF-16 units: the 8,192nd code point is the
+    // first emoji, so the cut lands between the two emoji, not inside one.
+    const text = `${"a".repeat(8191)}😀😀`;
+    const rec = await failedRecord({
+      executionError: named("StepError", text, named(text, text)),
+    });
+    const expected = `${"a".repeat(8191)}😀…`;
+    for (const value of [
+      rec.error?.message,
+      rec.error?.cause?.name,
+      rec.error?.cause?.message,
+    ]) {
+      expect(value).toBe(expected);
+      expect(wellFormed(value ?? "")).toBe(true);
+    }
+  });
+
+  it("keeps 8,192 emoji of a 9,000-emoji message (code points, not UTF-16 units)", async () => {
+    const text = "😀".repeat(9000);
+    const rec = await failedRecord({
+      executionError: named("StepError", text, named("Inner", text)),
+    });
+    const expected = `${"😀".repeat(8192)}…`;
+    for (const value of [rec.error?.message, rec.error?.cause?.message]) {
+      expect(value).toBe(expected);
+      expect(codePoints(value ?? "")).toBe(8193);
+      expect(wellFormed(value ?? "")).toBe(true);
+    }
+  });
+
+  it("keeps a value of 8,192 code points but more UTF-16 units unchanged", async () => {
+    const text = `${"a".repeat(8191)}😀`; // 8,193 units, 8,192 code points
+    const rec = await failedRecord({
+      executionError: named(text, text),
+    });
+    expect(rec.error).toEqual({ name: text, message: text });
+  });
+
+  it("caps a 70,000-character name on errors and on causes", async () => {
+    const long = "N".repeat(70_000);
+    const capped = `${"N".repeat(8192)}…`;
+    const error = named(long, "failed", named(long, "inner"));
+    const rec = await failedRecord({
+      executionError: error,
+      operations: {
+        o1: op({ id: "o1", name: "charge", status: "FAILED", error }),
+      },
+    });
+    const expected = {
+      name: capped,
+      message: "failed",
+      cause: { name: capped, message: "inner" },
+    };
+    expect(rec.error).toEqual(expected);
+    expect(rec.operations[0].error).toEqual(expected);
+    expect(withOperationsByName(rec).operationsByName.charge.error).toEqual(
+      expected,
+    );
+  });
+
+  it("writes the root error as { name: 'Error', message: '' } when its getters throw, keeping the record and its cause", async () => {
+    const throwingName = new Error("m", { cause: named("Inner", "inner") });
+    Object.defineProperty(throwingName, "name", {
+      get(): string {
+        throw new Error("name getter blew up");
+      },
+    });
+    const a = await failedRecord({ executionError: throwingName });
+    expect(a.error).toEqual({
+      name: "Error",
+      message: "",
+      cause: { name: "Inner", message: "inner" },
+    });
+
+    const throwingMessage = new Error("m");
+    Object.defineProperty(throwingMessage, "message", {
+      get(): string {
+        throw new Error("message getter blew up");
+      },
+    });
+    const b = await failedRecord({
+      executionError: throwingMessage,
+      operations: {
+        o1: op({
+          id: "o1",
+          name: "charge",
+          status: "FAILED",
+          error: throwingMessage,
+        }),
+      },
+    });
+    expect(b.error).toEqual({ name: "Error", message: "" });
+    expect(b.operations[0].error).toEqual({ name: "Error", message: "" });
+  });
+
+  it("converts a non-string root name and message to strings, and caps them", async () => {
+    const root = new Error("x");
+    Object.defineProperty(root, "name", { value: { nested: 1 } });
+    Object.defineProperty(root, "message", { value: 42 });
+    const rec = await failedRecord({ executionError: root });
+    expect(rec.error).toEqual({ name: "[object Object]", message: "42" });
+
+    const missing = new Error("x");
+    Object.defineProperty(missing, "name", { value: undefined });
+    Object.defineProperty(missing, "message", { value: null });
+    const rec2 = await failedRecord({ executionError: missing });
+    expect(rec2.error).toEqual({ name: "Error", message: "" });
+  });
+
+  it("ends the chain at a cause whose name getter throws, keeping the record", async () => {
+    const cause = new Error("y");
+    Object.defineProperty(cause, "name", {
+      get(): string {
+        throw new Error("name getter blew up");
+      },
+    });
+    const rec = await failedRecord({
+      executionError: named(
+        "StepError",
+        "failed",
+        named("Inner", "inner", cause),
+      ),
+    });
+    expect(rec.error).toEqual({
+      name: "StepError",
+      message: "failed",
+      cause: { name: "Inner", message: "inner" },
+    });
+  });
+
+  it("stops an infinite chain of distinct causes at 16 levels", async () => {
+    let calls = 0;
+    const endless = (n: number): Error => {
+      const e = named(`Cause${n}`, `c${n}`);
+      Object.defineProperty(e, "cause", {
+        get(): Error {
+          calls++;
+          return endless(n + 1);
+        },
+      });
+      return e;
+    };
+    const top = named("TopError", "top");
+    Object.defineProperty(top, "cause", {
+      get(): Error {
+        calls++;
+        return endless(1);
+      },
+    });
+    const rec = await failedRecord({ executionError: top });
+    expect(depth(rec.error)).toBe(16);
+    let c = rec.error?.cause;
+    for (let i = 1; i <= 16; i++) {
+      expect(c).toMatchObject({ name: `Cause${i}`, message: `c${i}` });
+      c = c?.cause;
+    }
+    // One read for the root and one per written level; nothing below 16.
+    expect(calls).toBe(17);
   });
 
   it("writes levels that repeat the level above (no dedupe)", async () => {
@@ -461,6 +642,72 @@ describe("error records", () => {
     expect(rec.operations[0].error?.cause?.name).toBe("Big");
   });
 
+  it.each(["both", "by-name"] as const)(
+    "truncation with operationsFormat %s removes causes from operationsByName too",
+    async (format) => {
+      const rec = await failedRecord({
+        executionError: named("StepError", "failed", named("Inner", "dropped")),
+        operations: {
+          o1: op({
+            id: "o1",
+            name: "charge",
+            status: "FAILED",
+            startTimestamp: new Date("2026-01-01T00:00:00.000Z"),
+            error: named("StepError", "x", named("Big", "y".repeat(2000))),
+          }),
+        },
+      });
+      const render = (r: DurableExecutionTelemetryRecord): unknown =>
+        applyOperationsFormat(r, format);
+      const size = (v: unknown): number => Buffer.byteLength(JSON.stringify(v));
+      const full = size(render(rec));
+      const cut = truncateRecord(rec, full - 1, render);
+      const rendered = render(cut) as {
+        operations?: unknown;
+        operationsByName: Record<string, { error?: ErrorRecord }>;
+      };
+      expect(size(rendered)).toBeLessThanOrEqual(full - 1);
+      expect(cut.truncated).toBe(true);
+      expect(cut.droppedCauses).toBe(true);
+      expect(cut.droppedOperations).toBeUndefined();
+      expect(rendered.operationsByName.charge.error).toEqual({
+        name: "StepError",
+        message: "x",
+      });
+      expect(rendered.operations !== undefined).toBe(format === "both");
+      expect(JSON.stringify(rendered)).not.toContain('"cause"');
+    },
+  );
+
+  it("does not set droppedCauses on an over-limit record that has no causes", async () => {
+    const rec = await failedRecord({
+      executionError: named("StepError", "failed"),
+      operations: {
+        o1: op({
+          id: "o1",
+          name: "old",
+          status: "FAILED",
+          startTimestamp: new Date("2026-01-01T00:00:00.000Z"),
+          error: named("StepError", "y".repeat(2000)),
+        }),
+        o2: op({
+          id: "o2",
+          name: "new",
+          status: "FAILED",
+          startTimestamp: new Date("2026-01-01T00:00:01.000Z"),
+          error: named("StepError", "z"),
+        }),
+      },
+    });
+    const full = Buffer.byteLength(JSON.stringify(rec));
+    const cut = truncateRecord(rec, full - 100);
+    expect(cut.truncated).toBe(true);
+    expect(cut.droppedCauses).toBeUndefined();
+    expect("droppedCauses" in cut).toBe(false);
+    expect(cut.droppedOperations).toBe(1);
+    expect(cut.operations.map((o) => o.name)).toEqual(["new"]);
+  });
+
   it("does not set droppedCauses when the record fits", async () => {
     const rec = await failedRecord({
       executionError: named("StepError", "failed", named("Inner", "kept")),
@@ -470,7 +717,7 @@ describe("error records", () => {
     expect(out.droppedCauses).toBeUndefined();
   });
 
-  it("keeps the failing operation for nested child contexts with a 60 KB message", async () => {
+  it("caps nested child-context errors with 60 KB messages so the record stays under the limit untruncated", async () => {
     // The shapes the SDK produces for three nested child contexts around a
     // step that throws a 60 KB message: each context error wraps the step
     // error, which wraps the thrown error, and every level copies the message.
@@ -527,6 +774,10 @@ describe("error records", () => {
     );
     const line = JSON.stringify(exporter.render(out));
     expect(Buffer.byteLength(line)).toBeLessThanOrEqual(256_000);
+    // The cap alone keeps the record under the limit: truncation is a no-op.
+    expect(out).toBe(rec);
+    expect(out.truncated).toBeUndefined();
+    expect(out.droppedCauses).toBeUndefined();
     expect(out.droppedOperations).toBeUndefined();
     // The default operationDetail keeps top-level operations only, so the
     // failing operation in the record is the outer context (as in a real run).
@@ -549,6 +800,7 @@ describe("error records", () => {
     expect(
       Buffer.byteLength(JSON.stringify(exporter.render(treeOut))),
     ).toBeLessThanOrEqual(256_000);
+    expect(treeOut).toBe(tree);
     expect(treeOut.droppedOperations).toBeUndefined();
     const pay = treeOut.operations.find((o) => o.name === "pay");
     expect(pay?.error?.name).toBe("StepError");
