@@ -145,7 +145,8 @@ Rules for the client:
 1. Lambda calls the wrapped handler with `{DurableExecutionArn, CheckpointToken,
    InitialExecutionState: {Operations, NextMarker}}`.
 2. The SDK loads the remaining pages with `GetDurableExecutionState` until `NextMarker` is
-   empty.
+   empty. If a page request fails, the SDK throws from the Lambda handler, so Lambda invokes
+   again.
 3. The first operation is the `EXECUTION` operation. The user event is
    `JSON.parse(ExecutionDetails.InputPayload)`, or `{}` if the payload is empty.
 4. The SDK calls `handler({ event, ctx, lambdaContext })`.
@@ -203,7 +204,10 @@ Suspension:
    promises start the next operation first. If it still holds, the invocation returns PENDING.
 6. After the SDK decides to return PENDING, every later `checkpoint` call returns a promise that
    never resolves. So user code cannot run more side effects in this invocation.
-7. The SDK has no timers and does not poll. Effect: a branch whose wait ends while another
+7. After the handler returns or throws, the execution never suspends. An un-awaited blocked
+   operation must not turn a finished handler into PENDING. So the SDK counts the finished
+   handler as running while it saves the remaining checkpoints.
+8. The SDK has no timers and does not poll. Effect: a branch whose wait ends while another
    branch runs a step continues only in the next invocation. This is accepted (rule 1.1).
 
 ### 2.6 Replay
@@ -213,7 +217,9 @@ Suspension:
    `name` must match a missing `Name`. A mismatch ends the execution as FAILED with
    `errorType: "NonDeterministicExecutionError"`.
 3. Each `ctx` has `replaying`. It is true while the last id that the `ctx` created had a record
-   in the state. The logger is silent while `replaying` is true.
+   in the state. Before the first id, the root `ctx` is replaying if the state holds more than
+   the `EXECUTION` record. A child `ctx` is replaying if its own context record exists. The
+   logger is silent while `replaying` is true.
 4. Every operation returns `JSON.parse(JSON.stringify(value))` on the first run, the same
    value it returns on replay. So the first run and a replay see the same data.
 
