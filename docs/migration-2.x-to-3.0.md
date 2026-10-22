@@ -48,12 +48,15 @@ later:
 | `@aws/durable-execution-sdk-js-testing` | `1.3.2` | `>=1.0.1 <4.0.0` |
 
 After publication, update the packages your application uses and regenerate its
-lock file:
+lock file. If you use the Testing SDK, upgrade it first: `1.3.1` excludes Core 3
+from its peer range, while `1.3.2` supports both Core 2 and Core 3. Keeping a
+pinned `1.3.1` while installing Core 3 can cause npm to reject the install with
+`ERESOLVE`.
 
 ```bash
+npm install --save-dev @aws/durable-execution-sdk-js-testing@1.3.2
 npm install @aws/durable-execution-sdk-js@3.0.0 \
   @aws/durable-execution-sdk-js-otel@2.0.0
-npm install --save-dev @aws/durable-execution-sdk-js-testing@1.3.2
 npm ls @aws/durable-execution-sdk-js @aws/durable-execution-sdk-js-otel
 ```
 
