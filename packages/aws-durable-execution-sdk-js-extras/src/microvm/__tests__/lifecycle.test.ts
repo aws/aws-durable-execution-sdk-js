@@ -1,6 +1,10 @@
-import { ResourceNotFoundException } from "@aws-sdk/client-lambda-microvms";
+import {
+  AccessDeniedException,
+  ResourceNotFoundException,
+} from "@aws-sdk/client-lambda-microvms";
 import { MicrovmEndpointUnavailableError } from "..";
-import { ensureRunning, MicrovmStateError } from "../lifecycle";
+import { MicrovmStateError } from "../aws-errors";
+import { ensureRunning } from "../lifecycle";
 import { FakeMicrovmsClient, throwing } from "./fakes";
 
 const state =
@@ -204,6 +208,55 @@ describe("ensureRunning", () => {
     client.resumeResponses = [throwing(denied)];
 
     await expect(ensureRunning(options(client))).rejects.toBe(denied);
+  });
+
+  it.each<"GetMicrovm" | "ResumeMicrovm">(["GetMicrovm", "ResumeMicrovm"])(
+    "rethrows any other %s error as the same object, with the request ID in its message",
+    async (operation) => {
+      const client = new FakeMicrovmsClient();
+      const denied = new AccessDeniedException({
+        message: "denied",
+        $metadata: { httpStatusCode: 403, requestId: "req-123" },
+      });
+      if (operation === "GetMicrovm") {
+        client.getResponses = [throwing(denied)];
+      } else {
+        client.getResponses = [state("SUSPENDED")];
+        client.resumeResponses = [throwing(denied)];
+      }
+
+      await expect(ensureRunning(options(client))).rejects.toBe(denied);
+      expect(denied).toBeInstanceOf(AccessDeniedException);
+      expect(denied.name).toBe("AccessDeniedException");
+      expect(denied.message).toBe(`denied. ${operation} request ID: req-123.`);
+    },
+  );
+
+  it.each<[string, Record<string, unknown>, string]>([
+    [
+      "with the request ID of the GetMicrovm answer",
+      { $metadata: { httpStatusCode: 200, requestId: "req-123" } },
+      "MicroVM mvm-1 is TERMINATED: MaximumDuration. GetMicrovm request ID: req-123.",
+    ],
+    [
+      "without a request ID when the answer has none",
+      { $metadata: { httpStatusCode: 200 } },
+      "MicroVM mvm-1 is TERMINATED: MaximumDuration.",
+    ],
+  ])("reports a terminated MicroVM %s", async (_label, metadata, message) => {
+    const client = new FakeMicrovmsClient();
+    client.getResponses = [
+      async () => ({
+        state: "TERMINATED",
+        stateReason: "MaximumDuration",
+        ...metadata,
+      }),
+    ];
+
+    const error = await ensureRunning(options(client)).catch((e) => e);
+    expect(error).toBeInstanceOf(MicrovmStateError);
+    expect(error.state).toBe("TERMINATED");
+    expect(error.message).toBe(message);
   });
 
   it("gives up after maxWaitMs", async () => {
