@@ -14,15 +14,31 @@ beforeEach(() => {
 });
 
 describe("SQSExporter", () => {
-  it("rejects an empty messageGroupId, which SQS would reject on every send", () => {
-    expect(
-      () =>
-        new SQSExporter({
-          queueUrl: "https://sqs.us-east-1.amazonaws.com/123456789012/t.fifo",
-          messageGroupId: "",
-        }),
-    ).toThrow(/messageGroupId must not be empty/);
-    expect(mockSend).not.toHaveBeenCalled();
+  it("treats an empty messageGroupId as omitted on a standard queue: no group id is sent", async () => {
+    const exporter = new SQSExporter({
+      queueUrl: "https://sqs.us-east-1.amazonaws.com/123456789012/telemetry",
+      messageGroupId: "",
+    });
+
+    await exporter.export(makeRecord());
+
+    const input = mockSend.mock.calls[0][0].__input;
+    expect(input.MessageGroupId).toBeUndefined();
+    expect(input.MessageDeduplicationId).toBeUndefined();
+  });
+
+  it("treats an empty messageGroupId as omitted on a FIFO queue: groups by executionArn", async () => {
+    const exporter = new SQSExporter({
+      queueUrl: "https://sqs.us-east-1.amazonaws.com/123456789012/t.fifo",
+      messageGroupId: "",
+    });
+    const record = makeRecord();
+
+    await exporter.export(record);
+
+    expect(mockSend.mock.calls[0][0].__input.MessageGroupId).toBe(
+      record.executionArn,
+    );
   });
 
   it("sends a standard-queue message with attributes and no FIFO fields", async () => {

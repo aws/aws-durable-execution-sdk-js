@@ -19,7 +19,8 @@ export interface SQSExporterConfig {
    * Message group ID (required for FIFO queues, ignored for standard).
    * Default: the executionArn (groups messages per execution). A value longer
    * than 128 characters is replaced by its SHA-256 hex digest. An empty string
-   * is rejected by the constructor, because SQS rejects it.
+   * is treated as omitted (as in the Python exporter): a standard queue sends no
+   * group id, and a FIFO queue groups by the executionArn.
    */
   messageGroupId?: string;
 
@@ -64,13 +65,10 @@ export class SQSExporter implements TelemetryExporter {
   readonly maxRecordSizeBytes: number;
 
   constructor(config: SQSExporterConfig) {
-    if (config.messageGroupId === "") {
-      throw new TypeError(
-        "SQSExporter: messageGroupId must not be empty; omit it to group by executionArn",
-      );
-    }
     this.queueUrl = config.queueUrl;
-    this.messageGroupId = config.messageGroupId;
+    // "" is treated as omitted, so `process.env.GROUP ?? undefined` with an
+    // empty variable keeps working on both queue types.
+    this.messageGroupId = config.messageGroupId || undefined;
     this.isFifo = config.queueUrl.endsWith(".fifo");
     this.operationsFormat = config.operationsFormat ?? "array";
     this.maxRecordSizeBytes = config.maxRecordSizeBytes ?? 256_000;
