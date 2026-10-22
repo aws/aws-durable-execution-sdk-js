@@ -16,7 +16,7 @@ export interface SQSExporterConfig {
   queueUrl: string;
 
   /**
-   * Message group ID (required for FIFO queues, ignored for standard).
+   * Message group ID, sent to FIFO queues only (a standard queue sends none).
    * Default: the executionArn (groups messages per execution). A value longer
    * than 128 characters is replaced by its SHA-256 hex digest. An empty string
    * is treated as omitted (as in the Python exporter): a standard queue sends no
