@@ -366,7 +366,9 @@ export interface MicrovmSession {
    * @throws \{MicrovmNotRunningError\} When the session's MicroVM has ended,
    * and the session checks the MicroVM state before each job. It checks with
    * `autoSuspendOnIdle: true` or an `idlePolicy`. Otherwise an ended MicroVM
-   * fails the job with {@link MicrovmDeliveryError} after the retries.
+   * fails the job with {@link MicrovmDeliveryError} after the retries. Every
+   * session also reports it when CreateMicrovmAuthToken reports the MicroVM
+   * removed.
    * @throws \{MicrovmDeliveryError\} When the request fails after all
    * retries, or the route rejects the job.
    * @throws \{TypeError\} When `context` is not a durable context, or
