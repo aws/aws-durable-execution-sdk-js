@@ -9,6 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Telemetry exporter (breaking for saved queries)**: `error.name` in telemetry records now
+  names the error that caused the failure, by one rule shared with the Python and Java exporters
+  (see the exporter README). It applies to the execution `error`, `operations[].error` and
+  `operationsByName.<name>.error`, and gives the same name live and on a later invocation.
+  `error.message` is unchanged. Queries, dashboards or alarms that match the old values must be
+  updated. Old → new, for a `PaymentError` thrown by user code:
+  - Step or `waitForCondition` check: execution `StepError` → `PaymentError`; operation
+    `StepError` → `PaymentError`.
+  - Child context, map item or parallel branch (directly, or from a step inside it): execution
+    `ChildContextError` → `PaymentError`; operation `StepError` → `PaymentError`.
+  - `waitForCallback` submitter: execution `CallbackSubmitterError` → `PaymentError`; operation
+    `StepError` → `PaymentError`.
+  - Invoked function: execution `InvokeError` → `PaymentError`; operation `StepError` →
+    `PaymentError`.
+  - Callback failed externally with `ErrorType: "PaymentError"`: execution
+    `CallbackExternalError` → `PaymentError`; operation `StepError` → `PaymentError`. With no
+    `ErrorType`, both are `CallbackExternalError` (the operation was `StepError`).
+  - Callback timeout: execution stays `CallbackTimeoutError`; operation `StepError` →
+    `CallbackTimeoutError`. A `/Timeout/` match on `error.name` keeps working.
+  - A qualified type string is reduced to its last segment after `.` or `$`
+    (`"a.b.Outer$PaymentError"` → `"PaymentError"`), and an empty or blank name is reported as
+    `"Error"` (it was `""`).
+- **Telemetry exporter**: the SQS exporter replaces a FIFO `MessageGroupId` or
+  `MessageDeduplicationId` longer than 128 characters (the SQS limit, which a durable execution
+  ARN usually exceeds) with the lowercase hex SHA-256 digest of its UTF-8 bytes. Before, such
+  sends were rejected by SQS.
+
 - Checkpoint-derived `OperationInfo.error` can be absent when a failed callback
   or invoke has missing wire error data or no defined diagnostic values.
   Instrumentation should use

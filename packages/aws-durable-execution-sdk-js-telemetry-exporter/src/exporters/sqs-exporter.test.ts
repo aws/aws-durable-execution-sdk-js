@@ -73,7 +73,9 @@ describe("SQSExporter", () => {
     // A realistic 144-character durable execution ARN. The expected digests were
     // computed independently with Python's hashlib:
     //   hashlib.sha256(value.encode("utf-8")).hexdigest()
-    // and match what the Python and Java exporters send for the same record.
+    // The Python and Java exporters apply the same rule to the same input
+    // string. (Their dedup input embeds their own emittedAt format, so a real
+    // record's dedup id can differ across SDKs.)
     const LONG_ARN =
       "arn:aws:lambda:us-east-1:123456789012:function:order-processor:$LATEST/durable-execution/order-bdd640fb0667/23b8c1e9-3924-46de-beb1-3b9046685257";
     const EMITTED_AT = "2026-01-01T00:00:10.000Z";

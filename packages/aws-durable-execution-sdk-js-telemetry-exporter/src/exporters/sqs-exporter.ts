@@ -47,7 +47,7 @@ export interface SQSExporterConfig {
  * `executionArn:emittedAt` to prevent duplicates while allowing updates. SQS
  * caps both FIFO ids at 128 characters and realistic execution ARNs are
  * longer, so an id over that limit is replaced by its SHA-256 hex digest
- * (see {@link fifoId}).
+ * (see the internal `fifoId` helper).
  *
  * Use this when you need guaranteed delivery to a single consumer or want
  * to decouple export processing from the Lambda invocation.
@@ -109,8 +109,9 @@ const MAX_FIFO_ID_LENGTH = 128;
  * Returns `value` when it fits the SQS FIFO id limit, otherwise the lowercase
  * hex SHA-256 digest of its UTF-8 bytes (64 characters).
  *
- * The Python and Java exporters apply the same rule to the same input strings,
- * so a given record gets the same ids from every SDK.
+ * The Python and Java exporters apply the same rule to the same input string.
+ * The dedup input embeds each SDK's own `emittedAt` string, so dedup ids for
+ * the same emission can differ across SDKs.
  *
  * @internal Exported for tests.
  */

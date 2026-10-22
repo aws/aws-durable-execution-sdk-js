@@ -44,7 +44,7 @@ interface DurableExecutionTelemetryRecord {
   output?: unknown; // Execution result (on success)
   error?: {
     // Error details (on failure)
-    name: string; // Simple type name of the user's error, e.g. "PaymentError" (see below)
+    name: string; // Type name of the error that caused the failure, e.g. "PaymentError" (see below)
     message: string;
   };
 
@@ -71,25 +71,69 @@ interface OperationRecord {
   attempt?: number; // Retry attempt count
   error?: {
     // Per-operation error
-    name: string; // Simple type name of the user's error, e.g. "PaymentError" (see below)
+    name: string; // Type name of the error that caused the failure, e.g. "PaymentError" (see below)
     message: string;
   };
   truncated?: boolean; // true if the size limiter dropped this operation's result
 }
 ```
 
-**`error.name`** is the simple type name of the error your code raised — for
-example `"PaymentError"` for `throw new PaymentError("card declined")` inside a
-step — rather than the SDK wrapper it reached the plugin in (`StepError`,
-`CallbackError`, ...). The same rule applies to the execution-level `error`, every
-`operations[].error` and `operationsByName.<name>.error`, and gives the same name
-whether the failure happened in the current invocation or is read back from
-checkpointed state on a later one. A type string with namespace or nesting
-separators is reduced to its last segment after any `.` and `$`
-(`"a.b.Outer$PaymentError"` → `"PaymentError"`). When no user error is behind a
-failure (for example a callback timeout), `name` is the SDK error's own name
-(`"CallbackTimeoutError"`). `message` is the error message. The Python and Java
-exporters report `error.name` the same way.
+#### `error.name`
+
+`error.message` is never changed. `error.name` follows one rule, shared with the
+Python and Java exporters. It applies to the execution-level `error`, every
+`operations[].error`, and every `operationsByName.<name>.error`.
+
+1. A record names the error that caused the failure. A wrapper error that the
+   SDK added is never the name.
+2. The SDK unwraps an error only when the error's type is one of the SDK's own
+   wrapper types. A user error is never unwrapped, even if it has a cause.
+3. Unwrapping follows the whole chain of SDK wrappers, up to a depth of 16. A
+   cycle stops the walk.
+4. If the chain ends at a user error, the name is that error's type name.
+5. If the chain ends at an SDK error that is not a wrapper, the name is that
+   SDK error's simple class name. A callback timeout is an example.
+6. A type name that is a qualified string is reduced to its last segment after
+   any `.` or `$`. If that segment is empty, the string is kept as it is.
+7. A failure gets the same name whether the record is built live or from a
+   replayed checkpoint.
+8. When the execution fails because an operation's error propagated, the
+   execution `error.name` equals that operation's `error.name`.
+
+A missing, empty or whitespace-only type name is reported as `"Error"`. A type
+name is never trimmed. A non-string `name` is converted with `String(...)`.
+
+In this SDK the wrapper types (rule 2) are matched by the error's `errorType`:
+`StepError`, `CallbackError`, `CallbackExternalError`, `CallbackSubmitterError`,
+`InvokeError`, `ChildContextError`, `PromiseCombinatorError` and
+`WaitForConditionError`. Some results:
+
+| Failure | `error.name` (operation and execution) |
+| --- | --- |
+| A step, child context, map item, parallel branch, `waitForCondition` check, `waitForCallback` submitter or invoked function throws `PaymentError` | `"PaymentError"` |
+| A callback times out | `"CallbackTimeoutError"` |
+| A callback is failed externally with `ErrorType: "PaymentError"` | `"PaymentError"` |
+| A callback is failed externally with no `ErrorType` (or `"Error"`) | `"CallbackExternalError"` |
+| A map or parallel completed as failed by `shouldComplete` | `"BatchCompletionError"` (execution) |
+| `"a.b.Outer$PaymentError"` / `"Payment$Error"` / `"trailing."` | `"PaymentError"` / `"Error"` / `"trailing."` |
+
+> **Set `name` on your error classes.** The name comes from the error's `name`
+> property, which is also what the SDK checkpoints. JavaScript does not set it
+> from the class: `class PaymentError extends Error {}` reports `"Error"`. Set
+> it in the constructor (`this.name = "PaymentError";`) to get the same name as
+> the Python and Java SDKs, which use the class name. Do not rely on
+> `constructor.name`; bundlers rename classes when they minify.
+
+> **Nested failures across invocations.** When a step fails inside a child
+> context, a map item, a parallel branch or a `waitForCallback`, the SDK
+> checkpoints the context with the wrapper's type (`StepError`). The user's type
+> is kept only by the failed step inside the context, and the plugin takes the
+> name from there. In the invocation where the failure happens, that step is
+> always available. On a later invocation (the handler caught the error,
+> suspended, and rethrew it) the backend omits the children of a finished
+> context unless [`childOperationsDepth`](#childoperationsdepth-on-withdurableexecution)
+> preserves them down to the failed step. Without that, the context and the
+> execution are both reported as `"StepError"`.
 
 ### Example Record
 
@@ -1245,7 +1289,7 @@ const telemetry = durableExecutionTelemetry({
 });
 ```
 
-**FIFO support:** Auto-detected from `.fifo` URL suffix. Group ID = `messageGroupId` (default: `executionArn`). Dedup ID = `executionArn:emittedAt`. SQS limits both IDs to 128 characters and durable execution ARNs are usually longer, so an ID over 128 characters is replaced by the lowercase hex SHA-256 digest of its UTF-8 bytes (64 characters) — the same IDs the Python and Java exporters send for the same record. Message attributes include `status` and `functionName` for SQS message filtering.
+**FIFO support:** Auto-detected from `.fifo` URL suffix. Group ID = `messageGroupId` (default: `executionArn`). Dedup ID = `executionArn:emittedAt`. SQS limits both IDs to 128 characters and durable execution ARNs are usually longer, so an ID over 128 characters is replaced by the lowercase hex SHA-256 digest of its UTF-8 bytes (64 characters). The Python and Java exporters apply the same rule to the same input string. The group IDs match across SDKs; the dedup IDs embed each SDK's own `emittedAt` string, so they can differ. Message attributes include `status` and `functionName` for SQS message filtering.
 
 **IAM required:** `sqs:SendMessage` on the queue.
 
