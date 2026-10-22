@@ -93,6 +93,7 @@
   },
   "devDependencies": {
     "@aws/durable-execution-sdk-js": "*",
+    "@aws/durable-execution-sdk-js-testing": "*",
     "jest": "^30.5.2",
     "ts-jest": "^29.4.14",
     "@aws-sdk/client-s3": "^3.1150.0",
