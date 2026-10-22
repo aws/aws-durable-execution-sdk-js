@@ -7,7 +7,6 @@ import {
 } from "../../types";
 import { InvokeError } from "../../errors/durable-error/durable-error";
 import {
-  ErrorObject,
   OperationAction,
   OperationStatus,
   OperationType,
@@ -26,31 +25,6 @@ import {
   toOperationInfo,
 } from "../../utils/operation/operation";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
-
-/**
- * Builds the {@link InvokeError} thrown for a failed chained invoke.
- *
- * The cause carries the invoked function's error type as its `name` (and its
- * stack trace), the same way the callback handlers and
- * `DurableOperationError.fromErrorObject` build theirs, so `error.cause.name`
- * is the remote error's type (for example `"PaymentError"`) rather than a
- * generic `"Error"`. A cause is created only when the remote error reported a
- * message or a type.
- */
-function toInvokeError(error: ErrorObject | undefined): InvokeError {
-  if (!error) return new InvokeError("Invoke failed");
-  let cause: Error | undefined;
-  if (error.ErrorMessage || error.ErrorType) {
-    cause = new Error(error.ErrorMessage);
-    cause.name = error.ErrorType || "Error";
-    cause.stack = error.StackTrace?.join("\n");
-  }
-  return new InvokeError(
-    error.ErrorMessage || "Invoke failed",
-    cause,
-    error.ErrorData,
-  );
-}
 
 export const createInvokeHandler = (
   context: ExecutionContext,
@@ -287,7 +261,18 @@ export const createInvokeHandler = (
         }
 
         // Handle failure
-        throw toInvokeError(stepData?.ChainedInvokeDetails?.Error);
+        const invokeDetails = stepData?.ChainedInvokeDetails;
+        if (invokeDetails?.Error) {
+          throw new InvokeError(
+            invokeDetails.Error.ErrorMessage || "Invoke failed",
+            invokeDetails.Error.ErrorMessage
+              ? new Error(invokeDetails.Error.ErrorMessage)
+              : undefined,
+            invokeDetails.Error.ErrorData,
+          );
+        } else {
+          throw new InvokeError("Invoke failed");
+        }
       }
 
       log("🔗", "Invoke phase 2:", { stepId });
@@ -335,7 +320,17 @@ export const createInvokeHandler = (
         isReplay: false,
       });
 
-      throw toInvokeError(invokeError);
+      if (invokeError) {
+        throw new InvokeError(
+          invokeError.ErrorMessage || "Invoke failed",
+          invokeError.ErrorMessage
+            ? new Error(invokeError.ErrorMessage)
+            : undefined,
+          invokeError.ErrorData,
+        );
+      } else {
+        throw new InvokeError("Invoke failed");
+      }
     });
   }
 
