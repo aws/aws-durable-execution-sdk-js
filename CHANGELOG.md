@@ -292,12 +292,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   For a rethrown AWS SDK error, each step adds the request ID to the message of the error object
   itself. It does not wrap the error. So the error keeps its class, `name`, `code`, `$retryable`,
-  and `$metadata`. So the default and custom retry strategies decide as before for such an error.
+  and `$metadata`. So the default retry strategy decides as before for such an error. A custom
+  retry strategy receives the message without the request ID. See the next entry (#1058).
   A message has no request ID when the AWS SDK error or output carries none, for example after a
   connection failure. Only an error of the Lambda MicroVMs service gets a request ID. An error of
   another service keeps its message. For example, a credential provider that assumes a role calls
   STS inside each call, and its error carries the request ID of STS. When a custom client throws one
   error object for several calls, the message names only the last call. (#1050)
+
+- A custom `retryStrategy` of the MicroVM operations in `@aws/durable-execution-sdk-js-extras`
+  received the AWS SDK error with the request ID sentence in its message. `createRetryStrategy`
+  matches its `retryableErrors` patterns against `error.message`. So a loose pattern, such as
+  `/request/i`, could match the request ID sentence. An anchored pattern, such as
+  `/^Rate exceeded$/`, could stop matching. Each step now calls the strategy while the error has
+  the message of the service. After the strategy returns or throws, the error has the message with
+  the request ID again. The SDK checkpoints the message after the strategy returns. So the handler
+  and the execution history still get the request ID. The default retry strategy reads only
+  `name`, `code`, and `$retryable`. So its decisions do not change. (#1058)
 
 - An `InvalidRunHookPayloadError` for a `runHookPayload` that is not JSON now keeps the parser's
   `SyntaxError` as its `cause`. Its message names the position of the error.

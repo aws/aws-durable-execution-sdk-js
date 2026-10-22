@@ -107,9 +107,13 @@ const changedMessages = new WeakMap<
  * 4. A wrapper error would need a copy of each of these fields. It would
  *    also fail the `instanceof` test.
  * 5. This function changes only `message`. So the error keeps its class,
- *    `name`, `code`, `$retryable`, `$fault`, and `$metadata`, and every retry
- *    decision stays the same.
- * 6. The AWS SDK creates a new error object for each failed call. No AWS SDK
+ *    `name`, `code`, `$retryable`, `$fault`, and `$metadata`.
+ * 6. A custom strategy can also match the message, for example with
+ *    `createRetryStrategy({ retryableErrors: [...] })`. The longer message
+ *    could change its decision. So each step calls the strategy through
+ *    {@link withOriginalMessage}. The strategy then decides on the original
+ *    message, and every retry decision stays the same.
+ * 7. The AWS SDK creates a new error object for each failed call. No AWS SDK
  *    code reads the error after it throws. So the change affects only the
  *    code that receives the error from the step.
  *
@@ -157,6 +161,56 @@ export function addRequestId<T>(operation: MicrovmApiOperation, error: T): T {
     // The step then fails as it did before this function existed.
   }
   return error;
+}
+
+/**
+ * Calls `fn` while `error` has the message that it had before
+ * {@link addRequestId} changed it. Returns what `fn` returns, and throws
+ * what `fn` throws.
+ *
+ * @remarks
+ * The step retry strategy receives the error that {@link addRequestId}
+ * changed. A strategy that matches the message would then match the request
+ * ID sentence too. The core SDK checkpoints the message after the strategy
+ * returns. So the function sets the original message only while `fn` runs.
+ * Then it sets the message with the request ID again, also when `fn` throws.
+ *
+ * The function calls `fn` with the current message in these cases:
+ *
+ * - {@link addRequestId} did not change the message of `error`.
+ * - Code outside {@link addRequestId} set another message after it. The
+ *   function keeps that message.
+ * - The message cannot be set, for example on an error that was frozen
+ *   after the change.
+ *
+ * `fn` can set its own message on the error. The function then keeps that
+ * message, as it would be without this function.
+ */
+export function withOriginalMessage<R>(error: unknown, fn: () => R): R {
+  const changed =
+    error instanceof Error ? changedMessages.get(error) : undefined;
+  if (changed === undefined || (error as Error).message !== changed.written) {
+    return fn();
+  }
+  const target = error as Error;
+  try {
+    target.message = changed.original;
+  } catch {
+    return fn();
+  }
+  try {
+    return fn();
+  } finally {
+    // Only a message that `fn` left unchanged gets the request ID again.
+    if (target.message === changed.original) {
+      try {
+        target.message = changed.written;
+      } catch {
+        // `fn` froze the error, or made its message read-only. The error
+        // keeps the original message.
+      }
+    }
+  }
 }
 
 /**
