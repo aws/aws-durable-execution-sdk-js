@@ -85,23 +85,44 @@ Python and Java exporters. It applies to the execution-level `error`, every
 `operations[].error`, and every `operationsByName.<name>.error`.
 
 1. A record names the error that caused the failure. A wrapper error that the
-   SDK added is never the name.
+   SDK added is never the name, except in the bounded cases of rules 3 and 9.
 2. The SDK unwraps an error only when the error's type is one of the SDK's own
    wrapper types. A user error is never unwrapped, even if it has a cause.
-3. Unwrapping follows the whole chain of SDK wrappers, up to a depth of 16. A
-   cycle stops the walk.
+3. Unwrapping follows the chain of SDK wrappers. The depth counts unwrap steps,
+   one per wrapper passed, not levels in the operation tree. At most 16 unwraps
+   happen. If the error reached after 16 unwraps is still a wrapper, its name is
+   reported. If the chain reaches an error it has already visited, the walk
+   stops and the last error visited before the repeat is reported.
 4. If the chain ends at a user error, the name is that error's type name.
 5. If the chain ends at an SDK error that is not a wrapper, the name is that
    SDK error's simple class name. A callback timeout is an example.
 6. A type name that is a qualified string is reduced to its last segment after
-   any `.` or `$`. If that segment is empty, the string is kept as it is.
+   any `.` or `$`. If that segment is empty, the string is kept as it is. A
+   missing type, or a type made only of blank characters, is `Error`. The blank
+   characters are the six ASCII whitespace characters: space, `\t`, `\n`, `\r`,
+   `\f` and `\v`. No other character counts as blank, and names are never
+   trimmed.
 7. A failure gets the same name whether the record is built live or from a
    replayed checkpoint.
 8. When the execution fails because an operation's error propagated, the
    execution `error.name` equals that operation's `error.name`.
+9. If the SDK cannot tell which of several failures caused a wrapper, it does
+   not guess. It reports the wrapper's name. Two map items or parallel branches
+   that fail with the same message but different types are an example.
 
-A missing, empty or whitespace-only type name is reported as `"Error"`. A type
-name is never trimmed. A non-string `name` is converted with `String(...)`.
+A callback that is failed externally with an explicit `ErrorType` is named
+after that type, after the reduction of rule 6. Only a missing or blank type
+reports the SDK callback-failure class (see the `"Error"` exception below).
+
+A non-string `name` is converted with `String(...)`.
+
+When the user's type is lost in a wrapper's checkpoint (see "Nested failures
+across invocations" below), the plugin finds the failed operation it came from
+by message: a failed child of the context, or, for a `context.promise.*`
+combinator, a failed sibling that ran inside it. Candidates that ended after the
+failed context are preferred. When the candidates left have different names,
+the wrapper's name (`"StepError"`) is reported instead of a guess (rule 9). The
+same applies to the execution-level error.
 
 In this SDK the wrapper types (rule 2) are matched by the error's `errorType`:
 `StepError`, `CallbackError`, `CallbackExternalError`, `CallbackSubmitterError`,
@@ -113,7 +134,11 @@ In this SDK the wrapper types (rule 2) are matched by the error's `errorType`:
 | A step, child context, map item, parallel branch, `waitForCondition` check, `waitForCallback` submitter or invoked function throws `PaymentError` | `"PaymentError"` |
 | A callback times out | `"CallbackTimeoutError"` |
 | A callback is failed externally with `ErrorType: "PaymentError"` | `"PaymentError"` |
-| A callback is failed externally with no `ErrorType` (or `"Error"`) | `"CallbackExternalError"` |
+| A callback is failed externally with no or a blank `ErrorType` | `"CallbackExternalError"` |
+| A callback is failed externally with `ErrorType: "Error"` | `"CallbackExternalError"` (not `"Error"`: the SDK rebuilds a missing type as `"Error"`, so the plugin cannot tell the two apart) |
+| `context.promise.all` / `race` over a step that throws `PaymentError` | `"PaymentError"` (step, combinator and execution) |
+| `context.promise.any` over steps that all fail | `"AggregateError"` (combinator and execution; each step keeps its own type) |
+| Two map items or parallel branches fail with the same message and different types | each item: its own type; execution: `"StepError"` (rule 9) |
 | A map or parallel completed as failed by `shouldComplete` | `"BatchCompletionError"` (execution) |
 | `"a.b.Outer$PaymentError"` / `"Payment$Error"` / `"trailing."` | `"PaymentError"` / `"Error"` / `"trailing."` |
 
@@ -133,7 +158,17 @@ In this SDK the wrapper types (rule 2) are matched by the error's `errorType`:
 > suspended, and rethrew it) the backend omits the children of a finished
 > context unless [`childOperationsDepth`](#childoperationsdepth-on-withdurableexecution)
 > preserves them down to the failed step. Without that, the context and the
-> execution are both reported as `"StepError"`.
+> execution are both reported as `"StepError"`. Records already exported keep
+> the name they had: with `emitMode: "on-change"`, the records of the first
+> invocation name the context `"PaymentError"`, and the records of the later
+> invocation name it `"StepError"`. A query over all the records of one
+> execution can see both names.
+
+> **Concurrent failures with the same message.** With plain `Promise.all` over
+> two child contexts that fail with the same message and different types, the
+> invocation where the first failure propagates names it (the second has not
+> failed yet). A later invocation sees both failures and reports `"StepError"`
+> (rule 9).
 
 ### Example Record
 

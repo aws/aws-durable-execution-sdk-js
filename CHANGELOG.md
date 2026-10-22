@@ -30,11 +30,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `CallbackTimeoutError`. A `/Timeout/` match on `error.name` keeps working.
   - A qualified type string is reduced to its last segment after `.` or `$`
     (`"a.b.Outer$PaymentError"` → `"PaymentError"`), and an empty or blank name is reported as
-    `"Error"` (it was `""`).
+    `"Error"` (it was `""`). Only the six ASCII whitespace characters count as blank.
+  - `context.promise.all` / `race` over a step that throws: execution `PromiseCombinatorError` →
+    `PaymentError`; combinator operation `StepError` → `PaymentError`.
+  - Several failures with the same message and different types (for example two map items):
+    the execution reports the wrapper name `StepError` instead of one of the types.
 - **Telemetry exporter**: the SQS exporter replaces a FIFO `MessageGroupId` or
   `MessageDeduplicationId` longer than 128 characters (the SQS limit, which a durable execution
   ARN usually exceeds) with the lowercase hex SHA-256 digest of its UTF-8 bytes. Before, such
-  sends were rejected by SQS.
+  sends were rejected by SQS. An empty `messageGroupId` now throws in the `SQSExporter`
+  constructor; before, every FIFO send with it was rejected by SQS.
 
 - Checkpoint-derived `OperationInfo.error` can be absent when a failed callback
   or invoke has missing wire error data or no defined diagnostic values.
