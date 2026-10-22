@@ -6,6 +6,9 @@ These versions have not been published by this preparation PR. Refresh the
 source range and pending-work table against the commit selected for the final
 release.
 
+For application upgrade steps, see the [2.x to 3.0 migration guide](../docs/migration-2.x-to-3.0.md),
+including dependency versions, before/after plugin examples, and validation.
+
 ## Package versions and publication scope
 
 | Package | Prepared version | Public npm state checked 2026-10-21 | Existing publisher decision |

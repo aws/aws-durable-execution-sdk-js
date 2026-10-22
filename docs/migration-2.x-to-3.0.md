@@ -1,0 +1,279 @@
+# Migrating from 2.x to 3.0
+
+`3.0` is a major release. Its breaking change is the
+[per-invocation plugin factory contract](#register-plugin-factories).
+Upgrade the OTel package to `2.x` together with Core `3.x`, including packages
+delivered through Lambda layers.
+
+Applications that register no plugins, select none through
+`DURABLE_EXECUTION_PLUGINS`, and ship no plugin providers can update their core
+dependency without changing their handler or durable operation calls. This guide
+covers migration from Core `2.x`; the
+[release notes](../release-notes/sdk-3.0.0.md) describe the full package scope.
+
+## Why upgrade to 3.0
+
+- **Plugin state is isolated between invocations.** Each Lambda invocation gets
+  fresh instrumentation, including concurrent invocations in Lambda Managed
+  Instances. Spans and operation buffers belong to the invocation they describe.
+- **Shared resources keep their intended lifetime.** Factories can reuse a
+  provider or exporter while creating separate invocation state.
+- **Trace context follows the invocation.** Factories and hooks receive the
+  invocation-local `xRayTraceId` carrier, avoiding another invocation's process
+  header when the runtime supplies a carrier.
+
+## Porting to 3.0
+
+The changes most likely to touch your code are the `plugins` argument,
+environment-loaded providers, and OTel registrations. Use
+[Finding affected code](#finding-affected-code) to locate them before upgrading.
+
+| Core 2.x / OTel 1.x | Core 3.x / OTel 2.x |
+| --- | --- |
+| `plugins: [pluginInstance]` | `plugins: [factoryObject]` |
+| `DurableInstrumentationPluginProvider` with `pluginApiVersion`, `pluginType`, and `createPlugin()` | `DurableInstrumentationPluginFactory` with `createPlugin(info)` |
+| `new InvocationOtelPlugin(config)` registration | `createInvocationOtelPluginFactory(config)` |
+| `new ExecutionOtelPlugin(config)` registration | `createExecutionOtelPluginFactory(config)` |
+| Registration metadata on the plugin instance or constructor | Metadata on the registered factory |
+
+### Upgrade dependencies together
+
+The coordinated release uses the following versions and requires Node.js 22 or
+later:
+
+| Package | Version | Core compatibility |
+| --- | --- | --- |
+| `@aws/durable-execution-sdk-js` | `3.0.0` | Core SDK |
+| `@aws/durable-execution-sdk-js-otel` | `2.0.0` | `>=3.0.0 <4.0.0` |
+| `@aws/durable-execution-sdk-js-testing` | `1.3.2` | `>=1.0.1 <4.0.0` |
+
+After publication, update the packages your application uses and regenerate its
+lock file:
+
+```bash
+npm install @aws/durable-execution-sdk-js@3.0.0 \
+  @aws/durable-execution-sdk-js-otel@2.0.0
+npm install --save-dev @aws/durable-execution-sdk-js-testing@1.3.2
+npm ls @aws/durable-execution-sdk-js @aws/durable-execution-sdk-js-otel
+```
+
+OTel is optional. If you use it, retain the provider/exporter setup described in
+the [OTel installation guide](../packages/aws-durable-execution-sdk-js-otel/README.md#installation).
+Upgrading the package alone does not configure trace export.
+
+Rebuild application bundles and custom provider packages, and update attached
+layers that contain Core or OTel. Updating the function's `package.json` does not
+update layer versions. Core 3 rejects the OTel 1.x provider contract, and OTel 2
+requires Core 3. Verify the versions resolved by the deployed function, not just
+the versions in your source tree.
+
+### Register plugin factories
+
+`DurableExecutionConfig.plugins` now accepts factory objects with a synchronous
+`createPlugin(info)` method. Return a fresh plugin on every call. The factory
+receives the same `InvocationInfo` object passed to `onInvocationStart`.
+
+```typescript
+// Core 2.x: one instance registered with the handler
+const handler = withDurableExecution(myHandler, {
+  plugins: [new AuditPlugin()],
+});
+```
+
+```typescript
+// Core 3.0: each invocation gets a new instance
+import {
+  withDurableExecution,
+  type DurableInstrumentationPlugin,
+  type DurableInstrumentationPluginFactory,
+  type OperationInfo,
+} from "@aws/durable-execution-sdk-js";
+
+class AuditPlugin implements DurableInstrumentationPlugin {
+  private readonly operationIds = new Set<string>();
+
+  constructor(private readonly executionArn: string) {}
+
+  async onOperationEnd(info: OperationInfo): Promise<void> {
+    this.operationIds.add(info.id);
+  }
+
+  async onInvocationEnd(): Promise<void> {
+    console.info({
+      executionArn: this.executionArn,
+      operationIds: [...this.operationIds],
+    });
+  }
+}
+
+const auditFactory: DurableInstrumentationPluginFactory = {
+  createPlugin(info) {
+    return new AuditPlugin(info.executionArn);
+  },
+};
+
+export const handler = withDurableExecution(
+  async (_event, context) => context.step("work", async () => "ok"),
+  { plugins: [auditFactory] },
+);
+```
+
+A bare function or plugin class without a `createPlugin` member is not a factory.
+For example, `plugins: [(info) => new AuditPlugin(info.executionArn)]` is invalid.
+Do not return a cached plugin from a factory; that would share its state across
+invocations again.
+
+Invalid registrations fail with `PluginLoadError` when the handler's plugin
+configuration is resolved. A valid factory that throws or returns `null` or
+`undefined` instead skips instrumentation for that invocation. Async factories
+are unsupported: Promise-like results are skipped. Keep shared resource setup
+outside `createPlugin`, and verify telemetry independently of handler success.
+
+### Replace the v1 provider contract
+
+Environment-loaded modules still export `durableExecutionPluginProvider`, but
+the exported object now uses the same factory contract as explicit registration.
+
+```typescript
+// Core 2.x
+export const durableExecutionPluginProvider = {
+  pluginApiVersion: 1,
+  pluginType: AuditPlugin,
+  createPlugin: () => new AuditPlugin(),
+};
+```
+
+```typescript
+// Core 3.0, alongside AuditPlugin and its imports above
+export const durableExecutionPluginProvider: DurableInstrumentationPluginFactory = {
+  createPlugin(info) {
+    return new AuditPlugin(info.executionArn);
+  },
+};
+```
+
+Remove `pluginApiVersion` and `pluginType` after migrating construction and state
+ownership. Declaring `pluginApiVersion` causes rejection on both explicit and
+environment registration; the SDK does not reinterpret a v1 provider with a
+different lifetime. Replace imports of `DurableInstrumentationPluginProvider`,
+`DurableInstrumentationPluginType`, and
+`DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION` with the appropriate factory type.
+
+The `DURABLE_EXECUTION_PLUGINS` variable still selects package/module specifiers.
+Preserve the provider export name and rebuild the package or layer containing
+it. See [dynamic instrumentation plugins](../packages/aws-durable-execution-sdk-js/README.md#dynamic-instrumentation-plugins).
+
+### Migrate OpenTelemetry registrations
+
+Replace plugin constructors with factory builders. Existing `OtelPluginConfig`
+options belong on the factory builder:
+
+```typescript
+// Core 2.x / OTel 1.x
+import { InvocationOtelPlugin } from "@aws/durable-execution-sdk-js-otel";
+
+const handler = withDurableExecution(myHandler, {
+  plugins: [new InvocationOtelPlugin()],
+});
+```
+
+```typescript
+// Core 3.0 / OTel 2.0
+import { withDurableExecution } from "@aws/durable-execution-sdk-js";
+import { createInvocationOtelPluginFactory } from "@aws/durable-execution-sdk-js-otel";
+
+export const handler = withDurableExecution(
+  async (_event, context) => context.step("work", async () => "ok"),
+  { plugins: [createInvocationOtelPluginFactory()] },
+);
+```
+
+Use `createExecutionOtelPluginFactory` for the execution-rooted view instead.
+Register only one view across code and environment selection. The subpaths
+`@aws/durable-execution-sdk-js-otel/otel-invocation` and
+`@aws/durable-execution-sdk-js-otel/otel-execution` remain the environment-loading
+entry points, but must resolve to OTel 2.
+
+Shared providers remain outside invocation instances. `flushTimeoutMillis`
+bounds the export wait; it does not guarantee delivery after timeout, export
+failure, or runtime freezing. An invocation must not shut down a shared provider.
+See the [OTel migration reference](../packages/aws-durable-execution-sdk-js-otel/README.md#migration-from-the-v1-provider-contract).
+
+### Move registration metadata to the factory
+
+Use `RegisteredDurableInstrumentationPluginFactory` for custom exclusivity
+metadata. `RegisteredDurableInstrumentationPluginType` is removed.
+`RegisteredDurableInstrumentationPlugin` remains a type describing instance
+metadata, but registration validates the factory's metadata in Core 3.
+The symbol remains
+`Symbol.for("aws.lambda.durable.instrumentation.plugin-registration")`; place its
+`name` and optional `exclusiveGroup` metadata on the registered factory, not on
+the returned plugin or its constructor. Configuration validates it before constructing plugins.
+Inherited groups accumulate, so a wrapper must preserve its underlying view's
+constraint rather than trying to hide it.
+
+```typescript
+// Core 3.0, alongside auditFactory above
+import {
+  DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION,
+  type RegisteredDurableInstrumentationPluginFactory,
+} from "@aws/durable-execution-sdk-js";
+
+const registeredAuditFactory: RegisteredDurableInstrumentationPluginFactory = {
+  ...auditFactory,
+  [DURABLE_INSTRUMENTATION_PLUGIN_REGISTRATION]: {
+    name: "example-audit",
+    exclusiveGroup: "example-audit-view",
+  },
+};
+// Pass registeredAuditFactory in plugins when this exclusivity rule is needed.
+```
+
+### Finding affected code
+
+Search application code, providers, layer packaging, and tests:
+
+```bash
+rg -n 'plugins:|DURABLE_EXECUTION_PLUGINS|durableExecutionPluginProvider' .
+rg -n 'pluginApiVersion|pluginType|DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION' .
+rg -n 'DurableInstrumentationPluginProvider|RegisteredDurableInstrumentationPlugin|DurableInstrumentationPluginType' .
+rg -n 'new (InvocationOtelPlugin|ExecutionOtelPlugin)|createPlugin' .
+rg -n '@aws/durable-execution-sdk-js|Layers:|layerVersionArn' .
+```
+
+## Plugin State and Replay
+
+Keep invocation identity, spans, and operation buffers on the new plugin. Keep
+intentionally shared providers/exporters outside it. One execution can suspend
+and resume many times, creating a new plugin each time. Instance fields are not
+checkpointed; reconstruct execution-wide state from invocation metadata and
+checkpointed operations rather than assuming the last instance survives.
+
+Do not use the presence of `OperationInfo.error` alone to detect failure. Error
+details can be absent for failed operations; use `OperationInfo.status` and
+`AttemptEndInfo.outcome` for their respective outcomes. This metadata correction
+does not change persisted error payloads or operation identity.
+
+If you copied the former Powertools logging example, update queries for the
+adapter's `executionArn`, `requestId`, `operationId`, and `operationName` fields.
+See the [logging guide](../packages/aws-durable-execution-sdk-js/README.md).
+
+## Recommended Validation After Upgrading
+
+1. Resolve the coordinated package versions, regenerate the lock file, and run
+   your TypeScript build and tests. Verify the effective versions in any bundles
+   and Lambda layers.
+2. Exercise explicit and environment-selected providers. Confirm plugin output;
+   a successful workflow does not prove a factory returned usable instrumentation.
+3. Run a workflow that suspends and resumes. Verify a fresh plugin for each
+   invocation, stable operation identity, and no repeated completed-step side
+   effects. Keep operation names, order, nesting, and serialization compatible
+   while executions are in flight.
+4. Exercise concurrent invocations and `map` or `parallel`. Confirm spans,
+   buffers, and execution identities stay with their own invocation.
+5. Test success, failure, retry, and callbacks without error details. Check
+   cleanup, status-based error handling, and telemetry for each outcome.
+6. With OTel, verify the chosen view and log correlation after resume and under
+   concurrency. With the Testing SDK, review assertions about invocation counts
+   and history ordering against its corrected clock and notification behavior
+   in the [release notes](../release-notes/sdk-3.0.0.md).
