@@ -291,6 +291,21 @@ describe("withOriginalMessage", () => {
     expect(seen).toEqual(["Rate exceeded", "Rate exceeded", "Rate exceeded"]);
   });
 
+  it("keeps the request ID in the stack when fn reads the stack first", () => {
+    const error = changed();
+    let stackInFn: string | undefined;
+
+    withOriginalMessage(error, () => {
+      stackInFn = error.stack;
+    });
+
+    // V8 keeps the stack text from the first read. So the read inside fn
+    // must not be the first one.
+    expect(stackInFn?.split("\n")[0]).toBe(`ThrottlingException: ${written}`);
+    expect(error.stack?.split("\n")[0]).toBe(`ThrottlingException: ${written}`);
+    expect(error.message).toBe(written);
+  });
+
   it.each<[string, () => unknown]>([
     [
       "an AWS SDK error without a request ID",

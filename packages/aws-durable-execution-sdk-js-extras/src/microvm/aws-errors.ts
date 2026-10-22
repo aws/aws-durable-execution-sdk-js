@@ -188,6 +188,14 @@ export function addRequestId<T>(operation: MicrovmApiOperation, error: T): T {
  *
  * `fn` can set its own message on the error. The function then keeps that
  * message, as it would be without this function.
+ *
+ * V8 builds the `stack` text when code first reads `stack`, and then keeps
+ * it. A strategy, a logger, or `util.inspect` inside `fn` can read `stack`.
+ * Without a read before the change, that first line would lack the request
+ * ID, and the plugin hooks would then see a message with the request ID and
+ * a stack without it. So the function reads `stack` before it sets the
+ * original message. The `stack` then shows the message with the request ID,
+ * as {@link addRequestId} describes.
  */
 export function withOriginalMessage<R>(error: unknown, fn: () => R): R {
   const changed =
@@ -196,6 +204,12 @@ export function withOriginalMessage<R>(error: unknown, fn: () => R): R {
     return fn();
   }
   const target = error as Error;
+  try {
+    // Builds and keeps the stack text with the request ID. See above.
+    void target.stack;
+  } catch {
+    // A `stack` getter that throws changes nothing here.
+  }
   try {
     target.message = changed.original;
   } catch {
