@@ -49,6 +49,7 @@ interface DurableExecutionTelemetryRecord {
 
   // Truncation markers — present only when the size limiter dropped data
   truncated?: boolean; // true when data was dropped to fit maxRecordSizeBytes
+  droppedCauses?: boolean; // true if every error `cause` was removed (dropped first)
   droppedOperations?: number; // count of whole operations dropped
   droppedInput?: boolean; // true if execution input was dropped (last resort)
   droppedOutput?: boolean; // true if execution output was dropped (last resort)
@@ -71,7 +72,7 @@ interface OperationRecord {
 
 interface ErrorRecord {
   name: string; // The error's own name (err.name), unchanged
-  message: string; // The error's message, unchanged
+  message: string; // The error's message, capped at 8,192 characters + "…"
   cause?: ErrorRecord; // Present only when the error has a cause
 }
 ```
@@ -90,23 +91,59 @@ order:
 }
 ```
 
-- `name` and `message` are the error's own `name` and `message`. The exporter
-  does not rewrite, shorten, or unwrap them.
-- `cause` follows `Error.cause`. For an operation error rebuilt from a
-  checkpoint (on replay), it is the cause the SDK built from the checkpointed
-  error. It is present only when there is a cause (`undefined` and `null` mean
+- `name` is the error's own `name`. The exporter does not rewrite, shorten, or
+  unwrap it.
+- `message` is the error's own `message`, capped at 8,192 characters: a longer
+  message keeps its first 8,192 characters followed by `…`. The cap applies to
+  every message, on the error and on each cause.
+- `cause` is present only when there is a cause (`undefined` and `null` mean
   none), and has the same shape, recursively.
 - The chain is cut after 16 cause levels below the error, and stops at a cause
   already written, so a cycle cannot loop.
 - A cause that is not an error object (a thrown string, say) is written as
-  `{ "name": "Error", "message": String(cause) }`.
-- `content.operations.includeErrors: false` removes operation errors together
-  with their causes. The size limiter treats `cause` as part of its error: it
-  never cuts an error on its own, and drops an operation's error (cause
-  included) only with the whole operation.
+  `{ "name": "Error", "message": String(cause) }`. A cause `name` or `message`
+  that is not a string is converted to a string, and a missing `name` is
+  written as `"Error"`. Reading a cause never throws: if reading one fails (a
+  throwing getter, a revoked proxy), the chain ends there and the record is
+  kept. `AggregateError.errors` is not written.
+
+**Which errors carry a cause in JS:**
+
+- Operation errors (`operations[].error` and `operationsByName.<name>.error`)
+  are the errors the SDK rebuilds from the checkpoint. Their `cause` is the
+  cause the SDK built from the checkpointed error.
+- The execution `error` is the live error the handler threw (or the SDK error
+  that wraps it). Its `cause` follows `Error.cause`.
+
+**Causes may repeat the wrapper.** The chain is written exactly as the SDK
+provides it; levels that repeat the level above are not skipped. SDK wrapper
+errors copy their cause's message, so a level often repeats the one above, for
+example `CallbackTimeoutError → CallbackTimeoutError`, or
+`ChildContextError → StepError → StepError` with the same message at each
+level. A failed step shows the thrown type, for example
+`StepError → PaymentError`.
+
+**Cause messages are written unredacted.** Every cause `message` (and the
+string form of a non-error cause) is written as-is, subject only to the cap.
+`content.operations.includeErrors: false` removes operation errors together
+with their causes, but it does not cover the execution `error`, which keeps its
+`cause` chain. If cause messages can contain sensitive data, do not put it in
+error messages, or avoid exporters whose destination should not hold it.
+
+**Size limit.** When a record is over an exporter's `maxRecordSizeBytes`, the
+first thing the limiter removes is every `cause`, and it sets
+`droppedCauses: true` (see [Record size & truncation](#record-size--truncation)).
+
+**Athena / Glue.** The Glue table in this package's CDK stack (`cdk/stack.ts`)
+types `error` as
+`struct<name:string,message:string>`. The JSON SerDe ignores unknown keys, so
+records with `cause` still load, but `cause` cannot be queried through that
+table (Hive structs cannot be recursive). Query `cause` from the raw JSON, or
+add the levels you need to the table definition.
 
 **Error names differ across SDKs.** The Python and Java exporters write the same
-shape, but each SDK reports its own type names, so the same failure can have a
+shape; whether a cause is present differs by SDK. Each SDK reports its own type
+names, so the same failure can have a
 different `name` in each language. For example, a step that throws
 `PaymentError` can be reported as `StepError` in JS,
 `aws_durable_execution_sdk_python.exceptions.StepError` or `PaymentError` in
@@ -119,9 +156,10 @@ filter recordType = "DurableExecutionTelemetry" and status = "FAILED"
 | fields @timestamp, executionArn, error.name, error.message, error.cause.name, error.cause.message
 ```
 
-For a failed durable invoke, the cause carries the invoked function's error
-type once [#1054](https://github.com/aws/aws-durable-execution-sdk-js/pull/1054)
-is released, as the Python and Java SDKs already do.
+For a failed durable invoke, the JS SDK currently writes the cause name as
+`Error`. A separate core SDK fix makes it carry the invoked function's error
+type, as the Python and Java SDKs already do; the release notes will say when
+it ships.
 
 ### Example Record
 
@@ -439,11 +477,15 @@ serialized JSON exceeds it, the plugin truncates a **per-exporter copy**
 (best-effort) before sending — the same record can go out full to one exporter
 and trimmed to another.
 
-Drop order, until the record fits:
+Drop order, until the record fits (one pass):
 
-1. operation `result` fields, **oldest operation first**;
-2. whole operations, **oldest first**;
-3. as a last resort (once every operation is gone), execution `input`, then
+1. every error `cause` — on the execution `error` and on every operation error
+   (and so in `operationsByName`, which is derived from the operations). Each
+   error keeps its `name` and `message`, and the record gets
+   `droppedCauses: true`. No step cuts individual cause levels;
+2. operation `result` fields, **oldest operation first**;
+3. whole operations, **oldest first**;
+4. as a last resort (once every operation is gone), execution `input`, then
    `output`.
 
 Identity/timeline fields are **never** dropped, and `input`/`output` are dropped
@@ -451,7 +493,7 @@ only after all operations are gone — so prefer `content.input` /
 `content.output` transforms to bound them earlier (those run before truncation).
 When anything is dropped, the emitted record carries `truncated: true`; each
 operation whose result was dropped is itself marked `truncated: true`, and
-`droppedOperations` (count), `droppedInput` / `droppedOutput` flags are set as
+`droppedCauses`, `droppedOperations` (count), `droppedInput` / `droppedOutput` flags are set as
 applicable — so a trimmed record is always distinguishable from a complete one
 ("cut, not missing").
 
@@ -1269,7 +1311,7 @@ const telemetry = durableExecutionTelemetry({
     new SQSExporter({
       queueUrl:
         "https://sqs.us-east-1.amazonaws.com/123456789012/telemetry-queue.fifo",
-      messageGroupId: undefined, // optional (default: executionArn); must not be ""
+      messageGroupId: undefined, // optional (default: executionArn); "" is treated as omitted
       region: "us-east-1", // optional
       operationsFormat: "array", // optional: "array" (default) | "by-name" | "both"
     }),
@@ -1277,7 +1319,7 @@ const telemetry = durableExecutionTelemetry({
 });
 ```
 
-**FIFO support:** Auto-detected from `.fifo` URL suffix. Group ID = `messageGroupId` (default: `executionArn`); dedup ID = `executionArn:emittedAt`. SQS limits both ids to 128 characters, and most execution ARNs are longer, so an id over 128 characters is replaced by the lowercase hex SHA-256 digest of its UTF-8 bytes (64 characters). Ids of 128 characters or fewer are sent unchanged. The Python and Java exporters use the same rule, so the same input string gives the same id. The message body always carries the full `executionArn`. An empty `messageGroupId` is rejected by the constructor, because SQS rejects it on every send. Message attributes include `status` and `functionName` for SQS message filtering.
+**FIFO support:** Auto-detected from `.fifo` URL suffix. Group ID = `messageGroupId` (default: `executionArn`); dedup ID = `executionArn:emittedAt`. SQS limits both ids to 128 characters, and most execution ARNs are longer, so an id over 128 characters is replaced by the lowercase hex SHA-256 digest of its UTF-8 bytes (64 characters). Ids of 128 characters or fewer are sent unchanged. The Python and Java exporters use the same rule, so the same input string gives the same id. The message body always carries the full `executionArn`. An empty `messageGroupId` is treated as omitted, as in the Python exporter: a standard queue sends no group id, and a FIFO queue groups by `executionArn`. Message attributes include `status` and `functionName` for SQS message filtering.
 
 **IAM required:** `sqs:SendMessage` on the queue.
 
