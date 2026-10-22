@@ -90,6 +90,12 @@ export class MicrovmDeliveryError extends MicrovmError {
  * MicroVM that no longer exists. A later attempt finds the same state. So
  * the job is not retried. To continue, start a new session.
  *
+ * When GetMicrovm or ResumeMicrovm reports that the MicroVM no longer exists,
+ * the message ends with the request ID of that call, in the form
+ * `GetMicrovm request ID: <id>.` or `ResumeMicrovm request ID: <id>.`. A
+ * support case can quote it. The message has no request ID when the AWS SDK
+ * error carries none.
+ *
  * By default, with no `idlePolicy`, the session makes no GetMicrovm call. The endpoint of a terminated MicroVM answers 502, and the
  * request step retries a 502 as a MicroVM that is still starting. So the job
  * fails with a plain {@link MicrovmDeliveryError}, after the retries of both
