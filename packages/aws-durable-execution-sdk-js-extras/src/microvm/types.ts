@@ -118,8 +118,8 @@ export interface MicrovmBaseConfig {
    * such as `createRetryStrategy({ retryableErrors: [...] })`, matches the
    * message of the service. The original message applies only during the
    * call. Code that reads `error.message` after the strategy returns sees
-   * the request ID. An error that the SDK creates itself, such as
-   * `MicrovmStateError` or "RunMicrovm returned no microvmId", has the
+   * the request ID. An error that the MicroVM operation creates itself, such
+   * as `MicrovmStateError` or "RunMicrovm returned no microvmId", has the
    * request ID in its message when the strategy receives it. The handler and
    * the execution history get the message with the request ID.
    *

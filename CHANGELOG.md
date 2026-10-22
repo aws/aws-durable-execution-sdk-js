@@ -293,18 +293,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   For a rethrown AWS SDK error, each step adds the request ID to the message of the error object
   itself. It does not wrap the error. So the error keeps its class, `name`, `code`, `$retryable`,
   and `$metadata`. So the default retry strategy decides as before for such an error.
-  `createRetryStrategy` matches its `retryableErrors` patterns against `error.message`. So each
-  step calls a custom retry strategy while the AWS SDK error has the message of the service. After
-  the strategy returns or throws, the error has the message with the request ID again. The SDK
-  checkpoints the message after the strategy returns. So the handler and the execution history
-  still get the request ID. An error that the SDK creates itself, such as `MicrovmStateError` or
-  "RunMicrovm returned no microvmId", has the request ID in its message when the strategy
-  receives it.
+  `createRetryStrategy` matches its `retryableErrors` patterns against `error.message`. The request
+  ID sentence would change what a pattern matches. So each step calls a custom retry strategy
+  while the AWS SDK error has the message of the service. After the strategy returns or throws,
+  the error has the message with the request ID again. The SDK checkpoints the message after the
+  strategy returns. So the handler and the execution history still get the request ID. An error
+  that the MicroVM operation creates itself, such as `MicrovmStateError` or "RunMicrovm returned
+  no microvmId", has the request ID in its message when the strategy receives it.
   A message has no request ID when the AWS SDK error or output carries none, for example after a
   connection failure. Only an error of the Lambda MicroVMs service gets a request ID. An error of
   another service keeps its message. For example, a credential provider that assumes a role calls
   STS inside each call, and its error carries the request ID of STS. When a custom client throws one
-  error object for several calls, the message names only the last call. (#1050)
+  error object for several calls, the message names only the last call. (#1050, #1058)
 
 - An `InvalidRunHookPayloadError` for a `runHookPayload` that is not JSON now keeps the parser's
   `SyntaxError` as its `cause`. Its message names the position of the error.

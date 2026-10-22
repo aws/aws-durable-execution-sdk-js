@@ -113,7 +113,7 @@ const changedMessages = new WeakMap<
  *    could change its decision. So each step calls the strategy through
  *    {@link withOriginalMessage}. For an AWS SDK error, the strategy then
  *    decides on the original message, and every retry decision stays the
- *    same. An error that the SDK creates itself, such as
+ *    same. An error that the MicroVM operation creates itself, such as
  *    `MicrovmStateError` or "RunMicrovm returned no microvmId", has the
  *    request ID in its message when the strategy receives it.
  * 7. The AWS SDK creates a new error object for each failed call. No AWS SDK

@@ -314,13 +314,15 @@ describe("a message-based retry strategy for a throttled GetMicrovm in a session
   // A session with `autoSuspendOnIdle: true` calls GetMicrovm in the request
   // step of each job. The session passes its scope to the job. So the
   // request step calls the strategy with the original message too.
-  it("matches an anchored pattern against the original message, and retries up to maxAttempts", async () => {
-    const client = new FakeMicrovmsClient();
-    const thrown: Error[] = [];
-    client.getResponses = throttled(true, thrown);
-    const { strategy, seen } = recording(
-      createRetryStrategy({ retryableErrors: [/^Rate exceeded$/] }),
-    );
+
+  /**
+   * Runs one job in a session, catches its error, and replays the failure
+   * once. The second entry of `caught` is the replay.
+   */
+  async function runSession(
+    client: FakeMicrovmsClient,
+    retryStrategy: RetryStrategy,
+  ): Promise<{ runner: LocalDurableTestRunner<unknown>; caught: unknown[] }> {
     const caught: unknown[] = [];
     const runner = new LocalDurableTestRunner({
       handlerFunction: withDurableExecution(
@@ -332,7 +334,7 @@ describe("a message-based retry strategy for a throttled GetMicrovm in a session
               {
                 ...baseConfig(client),
                 fetch: new FakeEndpoint().fetch,
-                retryStrategy: strategy,
+                retryStrategy,
                 timeout: { hours: 1 },
                 autoSuspendOnIdle: true,
               },
@@ -361,12 +363,15 @@ describe("a message-based retry strategy for a throttled GetMicrovm in a session
 
     expect(execution.getStatus()).toBe("SUCCEEDED");
     expect(execution.getResult()).toBe("caught");
-    // createRetryStrategy allows 3 attempts by default. A thrown GetMicrovm
-    // records no event. So the test counts the error objects.
-    expect(thrown).toHaveLength(3);
-    expect(seen).toEqual(["Rate exceeded", "Rate exceeded", "Rate exceeded"]);
-    const stepMessage = "Rate exceeded. GetMicrovm request ID: req-3.";
     expect(caught.length).toBeGreaterThanOrEqual(2);
+    return { runner, caught };
+  }
+
+  function expectSessionReported(
+    runner: LocalDurableTestRunner<unknown>,
+    caught: unknown[],
+    stepMessage: string,
+  ): void {
     for (const error of caught) {
       expect(error).toBeInstanceOf(MicrovmDeliveryError);
       expect((error as Error).message).toBe(
@@ -379,25 +384,66 @@ describe("a message-based retry strategy for a throttled GetMicrovm in a session
       errorType: "ThrottlingException",
       errorMessage: stepMessage,
     });
+  }
+
+  it("matches an anchored pattern against the original message, and retries up to maxAttempts", async () => {
+    const client = new FakeMicrovmsClient();
+    const thrown: Error[] = [];
+    client.getResponses = throttled(true, thrown);
+    const { strategy, seen } = recording(
+      createRetryStrategy({ retryableErrors: [/^Rate exceeded$/] }),
+    );
+
+    const { runner, caught } = await runSession(client, strategy);
+
+    // createRetryStrategy allows 3 attempts by default. A thrown GetMicrovm
+    // records no event. So the test counts the error objects.
+    expect(thrown).toHaveLength(3);
+    expect(seen).toEqual(["Rate exceeded", "Rate exceeded", "Rate exceeded"]);
+    expectSessionReported(
+      runner,
+      caught,
+      "Rate exceeded. GetMicrovm request ID: req-3.",
+    );
+  });
+
+  it("does not match a loose pattern against the request ID sentence", async () => {
+    const client = new FakeMicrovmsClient();
+    const thrown: Error[] = [];
+    client.getResponses = throttled(true, thrown);
+    const { strategy, seen } = recording(
+      createRetryStrategy({ retryableErrors: [/request/i] }),
+    );
+
+    const { runner, caught } = await runSession(client, strategy);
+
+    // A thrown GetMicrovm records no event. So the test counts the error
+    // objects.
+    expect(thrown).toHaveLength(1);
+    expect(seen).toEqual(["Rate exceeded"]);
+    expectSessionReported(
+      runner,
+      caught,
+      "Rate exceeded. GetMicrovm request ID: req-1.",
+    );
   });
 });
 
 describe("a message-based retry strategy for a throttled TerminateMicrovm", () => {
-  it("matches the original message, and the terminate record keeps the request ID of the last call", async () => {
-    const client = new FakeMicrovmsClient();
-    client.terminateResponses = throttled(true);
-    const { strategy, seen } = recording(
-      createRetryStrategy({ retryableErrors: [/^Rate exceeded$/] }),
-    );
+  /** Runs one `microvm` job whose TerminateMicrovm calls fail. */
+  async function runTerminate(
+    client: FakeMicrovmsClient,
+    retryStrategy: RetryStrategy,
+  ): Promise<LocalDurableTestRunner<unknown>> {
     const runner = new LocalDurableTestRunner({
       handlerFunction: withDurableExecution(
         async (_event: unknown, context: DurableContext) =>
           microvm(context, "build", 1, {
             ...baseConfig(client),
-            retryStrategy: strategy,
+            retryStrategy,
           }),
       ),
-    });
+    }) as LocalDurableTestRunner<unknown>;
 
     const executionPromise = runner.run({ payload: {} });
     const callback = runner.getOperation("build.callback");
@@ -405,8 +451,21 @@ describe("a message-based retry strategy for a throttled TerminateMicrovm", () =
     await callback.sendCallbackSuccess(JSON.stringify("ok"));
     const execution = await executionPromise;
 
+    // A failed TerminateMicrovm call does not fail the operation.
     expect(execution.getStatus()).toBe("SUCCEEDED");
     expect(execution.getResult()).toBe("ok");
+    return runner;
+  }
+
+  it("matches the original message, and the terminate record keeps the request ID of the last call", async () => {
+    const client = new FakeMicrovmsClient();
+    client.terminateResponses = throttled(true);
+    const { strategy, seen } = recording(
+      createRetryStrategy({ retryableErrors: [/^Rate exceeded$/] }),
+    );
+
+    const runner = await runTerminate(client, strategy);
+
     expect(client.terminateInputs).toHaveLength(3);
     expect(seen).toEqual(["Rate exceeded", "Rate exceeded", "Rate exceeded"]);
     expect(
@@ -414,6 +473,25 @@ describe("a message-based retry strategy for a throttled TerminateMicrovm", () =
     ).toMatchObject({
       errorType: "ThrottlingException",
       errorMessage: "Rate exceeded. TerminateMicrovm request ID: req-3.",
+    });
+  });
+
+  it("does not match a loose pattern against the request ID sentence", async () => {
+    const client = new FakeMicrovmsClient();
+    client.terminateResponses = throttled(true);
+    const { strategy, seen } = recording(
+      createRetryStrategy({ retryableErrors: [/request/i] }),
+    );
+
+    const runner = await runTerminate(client, strategy);
+
+    expect(client.terminateInputs).toHaveLength(1);
+    expect(seen).toEqual(["Rate exceeded"]);
+    expect(
+      runner.getOperation("build.terminate").getStepDetails()?.error,
+    ).toMatchObject({
+      errorType: "ThrottlingException",
+      errorMessage: "Rate exceeded. TerminateMicrovm request ID: req-1.",
     });
   });
 });
