@@ -14,6 +14,17 @@ beforeEach(() => {
 });
 
 describe("SQSExporter", () => {
+  it("rejects an empty messageGroupId, which SQS would reject on every send", () => {
+    expect(
+      () =>
+        new SQSExporter({
+          queueUrl: "https://sqs.us-east-1.amazonaws.com/123456789012/t.fifo",
+          messageGroupId: "",
+        }),
+    ).toThrow(/messageGroupId must not be empty/);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
   it("sends a standard-queue message with attributes and no FIFO fields", async () => {
     const exporter = new SQSExporter({
       queueUrl: "https://sqs.us-east-1.amazonaws.com/123456789012/telemetry",

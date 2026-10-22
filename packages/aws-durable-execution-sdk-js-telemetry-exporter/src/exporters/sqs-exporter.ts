@@ -18,7 +18,8 @@ export interface SQSExporterConfig {
   /**
    * Message group ID (required for FIFO queues, ignored for standard).
    * Default: the executionArn (groups messages per execution). A value longer
-   * than 128 characters is replaced by its SHA-256 hex digest.
+   * than 128 characters is replaced by its SHA-256 hex digest. An empty string
+   * is rejected by the constructor, because SQS rejects it.
    */
   messageGroupId?: string;
 
@@ -63,6 +64,11 @@ export class SQSExporter implements TelemetryExporter {
   readonly maxRecordSizeBytes: number;
 
   constructor(config: SQSExporterConfig) {
+    if (config.messageGroupId === "") {
+      throw new TypeError(
+        "SQSExporter: messageGroupId must not be empty; omit it to group by executionArn",
+      );
+    }
     this.queueUrl = config.queueUrl;
     this.messageGroupId = config.messageGroupId;
     this.isFifo = config.queueUrl.endsWith(".fifo");
