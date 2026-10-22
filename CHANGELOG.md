@@ -106,6 +106,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `MessageDeduplicationId` longer than 128 characters with its lowercase hex SHA-256 digest. SQS
   rejected these sends, and most execution ARNs are longer than 128 characters. Ids of 128
   characters or fewer are unchanged. An empty `messageGroupId` is treated as omitted.
+- A failed `context.invoke` now throws an `InvokeError` whose `cause.name` is the invoked
+  function's error type (for example `"PaymentError"`), with the remote stack trace, as the
+  callback handlers and replayed operations already do. Before, `cause.name` was always
+  `"Error"`. A cause is now also created when the remote error has a type but no message.
+
 - **OpenTelemetry**: `FAILED`, `TIMED_OUT`, and `STOPPED` operations remain `ERROR` in both views,
   including later-invocation continuations, even without error details.
   Exception events still require an actual error object.
