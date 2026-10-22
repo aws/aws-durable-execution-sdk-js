@@ -27,6 +27,7 @@ import {
   baseConfig,
   FakeEndpoint,
   FakeMicrovmsClient,
+  FakeStsServiceException,
   type Handler,
   throwing,
 } from "./fakes";
@@ -121,7 +122,7 @@ async function runAndReplay(
 }
 
 const removed =
-  "MicroVM mvm-1 no longer exists. A session MicroVM lives at most its session timeout plus 5 minutes, and never longer than 8 hours.";
+  "MicroVM mvm-1 no longer exists. A MicroVM lives at most its `timeout` plus 5 minutes, and never longer than 8 hours.";
 const delivery = 'MicroVM "job": the job could not be delivered: ';
 const launchFailed = 'MicroVM "job": the launch failed: ';
 
@@ -233,6 +234,32 @@ const scenarios: Record<string, Scenario> = {
       `${removed} CreateMicrovmAuthToken request ID: req-1.`,
     ],
     calls: (client) => client.tokenInputs.length,
+    expectedCalls: 1,
+  },
+  // The request ID of an STS error belongs to STS. So the message names no
+  // RunMicrovm request ID, with or without a request ID on the error.
+  "the credential provider's STS call fails inside RunMicrovm": {
+    kind: "microvm",
+    setup: (client, _endpoint, meta) => {
+      client.runResponses = [
+        throwing(
+          new FakeStsServiceException(
+            "not authorized to assume role",
+            meta.$metadata,
+          ),
+        ),
+      ];
+    },
+    errorClass: MicrovmLaunchError,
+    notRunning: false,
+    prefix: launchFailed,
+    step: "job.launch",
+    stepErrorType: "AccessDenied",
+    stepMessage: [
+      "not authorized to assume role",
+      "not authorized to assume role",
+    ],
+    calls: (client) => client.runInputs.length,
     expectedCalls: 1,
   },
   "GetMicrovm reports a terminated MicroVM": {
@@ -522,7 +549,7 @@ describe("retries of a failed AWS call with a request ID", () => {
     },
   );
 
-  it("appends the request ID once when a custom client throws one error object for every call", async () => {
+  it("names the request ID once when a custom client throws one error object for every call", async () => {
     const client = new FakeMicrovmsClient();
     const error = new ThrottlingException({
       message: "slow down",
@@ -544,6 +571,37 @@ describe("retries of a failed AWS call with a request ID", () => {
         `${launchFailed}slow down. RunMicrovm request ID: req-1.`,
       );
     }
+  });
+
+  it("names only the last request ID when one error object gets a new request ID on each call", async () => {
+    const client = new FakeMicrovmsClient();
+    const error = new ThrottlingException({
+      message: "Rate exceeded",
+      $metadata: { httpStatusCode: 429 },
+    });
+    client.runResponses = Array.from({ length: 5 }, (_, i) => async () => {
+      error.$metadata.requestId = `r-${i + 1}`;
+      throw error;
+    });
+    const { runner, caught } = runCatching(
+      "microvm",
+      client,
+      new FakeEndpoint(),
+    );
+
+    await runAndReplay(runner);
+
+    expect(client.runInputs).toHaveLength(5);
+    for (const caughtError of caught) {
+      expect((caughtError as Error).message).toBe(
+        `${launchFailed}Rate exceeded. RunMicrovm request ID: r-5.`,
+      );
+    }
+    expect(
+      runner.getOperation("job.launch").getStepDetails()?.error,
+    ).toMatchObject({
+      errorMessage: "Rate exceeded. RunMicrovm request ID: r-5.",
+    });
   });
 
   it("gives a custom retry strategy the AWS SDK error itself, with its class and retry fields", async () => {
@@ -623,6 +681,40 @@ describe("the request ID of a failed TerminateMicrovm call", () => {
       });
     },
   );
+});
+
+describe("one error object that a custom client throws for two operations", () => {
+  it("names only TerminateMicrovm in the terminate record, after CreateMicrovmAuthToken threw the same object", async () => {
+    const client = new FakeMicrovmsClient();
+    const shared = new AccessDeniedException({
+      message: "denied",
+      $metadata: { httpStatusCode: 403, requestId: "shared-1" },
+    });
+    client.tokenResponses = [throwing(shared)];
+    client.terminateResponses = [throwing(shared)];
+    const { runner, caught } = runCatching(
+      "session",
+      client,
+      new FakeEndpoint(),
+    );
+
+    await runAndReplay(runner);
+
+    for (const error of caught) {
+      expect((error as Error).message).toBe(
+        `${delivery}denied. CreateMicrovmAuthToken request ID: shared-1.`,
+      );
+    }
+    expect(
+      runner.getOperation("pipeline.terminate").getStepDetails()?.error,
+    ).toMatchObject({
+      errorType: "AccessDeniedException",
+      errorMessage: "denied. TerminateMicrovm request ID: shared-1.",
+    });
+    expect(shared.message).toBe(
+      "denied. TerminateMicrovm request ID: shared-1.",
+    );
+  });
 });
 
 describe("sendJob when CreateMicrovmAuthToken reports the MicroVM removed", () => {

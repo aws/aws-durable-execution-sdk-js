@@ -62,10 +62,10 @@ export interface EnsureRunningOptions {
  *   `GetMicrovm request ID: <id>.`.
  *
  * Any other GetMicrovm or ResumeMicrovm error, such as
- * `AccessDeniedException`, is rethrown as the same error object. Its
- * message then ends with the request ID of the call. See
- * {@link addRequestId}. A `ConflictException` from ResumeMicrovm is not an
- * error: polling continues.
+ * `AccessDeniedException`, is rethrown as the same error object. When it is
+ * an error of the Lambda MicroVMs service, its message then ends with the
+ * request ID of the call. See {@link addRequestId}. A `ConflictException`
+ * from ResumeMicrovm is not an error: polling continues.
  *
  * It polls after 250 milliseconds, doubling the wait up to 2 seconds. It
  * stops after `maxWaitMs`, or 10 seconds before the invocation times out. It
@@ -127,8 +127,8 @@ export async function ensureRunning(
   // a removed MicroVM. ResumeMicrovm returns it when the MicroVM is removed
   // after the state check. So `ensureRunning` throws the same
   // `MicrovmStateError` for both. Every other error of either call keeps its
-  // class and its retry fields, and gets the request ID in its message.
-  // See `addRequestId`.
+  // class and its retry fields. An error of the Lambda MicroVMs service also
+  // gets the request ID in its message. See `addRequestId`.
   for (;;) {
     let state: string | undefined;
     let endpoint: string | undefined;

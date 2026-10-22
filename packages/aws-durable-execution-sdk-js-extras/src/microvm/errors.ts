@@ -51,11 +51,13 @@ export class MicrovmError extends DurableOperationError {
  * learned the MicroVM's ID. The MicroVM ends at its maximum duration. So a
  * caller that runs the job again after this error can run it twice.
  *
- * When the last RunMicrovm call failed with an AWS SDK error, the message
- * ends with the request ID of that call, in the form
+ * When the last RunMicrovm call failed with an error of the Lambda MicroVMs
+ * service, the message ends with the request ID of that call, in the form
  * `RunMicrovm request ID: <id>.`. A support case can quote it. The message
  * has no request ID when the AWS SDK error carries none, for example after
- * a connection failure.
+ * a connection failure. It also has none for an error of another service,
+ * such as STS in a credential provider, because that request ID does not
+ * belong to RunMicrovm.
  *
  * @public
  *
@@ -84,10 +86,10 @@ export class MicrovmDeliveryError extends MicrovmError {
  * catches delivery failures also catches it.
  *
  * @remarks
- * A session MicroVM lives at most its session `timeout` plus 5 minutes, and
- * never longer than 8 hours, running or suspended. The platform then
- * terminates and removes it. A TerminateMicrovm call from outside the session
- * ends it too.
+ * A MicroVM lives at most its `timeout` plus 5 minutes, and never longer
+ * than 8 hours, running or suspended. This holds for a session and for
+ * {@link microvm}. The platform then terminates and removes it. A
+ * TerminateMicrovm call from outside the operation ends it too.
  *
  * The request step reports this error in two cases:
  *
@@ -111,7 +113,7 @@ export class MicrovmDeliveryError extends MicrovmError {
  * `ResumeMicrovm request ID: <id>.`, or
  * `CreateMicrovmAuthToken request ID: <id>.`. A support case can quote it.
  * The message has no request ID when the AWS SDK error or output carries
- * none.
+ * none, or when the error does not come from the Lambda MicroVMs service.
  *
  * By default, with no `idlePolicy`, the session makes no GetMicrovm call.
  * The endpoint of a terminated MicroVM answers 502, and the request step

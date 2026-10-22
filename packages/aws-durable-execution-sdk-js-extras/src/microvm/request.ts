@@ -468,8 +468,9 @@ function redirectTarget(url: string | null): string | undefined {
  *   after the state check. So the call throws the same
  *   `MicrovmStateError` as GetMicrovm and ResumeMicrovm. The step fails
  *   at once, and the job fails with `MicrovmNotRunningError`.
- * - Any other error: the call rethrows the same error object, with the
- *   request ID in its message. See {@link addRequestId}.
+ * - Any other error: the call rethrows the same error object. An error of
+ *   the Lambda MicroVMs service gets the request ID in its message. See
+ *   {@link addRequestId}.
  * - An answer without `authToken`: the call throws an `Error` whose message
  *   ends with the request ID of the answer.
  */

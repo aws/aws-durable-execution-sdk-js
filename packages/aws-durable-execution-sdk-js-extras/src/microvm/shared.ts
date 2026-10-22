@@ -325,8 +325,9 @@ export function launch(
     `${scope.name}.launch`,
     async () => {
       // The core SDK checkpoints only the message of a step failure. So a
-      // RunMicrovm error gets the request ID in its message, and keeps its
-      // class and retry fields. See `addRequestId`.
+      // RunMicrovm error of the Lambda MicroVMs service gets the request ID
+      // in its message, and keeps its class and retry fields. See
+      // `addRequestId`.
       const response = await getClient(config, region)
         .send(
           new RunMicrovmCommand({

@@ -106,7 +106,7 @@ describe("ensureRunning", () => {
     const error = await ensureRunning(options(client)).catch((e) => e);
     expect(error).toBeInstanceOf(MicrovmStateError);
     expect(error.state).toBeUndefined();
-    expect(error.message).toContain("session timeout plus 5 minutes");
+    expect(error.message).toContain("`timeout` plus 5 minutes");
   });
 
   it("throws MicrovmStateError when the MicroVM is removed before ResumeMicrovm", async () => {
@@ -125,7 +125,7 @@ describe("ensureRunning", () => {
     expect(error).toBeInstanceOf(MicrovmStateError);
     expect(error.state).toBeUndefined();
     expect(error.message).toBe(
-      "MicroVM mvm-1 no longer exists. A session MicroVM lives at most its session timeout plus 5 minutes, and never longer than 8 hours.",
+      "MicroVM mvm-1 no longer exists. A MicroVM lives at most its `timeout` plus 5 minutes, and never longer than 8 hours.",
     );
     // The function stops at once. It does not poll a removed MicroVM.
     expect(client.events).toEqual(["get:SUSPENDED", "resume"]);
@@ -133,7 +133,7 @@ describe("ensureRunning", () => {
   });
 
   const removedMessage =
-    "MicroVM mvm-1 no longer exists. A session MicroVM lives at most its session timeout plus 5 minutes, and never longer than 8 hours.";
+    "MicroVM mvm-1 no longer exists. A MicroVM lives at most its `timeout` plus 5 minutes, and never longer than 8 hours.";
 
   /** Makes the named call answer `error`. GetMicrovm first reports SUSPENDED for ResumeMicrovm. */
   const answerNotFound = (

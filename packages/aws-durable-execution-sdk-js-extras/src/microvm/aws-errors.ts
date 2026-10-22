@@ -1,5 +1,6 @@
 // The request IDs of the AWS calls that the MicroVM operations make, and the
 // error for a MicroVM that can no longer take a job.
+import { LambdaMicrovmsServiceException } from "@aws-sdk/client-lambda-microvms";
 import { MICROVM_STATE_ERROR_NAME } from "./errors";
 
 /** The Lambda MicroVMs API operations that the MicroVM operations call. */
@@ -11,13 +12,33 @@ export type MicrovmApiOperation =
   | "TerminateMicrovm";
 
 /**
+ * Returns `true` when `error` is an error of the Lambda MicroVMs service.
+ *
+ * The AWS SDK resolves the credentials inside `client.send`. A credential
+ * provider can call another service, such as STS for an assumed role. When
+ * that call fails, `client.send` rejects with the error of the other
+ * service. That error also carries a request ID in `$metadata.requestId`,
+ * but the ID belongs to the other service. A custom client can also throw
+ * its own error with a `$metadata` field. So only an error that is an
+ * instance of `LambdaMicrovmsServiceException` gets the name of a Lambda
+ * MicroVMs operation next to its request ID. Every modeled error of the
+ * service extends that class. The AWS SDK also uses that class for an error
+ * that the service model does not list.
+ */
+function isMicrovmsServiceError(
+  error: unknown,
+): error is LambdaMicrovmsServiceException {
+  return error instanceof LambdaMicrovmsServiceException;
+}
+
+/**
  * Returns the sentence that names an AWS call and its request ID, in the
  * form `<Operation> request ID: <id>.`.
  *
- * `source` is an AWS SDK error or an AWS SDK output. Both carry the request
- * ID in `$metadata.requestId`. A custom client can throw an error or return
- * an output without it. So the function returns "" when `source` has no
- * request ID that is a non-empty string.
+ * `source` is an AWS SDK output, or an error of the Lambda MicroVMs service.
+ * Both carry the request ID in `$metadata.requestId`. A custom client can
+ * throw an error or return an output without it. So the function returns ""
+ * when `source` has no request ID that is a non-empty string.
  */
 export function requestIdSentence(
   operation: MicrovmApiOperation,
@@ -56,8 +77,21 @@ export function withRequestId(
 }
 
 /**
- * Appends the request ID of a failed AWS call to the message of its error,
- * and returns the same error object.
+ * The message of each error that {@link addRequestId} changed: the message
+ * before the change, and the message that the function wrote.
+ *
+ * A weak map does not keep an error object alive. So an entry exists only
+ * while its error exists.
+ */
+const changedMessages = new WeakMap<
+  Error,
+  { original: string; written: string }
+>();
+
+/**
+ * Sets the message of an error of the Lambda MicroVMs service to its
+ * original message followed by the request ID of the failed call, and
+ * returns the same error object.
  *
  * @remarks
  * The function changes the message of the error object. It does not wrap
@@ -79,27 +113,45 @@ export function withRequestId(
  *    code reads the error after it throws. So the change affects only the
  *    code that receives the error from the step.
  *
+ * A fake or a custom client can throw one error object for several calls.
+ * Each call can have another operation or another request ID. So the
+ * function keeps the original message of each error that it changed. Each
+ * call builds the message from that original message. So the message names
+ * only the last call, and a call without a request ID restores the original
+ * message. Code outside this function can also set the message. When the
+ * message differs from the one that the function wrote, the function takes
+ * the current message as the new original.
+ *
  * The function returns the error unchanged in these cases:
  *
- * - `error` is not an `Error`, or its `message` is not a string.
- * - `error` has no request ID that is a non-empty string.
- * - The message already ends with the request ID sentence. A custom client
- *   can throw one error object for several calls. So the sentence is
- *   appended once.
+ * - `error` is not an instance of `LambdaMicrovmsServiceException`. Such an
+ *   error comes from somewhere other than the Lambda MicroVMs service, for
+ *   example from STS in a credential provider, or from a custom client. Its
+ *   request ID, if any, does not belong to a Lambda MicroVMs call.
+ * - Its `message` is not a string.
+ * - The new message equals the current message. For example, the error has
+ *   no request ID, and the function never changed its message.
  * - The message cannot be set, for example on a frozen error.
  *
- * The `stack` keeps the message that the error had when it was created.
+ * The `stack` shows the new message, unless code read `stack` before this
+ * function ran.
  */
 export function addRequestId<T>(operation: MicrovmApiOperation, error: T): T {
-  if (!(error instanceof Error) || typeof error.message !== "string") {
+  if (!isMicrovmsServiceError(error) || typeof error.message !== "string") {
     return error;
   }
-  const sentence = requestIdSentence(operation, error);
-  if (sentence === "" || error.message.endsWith(sentence)) {
+  const changed = changedMessages.get(error);
+  const original =
+    changed !== undefined && changed.written === error.message
+      ? changed.original
+      : error.message;
+  const message = withRequestId(original, operation, error);
+  if (message === error.message) {
     return error;
   }
   try {
-    error.message = withRequestId(error.message, operation, error);
+    error.message = message;
+    changedMessages.set(error, { original, written: message });
   } catch {
     // A frozen error, or one with a read-only message, keeps its message.
     // The step then fails as it did before this function existed.
@@ -143,7 +195,14 @@ export class MicrovmStateError extends Error {
  * AWS SDK error carries the request ID in `$metadata.requestId`. A support
  * case needs that ID. The SDK checkpoints only the message of a step
  * failure. So the message names the call and its request ID, and the AWS SDK
- * error becomes the cause.
+ * error becomes the cause. The caller matches the error by name. So the
+ * message names the request ID only when the error is an error of the Lambda
+ * MicroVMs service, as in {@link addRequestId}.
+ *
+ * The caller can be a session or {@link microvm}. Both configs name the
+ * MicroVM lifetime `timeout`. Both launches set `maximumDurationInSeconds`
+ * to `timeout` plus 5 minutes, capped at 8 hours. So the message states that
+ * limit in words that fit both callers.
  */
 export function microvmNotFound(
   microvmId: string,
@@ -152,9 +211,9 @@ export function microvmNotFound(
 ): MicrovmStateError {
   return new MicrovmStateError(
     withRequestId(
-      `MicroVM ${microvmId} no longer exists. A session MicroVM lives at most its session timeout plus 5 minutes, and never longer than 8 hours.`,
+      `MicroVM ${microvmId} no longer exists. A MicroVM lives at most its \`timeout\` plus 5 minutes, and never longer than 8 hours.`,
       operation,
-      error,
+      isMicrovmsServiceError(error) ? error : undefined,
     ),
     undefined,
     { cause: error },
