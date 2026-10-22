@@ -259,6 +259,16 @@ Suspension:
 
 Each operation's file states its replay table in a comment at the top.
 
+Child contexts (`runInChildContext`, `waitForCallback`, `map`, `parallel`):
+
+1. The service drops the children of a completed context from the state. So a SUCCEEDED or
+   FAILED context returns its stored result or error. It does not run `fn` again, because
+   its steps would run again.
+2. A result larger than `256 * 1024` bytes does not fit in a checkpoint. The SDK sends
+   `SUCCEED` with `Payload: ""` and `ContextOptions: {ReplayChildren: true}`. The service then
+   keeps the children. On replay the SDK runs `fn` again. The children replay from their
+   records, so no step runs again.
+
 ### 2.10 Logging
 
 `ctx.logger` has `debug`, `info`, `warn` and `error`. Each forwards to the same `console`

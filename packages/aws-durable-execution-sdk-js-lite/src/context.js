@@ -2,9 +2,12 @@ import { nonDeterministicError } from "./errors.js";
 import { hashId } from "./ids.js";
 import { createLogger } from "./logger.js";
 import { createCallback } from "./operations/callback.js";
+import { runInChildContext } from "./operations/child-context.js";
 import { invoke } from "./operations/invoke.js";
 import { step } from "./operations/step.js";
 import { wait } from "./operations/wait.js";
+import { waitForCallback } from "./operations/wait-for-callback.js";
+import { waitForCondition } from "./operations/wait-for-condition.js";
 
 // Members that start with "_" are for operations, not for user code.
 export function createContext({ execution, prefix, parentId }) {
@@ -29,6 +32,12 @@ export function createContext({ execution, prefix, parentId }) {
     },
 
     _lookup: (rawId) => execution.get(hashId(rawId)),
+
+    // The ctx for the child context with this raw id. It lives here because
+    // child-context.js is imported by this file: importing createContext back would
+    // make an import cycle.
+    _child: (rawId) =>
+      createContext({ execution, prefix: rawId, parentId: rawId }),
 
     // The fields every update for this operation carries.
     _base(rawId, { type, subType, name }) {
@@ -64,6 +73,9 @@ export function createContext({ execution, prefix, parentId }) {
     wait: (opts) => wait(ctx, opts),
     createCallback: (opts) => createCallback(ctx, opts),
     invoke: (opts) => invoke(ctx, opts),
+    runInChildContext: (opts) => runInChildContext(ctx, opts),
+    waitForCallback: (opts) => waitForCallback(ctx, opts),
+    waitForCondition: (opts) => waitForCondition(ctx, opts),
   };
   ctx.logger = createLogger(() => ctx.replaying);
   return ctx;

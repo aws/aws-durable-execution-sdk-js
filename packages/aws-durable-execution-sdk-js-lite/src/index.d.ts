@@ -107,6 +107,46 @@ export interface InvokeOptions<I> {
   tenantId?: string;
 }
 
+export interface RunInChildContextOptions<T> {
+  name?: string;
+  /** Use the child ctx inside fn, not the parent ctx. */
+  fn: (args: { ctx: DurableContext }) => T | Promise<T>;
+}
+
+export interface WaitForCallbackOptions {
+  name?: string;
+  /** Sends callbackId to the outside system. Runs in a step, so it is retried. */
+  submitter: (args: {
+    callbackId: string;
+    logger: Logger;
+  }) => void | Promise<void>;
+  /** The callback times out after this many seconds. Default: no timeout. */
+  timeoutSeconds?: number;
+  /** The callback times out if no heartbeat arrives for this many seconds. */
+  heartbeatTimeoutSeconds?: number;
+  /** Retries of the submitter step. Default: createRetryStrategy(). */
+  retryStrategy?: RetryStrategy;
+}
+
+export interface WaitForConditionDecision {
+  shouldContinue: boolean;
+  /** Whole seconds until the next check, at least 1. Defaults to 1. */
+  delaySeconds?: number;
+}
+
+export interface WaitForConditionOptions<S> {
+  name?: string;
+  /** One check. Returns the new state. A throw fails the operation without retry. */
+  fn: (args: { state: S; attempt: number; logger: Logger }) => S | Promise<S>;
+  /** The state for the first check. Stored as JSON. */
+  initialState: S;
+  /** attempt is 1-based: the number of the check that just ran. */
+  waitStrategy: (args: {
+    state: S;
+    attempt: number;
+  }) => WaitForConditionDecision;
+}
+
 export interface DurableContext {
   /** True while this context replays operations that an earlier invocation completed. */
   readonly replaying: boolean;
@@ -117,6 +157,15 @@ export interface DurableContext {
   createCallback(opts?: CreateCallbackOptions): Promise<Callback>;
   /** Returns the invoked function's JSON result. Its errors keep their errorType. */
   invoke<O = unknown, I = unknown>(opts: InvokeOptions<I>): Promise<O>;
+  /** Groups operations. A completed child context returns its result without running fn. */
+  runInChildContext<T>(opts: RunInChildContextOptions<T>): Promise<T>;
+  /**
+   * Creates a callback, runs the submitter, and resolves to the raw result string.
+   * Errors keep their errorType, for example "CallbackTimeoutError".
+   */
+  waitForCallback(opts: WaitForCallbackOptions): Promise<string | undefined>;
+  /** Runs fn, then waits, until waitStrategy stops. Resolves to the last state. */
+  waitForCondition<S>(opts: WaitForConditionOptions<S>): Promise<S>;
 }
 
 /** A client for the two durable execution APIs. Field names follow the Lambda API. */

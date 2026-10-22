@@ -40,6 +40,8 @@ export function createFakeClient({ operations = [], pages = [] } = {}) {
         op.StepDetails = {
           Attempt: attempt + 1,
           Error: u.Error,
+          // waitForCondition carries its state in the RETRY Payload.
+          ...(u.Payload !== undefined && { Result: u.Payload }),
           NextAttemptTimestamp: 2,
         };
       }
