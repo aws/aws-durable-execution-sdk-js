@@ -1,4 +1,5 @@
 import {
+  ChildContextError,
   DurableOperationError,
   StepError,
   type InvocationEndInfo,
@@ -41,12 +42,14 @@ async function failedRecord(args: {
   executionError?: Error;
   operations?: Record<string, OperationInfo>;
   content?: ContentConfig;
+  operationDetail?: "full-tree" | "top-level";
 }): Promise<DurableExecutionTelemetryRecord> {
   const exporter = new CapturingExporter();
   const factory = durableExecutionTelemetry({
     exporters: [exporter],
     emitMode: "on-complete",
     content: args.content,
+    operationDetail: args.operationDetail,
   });
   const end = {
     executionArn: ARN,
@@ -327,9 +330,109 @@ describe("error records", () => {
     expect(rec.error?.cause).toEqual({ name: "Inner", message: "inner" });
   });
 
-  it("truncation drops an operation's cause together with its operation", async () => {
+  it("ends the chain at a revoked proxy cause, keeping the record", async () => {
+    const { proxy, revoke } = Proxy.revocable(new Error("gone"), {});
+    revoke();
     const rec = await failedRecord({
-      executionError: named("StepError", "failed", named("Inner", "kept")),
+      executionError: named("StepError", "failed", proxy),
+    });
+    expect(rec.error).toEqual({ name: "StepError", message: "failed" });
+  });
+
+  it("ends the chain at a cause whose Symbol.toStringTag getter throws, keeping the record", async () => {
+    const cause = {
+      get [Symbol.toStringTag](): string {
+        throw new Error("tag getter");
+      },
+    };
+    const rec = await failedRecord({
+      executionError: named(
+        "StepError",
+        "failed",
+        named("Inner", "inner", cause),
+      ),
+    });
+    expect(rec.error).toEqual({
+      name: "StepError",
+      message: "failed",
+      cause: { name: "Inner", message: "inner" },
+    });
+  });
+
+  it("writes a cause whose name is missing with name 'Error'", async () => {
+    const cause = new Error("n");
+    Object.defineProperty(cause, "name", { value: undefined });
+    const rec = await failedRecord({
+      executionError: named("StepError", "failed", cause),
+    });
+    expect(rec.error?.cause).toEqual({ name: "Error", message: "n" });
+    expect(Object.keys(rec.error?.cause ?? {})).toEqual(["name", "message"]);
+  });
+
+  it("converts a non-string cause name and message to strings", async () => {
+    const cause = {
+      [Symbol.toStringTag]: "Error",
+      name: { nested: 1 },
+      message: 42,
+    };
+    const rec = await failedRecord({
+      executionError: named("StepError", "failed", cause),
+    });
+    expect(rec.error?.cause).toEqual({
+      name: "[object Object]",
+      message: "42",
+    });
+  });
+
+  it("caps every message, on errors and on causes, at 8,192 characters plus '…'", async () => {
+    const long = "m".repeat(10_000);
+    const capped = `${"m".repeat(8192)}…`;
+    const error = named("StepError", long, named("Inner", long, long));
+    const rec = await failedRecord({
+      executionError: error,
+      operations: {
+        o1: op({ id: "o1", name: "charge", status: "FAILED", error }),
+      },
+    });
+    const expected = {
+      name: "StepError",
+      message: capped,
+      cause: {
+        name: "Inner",
+        message: capped,
+        cause: { name: "Error", message: capped },
+      },
+    };
+    expect(rec.error).toEqual(expected);
+    expect(rec.operations[0].error).toEqual(expected);
+    expect(withOperationsByName(rec).operationsByName.charge.error).toEqual(
+      expected,
+    );
+  });
+
+  it("keeps a message of exactly 8,192 characters unchanged", async () => {
+    const exact = "m".repeat(8192);
+    const rec = await failedRecord({
+      executionError: named("StepError", exact, named("Inner", exact)),
+    });
+    expect(rec.error?.message).toBe(exact);
+    expect(rec.error?.cause?.message).toBe(exact);
+  });
+
+  it("writes levels that repeat the level above (no dedupe)", async () => {
+    const rec = await failedRecord({
+      executionError: named(
+        "StepError",
+        "same",
+        named("StepError", "same", named("StepError", "same")),
+      ),
+    });
+    expect(depth(rec.error)).toBe(2);
+  });
+
+  it("truncation first removes every cause and sets droppedCauses, keeping the operations", async () => {
+    const rec = await failedRecord({
+      executionError: named("StepError", "failed", named("Inner", "dropped")),
       operations: {
         o1: op({
           id: "o1",
@@ -343,9 +446,149 @@ describe("error records", () => {
     const full = JSON.stringify(rec).length;
     const cut = truncateRecord(rec, full - 100);
     expect(cut.truncated).toBe(true);
-    expect(cut.droppedOperations).toBe(1);
+    expect(cut.droppedCauses).toBe(true);
+    expect(cut.droppedOperations).toBeUndefined();
+    expect(JSON.stringify(cut.error)).toBe(
+      '{"name":"StepError","message":"failed"}',
+    );
+    expect(cut.operations[0].error).toEqual({
+      name: "StepError",
+      message: "x",
+    });
     expect(JSON.stringify(cut)).not.toContain("Big");
-    // The execution error, cause included, is never cut.
-    expect(cut.error).toEqual(rec.error);
+    // The shared input record is not mutated.
+    expect(rec.error?.cause).toEqual({ name: "Inner", message: "dropped" });
+    expect(rec.operations[0].error?.cause?.name).toBe("Big");
+  });
+
+  it("does not set droppedCauses when the record fits", async () => {
+    const rec = await failedRecord({
+      executionError: named("StepError", "failed", named("Inner", "kept")),
+    });
+    const out = truncateRecord(rec, 256_000);
+    expect(out).toBe(rec);
+    expect(out.droppedCauses).toBeUndefined();
+  });
+
+  it("keeps the failing operation for nested child contexts with a 60 KB message", async () => {
+    // The shapes the SDK produces for three nested child contexts around a
+    // step that throws a 60 KB message: each context error wraps the step
+    // error, which wraps the thrown error, and every level copies the message.
+    const big = "x".repeat(60_000);
+    const contextError = (): Error =>
+      new ChildContextError(big, new StepError(big, new Error(big)));
+    const at = (s: number): Date => new Date(`2026-01-01T00:00:0${s}.000Z`);
+    const rec2Ops = (): Record<string, OperationInfo> => ({
+      c1: op({
+        id: "c1",
+        name: "outer",
+        type: "CONTEXT",
+        status: "FAILED",
+        startTimestamp: at(1),
+        error: contextError(),
+      }),
+      c2: op({
+        id: "c2",
+        name: "mid",
+        type: "CONTEXT",
+        parentId: "c1",
+        status: "FAILED",
+        startTimestamp: at(2),
+        error: contextError(),
+      }),
+      c3: op({
+        id: "c3",
+        name: "inner",
+        type: "CONTEXT",
+        parentId: "c2",
+        status: "FAILED",
+        startTimestamp: at(3),
+        error: contextError(),
+      }),
+      s1: op({
+        id: "s1",
+        name: "pay",
+        parentId: "c3",
+        status: "FAILED",
+        startTimestamp: at(4),
+        error: new StepError(big, new Error(big)),
+      }),
+    });
+    const rec = await failedRecord({
+      executionError: contextError(),
+      operations: rec2Ops(),
+    });
+
+    const exporter = new LambdaLogExporter();
+    const out = truncateRecord(
+      rec,
+      exporter.maxRecordSizeBytes,
+      exporter.render,
+    );
+    const line = JSON.stringify(exporter.render(out));
+    expect(Buffer.byteLength(line)).toBeLessThanOrEqual(256_000);
+    expect(out.droppedOperations).toBeUndefined();
+    // The default operationDetail keeps top-level operations only, so the
+    // failing operation in the record is the outer context (as in a real run).
+    expect(out.operations.map((o) => o.name)).toEqual(["outer"]);
+    const outer = out.operations[0];
+    expect(outer.error?.name).toBe("ChildContextError");
+    expect(outer.error?.message).toBe(`${"x".repeat(8192)}…`);
+
+    // With every operation in the record, the failing step is kept too.
+    const tree = await failedRecord({
+      executionError: contextError(),
+      operations: rec2Ops(),
+      operationDetail: "full-tree",
+    });
+    const treeOut = truncateRecord(
+      tree,
+      exporter.maxRecordSizeBytes,
+      exporter.render,
+    );
+    expect(
+      Buffer.byteLength(JSON.stringify(exporter.render(treeOut))),
+    ).toBeLessThanOrEqual(256_000);
+    expect(treeOut.droppedOperations).toBeUndefined();
+    const pay = treeOut.operations.find((o) => o.name === "pay");
+    expect(pay?.error?.name).toBe("StepError");
+    expect(pay?.error?.message).toBe(`${"x".repeat(8192)}…`);
+  });
+
+  it("fits a 17-level chain of 50 KB messages under 256,000 bytes with droppedCauses", async () => {
+    const msg = "z".repeat(50_000);
+    let cause: Error | undefined;
+    for (let i = 17; i >= 1; i--) cause = named(`Cause${i}`, msg, cause);
+    const error = named("TopError", msg, cause);
+    const rec = await failedRecord({
+      executionError: error,
+      operations: {
+        o1: op({
+          id: "o1",
+          name: "charge",
+          status: "FAILED",
+          startTimestamp: new Date("2026-01-01T00:00:00.000Z"),
+          error,
+        }),
+      },
+    });
+    expect(depth(rec.error)).toBe(16);
+
+    const exporter = new LambdaLogExporter();
+    const out = truncateRecord(
+      rec,
+      exporter.maxRecordSizeBytes,
+      exporter.render,
+    );
+    const bytes = Buffer.byteLength(JSON.stringify(exporter.render(out)));
+    expect(bytes).toBeLessThanOrEqual(256_000);
+    expect(out.truncated).toBe(true);
+    expect(out.droppedCauses).toBe(true);
+    expect(out.droppedOperations).toBeUndefined();
+    expect(out.error).toEqual({
+      name: "TopError",
+      message: `${"z".repeat(8192)}…`,
+    });
+    expect(out.operations[0].error?.cause).toBeUndefined();
   });
 });

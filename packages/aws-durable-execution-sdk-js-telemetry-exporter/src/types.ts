@@ -127,12 +127,14 @@ export interface TelemetryExporter {
   /**
    * Maximum serialized record size, in bytes, this exporter will emit. When a
    * record's JSON exceeds this, the plugin truncates a per-exporter copy before
-   * calling {@link TelemetryExporter.export | export} (best-effort): it drops
+   * calling {@link TelemetryExporter.export | export} (best-effort): it first
+   * removes every error `cause` (setting `droppedCauses: true`), then drops
    * operation `result` fields oldest-first, then whole operations oldest-first,
    * then — only as a last resort — execution `input` and `output`. It sets
    * `truncated: true` on the emitted record, marks each operation whose result
-   * was dropped with its own `truncated: true`, and adds the `droppedOperations`
-   * count and `droppedInput` / `droppedOutput` flags. Prefer `content.input` /
+   * was dropped with its own `truncated: true`, and adds the `droppedCauses`
+   * flag, the `droppedOperations` count and `droppedInput` / `droppedOutput`
+   * flags. Prefer `content.input` /
    * `content.output` transforms to bound `input`/`output` before it comes to
    * that; identity/timeline fields are never dropped.
    *
@@ -351,6 +353,12 @@ export interface DurableExecutionTelemetryRecord {
    * record is always distinguishable from a complete one ("cut, not missing").
    */
   truncated?: boolean;
+  /**
+   * `true` when the size limiter removed every error `cause` (from the
+   * execution `error` and every operation error). It is the first thing the
+   * limiter drops; each error keeps its own `name` and `message`.
+   */
+  droppedCauses?: boolean;
   /** Number of whole operations dropped by the size limiter. */
   droppedOperations?: number;
   /**

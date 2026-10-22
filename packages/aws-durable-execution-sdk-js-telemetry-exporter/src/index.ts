@@ -215,8 +215,26 @@ function toIsoString(ts: unknown): string | undefined {
 const MAX_CAUSE_DEPTH = 16;
 
 /**
+ * Longest `message` written for an error or a cause, in characters (UTF-16
+ * code units). A longer message keeps this many characters followed by `…`.
+ */
+const MAX_MESSAGE_LENGTH = 8192;
+
+/** Caps a message at {@link MAX_MESSAGE_LENGTH} characters, then appends `…`. */
+function capMessage(message: string): string {
+  return message.length > MAX_MESSAGE_LENGTH
+    ? `${message.slice(0, MAX_MESSAGE_LENGTH)}…`
+    : message;
+}
+
+/**
  * True for an error object, including one from another realm (a `vm` context),
  * which `instanceof Error` does not recognize.
+ *
+ * Both checks can throw on customer values: `instanceof` on a revoked proxy,
+ * and `Object.prototype.toString` on a throwing `Symbol.toStringTag` getter.
+ * This function does not catch; callers classify inside a `try` so that a
+ * throw ends the cause chain instead of losing the record.
  */
 function isErrorObject(value: unknown): value is Error {
   return (
@@ -254,17 +272,51 @@ function readCause(error: Error): unknown {
   }
 }
 
+/** One written cause level, and whether the chain may continue below it. */
+interface CauseLevel {
+  record: ErrorRecord;
+  /** `true` when the cause is an error object whose own `cause` is read next. */
+  isError: boolean;
+}
+
 /**
  * One cause level. Unlike the top-level error, a cause is customer data the
- * exporter did not ask for, so a getter that throws ends the chain (returns
- * `undefined`) instead of losing the whole record.
+ * exporter did not ask for, so any throw while reading it — classifying it
+ * (revoked proxy, throwing `Symbol.toStringTag`), or reading `name`/`message`
+ * — ends the chain (returns `undefined`) instead of losing the whole record.
+ *
+ * `name` and `message` are always strings: a non-string value is converted with
+ * the same safe stringify used for non-error causes, a missing `name` is
+ * `"Error"`, and a missing `message` is `""`. The message is capped.
  */
-function toCauseLevel(cause: unknown): ErrorRecord | undefined {
-  if (!isErrorObject(cause)) {
-    return { name: "Error", message: causeToString(cause) };
-  }
+function toCauseLevel(cause: unknown): CauseLevel | undefined {
   try {
-    return { name: cause.name, message: cause.message };
+    if (!isErrorObject(cause)) {
+      return {
+        record: { name: "Error", message: capMessage(causeToString(cause)) },
+        isError: false,
+      };
+    }
+    const name: unknown = cause.name;
+    const message: unknown = cause.message;
+    return {
+      record: {
+        name:
+          typeof name === "string"
+            ? name
+            : name == null
+              ? "Error"
+              : causeToString(name),
+        message: capMessage(
+          typeof message === "string"
+            ? message
+            : message == null
+              ? ""
+              : causeToString(message),
+        ),
+      },
+      isError: true,
+    };
   } catch {
     return undefined;
   }
@@ -280,11 +332,19 @@ function toCauseLevel(cause: unknown): ErrorRecord | undefined {
  * {@link MAX_CAUSE_DEPTH} levels below `error`, and stops at a cause it has
  * already written, so a cycle cannot loop. A cause that is not an error object
  * is written as `{ name: "Error", message: String(cause) }` and ends the chain.
+ * Any throw while reading a cause ends the chain; the levels already written
+ * are kept. Every `message` (the error's and each cause's) is capped at
+ * {@link MAX_MESSAGE_LENGTH} characters plus `…`. Levels that repeat the level
+ * above are written as they are.
  * `cause` is omitted, not `undefined`, when there is none, so the serialized
  * shape is `{ name, message }` exactly as before.
  */
 function toErrorRecord(error: Error): ErrorRecord {
-  const root: ErrorRecord = { name: error.name, message: error.message };
+  const message = error.message;
+  const root: ErrorRecord = {
+    name: error.name,
+    message: typeof message === "string" ? capMessage(message) : message,
+  };
   const visited = new Set<unknown>([error]);
   let tail = root;
   let current: unknown = readCause(error);
@@ -293,10 +353,10 @@ function toErrorRecord(error: Error): ErrorRecord {
     visited.add(current);
     const level = toCauseLevel(current);
     if (level === undefined) break;
-    tail.cause = level;
-    tail = level;
-    if (!isErrorObject(current)) break;
-    current = readCause(current);
+    tail.cause = level.record;
+    tail = level.record;
+    if (!level.isError) break;
+    current = readCause(current as Error);
   }
   return root;
 }
