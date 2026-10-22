@@ -571,14 +571,19 @@ later invocation.
 With the default semantics `"AT_LEAST_ONCE_PER_RETRY"`, `fn` can run more than once in one
 attempt.
 
-1. The SDK runs `fn`, then saves the result.
-2. If the invocation ends between these two actions, the step has no saved result.
-3. So the next invocation runs `fn` again.
+1. The SDK runs `fn`. Then it queues the result for the next checkpoint request and returns
+   the result at once. It does not wait for the request.
+2. If the invocation ends before that request succeeds, the step has no saved result.
+3. So the next invocation runs `fn` again. Later steps in the same invocation may already have
+   used the first result.
 
-So make `fn` idempotent. For example, pass an idempotency key to the API you call.
+So make `fn` idempotent. For example, pass an idempotency key to the API you call. Do not use
+a value that an at-least-once step generates, such as a random id, as the idempotency key of
+a later step: a second run of the step generates a different value.
 
 Use `"AT_MOST_ONCE_PER_RETRY"` when a second run is harmful and the API has no idempotency
-key. The SDK then saves the start of the attempt before it runs `fn`. If the attempt was
+key. The SDK then saves the start of the attempt before it runs `fn`. It also waits until the
+result is saved before the step returns. If the attempt was
 interrupted, the SDK does not run `fn` again. It treats the attempt as failed with
 `errorType` `"StepInterruptedError"` and asks the retry strategy. To run `fn` at most once in
 total, also set a retry strategy that never retries:
@@ -624,6 +629,8 @@ try {
   `runInChildContext` (see [Race operations inside a child context](#race-operations-inside-a-child-context)).
 - No linear retry, no retry presets, no `withRetry` and no `createWaitStrategy`.
 - `ctx.invoke` errors keep the invoked function's `ErrorType`. The full SDK does not keep it.
+- An at-least-once step returns as soon as `fn` settles. It does not wait until its result is
+  saved. The full SDK waits.
 - `waitForCondition` validates replay like the other operations. The full SDK does not.
 - No CommonJS build. CommonJS code loads the package with `require()`, which works for ES
   modules on Node.js 22.12 and later.

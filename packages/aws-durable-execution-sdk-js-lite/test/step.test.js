@@ -50,6 +50,8 @@ test("root ids are 1, 2 and child ids use the child prefix and ParentId", async 
   const child = createContext({ execution, prefix: "3", parentId: "3" });
   await child.step({ fn: () => 1 });
   await child.step({ fn: () => 2 });
+  // At-least-once steps return before their outcome is saved.
+  await execution.drain();
   const ids = client.checkpoints.flatMap((r) => r.Updates);
   assert.deepEqual(
     ids.map((u) => [u.Id, u.ParentId]),
@@ -207,6 +209,78 @@ test("at-most-once awaits START before fn; at-least-once does not", async () => 
     assert.equal((await done).output.Status, "SUCCEEDED");
     assert.equal(ran, true);
   }
+});
+
+test("at-least-once returns before SUCCEED and FAIL are saved; at-most-once waits", async () => {
+  for (const semantics of [
+    "AT_LEAST_ONCE_PER_RETRY",
+    "AT_MOST_ONCE_PER_RETRY",
+  ]) {
+    for (const fails of [false, true]) {
+      const client = createFakeClient();
+      const execution = createExecution({
+        client,
+        arn: ARN,
+        token: "token-0",
+        operations: [],
+      });
+      const ctx = createContext({ execution });
+      let settled = false;
+      // The first request (START) succeeds. Later requests are held.
+      client.script(() => {
+        client.hold();
+        return {
+          CheckpointToken: "token-1",
+          NewExecutionState: { Operations: [] },
+        };
+      });
+      const p = ctx
+        .step({
+          semantics,
+          retryStrategy: noRetry,
+          // The delay lets START go in its own request first.
+          fn: async () => {
+            await sleep(5);
+            if (fails) throw new Error("x");
+            return 1;
+          },
+        })
+        .then(
+          () => {},
+          () => {},
+        )
+        .finally(() => {
+          settled = true;
+        });
+      await sleep(20);
+      const label = `${semantics} fails=${fails}`;
+      const last = client.checkpoints.at(-1).Updates.at(-1).Action;
+      assert.equal(last, fails ? "FAIL" : "SUCCEED", label);
+      // The outcome request is held, so only at-least-once has returned.
+      assert.equal(settled, semantics === "AT_LEAST_ONCE_PER_RETRY", label);
+      void p;
+    }
+  }
+});
+
+test("a step does not run fn after the invocation ended", async () => {
+  const client = createFakeClient();
+  const execution = createExecution({
+    client,
+    arn: ARN,
+    token: "token-0",
+    operations: [],
+  });
+  const ctx = createContext({ execution });
+  execution.fail(new Error("ended"));
+  let ran = false;
+  void ctx.step({
+    fn: () => {
+      ran = true;
+    },
+  });
+  await sleep(10);
+  assert.equal(ran, false);
 });
 
 test("failure with retry sends RETRY and suspends", async () => {

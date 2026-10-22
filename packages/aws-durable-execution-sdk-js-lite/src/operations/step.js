@@ -41,6 +41,14 @@ async function runStep(
   const record = ctx._lookup(rawId);
   if (!ctx._mayRun(record, meta)) return new Promise(() => {});
   const update = (fields) => ({ ...ctx._base(rawId, meta), ...fields });
+  // At-least-once does not wait for the outcome checkpoint. The queue keeps the order of
+  // updates, and the invocation does not end before the queue is empty. If the invocation
+  // ends before the request succeeds, the step runs again, which at-least-once allows.
+  // At-most-once waits, so its outcome is saved before later code runs.
+  const saved = (u) => {
+    const p = execution.checkpoint(u);
+    return semantics === AT_MOST_ONCE ? p : undefined;
+  };
   const status = record?.Status;
 
   if (status === "SUCCEEDED") return parse(record.StepDetails?.Result);
@@ -66,6 +74,10 @@ async function runStep(
       // At-least-once lets START travel with later updates.
       if (semantics === AT_MOST_ONCE) await started;
     }
+    // A step that did not wait for its outcome checkpoint lets later code run after the
+    // invocation ended, for example in a warm sandbox's next invocation. Its fn must not
+    // run then: nothing would save its result.
+    if (execution.done) return new Promise(() => {});
     let result;
     let failed = false;
     execution.runningStart();
@@ -81,9 +93,7 @@ async function runStep(
     }
     if (!failed) {
       const payload = JSON.stringify(result);
-      await execution.checkpoint(
-        update({ Action: "SUCCEED", Payload: payload }),
-      );
+      await saved(update({ Action: "SUCCEED", Payload: payload }));
       return parse(payload);
     }
   }
@@ -91,7 +101,7 @@ async function runStep(
   const errorObject = toErrorObject(error);
   const decision = retryStrategy({ error, attempt });
   if (!decision.shouldRetry) {
-    await execution.checkpoint(update({ Action: "FAIL", Error: errorObject }));
+    await saved(update({ Action: "FAIL", Error: errorObject }));
     throw fromErrorObject(errorObject, "StepError");
   }
   await execution.checkpoint(

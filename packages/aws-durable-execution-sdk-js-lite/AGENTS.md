@@ -270,6 +270,19 @@ Suspension:
 
 Each operation's file states its replay table in a comment at the top.
 
+Steps:
+
+1. An at-least-once step does not wait for any of its checkpoints except RETRY. It returns
+   or throws as soon as `fn` settles. The queue keeps the update order. So a later operation's
+   updates never reach the service before the step's outcome.
+2. If the invocation ends before the outcome is saved, the step runs again in the next
+   invocation. At-least-once allows this. The package owner chose lower latency over waiting.
+3. An at-most-once step waits for START before `fn`, and for SUCCEED or FAIL before it
+   returns or throws.
+4. Code that did not wait for a checkpoint can keep running after the invocation's outcome is
+   decided. So a step checks `execution.done` before it runs `fn`, and never runs `fn` after
+   that.
+
 Child contexts (`runInChildContext`, `waitForCallback`, `map`, `parallel`):
 
 1. The service drops the children of a completed context from the state. So a SUCCEEDED or

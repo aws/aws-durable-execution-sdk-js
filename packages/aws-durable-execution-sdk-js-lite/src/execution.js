@@ -111,6 +111,11 @@ export function createExecution({ client, arn, token, operations }) {
     get size() {
       return state.size;
     },
+    // True after the invocation's outcome is decided. Code that did not wait for a
+    // checkpoint can still be running then, so a step checks this before it runs fn.
+    get done() {
+      return done;
+    },
     checkpoint,
     // Resolves once every update queued so far is saved. Never resolves after terminate.
     drain: () => last,
