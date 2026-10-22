@@ -71,8 +71,8 @@ interface OperationRecord {
 }
 
 interface ErrorRecord {
-  name: string; // The error's own name (err.name), unchanged
-  message: string; // The error's message, capped at 8,192 characters + "…"
+  name: string; // The error's own name (err.name), capped at 8,192 code points + "…"
+  message: string; // The error's message, capped at 8,192 code points + "…"
   cause?: ErrorRecord; // Present only when the error has a cause
 }
 ```
@@ -92,10 +92,19 @@ order:
 ```
 
 - `name` is the error's own `name`. The exporter does not rewrite, shorten, or
-  unwrap it.
-- `message` is the error's own `message`, capped at 8,192 characters: a longer
-  message keeps its first 8,192 characters followed by `…`. The cap applies to
-  every message, on the error and on each cause.
+  unwrap it, apart from the length cap below.
+- `message` is the error's own `message`.
+- Every `name` and `message`, on the error and on each cause, is capped at
+  8,192 Unicode code points: a longer value keeps its first 8,192 code points
+  followed by `…`. Code points are counted, not UTF-16 code units, so a cut
+  never splits a surrogate pair (an emoji counts as one), and the cut point is
+  the same as in the Python and Java exporters. The cap is applied once, when
+  the error is written.
+- The error's own `name` and `message` are read like a cause's: a value that
+  is not a string is converted to a string, a missing `name` is `"Error"`, and
+  a missing `message` is `""`. If reading either throws (a throwing getter, a
+  revoked proxy), the error is written as `{ "name": "Error", "message": "" }`,
+  its cause chain is still written, and the record is kept.
 - `cause` is present only when there is a cause (`undefined` and `null` mean
   none), and has the same shape, recursively.
 - The chain is cut after 16 cause levels below the error, and stops at a cause
