@@ -94,7 +94,9 @@ async function runStep(
     if (!failed) {
       const payload = JSON.stringify(result);
       await saved(update({ Action: "SUCCEED", Payload: payload }));
-      return parse(payload);
+      // The first run returns fn's own value. Only a replay parses the stored JSON
+      // (AGENTS.md 2.6).
+      return result;
     }
   }
 

@@ -55,9 +55,9 @@ async function runChild(ctx, rawId, { name, fn, subType }) {
     }
     throw fromErrorObject(errorObject, "ChildContextError");
   }
-  const payload = JSON.stringify(result);
   // The context already succeeded. Rebuilding its result changes nothing on the service.
-  if (replayChildren) return parse(payload);
+  if (replayChildren) return result;
+  const payload = JSON.stringify(result);
   const large =
     payload !== undefined && Buffer.byteLength(payload) > MAX_PAYLOAD_BYTES;
   await execution.checkpoint(
@@ -71,5 +71,7 @@ async function runChild(ctx, rawId, { name, fn, subType }) {
         : { Action: "SUCCEED", Payload: payload },
     ),
   );
-  return parse(payload);
+  // The first run returns fn's own value. Only a replay parses the stored JSON
+  // (AGENTS.md 2.6).
+  return result;
 }

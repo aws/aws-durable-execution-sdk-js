@@ -44,11 +44,9 @@ async function runCondition(
   }
   if (status === "PENDING") return execution.block();
 
-  // Round-tripped, so the first check sees the same data as a later one.
+  // A later check reads the state that the previous check saved.
   const state =
-    details?.Result != null
-      ? JSON.parse(details.Result)
-      : parse(JSON.stringify(initialState));
+    details?.Result != null ? JSON.parse(details.Result) : initialState;
   if (status !== "STARTED") execution.checkpoint(update({ Action: "START" }));
   const attempt = (details?.Attempt ?? 0) + 1;
 
@@ -77,7 +75,8 @@ async function runCondition(
   const payload = JSON.stringify(newState);
   if (!decision.shouldContinue) {
     await execution.checkpoint(update({ Action: "SUCCEED", Payload: payload }));
-    return parse(payload);
+    // The first run returns fn's own value. Only a replay parses the stored JSON.
+    return newState;
   }
   await execution.checkpoint(
     update({

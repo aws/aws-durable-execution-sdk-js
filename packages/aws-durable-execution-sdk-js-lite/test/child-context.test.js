@@ -339,3 +339,28 @@ test("two child contexts in Promise.all complete with stable ids", async () => {
   assert.equal(run.getOperation("A").Status, "SUCCEEDED");
   assert.equal(run.getOperation("B").Status, "SUCCEEDED");
 });
+
+test("the first run returns fn's own value; a replay returns the parsed JSON", async () => {
+  const value = { at: new Date(0) };
+  const seen = [];
+  const run = await runDurable({
+    workflow: async ({ ctx }) => {
+      seen.push(await ctx.runInChildContext({ name: "c", fn: () => value }));
+      seen.push(
+        await ctx.waitForCondition({
+          name: "w",
+          initialState: value,
+          fn: ({ state }) => state,
+          waitStrategy: () => ({ shouldContinue: false }),
+        }),
+      );
+      await ctx.wait({ seconds: 1 });
+    },
+  });
+  assert.equal(run.status, "SUCCEEDED");
+  // First invocation: the same object. Second invocation: the stored JSON.
+  assert.equal(seen[0], value);
+  assert.equal(seen[1], value);
+  assert.deepEqual(seen[2], { at: value.at.toJSON() });
+  assert.deepEqual(seen[3], { at: value.at.toJSON() });
+});

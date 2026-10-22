@@ -494,13 +494,24 @@ each run. To group operations, use `runInChildContext`.
 
 ### Return JSON-safe values
 
-The SDK stores every result as JSON. It returns the JSON copy in the first run too, so the
-first run and a replay see the same value.
+The SDK stores every result as JSON.
+
+1. In the first run, an operation returns the exact value that `fn` returned.
+2. In a replay, it returns `JSON.parse` of the stored JSON.
+3. So the two are equal only when the value does not change shape through JSON.
+4. The SDK does not check this. Returning such a value is your responsibility.
+
+A value changes shape through JSON in these cases:
 
 - A `Date` becomes an ISO string.
 - A field whose value is `undefined` is dropped.
 - A class instance becomes a plain object without its prototype and methods.
 - A `Map` or a `Set` becomes `{}`.
+- A `BigInt` makes `JSON.stringify` throw. So the operation throws a `TypeError`.
+
+Return plain objects, arrays, strings, numbers, booleans and `null`. Convert a `Date` to a
+string inside `fn`, for example with `toISOString()`. Also do not change the returned object
+after the operation returns, because the stored JSON keeps the old value.
 
 ### Keep step results small
 
@@ -632,6 +643,8 @@ try {
 - `ctx.invoke` errors keep the invoked function's `ErrorType`. The full SDK does not keep it.
 - An at-least-once step returns as soon as `fn` settles. It does not wait until its result is
   saved. The full SDK waits.
+- In the first run, an operation returns the value that `fn` returned. The full SDK returns a
+  copy that it serialized and deserialized.
 - `waitForCondition` validates replay like the other operations. The full SDK does not.
 - No CommonJS build. CommonJS code loads the package with `require()`, which works for ES
   modules on Node.js 22.12 and later.

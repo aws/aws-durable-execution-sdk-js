@@ -10,11 +10,13 @@ import { invoke } from "./helpers/invoke.js";
 
 const noRetry = () => ({ shouldRetry: false });
 
-test("fresh step sends START and SUCCEED and returns the JSON value", async () => {
+test("fresh step sends START and SUCCEED and returns fn's own value", async () => {
   const date = new Date(0);
+  const result = { date };
   const { output, updates } = await invoke(async ({ ctx }) => {
-    const value = await ctx.step({ name: "s", fn: async () => ({ date }) });
-    assert.deepEqual(value, { date: date.toJSON() });
+    const value = await ctx.step({ name: "s", fn: async () => result });
+    // The first run does not parse the stored JSON. A replay returns { date: string }.
+    assert.equal(value, result);
     return value;
   });
   const base = { Id: hashId("1"), Name: "s", Type: "STEP", SubType: "Step" };

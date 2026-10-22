@@ -228,8 +228,11 @@ Suspension:
    in the state. Before the first id, the root `ctx` is replaying if the state holds more than
    the `EXECUTION` record. A child `ctx` is replaying if its own context record exists. The
    logger is silent while `replaying` is true.
-4. Every operation returns `JSON.parse(JSON.stringify(value))` on the first run, the same
-   value it returns on replay. So the first run and a replay see the same data.
+4. On the first run, an operation returns the value that `fn` returned. It does not parse the
+   JSON it stored. On replay, it returns `JSON.parse` of the stored JSON. So the two are equal
+   only for a JSON-safe value. Returning a JSON-safe value is the developer's responsibility
+   (README "Return JSON-safe values"). The SDK does not check it, because a check costs a
+   parse on every operation.
 
 ### 2.7 Errors
 
