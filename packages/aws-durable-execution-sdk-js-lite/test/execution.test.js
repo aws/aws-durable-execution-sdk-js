@@ -45,48 +45,80 @@ test("updates queued while a request is in flight go together in the next one", 
   assert.equal(client.checkpoints[1].CheckpointToken, "token-1");
 });
 
-test("a request carries at most 250 updates", async () => {
+test("a request has no limit on the number of updates", async () => {
   const client = createFakeClient();
   const ex = make(client);
   const all = [];
-  for (let i = 0; i < 260; i++) all.push(ex.checkpoint(update(`id${i}`)));
+  for (let i = 0; i < 1000; i++) all.push(ex.checkpoint(update(`id${i}`)));
   await Promise.all(all);
   assert.deepEqual(
     client.checkpoints.map((r) => r.Updates.length),
-    [250, 10],
+    [1000],
   );
 });
 
-test("a request stays within 750 KiB, in order", async () => {
+// The body the client sends: it adds a 36-character ClientToken.
+const bodyBytes = (r) =>
+  Buffer.byteLength(
+    JSON.stringify({
+      CheckpointToken: r.CheckpointToken,
+      ClientToken: "00000000-0000-0000-0000-000000000000",
+      Updates: r.Updates,
+    }),
+  );
+const LIMIT = 5 * 1024 * 1024;
+
+test("a request body stays within 5 MiB, in order", async () => {
   const client = createFakeClient();
   const ex = make(client);
-  const big = (Id, kib) => ({
+  const big = (Id) => ({
     ...update(Id, "SUCCEED"),
-    Payload: "x".repeat(kib * 1024),
+    Payload: "x".repeat(1024 * 1024),
   });
   const all = [];
-  for (let i = 0; i < 6; i++) all.push(ex.checkpoint(big(`b${i}`, 200)));
+  for (let i = 0; i < 6; i++) all.push(ex.checkpoint(big(`b${i}`)));
   await Promise.all(all);
   assert.deepEqual(
     client.checkpoints.map((r) => r.Updates.map((u) => u.Id)),
     [
-      ["b0", "b1", "b2"],
-      ["b3", "b4", "b5"],
+      ["b0", "b1", "b2", "b3"],
+      ["b4", "b5"],
     ],
   );
-  for (const r of client.checkpoints) {
-    assert.ok(Buffer.byteLength(JSON.stringify(r)) <= 750 * 1024);
+  for (const r of client.checkpoints) assert.ok(bodyBytes(r) <= LIMIT);
+});
+
+test("the size check uses the exact body size", async () => {
+  for (const extra of [0, 1]) {
+    const client = createFakeClient();
+    const ex = make(client);
+    const a = update("a");
+    // Size the second payload so that the body with both updates is LIMIT + extra.
+    const probe = {
+      CheckpointToken: "token-0",
+      Updates: [a, { ...a, Id: "b" }],
+    };
+    const fill = LIMIT + extra - bodyBytes(probe);
+    const b = {
+      ...a,
+      Id: "b",
+      Payload: "x".repeat(fill - ',"Payload":""'.length),
+    };
+    await Promise.all([ex.checkpoint(a), ex.checkpoint(b)]);
+    const first = client.checkpoints[0];
+    assert.equal(first.Updates.length, extra === 0 ? 2 : 1, `extra=${extra}`);
+    if (extra === 0) assert.equal(bodyBytes(first), LIMIT);
   }
 });
 
-test("an update larger than 750 KiB goes alone", async () => {
+test("an update larger than 5 MiB goes alone", async () => {
   const client = createFakeClient();
   const ex = make(client);
   await Promise.all([
     ex.checkpoint(update("a")),
     ex.checkpoint({
       ...update("huge", "SUCCEED"),
-      Payload: "x".repeat(800 * 1024),
+      Payload: "x".repeat(LIMIT + 1),
     }),
     ex.checkpoint(update("b")),
   ]);

@@ -28,6 +28,8 @@ const PAYLOAD_LIMITS = {
   CONTEXT: 262_144,
   CHAINED_INVOKE: 1_048_576,
 };
+// The service's limit on the raw HTTP request: 6 MiB plus 11 KiB of headers.
+const MAX_BODY_BYTES = 6_302_720;
 
 export function createInMemoryService({
   input,
@@ -262,8 +264,20 @@ export function createInMemoryService({
       return result;
     },
     client: {
-      async checkpoint({ CheckpointToken, Updates = [] }) {
+      async checkpoint(request) {
+        const { CheckpointToken, Updates = [] } = request;
         checkToken(CheckpointToken);
+        // The client adds a 36-character ClientToken when the request has none.
+        const body = JSON.stringify({
+          ClientToken: "0".repeat(36),
+          ...request,
+        });
+        if (Buffer.byteLength(body) > MAX_BODY_BYTES) {
+          throw Object.assign(
+            new Error(`Request must be smaller than ${MAX_BODY_BYTES} bytes`),
+            { name: "RequestEntityTooLargeException", status: 413 },
+          );
+        }
         validate(Updates);
         const changed = new Set(Updates.map(apply));
         token = `token-${++tokens}`;

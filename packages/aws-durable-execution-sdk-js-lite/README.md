@@ -406,6 +406,7 @@ The in-memory service does not simulate heartbeat timeouts.
 The in-memory service rejects some requests that the real service rejects. A rejected request
 fails the execution, as in AWS. It rejects:
 
+- a request body larger than 6 MiB plus 11 KiB, the service's limit on the HTTP request;
 - a member such as `Name`, `Payload` or `Error.ErrorData` that is not a string;
 - a STEP or CONTEXT `Payload` larger than 256 KiB, and a CHAINED_INVOKE `Payload` larger than
   1 MiB;

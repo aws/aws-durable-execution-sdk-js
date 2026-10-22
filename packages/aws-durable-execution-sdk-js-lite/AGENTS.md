@@ -184,11 +184,13 @@ Checkpoint queue:
    checkpoint request is in flight at a time.
 2. `execution.checkpoint(update)` adds the update to a pending list and returns a promise. The
    promise resolves when the request that carried the update succeeds.
-3. When no request is in flight, the SDK sends the pending updates in one request. It takes
-   updates in order while the request has at most 250 updates and at most `750 * 1024`
-   bytes. The size is the sum of `Buffer.byteLength(JSON.stringify(update))`, plus the token
-   length and 100 bytes for the other fields, like the full SDK. The first update is always
-   taken, so an update larger than the limit goes alone. The rest wait for the next request.
+3. When no request is in flight, the SDK sends the pending updates in one request. The service
+   has no limit on the number of updates. It limits the raw HTTP request to about 6 MiB. So
+   the SDK takes updates in order while the request body is at most `5 * 1024 * 1024` bytes.
+   The size is the exact byte length of the JSON body, including the 36-character
+   `ClientToken` that the client adds. The 1 MiB margin leaves room for the HTTP headers.
+   The first update is always taken, so an update larger than the limit goes alone. The rest
+   wait for the next request.
 4. After each response, the SDK stores the new token. It replaces each returned operation in
    the local state, keyed by `Id`. Operations read service-assigned fields from that state, for
    example `CallbackDetails.CallbackId`.

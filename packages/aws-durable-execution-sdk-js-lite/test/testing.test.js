@@ -175,7 +175,9 @@ test("exceeding maxInvocations throws with the last invocation error", async () 
 });
 
 test("a large result arrives through the EXECUTION checkpoint", async () => {
-  const big = "x".repeat(6 * 1024 * 1024);
+  // Its JSON is above the 6 MiB - 50 bytes response limit and within the service's
+  // 6 MiB limit for an EXECUTION payload.
+  const big = "x".repeat(6 * 1024 * 1024 - 40);
   const run = await runDurable({ workflow: async () => big });
   assert.equal(run.status, "SUCCEEDED");
   assert.equal(run.result, big);
@@ -491,6 +493,17 @@ test("the service rejects updates that the real service rejects", async () => {
     "Cannot update operation a twice in one request",
     step("a", "START"),
     step("a", "START"),
+  );
+  // A request is at most 6 MiB plus 11 KiB, whatever the number of updates.
+  await assert.rejects(
+    checkpoint(
+      service,
+      token,
+      ...Array.from({ length: 25 }, (_, i) =>
+        step(`big${i}`, "SUCCEED", { Payload: "x".repeat(256 * 1024) }),
+      ),
+    ),
+    { name: "RequestEntityTooLargeException", status: 413 },
   );
   // A rejected request applies nothing.
   assert.equal(service.ops.has("a"), false);

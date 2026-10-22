@@ -1,7 +1,9 @@
-const MAX_UPDATES = 250;
-// The full SDK limits one checkpoint request to 750 KiB. A request that the service
-// rejects fails the execution. So the lite SDK uses the same limit.
-const MAX_REQUEST_BYTES = 750 * 1024;
+// The service has no limit on the number of updates in one request. It limits the raw
+// HTTP request to about 6 MiB, and a rejected request fails the execution. So the SDK
+// keeps each request body at most 5 MiB, which leaves room for the HTTP headers.
+const MAX_BODY_BYTES = 5 * 1024 * 1024;
+// The client generates a ClientToken with crypto.randomUUID(), which is 36 characters.
+const CLIENT_TOKEN = "00000000-0000-0000-0000-000000000000";
 const never = () => new Promise(() => {});
 
 // Per-invocation state: the operation records, the checkpoint queue and suspension.
@@ -43,12 +45,21 @@ export function createExecution({ client, arn, token, operations }) {
 
   // Takes updates in order while the request stays within both limits. The first update
   // is always taken, so an update larger than the byte limit still goes out alone.
+  // The body is JSON.stringify({CheckpointToken, ClientToken, Updates}). Its size is the
+  // body with no updates, plus each update's JSON, plus one comma between updates. So the
+  // sum below is the exact body size. The first update is always taken.
   function takeBatch() {
-    let size = token.length + 100; // the request fields besides Updates, like the full SDK
+    let size = Buffer.byteLength(
+      JSON.stringify({
+        CheckpointToken: token,
+        ClientToken: CLIENT_TOKEN,
+        Updates: [],
+      }),
+    );
     let n = 0;
-    while (n < pending.length && n < MAX_UPDATES) {
-      size += Buffer.byteLength(JSON.stringify(pending[n].update));
-      if (n > 0 && size > MAX_REQUEST_BYTES) break;
+    while (n < pending.length) {
+      size += Buffer.byteLength(JSON.stringify(pending[n].update)) + (n > 0);
+      if (n > 0 && size > MAX_BODY_BYTES) break;
       n++;
     }
     return pending.splice(0, n);
