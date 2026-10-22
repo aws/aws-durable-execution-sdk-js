@@ -16,7 +16,7 @@ covers migration from Core `2.x`; the
 - **Plugin state is isolated between invocations.** Each Lambda invocation gets
   fresh instrumentation, including concurrent invocations in Lambda Managed
   Instances. Spans and operation buffers belong to the invocation they describe.
-- **Shared resources keep their intended lifetime.** Factories can reuse a
+- **Resource ownership is explicit.** Factories can reuse a
   provider or exporter while creating separate invocation state.
 - **Trace context follows the invocation.** Factories and hooks receive the
   invocation-local `xRayTraceId` carrier, avoiding another invocation's process
@@ -244,7 +244,7 @@ rg -n 'new (InvocationOtelPlugin|ExecutionOtelPlugin)|createPlugin' .
 rg -n '@aws/durable-execution-sdk-js|Layers:|layerVersionArn' .
 ```
 
-## Plugin State and Replay
+## Plugin state and invocation lifecycle
 
 Keep invocation identity, spans, and operation buffers on the new plugin. Keep
 intentionally shared providers/exporters outside it. One execution can suspend
@@ -261,7 +261,7 @@ If you copied the former Powertools logging example, update queries for the
 adapter's `executionArn`, `requestId`, `operationId`, and `operationName` fields.
 See the [logging guide](../packages/aws-durable-execution-sdk-js/README.md).
 
-## Recommended Validation After Upgrading
+## Recommended validation after upgrading
 
 1. Resolve the coordinated package versions, regenerate the lock file, and run
    your TypeScript build and tests. Verify the effective versions in any bundles
