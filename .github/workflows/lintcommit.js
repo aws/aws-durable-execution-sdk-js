@@ -40,6 +40,8 @@ const scopes = new Set([
   // Durable Execution Telemetry: the VS Code extension, the desktop app, and the host-free
   // modules they share.
   "telemetry",
+  // The dependency-free SDK in packages/aws-durable-execution-sdk-js-lite.
+  "sdk-lite",
 ]);
 
 /**
