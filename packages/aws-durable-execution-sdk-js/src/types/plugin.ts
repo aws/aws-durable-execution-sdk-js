@@ -201,6 +201,19 @@ export interface OperationChangeInfo {
  * Because hooks are awaited, any time spent in a hook directly increases the
  * wall-clock duration of the current Lambda invocation.
  *
+ * **Wrapping hooks:** a wrapper may return its own result, including a deadline
+ * race or a synchronous override after calling `next()`. The SDK preserves that
+ * settlement timing; it does not wait for a still-pending callback afterward.
+ * If the callback's original error has already been observed when the wrapper
+ * settles, that error wins over a replacement result or wrapper rethrow, on both
+ * synchronous and asynchronous paths. A later callback rejection is observed
+ * without changing an outcome the wrapper already returned. Wrapper failures
+ * themselves are isolated by running or reusing the healthy inner chain.
+ * An asynchronous inner wrapper failure unwinds outer wrappers normally:
+ * `finally` blocks run, while success-only code after `await next()` may not.
+ * The SDK then recovers using cached inner work, without rerunning wrappers
+ * or customer code.
+ *
  * **Opting out (fire-and-forget):** to avoid blocking the SDK, start the
  * background work inside the hook but return without awaiting it, so the
  * returned promise resolves immediately:

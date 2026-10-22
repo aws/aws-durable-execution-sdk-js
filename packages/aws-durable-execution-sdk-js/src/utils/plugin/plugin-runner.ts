@@ -13,9 +13,145 @@ import {
 } from "../../types/plugin";
 import { DurableExecutionInvocationOutput } from "../../types/core";
 import { collectPropagationMetadata } from "./propagation-metadata";
+import util from "node:util";
 
 type CallbackResult = unknown;
-type CallbackFn = () => CallbackResult;
+type CallbackOutcome =
+  | { asynchronous: false; value: CallbackResult }
+  | {
+      asynchronous: true;
+      promise: Promise<CallbackResult>;
+      sourcePromise?: Promise<CallbackResult>;
+    };
+type CallbackFn = () => CallbackOutcome;
+const nativePromiseThen = Promise.prototype.then;
+
+// Call only inside the boundary that owns this value: getting or invoking `then`
+// can execute customer code. Capture the method once and preserve its receiver.
+function observeCallbackResult(
+  value: CallbackResult,
+  onFulfilled?: () => void,
+  onRejected?: (error: unknown) => void,
+): CallbackOutcome {
+  const then = value == null ? undefined : (value as { then?: unknown }).then;
+  // Native promises remain asynchronous when their own `then` is replaced.
+  // Lightweight runtimes can omit util.types; retain a same-realm fallback.
+  const isPromise =
+    typeof util.types?.isPromise === "function"
+      ? util.types.isPromise(value)
+      : value instanceof Promise;
+  if (typeof then !== "function") {
+    if (!isPromise) {
+      onFulfilled?.();
+      return { asynchronous: false, value };
+    }
+  }
+  const method = typeof then === "function" ? then : nativePromiseThen;
+  let resolveSource: ((value: unknown) => void) | undefined;
+  let rejectSource: ((error: unknown) => void) | undefined;
+  const source = isPromise
+    ? (value as Promise<CallbackResult>)
+    : new Promise<CallbackResult>((resolve, reject) => {
+        resolveSource = resolve;
+        rejectSource = reject;
+      });
+  // A PromiseLike await has one assimilation reaction before the consumer
+  // resumes. Keep it separate from adopted-settlement tracking and recovery.
+  const sourcePromise = isPromise ? source : source.then((result) => result);
+  if (!isPromise) void sourcePromise.catch(() => undefined);
+  return {
+    asynchronous: true,
+    sourcePromise,
+    promise: new Promise((resolve, reject) => {
+      // Retain the first resolution choice, ignoring later resolve/reject/throw.
+      // An adopted thenable must finish before its outcome takes precedence.
+      let resolutionChosen = false;
+      const fulfillResult = (result: unknown) => {
+        onFulfilled?.();
+        resolveSource?.(result);
+        resolve(result);
+      };
+      const rejectResult = (error: unknown) => {
+        onRejected?.(error);
+        rejectSource?.(error);
+        reject(error);
+      };
+      const fulfill = (result: unknown) => {
+        if (resolutionChosen) return;
+        resolutionChosen = true;
+        // A native fulfillment is already adopted. A custom thenable's first
+        // resolve call can instead choose another pending thenable: capture
+        // precedence when that adoption settles, not when it is selected.
+        if (
+          method !== nativePromiseThen &&
+          result !== null &&
+          (typeof result === "object" || typeof result === "function")
+        ) {
+          try {
+            const adoptedThen = (result as { then?: unknown }).then;
+            if (typeof adoptedThen === "function") {
+              const adopt = (resolveAdopted: (value: unknown) => void) => {
+                resolveAdopted({
+                  // biome-ignore lint/suspicious/noThenProperty: Preserve one captured then read and its original receiver during native assimilation.
+                  then(
+                    resolveNext: (value: unknown) => void,
+                    rejectNext: (error: unknown) => void,
+                  ) {
+                    Reflect.apply(adoptedThen, result, [
+                      resolveNext,
+                      rejectNext,
+                    ]);
+                  },
+                });
+              };
+              // Reuse the same captured subscription for the exposed source
+              // and private settlement tracking; adopted then runs only once.
+              const adoption = isPromise ? new Promise(adopt) : source;
+              if (resolveSource) adopt(resolveSource);
+              void adoption.then(fulfillResult, rejectResult);
+              return;
+            }
+          } catch (error) {
+            rejectResult(error);
+            return;
+          }
+        }
+        fulfillResult(result);
+      };
+      const fail = (error: unknown) => {
+        if (resolutionChosen) return;
+        resolutionChosen = true;
+        rejectResult(error);
+      };
+      try {
+        Reflect.apply(method, value, [fulfill, fail]);
+      } catch (error) {
+        fail(error);
+      }
+    }),
+  };
+}
+
+// Recovery must reuse the inner chain, including its original synchronous error.
+// Mark entry before invoking it so even a reentrant call cannot execute it twice.
+function memoizeCallback(callback: CallbackFn): CallbackFn {
+  let called = false;
+  let outcome: CallbackOutcome = { asynchronous: false, value: undefined };
+  let failure: { error: unknown } | undefined;
+  return () => {
+    if (!called) {
+      called = true;
+      try {
+        outcome = callback();
+      } catch (error) {
+        failure = { error };
+      }
+    }
+    if (failure) throw failure.error;
+    return outcome;
+  };
+}
+
 type PluginInfo =
   | OperationInfo
   | OperationEndInfo
@@ -48,73 +184,108 @@ export function createPluginRunner(
     fn: CustomerFn,
   ): CustomerFnResult => {
     let fnError: { error: unknown } | undefined;
-    let fnCalled = false;
-    let fnResult: CustomerFnResult;
-
-    // Wrap the original fn to capture any error it throws and prevent double-calls
-    const guardedFn: CallbackResult | CustomerFnResult = () => {
-      if (fnCalled) return fnResult;
-      fnCalled = true;
+    const guardedFn = memoizeCallback(() => {
       try {
-        const result: CustomerFnResult = fn();
-        if (
-          result != null &&
-          typeof (result as Promise<unknown>).then === "function"
-        ) {
-          fnResult = (result as Promise<unknown>).catch((err: unknown) => {
-            fnError = { error: err };
-            throw err; // re-throw so plugins still see it
+        const outcome = observeCallbackResult(fn(), undefined, (error) => {
+          fnError = { error };
+        });
+        if (outcome.asynchronous) {
+          const promise = outcome.promise.catch((error: unknown) => {
+            fnError = { error };
+            throw error;
           });
-          return fnResult;
+          // A wrapper may start next() and return its own result without waiting.
+          // Retain the callback failure even if that wrapper ignores its promise.
+          void promise.catch(() => undefined);
+          return {
+            asynchronous: true,
+            promise,
+            // Match the callback's one-reaction catch path on main. The
+            // protected observer above is attached before a wrapper can mutate
+            // this exposed promise, so cached recovery stays private.
+            sourcePromise: outcome.promise,
+          };
         }
-        fnResult = result;
-        return result;
-      } catch (err) {
-        fnError = { error: err };
-        throw err; // re-throw so plugins still see it
+        return outcome;
+      } catch (error) {
+        fnError = { error };
+        throw error;
       }
-    };
+    });
 
-    const chain: CallbackFn = plugins.reduceRight<CallbackFn>(
-      (next, plugin) => () => {
-        const hookFn = plugin[method] as PluginWrapperHookFn;
-        if (hookFn) {
-          try {
-            return hookFn.call(plugin, info, next);
-          } catch {
-            // Plugin errors are swallowed — fall through to the inner fn
-            return next();
+    const chain = plugins.reduceRight<CallbackFn>((next, plugin) => {
+      const nextOnce = memoizeCallback(next);
+      let exposedPromise: Promise<CallbackResult> | undefined;
+      const callNext: CustomerFn = () => {
+        const outcome = nextOnce();
+        if (!outcome.asynchronous) return outcome.value;
+        if (!exposedPromise) {
+          if (outcome.sourcePromise) {
+            // Outer wrappers await the native result or PromiseLike assimilation
+            // without settlement/recovery hops changing error precedence.
+            // The separately observed outcome remains private for recovery.
+            exposedPromise = outcome.sourcePromise;
+          } else {
+            exposedPromise = outcome.promise.then((value) => value);
+            void exposedPromise.catch(() => undefined);
           }
         }
-        return next();
-      },
-      guardedFn as CallbackFn,
-    );
+        return exposedPromise;
+      };
+      return () => {
+        try {
+          const hook = plugin[method] as PluginWrapperHookFn;
+          if (!hook) return nextOnce();
+          const result = hook.call(plugin, info, callNext);
+          // Returning next's native promise preserves its cached asynchronous
+          // outcome even if the wrapper replaced its `then` property.
+          if (exposedPromise !== undefined && result === exposedPromise) {
+            return nextOnce();
+          }
+          let errorAtSettlement: { error: unknown } | undefined;
+          const captureError = () => {
+            errorAtSettlement = fnError;
+          };
+          const outcome = observeCallbackResult(
+            result,
+            captureError,
+            captureError,
+          );
+          const checkCallback = (value: CallbackResult): CallbackResult => {
+            // Later customer rejection must not change an already-chosen
+            // wrapper result while our observation/recovery promises settle.
+            if (errorAtSettlement) throw errorAtSettlement.error;
+            return value;
+          };
+          if (!outcome.asynchronous) {
+            return { asynchronous: false, value: checkCallback(outcome.value) };
+          }
+          const promise = outcome.promise.then(checkCallback, () => {
+            // The wrapper rejected; run or reuse the inner chain. Outer native
+            // wrappers unwind normally before their own boundary recovers.
+            if (errorAtSettlement) throw errorAtSettlement.error;
+            const fallback = nextOnce();
+            return fallback.asynchronous ? fallback.promise : fallback.value;
+          });
+          // An outer wrapper awaits the original result or its PromiseLike
+          // assimilation, without private settlement or recovery reactions.
+          void promise.catch(() => undefined);
+          return {
+            asynchronous: true,
+            promise,
+            sourcePromise: outcome.sourcePromise,
+          };
+        } catch {
+          // Getter, call and result-validation failures belong to this wrapper.
+          // Continue through healthy inner wrappers, or reuse their outcome if
+          // the failed wrapper already called next().
+          return nextOnce();
+        }
+      };
+    }, guardedFn);
 
-    let result: CallbackResult;
-    try {
-      result = chain();
-    } catch (_err) {
-      // If the chain threw synchronously, check if it was from the customer fn
-      if (fnError) throw fnError.error;
-      // Otherwise it's a plugin error that escaped — swallow and call fn directly
-      result = (guardedFn as CallbackFn)();
-    }
-
-    // If the result is async, ensure fn errors are re-thrown even if swallowed by a plugin
-    if (
-      result != null &&
-      typeof (result as PromiseLike<unknown>).then === "function"
-    ) {
-      return (result as PromiseLike<unknown>).then((val: CustomerFnResult) => {
-        if (fnError) throw fnError.error;
-        return val;
-      });
-    }
-
-    // Sync path: if fn threw but the chain swallowed it, re-throw
-    if (fnError) throw fnError.error;
-    return result;
+    const outcome = chain();
+    return outcome.asynchronous ? outcome.promise : outcome.value;
   };
 
   /**
