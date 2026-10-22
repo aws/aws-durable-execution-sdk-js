@@ -147,6 +147,52 @@ export interface WaitForConditionOptions<S> {
   }) => WaitForConditionDecision;
 }
 
+export interface MapOptions<I, O> {
+  name?: string;
+  items: readonly I[];
+  /** Use the item ctx inside fn, not the parent ctx. */
+  fn: (args: { ctx: DurableContext; item: I; index: number }) => O | Promise<O>;
+  /** At most this many items run at once. Default: no limit. */
+  maxConcurrency?: number;
+  /** The Name of each item's child context. Default: no Name. */
+  itemName?: (args: { item: I; index: number }) => string;
+}
+
+export interface ParallelBranch<T> {
+  name?: string;
+  /** Use the branch ctx inside fn, not the parent ctx. */
+  fn: (args: { ctx: DurableContext }) => T | Promise<T>;
+}
+
+export interface ParallelOptions<T> {
+  name?: string;
+  branches: readonly ParallelBranch<T>[];
+  /** At most this many branches run at once. Default: no limit. */
+  maxConcurrency?: number;
+}
+
+export interface BatchItem<T> {
+  index: number;
+  status: "SUCCEEDED" | "FAILED";
+  /** Set when status is SUCCEEDED. */
+  result?: T;
+  /** Set when status is FAILED. */
+  error?: DurableOperationError;
+}
+
+/** Every item runs to completion, so completionReason is always "ALL_COMPLETED". */
+export interface BatchResult<T> {
+  /** In index order. */
+  all: BatchItem<T>[];
+  completionReason: "ALL_COMPLETED";
+  /** The results of the items that succeeded, in index order. */
+  getResults(): T[];
+  /** The errors of the items that failed, in index order. */
+  getErrors(): DurableOperationError[];
+  /** Throws the first failed item's error, if any. */
+  throwIfError(): void;
+}
+
 export interface DurableContext {
   /** True while this context replays operations that an earlier invocation completed. */
   readonly replaying: boolean;
@@ -166,6 +212,10 @@ export interface DurableContext {
   waitForCallback(opts: WaitForCallbackOptions): Promise<string | undefined>;
   /** Runs fn, then waits, until waitStrategy stops. Resolves to the last state. */
   waitForCondition<S>(opts: WaitForConditionOptions<S>): Promise<S>;
+  /** Runs fn for every item in its own child context. A failed item does not stop the others. */
+  map<I, O>(opts: MapOptions<I, O>): Promise<BatchResult<O>>;
+  /** Runs every branch in its own child context. A failed branch does not stop the others. */
+  parallel<T>(opts: ParallelOptions<T>): Promise<BatchResult<T>>;
 }
 
 /** A client for the two durable execution APIs. Field names follow the Lambda API. */

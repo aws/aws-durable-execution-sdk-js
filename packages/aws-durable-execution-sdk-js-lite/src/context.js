@@ -1,6 +1,7 @@
 import { nonDeterministicError } from "./errors.js";
 import { hashId } from "./ids.js";
 import { createLogger } from "./logger.js";
+import { map, parallel } from "./operations/batch.js";
 import { createCallback } from "./operations/callback.js";
 import { runInChildContext } from "./operations/child-context.js";
 import { invoke } from "./operations/invoke.js";
@@ -76,6 +77,8 @@ export function createContext({ execution, prefix, parentId }) {
     runInChildContext: (opts) => runInChildContext(ctx, opts),
     waitForCallback: (opts) => waitForCallback(ctx, opts),
     waitForCondition: (opts) => waitForCondition(ctx, opts),
+    map: (opts) => map(ctx, opts),
+    parallel: (opts) => parallel(ctx, opts),
   };
   ctx.logger = createLogger(() => ctx.replaying);
   return ctx;

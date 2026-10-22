@@ -33,6 +33,19 @@ the state in pages, to exercise pagination.
   the middle of it.
 - A callback `result` is the raw string the sender sent. Call `JSON.parse` yourself if the
   sender sends JSON.
+- `ctx.map` and `ctx.parallel` always run every item, even after an item fails. A failed
+  item is recorded in the result, not thrown. Call `throwIfError()` on the result to fail on
+  any item error.
+- Inside a map item or a parallel branch, use the `ctx` passed to `fn`, not the outer `ctx`.
+- For "first one wins", race the operations inside a child context, so the winner is
+  recorded and replays the same:
+
+  ```js
+  const winner = await ctx.runInChildContext({
+    fn: ({ ctx: c }) =>
+      Promise.race([c.step({ fn: fetchA }), c.step({ fn: fetchB })]),
+  });
+  ```
 
 Export the workflow separately from the handler, so tests can run it with `runDurable`:
 
