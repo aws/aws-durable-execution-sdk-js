@@ -38,6 +38,13 @@ class PaymentError extends Error {
   }
 }
 
+class FraudError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FraudError";
+  }
+}
+
 class ValidationError extends Error {
   constructor(message: string) {
     super(message);
@@ -72,6 +79,11 @@ interface Row {
   message?: string;
   /** Operations whose failure was caught and handled, so rule 8 does not apply. */
   handled?: string[];
+  /**
+   * Several failures could have caused the execution's failure, so the
+   * execution reports the wrapper (rule 9) and rule 8 does not apply.
+   */
+  ambiguous?: boolean;
   /** Fail the callback named "cb" externally with this error. */
   sendFailure?: { ErrorType?: string; ErrorMessage: string };
 }
@@ -314,6 +326,137 @@ const TABLE_B: Record<string, Row> = {
     ops: { charge: "Error" },
     exec: "Error",
   },
+  B19: {
+    title: "context.promise.all over a step that throws PaymentError",
+    run: (ctx) =>
+      ctx.promise.all("combo", [
+        ctx.step(
+          "charge",
+          async () => {
+            throw new PaymentError(MSG);
+          },
+          noRetry,
+        ),
+      ]),
+    ops: { charge: "PaymentError", combo: "PaymentError" },
+    exec: "PaymentError",
+  },
+  "B19-race": {
+    title: "context.promise.race over a step that throws PaymentError",
+    run: (ctx) =>
+      ctx.promise.race("combo", [
+        ctx.step(
+          "charge",
+          async () => {
+            throw new PaymentError(MSG);
+          },
+          noRetry,
+        ),
+      ]),
+    ops: { charge: "PaymentError", combo: "PaymentError" },
+    exec: "PaymentError",
+  },
+  B20: {
+    title:
+      "two map items' steps fail with the same message: PaymentError, FraudError",
+    run: async (ctx) => {
+      const result = await ctx.map(
+        "fanout",
+        ["a", "b"],
+        (item, value) =>
+          item.step(
+            `step-${value}`,
+            async () => {
+              throw value === "a" ? new PaymentError(MSG) : new FraudError(MSG);
+            },
+            noRetry,
+          ),
+        { completionConfig: { toleratedFailureCount: 1 } },
+      );
+      result.throwIfError();
+    },
+    ops: {
+      "step-a": "PaymentError",
+      "step-b": "FraudError",
+      "map-item-0": "PaymentError",
+      "map-item-1": "FraudError",
+    },
+    ambiguous: true,
+    exec: "StepError",
+  },
+  B21: {
+    title:
+      "two parallel branches' steps fail with the same message: PaymentError, FraudError",
+    run: async (ctx) => {
+      const result = await ctx.parallel(
+        "par",
+        [
+          (branch) =>
+            branch.step(
+              "step-a",
+              async () => {
+                throw new PaymentError(MSG);
+              },
+              noRetry,
+            ),
+          (branch) =>
+            branch.step(
+              "step-b",
+              async () => {
+                throw new FraudError(MSG);
+              },
+              noRetry,
+            ),
+        ],
+        { completionConfig: { toleratedFailureCount: 1 } },
+      );
+      result.throwIfError();
+    },
+    ops: {
+      "step-a": "PaymentError",
+      "step-b": "FraudError",
+      "parallel-branch-0": "PaymentError",
+      "parallel-branch-1": "FraudError",
+    },
+    ambiguous: true,
+    exec: "StepError",
+  },
+  "R2-concurrent": {
+    title:
+      "two concurrent child contexts fail with the same message: TypeError, PaymentError",
+    run: async (ctx) => {
+      const settled = await Promise.allSettled([
+        ctx.runInChildContext("c1", (child) =>
+          child.step(
+            "s1",
+            async () => {
+              throw new TypeError(MSG);
+            },
+            noRetry,
+          ),
+        ),
+        ctx.runInChildContext("c2", (child) =>
+          child.step(
+            "s2",
+            async () => {
+              throw new PaymentError(MSG);
+            },
+            noRetry,
+          ),
+        ),
+      ]);
+      const failed = settled.find((r) => r.status === "rejected");
+      if (failed) throw failed.reason;
+    },
+    ops: {
+      s1: "TypeError",
+      c1: "TypeError",
+      s2: "PaymentError",
+      c2: "PaymentError",
+    },
+    ambiguous: true,
+    exec: "StepError",
+  },
 };
 
 class CapturingExporter implements TelemetryExporter {
@@ -410,7 +553,7 @@ describe.each(Object.entries(TABLE_B))("Table B %s", (_id, row) => {
         });
         expect(observed.opsByName[name]).toEqual(observed.ops[name]);
         // Rule 8: the execution names the error of the operation it came from.
-        if (!row.handled?.includes(name)) {
+        if (!row.ambiguous && !row.handled?.includes(name)) {
           expect({ [name]: observed.ops[name]?.name }).toEqual({
             [name]: observed.exec?.name,
           });
@@ -444,7 +587,7 @@ describe.each(Object.entries(TABLE_B))("Table B %s", (_id, row) => {
  * only when `pluginsConfig.childOperationsDepth` preserves it. Without it the
  * replayed execution is named after the checkpointed type.
  */
-const LOST_WITHOUT_CHILDREN = new Set(["B4", "B6", "B10"]);
+const LOST_WITHOUT_CHILDREN = new Set(["B4", "B6", "B10", "R2-concurrent"]);
 
 describe.each(Object.entries(TABLE_B))(
   "Table B %s replayed with the default childOperationsDepth",
@@ -472,3 +615,144 @@ describe.each(Object.entries(TABLE_B))(
     });
   },
 );
+
+/** Rows that behave differently in JS from what the shared table expects. */
+describe("outside Table B, pinned so a change is noticed", () => {
+  const callback = (ErrorType: string): Row => ({
+    title: `a callback failed externally with type ${JSON.stringify(ErrorType)}`,
+    run: async (ctx) => {
+      const [promise] = await ctx.createCallback("cb", {
+        timeout: { seconds: 3600 },
+      });
+      await promise;
+    },
+    sendFailure: { ErrorType, ErrorMessage: MSG },
+    ops: { cb: "" },
+    exec: "",
+  });
+
+  /**
+   * B13b expects `Error`. The core SDK rebuilds a callback failure's cause with
+   * `name = ErrorType || "Error"`, so a plugin receives the same error for a
+   * missing type and for `"Error"`, and the exporter cannot tell them apart.
+   * The missing type wins (B13). Fixing this needs a core SDK change.
+   */
+  it.each(["live", "replayed"] as const)(
+    'B13b (%s): ErrorType "Error" is reported as CallbackExternalError',
+    async (mode) => {
+      const observed = await observe(callback("Error"), mode);
+      expect(observed.exec).toEqual({
+        name: "CallbackExternalError",
+        message: MSG,
+      });
+      expect(observed.ops.cb?.name).toBe("CallbackExternalError");
+    },
+  );
+
+  it.each(["live", "replayed"] as const)(
+    "a blank ErrorType is reported as CallbackExternalError (%s)",
+    async (mode) => {
+      const observed = await observe(callback(" \t"), mode);
+      expect(observed.exec?.name).toBe("CallbackExternalError");
+      expect(observed.ops.cb?.name).toBe("CallbackExternalError");
+    },
+  );
+
+  const failingStep = (ctx: DurableContext) =>
+    ctx.step(
+      "charge",
+      async () => {
+        throw new PaymentError(MSG);
+      },
+      noRetry,
+    );
+
+  /**
+   * `promise.any` rejects with an `AggregateError`, which is not an SDK
+   * wrapper, so it is the name (rule 2). The step keeps its own type.
+   */
+  it.each(["live", "replayed"] as const)(
+    "context.promise.any (%s): combinator and execution AggregateError",
+    async (mode) => {
+      const observed = await observe(
+        {
+          title: "promise.any",
+          run: (ctx) => ctx.promise.any("combo", [failingStep(ctx)]),
+          ops: { charge: "", combo: "" },
+          exec: "",
+        },
+        mode,
+      );
+      expect(observed.status).toBe("FAILED");
+      expect(observed.exec?.name).toBe("AggregateError");
+      expect(observed.ops.combo?.name).toBe("AggregateError");
+      expect(observed.ops.charge).toEqual({
+        name: "PaymentError",
+        message: MSG,
+      });
+    },
+  );
+
+  /** `promise.allSettled` never rejects, so nothing is named after it. */
+  it("context.promise.allSettled: the execution does not fail", async () => {
+    const observed = await observe(
+      {
+        title: "promise.allSettled",
+        run: async (ctx) => {
+          await ctx.promise.allSettled("combo", [failingStep(ctx)]);
+        },
+        ops: { charge: "", combo: "" },
+        exec: "",
+      },
+      "live",
+    );
+    expect(observed.status).toBe("SUCCEEDED");
+    expect(observed.exec).toBeUndefined();
+    expect(observed.ops.combo).toBeUndefined();
+    expect(observed.ops.charge).toEqual({ name: "PaymentError", message: MSG });
+  });
+
+  /**
+   * Plain `Promise.all` over two child contexts rejects as soon as the first
+   * fails. Live, the second has not failed yet, so the first is the only
+   * candidate. Replayed, both have failed with the same message and different
+   * types, and the exporter does not guess (rule 9). The R2-concurrent row,
+   * where both have failed before the handler throws, is equal live and
+   * replayed.
+   */
+  it("Promise.all fast rejection: live names the first failure, replayed the wrapper", async () => {
+    const row: Row = {
+      title: "Promise.all fast rejection",
+      run: (ctx) =>
+        Promise.all([
+          ctx.runInChildContext("c1", (child) =>
+            child.step(
+              "s1",
+              async () => {
+                throw new TypeError(MSG);
+              },
+              noRetry,
+            ),
+          ),
+          ctx.runInChildContext("c2", (child) =>
+            child.step(
+              "s2",
+              async () => {
+                await new Promise((r) => setTimeout(r, 200));
+                throw new PaymentError(MSG);
+              },
+              noRetry,
+            ),
+          ),
+        ]),
+      ops: { c1: "", c2: "" },
+      exec: "",
+    };
+    const live = await observe(row, "live");
+    const replayed = await observe(row, "replayed");
+    expect(live.exec?.name).toBe("TypeError");
+    expect(replayed.exec?.name).toBe("StepError");
+    expect(replayed.ops.c1?.name).toBe("TypeError");
+    expect(replayed.ops.c2?.name).toBe("PaymentError");
+  });
+});
