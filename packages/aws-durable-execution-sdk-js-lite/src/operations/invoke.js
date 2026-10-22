@@ -23,8 +23,7 @@ async function runInvoke(ctx, rawId, { name, functionName, input, tenantId }) {
   const execution = ctx._execution;
   const meta = { type: "CHAINED_INVOKE", subType: "ChainedInvoke", name };
   let record = ctx._lookup(rawId);
-  if (record && !ctx._validateReplay(record, meta))
-    return new Promise(() => {});
+  if (!ctx._mayRun(record, meta)) return new Promise(() => {});
   if (!record) {
     await execution.checkpoint({
       ...ctx._base(rawId, meta),

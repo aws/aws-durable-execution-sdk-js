@@ -83,8 +83,9 @@ Wraps a workflow as a Lambda handler.
   replace it.
 
 The workflow's return value is the execution result. It is stored as JSON. A thrown error
-fails the execution. The execution error has `ErrorType` set to the error's `errorType`, else
-its `name`.
+fails the execution. The execution error has `ErrorType` set to the error's `name`, and
+`ErrorMessage` set to its `message`. Only a `DurableOperationError` sets `ErrorType` from
+its `errorType` and adds `ErrorData` from its `data`.
 
 The returned handler throws if the event has no `DurableExecutionArn` or `CheckpointToken`.
 This happens when durable execution is not enabled on the function.
@@ -306,7 +307,7 @@ Returns a retry strategy for `step` and `waitForCallback`. All options are optio
 - `maxDelaySeconds` (default 60): the largest delay.
 - `backoffRate` (default 2): each delay is this many times the previous one.
 - `jitter` (default `true`): multiplies each delay by a random number between 0 and 1.
-- `shouldRetry(error)` (default: retry every error): return `false` to fail at once.
+- `shouldRetry({ error })` (default: retry every error): return `false` to fail at once.
 
 Delays are rounded to whole seconds. The smallest delay is 1 second.
 
@@ -319,7 +320,7 @@ import { createRetryStrategy } from "@aws/durable-execution-sdk-js-lite";
 const retryStrategy = createRetryStrategy({
   maxAttempts: 4,
   jitter: false,
-  shouldRetry: (error) => error.name !== "ValidationError",
+  shouldRetry: ({ error }) => error.name !== "ValidationError",
 });
 ```
 
@@ -332,7 +333,10 @@ Every failed operation throws a `DurableOperationError`, in the first run and in
 - `data` (optional): a string with extra data.
 - `cause` (optional).
 
-Throw a `DurableOperationError` to set `errorType` and `data` directly:
+Throw a `DurableOperationError` to set `errorType` and `data` directly. The SDK reads
+`errorType` and `data` only from a `DurableOperationError`. Other errors keep only their
+`name` and `message`. Many HTTP clients put an object in `error.data`. The service accepts
+only a string in `ErrorData`. So the SDK does not send `data` from other errors.
 
 ```js
 import { DurableOperationError } from "@aws/durable-execution-sdk-js-lite";
@@ -380,8 +384,8 @@ Options:
   the callback open. The callback that `waitForCallback` creates has no name, so `name` is
   `undefined` for it.
 - `functions` (optional): an object that maps a `functionName` to a local function for
-  `ctx.invoke`. The function receives the parsed input, or `null` without input. Its return
-  value is the invoke result.
+  `ctx.invoke`. The function receives `{ input }`. `input` is the parsed input, or `null`
+  without input. Its return value is the invoke result.
   A thrown error fails the invoke with `ErrorType` set to the error's `name`.
 - `maxInvocations` (default 100): `runDurable` throws after this many invocations.
 - `pageSize` (optional): serves the execution state in pages of this size, to test
@@ -398,6 +402,16 @@ Options:
 - `getOperation(name)`: the first operation record with this name.
 
 The in-memory service does not simulate heartbeat timeouts.
+
+The in-memory service rejects some requests that the real service rejects. A rejected request
+fails the execution, as in AWS. It rejects:
+
+- a member such as `Name`, `Payload` or `Error.ErrorData` that is not a string;
+- a STEP or CONTEXT `Payload` larger than 256 KiB, and a CHAINED_INVOKE `Payload` larger than
+  1 MiB;
+- a `START` for an operation that exists, unless it is a STEP in status `READY`;
+- two updates for one operation in one request, unless a STEP or CONTEXT `START` comes
+  first.
 
 ```js
 import assert from "node:assert/strict";
@@ -537,6 +551,20 @@ const winner = await ctx.runInChildContext({
 
 The same pattern replaces `Promise.all`, `Promise.allSettled` and `Promise.any` on durable
 operations.
+
+`Promise.race` does not stop the losing branches.
+
+1. The losing branches keep running in the same invocation.
+2. The SDK still saves their operations in checkpoints, after the child context has its
+   result.
+3. So a losing branch must not start more side effects after it loses. Make each branch one
+   step. Or set a flag when the winner finishes, and check the flag in the loser before its
+   next step.
+
+In a later invocation, a completed child context can run `fn` again to rebuild a result larger
+than 256 KiB. In that run, an operation without a saved record does not run, and neither does a
+step that did not finish. Its promise never resolves. So a losing branch never continues in a
+later invocation.
 
 ### Make steps idempotent
 

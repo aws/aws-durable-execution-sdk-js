@@ -8,7 +8,7 @@ export function createRetryStrategy({
   shouldRetry = () => true,
 } = {}) {
   return ({ error, attempt }) => {
-    if (attempt >= maxAttempts || !shouldRetry(error)) {
+    if (attempt >= maxAttempts || !shouldRetry({ error })) {
       return { shouldRetry: false };
     }
     let delay = Math.min(

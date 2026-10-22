@@ -53,7 +53,7 @@ export interface RetryStrategyConfig {
   /** Full jitter. Default true. */
   jitter?: boolean;
   /** Default: retry every error. */
-  shouldRetry?: (error: unknown) => boolean;
+  shouldRetry?: (args: { error: unknown }) => boolean;
 }
 
 export function createRetryStrategy(

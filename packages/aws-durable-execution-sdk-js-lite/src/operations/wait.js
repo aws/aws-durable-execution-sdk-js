@@ -26,8 +26,7 @@ async function runWait(ctx, rawId, { name, seconds }) {
   const execution = ctx._execution;
   const meta = { type: "WAIT", subType: "Wait", name };
   const record = ctx._lookup(rawId);
-  if (record && !ctx._validateReplay(record, meta))
-    return new Promise(() => {});
+  if (!ctx._mayRun(record, meta)) return new Promise(() => {});
   if (TERMINAL.has(record?.Status)) return;
   if (!record) {
     await execution.checkpoint({

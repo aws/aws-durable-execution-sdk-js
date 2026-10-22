@@ -4,6 +4,7 @@ import { DurableOperationError } from "../src/errors.js";
 import { hashId } from "../src/ids.js";
 import { runDurable } from "../src/testing/index.js";
 import { invoke } from "./helpers/invoke.js";
+import { stepRecord } from "./helpers/fake-client.js";
 
 const noRetry = () => ({ shouldRetry: false });
 const byId = (run, rawId) =>
@@ -154,6 +155,87 @@ test("a large result sets ReplayChildren and is rebuilt without running steps", 
   const context = byId(run, "1");
   assert.equal(context.ContextDetails.Result, "");
   assert.equal(context.ContextDetails.ReplayChildren, true);
+});
+
+test("a ReplayChildren re-run does not run a race loser's later operations", async () => {
+  // The winner's result is larger than 256 KiB, so a later invocation re-runs the race.
+  // By then the loser's wait has ended. Its next step has no record and must not run.
+  let loserRuns = 0;
+  const run = await runDurable({
+    workflow: async ({ ctx }) => {
+      const value = await ctx.runInChildContext({
+        name: "race",
+        fn: ({ ctx: c }) =>
+          Promise.race([
+            Promise.all([
+              c.step({ name: "w1", fn: () => "x".repeat(150_000) }),
+              c.step({ name: "w2", fn: () => "x".repeat(150_000) }),
+            ]),
+            // The loser is nested, so replay-only must apply at every depth.
+            c.runInChildContext({
+              name: "loser",
+              fn: async ({ ctx: l }) => {
+                await l.wait({ name: "timeout", seconds: 60 });
+                return l.step({
+                  name: "loser-side-effect",
+                  fn: () => {
+                    loserRuns++;
+                    return "late";
+                  },
+                });
+              },
+            }),
+          ]),
+      });
+      await ctx.wait({ name: "after", seconds: 120 });
+      return value.length;
+    },
+  });
+  assert.equal(run.status, "SUCCEEDED");
+  assert.equal(run.result, 2);
+  assert.equal(run.invocations, 3);
+  assert.equal(loserRuns, 0);
+  assert.equal(run.getOperation("loser-side-effect"), undefined);
+});
+
+test("a ReplayChildren re-run does not run a step that did not end", async () => {
+  // The loser's step started, but its result was never saved. At-least-once would run
+  // fn again. The context already succeeded, so the step must not run.
+  let loserRuns = 0;
+  const { output, updates } = await invoke(
+    async ({ ctx }) =>
+      ctx.runInChildContext({
+        name: "race",
+        fn: ({ ctx: c }) =>
+          Promise.race([
+            c.step({ name: "winner", fn: () => "w" }),
+            c.step({
+              name: "loser",
+              fn: () => {
+                loserRuns++;
+                return "l";
+              },
+            }),
+          ]),
+      }),
+    {
+      operations: [
+        {
+          Id: hashId("1"),
+          Name: "race",
+          Type: "CONTEXT",
+          SubType: "RunInChildContext",
+          Status: "SUCCEEDED",
+          ContextDetails: { Result: "", ReplayChildren: true },
+        },
+        stepRecord("1-1", "SUCCEEDED", { name: "winner", Result: '"w"' }),
+        stepRecord("1-2", "STARTED", { name: "loser" }),
+      ],
+    },
+  );
+  assert.deepEqual(output, { Status: "SUCCEEDED", Result: '"w"' });
+  assert.equal(loserRuns, 0);
+  assert.deepEqual(updates, []);
 });
 
 test("a large result sends SUCCEED with an empty Payload and ReplayChildren", async () => {

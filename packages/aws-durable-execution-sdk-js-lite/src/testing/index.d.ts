@@ -49,7 +49,10 @@ export type OnCallback = (args: {
   | Promise<undefined | { result: string } | { error: ErrorObject }>;
 
 /** Functions that ctx.invoke can call, by function name. */
-export type InvokeFunctions = Record<string, (input: unknown) => unknown>;
+export type InvokeFunctions = Record<
+  string,
+  (args: { input: unknown }) => unknown
+>;
 
 export interface InMemoryServiceOptions {
   /** The user event. Stored as ExecutionDetails.InputPayload. */

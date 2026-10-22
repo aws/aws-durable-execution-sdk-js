@@ -16,6 +16,18 @@ const DETAILS = {
 const clean = (obj) =>
   Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
 const clone = (op) => structuredClone(op);
+const INVALID = "InvalidParameterValueException";
+// The members of an update that the service reads as strings.
+const STRING_FIELDS =
+  "Id ParentId Name Type SubType Action Payload Error.ErrorType Error.ErrorMessage Error.ErrorData".split(
+    " ",
+  );
+// The service's Payload limits in bytes. Other types have no limit here.
+const PAYLOAD_LIMITS = {
+  STEP: 262_144,
+  CONTEXT: 262_144,
+  CHAINED_INVOKE: 1_048_576,
+};
 
 export function createInMemoryService({
   input,
@@ -94,7 +106,7 @@ export function createInMemoryService({
                 name: "ResourceNotFoundException",
               });
             }
-            return fn(JSON.parse(u.Payload ?? "null"));
+            return fn({ input: JSON.parse(u.Payload ?? "null") });
           })
           .then(
             (value) => [op, "SUCCEEDED", { Result: JSON.stringify(value) }],
@@ -108,6 +120,49 @@ export function createInMemoryService({
     } else if (op.Type === "CONTEXT") {
       // The service ignores ContextOptions on START.
       op.ContextDetails = {};
+    }
+  }
+
+  // A lean subset of the service's checks (the simulated service's checkpoint-server
+  // validators), so local tests fail where the service would reject a request. The
+  // service checks every update against the state before the request, then applies them.
+  function validate(updates) {
+    const reject = (name, message) => {
+      throw Object.assign(new Error(message), { name, status: 400 });
+    };
+    const seen = new Map();
+    for (const u of updates) {
+      for (const path of STRING_FIELDS) {
+        const v = path.split(".").reduce((o, key) => o?.[key], u);
+        if (v != null && typeof v !== "string") {
+          reject("SerializationException", `${path} must be a string`);
+        }
+      }
+      const limit = PAYLOAD_LIMITS[u.Type];
+      if (u.Payload != null && Buffer.byteLength(u.Payload) > limit) {
+        reject(INVALID, `${u.Type} payload is larger than ${limit} bytes`);
+      }
+      const prev = seen.get(u.Id);
+      const pair = prev?.Action === "START" && u.Action !== "START";
+      if (
+        prev &&
+        !(pair && (prev.Type === "STEP" || prev.Type === "CONTEXT"))
+      ) {
+        reject(INVALID, `Cannot update operation ${u.Id} twice in one request`);
+      }
+      seen.set(u.Id, u);
+      // Only a STEP waiting for its next attempt can start again.
+      const op = u.Type === "EXECUTION" ? undefined : ops.get(u.Id);
+      if (
+        u.Action === "START" &&
+        op &&
+        !(op.Type === "STEP" && op.Status === "READY")
+      ) {
+        reject(
+          INVALID,
+          `Cannot start ${op.Type} ${u.Id} in status ${op.Status}`,
+        );
+      }
     }
   }
 
@@ -209,6 +264,7 @@ export function createInMemoryService({
     client: {
       async checkpoint({ CheckpointToken, Updates = [] }) {
         checkToken(CheckpointToken);
+        validate(Updates);
         const changed = new Set(Updates.map(apply));
         token = `token-${++tokens}`;
         return {

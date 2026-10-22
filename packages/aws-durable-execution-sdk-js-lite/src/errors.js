@@ -10,13 +10,23 @@ export class DurableOperationError extends Error {
 }
 
 // Stack traces are not sent. They can be large and they leak paths.
+// The service accepts only strings in ErrorType and ErrorData. Other libraries put
+// objects in `data`, for example the parsed body of an HTTP response. A rejected update
+// fails the execution. So only DurableOperationError, whose fields come from an
+// ErrorObject, supplies errorType and data. This matches the full SDK.
 export function toErrorObject(err) {
-  const obj = {
-    ErrorType: err?.errorType ?? err?.name ?? "Error",
+  if (err instanceof DurableOperationError) {
+    const obj = {
+      ErrorType: err.errorType ?? err.name,
+      ErrorMessage: err.message,
+    };
+    if (err.data !== undefined) obj.ErrorData = err.data;
+    return obj;
+  }
+  return {
+    ErrorType: err?.name ?? "Error",
     ErrorMessage: err?.message ?? String(err),
   };
-  if (err?.data !== undefined) obj.ErrorData = err.data;
-  return obj;
 }
 
 export function fromErrorObject(obj, fallbackType) {

@@ -43,7 +43,7 @@ test("createRetryStrategy honors options", () => {
     backoffRate: 3,
     maxDelaySeconds: 100,
     jitter: false,
-    shouldRetry: (e) => e.message !== "fatal",
+    shouldRetry: ({ error }) => error.message !== "fatal",
   });
   // 0.2 rounds to 0, so the 1 second floor applies.
   assert.deepEqual(retry({ error: new Error("x"), attempt: 1 }), {
@@ -90,6 +90,20 @@ test("ErrorObject conversion round-trips", () => {
     ErrorType: "T",
     ErrorMessage: "m",
     ErrorData: "d",
+  });
+  // Only DurableOperationError supplies errorType and data. Other libraries put objects
+  // in `data`, and the service rejects a non-string ErrorData.
+  class FetchError extends Error {
+    constructor(message, data) {
+      super(message);
+      this.name = "FetchError";
+      this.errorType = "Custom";
+      this.data = data;
+    }
+  }
+  assert.deepEqual(toErrorObject(new FetchError("503", { code: "busy" })), {
+    ErrorType: "FetchError",
+    ErrorMessage: "503",
   });
   const empty = fromErrorObject(undefined, "StepError");
   assert.equal(empty.errorType, "StepError");

@@ -28,8 +28,7 @@ async function runCallback(
   const execution = ctx._execution;
   const meta = { type: "CALLBACK", subType: "Callback", name };
   let record = ctx._lookup(rawId);
-  if (record && !ctx._validateReplay(record, meta))
-    return new Promise(() => {});
+  if (!ctx._mayRun(record, meta)) return new Promise(() => {});
   if (!record) {
     const options = clean({
       TimeoutSeconds: timeoutSeconds,

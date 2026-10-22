@@ -75,6 +75,8 @@ from the package owner.
 ### 1.7 API shape
 
 1. Every operation takes exactly one argument. The argument is an object with named keys.
+   One exception exists: when every key of the argument is optional, the caller may omit
+   the argument, as in `ctx.createCallback()`.
 2. No operation has overloads. The code never checks argument types to decide which form the
    caller used.
 3. Every function that the developer passes to the SDK also receives exactly one object.
@@ -182,7 +184,11 @@ Checkpoint queue:
    checkpoint request is in flight at a time.
 2. `execution.checkpoint(update)` adds the update to a pending list and returns a promise. The
    promise resolves when the request that carried the update succeeds.
-3. When no request is in flight, the SDK sends all pending updates in one request, at most 250.
+3. When no request is in flight, the SDK sends the pending updates in one request. It takes
+   updates in order while the request has at most 250 updates and at most `750 * 1024`
+   bytes. The size is the sum of `Buffer.byteLength(JSON.stringify(update))`, plus the token
+   length and 100 bytes for the other fields, like the full SDK. The first update is always
+   taken, so an update larger than the limit goes alone. The rest wait for the next request.
 4. After each response, the SDK stores the new token. It replaces each returned operation in
    the local state, keyed by `Id`. Operations read service-assigned fields from that state, for
    example `CallbackDetails.CallbackId`.
@@ -233,6 +239,11 @@ Suspension:
    checkpointed. So the first run and a replay throw the same error.
 4. `errorType` is the original error's `name` (for example `"TypeError"`), or a fixed value when
    the SDK creates the error, for example `"CallbackTimeoutError"`.
+5. Only a `DurableOperationError` supplies `ErrorType` from its `errorType` and `ErrorData`
+   from its `data`. Any other value supplies `ErrorType` from `name` and `ErrorMessage` from
+   `message`, and no `ErrorData`. Other libraries put objects in `data`. The service rejects
+   a non-string `ErrorData`, and the rejection fails the execution. The full SDK does the
+   same.
 
 ### 2.8 Checkpoint error handling
 
@@ -268,6 +279,12 @@ Child contexts (`runInChildContext`, `waitForCallback`, `map`, `parallel`):
    `SUCCEED` with `Payload: ""` and `ContextOptions: {ReplayChildren: true}`. The service then
    keeps the children. On replay the SDK runs `fn` again. The children replay from their
    records, so no step runs again.
+3. That re-run uses a replay-only child `ctx`. Its descendants are replay-only too. The
+   context succeeded, so `fn` awaited only operations that ended. So an operation without a
+   record, or a step or context that did not end, belongs to a branch that lost a race. In a
+   replay-only `ctx` such an operation does nothing and returns a promise that never
+   resolves. It does not count as blocked, because nothing that the result depends on
+   awaits it. `ctx._mayRun` holds this check, and every operation calls it.
 
 ### 2.10 Logging
 

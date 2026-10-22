@@ -6,7 +6,7 @@
 // | none                           | send START (not awaited), run fn, SUCCEED or FAIL |
 // | STARTED                        | run fn again, children replay from their records  |
 // | SUCCEEDED                      | return JSON.parse(ContextDetails.Result), no fn   |
-// | SUCCEEDED with ReplayChildren  | run fn again to rebuild the result, no checkpoint |
+// | SUCCEEDED with ReplayChildren  | run fn again in a replay-only ctx, no checkpoint  |
 // | FAILED                         | throw fromErrorObject(ContextDetails.Error), no fn |
 //
 // The service prunes the children of a completed context. So fn must not run again
@@ -32,8 +32,7 @@ async function runChild(ctx, rawId, { name, fn, subType }) {
   const execution = ctx._execution;
   const meta = { type: "CONTEXT", subType, name };
   const record = ctx._lookup(rawId);
-  if (record && !ctx._validateReplay(record, meta))
-    return new Promise(() => {});
+  if (!ctx._mayRun(record, meta)) return new Promise(() => {});
   const details = record?.ContextDetails;
   const replayChildren = record?.Status === "SUCCEEDED";
   if (replayChildren && !details?.ReplayChildren) return parse(details?.Result);
@@ -46,7 +45,7 @@ async function runChild(ctx, rawId, { name, fn, subType }) {
 
   let result;
   try {
-    result = await fn({ ctx: ctx._child(rawId) });
+    result = await fn({ ctx: ctx._child(rawId, replayChildren) });
   } catch (err) {
     const errorObject = toErrorObject(err);
     if (!replayChildren) {

@@ -20,7 +20,7 @@ test("the order example confirms an approved order", async (t) => {
     input: { orderId: "o-1" },
     onCallback: approve,
     functions: {
-      [PAYMENT_FUNCTION]: (input) => {
+      [PAYMENT_FUNCTION]: ({ input }) => {
         charges.push(input);
         return { paymentId: "p-1" };
       },

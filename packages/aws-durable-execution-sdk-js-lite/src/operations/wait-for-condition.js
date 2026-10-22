@@ -33,8 +33,7 @@ async function runCondition(
   const execution = ctx._execution;
   const meta = { type: "STEP", subType: "WaitForCondition", name };
   const record = ctx._lookup(rawId);
-  if (record && !ctx._validateReplay(record, meta))
-    return new Promise(() => {});
+  if (!ctx._mayRun(record, meta)) return new Promise(() => {});
   const update = (fields) => ({ ...ctx._base(rawId, meta), ...fields });
   const status = record?.Status;
   const details = record?.StepDetails;

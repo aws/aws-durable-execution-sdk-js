@@ -11,7 +11,13 @@ import { waitForCallback } from "./operations/wait-for-callback.js";
 import { waitForCondition } from "./operations/wait-for-condition.js";
 
 // Members that start with "_" are for operations, not for user code.
-export function createContext({ execution, prefix, parentId }) {
+// replayOnly: no operation may act that has no record (see _mayRun).
+export function createContext({
+  execution,
+  prefix,
+  parentId,
+  replayOnly = false,
+}) {
   let counter = 0;
   const ctx = {
     _execution: execution,
@@ -36,9 +42,32 @@ export function createContext({ execution, prefix, parentId }) {
 
     // The ctx for the child context with this raw id. It lives here because
     // child-context.js is imported by this file: importing createContext back would
-    // make an import cycle.
-    _child: (rawId) =>
-      createContext({ execution, prefix: rawId, parentId: rawId }),
+    // make an import cycle. A replay-only parent makes every descendant replay-only.
+    _child: (rawId, childReplayOnly = false) =>
+      createContext({
+        execution,
+        prefix: rawId,
+        parentId: rawId,
+        replayOnly: replayOnly || childReplayOnly,
+      }),
+
+    // Every operation calls this after its lookup. False means the operation must stop:
+    // it then returns a promise that never resolves.
+    _mayRun(record, meta) {
+      // A replay-only ctx re-runs a context that already succeeded (AGENTS.md 2.9).
+      // Its fn awaited only operations that ended. So an operation without a record, or
+      // a step or context that did not end, belongs to a branch that lost a race.
+      // Running it would repeat or add side effects. Not counting it as blocked is safe,
+      // because nothing that the result depends on awaits it.
+      if (!record) return !replayOnly;
+      if (!ctx._validateReplay(record, meta)) return false;
+      return !(
+        replayOnly &&
+        (record.Type === "STEP" || record.Type === "CONTEXT") &&
+        record.Status !== "SUCCEEDED" &&
+        record.Status !== "FAILED"
+      );
+    },
 
     // The fields every update for this operation carries.
     _base(rawId, { type, subType, name }) {

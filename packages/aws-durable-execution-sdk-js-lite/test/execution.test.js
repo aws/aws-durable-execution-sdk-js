@@ -57,6 +57,45 @@ test("a request carries at most 250 updates", async () => {
   );
 });
 
+test("a request stays within 750 KiB, in order", async () => {
+  const client = createFakeClient();
+  const ex = make(client);
+  const big = (Id, kib) => ({
+    ...update(Id, "SUCCEED"),
+    Payload: "x".repeat(kib * 1024),
+  });
+  const all = [];
+  for (let i = 0; i < 6; i++) all.push(ex.checkpoint(big(`b${i}`, 200)));
+  await Promise.all(all);
+  assert.deepEqual(
+    client.checkpoints.map((r) => r.Updates.map((u) => u.Id)),
+    [
+      ["b0", "b1", "b2"],
+      ["b3", "b4", "b5"],
+    ],
+  );
+  for (const r of client.checkpoints) {
+    assert.ok(Buffer.byteLength(JSON.stringify(r)) <= 750 * 1024);
+  }
+});
+
+test("an update larger than 750 KiB goes alone", async () => {
+  const client = createFakeClient();
+  const ex = make(client);
+  await Promise.all([
+    ex.checkpoint(update("a")),
+    ex.checkpoint({
+      ...update("huge", "SUCCEED"),
+      Payload: "x".repeat(800 * 1024),
+    }),
+    ex.checkpoint(update("b")),
+  ]);
+  assert.deepEqual(
+    client.checkpoints.map((r) => r.Updates.map((u) => u.Id)),
+    [["a"], ["huge"], ["b"]],
+  );
+});
+
 test("NewExecutionState replaces operations by Id", async () => {
   const client = createFakeClient();
   client.script({

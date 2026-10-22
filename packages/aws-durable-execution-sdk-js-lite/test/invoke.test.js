@@ -123,7 +123,7 @@ test("runDurable: invoke returns the callee's JSON result", async () => {
   const run = await runDurable({
     input: { n: 2 },
     functions: {
-      double: (input) => {
+      double: ({ input }) => {
         received.push(input);
         return { doubled: input.n * 2 };
       },

@@ -1,4 +1,7 @@
 const MAX_UPDATES = 250;
+// The full SDK limits one checkpoint request to 750 KiB. A request that the service
+// rejects fails the execution. So the lite SDK uses the same limit.
+const MAX_REQUEST_BYTES = 750 * 1024;
 const never = () => new Promise(() => {});
 
 // Per-invocation state: the operation records, the checkpoint queue and suspension.
@@ -38,10 +41,23 @@ export function createExecution({ client, arn, token, operations }) {
     setImmediate(flush);
   }
 
+  // Takes updates in order while the request stays within both limits. The first update
+  // is always taken, so an update larger than the byte limit still goes out alone.
+  function takeBatch() {
+    let size = token.length + 100; // the request fields besides Updates, like the full SDK
+    let n = 0;
+    while (n < pending.length && n < MAX_UPDATES) {
+      size += Buffer.byteLength(JSON.stringify(pending[n].update));
+      if (n > 0 && size > MAX_REQUEST_BYTES) break;
+      n++;
+    }
+    return pending.splice(0, n);
+  }
+
   async function flush() {
     scheduled = false;
     if (done) return;
-    const batch = pending.splice(0, MAX_UPDATES);
+    const batch = takeBatch();
     const updates = batch.map((b) => b.update);
     inFlight = true;
     let res;

@@ -330,7 +330,7 @@ test("CALLBACK answers land at the boundary and timeouts when due", async () => 
 test("CHAINED_INVOKE runs the registered function and lands at the boundary", async () => {
   const service = createInMemoryService({
     functions: {
-      double: async (x) => x * 2,
+      double: async ({ input }) => input * 2,
       boom: () => {
         throw new RangeError("bad");
       },
@@ -450,4 +450,83 @@ test("completed contexts hide their descendants unless ReplayChildren is set", a
     state.Operations.map((o) => o.Id),
     ["execution", "c", "r", "r-s", "f"],
   );
+});
+
+test("the service rejects updates that the real service rejects", async () => {
+  const service = createInMemoryService();
+  let token = service.event().CheckpointToken;
+  const step = (Id, Action, fields = {}) => ({
+    Id,
+    Type: "STEP",
+    Action,
+    ...fields,
+  });
+  const rejects = (name, message, ...updates) =>
+    assert.rejects(checkpoint(service, token, ...updates), {
+      name,
+      status: 400,
+      message,
+    });
+
+  // Every string member must be a string.
+  await rejects(
+    "SerializationException",
+    "Error.ErrorData must be a string",
+    step("a", "FAIL", { Error: { ErrorType: "E", ErrorData: { code: 1 } } }),
+  );
+  await rejects(
+    "SerializationException",
+    "Name must be a string",
+    step("a", "START", { Name: 7 }),
+  );
+  // STEP and CONTEXT payloads are at most 256 KiB.
+  await rejects(
+    "InvalidParameterValueException",
+    "STEP payload is larger than 262144 bytes",
+    step("a", "SUCCEED", { Payload: "x".repeat(262_145) }),
+  );
+  // One update per operation, except START followed by another action.
+  await rejects(
+    "InvalidParameterValueException",
+    "Cannot update operation a twice in one request",
+    step("a", "START"),
+    step("a", "START"),
+  );
+  // A rejected request applies nothing.
+  assert.equal(service.ops.has("a"), false);
+
+  token = (
+    await checkpoint(
+      service,
+      token,
+      step("a", "START"),
+      step("a", "SUCCEED", { Payload: "x".repeat(262_142) }),
+      step("b", "START"),
+    )
+  ).CheckpointToken;
+  // Only a READY step can start again.
+  await rejects(
+    "InvalidParameterValueException",
+    "Cannot start STEP b in status STARTED",
+    step("b", "START"),
+  );
+  token = (
+    await checkpoint(
+      service,
+      token,
+      step("b", "RETRY", { StepOptions: { NextAttemptDelaySeconds: 1 } }),
+    )
+  ).CheckpointToken;
+  service.advance();
+  assert.equal(service.ops.get("b").Status, "READY");
+  await checkpoint(service, token, step("b", "START"));
+  assert.equal(service.ops.get("b").Status, "STARTED");
+});
+
+test("runDurable fails a step whose result is larger than 256 KiB", async () => {
+  const run = await runDurable({
+    workflow: ({ ctx }) => ctx.step({ fn: () => "x".repeat(300 * 1024) }),
+  });
+  assert.equal(run.status, "FAILED");
+  assert.equal(run.error.ErrorType, "InvalidParameterValueException");
 });
