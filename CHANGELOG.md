@@ -87,6 +87,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Durable Execution Telemetry**: every error in a record (the execution `error`,
+  `operations[].error`, and `operationsByName.<name>.error`) now carries its cause chain as
+  `{ name, message, cause? }`, in that key order. `cause` follows `Error.cause`, including the
+  cause the SDK builds when it rebuilds an operation error from a checkpoint. The chain is cut
+  after 16 levels or at a cause already written, and a cause that is not an error object is
+  written as `{ name: "Error", message: String(cause) }`. Reading a cause never throws: a failure
+  ends the chain and the record is kept. The error's own `name` and `message` are converted to
+  strings the same way; if reading them throws, the error is written as
+  `{ name: "Error", message: "" }` and the record is kept. Every `name` and `message`, on errors
+  and on causes, is capped at 8,192 Unicode code points plus `…`, so a cut never splits a
+  surrogate pair.
+  When a record is over an exporter's size limit, every `cause` is removed first and the record
+  gets `droppedCauses: true`. Apart from the cap, `name` is unchanged, and an error without a
+  cause is written as before. Error names are each SDK's own and differ across languages; the exporter README
+  explains how to query them.
+- **Durable Execution Telemetry**: `SQSExporter` replaces a FIFO `MessageGroupId` or
+  `MessageDeduplicationId` longer than 128 characters with its lowercase hex SHA-256 digest. SQS
+  rejected these sends, and most execution ARNs are longer than 128 characters. Ids of 128
+  characters or fewer are unchanged. An empty `messageGroupId` is treated as omitted.
 - A failed `context.invoke` now throws an `InvokeError` whose `cause.name` is the invoked
   function's error type (for example `"PaymentError"`), with the remote stack trace, as the
   callback handlers and replayed operations already do. Before, `cause.name` was always

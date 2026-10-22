@@ -10,6 +10,7 @@ import type {
 import type {
   DurableExecutionTelemetryConfig,
   DurableExecutionTelemetryRecord,
+  ErrorRecord,
   OperationRecord,
   OperationOverride,
   OperationResult,
@@ -23,6 +24,7 @@ export type {
   TelemetryExporter,
   DurableExecutionTelemetryConfig,
   DurableExecutionTelemetryRecord,
+  ErrorRecord,
   OperationRecord,
   OperationSummary,
   OperationsFormat,
@@ -207,6 +209,184 @@ function toIsoString(ts: unknown): string | undefined {
   return ms === undefined ? undefined : new Date(ms).toISOString();
 }
 
+// --- Error Records ---
+
+/** How many `cause` levels are written below an error before the chain is cut. */
+const MAX_CAUSE_DEPTH = 16;
+
+/**
+ * Longest `name` or `message` written for an error or a cause, in Unicode code
+ * points (not UTF-16 code units), so a cut never splits a surrogate pair and the
+ * cut point matches the Python and Java exporters. A longer value keeps this
+ * many code points followed by `…`.
+ */
+const MAX_TEXT_LENGTH = 8192;
+
+/**
+ * Caps a `name` or `message` at {@link MAX_TEXT_LENGTH} code points, then
+ * appends `…`. A string has at least as many UTF-16 units as code points, so a
+ * string of at most {@link MAX_TEXT_LENGTH} units is returned without scanning.
+ * A longer string is scanned only up to the cut point.
+ */
+function capText(text: string): string {
+  if (text.length <= MAX_TEXT_LENGTH) return text;
+  let units = 0;
+  let points = 0;
+  for (const ch of text) {
+    if (points === MAX_TEXT_LENGTH) return `${text.slice(0, units)}…`;
+    units += ch.length;
+    points++;
+  }
+  // More units than the cap, but at most MAX_TEXT_LENGTH code points.
+  return text;
+}
+
+/**
+ * True for an error object, including one from another realm (a `vm` context),
+ * which `instanceof Error` does not recognize.
+ *
+ * Both checks can throw on customer values: `instanceof` on a revoked proxy,
+ * and `Object.prototype.toString` on a throwing `Symbol.toStringTag` getter.
+ * This function does not catch; callers classify inside a `try` so that a
+ * throw ends the cause chain instead of losing the record.
+ */
+function isErrorObject(value: unknown): value is Error {
+  return (
+    value instanceof Error ||
+    Object.prototype.toString.call(value) === "[object Error]"
+  );
+}
+
+/**
+ * The string form of a cause that is not an error object (a thrown string, a
+ * number, a plain object). A `toString` that throws must not lose the record,
+ * so it falls back to the `Object.prototype.toString` tag.
+ */
+function causeToString(cause: unknown): string {
+  try {
+    return String(cause);
+  } catch {
+    try {
+      return Object.prototype.toString.call(cause);
+    } catch {
+      return "";
+    }
+  }
+}
+
+/**
+ * Reads an error's `cause`. `undefined` and `null` mean "no cause". A throwing
+ * `cause` getter also ends the chain rather than losing the record.
+ */
+function readCause(error: Error): unknown {
+  try {
+    return (error as { cause?: unknown }).cause ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** One written cause level, and whether the chain may continue below it. */
+interface CauseLevel {
+  record: ErrorRecord;
+  /** `true` when the cause is an error object whose own `cause` is read next. */
+  isError: boolean;
+}
+
+/**
+ * Reads an error object's `name` and `message` as strings, capped: a non-string
+ * value is converted with the same safe stringify used for non-error causes, a
+ * missing (`undefined`/`null`) `name` is `"Error"`, and a missing `message` is
+ * `""`. Does not catch: a throwing getter or proxy trap propagates to the
+ * caller, which decides what a failed read means.
+ */
+function readNameAndMessage(error: Error): ErrorRecord {
+  const name: unknown = error.name;
+  const message: unknown = error.message;
+  return {
+    name: capText(
+      typeof name === "string"
+        ? name
+        : name == null
+          ? "Error"
+          : causeToString(name),
+    ),
+    message: capText(
+      typeof message === "string"
+        ? message
+        : message == null
+          ? ""
+          : causeToString(message),
+    ),
+  };
+}
+
+/**
+ * One cause level. Unlike the top-level error, a cause is customer data the
+ * exporter did not ask for, so any throw while reading it — classifying it
+ * (revoked proxy, throwing `Symbol.toStringTag`), or reading `name`/`message`
+ * — ends the chain (returns `undefined`) instead of losing the whole record.
+ *
+ * `name` and `message` are read by {@link readNameAndMessage}, so they are
+ * always capped strings.
+ */
+function toCauseLevel(cause: unknown): CauseLevel | undefined {
+  try {
+    if (!isErrorObject(cause)) {
+      return {
+        record: { name: "Error", message: capText(causeToString(cause)) },
+        isError: false,
+      };
+    }
+    return { record: readNameAndMessage(cause), isError: true };
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Builds the record form of an error: `{ name, message, cause? }`, in that key
+ * order.
+ *
+ * `name` and `message` are the error's own values, unchanged. The `cause` chain
+ * follows `Error.cause` (for an operation error rebuilt from a checkpoint, the
+ * cause the SDK built from the checkpointed error), writes at most
+ * {@link MAX_CAUSE_DEPTH} levels below `error`, and stops at a cause it has
+ * already written, so a cycle cannot loop. A cause that is not an error object
+ * is written as `{ name: "Error", message: String(cause) }` and ends the chain.
+ * Any throw while reading a cause ends the chain; the levels already written
+ * are kept. The error's own `name` and `message` are read the same way as a
+ * cause's (converted to strings); if reading either throws, the error is
+ * written as `{ name: "Error", message: "" }` and its cause chain is still
+ * read, so the record is kept. Every `name` and `message` (the error's and each
+ * cause's) is capped at {@link MAX_TEXT_LENGTH} code points plus `…`. Levels
+ * that repeat the level above are written as they are.
+ * `cause` is omitted, not `undefined`, when there is none, so the serialized
+ * shape is `{ name, message }` exactly as before.
+ */
+function toErrorRecord(error: Error): ErrorRecord {
+  let root: ErrorRecord;
+  try {
+    root = readNameAndMessage(error);
+  } catch {
+    root = { name: "Error", message: "" };
+  }
+  const visited = new Set<unknown>([error]);
+  let tail = root;
+  let current: unknown = readCause(error);
+  for (let depth = 0; depth < MAX_CAUSE_DEPTH; depth++) {
+    if (current === undefined || visited.has(current)) break;
+    visited.add(current);
+    const level = toCauseLevel(current);
+    if (level === undefined) break;
+    tail.cause = level.record;
+    tail = level.record;
+    if (!level.isError) break;
+    current = readCause(current as Error);
+  }
+  return root;
+}
+
 function toOperationRecord(op: OperationInfo): OperationRecord {
   const startMs = toEpochMs(op.startTimestamp);
   const endMs = toEpochMs(op.endTimestamp);
@@ -224,9 +404,7 @@ function toOperationRecord(op: OperationInfo): OperationRecord {
     endTime: toIsoString(op.endTimestamp),
     durationMs,
     attempt: op.attempt,
-    error: op.error
-      ? { name: op.error.name, message: op.error.message }
-      : undefined,
+    error: op.error ? toErrorRecord(op.error) : undefined,
   };
 }
 
@@ -889,9 +1067,7 @@ class DurableExecutionTelemetryInvocation
       durationMs,
       input: applyDataContent(args.input, content?.input),
       output: applyDataContent(args.output, content?.output),
-      error: args.error
-        ? { name: args.error.name, message: args.error.message }
-        : undefined,
+      error: args.error ? toErrorRecord(args.error) : undefined,
       operations: args.operations,
     };
   }
