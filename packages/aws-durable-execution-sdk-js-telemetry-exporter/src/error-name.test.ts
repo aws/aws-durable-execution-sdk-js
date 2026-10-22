@@ -541,7 +541,7 @@ describe("ErrorNameResolver.operationErrorName", () => {
     expect(resolve("s1", ops)).toBe("FraudError");
   });
 
-  it("prefers children that ended no later than the failed parent (R2)", () => {
+  it("prefers children that ended no later than the failed parent", () => {
     const ops = [
       op({
         id: "child",
@@ -568,7 +568,7 @@ describe("ErrorNameResolver.operationErrorName", () => {
     expect(resolve("child", ops)).toBe("TypeError");
   });
 
-  describe("a promise combinator whose failed promise is a sibling (R1, B19)", () => {
+  describe("a promise combinator whose failed promise is a sibling (B19)", () => {
     const combinator = (partial: Partial<OperationInfo> = {}) =>
       op({
         id: "combo",

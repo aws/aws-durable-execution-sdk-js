@@ -421,7 +421,7 @@ const TABLE_B: Record<string, Row> = {
     ambiguous: true,
     exec: "StepError",
   },
-  "R2-concurrent": {
+  "concurrent-same-message": {
     title:
       "two concurrent child contexts fail with the same message: TypeError, PaymentError",
     run: async (ctx) => {
@@ -587,7 +587,12 @@ describe.each(Object.entries(TABLE_B))("Table B %s", (_id, row) => {
  * only when `pluginsConfig.childOperationsDepth` preserves it. Without it the
  * replayed execution is named after the checkpointed type.
  */
-const LOST_WITHOUT_CHILDREN = new Set(["B4", "B6", "B10", "R2-concurrent"]);
+const LOST_WITHOUT_CHILDREN = new Set([
+  "B4",
+  "B6",
+  "B10",
+  "concurrent-same-message",
+]);
 
 describe.each(Object.entries(TABLE_B))(
   "Table B %s replayed with the default childOperationsDepth",
@@ -716,7 +721,7 @@ describe("outside Table B, pinned so a change is noticed", () => {
    * Plain `Promise.all` over two child contexts rejects as soon as the first
    * fails. Live, the second has not failed yet, so the first is the only
    * candidate. Replayed, both have failed with the same message and different
-   * types, and the exporter does not guess (rule 9). The R2-concurrent row,
+   * types, and the exporter does not guess (rule 9). The concurrent-same-message row,
    * where both have failed before the handler throws, is equal live and
    * replayed.
    */
