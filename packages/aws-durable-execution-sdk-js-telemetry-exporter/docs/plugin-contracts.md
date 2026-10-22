@@ -387,6 +387,8 @@ interface DurableExecutionTelemetryRecord {
   error?: {
     name: string;
     message: string;
+    /** Error.cause, same shape; cut after 16 levels or at a repeated cause. */
+    cause?: { name: string; message: string; cause?: ... };
   };
 
   // --- Operations ---
@@ -444,6 +446,8 @@ interface OperationRecord {
   error?: {
     name: string;
     message: string;
+    /** Error.cause, same shape; cut after 16 levels or at a repeated cause. */
+    cause?: { name: string; message: string; cause?: ... };
   };
 
   /** True when the size limiter dropped this operation's result. */

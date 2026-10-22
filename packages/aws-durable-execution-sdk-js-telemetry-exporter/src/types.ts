@@ -227,6 +227,24 @@ export interface DurableExecutionTelemetryConfig {
 }
 
 /**
+ * An error as written in a record: the execution-level `error`, every
+ * `operations[].error`, and every `operationsByName.<name>.error`.
+ *
+ * Keys are written in the order `name`, `message`, `cause`. `name` is the
+ * error's own `name`, unchanged; error names are not aligned across SDK
+ * languages. `cause` is present only when the error has one (`Error.cause`, or
+ * the cause the SDK built when it rebuilt the error from a checkpoint), has the
+ * same shape, and is cut after 16 levels or at a cause already written.
+ *
+ * @experimental This interface is experimental and may change in future releases.
+ */
+export interface ErrorRecord {
+  name: string;
+  message: string;
+  cause?: ErrorRecord;
+}
+
+/**
  * A single operation within an execution (step, wait, invoke, callback, or context).
  * @experimental This interface is experimental and may change in future releases.
  */
@@ -241,10 +259,7 @@ export interface OperationRecord {
   endTime?: string;
   durationMs?: number;
   attempt?: number;
-  error?: {
-    name: string;
-    message: string;
-  };
+  error?: ErrorRecord;
   /**
    * The operation's result. Omitted by default; included only when a matching
    * `content.operations.overrides` entry supplies a `result` transform.
@@ -299,10 +314,7 @@ export interface OperationSummary {
   /** Result — only present when this name occurs exactly once (and opted results in). */
   result?: OperationResult;
   /** Error — only present when this name occurs exactly once (and it failed, errors included). */
-  error?: {
-    name: string;
-    message: string;
-  };
+  error?: ErrorRecord;
 }
 
 /**
@@ -331,10 +343,7 @@ export interface DurableExecutionTelemetryRecord {
   durationMs?: number;
   input?: ExecutionInput;
   output?: ExecutionOutput;
-  error?: {
-    name: string;
-    message: string;
-  };
+  error?: ErrorRecord;
   operations: OperationRecord[];
   /**
    * `true` when the size limiter dropped data to fit the exporter's

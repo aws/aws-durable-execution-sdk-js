@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 import type {
   TelemetryExporter,
@@ -16,7 +17,9 @@ export interface SQSExporterConfig {
 
   /**
    * Message group ID (required for FIFO queues, ignored for standard).
-   * Default: the executionArn (groups messages per execution).
+   * Default: the executionArn (groups messages per execution). A value longer
+   * than 128 characters is replaced by its SHA-256 hex digest. An empty string
+   * is rejected by the constructor, because SQS rejects it.
    */
   messageGroupId?: string;
 
@@ -42,7 +45,10 @@ export interface SQSExporterConfig {
  *
  * Each record is sent as a single message with the full JSON as the body.
  * For FIFO queues, the message deduplication ID is derived from
- * executionArn + emittedAt to prevent duplicates while allowing updates.
+ * `executionArn:emittedAt` to prevent duplicates while allowing updates. SQS
+ * caps both FIFO ids at 128 characters and realistic execution ARNs are
+ * longer, so an id over that limit is replaced by its SHA-256 hex digest
+ * (see the internal `fifoId` helper).
  *
  * Use this when you need guaranteed delivery to a single consumer or want
  * to decouple export processing from the Lambda invocation.
@@ -58,6 +64,11 @@ export class SQSExporter implements TelemetryExporter {
   readonly maxRecordSizeBytes: number;
 
   constructor(config: SQSExporterConfig) {
+    if (config.messageGroupId === "") {
+      throw new TypeError(
+        "SQSExporter: messageGroupId must not be empty; omit it to group by executionArn",
+      );
+    }
     this.queueUrl = config.queueUrl;
     this.messageGroupId = config.messageGroupId;
     this.isFifo = config.queueUrl.endsWith(".fifo");
@@ -76,10 +87,10 @@ export class SQSExporter implements TelemetryExporter {
         QueueUrl: this.queueUrl,
         MessageBody: JSON.stringify(this.render(record)),
         MessageGroupId: this.isFifo
-          ? (this.messageGroupId ?? record.executionArn)
+          ? fifoId(this.messageGroupId ?? record.executionArn)
           : undefined,
         MessageDeduplicationId: this.isFifo
-          ? `${record.executionArn}:${record.emittedAt}`
+          ? fifoId(`${record.executionArn}:${record.emittedAt}`)
           : undefined,
         MessageAttributes: {
           status: { DataType: "String", StringValue: record.status },
@@ -95,4 +106,22 @@ export class SQSExporter implements TelemetryExporter {
   async flush(): Promise<void> {
     // No buffering — each export is a single SendMessage.
   }
+}
+
+/** SQS's limit on the length of a FIFO `MessageGroupId` and `MessageDeduplicationId`. */
+const MAX_FIFO_ID_LENGTH = 128;
+
+/**
+ * Returns `value` when it fits the SQS FIFO id limit, otherwise the lowercase
+ * hex SHA-256 digest of its UTF-8 bytes (64 characters).
+ *
+ * The Python and Java exporters apply the same rule to the same input string.
+ * The dedup input embeds each SDK's own `emittedAt` string, so dedup ids for
+ * the same emission can differ across SDKs.
+ *
+ * @internal Exported for tests.
+ */
+export function fifoId(value: string): string {
+  if (value.length <= MAX_FIFO_ID_LENGTH) return value;
+  return createHash("sha256").update(value, "utf8").digest("hex");
 }

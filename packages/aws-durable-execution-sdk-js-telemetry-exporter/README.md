@@ -13,7 +13,7 @@ Every time your durable function runs, Durable Execution Telemetry builds a **cu
 - **Timing** — start/end time, total duration
 - **Input/Output** — the event and result of the execution
 - **Operations** — every step, wait, invoke, and callback with individual timing and status
-- **Errors** — error name and message when the execution fails
+- **Errors** — error name, message, and cause chain when the execution or an operation fails (see [Error names and causes](#error-names-and-causes))
 
 ## Record Schema (`DurableExecutionTelemetryRecord`)
 
@@ -42,11 +42,7 @@ interface DurableExecutionTelemetryRecord {
   // Payload
   input?: unknown; // Execution input (the event)
   output?: unknown; // Execution result (on success)
-  error?: {
-    // Error details (on failure)
-    name: string;
-    message: string;
-  };
+  error?: ErrorRecord; // Error details (on failure)
 
   // Operations (steps, waits, invokes, callbacks)
   operations: OperationRecord[];
@@ -69,14 +65,63 @@ interface OperationRecord {
   endTime?: string; // ISO-8601
   durationMs?: number; // Operation duration
   attempt?: number; // Retry attempt count
-  error?: {
-    // Per-operation error
-    name: string;
-    message: string;
-  };
+  error?: ErrorRecord; // Per-operation error
   truncated?: boolean; // true if the size limiter dropped this operation's result
 }
+
+interface ErrorRecord {
+  name: string; // The error's own name (err.name), unchanged
+  message: string; // The error's message, unchanged
+  cause?: ErrorRecord; // Present only when the error has a cause
+}
 ```
+
+## Error names and causes
+
+Every error in a record — the execution `error`, each `operations[].error`, and
+each `operationsByName.<name>.error` — has this shape, with the keys in this
+order:
+
+```json
+"error": {
+  "name": "StepError",
+  "message": "card declined",
+  "cause": { "name": "PaymentError", "message": "card declined" }
+}
+```
+
+- `name` and `message` are the error's own `name` and `message`. The exporter
+  does not rewrite, shorten, or unwrap them.
+- `cause` follows `Error.cause`. For an operation error rebuilt from a
+  checkpoint (on replay), it is the cause the SDK built from the checkpointed
+  error. It is present only when there is a cause (`undefined` and `null` mean
+  none), and has the same shape, recursively.
+- The chain is cut after 16 cause levels below the error, and stops at a cause
+  already written, so a cycle cannot loop.
+- A cause that is not an error object (a thrown string, say) is written as
+  `{ "name": "Error", "message": String(cause) }`.
+- `content.operations.includeErrors: false` removes operation errors together
+  with their causes. The size limiter treats `cause` as part of its error: it
+  never cuts an error on its own, and drops an operation's error (cause
+  included) only with the whole operation.
+
+**Error names differ across SDKs.** The Python and Java exporters write the same
+shape, but each SDK reports its own type names, so the same failure can have a
+different `name` in each language. For example, a step that throws
+`PaymentError` can be reported as `StepError` in JS,
+`aws_durable_execution_sdk_python.exceptions.StepError` or `PaymentError` in
+Python, and `StepFailedException` or `PaymentError` in Java. Query `name` per
+SDK, or query on `message` and the `cause` chain:
+
+```
+# CloudWatch Logs Insights (CloudWatchLogsExporter)
+filter recordType = "DurableExecutionTelemetry" and status = "FAILED"
+| fields @timestamp, executionArn, error.name, error.message, error.cause.name, error.cause.message
+```
+
+For a failed durable invoke, the cause carries the invoked function's error
+type once [#1054](https://github.com/aws/aws-durable-execution-sdk-js/pull/1054)
+is released, as the Python and Java SDKs already do.
 
 ### Example Record
 
@@ -1224,7 +1269,7 @@ const telemetry = durableExecutionTelemetry({
     new SQSExporter({
       queueUrl:
         "https://sqs.us-east-1.amazonaws.com/123456789012/telemetry-queue.fifo",
-      messageGroupId: undefined, // optional (default: executionArn)
+      messageGroupId: undefined, // optional (default: executionArn); must not be ""
       region: "us-east-1", // optional
       operationsFormat: "array", // optional: "array" (default) | "by-name" | "both"
     }),
@@ -1232,7 +1277,7 @@ const telemetry = durableExecutionTelemetry({
 });
 ```
 
-**FIFO support:** Auto-detected from `.fifo` URL suffix. Dedup ID = `executionArn:emittedAt`. Message attributes include `status` and `functionName` for SQS message filtering.
+**FIFO support:** Auto-detected from `.fifo` URL suffix. Group ID = `messageGroupId` (default: `executionArn`); dedup ID = `executionArn:emittedAt`. SQS limits both ids to 128 characters, and most execution ARNs are longer, so an id over 128 characters is replaced by the lowercase hex SHA-256 digest of its UTF-8 bytes (64 characters). Ids of 128 characters or fewer are sent unchanged. The Python and Java exporters use the same rule, so the same input string gives the same id. The message body always carries the full `executionArn`. An empty `messageGroupId` is rejected by the constructor, because SQS rejects it on every send. Message attributes include `status` and `functionName` for SQS message filtering.
 
 **IAM required:** `sqs:SendMessage` on the queue.
 

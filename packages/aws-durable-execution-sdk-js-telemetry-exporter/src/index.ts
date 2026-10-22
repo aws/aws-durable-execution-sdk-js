@@ -10,6 +10,7 @@ import type {
 import type {
   DurableExecutionTelemetryConfig,
   DurableExecutionTelemetryRecord,
+  ErrorRecord,
   OperationRecord,
   OperationOverride,
   OperationResult,
@@ -23,6 +24,7 @@ export type {
   TelemetryExporter,
   DurableExecutionTelemetryConfig,
   DurableExecutionTelemetryRecord,
+  ErrorRecord,
   OperationRecord,
   OperationSummary,
   OperationsFormat,
@@ -207,6 +209,98 @@ function toIsoString(ts: unknown): string | undefined {
   return ms === undefined ? undefined : new Date(ms).toISOString();
 }
 
+// --- Error Records ---
+
+/** How many `cause` levels are written below an error before the chain is cut. */
+const MAX_CAUSE_DEPTH = 16;
+
+/**
+ * True for an error object, including one from another realm (a `vm` context),
+ * which `instanceof Error` does not recognize.
+ */
+function isErrorObject(value: unknown): value is Error {
+  return (
+    value instanceof Error ||
+    Object.prototype.toString.call(value) === "[object Error]"
+  );
+}
+
+/**
+ * The string form of a cause that is not an error object (a thrown string, a
+ * number, a plain object). A `toString` that throws must not lose the record,
+ * so it falls back to the `Object.prototype.toString` tag.
+ */
+function causeToString(cause: unknown): string {
+  try {
+    return String(cause);
+  } catch {
+    try {
+      return Object.prototype.toString.call(cause);
+    } catch {
+      return "";
+    }
+  }
+}
+
+/**
+ * Reads an error's `cause`. `undefined` and `null` mean "no cause". A throwing
+ * `cause` getter also ends the chain rather than losing the record.
+ */
+function readCause(error: Error): unknown {
+  try {
+    return (error as { cause?: unknown }).cause ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * One cause level. Unlike the top-level error, a cause is customer data the
+ * exporter did not ask for, so a getter that throws ends the chain (returns
+ * `undefined`) instead of losing the whole record.
+ */
+function toCauseLevel(cause: unknown): ErrorRecord | undefined {
+  if (!isErrorObject(cause)) {
+    return { name: "Error", message: causeToString(cause) };
+  }
+  try {
+    return { name: cause.name, message: cause.message };
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Builds the record form of an error: `{ name, message, cause? }`, in that key
+ * order.
+ *
+ * `name` and `message` are the error's own values, unchanged. The `cause` chain
+ * follows `Error.cause` (for an operation error rebuilt from a checkpoint, the
+ * cause the SDK built from the checkpointed error), writes at most
+ * {@link MAX_CAUSE_DEPTH} levels below `error`, and stops at a cause it has
+ * already written, so a cycle cannot loop. A cause that is not an error object
+ * is written as `{ name: "Error", message: String(cause) }` and ends the chain.
+ * `cause` is omitted, not `undefined`, when there is none, so the serialized
+ * shape is `{ name, message }` exactly as before.
+ */
+function toErrorRecord(error: Error): ErrorRecord {
+  const root: ErrorRecord = { name: error.name, message: error.message };
+  const visited = new Set<unknown>([error]);
+  let tail = root;
+  let current: unknown = readCause(error);
+  for (let depth = 0; depth < MAX_CAUSE_DEPTH; depth++) {
+    if (current === undefined || visited.has(current)) break;
+    visited.add(current);
+    const level = toCauseLevel(current);
+    if (level === undefined) break;
+    tail.cause = level;
+    tail = level;
+    if (!isErrorObject(current)) break;
+    current = readCause(current);
+  }
+  return root;
+}
+
 function toOperationRecord(op: OperationInfo): OperationRecord {
   const startMs = toEpochMs(op.startTimestamp);
   const endMs = toEpochMs(op.endTimestamp);
@@ -224,9 +318,7 @@ function toOperationRecord(op: OperationInfo): OperationRecord {
     endTime: toIsoString(op.endTimestamp),
     durationMs,
     attempt: op.attempt,
-    error: op.error
-      ? { name: op.error.name, message: op.error.message }
-      : undefined,
+    error: op.error ? toErrorRecord(op.error) : undefined,
   };
 }
 
@@ -889,9 +981,7 @@ class DurableExecutionTelemetryInvocation
       durationMs,
       input: applyDataContent(args.input, content?.input),
       output: applyDataContent(args.output, content?.output),
-      error: args.error
-        ? { name: args.error.name, message: args.error.message }
-        : undefined,
+      error: args.error ? toErrorRecord(args.error) : undefined,
       operations: args.operations,
     };
   }
