@@ -5,20 +5,32 @@ import type { OperationInfo } from "@aws/durable-execution-sdk-js";
 // The rule, shared with the Python and Java exporters:
 //
 // 1. A record names the error that caused the failure. A wrapper error that the
-//    SDK added is never the name.
+//    SDK added is never the name, except in the bounded cases of rules 3 and 9.
 // 2. The SDK unwraps an error only when the error's type is one of the SDK's own
 //    wrapper types. A user error is never unwrapped, even if it has a cause.
-// 3. Unwrapping follows the whole chain of SDK wrappers, up to a depth of 16. A
-//    cycle stops the walk.
+// 3. Unwrapping follows the chain of SDK wrappers. The depth counts unwrap
+//    steps, one per wrapper passed, not levels in the operation tree. At most 16
+//    unwraps happen. If the error reached after 16 unwraps is still a wrapper,
+//    its name is reported. If the chain reaches an error it has already
+//    visited, the walk stops and the last error visited before the repeat is
+//    reported.
 // 4. If the chain ends at a user error, the name is that error's type name.
 // 5. If the chain ends at an SDK error that is not a wrapper, the name is that
 //    SDK error's simple class name. A callback timeout is an example.
 // 6. A type name that is a qualified string is reduced to its last segment after
-//    any `.` or `$`. If that segment is empty, the string is kept as it is.
+//    any `.` or `$`. If that segment is empty, the string is kept as it is. A
+//    missing type, or a type made only of blank characters, is `Error`. The
+//    blank characters are the six ASCII whitespace characters: space, `\t`,
+//    `\n`, `\r`, `\f` and `\v`. No other character counts as blank, and names
+//    are never trimmed.
 // 7. A failure gets the same name whether the record is built live or from a
 //    replayed checkpoint.
 // 8. When the execution fails because an operation's error propagated, the
 //    execution `error.name` equals that operation's `error.name`.
+// 9. If the SDK cannot tell which of several failures caused a wrapper, it does
+//    not guess. It reports the wrapper's name. Two map items or parallel
+//    branches that fail with the same message but different types are an
+//    example.
 //
 // `error.message` is never changed by this rule.
 
@@ -53,7 +65,10 @@ const CALLBACK_EXTERNAL_ERROR = "CallbackExternalError";
 /** Name of the SDK error thrown for a chained invoke that failed. */
 const INVOKE_ERROR = "InvokeError";
 
-/** Maximum number of SDK wrappers unwrapped, and of nested operations searched. */
+/**
+ * Maximum number of SDK wrappers unwrapped (rule 3), and of nested operations
+ * descended into to find a lost type.
+ */
 const MAX_DEPTH = 16;
 
 /** Name reported for a missing, blank or otherwise unusable type name. */
@@ -62,7 +77,9 @@ const DEFAULT_ERROR_NAME = "Error";
 /**
  * Reduces an error type string to the name a record reports.
  *
- * - A missing, empty or whitespace-only value gives `"Error"`.
+ * - A missing or empty value, or one made only of the six ASCII whitespace
+ *   characters (space, `\t`, `\n`, `\r`, `\f`, `\v`), gives `"Error"`. Any other
+ *   character, such as U+00A0 or U+FEFF, is not blank.
  * - Otherwise the value is reduced to its last segment after any `.` or `$`
  *   (`"a.b.Outer$PaymentError"` → `"PaymentError"`). When that segment is empty
  *   (`"trailing."`, `"Outer$"`, `"."`), the value is returned unchanged.
@@ -80,11 +97,19 @@ export function reduceTypeName(typeName: unknown): string {
     // A name whose conversion throws (a hostile toString) must not break the record.
     return DEFAULT_ERROR_NAME;
   }
-  if (value.trim() === "") return DEFAULT_ERROR_NAME;
+  if (isBlank(value)) return DEFAULT_ERROR_NAME;
   const segment = value.slice(
     Math.max(value.lastIndexOf("."), value.lastIndexOf("$")) + 1,
   );
   return segment || value;
+}
+
+/** The six ASCII whitespace characters of rule 6, and nothing else. */
+const BLANK = /^[ \t\n\r\f\v]*$/;
+
+/** Whether a string is empty or made only of the six ASCII whitespace characters. */
+function isBlank(value: string): boolean {
+  return BLANK.test(value);
 }
 
 type ErrorLike = { name?: unknown; message?: unknown; cause?: unknown };
@@ -109,17 +134,16 @@ function wrapperType(error: ErrorLike): string | undefined {
  */
 function isUntypedCause(name: unknown): boolean {
   return (
-    typeof name !== "string" ||
-    name.trim() === "" ||
-    name === DEFAULT_ERROR_NAME
+    typeof name !== "string" || isBlank(name) || name === DEFAULT_ERROR_NAME
   );
 }
 
 /**
  * Follows the chain of SDK wrappers from `error` (rule 3) and returns the error
  * at its end: the first error that is not an SDK wrapper, or the last wrapper
- * when the walk cannot go further (no error-like `cause`, a cycle, the depth
- * limit, or a callback failure with no type).
+ * when the walk cannot go further. That is the wrapper with no error-like
+ * `cause`, the error reached after 16 unwraps, the last error visited before a
+ * repeat (for a cycle), or a callback failure with no type.
  */
 function chainEnd(error: ErrorLike): ErrorLike {
   return walkChain(error).end;
@@ -188,15 +212,8 @@ function lostType(error: ErrorLike, end: ErrorLike): LostType | undefined {
     : undefined;
 }
 
-function epochMs(ts: unknown): number {
-  if (ts instanceof Date) return ts.getTime();
-  if (typeof ts === "number") return ts;
-  if (typeof ts === "string") {
-    const ms = Date.parse(ts);
-    return Number.isNaN(ms) ? 0 : ms;
-  }
-  return 0;
-}
+/** Marks a choice between failures with different names (rule 9). */
+const AMBIGUOUS: unique symbol = Symbol("ambiguous");
 
 /**
  * Names the errors in one record: every operation's error and the execution's
@@ -233,22 +250,26 @@ export class ErrorNameResolver {
   /**
    * `error.name` for the execution's error. When the error's chain lost the
    * user's type, the name is that of the failed operation the error came from,
-   * so the two agree (rule 8).
+   * so the two agree (rule 8). When several failed operations could be that
+   * source and they have different names, the wrapper's name is reported
+   * (rule 9).
    */
   executionErrorName(error: Error): string {
     const end = chainEnd(error);
     const lost = lostType(error, end);
     if (lost) {
-      const source = this.findFailedOperation(lost);
-      if (source) return this.operationErrorName(source);
+      const name = this.agreedName(this.findFailedOperations(lost));
+      if (name === AMBIGUOUS) return reduceTypeName(end.name);
+      if (name !== undefined) return name;
     }
     // An invoke failure whose cause has no type: the invoked function's type is
     // kept by the failed invoke operation's checkpoint. Without that operation,
-    // report the SDK wrapper rather than a generic "Error".
+    // or when several such operations disagree, report the SDK wrapper rather
+    // than a generic "Error".
     const invoke = untypedInvokeCause(error);
     if (invoke) {
-      const source = this.findFailedInvoke(invoke.message);
-      return source ? this.operationErrorName(source) : INVOKE_ERROR;
+      const name = this.agreedName(this.findFailedInvokes(invoke.message));
+      return name === AMBIGUOUS || name === undefined ? INVOKE_ERROR : name;
     }
     return reduceTypeName(end.name);
   }
@@ -270,40 +291,114 @@ export class ErrorNameResolver {
 
     const end = chainEnd(error);
     const lost = lostType(error, end);
-    // Descend at most 16 levels; the in-progress set also cuts a malformed
-    // parent cycle.
-    if (lost && this.inProgress.size <= MAX_DEPTH) {
-      const child = this.findFailedChild(op, lost);
-      if (child) return this.operationErrorName(child);
+    // Descend at most 16 levels: `inProgress` already holds this operation, so
+    // `<` allows 15 more. It also cuts a malformed parent cycle.
+    if (lost && this.inProgress.size < MAX_DEPTH) {
+      const wrapperName = reduceTypeName(end.name);
+      const fromChildren = this.agreedName(
+        this.failedChildren(op, lost),
+        op.endTimestamp,
+      );
+      if (fromChildren === AMBIGUOUS) return wrapperName;
+      if (fromChildren !== undefined) return fromChildren;
+      // A promise combinator (`context.promise.all`, `race`, ...) is a child
+      // context, but the promises it awaits belong to its parent context: the
+      // failed step is a sibling of the combinator, not a child.
+      const fromSiblings = this.agreedName(
+        this.failedSiblings(op, lost),
+        op.endTimestamp,
+        (name) => !SDK_WRAPPER_TYPES.has(name),
+      );
+      if (fromSiblings === AMBIGUOUS) return wrapperName;
+      if (fromSiblings !== undefined) return fromSiblings;
     }
     return reduceTypeName(end.name);
   }
 
   /**
-   * The failed direct child of `op` that the lost error came from: a child whose
-   * error has the same message. The latest to end wins.
+   * The one name shared by `candidates` (rule 9: the SDK does not guess).
+   *
+   * - Candidates whose name fails `accept` are dropped.
+   * - When `parentEnd` is known, candidates that ended after it are dropped,
+   *   unless that would drop them all: a failure that ended after its parent
+   *   cannot have caused the parent's failure.
+   * - Returns `undefined` when no candidate is left, and {@link AMBIGUOUS} when
+   *   the candidates left have different names.
    */
-  private findFailedChild(
-    op: OperationInfo,
-    lost: LostType,
-  ): OperationInfo | undefined {
-    const candidates = (this.childIndex().get(op.id) ?? []).filter(
-      (child) =>
-        !this.inProgress.has(child.id) &&
-        isErrorLike(child.error) &&
-        chainEnd(child.error).message === lost.message,
-    );
-    return latest(candidates);
+  private agreedName(
+    candidates: OperationInfo[],
+    parentEnd?: unknown,
+    accept: (name: string) => boolean = () => true,
+  ): string | typeof AMBIGUOUS | undefined {
+    let named = candidates
+      .map((op) => ({ op, name: this.operationErrorName(op) }))
+      .filter(({ name }) => accept(name));
+    const end = timestampMs(parentEnd);
+    if (end !== undefined) {
+      const inTime = named.filter(({ op }) => {
+        const opEnd = timestampMs(op.endTimestamp);
+        return opEnd === undefined || opEnd <= end;
+      });
+      if (inTime.length > 0) named = inTime;
+    }
+    let agreed: string | undefined;
+    for (const { name } of named) {
+      if (agreed === undefined) agreed = name;
+      else if (agreed !== name) return AMBIGUOUS;
+    }
+    return agreed;
   }
 
   /**
-   * The failed operation an execution error with a lost type came from: an
-   * operation whose own error chain ends at the same SDK type and message. The
-   * shallowest wins (the error propagated out of it); among equals, the latest
-   * to end.
+   * The failed direct children of `op` that the lost error could have come
+   * from: children whose error chain ends at the same message.
    */
-  private findFailedOperation(lost: LostType): OperationInfo | undefined {
-    return this.shallowestLatest((op) => {
+  private failedChildren(op: OperationInfo, lost: LostType): OperationInfo[] {
+    return (this.childIndex().get(op.id) ?? []).filter((child) =>
+      this.endsAtMessage(child, lost.message),
+    );
+  }
+
+  /**
+   * The failed siblings of `op` (same `parentId`) that the lost error could
+   * have come from: siblings whose error chain ends at the same message and
+   * that ran within `op`, starting no earlier than `op` started. The start
+   * check keeps an earlier, handled failure with the same message out.
+   */
+  private failedSiblings(op: OperationInfo, lost: LostType): OperationInfo[] {
+    const siblings = op.parentId
+      ? this.childIndex().get(op.parentId)
+      : this.topLevel();
+    const start = timestampMs(op.startTimestamp);
+    return (siblings ?? []).filter((sibling) => {
+      if (sibling.id === op.id || !this.endsAtMessage(sibling, lost.message)) {
+        return false;
+      }
+      const siblingStart = timestampMs(sibling.startTimestamp);
+      return (
+        start === undefined ||
+        siblingStart === undefined ||
+        siblingStart >= start
+      );
+    });
+  }
+
+  private endsAtMessage(op: OperationInfo, message: unknown): boolean {
+    return (
+      !this.inProgress.has(op.id) &&
+      op.type !== "EXECUTION" &&
+      isErrorLike(op.error) &&
+      chainEnd(op.error).message === message
+    );
+  }
+
+  /**
+   * The failed operations an execution error with a lost type could have come
+   * from: operations whose own error chain ends at the same SDK type and
+   * message. Only the shallowest are kept (the error propagated out of them).
+   */
+  private findFailedOperations(lost: LostType): OperationInfo[] {
+    return this.shallowest((op) => {
       if (op.type === "EXECUTION" || !isErrorLike(op.error)) return false;
       const end = chainEnd(op.error);
       return (
@@ -313,12 +408,12 @@ export class ErrorNameResolver {
   }
 
   /**
-   * The failed chained invoke an execution error with an untyped invoke cause
-   * came from: a `CHAINED_INVOKE` operation whose error chain ends at the same
-   * message. The shallowest wins; among equals, the latest to end.
+   * The failed chained invokes an execution error with an untyped invoke cause
+   * could have come from: `CHAINED_INVOKE` operations whose error chain ends at
+   * the same message. Only the shallowest are kept.
    */
-  private findFailedInvoke(message: unknown): OperationInfo | undefined {
-    return this.shallowestLatest(
+  private findFailedInvokes(message: unknown): OperationInfo[] {
+    return this.shallowest(
       (op) =>
         op.type === "CHAINED_INVOKE" &&
         isErrorLike(op.error) &&
@@ -326,9 +421,7 @@ export class ErrorNameResolver {
     );
   }
 
-  private shallowestLatest(
-    matches: (op: OperationInfo) => boolean,
-  ): OperationInfo | undefined {
+  private shallowest(matches: (op: OperationInfo) => boolean): OperationInfo[] {
     const depths = this.depthIndex();
     let best: OperationInfo[] = [];
     let bestDepth = Number.POSITIVE_INFINITY;
@@ -342,7 +435,15 @@ export class ErrorNameResolver {
         best.push(op);
       }
     }
-    return latest(best);
+    return best;
+  }
+
+  /** Operations with no parent, or whose parent is the execution. */
+  private topLevel(): OperationInfo[] {
+    const depths = this.depthIndex();
+    return Object.values(this.operations).filter(
+      (op) => op.type !== "EXECUTION" && (depths.get(op.id) ?? 0) === 0,
+    );
   }
 
   private childIndex(): Map<string, OperationInfo[]> {
@@ -378,12 +479,12 @@ export class ErrorNameResolver {
   }
 }
 
-function latest(ops: OperationInfo[]): OperationInfo | undefined {
-  let best: OperationInfo | undefined;
-  for (const op of ops) {
-    if (!best || epochMs(op.endTimestamp) >= epochMs(best.endTimestamp)) {
-      best = op;
-    }
-  }
-  return best;
+/** A timestamp in epoch milliseconds, or `undefined` when it is unusable. */
+function timestampMs(ts: unknown): number | undefined {
+  let ms: number;
+  if (ts instanceof Date) ms = ts.getTime();
+  else if (typeof ts === "number") ms = ts;
+  else if (typeof ts === "string") ms = Date.parse(ts);
+  else return undefined;
+  return Number.isFinite(ms) ? ms : undefined;
 }

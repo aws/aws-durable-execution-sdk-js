@@ -1,21 +1,106 @@
 {
-  "description": "Durable Execution Telemetry error.name reduction vectors. Input is a type string; expected is the reported error.name. Shared across the JS, Python and Java exporters. Do not edit in one repo only.",
-  "version": 1,
+  "description": "Durable Execution Telemetry error.name reduction vectors (spec version 2). Input is a type string; expected is the reported error.name. Blank means only the six ASCII whitespace characters (space, \\t, \\n, \\r, \\f, \\v); names are never trimmed. Shared byte-for-byte across the JS, Python and Java exporters. Do not edit in one repo only.",
+  "version": 2,
   "reduce": [
-    { "id": "A1", "input": "PaymentError", "expected": "PaymentError" },
-    { "id": "A2", "input": "com.acme.PaymentError", "expected": "PaymentError" },
-    { "id": "A3", "input": "com.acme.Outer$PaymentError", "expected": "PaymentError" },
-    { "id": "A4", "input": "a.b.Outer$Inner$PaymentError", "expected": "PaymentError" },
-    { "id": "A5", "input": "__main__.PaymentError", "expected": "PaymentError" },
-    { "id": "A6", "input": "States.Timeout", "expected": "Timeout" },
-    { "id": "A7", "input": "trailing.", "expected": "trailing." },
-    { "id": "A8", "input": "Outer$", "expected": "Outer$" },
-    { "id": "A9a", "input": ".", "expected": "." },
-    { "id": "A9b", "input": "$", "expected": "$" },
-    { "id": "A10", "input": "pkg.Foo$1Local", "expected": "1Local" },
-    { "id": "A11", "input": " PaymentError ", "expected": " PaymentError " },
-    { "id": "A12a", "input": "", "expected": "Error" },
-    { "id": "A12b", "input": "   ", "expected": "Error" },
-    { "id": "A12c", "input": null, "expected": "Error" }
+    {
+      "id": "A1",
+      "input": "PaymentError",
+      "expected": "PaymentError"
+    },
+    {
+      "id": "A2",
+      "input": "com.acme.PaymentError",
+      "expected": "PaymentError"
+    },
+    {
+      "id": "A3",
+      "input": "com.acme.Outer$PaymentError",
+      "expected": "PaymentError"
+    },
+    {
+      "id": "A4",
+      "input": "a.b.Outer$Inner$PaymentError",
+      "expected": "PaymentError"
+    },
+    {
+      "id": "A5",
+      "input": "__main__.PaymentError",
+      "expected": "PaymentError"
+    },
+    {
+      "id": "A6",
+      "input": "States.Timeout",
+      "expected": "Timeout"
+    },
+    {
+      "id": "A7",
+      "input": "trailing.",
+      "expected": "trailing."
+    },
+    {
+      "id": "A8",
+      "input": "Outer$",
+      "expected": "Outer$"
+    },
+    {
+      "id": "A9a",
+      "input": ".",
+      "expected": "."
+    },
+    {
+      "id": "A9b",
+      "input": "$",
+      "expected": "$"
+    },
+    {
+      "id": "A10",
+      "input": "pkg.Foo$1Local",
+      "expected": "1Local"
+    },
+    {
+      "id": "A11",
+      "input": " PaymentError ",
+      "expected": " PaymentError "
+    },
+    {
+      "id": "A12a",
+      "input": "",
+      "expected": "Error"
+    },
+    {
+      "id": "A12b",
+      "input": "   ",
+      "expected": "Error"
+    },
+    {
+      "id": "A12c",
+      "input": null,
+      "expected": "Error"
+    },
+    {
+      "id": "A13",
+      "input": " \t\n\r\f\u000b",
+      "expected": "Error"
+    },
+    {
+      "id": "A14",
+      "input": "\u00a0",
+      "expected": "\u00a0"
+    },
+    {
+      "id": "A15",
+      "input": "\ufeff",
+      "expected": "\ufeff"
+    },
+    {
+      "id": "A16",
+      "input": "\u001c",
+      "expected": "\u001c"
+    },
+    {
+      "id": "A17",
+      "input": "\u2003",
+      "expected": "\u2003"
+    }
   ]
 }

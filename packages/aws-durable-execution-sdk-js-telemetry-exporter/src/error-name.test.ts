@@ -7,6 +7,7 @@ import {
   ChildContextError,
   DurableOperationError,
   InvokeError,
+  PromiseCombinatorError,
   StepError,
   type OperationInfo,
 } from "@aws/durable-execution-sdk-js";
@@ -28,8 +29,10 @@ const vectors = JSON.parse(
 
 describe("reduceTypeName (shared vectors, Table A)", () => {
   it("loads the shared vector file", () => {
-    expect(vectors.version).toBe(1);
-    expect(vectors.reduce.length).toBeGreaterThanOrEqual(15);
+    expect(vectors.version).toBe(2);
+    expect(vectors.reduce.map((v) => v.id)).toEqual(
+      expect.arrayContaining(["A13", "A14", "A15", "A16", "A17"]),
+    );
   });
 
   it.each(vectors.reduce.map((v) => [v.id, v.input, v.expected] as const))(
@@ -41,6 +44,25 @@ describe("reduceTypeName (shared vectors, Table A)", () => {
 
   it("reports Error for a missing name", () => {
     expect(reduceTypeName(undefined)).toBe("Error");
+  });
+
+  it("counts only the six ASCII whitespace characters as blank (rule 6)", () => {
+    for (const blank of [" ", "\t", "\n", "\r", "\f", "\v", " \t\n\r\f\v"]) {
+      expect(reduceTypeName(blank)).toBe("Error");
+    }
+    for (const kept of [
+      "\u00a0",
+      "\ufeff",
+      "\u001c",
+      "\u2003",
+      "\u3000",
+      "\u200b",
+      "\u0085",
+      "\u2028",
+      " \u00a0 ",
+    ]) {
+      expect(reduceTypeName(kept)).toBe(kept);
+    }
   });
 
   it("converts a non-string name with String(...)", () => {
@@ -111,21 +133,63 @@ describe("ErrorNameResolver.executionErrorName", () => {
     expect(resolve(error)).toBe("PaymentError");
   });
 
-  it("stops after 16 wrappers", () => {
-    let error: Error = named("PaymentError");
-    for (let i = 0; i < 17; i++) error = new StepError("x", error);
-    // 16 unwraps leave the innermost wrapper, which reports its own name.
-    expect(resolve(error)).toBe("StepError");
-    let shorter: Error = named("PaymentError");
-    for (let i = 0; i < 16; i++) shorter = new StepError("x", shorter);
-    expect(resolve(shorter)).toBe("PaymentError");
+  describe("unwraps at most 16 wrappers (rule 3)", () => {
+    /**
+     * `count` wrappers around a PaymentError. The innermost wrapper is a
+     * ChildContextError and the others are StepErrors, so the name reported
+     * after 16 unwraps shows exactly which error the walk stopped at.
+     */
+    const wrapped = (count: number): Error => {
+      let error: Error = named("PaymentError");
+      for (let i = 0; i < count; i++) {
+        error =
+          i === 0
+            ? new ChildContextError("x", error)
+            : i === 1
+              ? new InvokeError("x", error)
+              : new StepError("x", error);
+      }
+      return error;
+    };
+
+    it.each([
+      [1, "PaymentError"],
+      [15, "PaymentError"],
+      // 16 unwraps reach the user error.
+      [16, "PaymentError"],
+      // 16 unwraps reach the innermost wrapper, which is reported.
+      [17, "ChildContextError"],
+      // 16 unwraps reach the second innermost wrapper.
+      [18, "InvokeError"],
+    ])("%i wrappers -> %s", (count, expected) => {
+      expect(resolve(wrapped(count))).toBe(expected);
+    });
   });
 
-  it("stops at a cycle", () => {
-    const a = new StepError("x");
-    const b = new ChildContextError("x", a);
-    a.cause = b;
-    expect(["StepError", "ChildContextError"]).toContain(resolve(b));
+  describe("stops at a cycle and reports the last error before the repeat (rule 3)", () => {
+    it("a self-cycle reports the wrapper itself", () => {
+      const self = new ChildContextError("x");
+      self.cause = self;
+      expect(resolve(self)).toBe("ChildContextError");
+    });
+
+    it("a two-wrapper cycle reports the second wrapper", () => {
+      const a = new StepError("x");
+      const b = new ChildContextError("x", a);
+      a.cause = b;
+      // b -> a -> b: a is the last error visited before b repeats.
+      expect(resolve(b)).toBe("StepError");
+      expect(resolve(a)).toBe("ChildContextError");
+    });
+
+    it("a cycle after a prefix reports the last error before the repeat", () => {
+      const inner = new PromiseCombinatorError("x");
+      const middle = new ChildContextError("x", inner);
+      inner.cause = middle;
+      const outer = new StepError("x", middle);
+      // outer -> middle -> inner -> middle: inner is reported.
+      expect(resolve(outer)).toBe("PromiseCombinatorError");
+    });
   });
 
   it("never unwraps a user error, even one with errorType and a cause (rule 2, B15)", () => {
@@ -223,7 +287,7 @@ describe("ErrorNameResolver.executionErrorName", () => {
       ).toBe("PaymentError");
     });
 
-    it("finds the invoke operation through outer wrappers, by message, shallowest then latest", () => {
+    it("does not guess between same-message invoke operations with different types (rule 9)", () => {
       const ops = [
         invokeOp({
           id: "other",
@@ -246,7 +310,22 @@ describe("ErrorNameResolver.executionErrorName", () => {
         "card declined",
         new InvokeError("card declined", named("Error")),
       );
-      expect(resolve(error, ops)).toBe("PaymentError");
+      // "early" and "late" are both shallowest and disagree.
+      expect(resolve(error, ops)).toBe("InvokeError");
+      // Without "early", the shallowest match is unique.
+      expect(
+        resolve(
+          error,
+          ops.filter((o) => o.id !== "early"),
+        ),
+      ).toBe("PaymentError");
+      // Agreeing candidates are not ambiguous.
+      expect(
+        resolve(error, [
+          invokeOp({ id: "a", endTimestamp: new Date(1) }),
+          invokeOp({ id: "b", endTimestamp: new Date(2) }),
+        ]),
+      ).toBe("PaymentError");
     });
 
     it("ignores operations that are not chained invokes", () => {
@@ -316,7 +395,7 @@ describe("ErrorNameResolver.executionErrorName", () => {
     expect(resolve(error, ops)).toBe("PaymentError");
   });
 
-  it("prefers the shallowest matching operation, then the latest to end", () => {
+  it("prefers the shallowest matching operation, and does not guess among them (rule 9)", () => {
     const ops = [
       op({
         id: "early",
@@ -349,11 +428,30 @@ describe("ErrorNameResolver.executionErrorName", () => {
         error: checkpointed("PaymentError"),
       }),
     ];
+    const error = new ChildContextError(
+      "card declined",
+      checkpointed("StepError"),
+    );
+    // "early" (RefundError) and "late" (PaymentError) disagree: the wrapper.
+    expect(resolve(error, ops)).toBe("StepError");
+    // The same types agree: no guess is needed.
+    const agreeing = ops.map((o) =>
+      o.id === "e1" ? { ...o, error: checkpointed("PaymentError") } : o,
+    );
+    expect(resolve(error, agreeing)).toBe("PaymentError");
+    // A deeper match never competes with a shallower one.
     expect(
-      resolve(
-        new ChildContextError("card declined", checkpointed("StepError")),
-        ops,
-      ),
+      resolve(error, [
+        ...ops.slice(2),
+        op({
+          id: "deep",
+          name: "deep",
+          parentId: "l1",
+          type: "CONTEXT",
+          status: "FAILED",
+          error: checkpointed("StepError"),
+        }),
+      ]),
     ).toBe("PaymentError");
   });
 
@@ -412,6 +510,198 @@ describe("ErrorNameResolver.operationErrorName", () => {
     ];
     expect(resolve("item", ops)).toBe("PaymentError");
     expect(resolve("inner", ops)).toBe("PaymentError");
+  });
+
+  it("does not guess between failed children with the same message (rule 9, B20, B21)", () => {
+    const ops = [
+      op({
+        id: "item",
+        type: "CONTEXT",
+        status: "FAILED",
+        endTimestamp: new Date(10),
+        error: checkpointed("StepError"),
+      }),
+      op({
+        id: "s0",
+        parentId: "item",
+        status: "FAILED",
+        endTimestamp: new Date(5),
+        error: checkpointed("PaymentError"),
+      }),
+      op({
+        id: "s1",
+        parentId: "item",
+        status: "FAILED",
+        endTimestamp: new Date(6),
+        error: checkpointed("FraudError"),
+      }),
+    ];
+    expect(resolve("item", ops)).toBe("StepError");
+    expect(resolve("s0", ops)).toBe("PaymentError");
+    expect(resolve("s1", ops)).toBe("FraudError");
+  });
+
+  it("prefers children that ended no later than the failed parent (R2)", () => {
+    const ops = [
+      op({
+        id: "child",
+        type: "CONTEXT",
+        status: "FAILED",
+        endTimestamp: new Date(10),
+        error: checkpointed("StepError"),
+      }),
+      op({
+        id: "fast",
+        parentId: "child",
+        status: "FAILED",
+        endTimestamp: new Date(5),
+        error: checkpointed("TypeError"),
+      }),
+      op({
+        id: "slow",
+        parentId: "child",
+        status: "FAILED",
+        endTimestamp: new Date(20),
+        error: checkpointed("PaymentError"),
+      }),
+    ];
+    expect(resolve("child", ops)).toBe("TypeError");
+  });
+
+  describe("a promise combinator whose failed promise is a sibling (R1, B19)", () => {
+    const combinator = (partial: Partial<OperationInfo> = {}) =>
+      op({
+        id: "combo",
+        name: "combo",
+        type: "CONTEXT",
+        status: "FAILED",
+        startTimestamp: new Date(10),
+        endTimestamp: new Date(30),
+        error: checkpointed("StepError"),
+        ...partial,
+      });
+    const step = (
+      id: string,
+      type: string,
+      partial: Partial<OperationInfo> = {},
+    ) =>
+      op({
+        id,
+        name: id,
+        status: "FAILED",
+        startTimestamp: new Date(10),
+        endTimestamp: new Date(20),
+        error: checkpointed(type),
+        ...partial,
+      });
+
+    it("names the combinator after the failed sibling", () => {
+      expect(resolve("combo", [combinator(), step("s1", "PaymentError")])).toBe(
+        "PaymentError",
+      );
+      // Nested in a parent context, siblings share its parentId.
+      expect(
+        resolve("combo", [
+          op({ id: "p", type: "CONTEXT", status: "STARTED" }),
+          combinator({ parentId: "p" }),
+          step("s1", "PaymentError", { parentId: "p" }),
+          step("other", "FraudError"),
+        ]),
+      ).toBe("PaymentError");
+    });
+
+    it("ignores a sibling that started before the combinator (an earlier, handled failure)", () => {
+      expect(
+        resolve("combo", [
+          combinator(),
+          step("s1", "PaymentError", {
+            startTimestamp: new Date(1),
+            endTimestamp: new Date(2),
+          }),
+        ]),
+      ).toBe("StepError");
+    });
+
+    it("ignores siblings whose name is itself a wrapper type", () => {
+      expect(
+        resolve("combo", [
+          combinator(),
+          op({
+            id: "c2",
+            type: "CONTEXT",
+            status: "FAILED",
+            startTimestamp: new Date(10),
+            endTimestamp: new Date(20),
+            error: checkpointed("StepError"),
+          }),
+        ]),
+      ).toBe("StepError");
+    });
+
+    it("does not guess between siblings with different types (rule 9)", () => {
+      expect(
+        resolve("combo", [
+          combinator(),
+          step("s1", "PaymentError"),
+          step("s2", "FraudError"),
+        ]),
+      ).toBe("StepError");
+      // A sibling that ended after the combinator is not a candidate.
+      expect(
+        resolve("combo", [
+          combinator(),
+          step("s1", "PaymentError"),
+          step("s2", "FraudError", { endTimestamp: new Date(40) }),
+        ]),
+      ).toBe("PaymentError");
+    });
+
+    it("prefers a failed child to a sibling", () => {
+      expect(
+        resolve("combo", [
+          combinator(),
+          step("inside", "PaymentError", { parentId: "combo" }),
+          step("s1", "FraudError"),
+        ]),
+      ).toBe("PaymentError");
+    });
+  });
+
+  describe("descends at most 16 operation levels", () => {
+    /** `contexts` nested failed contexts around a failed step. */
+    const nested = (contexts: number): OperationInfo[] => {
+      const ops: OperationInfo[] = [];
+      for (let i = 0; i < contexts; i++) {
+        ops.push(
+          op({
+            id: `c${i}`,
+            type: "CONTEXT",
+            parentId: i === 0 ? undefined : `c${i - 1}`,
+            status: "FAILED",
+            error: checkpointed("StepError"),
+          }),
+        );
+      }
+      ops.push(
+        op({
+          id: "step",
+          parentId: `c${contexts - 1}`,
+          status: "FAILED",
+          error: checkpointed("PaymentError"),
+        }),
+      );
+      return ops;
+    };
+
+    it.each([
+      [1, "PaymentError"],
+      // 16 levels: 15 contexts and the step.
+      [15, "PaymentError"],
+      [16, "StepError"],
+      [17, "StepError"],
+    ])("%i contexts above the step -> %s", (contexts, expected) => {
+      expect(resolve("c0", nested(contexts))).toBe(expected);
+    });
   });
 
   it("keeps the checkpointed type when no failed child matches", () => {
