@@ -24,11 +24,26 @@ export function createContext({
 }) {
   let counter = 0;
   let childrenAbandoned = false;
+  // Each operation needs its hashed id for the lookup and for every update it sends.
+  // MD5 is the main CPU cost per operation. So each id is hashed once per ctx, and the
+  // parent id once per ctx.
+  const hashes = new Map();
+  const hash = (rawId) => {
+    let h = hashes.get(rawId);
+    if (h === undefined) {
+      h = hashId(rawId);
+      hashes.set(rawId, h);
+    }
+    return h;
+  };
+  // A child ctx gets the same raw id as prefix and parentId. So this is also the hash of
+  // the child's own record id.
+  const hashedParentId = parentId === undefined ? undefined : hashId(parentId);
   const ctx = {
     _execution: execution,
     _replayOnly: replayOnly,
     // The record of this child context. Only child contexts call it.
-    _record: () => execution.get(hashId(prefix)),
+    _record: () => execution.get(hashedParentId),
 
     // A batch that completes early abandons its items that are still running
     // (AGENTS.md 2.9). The batch sets the flag after the item ctxs exist. So the getter
@@ -60,7 +75,7 @@ export function createContext({
     replaying:
       prefix === undefined
         ? execution.size > 1
-        : execution.get(hashId(prefix)) !== undefined,
+        : execution.get(hashedParentId) !== undefined,
 
     // Ids are allocated at call time, before any await, so concurrent calls stay
     // deterministic. A batch re-run also calls it alone to skip an item it does not run.
@@ -68,11 +83,11 @@ export function createContext({
       counter++;
       const rawId =
         prefix === undefined ? String(counter) : `${prefix}-${counter}`;
-      ctx.replaying = execution.get(hashId(rawId)) !== undefined;
+      ctx.replaying = execution.get(hash(rawId)) !== undefined;
       return rawId;
     },
 
-    _lookup: (rawId) => execution.get(hashId(rawId)),
+    _lookup: (rawId) => execution.get(hash(rawId)),
 
     // The ctx for the child context with this raw id. It lives here because
     // child-context.js is imported by this file: importing createContext back would
@@ -109,8 +124,8 @@ export function createContext({
     // The fields every update for this operation carries.
     _base(rawId, { type, subType, name }) {
       return {
-        Id: hashId(rawId),
-        ...(parentId !== undefined && { ParentId: hashId(parentId) }),
+        Id: hash(rawId),
+        ...(hashedParentId !== undefined && { ParentId: hashedParentId }),
         ...(name !== undefined && { Name: name }),
         Type: type,
         ...(subType !== undefined && { SubType: subType }),

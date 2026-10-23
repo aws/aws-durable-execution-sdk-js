@@ -176,6 +176,8 @@ Rules for the client:
    `ParentId` is the hashed raw id of the enclosing child context. Root operations have no
    `ParentId`.
 5. These ids must match the full SDK exactly. The service and saved executions depend on them.
+6. MD5 is the main CPU cost of an operation. So each ctx hashes each raw id once and keeps the
+   hash in a map. It hashes its parent id once, when the ctx is created.
 
 ### 2.5 Checkpoints and suspension
 
