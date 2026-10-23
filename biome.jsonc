@@ -694,6 +694,7 @@
         "packages/aws-durable-execution-sdk-js-examples/**",
         "packages/aws-durable-execution-sdk-js-conformance-tests/**",
         "packages/aws-durable-execution-sdk-js-conformance-tests-otel/**",
+        "packages/aws-durable-execution-sdk-js-conformance-tests-telemetry/**",
         "packages/cjs-integration-test/**",
         "packages/esm-integration-test/**",
         "packages/cdk-bundling-integration-test/**",

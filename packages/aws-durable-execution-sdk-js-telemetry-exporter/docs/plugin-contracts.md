@@ -538,9 +538,15 @@ interface OperationRecord {
 | `on-change`   | On every `onOperationChange` + at `onInvocationEnd`           | Yes — same record key, overwritten with latest state |
 | `on-failure`  | Once, at `onInvocationEnd` when status is FAILED              | No — single write (only for failures)                |
 
-### Critical constraint: `onInvocationEnd` must be awaited
+### Critical constraint: `onInvocationEnd` must be awaited, within its deadline
 
-The plugin runner awaits `onInvocationEnd` before returning the Lambda response.
+The plugin runner awaits `onInvocationEnd` before returning the Lambda response,
+until 50 ms before the invocation's deadline. Before it calls the hook, it waits
+for the asynchronous work of earlier hooks to settle, until 500 ms before the
+deadline. Operation hooks themselves are not awaited. A flush that has not
+settled 50 ms before the deadline is abandoned, and the environment is then
+frozen. If the context reports no deadline, both waits last until everything
+settles.
 Each Durable Execution Telemetry plugin instance uses that hook to drain its
 queued records and await the shared exporter's flush. Export and flush failures
 are isolated from the execution result; exporters must settle promptly.

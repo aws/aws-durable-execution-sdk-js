@@ -13,7 +13,7 @@ export const STORE_STACK_TRACES = false;
  * After the last operation completes, the checkpoint manager waits this duration
  * before terminating to allow for any final checkpoint operations
  */
-export const CHECKPOINT_TERMINATION_COOLDOWN_MS = 20;
+export const CHECKPOINT_TERMINATION_COOLDOWN_MS = 3;
 
 /**
  * Largest delay `setTimeout` can represent, in milliseconds (~24.9 days).
