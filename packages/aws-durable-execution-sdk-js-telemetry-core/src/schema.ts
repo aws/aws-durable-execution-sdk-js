@@ -469,7 +469,7 @@ a Glue table "TABLE_NAME" and Hive-partitioned by year/month/day (partition colu
 below). Columns:
 - recordType: string ("DurableExecutionTelemetry")
 - schemaVersion: string
-- emittedAt: string (ISO-8601)
+- emittedAt: timestamp (UTC)
 - executionArn: string
 - executionName: string (nullable)
 - functionName: string
@@ -477,8 +477,8 @@ below). Columns:
 - region: string
 - accountId: string
 - status: string — RUNNING | SUCCEEDED | FAILED
-- startTime: string (ISO-8601)
-- endTime: string (ISO-8601, nullable)
+- startTime: timestamp (UTC)
+- endTime: timestamp (UTC, nullable)
 - durationMs: bigint (nullable)
 - input: string (JSON-serialized; use json_extract_scalar/json_extract to read fields — see lowercasing note below)
 - output: string (JSON-serialized; use json_extract_scalar/json_extract to read fields — see lowercasing note below)
@@ -486,6 +486,7 @@ below). Columns:
 - operations: array<struct<id,name,type,subType,parentId,status,startTime,endTime,durationMs,attempt,error,result,truncated>>
     This is the canonical per-operation array (NOT operationsByName — S3Exporter
     keeps the raw array). To filter/aggregate by operation name or fields, UNNEST it.
+    The operation startTime/endTime are timestamp (UTC) too.
 - year, month, day: string — Hive partition columns (from the S3 key
     year=YYYY/month=MM/day=DD/), zero-padded 2-digit strings for month/day. Filter
     on these instead of parsing startTime/emittedAt for partition pruning.
@@ -512,6 +513,7 @@ const DIALECT_ATHENA = `Target query language: Trino/Presto SQL (Amazon Athena) 
 Rules:
 - Table name is TABLE_NAME (already database-qualified by the connection — do not prefix it).
 - To inspect operations, UNNEST the array and give the element its own alias, then reference THAT alias directly — NOT prefixed by the table alias. Correct: FROM TABLE_NAME t CROSS JOIN UNNEST(t.operations) AS u(op) ... then use op.name, op.type, op.status, op.durationMs, op.error, etc. WRONG: t.op.name (the unnested element op is its own alias, not a column of the table alias t; writing t.op.name fails with COLUMN_NOT_FOUND). Use a distinct alias for the unnest table (e.g. u) so it does not collide with the table alias.
+- emittedAt, startTime, endTime (and op.startTime/op.endTime) are native timestamp columns holding UTC. Compare them with TIMESTAMP literals or timestamp expressions, never with strings: WHERE starttime >= TIMESTAMP '2026-10-23 18:00:00' or WHERE starttime >= current_timestamp - INTERVAL '1' HOUR. A string such as '2026-10-23T18:00:00Z' fails with a type mismatch. Use date_diff('millisecond', starttime, endtime) for elapsed time and date_trunc('hour', starttime) for bucketing. Keep the year/month/day partition filter as well, so the query scans only the matching partitions.
 - json_extract_scalar(col, '$.path') returns a scalar string; json_extract(col, '$.path') returns JSON — cast as needed, e.g. CAST(json_extract_scalar(...) AS double).
 - Every path segment passed to json_extract_scalar/json_extract on input or output MUST be lowercase (the SerDe lowercases JSON keys on read) — e.g. '$.claimtype' not '$.claimType'.
 - A field that lives inside input/output (e.g. claimType, decision, amount) is NEVER a bare column — it does not exist as a plain identifier anywhere in this table, including in GROUP BY, ORDER BY, and WHERE. Referencing it bare (e.g. "GROUP BY claimType" or "GROUP BY claim_type") fails with COLUMN_NOT_FOUND. Always wrap it in json_extract_scalar(input, '$.path') / json_extract_scalar(output, '$.path') — and repeat that full expression everywhere it's used (SELECT, GROUP BY, ORDER BY, WHERE), not just an alias, since GROUP BY/ORDER BY must reference the actual computed expression.
