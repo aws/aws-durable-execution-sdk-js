@@ -204,16 +204,12 @@ export interface DurableExecutionConfig {
    *   ],
    * });
    * ```
-   *
-   * @experimental This parameter is experimental and may be changed or removed in future releases.
    */
   plugins?: DurableInstrumentationPluginFactory[];
 
   /**
    * Execution-level settings that affect how instrumentation plugins observe
    * the run.
-   *
-   * @experimental This parameter is experimental and may be changed or removed in future releases.
    */
   pluginsConfig?: {
     /**
@@ -262,8 +258,6 @@ export interface DurableExecutionConfig {
      * plus carrying those children in the execution state — it grows with the
      * number of preserved contexts and the depth requested, and is **not** a
      * re-doing of the children's work. Enable only the depth you actually need.
-     *
-     * @experimental
      */
     childOperationsDepth?: number;
   };
