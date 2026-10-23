@@ -249,7 +249,7 @@ test("a failed checkpoint terminates with the classified outcome", async () => {
 
 test("blocked with nothing running or pending suspends", async () => {
   const ex = make(createFakeClient());
-  void ex.block();
+  void ex.block("blocked-op");
   assert.deepEqual(await ex.terminated, { kind: "pending" });
 });
 
@@ -260,7 +260,7 @@ test("a running operation prevents suspension", async () => {
     outcome = o;
   });
   ex.runningStart();
-  void ex.block();
+  void ex.block("blocked-op");
   for (let i = 0; i < 5; i++) await tick();
   assert.equal(outcome, undefined);
   ex.runningEnd();
@@ -272,7 +272,7 @@ test("a pending checkpoint prevents suspension until it is saved", async () => {
   const ex = make(client);
   const release = client.hold();
   void ex.checkpoint(update("a"));
-  void ex.block();
+  void ex.block("blocked-op");
   let outcome;
   void ex.terminated.then((o) => {
     outcome = o;

@@ -69,8 +69,14 @@ export function createContext({
       ctx._abandoned ? never() : execution.checkpoint(update),
 
     // The liveness check is read at each suspension check. So an operation that was
-    // blocked before its batch abandoned it stops counting as blocked.
-    _block: () => execution.block(() => !ctx._abandoned),
+    // blocked before its batch abandoned it stops counting as blocked. The promise
+    // resolves when a checkpoint response changes the operation's record. A batch can
+    // abandon the operation between that response and the resolution. So the promise
+    // then never resolves, and the operation does not run again.
+    _block: (rawId) =>
+      execution
+        .block(hash(rawId), () => !ctx._abandoned)
+        .then(() => (ctx._abandoned ? never() : undefined)),
 
     // The EXECUTION record is always present. More records mean an earlier invocation ran.
     // A child starts replaying if its own record exists.

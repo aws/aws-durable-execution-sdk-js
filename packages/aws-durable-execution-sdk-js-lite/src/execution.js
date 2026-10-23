@@ -51,6 +51,20 @@ export function sizeBound(u) {
   );
 }
 
+// True if the record's scheduled time has passed: a wait's end or a step's next attempt.
+// The API sends epoch seconds as a number. The invocation event sends an ISO string.
+// A callback or an invoke has no scheduled time.
+function isDue(op) {
+  const t =
+    op?.Type === "WAIT"
+      ? op.WaitDetails?.ScheduledEndTimestamp
+      : op?.Type === "STEP"
+        ? op.StepDetails?.NextAttemptTimestamp
+        : undefined;
+  if (t == null) return false;
+  return (typeof t === "number" ? t * 1000 : Date.parse(t)) <= Date.now();
+}
+
 // Per-invocation state: the operation records, the checkpoint queue and suspension.
 export function createExecution({ client, arn, token, operations }) {
   const state = new Map(operations.map((op) => [op.Id, op]));
@@ -59,7 +73,9 @@ export function createExecution({ client, arn, token, operations }) {
   let scheduled = false;
   let inFlight = false;
   let running = 0;
-  const blocked = []; // one liveness check per blocked operation
+  const blocked = new Set(); // { id, status, isLive, wake }, one per blocked operation
+  // True after an empty refresh checkpoint that woke nothing. Reset when an op wakes.
+  let refreshed = false;
   let done = false;
   let settle;
   const terminated = new Promise((resolve) => {
@@ -132,6 +148,17 @@ export function createExecution({ client, arn, token, operations }) {
     for (const op of res.NewExecutionState?.Operations ?? []) {
       state.set(op.Id, op);
     }
+    // A blocked operation whose record changed may proceed now. It leaves the blocked
+    // set here, before checkIdle below. So the invocation does not suspend on it.
+    for (const b of blocked) {
+      if (state.get(b.id)?.Status === b.status) continue;
+      blocked.delete(b);
+      // An abandoned operation must not run again (AGENTS.md 2.9). It stays unresolved.
+      if (b.isLive()) {
+        refreshed = false;
+        b.wake();
+      }
+    }
     for (const b of batch) b.resolve();
     schedule();
     checkIdle();
@@ -139,17 +166,31 @@ export function createExecution({ client, arn, token, operations }) {
 
   // Suspend when nothing can make progress without the service. The second check after
   // setImmediate lets already-resolved promises start the next operation first.
+  // True if a live blocked operation passes the test.
+  const someLive = (test = () => true) => {
+    for (const b of blocked) if (b.isLive() && test(b)) return true;
+    return false;
+  };
   const idle = () =>
     !done &&
     running === 0 &&
-    blocked.some((isLive) => isLive()) &&
+    someLive() &&
     pending.length === 0 &&
     !scheduled &&
     !inFlight;
   function checkIdle() {
     if (!idle()) return;
     setImmediate(() => {
-      if (idle()) terminate({ kind: "pending" });
+      if (!idle()) return;
+      // The service can end a wait or a retry delay after the last checkpoint response.
+      // PENDING with nothing pending is an invocation error on the service. So if a due
+      // time has passed, one empty checkpoint reads the new records first. A refresh
+      // that wakes nothing is not repeated, so the invocation then suspends.
+      if (!refreshed && someLive((b) => isDue(state.get(b.id)))) {
+        refreshed = true;
+        // flush handles its own errors. It sends Updates: [] because nothing is pending.
+        void flush();
+      } else terminate({ kind: "pending" });
     });
   }
 
@@ -175,13 +216,18 @@ export function createExecution({ client, arn, token, operations }) {
       running--;
       checkIdle();
     },
-    // The operation needs the service to act first. Its promise never resolves.
-    // isLive turns false when a batch abandons the operation (AGENTS.md 2.9). Then the
-    // operation no longer counts as blocked.
-    block(isLive = () => true) {
-      blocked.push(isLive);
+    // The operation needs the service to act first. id is its hashed id. The promise
+    // resolves when a checkpoint response changes the Status of that record. The
+    // operation then reads its record again. isLive turns false when a batch abandons
+    // the operation (AGENTS.md 2.9). Then the operation no longer counts as blocked,
+    // and its promise never resolves.
+    block(id, isLive = () => true) {
+      const status = state.get(id)?.Status;
+      const woken = new Promise((wake) => {
+        blocked.add({ id, status, isLive, wake });
+      });
       checkIdle();
-      return never();
+      return woken;
     },
     fail(error) {
       terminate({ kind: "failed", error });

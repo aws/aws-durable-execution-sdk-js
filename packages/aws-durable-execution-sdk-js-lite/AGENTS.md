@@ -67,7 +67,8 @@ from the package owner.
   add per-operation serdes only (section 2.11). The `serdes` option for a whole
   `BatchResult`, `createClassSerdes` and `createClassSerdesWithDates` are out of scope
   too.
-- In-invocation timers and polling. Section 2.5 explains the effect.
+- In-invocation timers and polling. Section 2.5, suspension steps 12 to 14, explains the
+  effect.
 - `ctx.promise.all/allSettled/any/race`. The README documents the replacement pattern.
 - Linear retry, retry presets, `withRetry`, `createWaitStrategy`.
 - The `Duration` object. All times are plain seconds.
@@ -226,24 +227,54 @@ Suspension:
 1. An operation is blocked when its result needs the service to act first: a wait that has not
    ended, a callback that has not completed, an invoke that has not finished, or a step retry
    that is scheduled.
-2. A blocked operation returns a promise that never resolves. It adds a liveness check to the
-   execution's blocked list. The check turns false when a batch abandons the operation
-   (section 2.9).
-3. While a step function or a `waitForCondition` check runs, the execution's running count is
+2. A blocked operation calls `ctx._block(rawId)`. The execution adds an entry to its blocked
+   set: the hashed id, the record's Status at that moment, and a liveness check. The check
+   turns false when a batch abandons the operation (section 2.9).
+3. The service can change a record while the invocation runs, for example when a wait ends.
+   It then returns the record in the next checkpoint response. After `flush` stores the
+   returned records, it compares each blocked entry's Status with the stored record. If
+   they differ, the entry leaves the blocked set, and its promise resolves. The full SDK
+   does the same (`updateStepDataFromCheckpointResponse` and `resolveWaitingOperation` in
+   `checkpoint-manager.ts`).
+4. The operation then reads its record again and applies its replay table to it. It may
+   return, throw, run the next step attempt, or block again. Each blocking operation is a
+   loop around its replay table for this reason.
+5. The wake happens before `flush` calls `checkIdle`. So the suspension check below never
+   counts a woken operation as blocked.
+6. An entry whose liveness check is false leaves the set without a wake. `ctx._block`
+   also never resolves if the batch abandoned the operation after the wake. So an
+   abandoned operation never runs again.
+7. While a step function or a `waitForCondition` check runs, the execution's running count is
    above zero.
-4. The execution suspends when all of these hold: the running count is 0, no checkpoint is
+8. The execution suspends when all of these hold: the running count is 0, no checkpoint is
    pending or in flight, and at least one blocked operation is live. An abandoned operation
    must not count. Otherwise the invocation could suspend while the workflow awaits
    something else, and nothing that the workflow awaits would wake it.
-5. The SDK checks the condition again after one `setImmediate`. This lets already-resolved
+9. The SDK checks the condition again after one `setImmediate`. This lets already-resolved
    promises start the next operation first. If it still holds, the invocation returns PENDING.
-6. After the SDK decides to return PENDING, every later `checkpoint` call returns a promise that
+10. After the SDK decides to return PENDING, every later `checkpoint` call returns a promise that
    never resolves. So user code cannot run more side effects in this invocation.
-7. After the handler returns or throws, the execution never suspends. An un-awaited blocked
+11. After the handler returns or throws, the execution never suspends. An un-awaited blocked
    operation must not turn a finished handler into PENDING. So the SDK counts the finished
    handler as running while it saves the remaining checkpoints.
-8. The SDK has no timers and does not poll. Effect: a branch whose wait ends while another
-   branch runs a step continues only in the next invocation. This is accepted (rule 1.1).
+12. The invocation must never return PENDING while a blocked operation's latest record says
+   that it can proceed. The SDK has no timers and does not poll. So a branch whose wait ends while another
+   branch runs a step continues when the next checkpoint response reports the end
+   (steps 3 to 5). That response usually answers the running step's outcome. So the
+   branch continues in the same invocation.
+13. A narrow window remains. The service can end a wait after the last checkpoint response
+   and before the invocation returns PENDING. The service records PENDING while nothing is
+   pending as an invocation error, and it invokes again a limited number of times. So
+   before the SDK returns PENDING, it checks the live blocked records for a due time
+   that has passed: `WaitDetails.ScheduledEndTimestamp` of a WAIT, or
+   `StepDetails.NextAttemptTimestamp` of a STEP. The API sends these as epoch seconds.
+   The invocation event sends them as ISO strings. The SDK reads both.
+14. If such a time has passed, the SDK sends one checkpoint with `Updates: []`. Its response
+   wakes the changed operations (step 3). Then the suspension check runs again. A refresh
+   that wakes nothing is not repeated until an operation wakes. So the invocation then
+   returns PENDING. A callback or an invoke has no due time, so it causes no refresh. The
+   window stays open for them, and for a wait that ends during the refresh. This is
+   accepted (rule 1.1).
 
 ### 2.6 Replay
 
@@ -448,7 +479,7 @@ Each can return a value or a promise. The option names follow the full SDK:
    default path costs the same as before.
 2. `entityId` is the operation's raw id, for example `"3-1"`. The full SDK passes the
    same value. `durableExecutionArn` comes from `execution.arn`.
-3. A serdes call counts as running (section 2.5, suspension step 3). A step starts
+3. A serdes call counts as running (section 2.5, suspension step 7). A step starts
    `serialize` before it ends its running count. Otherwise the invocation could suspend
    during an async call, and the operation would not continue in this invocation.
 4. A throw from a serdes function ends the invocation with an error named

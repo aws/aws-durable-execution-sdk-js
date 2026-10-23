@@ -1,6 +1,11 @@
 // An in-memory stand-in for the durable execution service. It applies checkpoint updates
 // like the service does and keeps a virtual clock in epoch seconds. It has no timers:
-// time moves only when advance() is called.
+// time moves only when advance() or advanceBy() is called.
+//
+// The service can change a record while an invocation runs, for example when a wait
+// ends. It then returns that record in the next checkpoint response. advanceBy() and
+// boundary() can run during an invocation. So the service remembers the records they
+// change, and the next checkpoint response includes them.
 
 export const ARN =
   "arn:aws:lambda:us-east-1:123456789012:function:workflow:$LATEST/durable-execution/local/run";
@@ -43,10 +48,12 @@ export function createInMemoryService({
   let callbacks = 0;
   let completed = false;
   let result; // the EXECUTION SUCCEED Payload (the large-result path)
-  // Outcomes from "outside" (callback responses, finished invokes). They land at the next
-  // invocation boundary, like an external system that answers later.
+  // Outcomes from "outside" (callback responses, finished invokes). They land when
+  // boundary() runs: between invocations, or during one when a test calls it.
   let outcomes = [];
   const deadlines = new Map(); // callback op id -> timeout time
+  // Records changed outside a checkpoint since the last response or invocation start.
+  const changed = new Set();
   const ops = new Map(); // insertion order is start order
   ops.set(EXECUTION_ID, {
     Id: EXECUTION_ID,
@@ -64,6 +71,7 @@ export function createInMemoryService({
     op.Status = Status;
     op.EndTimestamp = now;
     merge(op, fields);
+    changed.add(op);
   };
 
   function checkToken(t) {
@@ -255,6 +263,19 @@ export function createInMemoryService({
     return items;
   };
 
+  function applyDue(items) {
+    for (const [t, op, status] of items) {
+      if (t > now) continue;
+      if (status === "READY") {
+        op.Status = "READY";
+        changed.add(op);
+      } else if (status === "SUCCEEDED") finish(op, status);
+      else {
+        finish(op, status, { Error: { ErrorMessage: "Callback timed out" } });
+      }
+    }
+  }
+
   return {
     ops,
     get now() {
@@ -279,12 +300,13 @@ export function createInMemoryService({
           );
         }
         validate(Updates);
-        const changed = new Set(Updates.map(apply));
+        // finish() adds to changed too. So the set holds the applied updates and the
+        // records that changed since the last response, each once.
+        for (const u of Updates) changed.add(apply(u));
+        const Operations = [...changed].map(clone);
+        changed.clear();
         token = `token-${++tokens}`;
-        return {
-          CheckpointToken: token,
-          NewExecutionState: { Operations: [...changed].map(clone) },
-        };
+        return { CheckpointToken: token, NewExecutionState: { Operations } };
       },
       async getExecutionState({ CheckpointToken, Marker, MaxItems }) {
         checkToken(CheckpointToken);
@@ -293,6 +315,8 @@ export function createInMemoryService({
     },
     // The input for a new invocation. Each invocation gets a fresh token.
     event() {
+      // The initial state holds every record.
+      changed.clear();
       token = `token-${++tokens}`;
       return {
         DurableExecutionArn: ARN,
@@ -317,15 +341,29 @@ export function createInMemoryService({
       const items = dueItems();
       if (items.length === 0) return false;
       now = Math.max(now, Math.min(...items.map(([t]) => t)));
-      for (const [t, op, status] of items) {
-        if (t > now) continue;
-        if (status === "READY") op.Status = "READY";
-        else if (status === "SUCCEEDED") finish(op, status);
-        else {
-          finish(op, status, { Error: { ErrorMessage: "Callback timed out" } });
-        }
-      }
+      applyDue(items);
       return true;
+    },
+    // Moves the clock forward by seconds and applies everything due by then. A test can
+    // call it during an invocation. The next checkpoint response then reports the
+    // changed records, like the service does.
+    advanceBy(seconds) {
+      now += seconds;
+      applyDue(dueItems());
+    },
+    // True if some record waits for the service or an outside system: a wait or a
+    // callback that has not ended, a scheduled step retry, or an invoke that has not
+    // finished. The service records an invocation error when an invocation returns
+    // PENDING while this is false.
+    hasPending() {
+      return [...ops.values()].some(
+        (op) =>
+          (op.Status === "STARTED" &&
+            (op.Type === "WAIT" ||
+              op.Type === "CALLBACK" ||
+              op.Type === "CHAINED_INVOKE")) ||
+          (op.Type === "STEP" && op.Status === "PENDING"),
+      );
     },
     // Records the invocation's final output on the EXECUTION operation.
     complete(output) {

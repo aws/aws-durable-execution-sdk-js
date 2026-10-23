@@ -8,6 +8,8 @@
 // | FAILED, TIMED_OUT, STOPPED   | throw fromErrorObject(ChainedInvokeDetails.Error)   |
 // | STARTED or anything else     | block until the service finishes the invoke         |
 //
+// A blocked invoke wakes when a checkpoint response changes its record (AGENTS.md 2.5).
+// It then applies this table to the new record.
 // The thrown error keeps the callee's ErrorType. The full SDK loses it.
 // payloadSerdes makes the START Payload from input. resultSerdes reads the callee's
 // Result. The callee's result always comes from the record, so every run deserializes.
@@ -48,14 +50,19 @@ async function runInvoke(
     });
     record = ctx._lookup(rawId);
   }
-  const details = record?.ChainedInvokeDetails;
-  if (record?.Status === "SUCCEEDED") {
-    const data = details?.Result;
-    if (resultSerdes) return deserialize(ctx, resultSerdes, data, rawId);
-    return data == null ? undefined : JSON.parse(data);
+  // The block resolves when a checkpoint response changes the record. The loop then
+  // applies the replay table to the new record.
+  for (;;) {
+    const details = record?.ChainedInvokeDetails;
+    if (record?.Status === "SUCCEEDED") {
+      const data = details?.Result;
+      if (resultSerdes) return deserialize(ctx, resultSerdes, data, rawId);
+      return data == null ? undefined : JSON.parse(data);
+    }
+    if (FAILED.has(record?.Status)) {
+      throw fromErrorObject(details?.Error, "InvokeError");
+    }
+    await ctx._block(rawId);
+    record = ctx._lookup(rawId);
   }
-  if (FAILED.has(record?.Status)) {
-    throw fromErrorObject(details?.Error, "InvokeError");
-  }
-  return ctx._block();
 }

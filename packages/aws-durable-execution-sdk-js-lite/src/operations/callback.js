@@ -10,6 +10,8 @@
 // | TIMED_OUT       | reject with errorType CallbackTimeoutError                   |
 // | anything else   | block until an outside system completes the callback         |
 //
+// A blocked result wakes when a checkpoint response changes the callback's record
+// (AGENTS.md 2.5). It then applies this table to the new record.
 // callbackId always comes from CallbackDetails.CallbackId, which the service assigns.
 
 import { DurableOperationError, fromErrorObject } from "../errors.js";
@@ -45,29 +47,37 @@ async function runCallback(
     record = ctx._lookup(rawId);
   }
   const details = record?.CallbackDetails;
-  const result = outcome(ctx, record?.Status, details, serdes, rawId);
+  const result = outcome(ctx, rawId, serdes);
   // A result that the user never awaits must not crash the process when it rejects.
   // The user's own await still sees the rejection.
   result.catch(() => {});
   return { callbackId: details?.CallbackId, result };
 }
 
-// A native promise, created eagerly. A blocked one counts at once (AGENTS.md 2.5).
+// A native promise, created eagerly. The async function runs up to its first await at
+// once. So a blocked one counts as blocked at once (AGENTS.md 2.5). The block resolves
+// when a checkpoint response changes the record. The loop then reads it again.
 // An outside system sent the result. So even the first run calls deserialize.
-function outcome(ctx, status, details, serdes, rawId) {
-  if (status === "SUCCEEDED") {
-    return serdes
-      ? deserialize(ctx, serdes, details?.Result, rawId)
-      : Promise.resolve(details?.Result);
+async function outcome(ctx, rawId, serdes) {
+  for (;;) {
+    const record = ctx._lookup(rawId);
+    const details = record?.CallbackDetails;
+    const status = record?.Status;
+    if (status === "SUCCEEDED") {
+      return serdes
+        ? deserialize(ctx, serdes, details?.Result, rawId)
+        : details?.Result;
+    }
+    if (status === "FAILED") {
+      throw fromErrorObject(details?.Error, "CallbackError");
+    }
+    if (status === "TIMED_OUT") {
+      const message = details?.Error?.ErrorMessage ?? "Callback timed out";
+      throw new DurableOperationError({
+        errorType: "CallbackTimeoutError",
+        message,
+      });
+    }
+    await ctx._block(rawId);
   }
-  if (status === "FAILED") {
-    return Promise.reject(fromErrorObject(details?.Error, "CallbackError"));
-  }
-  if (status === "TIMED_OUT") {
-    const message = details?.Error?.ErrorMessage ?? "Callback timed out";
-    return Promise.reject(
-      new DurableOperationError({ errorType: "CallbackTimeoutError", message }),
-    );
-  }
-  return ctx._block();
 }

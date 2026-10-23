@@ -611,6 +611,11 @@ Options:
 - `maxInvocations` (default 100): `runDurable` throws after this many invocations.
 - `pageSize` (optional): serves the execution state in pages of this size, to test
   pagination.
+- `service` (optional): a service from `createInMemoryService(options)`. The options above
+  for the service are then ignored. Pass one to change records during an invocation, as the
+  real service does. `service.advanceBy(seconds)` moves the virtual clock and ends the
+  waits and retry delays that are due. `service.boundary()` applies the callback answers
+  and invoke results. The next checkpoint response reports the changed records.
 
 `runDurable` resolves to an object with these fields:
 
@@ -620,6 +625,10 @@ Options:
 - `error`: `{ ErrorType, ErrorMessage, ErrorData }`, when `status` is `"FAILED"`.
 - `operations`: every operation record, in start order.
 - `invocations`: the number of invocations.
+- `invocationErrors`: the invocation errors that the service would record, in order. One
+  is an error that the handler threw. The other is a `PENDING` output while no wait,
+  callback, invoke or step retry is pending. The service then invokes again, so
+  `runDurable` does too. A test can assert that this list is empty.
 - `getOperation(name)`: the first operation record with this name.
 
 The in-memory service does not simulate heartbeat timeouts.
@@ -985,9 +994,12 @@ export const handler = withDurableExecution(workflow, {
   `deserialize` first.
 - A child context that rebuilds a result larger than 256 KiB calls no serdes. The full SDK
   calls `serialize` and `deserialize` again.
-- No timers and no polling inside an invocation. So a branch whose wait ends while another
-  branch runs a step continues only in the next invocation. The same holds for retries and
-  callbacks.
+- No timers and no polling inside an invocation. The service reports a changed record in
+  each checkpoint response. So a branch whose wait ends while another branch runs a step
+  continues when the next checkpoint response reports the end. That response usually
+  answers the running step's SUCCEED, so the branch continues in the same invocation. The
+  same holds for step retries, callbacks and invokes. The full SDK also starts a timer for
+  the wait's end and polls the service.
 - `map` and `parallel` support `minSuccessful`, `toleratedFailureCount`,
   `toleratedFailurePercentage` and the `shouldComplete` predicate, and fail fast by default,
   like the full SDK. The predicate returns a plain object. The `completeBatch()` and
