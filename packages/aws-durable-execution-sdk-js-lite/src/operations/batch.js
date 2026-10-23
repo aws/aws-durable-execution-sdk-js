@@ -15,6 +15,12 @@
 // Neither replay path calls a shouldComplete predicate. A SUCCEEDED record returns the
 // stored result, and a re-run reads the saved completionReason. So a replay cannot
 // reach a different decision than the live run.
+//
+// itemSerdes is each item's serdes. Without itemSerdes, the batch record holds the item
+// results as JSON. A replay of such a record would not call itemSerdes. So with
+// itemSerdes, the batch always saves the summary with ReplayChildren. A replay then re-drives the items, and each item's record
+// goes through itemSerdes.deserialize. The full SDK stores the item values in the batch
+// record and replays them with JSON.parse.
 
 import {
   DurableOperationError,
@@ -25,7 +31,7 @@ import { childContext } from "./child-context.js";
 
 export function map(
   ctx,
-  { name, items, fn, maxConcurrency, itemName, completionConfig },
+  { name, items, fn, maxConcurrency, itemName, completionConfig, itemSerdes },
 ) {
   const tasks = items.map((item, index) => ({
     name: itemName?.({ item, index }),
@@ -37,12 +43,13 @@ export function map(
     tasks,
     maxConcurrency,
     completionConfig,
+    itemSerdes,
   });
 }
 
 export function parallel(
   ctx,
-  { name, branches, maxConcurrency, completionConfig },
+  { name, branches, maxConcurrency, completionConfig, itemSerdes },
 ) {
   return batch(ctx, {
     name,
@@ -50,6 +57,7 @@ export function parallel(
     tasks: branches,
     maxConcurrency,
     completionConfig,
+    itemSerdes,
   });
 }
 
@@ -61,11 +69,12 @@ async function batch(ctx, { name, subType, tasks, ...config }) {
   const value = await childContext(ctx, {
     name,
     subType,
+    keepChildren: config.itemSerdes !== undefined,
     // A replay-only batch ctx means the batch record is SUCCEEDED with ReplayChildren.
     // Every other record either returns before fn runs or makes the ctx not replay-only.
     fn: ({ ctx: b }) =>
       b._replayOnly
-        ? replayAll(b, tasks, itemSubType)
+        ? replayAll(b, tasks, itemSubType, config.itemSerdes)
         : runAll(b, tasks, itemSubType, config),
     // One character per started item, in index order, like the full SDK's itemStatuses.
     summary: ({ all, completionReason }) =>
@@ -163,7 +172,7 @@ function runAll(
   ctx,
   tasks,
   subType,
-  { maxConcurrency = Infinity, completionConfig },
+  { maxConcurrency = Infinity, completionConfig, itemSerdes },
 ) {
   const policy = completionPolicy(completionConfig, tasks);
   const all = [];
@@ -186,18 +195,22 @@ function runAll(
         const index = all.length;
         all.push({ index, status: "STARTED" });
         const { name, fn } = tasks[index];
-        void settle(childContext(ctx, { name, subType, fn }), index).then(
-          (item) => {
-            // An item that settles after the decision keeps STARTED, like the full SDK.
-            if (decided) return;
-            all[index] = item;
-            if (item.status === "SUCCEEDED") succeeded++;
-            else failed++;
-            const reason = policy.reason(all, succeeded, failed);
-            if (reason) decide(reason);
-            else startMore();
-          },
-        );
+        const run = childContext(ctx, {
+          name,
+          subType,
+          fn,
+          serdes: itemSerdes,
+        });
+        void settle(run, index).then((item) => {
+          // An item that settles after the decision keeps STARTED, like the full SDK.
+          if (decided) return;
+          all[index] = item;
+          if (item.status === "SUCCEEDED") succeeded++;
+          else failed++;
+          const reason = policy.reason(all, succeeded, failed);
+          if (reason) decide(reason);
+          else startMore();
+        });
       }
     };
     startMore();
@@ -217,7 +230,7 @@ function runAll(
 // 2. An item marked "-" was still running. It is not run. Its id is still taken, so
 //    later items keep their ids. It stays STARTED in the result.
 // 3. An item after the marks never started. It is not run and not in the result.
-async function replayAll(ctx, tasks, subType) {
+async function replayAll(ctx, tasks, subType, serdes) {
   const { completionReason, itemStatuses } = JSON.parse(
     ctx._record().ContextDetails.Result,
   );
@@ -228,7 +241,8 @@ async function replayAll(ctx, tasks, subType) {
       all.push({ index, status: "STARTED" });
     } else {
       const { name, fn } = tasks[index];
-      all.push(await settle(childContext(ctx, { name, subType, fn }), index));
+      const run = childContext(ctx, { name, subType, fn, serdes });
+      all.push(await settle(run, index));
     }
   }
   return { all, completionReason };

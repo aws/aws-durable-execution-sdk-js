@@ -60,6 +60,31 @@ export function createRetryStrategy(
   config?: RetryStrategyConfig,
 ): RetryStrategy;
 
+/** What a serdes function receives besides the value. */
+export interface SerdesContext {
+  /** The operation's raw id, for example "2" or "3-1". Unique in one execution. */
+  entityId: string;
+  /** The execution's ARN. Use it with entityId to build a unique storage key. */
+  durableExecutionArn: string;
+}
+
+/**
+ * Turns a value into the string that the SDK checkpoints, and back. Both functions can
+ * be async. deserialize(serialize(v)) must return a value equivalent to v. Neither
+ * function may call durable operations. A throw throws from the Lambda handler, so
+ * Lambda invokes again.
+ */
+export interface Serdes<T> {
+  /** Returns the string to checkpoint, or undefined for no payload. */
+  serialize(
+    args: { value: T } & SerdesContext,
+  ): string | undefined | Promise<string | undefined>;
+  /** data is undefined when the checkpoint has no payload. */
+  deserialize(
+    args: { data: string | undefined } & SerdesContext,
+  ): T | Promise<T>;
+}
+
 export type StepSemantics =
   | "AT_LEAST_ONCE_PER_RETRY"
   | "AT_MOST_ONCE_PER_RETRY";
@@ -77,6 +102,8 @@ export interface StepOptions<T> {
    * Replay compares it, so changing it fails running executions like a rename.
    */
   subType?: string;
+  /** Default: JSON. The first run returns fn's value; only a replay calls deserialize. */
+  serdes?: Serdes<T>;
 }
 
 export interface WaitOptions {
@@ -85,7 +112,7 @@ export interface WaitOptions {
   seconds: number;
 }
 
-export interface CreateCallbackOptions {
+export interface CreateCallbackOptions<T = string | undefined> {
   name?: string;
   /** The callback times out after this many seconds. Default: no timeout. */
   timeoutSeconds?: number;
@@ -97,26 +124,32 @@ export interface CreateCallbackOptions {
    * Replay compares it, so changing it fails running executions like a rename.
    */
   subType?: string;
+  /** Reads the raw result string. Default: the raw string itself. */
+  serdes?: Pick<Serdes<T>, "deserialize">;
 }
 
-export interface Callback {
+export interface Callback<T = string | undefined> {
   /** Give this id to the outside system that completes the callback. */
   callbackId: string;
   /**
-   * The raw result string the sender sent, not JSON-parsed. Rejects with a
-   * DurableOperationError when the callback fails or times out
+   * The raw result string the sender sent, not JSON-parsed, or serdes.deserialize of
+   * it. Rejects with a DurableOperationError when the callback fails or times out
    * (errorType "CallbackTimeoutError").
    */
-  result: Promise<string | undefined>;
+  result: Promise<T>;
 }
 
-export interface InvokeOptions<I> {
+export interface InvokeOptions<I, O = unknown> {
   name?: string;
   /** The durable function to invoke: a qualified function ARN or alias. */
   functionName: string;
   /** Sent as JSON. Omitted when undefined. */
   input?: I;
   tenantId?: string;
+  /** Makes the Payload from input. The invoked function receives it as its event. */
+  payloadSerdes?: Pick<Serdes<I | undefined>, "serialize">;
+  /** Reads the invoked function's result. Default: JSON.parse. */
+  resultSerdes?: Pick<Serdes<O>, "deserialize">;
 }
 
 export interface RunInChildContextOptions<T> {
@@ -129,9 +162,14 @@ export interface RunInChildContextOptions<T> {
    * Replay compares it, so changing it fails running executions like a rename.
    */
   subType?: string;
+  /**
+   * Default: JSON. The 256 KiB limit applies to the serialized string. The first run
+   * returns fn's value; only a replay calls deserialize.
+   */
+  serdes?: Serdes<T>;
 }
 
-export interface WaitForCallbackOptions {
+export interface WaitForCallbackOptions<T = string | undefined> {
   name?: string;
   /** Sends callbackId to the outside system. Runs in a step, so it is retried. */
   submitter: (args: {
@@ -144,6 +182,8 @@ export interface WaitForCallbackOptions {
   heartbeatTimeoutSeconds?: number;
   /** Retries of the submitter step. Default: createRetryStrategy(). */
   retryStrategy?: RetryStrategy;
+  /** Reads the raw result string. Default: the raw string itself. */
+  serdes?: Pick<Serdes<T>, "deserialize">;
 }
 
 export interface WaitForConditionDecision {
@@ -163,6 +203,8 @@ export interface WaitForConditionOptions<S> {
     state: S;
     attempt: number;
   }) => WaitForConditionDecision;
+  /** Default: JSON. Saves each state and reads saved states back. */
+  serdes?: Serdes<S>;
 }
 
 export interface MapOptions<I, O> {
@@ -176,6 +218,11 @@ export interface MapOptions<I, O> {
   itemName?: (args: { item: I; index: number }) => string;
   /** When the map completes early. Default: at the first failed item. */
   completionConfig?: CompletionConfig;
+  /**
+   * The serdes of each item's result. Default: JSON. With itemSerdes, the map saves
+   * only a summary, and a replay reads each item's own record.
+   */
+  itemSerdes?: Serdes<O>;
 }
 
 export interface ParallelBranch<T> {
@@ -191,6 +238,8 @@ export interface ParallelOptions<T> {
   maxConcurrency?: number;
   /** When the parallel completes early. Default: at the first failed branch. */
   completionConfig?: CompletionConfig;
+  /** The serdes of each branch's result, as in MapOptions.itemSerdes. */
+  itemSerdes?: Serdes<T>;
 }
 
 /**
@@ -302,16 +351,21 @@ export interface DurableContext {
   readonly logger: Logger;
   step<T>(opts: StepOptions<T>): Promise<T>;
   wait(opts: WaitOptions): Promise<void>;
-  createCallback(opts?: CreateCallbackOptions): Promise<Callback>;
+  createCallback<T = string | undefined>(
+    opts?: CreateCallbackOptions<T>,
+  ): Promise<Callback<T>>;
   /** Returns the invoked function's JSON result. Its errors keep their errorType. */
-  invoke<O = unknown, I = unknown>(opts: InvokeOptions<I>): Promise<O>;
+  invoke<O = unknown, I = unknown>(opts: InvokeOptions<I, O>): Promise<O>;
   /** Groups operations. A completed child context returns its result without running fn. */
   runInChildContext<T>(opts: RunInChildContextOptions<T>): Promise<T>;
   /**
-   * Creates a callback, runs the submitter, and resolves to the raw result string.
-   * Errors keep their errorType, for example "CallbackTimeoutError".
+   * Creates a callback, runs the submitter, and resolves to the raw result string, or
+   * to serdes.deserialize of it. Errors keep their errorType, for example
+   * "CallbackTimeoutError".
    */
-  waitForCallback(opts: WaitForCallbackOptions): Promise<string | undefined>;
+  waitForCallback<T = string | undefined>(
+    opts: WaitForCallbackOptions<T>,
+  ): Promise<T>;
   /** Runs fn, then waits, until waitStrategy stops. Resolves to the last state. */
   waitForCondition<S>(opts: WaitForConditionOptions<S>): Promise<S>;
   /** Runs fn for every item in its own child context. A failed item does not stop the others. */

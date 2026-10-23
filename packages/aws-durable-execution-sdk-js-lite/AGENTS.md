@@ -63,7 +63,10 @@ These features of the full SDK are not in the lite SDK. Do not add them without 
 from the package owner.
 
 - Plugins, OpenTelemetry hooks, and external or custom loggers.
-- Custom serdes. Every value is stored as JSON.
+- `configureSerdes` and any default serdes for a context. The package owner decided to
+  add per-operation serdes only (section 2.11). The `serdes` option for a whole
+  `BatchResult`, `createClassSerdes` and `createClassSerdesWithDates` are out of scope
+  too.
 - In-invocation timers and polling. Section 2.5 explains the effect.
 - `ctx.promise.all/allSettled/any/race`. The README documents the replacement pattern.
 - Linear retry, retry presets, `withRetry`, `createWaitStrategy`.
@@ -111,6 +114,7 @@ src/context.js             the ctx object and operation ids
 src/errors.js              DurableOperationError and ErrorObject conversion
 src/retry.js               createRetryStrategy
 src/logger.js              replay-aware console logger
+src/serdes.js              calls a custom serdes (section 2.11)
 src/operations/*.js        one file per operation
 src/transport/sigv4.js     SigV4 signing with node:crypto
 src/transport/lambda-client.js  HTTPS client for the two durable APIs
@@ -196,7 +200,9 @@ Checkpoint queue:
    the SDK takes updates in order while the request body is at most `5 * 1024 * 1024` bytes.
    The SDK does not serialize an update to measure it. It adds an upper bound per update
    (`sizeBound` in `execution.js`): 2 bytes per UTF-8 byte of `Payload`, 6 bytes per
-   character of a developer string, and 600 bytes for keys and numbers. So the real body is
+   character of a developer string, and 600 bytes for keys and numbers. A custom
+   serialize can return any string, so its `Payload` counts as a developer string. The
+   operation marks such an update with the symbol key `CUSTOM_PAYLOAD`. So the real body is
    never larger than the limit. The bound is about 2 times the real size for a large
    payload, so a request can carry about 2.5 MiB of payloads. The 1 MiB margin also leaves
    room for the HTTP headers.
@@ -247,6 +253,11 @@ Suspension:
    only for a JSON-safe value. Returning a JSON-safe value is the developer's responsibility
    (README "Return JSON-safe values"). The SDK does not check it, because a check costs a
    parse on every operation.
+5. The same rule holds for a custom serdes. The first run calls `serialize` and returns
+   `fn`'s value. Only a replay calls `deserialize`. The full SDK calls `deserialize` on the
+   first run too. Correctness does not need it: `deserialize(serialize(v))` must be
+   equivalent to `v` anyway (README "Make serdes round trips exact"). Skipping it saves a
+   call, for example an S3 read, per operation.
 
 ### 2.7 Errors
 
@@ -303,7 +314,9 @@ Steps:
    invocation. At-least-once allows this. The package owner chose lower latency over waiting.
 3. An at-most-once step waits for START before `fn`, and for SUCCEED or FAIL before it
    returns or throws.
-4. Code that did not wait for a checkpoint can keep running after the invocation's outcome is
+4. A step with a custom serdes awaits `serialize` before it queues SUCCEED. The SUCCEED
+   needs the string. An at-least-once step still does not wait for the checkpoint.
+5. Code that did not wait for a checkpoint can keep running after the invocation's outcome is
    decided. So a step checks `execution.done` before it runs `fn`, and never runs `fn` after
    that.
 
@@ -312,7 +325,8 @@ Child contexts (`runInChildContext`, `waitForCallback`, `map`, `parallel`):
 1. The service drops the children of a completed context from the state. So a SUCCEEDED or
    FAILED context returns its stored result or error. It does not run `fn` again, because
    its steps would run again.
-2. A result larger than `256 * 1024` bytes does not fit in a checkpoint. The SDK sends
+2. A result whose serialized string is larger than `256 * 1024` bytes does not fit in a
+   checkpoint. The SDK sends
    `SUCCEED` with `Payload: ""` and `ContextOptions: {ReplayChildren: true}`. The service then
    keeps the children. On replay the SDK runs `fn` again. The children replay from their
    records, so no step runs again.
@@ -367,8 +381,47 @@ Map and parallel (`batch.js`):
    It never starts an item after the marks. So the result equals the live result, including
    the `STARTED` items. The full SDK drops `STARTED` items here.
 
+12. With `itemSerdes`, the batch always saves the summary from step 10 with
+   ReplayChildren. The full SDK stores the item values in the batch record as JSON. A
+   replay of that record would not call `itemSerdes.deserialize`. So the lite SDK
+   re-drives the items as in step 11, and each item replays its own record through
+   `itemSerdes`. The cost: the service keeps the children of the batch.
+
 ### 2.10 Logging
 
 `ctx.logger` has `debug`, `info`, `warn` and `error`. Each forwards to the same `console`
 method. It is silent while `ctx.replaying` is true. A step function receives a logger that is
 never silent, because a completed step does not run again.
+
+### 2.11 Serdes
+
+A serdes is `{ serialize, deserialize }`. Each function receives one object (rule 1.7):
+`{ value, entityId, durableExecutionArn }` or `{ data, entityId, durableExecutionArn }`.
+Each can return a value or a promise. The option names follow the full SDK:
+
+| Operation | Option | Applies to |
+|---|---|---|
+| `step`, `runInChildContext`, `waitForCondition` | `serdes` | the result, and each state of `waitForCondition` |
+| `invoke` | `payloadSerdes`, `resultSerdes` | `serialize` the input, `deserialize` the callee result |
+| `createCallback`, `waitForCallback` | `serdes` (only `deserialize`) | the raw callback result |
+| `map`, `parallel` | `itemSerdes` | each item's result, in the item's own record |
+
+1. Without a serdes, the operation calls `JSON.stringify` and `JSON.parse` as before. It
+   adds no `await`. Only an update with a custom `Payload` carries the `CUSTOM_PAYLOAD`
+   key. A symbol key on every update made 3000 default steps about 3% slower. So the
+   default path costs the same as before.
+2. `entityId` is the operation's raw id, for example `"3-1"`. The full SDK passes the
+   same value. `durableExecutionArn` comes from `execution.arn`.
+3. A serdes call counts as running (section 2.5, suspension step 3). A step starts
+   `serialize` before it ends its running count. Otherwise the invocation could suspend
+   during an async call, and the operation would not continue in this invocation.
+4. A throw from a serdes function ends the invocation with an error named
+   `SerdesFailedError`. The Lambda handler throws it, so Lambda invokes again. The full
+   SDK does the same (`safeSerialize` and `safeDeserialize` in `serdes-errors.ts`). A
+   failed S3 call can succeed in the next invocation.
+5. A callback result and an invoke result come from outside. So `deserialize` reads them
+   in every run.
+6. `serialize` receives `undefined` when the value is `undefined`. If `serialize` returns
+   `undefined`, the update has no `Payload`. A replay then passes `data: undefined` to
+   `deserialize`.
+7. A ReplayChildren re-run of a child context returns `fn`'s value and calls no serdes.

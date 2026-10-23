@@ -8,14 +8,27 @@
 //
 // The children have no Name, like the names the full SDK checkpoints. Errors keep their
 // errorType, for example CallbackTimeoutError or the submitter error's name.
+//
+// The context stores the raw callback string as JSON. serdes.deserialize then reads
+// that string in every run, with the context's raw id as entityId, like the full SDK.
 
-import { childContext } from "./child-context.js";
+import { deserialize } from "../serdes.js";
+import { runChild } from "./child-context.js";
 
 export function waitForCallback(
   ctx,
-  { name, submitter, timeoutSeconds, heartbeatTimeoutSeconds, retryStrategy },
+  {
+    name,
+    submitter,
+    timeoutSeconds,
+    heartbeatTimeoutSeconds,
+    retryStrategy,
+    serdes,
+  },
 ) {
-  return childContext(ctx, {
+  // The id is taken now, before any await (AGENTS.md 2.4).
+  const rawId = ctx._nextId();
+  const raw = runChild(ctx, rawId, {
     name,
     subType: "WaitForCallback",
     fn: async ({ ctx: child }) => {
@@ -33,4 +46,7 @@ export function waitForCallback(
       return await result;
     },
   });
+  return serdes
+    ? raw.then((data) => deserialize(ctx, serdes, data, rawId))
+    : raw;
 }

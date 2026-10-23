@@ -6,11 +6,18 @@ const MAX_BODY_BYTES = 5 * 1024 * 1024;
 const CLIENT_TOKEN = "00000000-0000-0000-0000-000000000000";
 const never = () => new Promise(() => {});
 
+// An operation sets this key to true on an update whose Payload a custom serdes made.
+// JSON.stringify skips symbol keys, so the key is never sent.
+export const CUSTOM_PAYLOAD = Symbol("customPayload");
+
 // An upper bound on Buffer.byteLength(JSON.stringify(update)) + 1 (the comma), without
 // serializing the update. Serializing every update only to measure it doubled the
 // serialization work. Inside the request body:
-// 1. A Payload is JSON text. JSON-escaping it again turns a quote or a backslash into 2
-//    bytes, and leaves other bytes alone. So it takes at most 2 * its UTF-8 bytes.
+// 1. A Payload from JSON.stringify is JSON text. JSON-escaping it again turns a quote or a
+//    backslash into 2 bytes, and leaves other bytes alone. So it takes at most 2 * its
+//    UTF-8 bytes.
+//    A custom serialize can return any string. A control character in it becomes \u00XX.
+//    So a Payload marked CUSTOM_PAYLOAD counts 6 bytes per UTF-16 unit, like rule 3.
 // 2. Id, ParentId, Type, SubType and Action are SDK-made ASCII without escapes: 1 byte per
 //    character.
 // 3. A string from the developer can hold control characters. Each becomes \u00XX: at
@@ -24,7 +31,11 @@ export function sizeBound(u) {
   const invoke = u.ChainedInvokeOptions;
   return (
     FIXED_BYTES +
-    (u.Payload ? 2 * Buffer.byteLength(u.Payload) : 0) +
+    (u.Payload
+      ? u[CUSTOM_PAYLOAD]
+        ? 6 * u.Payload.length
+        : 2 * Buffer.byteLength(u.Payload)
+      : 0) +
     len(u.Id) +
     len(u.ParentId) +
     len(u.Type) +
@@ -143,6 +154,7 @@ export function createExecution({ client, arn, token, operations }) {
   }
 
   return {
+    arn,
     terminated,
     get: (id) => state.get(id),
     get size() {
@@ -173,6 +185,10 @@ export function createExecution({ client, arn, token, operations }) {
     },
     fail(error) {
       terminate({ kind: "failed", error });
+    },
+    // The Lambda handler throws this error, so Lambda invokes again.
+    abort(error) {
+      terminate({ kind: "throw", error });
     },
   };
 }

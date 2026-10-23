@@ -96,7 +96,7 @@ This happens when durable execution is not enabled on the function.
 export const handler = withDurableExecution(workflow);
 ```
 
-### ctx.step({ name, fn, retryStrategy, semantics, subType })
+### ctx.step({ name, fn, retryStrategy, semantics, subType, serdes })
 
 Runs `fn` once and saves its result.
 
@@ -107,6 +107,7 @@ Runs `fn` once and saves its result.
   [Make steps idempotent](#make-steps-idempotent).
 - `subType` (default `"Step"`): the `SubType` of the operation on the wire. See
   [Custom subtypes](#keep-custom-subtypes-valid-and-stable).
+- `serdes` (default: JSON): stores the result. See [Serdes](#serdes).
 
 Returns a promise for the result of `fn`. A retry runs in a later invocation. After the last
 attempt fails, the promise rejects with a `DurableOperationError`. Its `errorType` is the
@@ -132,7 +133,7 @@ to `undefined`.
 await ctx.wait({ name: "cooling-off", seconds: 60 * 60 });
 ```
 
-### ctx.createCallback({ name, timeoutSeconds, heartbeatTimeoutSeconds, subType })
+### ctx.createCallback({ name, timeoutSeconds, heartbeatTimeoutSeconds, subType, serdes })
 
 Creates a callback that an outside system completes. The argument is optional.
 
@@ -141,14 +142,16 @@ Creates a callback that an outside system completes. The argument is optional.
   heartbeat arrives for this many seconds.
 - `subType` (default `"Callback"`): the `SubType` of the operation on the wire. See
   [Custom subtypes](#keep-custom-subtypes-valid-and-stable).
+- `serdes` (optional): an object with only `deserialize`. It turns the raw result string
+  into the value of `result`. See [Serdes](#serdes).
 
 Returns a promise for `{ callbackId, result }`.
 
 - `callbackId`: give it to the outside system. That system calls the Lambda API
   `SendDurableExecutionCallbackSuccess`, `SendDurableExecutionCallbackFailure` or
   `SendDurableExecutionCallbackHeartbeat` with this id.
-- `result`: a promise for the raw string the sender sent. It is `undefined` if the sender sent
-  no result. It rejects with a `DurableOperationError` when the callback fails or times out.
+- `result`: a promise for the raw string the sender sent, or for `serdes.deserialize` of it.
+  The raw string is `undefined` if the sender sent no result. It rejects with a `DurableOperationError` when the callback fails or times out.
   A timeout has `errorType` `"CallbackTimeoutError"`. A failure has the `ErrorType` the sender
   sent.
 
@@ -161,15 +164,17 @@ await ctx.step({ name: "notify", fn: () => sendApprovalEmail(callbackId) });
 const answer = JSON.parse((await result) ?? "{}");
 ```
 
-### ctx.waitForCallback({ name, submitter, timeoutSeconds, heartbeatTimeoutSeconds, retryStrategy })
+### ctx.waitForCallback({ name, submitter, timeoutSeconds, heartbeatTimeoutSeconds, retryStrategy, serdes })
 
 Creates a callback, runs `submitter` in a step, and waits for the callback result.
 
 - `submitter({ callbackId, logger })`: sends `callbackId` to the outside system.
 - `timeoutSeconds`, `heartbeatTimeoutSeconds`: as in `createCallback`.
 - `retryStrategy` (default `createRetryStrategy()`): retries of the submitter step.
+- `serdes` (optional): an object with only `deserialize`, as in `createCallback`.
 
-Returns a promise for the raw result string, or `undefined`. Errors keep their `errorType`:
+Returns a promise for the raw result string, or `undefined`, or for `serdes.deserialize` of
+the raw string. Errors keep their `errorType`:
 `"CallbackTimeoutError"`, the sender's `ErrorType`, or the `name` of the submitter's error.
 
 ```js
@@ -181,15 +186,21 @@ const answer = await ctx.waitForCallback({
 const { approved } = JSON.parse(answer ?? "{}");
 ```
 
-### ctx.invoke({ name, functionName, input, tenantId })
+### ctx.invoke({ name, functionName, input, tenantId, payloadSerdes, resultSerdes })
 
 Invokes another durable function and waits for its result.
 
 - `functionName`: a qualified function name or ARN, with a version, an alias or `$LATEST`.
-- `input` (optional): sent as JSON.
+- `input` (optional): sent as JSON, or as the string that `payloadSerdes` returns.
 - `tenantId` (optional): the tenant id for the invoked function.
+- `payloadSerdes` (optional): an object with only `serialize`. It makes the payload from
+  `input`. The invoked function receives the payload as its event and parses it as JSON.
+  So `serialize` must return JSON text.
+- `resultSerdes` (optional): an object with only `deserialize`. It reads the invoked
+  function's result string. The default is `JSON.parse`.
 
-Returns a promise for the invoked function's result, parsed from JSON. In TypeScript, pass
+Returns a promise for the invoked function's result, parsed from JSON or read by
+`resultSerdes`. In TypeScript, pass
 the result type: `ctx.invoke<Receipt>({ ... })`. If the invoked function fails, times out or
 is stopped, the promise rejects with a `DurableOperationError`. Its `errorType` is the invoked
 function's `ErrorType`.
@@ -202,16 +213,18 @@ const receipt = await ctx.invoke({
 });
 ```
 
-### ctx.waitForCondition({ name, fn, initialState, waitStrategy })
+### ctx.waitForCondition({ name, fn, initialState, waitStrategy, serdes })
 
 Checks a condition repeatedly, with a wait between checks.
 
 - `fn({ state, attempt, logger })`: one check. It returns the new state. A throw fails the
   operation without a retry.
-- `initialState`: the state for the first check. It is stored as JSON.
+- `initialState`: the state for the first check.
 - `waitStrategy({ state, attempt })`: returns `{ shouldContinue, delaySeconds }`.
   `shouldContinue: false` ends the operation. `delaySeconds` defaults to 1. `attempt` is the
   number of the check that just ran, starting at 1.
+- `serdes` (default: JSON): stores each state. A later check reads the saved state with
+  `deserialize`. The first check gets `initialState` itself. See [Serdes](#serdes).
 
 Returns a promise for the last state. The service schedules each next check, like a `wait`.
 
@@ -227,13 +240,15 @@ const job = await ctx.waitForCondition({
 });
 ```
 
-### ctx.runInChildContext({ name, fn, subType })
+### ctx.runInChildContext({ name, fn, subType, serdes })
 
 Groups operations in a child context.
 
 - `fn({ ctx })`: the group. Use the child `ctx` inside `fn`.
 - `subType` (default `"RunInChildContext"`): the `SubType` of the operation on the wire. See
   [Custom subtypes](#keep-custom-subtypes-valid-and-stable).
+- `serdes` (default: JSON): stores the result. The 256 KiB limit applies to the string that
+  `serialize` returns. See [Serdes](#serdes).
 
 Returns a promise for the result of `fn`. A completed child context returns its saved result.
 It does not run `fn` again. If `fn` throws, the promise rejects with a `DurableOperationError`
@@ -250,7 +265,7 @@ const profile = await ctx.runInChildContext({
 });
 ```
 
-### ctx.map({ name, items, fn, maxConcurrency, itemName, completionConfig })
+### ctx.map({ name, items, fn, maxConcurrency, itemName, completionConfig, itemSerdes })
 
 Runs `fn` for every item. Each item runs in its own child context. Items start in index order.
 
@@ -259,6 +274,9 @@ Runs `fn` for every item. Each item runs in its own child context. Items start i
 - `maxConcurrency` (default: no limit): at most this many items run at once.
 - `itemName({ item, index })` (optional): the name of each item's child context.
 - `completionConfig` (optional): when the map completes early. See below.
+- `itemSerdes` (default: JSON): stores each item's result in the item's own checkpoint.
+  With `itemSerdes`, the map's checkpoint holds only the status of each item. A replay
+  then reads each item's checkpoint with `itemSerdes.deserialize`. See [Serdes](#serdes).
 
 Returns a promise for a `BatchResult`. The promise does not reject when an item fails.
 
@@ -377,7 +395,7 @@ const spread = await ctx.map({
 spread.throwIfError();
 ```
 
-### ctx.parallel({ name, branches, maxConcurrency, completionConfig })
+### ctx.parallel({ name, branches, maxConcurrency, completionConfig, itemSerdes })
 
 Runs every branch. Each branch runs in its own child context.
 
@@ -386,6 +404,7 @@ Runs every branch. Each branch runs in its own child context.
 - `maxConcurrency` (default: no limit): at most this many branches run at once.
 - `completionConfig` (optional): as in `map`. The default is fail fast. In the predicate's
   `items`, `name` is the branch name.
+- `itemSerdes` (default: JSON): stores each branch's result, as in `map`.
 
 Returns a promise for a `BatchResult`, as in `map`.
 
@@ -400,6 +419,73 @@ const checks = await ctx.parallel({
 checks.throwIfError();
 const [fraud, credit] = checks.getResults();
 ```
+
+### Serdes
+
+By default, the SDK stores every value as JSON. A serdes replaces JSON for one operation.
+It is an object with two functions. Each function receives one object, and each can be
+async.
+
+- `serialize({ value, entityId, durableExecutionArn })`: returns the string to store, or
+  `undefined` to store no payload.
+- `deserialize({ data, entityId, durableExecutionArn })`: returns the value. `data` is the
+  stored string, or `undefined` if none is stored.
+- `entityId` is the operation's raw id, for example `"2"` or `"3-1"`. It is unique within
+  one execution. `durableExecutionArn` is the execution's ARN. Together they form a key
+  that is unique across executions.
+
+The options are `serdes` on `step`, `waitForCondition` and `runInChildContext`,
+`payloadSerdes` and `resultSerdes` on `invoke`, and `itemSerdes` on `map` and `parallel`.
+`createCallback` and `waitForCallback` accept a `serdes` with only `deserialize`.
+
+When the SDK calls each function:
+
+1. In the first run, an operation calls `serialize` once. It returns the value that `fn`
+   returned. It does not call `deserialize`.
+2. In a replay, an operation calls `deserialize` on the stored string. It does not call
+   `serialize`.
+3. A callback result and an invoke result come from outside. So `deserialize` reads them
+   in every run.
+4. An at-least-once step awaits `serialize` before it queues its result. It still does not
+   wait for the checkpoint.
+5. If `serialize` or `deserialize` throws, the Lambda handler throws an error with `name`
+   `"SerdesFailedError"`. Lambda then invokes the function again. The full SDK does the
+   same.
+
+The example below stores large values in Amazon S3. The checkpoint holds only the S3 key.
+
+```js
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+
+const s3 = new S3Client({});
+const Bucket = process.env.PAYLOAD_BUCKET;
+
+const s3Serdes = {
+  async serialize({ value, entityId, durableExecutionArn }) {
+    if (value === undefined) return undefined;
+    const Key = `${encodeURIComponent(durableExecutionArn)}/${entityId}.json`;
+    await s3.send(
+      new PutObjectCommand({ Bucket, Key, Body: JSON.stringify(value) }),
+    );
+    return JSON.stringify({ s3: Key });
+  },
+  async deserialize({ data }) {
+    if (data === undefined) return undefined;
+    const { s3: Key } = JSON.parse(data);
+    const res = await s3.send(new GetObjectCommand({ Bucket, Key }));
+    return JSON.parse(await res.Body.transformToString());
+  },
+};
+
+const report = await ctx.step({
+  name: "build-report",
+  fn: () => buildLargeReport(event.month),
+  serdes: s3Serdes,
+});
+```
+
+A step that runs again writes the same key again. So the new object replaces the old one.
+The SDK never deletes the objects. Delete them with an S3 lifecycle rule.
 
 ### createRetryStrategy(config)
 
@@ -597,7 +683,7 @@ each run. To group operations, use `runInChildContext`.
 
 ### Return JSON-safe values
 
-The SDK stores every result as JSON.
+Without a serdes, the SDK stores every result as JSON.
 
 1. In the first run, an operation returns the exact value that `fn` returned.
 2. In a replay, it returns `JSON.parse` of the stored JSON.
@@ -616,11 +702,31 @@ Return plain objects, arrays, strings, numbers, booleans and `null`. Convert a `
 string inside `fn`, for example with `toISOString()`. Also do not change the returned object
 after the operation returns, because the stored JSON keeps the old value.
 
+To keep a `Date` or a class instance, pass a [serdes](#serdes) instead. The same rule then
+applies to the serdes (see [Make serdes round trips exact](#make-serdes-round-trips-exact)).
+
+### Make serdes round trips exact
+
+The first run returns the value that `fn` returned. A replay returns `deserialize` of the
+stored string.
+
+1. So `deserialize(serialize(v))` must return a value equivalent to `v`. Otherwise the
+   first run and a replay see different values, and the workflow can take a different
+   path.
+2. The SDK does not check this. The full SDK calls `deserialize` in the first run too.
+3. `serialize` and `deserialize` must not call durable operations. An operation inside
+   them would get an id in an order that depends on timing.
+4. `serialize` can run again for the same `entityId`: an at-least-once step can run
+   again, and a failed attempt can retry. So make it safe to repeat, for example by
+   overwriting the same storage key.
+5. Do not use a random key in `serialize`. Use `durableExecutionArn` and `entityId`.
+
 ### Keep step results small
 
 Each result is stored in a checkpoint. The service limits the size of a checkpoint. A child
 context result larger than 256 KiB is rebuilt on replay, at extra cost. Store a large payload
-in Amazon S3 inside the step, and return the S3 key.
+in Amazon S3 inside the step, and return the S3 key. Or pass a serdes that stores the value
+in S3 (see [Serdes](#serdes)).
 
 ### Do not change the operation order while executions run
 
@@ -769,8 +875,20 @@ try {
 - Times are whole seconds (`seconds`, `timeoutSeconds`). The `Duration` object does not
   exist.
 - One error class exists: `DurableOperationError`. Use `errorType` to tell errors apart.
-- No plugins, no OpenTelemetry hooks, no custom loggers and no custom serdes. Every value is
-  stored as JSON. The logger writes to `console`.
+- No plugins, no OpenTelemetry hooks and no custom loggers. The logger writes to `console`.
+- Serdes functions receive one object: `serialize({ value, entityId, durableExecutionArn })`
+  and `deserialize({ data, entityId, durableExecutionArn })`. They can return a value or a
+  promise.
+- No `ctx.configureSerdes` and no default serdes for a context. Pass a serdes to each
+  operation. No `createClassSerdes`, `createClassSerdesWithDates` or file-system serdes.
+- `map` and `parallel` take `itemSerdes`, but no `serdes` for the whole `BatchResult`. With
+  `itemSerdes`, the batch stores only the item statuses, and a replay reads each item
+  through `itemSerdes`. The full SDK stores the item values in the batch result as JSON.
+- A `waitForCondition` check receives `initialState` itself, and `waitStrategy` receives
+  the state that `fn` returned. The full SDK sends these values through `serialize` and
+  `deserialize` first.
+- A child context that rebuilds a result larger than 256 KiB calls no serdes. The full SDK
+  calls `serialize` and `deserialize` again.
 - No timers and no polling inside an invocation. So a branch whose wait ends while another
   branch runs a step continues only in the next invocation. The same holds for retries and
   callbacks.
@@ -790,8 +908,9 @@ try {
 - `ctx.invoke` errors keep the invoked function's `ErrorType`. The full SDK does not keep it.
 - An at-least-once step returns as soon as `fn` settles. It does not wait until its result is
   saved. The full SDK waits.
-- In the first run, an operation returns the value that `fn` returned. The full SDK returns a
-  copy that it serialized and deserialized.
+- In the first run, an operation returns the value that `fn` returned. It does not call
+  `deserialize`. The full SDK returns a copy that it serialized and deserialized, with the
+  default JSON serdes and with a custom serdes.
 - `waitForCondition` validates replay like the other operations. The full SDK does not.
 - No CommonJS build. CommonJS code loads the package with `require()`, which works for ES
   modules on Node.js 22.12 and later.

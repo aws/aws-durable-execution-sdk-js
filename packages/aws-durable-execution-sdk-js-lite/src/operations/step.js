@@ -3,18 +3,21 @@
 // | Record status               | Behavior                                              |
 // |-----------------------------|-------------------------------------------------------|
 // | none or READY               | send START, run fn                                    |
-// | SUCCEEDED                   | return JSON.parse(StepDetails.Result)                 |
+// | SUCCEEDED                   | return JSON.parse(StepDetails.Result), or deserialize |
 // | FAILED                      | throw fromErrorObject(StepDetails.Error)              |
 // | PENDING (retry scheduled)   | block until the service makes it READY                |
 // | STARTED, at-least-once      | run fn again, no new START                            |
 // | STARTED, at-most-once       | the last run was interrupted: retry decision, no fn   |
 //
 // After fn: success sends SUCCEED. Failure asks retryStrategy, then sends FAIL and
-// throws, or sends RETRY and blocks.
+// throws, or sends RETRY and blocks. A custom serdes makes the SUCCEED Payload. The first
+// run does not call deserialize (AGENTS.md 2.6).
 
 import { fromErrorObject, toErrorObject } from "../errors.js";
+import { CUSTOM_PAYLOAD } from "../execution.js";
 import { createLogger } from "../logger.js";
 import { defaultRetryStrategy } from "../retry.js";
+import { deserialize, serialize } from "../serdes.js";
 
 const AT_MOST_ONCE = "AT_MOST_ONCE_PER_RETRY";
 const parse = (s) => (s == null ? undefined : JSON.parse(s));
@@ -35,6 +38,7 @@ async function runStep(
     retryStrategy = defaultRetryStrategy,
     semantics = "AT_LEAST_ONCE_PER_RETRY",
     subType,
+    serdes,
   },
 ) {
   const execution = ctx._execution;
@@ -53,7 +57,10 @@ async function runStep(
   };
   const status = record?.Status;
 
-  if (status === "SUCCEEDED") return parse(record.StepDetails?.Result);
+  if (status === "SUCCEEDED") {
+    const data = record.StepDetails?.Result;
+    return serdes ? deserialize(ctx, serdes, data, rawId) : parse(data);
+  }
   if (status === "FAILED") {
     throw fromErrorObject(record.StepDetails?.Error, "StepError");
   }
@@ -83,6 +90,7 @@ async function runStep(
     if (execution.done || ctx._abandoned) return new Promise(() => {});
     let result;
     let failed = false;
+    let serialized;
     execution.runningStart();
     try {
       result = await fn({ logger: stepLogger, attempt });
@@ -90,15 +98,26 @@ async function runStep(
       failed = true;
       error = err;
     } finally {
-      // The outcome checkpoint below is queued in this same tick, so the execution
-      // never looks idle in between.
+      // A custom serialize counts as running while it runs (serdes.js). It starts
+      // before runningEnd, so the step counts as running without a gap.
+      if (serdes && !failed) serialized = serialize(ctx, serdes, result, rawId);
+      // The outcome checkpoint below is queued in this same tick, or in the microtask
+      // after serialize settles. So the execution never looks idle in between.
       execution.runningEnd();
     }
     if (!failed) {
-      const payload = JSON.stringify(result);
-      await saved(update({ Action: "SUCCEED", Payload: payload }));
-      // The first run returns fn's own value. Only a replay parses the stored JSON
-      // (AGENTS.md 2.6).
+      const payload = serdes ? await serialized : JSON.stringify(result);
+      // Only a custom Payload carries the mark. A symbol key on every update made 3000
+      // default steps about 3% slower.
+      await saved(
+        update(
+          serdes
+            ? { Action: "SUCCEED", Payload: payload, [CUSTOM_PAYLOAD]: true }
+            : { Action: "SUCCEED", Payload: payload },
+        ),
+      );
+      // The first run returns fn's own value. Only a replay parses the stored JSON or
+      // calls deserialize (AGENTS.md 2.6).
       return result;
     }
   }
