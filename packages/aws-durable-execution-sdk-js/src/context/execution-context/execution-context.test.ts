@@ -1,3 +1,10 @@
+/**
+ * CONTRACT TEST, in part. The cases named "reports the remaining time as Infinity" guard the
+ * deadline reading in rule 4 of packages/aws-durable-execution-sdk-js/AGENTS.md and
+ * docs/adr/0001-operation-tracking-and-plugin-hooks.md. If a change makes one of them fail, the
+ * change breaks an invariant. Do not edit, skip or delete those cases to make the change pass.
+ * Change the ADR first. The other cases in this file are ordinary unit tests.
+ */
 import { Operation, OperationStatus, OperationType } from "../../types/wire";
 import { DurableExecutionInvocationInput, OperationSubType } from "../../types";
 import { log } from "../../utils/logger/logger";
@@ -162,6 +169,34 @@ describe("initializeExecutionContext", () => {
     expect(executionContext.getRemainingTimeMs()).toBe(120_000);
     expect(executionContext.getRemainingTimeMs()).toBe(90_000);
   });
+
+  it.each([
+    ["lacks the method", undefined],
+    [
+      "throws",
+      (): number => {
+        throw new Error("no deadline");
+      },
+    ],
+    ["returns NaN", (): number => Number.NaN],
+    ["returns a non-number", (): number => "soon" as unknown as number],
+  ])(
+    "reports the remaining time as Infinity when the context %s",
+    async (_case, getRemainingTimeInMillis) => {
+      const lambdaContext = {
+        ...mockLambdaContext,
+        getRemainingTimeInMillis,
+      } as unknown as Context;
+
+      const { executionContext } = await initializeExecutionContext(
+        mockEvent,
+        lambdaContext,
+        undefined,
+      );
+
+      expect(executionContext.getRemainingTimeMs()).toBe(Infinity);
+    },
+  );
 
   it("should initialize execution context in verbose mode", async () => {
     // Setup

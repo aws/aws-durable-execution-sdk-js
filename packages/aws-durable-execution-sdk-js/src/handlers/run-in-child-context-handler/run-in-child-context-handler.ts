@@ -418,8 +418,23 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
   };
 
   try {
-    // Execute the child context function with context tracking
-    const childContextFn = () => fn(durableChildContext);
+    // Execute the child context function with context tracking. The context is
+    // marked EXECUTING as soon as `fn` settles, not when the whole
+    // `wrapChildContextFn` chain settles. A wrapper may do asynchronous work
+    // after `fn` returns. That work runs while no operation inside `fn` is
+    // EXECUTING any more, so without this mark the invocation could suspend
+    // during it.
+    const childContextFn = (): ReturnType<typeof fn> => {
+      let settled: ReturnType<typeof fn>;
+      try {
+        settled = fn(durableChildContext);
+      } catch (error) {
+        markExecuting();
+        throw error;
+      }
+      void Promise.resolve(settled).then(markExecuting, markExecuting);
+      return settled;
+    };
     const wrapInfo = {
       ...opInfo,
       isReplay: childReplayMode !== DurableExecutionMode.ExecutionMode,
