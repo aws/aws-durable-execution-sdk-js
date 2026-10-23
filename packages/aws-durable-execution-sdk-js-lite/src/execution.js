@@ -6,6 +6,40 @@ const MAX_BODY_BYTES = 5 * 1024 * 1024;
 const CLIENT_TOKEN = "00000000-0000-0000-0000-000000000000";
 const never = () => new Promise(() => {});
 
+// An upper bound on Buffer.byteLength(JSON.stringify(update)) + 1 (the comma), without
+// serializing the update. Serializing every update only to measure it doubled the
+// serialization work. Inside the request body:
+// 1. A Payload is JSON text. JSON-escaping it again turns a quote or a backslash into 2
+//    bytes, and leaves other bytes alone. So it takes at most 2 * its UTF-8 bytes.
+// 2. Id, ParentId, Type, SubType and Action are SDK-made ASCII without escapes: 1 byte per
+//    character.
+// 3. A string from the developer can hold control characters. Each becomes \u00XX: at
+//    most 6 bytes per UTF-16 unit.
+// 4. The keys, punctuation and numbers of the largest update take about 500 bytes. 600
+//    leaves a margin.
+const len = (s) => (typeof s === "string" ? s.length : 0);
+const FIXED_BYTES = 600;
+export function sizeBound(u) {
+  const e = u.Error;
+  const invoke = u.ChainedInvokeOptions;
+  return (
+    FIXED_BYTES +
+    (u.Payload ? 2 * Buffer.byteLength(u.Payload) : 0) +
+    len(u.Id) +
+    len(u.ParentId) +
+    len(u.Type) +
+    len(u.SubType) +
+    len(u.Action) +
+    6 *
+      (len(u.Name) +
+        len(e?.ErrorType) +
+        len(e?.ErrorMessage) +
+        len(e?.ErrorData) +
+        len(invoke?.FunctionName) +
+        len(invoke?.TenantId))
+  );
+}
+
 // Per-invocation state: the operation records, the checkpoint queue and suspension.
 export function createExecution({ client, arn, token, operations }) {
   const state = new Map(operations.map((op) => [op.Id, op]));
@@ -43,22 +77,14 @@ export function createExecution({ client, arn, token, operations }) {
     setImmediate(flush);
   }
 
-  // Takes updates in order while the request stays within both limits. The first update
-  // is always taken, so an update larger than the byte limit still goes out alone.
-  // The body is JSON.stringify({CheckpointToken, ClientToken, Updates}). Its size is the
-  // body with no updates, plus each update's JSON, plus one comma between updates. So the
-  // sum below is the exact body size. The first update is always taken.
+  // Takes updates in order while the request stays within the byte limit. The first update
+  // is always taken, so an update larger than the limit still goes out alone. The size is
+  // an upper bound (sizeBound), so the real body is never larger than the limit.
   function takeBatch() {
-    let size = Buffer.byteLength(
-      JSON.stringify({
-        CheckpointToken: token,
-        ClientToken: CLIENT_TOKEN,
-        Updates: [],
-      }),
-    );
+    let size = token.length + CLIENT_TOKEN.length + 100;
     let n = 0;
     while (n < pending.length) {
-      size += Buffer.byteLength(JSON.stringify(pending[n].update)) + (n > 0);
+      size += sizeBound(pending[n].update);
       if (n > 0 && size > MAX_BODY_BYTES) break;
       n++;
     }

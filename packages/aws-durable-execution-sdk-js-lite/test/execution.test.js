@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { classify, createExecution } from "../src/execution.js";
+import { classify, createExecution, sizeBound } from "../src/execution.js";
+import { hashId } from "../src/ids.js";
 import { ARN, createFakeClient, httpError } from "./helpers/fake-client.js";
 
 const tick = () => new Promise((r) => setImmediate(r));
@@ -71,43 +72,83 @@ const LIMIT = 5 * 1024 * 1024;
 test("a request body stays within 5 MiB, in order", async () => {
   const client = createFakeClient();
   const ex = make(client);
+  // A JSON payload of 512 KiB. Its bound is 2 * 512 KiB, so 5 fit in 5 MiB.
   const big = (Id) => ({
     ...update(Id, "SUCCEED"),
-    Payload: "x".repeat(1024 * 1024),
+    Payload: JSON.stringify("x".repeat(512 * 1024 - 2)),
   });
   const all = [];
-  for (let i = 0; i < 6; i++) all.push(ex.checkpoint(big(`b${i}`)));
+  for (let i = 0; i < 8; i++) all.push(ex.checkpoint(big(`b${i}`)));
   await Promise.all(all);
   assert.deepEqual(
     client.checkpoints.map((r) => r.Updates.map((u) => u.Id)),
     [
       ["b0", "b1", "b2", "b3"],
-      ["b4", "b5"],
+      ["b4", "b5", "b6", "b7"],
     ],
   );
   for (const r of client.checkpoints) assert.ok(bodyBytes(r) <= LIMIT);
 });
 
-test("the size check uses the exact body size", async () => {
-  for (const extra of [0, 1]) {
-    const client = createFakeClient();
-    const ex = make(client);
-    const a = update("a");
-    // Size the second payload so that the body with both updates is LIMIT + extra.
-    const probe = {
-      CheckpointToken: "token-0",
-      Updates: [a, { ...a, Id: "b" }],
+test("6000 small updates, like 3000 steps, go in one request", async () => {
+  const client = createFakeClient();
+  const ex = make(client);
+  const all = [];
+  for (let i = 0; i < 3000; i++) {
+    const base = {
+      Id: hashId(String(i + 1)),
+      Name: "noop",
+      Type: "STEP",
+      SubType: "Step",
     };
-    const fill = LIMIT + extra - bodyBytes(probe);
-    const b = {
-      ...a,
-      Id: "b",
-      Payload: "x".repeat(fill - ',"Payload":""'.length),
-    };
-    await Promise.all([ex.checkpoint(a), ex.checkpoint(b)]);
-    const first = client.checkpoints[0];
-    assert.equal(first.Updates.length, extra === 0 ? 2 : 1, `extra=${extra}`);
-    if (extra === 0) assert.equal(bodyBytes(first), LIMIT);
+    all.push(ex.checkpoint({ ...base, Action: "START" }));
+    all.push(ex.checkpoint({ ...base, Action: "SUCCEED", Payload: String(i) }));
+  }
+  await Promise.all(all);
+  assert.deepEqual(
+    client.checkpoints.map((r) => r.Updates.length),
+    [6000],
+  );
+});
+
+test("sizeBound is never below the real JSON size of an update", () => {
+  // Worst cases for each kind of string: quotes and backslashes in a Payload, control
+  // characters and non-ASCII text in developer strings, and the largest set of keys.
+  const nasty = '"\\\n\u0001\t' + "\u0000".repeat(10) + "é漢😀";
+  const strings = [
+    "",
+    "plain",
+    nasty,
+    "\u0001".repeat(100),
+    "漢".repeat(100),
+    "😀".repeat(50),
+    '"'.repeat(200),
+  ];
+  const updates = [];
+  for (const s of strings) {
+    updates.push({
+      Id: "0123456789abcdef",
+      ParentId: "fedcba9876543210",
+      Name: s,
+      Type: "CHAINED_INVOKE",
+      SubType: "WaitForCondition",
+      Action: "SUCCEED",
+      Payload: JSON.stringify({ s, list: [s, s], n: 1.5e300 }),
+      Error: { ErrorType: s, ErrorMessage: s, ErrorData: s },
+      ContextOptions: { ReplayChildren: true },
+      StepOptions: { NextAttemptDelaySeconds: Number.MAX_SAFE_INTEGER },
+      WaitOptions: { WaitSeconds: Number.MAX_SAFE_INTEGER },
+      CallbackOptions: {
+        TimeoutSeconds: Number.MAX_SAFE_INTEGER,
+        HeartbeatTimeoutSeconds: Number.MAX_SAFE_INTEGER,
+      },
+      ChainedInvokeOptions: { FunctionName: s, TenantId: s },
+    });
+    updates.push({ Id: "0123456789abcdef", Type: "WAIT", Action: "START" });
+  }
+  for (const u of updates) {
+    const real = Buffer.byteLength(JSON.stringify(u)) + 1;
+    assert.ok(sizeBound(u) >= real, `${sizeBound(u)} < ${real}`);
   }
 });
 

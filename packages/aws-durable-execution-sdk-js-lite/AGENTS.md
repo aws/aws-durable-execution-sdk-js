@@ -193,8 +193,12 @@ Checkpoint queue:
 3. When no request is in flight, the SDK sends the pending updates in one request. The service
    has no limit on the number of updates. It limits the raw HTTP request to about 6 MiB. So
    the SDK takes updates in order while the request body is at most `5 * 1024 * 1024` bytes.
-   The size is the exact byte length of the JSON body, including the 36-character
-   `ClientToken` that the client adds. The 1 MiB margin leaves room for the HTTP headers.
+   The SDK does not serialize an update to measure it. It adds an upper bound per update
+   (`sizeBound` in `execution.js`): 2 bytes per UTF-8 byte of `Payload`, 6 bytes per
+   character of a developer string, and 600 bytes for keys and numbers. So the real body is
+   never larger than the limit. The bound is about 2 times the real size for a large
+   payload, so a request can carry about 2.5 MiB of payloads. The 1 MiB margin also leaves
+   room for the HTTP headers.
    The first update is always taken, so an update larger than the limit goes alone. The rest
    wait for the next request.
 4. After each response, the SDK stores the new token. It replaces each returned operation in
