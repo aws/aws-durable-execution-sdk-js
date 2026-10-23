@@ -127,6 +127,7 @@ async function runHandler<
   const plugin: DurableInstrumentationPlugin = createInvocationPluginRunner(
     pluginFactories,
     invocationInfo,
+    { getRemainingTimeMs: executionContext.getRemainingTimeMs },
   );
 
   // Create checkpoint manager and step data emitter
