@@ -1,4 +1,4 @@
-import { createPluginRunner } from "./plugin-runner";
+import { createPluginRunner, PLUGIN_DRAIN_RESERVE_MS } from "./plugin-runner";
 import {
   DurableInstrumentationPlugin,
   AttemptEndInfoOutcome,
@@ -178,28 +178,64 @@ describe("createPluginRunner", () => {
       expect(() => runner.onOperationStart!(operationInfo)).not.toThrow();
     });
 
-    it("awaits async work from a non-end hook before resolving", async () => {
-      let resolveHook: (() => void) | undefined;
+    it("does not wait for async work from an operation hook", async () => {
       let hookCompleted = false;
       const plugin: DurableInstrumentationPlugin = {
-        onOperationStart: () =>
-          new Promise<void>((resolve) => {
-            resolveHook = (): void => {
-              hookCompleted = true;
-              resolve();
-            };
-          }),
+        onOperationStart: () => new Promise<void>(() => {}),
+        onOperationEnd: async () => {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          hookCompleted = true;
+        },
       };
 
       const runner = createPluginRunner([plugin]);
-      const pending = runner.onOperationStart!(operationInfo) as Promise<void>;
 
-      // The hook has not resolved yet, so the runner promise must still be pending
+      // Both resolve although one hook never settles and the other is slow.
+      await runner.onOperationStart!(operationInfo);
+      await runner.onOperationEnd!(operationInfo);
       expect(hookCompleted).toBe(false);
+    });
 
-      resolveHook!();
-      await pending;
+    it("runs the synchronous part of every hook before returning, in call order", () => {
+      const calls: string[] = [];
+      const record = (name: string) => async (): Promise<void> => {
+        calls.push(name);
+        await new Promise(() => {});
+      };
+      const plugin: DurableInstrumentationPlugin = {
+        onOperationStart: record("start"),
+        onOperationAttemptStart: record("attempt-start"),
+        onOperationAttemptEnd: record("attempt-end"),
+        onOperationEnd: record("end"),
+        onOperationChange: record("change"),
+      };
 
+      const runner = createPluginRunner([plugin]);
+      void runner.onOperationStart!(operationInfo);
+      void runner.onOperationAttemptStart!(attemptInfo);
+      void runner.onOperationAttemptEnd!(attemptEndInfo);
+      void runner.onOperationEnd!(operationInfo);
+      void runner.onOperationChange!(operationChangeInfo);
+
+      expect(calls).toEqual([
+        "start",
+        "attempt-start",
+        "attempt-end",
+        "end",
+        "change",
+      ]);
+    });
+
+    it("still waits for onInvocationStart", async () => {
+      let hookCompleted = false;
+      const plugin: DurableInstrumentationPlugin = {
+        onInvocationStart: async () => {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          hookCompleted = true;
+        },
+      };
+
+      await createPluginRunner([plugin]).onInvocationStart!(invocationInfo);
       expect(hookCompleted).toBe(true);
     });
 
@@ -380,6 +416,90 @@ describe("createPluginRunner", () => {
         runner.onInvocationEnd!(invocationEndInfo),
       ).resolves.toBeUndefined();
       expect(plugin2.onInvocationEnd).toHaveBeenCalledWith(invocationEndInfo);
+    });
+
+    it("drains pending operation-hook work before calling onInvocationEnd", async () => {
+      const events: string[] = [];
+      const plugin: DurableInstrumentationPlugin = {
+        onOperationEnd: async () => {
+          await new Promise((resolve) => setTimeout(resolve, 30));
+          events.push("operation-end settled");
+        },
+        onInvocationEnd: async () => {
+          events.push("invocation-end called");
+        },
+      };
+
+      const runner = createPluginRunner([plugin]);
+      await runner.onOperationEnd!(operationInfo);
+      expect(events).toEqual([]);
+
+      await runner.onInvocationEnd!(invocationEndInfo);
+      expect(events).toEqual([
+        "operation-end settled",
+        "invocation-end called",
+      ]);
+    });
+
+    it("drains hook work that settling hook work starts", async () => {
+      const events: string[] = [];
+      let runner: DurableInstrumentationPlugin;
+      const plugin: DurableInstrumentationPlugin = {
+        onOperationEnd: async () => {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          void runner.onOperationChange!(operationChangeInfo);
+        },
+        onOperationChange: async () => {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          events.push("change settled");
+        },
+      };
+
+      runner = createPluginRunner([plugin]);
+      await runner.onOperationEnd!(operationInfo);
+      await runner.onInvocationEnd!(invocationEndInfo);
+      expect(events).toEqual(["change settled"]);
+    });
+
+    it("bounds the drain by the invocation's remaining time", async () => {
+      const onInvocationEnd = jest.fn(() => new Promise<void>(() => {}));
+      const plugin: DurableInstrumentationPlugin = {
+        onOperationEnd: () => new Promise<void>(() => {}),
+        onInvocationEnd,
+      };
+
+      // 100 ms of drain budget once the reserve is subtracted.
+      const runner = createPluginRunner([plugin], {
+        getRemainingTimeMs: () => PLUGIN_DRAIN_RESERVE_MS + 100,
+      });
+      await runner.onOperationEnd!(operationInfo);
+
+      const started = Date.now();
+      await runner.onInvocationEnd!(invocationEndInfo);
+      const elapsed = Date.now() - started;
+
+      // The never-settling operation hook used the budget; onInvocationEnd is
+      // still called, but not waited for past the budget.
+      expect(onInvocationEnd).toHaveBeenCalledTimes(1);
+      expect(elapsed).toBeGreaterThanOrEqual(90);
+      expect(elapsed).toBeLessThan(400);
+    });
+
+    it("skips waiting when no drain budget is left", async () => {
+      const onInvocationEnd = jest.fn(() => new Promise<void>(() => {}));
+      const runner = createPluginRunner(
+        [
+          {
+            onOperationEnd: () => new Promise<void>(() => {}),
+            onInvocationEnd,
+          },
+        ],
+        { getRemainingTimeMs: () => PLUGIN_DRAIN_RESERVE_MS - 1 },
+      );
+      await runner.onOperationEnd!(operationInfo);
+
+      await runner.onInvocationEnd!(invocationEndInfo);
+      expect(onInvocationEnd).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -903,7 +1023,7 @@ describe("createPluginRunner", () => {
       runner.onOperationAttemptEnd!(attemptEndInfo);
       runner.onOperationEnd!(operationInfo);
       runner.onOperationChange!(operationChangeInfo);
-      runner.onInvocationEnd!(invocationEndInfo);
+      await runner.onInvocationEnd!(invocationEndInfo);
       const logCtx = runner.enrichLogContext!();
 
       // Verify all hooks called on both plugins

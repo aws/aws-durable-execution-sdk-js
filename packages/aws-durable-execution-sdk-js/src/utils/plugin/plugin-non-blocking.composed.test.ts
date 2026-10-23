@@ -1,0 +1,199 @@
+/**
+ * Operation hooks must not block operations, and onInvocationEnd must still see their work
+ * finished.
+ *
+ * The SDK used to await every plugin hook. A slow hook then delayed the next operation. Worse,
+ * a hook awaited while no operation was EXECUTING let the invocation suspend before the
+ * caller's next line ran, when another operation was waiting. These tests run the real engine
+ * with a plugin whose hooks are slower than the termination cooldown.
+ */
+
+import { withDurableExecution } from "../../with-durable-execution";
+import { DurableExecutionInvocationInputWithClient } from "../durable-execution-invocation-input/durable-execution-invocation-input";
+import { hashId } from "../step-id-utils/step-id-utils";
+import {
+  DurableContext,
+  DurableExecutionClient,
+  InvocationStatus,
+  OperationSubType,
+} from "../../types";
+import {
+  CheckpointDurableExecutionResponse,
+  GetDurableExecutionStateResponse,
+  OperationStatus,
+  OperationType,
+  WireOperation,
+} from "../../types/wire";
+import { DurableInstrumentationPlugin } from "../../types/plugin";
+import { CHECKPOINT_TERMINATION_COOLDOWN_MS } from "../constants/constants";
+import { Context } from "aws-lambda";
+
+const HOOK_DELAY_MS = CHECKPOINT_TERMINATION_COOLDOWN_MS * 3 + 30;
+
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+const lambdaContext = {
+  awsRequestId: "request-1",
+  getRemainingTimeInMillis: () => 300_000,
+} as unknown as Context;
+
+const now = (): string => new Date().toISOString();
+
+const executionOp = {
+  Id: hashId("execution"),
+  Type: OperationType.EXECUTION,
+  Status: OperationStatus.STARTED,
+  StartTimestamp: now(),
+  ExecutionDetails: { InputPayload: "{}" },
+} as unknown as WireOperation;
+
+const pendingCallbackOp = {
+  Id: hashId("1"),
+  Type: OperationType.CALLBACK,
+  SubType: OperationSubType.CALLBACK,
+  Name: "cb",
+  Status: OperationStatus.STARTED,
+  StartTimestamp: now(),
+  CallbackDetails: { CallbackId: "callback-id" },
+} as unknown as WireOperation;
+
+const client: DurableExecutionClient = {
+  getExecutionState: async (): Promise<GetDurableExecutionStateResponse> => ({
+    Operations: [],
+    NextMarker: undefined,
+  }),
+  checkpoint: async (): Promise<CheckpointDurableExecutionResponse> => ({
+    CheckpointToken: "next-token",
+    NewExecutionState: undefined,
+  }),
+};
+
+const invoke = (
+  handler: (event: unknown, context: DurableContext) => Promise<unknown>,
+  plugin: DurableInstrumentationPlugin,
+  operations: WireOperation[] = [executionOp],
+): Promise<unknown> =>
+  withDurableExecution(handler, { plugins: [{ createPlugin: () => plugin }] })(
+    new DurableExecutionInvocationInputWithClient(
+      {
+        DurableExecutionArn:
+          "arn:aws:lambda:us-east-1:123456789012:function:repro:$LATEST",
+        CheckpointToken: "token-1",
+        InitialExecutionState: { Operations: operations, NextMarker: "" },
+      },
+      client,
+    ),
+    lambdaContext,
+  );
+
+describe("plugin hooks do not block operations", () => {
+  it("runs the next step without waiting for slow operation hooks", async () => {
+    const slow = async (): Promise<void> => sleep(HOOK_DELAY_MS);
+    const started = Date.now();
+    let secondStepAt = 0;
+
+    await invoke(
+      async (_event, context) => {
+        await context.step("first", async () => "a");
+        await context.step("second", async () => {
+          secondStepAt = Date.now() - started;
+          return "b";
+        });
+        return "done";
+      },
+      {
+        onOperationStart: slow,
+        onOperationAttemptStart: slow,
+        onOperationAttemptEnd: slow,
+        onOperationEnd: slow,
+      },
+    );
+
+    // Awaiting four hooks on "first" alone used to take 4 * HOOK_DELAY_MS.
+    expect(secondStepAt).toBeLessThan(HOOK_DELAY_MS);
+  });
+
+  it("calls onInvocationEnd after the work of earlier hooks settled", async () => {
+    const events: string[] = [];
+
+    const response = await invoke(
+      async (_event, context) => {
+        await context.step("only", async () => "a");
+        return "done";
+      },
+      {
+        onOperationEnd: async (info) => {
+          await sleep(HOOK_DELAY_MS);
+          events.push(`end ${info.name}`);
+        },
+        onInvocationEnd: async () => {
+          events.push("invocation end");
+        },
+      },
+    );
+
+    expect(response).toMatchObject({ Status: InvocationStatus.SUCCEEDED });
+    expect(events).toEqual(["end only", "invocation end"]);
+  });
+
+  it("runs the caller's next line before suspending when a failed step's end hook is slow", async () => {
+    // A failed step is marked COMPLETED before onOperationEnd. Awaiting a slow hook there
+    // let the invocation suspend while the pending callback was the only open operation.
+    let submitRanBeforeReturn = false;
+    let submitRan = false;
+
+    const response = await invoke(
+      async (_event, context) => {
+        const [callbackPromise] = await context.createCallback("cb");
+        await context
+          .step(
+            "failing",
+            async () => {
+              throw new Error("expected failure");
+            },
+            { retryStrategy: () => ({ shouldRetry: false }) },
+          )
+          .catch(() => undefined);
+        await context.step("submit", async () => {
+          submitRan = true;
+        });
+        return await callbackPromise;
+      },
+      {
+        onOperationEnd: async (info) => {
+          if (info.name === "failing") await sleep(HOOK_DELAY_MS);
+        },
+      },
+      [executionOp, pendingCallbackOp],
+    );
+    submitRanBeforeReturn = submitRan;
+
+    expect(submitRanBeforeReturn).toBe(true);
+    expect(response).toEqual({ Status: InvocationStatus.PENDING });
+  });
+
+  it("runs the caller's next line before suspending when a step's start hook is slow", async () => {
+    let submitRan = false;
+
+    const response = await invoke(
+      async (_event, context) => {
+        const [callbackPromise] = await context.createCallback("cb");
+        await context.step("fast", async () => "f");
+        await context.step("submit", async () => {
+          submitRan = true;
+        });
+        return await callbackPromise;
+      },
+      {
+        onOperationStart: async (info) => {
+          if (info.name === "submit") await sleep(HOOK_DELAY_MS);
+        },
+      },
+      [executionOp, pendingCallbackOp],
+    );
+
+    expect(submitRan).toBe(true);
+    expect(response).toEqual({ Status: InvocationStatus.PENDING });
+  });
+});

@@ -541,6 +541,9 @@ interface OperationRecord {
 ### Critical constraint: `onInvocationEnd` must be awaited
 
 The plugin runner awaits `onInvocationEnd` before returning the Lambda response.
+It first waits for the asynchronous work of earlier hooks to settle, and bounds
+both waits by the invocation's remaining time minus a small reserve. Operation
+hooks themselves are not awaited.
 Each Durable Execution Telemetry plugin instance uses that hook to drain its
 queued records and await the shared exporter's flush. Export and flush failures
 are isolated from the execution result; exporters must settle promptly.

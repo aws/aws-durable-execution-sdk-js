@@ -1117,11 +1117,12 @@ class DurableExecutionTelemetryInvocation
    *
    * The SDK awaits this hook on every path out of an invocation — the six
    * status branches in `with-durable-execution.ts` plus the config-error path
-   * that returns before `wrapInvocation` is ever called — and the runner awaits
-   * it through `Promise.allSettled`, so the wait is guaranteed to complete
-   * before the Lambda response is returned and a rejection here cannot become
-   * the invocation's error. That makes this the right place for the drain, and
-   * it is where the Python and Java ports already do it.
+   * that returns before `wrapInvocation` is ever called. The runner first lets
+   * the asynchronous work of earlier hooks settle, then awaits this hook, so a
+   * rejection here cannot become the invocation's error. Both waits are bounded
+   * by the invocation's remaining time, minus a small reserve. That makes this
+   * the right place for the drain, and it is where the Python and Java ports
+   * already do it.
    */
   async onInvocationEnd(info: InvocationEndInfo): Promise<void> {
     const status = mapStatus(info.status);
