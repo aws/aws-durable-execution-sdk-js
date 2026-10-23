@@ -374,7 +374,19 @@ export interface DurableContext {
   parallel<T>(opts: ParallelOptions<T>): Promise<BatchResult<T>>;
 }
 
-/** A client for the two durable execution APIs. Field names follow the Lambda API. */
+/**
+ * A client for the two durable execution APIs. Field names follow the Lambda API.
+ *
+ * A failed call must throw an error with these fields. The SDK reads them to decide what
+ * happens next:
+ * - `name`: the AWS error code, for example "InvalidParameterValueException".
+ * - `status`: the HTTP status as a number, for example 400.
+ * - `message`: the error message.
+ *
+ * Without `status`, the SDK treats every error as retryable. Lambda then invokes again and
+ * again until the execution times out. An AWS SDK v3 client puts the status in
+ * `$metadata.httpStatusCode`, so copy it to `status`.
+ */
 export interface DurableExecutionClient {
   checkpoint(request: {
     DurableExecutionArn: string;

@@ -82,7 +82,8 @@ Wraps a workflow as a Lambda handler.
 - `config.client` (optional): the client for the two durable execution APIs. The default
   client signs requests with the region and the credentials from the Lambda environment:
   the `AWS_ACCESS_KEY_ID` environment variables, or the container credentials endpoint
-  that Lambda uses for SnapStart functions. Tests replace it.
+  that Lambda uses for SnapStart functions. Tests replace it. See
+  [Write a custom client](#write-a-custom-client).
 
 The workflow's return value is the execution result. It is stored as JSON. A thrown error
 fails the execution. The execution error has `ErrorType` set to the error's `name`, and
@@ -867,6 +868,54 @@ try {
   if (err.errorType !== "OutOfStockError") throw err;
   await ctx.step({ name: "backorder", fn: () => backorder(item) });
 }
+```
+
+### Write a custom client
+
+`config.client` replaces the built-in client. Use it to call the APIs through another
+HTTP stack, a proxy or the AWS SDK. A custom client is an object with two async methods,
+`checkpoint(request)` and `getExecutionState(request)`. Requests and responses use the
+field names of the Lambda API.
+
+The SDK decides what to do after a failed call from the error's fields:
+
+- `name`: the AWS error code, for example `"InvalidParameterValueException"`.
+- `status`: the HTTP status as a number, for example `400`.
+- `message`: the error message.
+
+1. A 4xx status other than 429 fails the execution. The one exception is an invalid
+   checkpoint token: Lambda then invokes again. An error whose `name` starts with `KMS` and
+   ends with `Exception` also fails the execution.
+2. Any other error, including a missing `status`, makes Lambda invoke again.
+3. So a client that throws errors without `status` turns a permanent error into a retry.
+   Lambda then invokes again and again until the execution times out.
+
+The AWS SDK v3 puts the status in `$metadata.httpStatusCode`. So copy it to `status`:
+
+```js
+import {
+  CheckpointDurableExecutionCommand,
+  GetDurableExecutionStateCommand,
+  LambdaClient,
+} from "@aws-sdk/client-lambda";
+
+const lambda = new LambdaClient({});
+const send = async (command) => {
+  try {
+    return await lambda.send(command);
+  } catch (err) {
+    err.status ??= err.$metadata?.httpStatusCode;
+    throw err;
+  }
+};
+
+export const handler = withDurableExecution(workflow, {
+  client: {
+    checkpoint: (request) => send(new CheckpointDurableExecutionCommand(request)),
+    getExecutionState: (request) =>
+      send(new GetDurableExecutionStateCommand(request)),
+  },
+});
 ```
 
 ## Differences from @aws/durable-execution-sdk-js

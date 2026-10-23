@@ -146,7 +146,10 @@ Rules for the client:
    of that call reuse the same token. So the service applies the call at most once.
 4. The client retries HTTP 429, HTTP 5xx and network errors up to 3 attempts in total.
 5. A failed call throws an `Error` with `name` (the AWS error code), `status` (the HTTP status)
-   and `message`.
+   and `message`. `classify` in `execution.js` reads only these fields. A custom client must
+   throw the same shape. The README section "Write a custom client" and the
+   `DurableExecutionClient` type state this. The SDK does not read other shapes, such as the
+   AWS SDK's `$metadata.httpStatusCode` (rule 1.2).
 6. The client is an object with two async methods: `checkpoint(request)` and
    `getExecutionState(request)`. Requests and responses use the API field names above. Tests
    and the local runner replace the client through `withDurableExecution(handler, { client })`.
