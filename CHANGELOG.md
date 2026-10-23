@@ -98,7 +98,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stored timestamp format (UTC, 3 fraction digits, `Z`) before it compares them. Before, a bound
   was compared as given. On DynamoDB and CloudWatch Logs, a bound without a fraction or with an
   offset such as `-07:00` was compared as text and returned the wrong records. A bound with no
-  offset is read as UTC.
+  offset is read as UTC. On those two destinations the comparison is still text, so records from
+  the Python exporter `0.0.1` preview, which wrote microsecond timestamps, can be ordered
+  incorrectly within one second.
 - **Durable Execution Telemetry**: every error in a record (the execution `error`,
   `operations[].error`, and `operationsByName.<name>.error`) now carries its cause chain as
   `{ name, message, cause? }`, in that key order. `cause` follows `Error.cause`, including the
