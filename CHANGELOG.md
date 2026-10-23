@@ -87,6 +87,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Durable Execution Telemetry**: the bundled Athena table (the CDK Glue table and the
+  telemetry-core Athena DDL) now declares `emittedat`, `starttime`, `endtime`, and the operation
+  `starttime`/`endtime` as `timestamp` instead of `string`. Athena compared the strings as text,
+  so a filter such as `starttime >= '2026-10-23T18:42:46Z'` left out every record from that
+  second. Queries now compare these columns with `TIMESTAMP` literals, and the Athena schema
+  prompt says so. A table created earlier keeps its `string` columns: recreate it, or run
+  `ALTER TABLE <table> REPLACE COLUMNS (...)` with the new definition.
+- **Durable Execution Telemetry MCP**: `list_executions` rewrites `since` and `until` to the
+  stored timestamp format (UTC, 3 fraction digits, `Z`) before it compares them. Before, a bound
+  was compared as given. On DynamoDB and CloudWatch Logs, a bound without a fraction or with an
+  offset such as `-07:00` was compared as text and returned the wrong records. A bound with no
+  offset is read as UTC.
 - **Durable Execution Telemetry**: every error in a record (the execution `error`,
   `operations[].error`, and `operationsByName.<name>.error`) now carries its cause chain as
   `{ name, message, cause? }`, in that key order. `cause` follows `Error.cause`, including the

@@ -115,6 +115,41 @@ export function validateTimestamp(label: string, value: string): string {
 }
 
 /**
+ * Validate a `since`/`until` bound, then rewrite it in the one format every SDK
+ * writes record timestamps in: UTC, exactly 3 fraction digits, a literal `Z`
+ * (`2024-01-31T12:34:56.000Z`, the output of `Date.prototype.toISOString()`).
+ *
+ * The rewrite is needed because some destinations compare these values as text
+ * (DynamoDB, CloudWatch Logs Insights). Text order equals time order only when
+ * both sides have the same width and the same zone. So a bound such as
+ * `2024-01-31T12:34:56Z` or `2024-01-31T05:34:56-07:00` is rewritten to the
+ * stored form before it is compared.
+ *
+ * A bound with no offset is read as UTC, because every record timestamp is UTC.
+ * A date alone means midnight UTC. Throws when the value does not match
+ * {@link ISO_TIMESTAMP} or does not name a real instant (for example month 13).
+ * The output contains only digits, `-`, `:`, `.`, `T` and `Z`, so it is safe to
+ * interpolate.
+ */
+export function normalizeTimestamp(label: string, value: string): string {
+  const validated = validateTimestamp(label, value);
+  let iso = validated.replace(" ", "T");
+  const hasTime = iso.includes("T");
+  const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(iso);
+  if (hasTime && !hasZone) iso += "Z";
+  // `+0700` is valid ISO-8601 but Date.parse rejects it; insert the colon.
+  iso = iso.replace(/([+-]\d{2})(\d{2})$/, "$1:$2");
+  const ms = Date.parse(iso);
+  if (Number.isNaN(ms)) {
+    throw new Error(
+      `Invalid ${label} "${value}". It matches the ISO-8601 shape but is not ` +
+        `a real date or time.`,
+    );
+  }
+  return new Date(ms).toISOString();
+}
+
+/**
  * An Athena Hive partition component (`year`/`month`/`day`). These are digit
  * strings by definition (the Glue table projects them as `integer`), so a
  * value that is not all digits is REJECTED — this both prunes correctly and

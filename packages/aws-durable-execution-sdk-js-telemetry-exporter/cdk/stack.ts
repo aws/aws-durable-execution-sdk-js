@@ -308,7 +308,7 @@ export class TelemetryDestinationsStack extends cdk.Stack {
             columns: [
               { name: "recordtype", type: "string" },
               { name: "schemaversion", type: "string" },
-              { name: "emittedat", type: "string" },
+              { name: "emittedat", type: "timestamp" },
               { name: "executionarn", type: "string" },
               { name: "executionname", type: "string" },
               { name: "functionname", type: "string" },
@@ -316,8 +316,8 @@ export class TelemetryDestinationsStack extends cdk.Stack {
               { name: "region", type: "string" },
               { name: "accountid", type: "string" },
               { name: "status", type: "string" },
-              { name: "starttime", type: "string" },
-              { name: "endtime", type: "string" },
+              { name: "starttime", type: "timestamp" },
+              { name: "endtime", type: "timestamp" },
               { name: "durationms", type: "bigint" },
               { name: "input", type: "string" },
               { name: "output", type: "string" },
@@ -337,7 +337,7 @@ export class TelemetryDestinationsStack extends cdk.Stack {
                 // field names, but keeping both DDL definitions in the same
                 // casing avoids them drifting into visually different text
                 // describing an identical schema.
-                type: "array<struct<id:string,name:string,type:string,subtype:string,parentid:string,status:string,starttime:string,endtime:string,durationms:bigint,attempt:int,error:struct<name:string,message:string>,result:string,truncated:boolean>>",
+                type: "array<struct<id:string,name:string,type:string,subtype:string,parentid:string,status:string,starttime:timestamp,endtime:timestamp,durationms:bigint,attempt:int,error:struct<name:string,message:string>,result:string,truncated:boolean>>",
               },
               { name: "truncated", type: "boolean" },
               { name: "droppedcauses", type: "boolean" },
