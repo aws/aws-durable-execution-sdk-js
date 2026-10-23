@@ -1,0 +1,19 @@
+# Files that implement or guard the invariants in
+# docs/adr/0001-operation-tracking-and-plugin-hooks.md.
+# A change to any of them needs a review from a JS SDK maintainer.
+# The rule takes effect for merges only when branch protection on main requires review from
+# code owners.
+
+/docs/adr/ @aws/aws-lambda-durable-functions-js-maintain
+/packages/aws-durable-execution-sdk-js/AGENTS.md @aws/aws-lambda-durable-functions-js-maintain
+/packages/aws-durable-execution-sdk-js/src/utils/checkpoint/checkpoint-manager.ts @aws/aws-lambda-durable-functions-js-maintain
+/packages/aws-durable-execution-sdk-js/src/utils/checkpoint/complete-after.ts @aws/aws-lambda-durable-functions-js-maintain
+/packages/aws-durable-execution-sdk-js/src/utils/checkpoint/deserialization-suspension.composed.test.ts @aws/aws-lambda-durable-functions-js-maintain
+/packages/aws-durable-execution-sdk-js/src/utils/plugin/plugin-runner.ts @aws/aws-lambda-durable-functions-js-maintain
+/packages/aws-durable-execution-sdk-js/src/utils/plugin/plugin-runner.test.ts @aws/aws-lambda-durable-functions-js-maintain
+/packages/aws-durable-execution-sdk-js/src/utils/plugin/plugin-hook-contract.composed.test.ts @aws/aws-lambda-durable-functions-js-maintain
+/packages/aws-durable-execution-sdk-js/src/types/plugin.ts @aws/aws-lambda-durable-functions-js-maintain
+/packages/aws-durable-execution-sdk-js/src/utils/constants/constants.ts @aws/aws-lambda-durable-functions-js-maintain
+/.github/CODEOWNERS @aws/aws-lambda-durable-functions-js-maintain
+/.github/prompts/ @aws/aws-lambda-durable-functions-js-maintain
+/packages/aws-durable-execution-sdk-js/src/context/execution-context/execution-context.ts @aws/aws-lambda-durable-functions-js-maintain
