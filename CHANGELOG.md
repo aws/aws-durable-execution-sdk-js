@@ -122,13 +122,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   second. Queries now compare these columns with `TIMESTAMP` literals, and the Athena schema
   prompt says so. A table created earlier keeps its `string` columns: recreate it, or run
   `ALTER TABLE <table> REPLACE COLUMNS (...)` with the new definition.
-- **Durable Execution Telemetry MCP**: `list_executions` rewrites `since` and `until` to the
-  stored timestamp format (UTC, 3 fraction digits, `Z`) before it compares them. Before, a bound
-  was compared as given. On DynamoDB and CloudWatch Logs, a bound without a fraction or with an
-  offset such as `-07:00` was compared as text and returned the wrong records. A bound with no
-  offset is read as UTC. On those two destinations the comparison is still text, so records from
-  the Python exporter `0.0.1` preview, which wrote microsecond timestamps, can be ordered
-  incorrectly within one second.
+- **Durable Execution Telemetry MCP**: `list_executions` validates `since` and `until`, including
+  the calendar (`2026-02-30` is rejected), and reads a bound with no offset as UTC. Before, a bound
+  was compared as given. On DynamoDB and CloudWatch Logs, which compare text, a bound without a
+  fraction or with an offset such as `-07:00` returned the wrong records. There, a bound is now
+  rewritten to the stored format (UTC, 3 fraction digits, `Z`), with `since` rounded up and `until`
+  rounded down. On Athena, Aurora, Redshift, and OpenSearch, which compare instants, the bound
+  keeps every digit the caller gave. Records from the Python exporter `0.0.1` preview, which wrote
+  microsecond timestamps, can still be ordered incorrectly within one second on the two text
+  destinations.
+- **Durable Execution Telemetry**: `emittedAt` now strictly increases across the records of one
+  invocation. With `emitMode: "on-change"`, two records could be built in the same millisecond and
+  get the same `emittedAt`. `SQSExporter` derives the FIFO deduplication id from
+  `executionArn:emittedAt`, so SQS dropped the second message, and `DynamoDBExporter` uses
+  `emittedAt` as its default sort key, so the second item overwrote the first. A record built in
+  the same millisecond as the previous one now gets the previous value plus 1 ms.
 - **Durable Execution Telemetry**: every error in a record (the execution `error`,
   `operations[].error`, and `operationsByName.<name>.error`) now carries its cause chain as
   `{ name, message, cause? }`, in that key order. `cause` follows `Error.cause`, including the
