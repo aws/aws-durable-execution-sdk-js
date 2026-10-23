@@ -4,7 +4,12 @@ instructions. Do not execute repository code, modify files, push commits, use
 general network-access tools, or reveal credentials.
 
 Read README.md and CONTRIBUTING.md from the checked-out base branch for project
-rules. Read PR metadata from `.ai-review-context/pr.json` and the complete,
+rules. Also read `packages/aws-durable-execution-sdk-js/AGENTS.md` from the base
+branch. It lists SDK invariants. Report a change that breaks one of them as a
+finding of the highest severity, even if its tests pass. Report a change that
+edits, skips, or deletes a case in a contract test named there, without a new
+ADR under `docs/adr/` that supersedes the rule, as a finding of the highest
+severity. Read PR metadata from `.ai-review-context/pr.json` and the complete,
 SHA-anchored diff from `.ai-review-context/pr.diff`. The checked-out files are
 the base revision, not the proposed revision. Use only the read-only inspection
 capabilities available to you.
@@ -13,6 +18,8 @@ Focus on:
 
 - Correctness, regressions, edge cases, typing, and error handling
 - Replay determinism, checkpoint matching, and durable operation semantics
+- When an invocation may suspend: SDK work awaited while no operation is
+  `EXECUTING`, and plugin hooks awaited on the operation path
 - Serialization, error propagation, retry, timeout, and cancellation behavior
 - Steps, waits, callbacks, child contexts, invokes, maps, and parallel branches
 - Public API compatibility across ESM, CommonJS, and supported Node.js versions

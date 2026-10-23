@@ -501,6 +501,73 @@ describe("emit modes", () => {
   });
 });
 
+describe("emittedAt", () => {
+  // Exporters key on executionArn + emittedAt (the SQS FIFO deduplication id
+  // and the default DynamoDB sort key). emittedAt has millisecond precision, so
+  // two records built in the same millisecond must still get distinct values.
+  afterEach(() => jest.restoreAllMocks());
+
+  it("strictly increases within one invocation when the clock does not move", async () => {
+    const frozen = Date.parse("2026-10-23T18:42:46.123Z");
+    jest.spyOn(Date, "now").mockReturnValue(frozen);
+    const exporter = new CapturingExporter();
+    const factory = durableExecutionTelemetry({
+      exporters: [exporter],
+      emitMode: "on-change",
+    });
+    const arn = arnFor("same-millisecond");
+
+    const start = startFor(arn);
+    const plugin = factory.createPlugin(start);
+    await plugin.onInvocationStart?.(start);
+    // Let the RUNNING record reach the exporter before the next one is built,
+    // so the scheduler cannot coalesce the two.
+    await sleep(20);
+    await plugin.onOperationChange?.(
+      changeFor(arn, {
+        o1: op({ id: "o1", name: "step-1", status: "SUCCEEDED" }),
+      }),
+    );
+    await sleep(20);
+    await plugin.onInvocationEnd?.(endFor(arn));
+
+    const emitted = exporter.records.map((r) => r.emittedAt);
+    expect(emitted).toEqual([
+      "2026-10-23T18:42:46.123Z",
+      "2026-10-23T18:42:46.124Z",
+      "2026-10-23T18:42:46.125Z",
+    ]);
+    expect(exporter.records.map((r) => r.status)).toEqual([
+      "RUNNING",
+      "RUNNING",
+      "SUCCEEDED",
+    ]);
+  });
+
+  it("uses the current time when the clock has moved past the previous record", async () => {
+    const now = jest.spyOn(Date, "now");
+    now.mockReturnValue(Date.parse("2026-10-23T18:42:46.123Z"));
+    const exporter = new CapturingExporter();
+    const factory = durableExecutionTelemetry({
+      exporters: [exporter],
+      emitMode: "on-change",
+    });
+    const arn = arnFor("clock-moves");
+
+    const start = startFor(arn);
+    const plugin = factory.createPlugin(start);
+    await plugin.onInvocationStart?.(start);
+    await sleep(20);
+    now.mockReturnValue(Date.parse("2026-10-23T18:42:47.000Z"));
+    await plugin.onInvocationEnd?.(endFor(arn));
+
+    expect(exporter.records.map((r) => r.emittedAt)).toEqual([
+      "2026-10-23T18:42:46.123Z",
+      "2026-10-23T18:42:47.000Z",
+    ]);
+  });
+});
+
 describe("sampling", () => {
   function baseInfo(arn: string): InvocationInfo {
     return {
