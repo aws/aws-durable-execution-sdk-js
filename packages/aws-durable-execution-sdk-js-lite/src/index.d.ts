@@ -199,19 +199,75 @@ export interface ParallelOptions<T> {
  * new item starts, and the items that still run are abandoned. With no threshold set
  * (no config, or `{}`), one failure exceeds the tolerance.
  */
-export interface CompletionConfig {
+export interface ThresholdCompletionConfig {
   /** Complete when this many items succeeded. */
   minSuccessful?: number;
   /** Complete when more than this many items failed. */
   toleratedFailureCount?: number;
   /** Complete when failures / all items * 100 is more than this. */
   toleratedFailurePercentage?: number;
+  /** Not allowed together with the threshold keys. */
+  shouldComplete?: never;
 }
+
+/**
+ * The batch asks shouldComplete before it starts each item and after each item
+ * settles. When it returns `complete: true`, no new item starts, and the items that
+ * still run are abandoned. The batch also completes when every item settled.
+ * The predicate must be deterministic and fast, and must not call durable operations.
+ * A replay does not call it.
+ */
+export interface CustomCompletionConfig {
+  shouldComplete: (status: CompletionStatus) => CompletionDecision;
+  /** Not allowed together with shouldComplete. */
+  minSuccessful?: never;
+  /** Not allowed together with shouldComplete. */
+  toleratedFailureCount?: never;
+  /** Not allowed together with shouldComplete. */
+  toleratedFailurePercentage?: never;
+}
+
+/** Thresholds or a predicate, not both. */
+export type CompletionConfig =
+  | ThresholdCompletionConfig
+  | CustomCompletionConfig;
+
+/** One item, when shouldComplete is called. */
+export interface CompletionItemStatus {
+  /** The item's position in items or branches. */
+  index: number;
+  /** The item's name: itemName's result, or the branch name. */
+  name?: string;
+  /** Absent when the item has not started. */
+  status?: BatchItem<unknown>["status"];
+}
+
+/** The input of shouldComplete. */
+export interface CompletionStatus {
+  successCount: number;
+  failureCount: number;
+  /** successCount + failureCount. */
+  completedCount: number;
+  /** The number of items or branches. */
+  totalCount: number;
+  /** One entry per item, in index order. A new array on every call. */
+  items: readonly CompletionItemStatus[];
+}
+
+/**
+ * The output of shouldComplete. `outcome` defaults to "SUCCEEDED". A "FAILED" outcome
+ * sets completionReason to "CUSTOM_COMPLETION_FAILED", and throwIfError then throws.
+ */
+export type CompletionDecision =
+  | { complete: false }
+  | { complete: true; outcome?: "SUCCEEDED" | "FAILED" };
 
 export type CompletionReason =
   | "ALL_COMPLETED"
   | "MIN_SUCCESSFUL_REACHED"
-  | "FAILURE_TOLERANCE_EXCEEDED";
+  | "FAILURE_TOLERANCE_EXCEEDED"
+  | "CUSTOM_COMPLETION_SUCCEEDED"
+  | "CUSTOM_COMPLETION_FAILED";
 
 export interface BatchItem<T> {
   index: number;
@@ -231,7 +287,11 @@ export interface BatchResult<T> {
   getResults(): T[];
   /** The errors of the items that failed, in index order. */
   getErrors(): DurableOperationError[];
-  /** Throws the first failed item's error, if any. */
+  /**
+   * Throws the first failed item's error, if any. Else, if completionReason is
+   * "CUSTOM_COMPLETION_FAILED", throws a DurableOperationError with errorType
+   * "BatchCompletionError".
+   */
   throwIfError(): void;
 }
 

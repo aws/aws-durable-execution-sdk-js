@@ -65,13 +65,14 @@ from the package owner.
 - Plugins, OpenTelemetry hooks, and external or custom loggers.
 - Custom serdes. Every value is stored as JSON.
 - In-invocation timers and polling. Section 2.5 explains the effect.
-- The custom `shouldComplete` predicate of `map` and `parallel`. Early completion with
-  `minSuccessful` and the failure tolerances is in scope (section 2.9).
 - `ctx.promise.all/allSettled/any/race`. The README documents the replacement pattern.
 - Linear retry, retry presets, `withRetry`, `createWaitStrategy`.
 - The `Duration` object. All times are plain seconds.
 - `NestingType.FLAT` / virtual contexts, custom summary generators, file-system serdes.
 - Error subclasses. One error class exists (section 2.7).
+- The `completeBatch()` and `continueBatch()` helpers and the `CompletionOutcome` enum.
+  The `shouldComplete` predicate of `map` and `parallel` is in scope (section 2.9). It
+  returns a plain object.
 
 ### 1.7 API shape
 
@@ -326,26 +327,40 @@ Map and parallel (`batch.js`):
 
 1. A batch is a child context. Each item is a child context of the batch. Items start in
    index order, so item i always has the raw id `` `${batchId}-${i + 1}` ``.
-2. `completionConfig` follows the full SDK. After each item settles, the batch checks it.
-   With no threshold set, one failure completes the batch (fail fast). The README lists the
-   rules.
-3. When the batch completes, it calls `ctx._abandonChildren()` on the batch ctx. Every item
+2. `completionConfig` follows the full SDK. It holds thresholds or a `shouldComplete`
+   predicate. After each item settles, the batch checks it. With no threshold set, one
+   failure completes the batch (fail fast). The README lists the rules.
+3. The predicate receives one object `{successCount, failureCount, completedCount,
+   totalCount, items}`, as in the full SDK. It returns `{complete: false}` or `{complete:
+   true, outcome}`. The batch also asks it before each item starts. If both are set, the
+   predicate applies and the thresholds are ignored. That is the full SDK's check order.
+   The full SDK also fails the execution with a validation error then. The lite SDK does
+   not check this (rule 1.2).
+4. A predicate's `"FAILED"` outcome sets `completionReason` to `"CUSTOM_COMPLETION_FAILED"`.
+   The batch still returns. `throwIfError()` then throws a `DurableOperationError` with
+   `errorType: "BatchCompletionError"` if no item failed. It builds the error from
+   `completionReason` alone. Both the stored JSON and the ReplayChildren summary hold
+   `completionReason`. So a replay throws the same error.
+5. No replay calls the predicate. A SUCCEEDED batch record returns the stored result. A
+   ReplayChildren re-run reads the saved reason (step 10). So a predicate that changes its
+   answer cannot change a replayed result.
+6. When the batch completes, it calls `ctx._abandonChildren()` on the batch ctx. Every item
    ctx and every descendant is then abandoned. `ctx._abandoned` reads the ancestors' flags
    at each call, because the flag is set after the item ctxs exist.
-4. In an abandoned ctx, `_mayRun` returns false, and `_checkpoint` sends nothing and returns
+7. In an abandoned ctx, `_mayRun` returns false, and `_checkpoint` sends nothing and returns
    a promise that never resolves. Every operation sends its updates through `_checkpoint`.
    A child context sends its own START, SUCCEED and FAIL through its child ctx. So an
    abandoned item's own SUCCEED is not sent either. A step whose `fn` already runs finishes
    `fn`, and its outcome is not sent.
-5. An update queued before the batch completed is still sent. The batch's SUCCEED is queued
+8. An update queued before the batch completed is still sent. The batch's SUCCEED is queued
    after it, and the queue keeps the order. So the service never receives an update for an
    operation inside a completed batch.
-6. An item that settles after the decision keeps `STARTED` in the result.
-7. A batch result larger than 256 KiB is not stored. The batch then saves
+9. An item that settles after the decision keeps `STARTED` in the result.
+10. A batch result larger than 256 KiB is not stored. The batch then saves
    `{completionReason, itemStatuses}` as the Payload. `itemStatuses` has one character per
    started item, in index order: `S` succeeded, `F` failed, `-` still running. This is the
    full SDK's format.
-8. A ReplayChildren re-run must not run the scheduler again. Cached items settle in index
+11. A ReplayChildren re-run must not run the scheduler again. Cached items settle in index
    order, not in the live order. So the scheduler could decide at a different item. Instead
    the re-run re-drives the items marked `S` or `F` in index order. They replay from their
    records. It takes the id of an item marked `-` with `ctx._nextId()` and does not run it.

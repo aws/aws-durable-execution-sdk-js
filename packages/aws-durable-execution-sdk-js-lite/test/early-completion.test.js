@@ -451,3 +451,354 @@ test("an abandoned item blocked on a wait or a callback does not suspend the wor
   // One suspension, for the workflow's own wait.
   assert.equal(run.invocations, 2);
 });
+
+// shouldComplete tests. A predicate that never completes, and one that completes when
+// `when` returns true.
+const never = () => ({ complete: false });
+const MARKS = { SUCCEEDED: "S", FAILED: "F", STARTED: "-" };
+const completeWhen = (when, outcome) => (status) =>
+  when(status) ? { complete: true, outcome } : { complete: false };
+
+test("shouldComplete: completes early with success; running items are abandoned", async () => {
+  // Complete as soon as 2 items from different regions succeeded. Items 0 and 1 are
+  // both "us", so item 1 does not complete the batch. Item 2 does. Item 3 still runs.
+  const items = [
+    { region: "us", ms: 5 },
+    { region: "us", ms: 10 },
+    { region: "eu", ms: 20 },
+    { region: "ap", ms: 80 },
+  ];
+  const snapshots = [];
+  const stepCalls = [0, 0, 0, 0];
+  const { output, updates } = await invoke(async ({ ctx }) => {
+    const r = await ctx.map({
+      name: "m",
+      items,
+      itemName: ({ item }) => item.region,
+      completionConfig: {
+        shouldComplete: (status) => {
+          snapshots.push(status);
+          const regions = new Set(
+            status.items
+              .filter((i) => i.status === "SUCCEEDED")
+              .map((i) => items[i.index].region),
+          );
+          return regions.size >= 2
+            ? { complete: true, outcome: "SUCCEEDED" }
+            : { complete: false };
+        },
+      },
+      fn: ({ ctx: c, item, index }) =>
+        c.step({
+          fn: async () => {
+            stepCalls[index]++;
+            await sleep(item.ms);
+            return item.region;
+          },
+        }),
+    });
+    // The workflow keeps running until the abandoned step's fn has finished.
+    await ctx.step({ fn: () => sleep(100) });
+    return brief(r);
+  });
+  assert.deepEqual(JSON.parse(output.Result), {
+    all: [
+      { index: 0, status: "SUCCEEDED", result: "us" },
+      { index: 1, status: "SUCCEEDED", result: "us" },
+      { index: 2, status: "SUCCEEDED", result: "eu" },
+      { index: 3, status: "STARTED" },
+    ],
+    completionReason: "CUSTOM_COMPLETION_SUCCEEDED",
+  });
+  assert.deepEqual(stepCalls, [1, 1, 1, 1]);
+  // The full SDK asks before each start. So the first call sees no started item.
+  assert.deepEqual(snapshots[0], {
+    successCount: 0,
+    failureCount: 0,
+    completedCount: 0,
+    totalCount: 4,
+    items: [
+      { index: 0, name: "us", status: undefined },
+      { index: 1, name: "us", status: undefined },
+      { index: 2, name: "eu", status: undefined },
+      { index: 3, name: "ap", status: undefined },
+    ],
+  });
+  assert.deepEqual(
+    snapshots[1].items.map((i) => i.status),
+    ["STARTED", undefined, undefined, undefined],
+  );
+  // Each call gets a new array. So the first snapshot still shows no started item.
+  assert.equal(snapshots[0].items[0].status, undefined);
+  // The last call: 3 settled, item 3 still STARTED.
+  assert.deepEqual(
+    snapshots.at(-1).items.map((i) => i.status),
+    ["SUCCEEDED", "SUCCEEDED", "SUCCEEDED", "STARTED"],
+  );
+  // Item 3 and its step sent only START. Nothing inside the batch follows its SUCCEED.
+  assert.deepEqual(
+    updates
+      .filter((u) => [hashId("1-4"), hashId("1-4-1")].includes(u.Id))
+      .map((u) => u.Action),
+    ["START", "START"],
+  );
+  const close = updates.findIndex(
+    (u) => u.Id === hashId("1") && u.Action === "SUCCEED",
+  );
+  // After the batch's SUCCEED, only the workflow's own step (raw id "2") sends updates.
+  assert.deepEqual(
+    [...new Set(updates.slice(close + 1).map((u) => u.Id))],
+    [hashId("2")],
+  );
+});
+
+test("shouldComplete: a FAILED outcome returns; throwIfError throws BatchCompletionError, also on replay", async () => {
+  // No item fails. The predicate still fails the batch after 2 successes.
+  const seen = [];
+  let predicateCalls = 0;
+  const run = await runDurable({
+    workflow: async ({ ctx }) => {
+      const before = predicateCalls;
+      const r = await ctx.map({
+        items: ["a", "b", "c"],
+        maxConcurrency: 1,
+        completionConfig: {
+          shouldComplete: (status) => {
+            predicateCalls++;
+            return completeWhen((s) => s.successCount === 2, "FAILED")(status);
+          },
+        },
+        fn: ({ ctx: c, item }) => c.step({ fn: () => item }),
+      });
+      let thrown;
+      try {
+        r.throwIfError();
+      } catch (err) {
+        thrown = {
+          name: err.name,
+          errorType: err.errorType,
+          message: err.message,
+        };
+      }
+      seen.push({ ...brief(r), thrown, calls: predicateCalls - before });
+      await ctx.wait({ seconds: 1 });
+      r.throwIfError();
+    },
+  });
+  assert.equal(run.invocations, 2);
+  const message =
+    "Batch completed as failed by shouldComplete (CUSTOM_COMPLETION_FAILED)";
+  assert.deepEqual(seen[0].thrown, {
+    name: "DurableOperationError",
+    errorType: "BatchCompletionError",
+    message,
+  });
+  assert.deepEqual(seen[0].all, [
+    { index: 0, status: "SUCCEEDED", result: "a" },
+    { index: 1, status: "SUCCEEDED", result: "b" },
+  ]);
+  assert.equal(seen[0].completionReason, "CUSTOM_COMPLETION_FAILED");
+  // The replay rebuilt the result from the stored JSON. It did not call the predicate.
+  assert.ok(seen[0].calls > 0);
+  assert.equal(seen[1].calls, 0);
+  assert.deepEqual({ ...seen[1], calls: 0 }, { ...seen[0], calls: 0 });
+  // The error that left the workflow is the same error.
+  assert.equal(run.status, "FAILED");
+  assert.deepEqual(run.error, {
+    ErrorType: "BatchCompletionError",
+    ErrorMessage: message,
+  });
+  assert.equal(byId(run, "1-3"), undefined);
+});
+
+test("shouldComplete: reasons when it never completes, completes at the end, or completes before any start", async () => {
+  const cases = [
+    // Never completes: no fail fast. Every item runs.
+    [["S", "F", "S"], never, "SFS", "ALL_COMPLETED"],
+    // Completes after the last item: the predicate's answer selects the reason.
+    [
+      ["S", "F", "S"],
+      completeWhen((s) => s.completedCount === 3, "FAILED"),
+      "SFS",
+      "CUSTOM_COMPLETION_FAILED",
+    ],
+    // Completes before the first start: no item starts.
+    [["S", "S"], completeWhen(() => true), "", "CUSTOM_COMPLETION_SUCCEEDED"],
+    // Outcome defaults to SUCCEEDED, also after a failed item.
+    [
+      ["F", "S", "S"],
+      completeWhen((s) => s.failureCount === 1),
+      "F",
+      "CUSTOM_COMPLETION_SUCCEEDED",
+    ],
+    // An empty batch asks the predicate once, like the full SDK.
+    [[], never, "", "ALL_COMPLETED"],
+    [[], completeWhen(() => true), "", "CUSTOM_COMPLETION_SUCCEEDED"],
+  ];
+  for (const [items, shouldComplete, statuses, reason] of cases) {
+    const r = await runMap(items, { shouldComplete });
+    const label = JSON.stringify({
+      items,
+      shouldComplete: String(shouldComplete),
+    });
+    assert.equal(r.statuses.join(""), statuses, label);
+    assert.equal(r.reason, reason, label);
+    assert.deepEqual(
+      r.calls,
+      [...statuses].map((_, i) => i),
+      label,
+    );
+  }
+});
+
+test("shouldComplete: throwIfError throws the first item error before BatchCompletionError", async () => {
+  for (const outcome of ["SUCCEEDED", "FAILED"]) {
+    const run = await runDurable({
+      workflow: async ({ ctx }) => {
+        const r = await ctx.map({
+          items: ["S", "F"],
+          maxConcurrency: 1,
+          completionConfig: {
+            shouldComplete: completeWhen((s) => s.failureCount === 1, outcome),
+          },
+          fn: ({ item }) => {
+            if (item === "F") throw new RangeError("item failed");
+            return item;
+          },
+        });
+        r.throwIfError();
+      },
+    });
+    assert.deepEqual(run.error, {
+      ErrorType: "RangeError",
+      ErrorMessage: "item failed",
+    });
+  }
+});
+
+test("shouldComplete with thresholds: the predicate wins, like the full SDK's check order", async () => {
+  // The types forbid this. The full SDK fails the execution with a validation error.
+  // The lite SDK does not check misuse (AGENTS.md 1.2). The thresholds are ignored.
+  const r = await runMap(["S", "F", "S"], {
+    minSuccessful: 1,
+    toleratedFailureCount: 0,
+    shouldComplete: never,
+  });
+  assert.deepEqual(r, {
+    statuses: ["S", "F", "S"],
+    reason: "ALL_COMPLETED",
+    calls: [0, 1, 2],
+  });
+});
+
+test("shouldComplete with maxConcurrency: items that did not start never start", async () => {
+  const fnCalls = [0, 0, 0, 0, 0];
+  const statusesSeen = [];
+  let predicateCalls = 0;
+  const callsPerInvocation = [];
+  const run = await runDurable({
+    workflow: async ({ ctx }) => {
+      const before = predicateCalls;
+      const r = await ctx.map({
+        items: [1, 1000, 1, 1, 1],
+        maxConcurrency: 2,
+        completionConfig: {
+          shouldComplete: (status) => {
+            predicateCalls++;
+            statusesSeen.push(status.items.map((i) => MARKS[i.status] ?? "."));
+            return completeWhen((s) => s.successCount === 1)(status);
+          },
+        },
+        fn: async ({ ctx: c, index }) => {
+          fnCalls[index]++;
+          // Item 1 waits 1000 s, so item 0's step settles first.
+          if (index === 1) await c.wait({ seconds: 1000 });
+          return c.step({ fn: () => index });
+        },
+      });
+      callsPerInvocation.push(predicateCalls - before);
+      // Item 1's wait ends during this wait. Its step still must not run.
+      await ctx.wait({ seconds: 2000 });
+      return brief(r);
+    },
+  });
+  assert.equal(run.status, "SUCCEEDED");
+  // Invocations: the first; item 1's abandoned wait ends; the main wait ends.
+  assert.equal(run.invocations, 3);
+  assert.deepEqual(callsPerInvocation, [statusesSeen.length, 0, 0]);
+  assert.deepEqual(run.result, {
+    all: [
+      { index: 0, status: "SUCCEEDED", result: 0 },
+      { index: 1, status: "STARTED" },
+    ],
+    completionReason: "CUSTOM_COMPLETION_SUCCEEDED",
+  });
+  // Before item 0 starts, before item 1 starts, and after item 0 settled. The loop
+  // does not ask while both slots are taken.
+  assert.deepEqual(statusesSeen, [
+    [".", ".", ".", ".", "."],
+    ["-", ".", ".", ".", "."],
+    ["S", "-", ".", ".", "."],
+  ]);
+  assert.deepEqual(fnCalls, [1, 1, 0, 0, 0]);
+  for (const id of ["1-2-2", "1-3", "1-4", "1-5"]) {
+    assert.equal(byId(run, id), undefined, id);
+  }
+});
+
+test("shouldComplete: a ReplayChildren re-run of a large batch does not call the predicate", async () => {
+  // Items settle in the order 1, 2, 0. The predicate completes when 2 items succeeded.
+  // Cached items settle in index order, so a predicate asked during the re-run would
+  // see different items. The saved statuses and reason decide instead.
+  const delays = [40, 5, 20, 150];
+  const stepCalls = [0, 0, 0, 0];
+  let predicateCalls = 0;
+  const seen = [];
+  const run = await runDurable({
+    workflow: async ({ ctx }) => {
+      const before = predicateCalls;
+      const r = await ctx.map({
+        items: delays,
+        completionConfig: {
+          shouldComplete: (status) => {
+            predicateCalls++;
+            return completeWhen((s) => s.successCount === 2)(status);
+          },
+        },
+        fn: ({ ctx: c, item, index }) =>
+          c.step({
+            fn: async () => {
+              stepCalls[index]++;
+              await sleep(item);
+              return String(index).repeat(150 * 1024);
+            },
+          }),
+      });
+      seen.push({
+        statuses: r.all.map((i) => i.status),
+        reason: r.completionReason,
+        calls: predicateCalls - before,
+      });
+      await ctx.wait({ seconds: 1 });
+      return seen.at(-1).statuses;
+    },
+  });
+  assert.equal(run.status, "SUCCEEDED");
+  assert.equal(seen.length, 2);
+  assert.deepEqual(seen[0].statuses, [
+    "STARTED",
+    "SUCCEEDED",
+    "SUCCEEDED",
+    "STARTED",
+  ]);
+  assert.equal(seen[0].reason, "CUSTOM_COMPLETION_SUCCEEDED");
+  assert.ok(seen[0].calls > 0);
+  assert.deepEqual(seen[1], { ...seen[0], calls: 0 });
+  assert.deepEqual(stepCalls, [1, 1, 1, 1]);
+  const batch = byId(run, "1");
+  assert.equal(batch.ContextDetails.ReplayChildren, true);
+  assert.deepEqual(JSON.parse(batch.ContextDetails.Result), {
+    completionReason: "CUSTOM_COMPLETION_SUCCEEDED",
+    itemStatuses: "-SS-",
+  });
+});

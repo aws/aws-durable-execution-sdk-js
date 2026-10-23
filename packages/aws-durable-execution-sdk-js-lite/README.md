@@ -266,13 +266,17 @@ A `BatchResult` has these members:
 
 - `all`: one entry per started item, in index order: `{ index, status, result, error }`.
   `status` is `"SUCCEEDED"`, `"FAILED"` or `"STARTED"`. `error` is a `DurableOperationError`.
-- `completionReason`: `"ALL_COMPLETED"`, `"MIN_SUCCESSFUL_REACHED"` or
-  `"FAILURE_TOLERANCE_EXCEEDED"`.
+- `completionReason`: `"ALL_COMPLETED"`, `"MIN_SUCCESSFUL_REACHED"`,
+  `"FAILURE_TOLERANCE_EXCEEDED"`, `"CUSTOM_COMPLETION_SUCCEEDED"` or
+  `"CUSTOM_COMPLETION_FAILED"`.
 - `getResults()`: the results of the items that succeeded, in index order.
 - `getErrors()`: the errors of the items that failed, in index order.
-- `throwIfError()`: throws the first item error, if any.
+- `throwIfError()`: throws the first item error, if any. Else, if `completionReason` is
+  `"CUSTOM_COMPLETION_FAILED"`, it throws a `DurableOperationError` with `errorType`
+  `"BatchCompletionError"`.
 
-`completionConfig` has three optional keys:
+`completionConfig` has thresholds or a predicate, not both. The thresholds are three
+optional keys:
 
 - `minSuccessful`: complete when this many items succeeded.
 - `toleratedFailureCount`: complete when more than this many items failed.
@@ -293,6 +297,32 @@ The rules match the full SDK:
    Else it is `"ALL_COMPLETED"` if every item settled. Else it is `"MIN_SUCCESSFUL_REACHED"`.
 
 To run every item whatever fails, set `completionConfig: { toleratedFailurePercentage: 100 }`.
+
+The predicate is the key `shouldComplete(status)`. It decides alone when the map completes.
+Its rules also match the full SDK:
+
+1. The map calls it before it starts each item and after each item settles.
+2. `status` has `successCount`, `failureCount`, `completedCount`, `totalCount` and `items`.
+   `items` has one entry `{ index, name, status }` per item, in index order. `name` is the
+   result of `itemName`. `status` is `"SUCCEEDED"`, `"FAILED"`, `"STARTED"`, or absent for
+   an item that has not started.
+3. It returns `{ complete: false }` to continue. It returns `{ complete: true, outcome }` to
+   complete the map now. `outcome` is `"SUCCEEDED"` (the default) or `"FAILED"`.
+4. When it completes the map, no new item starts. Items that still run are abandoned, as
+   with the thresholds. `completionReason` is `"CUSTOM_COMPLETION_SUCCEEDED"` or
+   `"CUSTOM_COMPLETION_FAILED"`, by `outcome`.
+5. The map also completes when every item settled. The map then still calls the predicate.
+   If it returns `complete: true`, the reason follows `outcome` as in rule 4. Else the
+   reason is `"ALL_COMPLETED"`.
+6. Fail fast does not apply. A failed item completes the map only if the predicate says so.
+7. A `"FAILED"` outcome does not make `map` throw. It returns the result. `throwIfError()`
+   throws.
+8. A replay does not call the predicate. It returns the saved result and reason.
+9. The predicate must be deterministic and fast, and must not call durable operations (see
+   [Keep completion predicates pure](#keep-completion-predicates-pure)).
+
+The types forbid thresholds together with `shouldComplete`. The SDK does not check it. If
+both are set, the predicate applies and the thresholds are ignored.
 
 ```js
 const shipped = await ctx.map({
@@ -318,6 +348,33 @@ const quorum = await ctx.map({
 if (quorum.getResults().length < 2) {
   throw new Error("fewer than 2 replicas confirmed");
 }
+
+// Done when 2 replicas in different regions confirmed. Fails when that is no longer possible.
+const spread = await ctx.map({
+  name: "replicate-regions",
+  items: replicas,
+  completionConfig: {
+    shouldComplete: ({ items }) => {
+      const regions = new Set(
+        items
+          .filter((i) => i.status === "SUCCEEDED")
+          .map((i) => replicas[i.index].region),
+      );
+      if (regions.size >= 2) return { complete: true, outcome: "SUCCEEDED" };
+      const open = new Set(
+        items
+          .filter((i) => i.status !== "FAILED")
+          .map((i) => replicas[i.index].region),
+      );
+      if (open.size < 2) return { complete: true, outcome: "FAILED" };
+      return { complete: false };
+    },
+  },
+  fn: ({ ctx: itemCtx, item }) =>
+    itemCtx.step({ name: "write", fn: () => writeTo(item, record) }),
+});
+// Throws a failed replica's error, or "BatchCompletionError" when no item failed.
+spread.throwIfError();
 ```
 
 ### ctx.parallel({ name, branches, maxConcurrency, completionConfig })
@@ -327,7 +384,8 @@ Runs every branch. Each branch runs in its own child context.
 - `branches`: an array of `{ name, fn }`. `fn({ ctx })` is the branch. Use the branch `ctx`
   inside `fn`.
 - `maxConcurrency` (default: no limit): at most this many branches run at once.
-- `completionConfig` (optional): as in `map`. The default is fail fast.
+- `completionConfig` (optional): as in `map`. The default is fail fast. In the predicate's
+  `items`, `name` is the branch name.
 
 Returns a promise for a `BatchResult`, as in `map`.
 
@@ -599,7 +657,20 @@ sent JSON. Handle `undefined`: the sender can send no result.
 stop at the first failure. Call `throwIfError()` to fail on any item error, or inspect
 `getErrors()` and `completionReason`. With `minSuccessful`, count `getResults()`. Do not check
 `completionReason` alone: when every item settled, it is `"ALL_COMPLETED"`, whether or not
-`minSuccessful` items succeeded.
+`minSuccessful` items succeeded. With `shouldComplete`, `throwIfError()` also throws when the
+predicate returned `outcome: "FAILED"`.
+
+### Keep completion predicates pure
+
+`shouldComplete` decides how many items run. A replay does not call it again.
+
+1. The SDK calls it many times in one run: before each start and after each settle.
+2. The SDK calls it synchronously, between items. A slow predicate delays every item.
+3. A durable operation inside it would get an operation id in an order that depends on
+   timing. So a replay could find a different operation and fail the execution.
+4. So read only its `status` argument and values that never change, such as the `items`
+   array. Return the same answer for the same `status`. Do not call `ctx`, do no I/O, and
+   do not use `Date.now()` or `Math.random()`.
 
 ### Do not rely on abandoned items
 
@@ -703,11 +774,13 @@ try {
 - No timers and no polling inside an invocation. So a branch whose wait ends while another
   branch runs a step continues only in the next invocation. The same holds for retries and
   callbacks.
-- `map` and `parallel` support `minSuccessful`, `toleratedFailureCount` and
-  `toleratedFailurePercentage`, and fail fast by default, like the full SDK. They have no
-  custom `shouldComplete` predicate. The result has `all`, `completionReason`,
-  `getResults()`, `getErrors()` and `throwIfError()`. It has no counts, no `status` and no
-  `succeeded()`, `failed()` or `started()`.
+- `map` and `parallel` support `minSuccessful`, `toleratedFailureCount`,
+  `toleratedFailurePercentage` and the `shouldComplete` predicate, and fail fast by default,
+  like the full SDK. The predicate returns a plain object. The `completeBatch()` and
+  `continueBatch()` helpers and the `CompletionOutcome` enum do not exist. Thresholds
+  together with a predicate do not fail the execution: the predicate applies. The result has
+  `all`, `completionReason`, `getResults()`, `getErrors()` and `throwIfError()`. It has no
+  counts, no `status` and no `succeeded()`, `failed()` or `started()`.
 - After a `map` or `parallel` result larger than 256 KiB, a later invocation rebuilds the same
   result as the live run, including the `STARTED` items. The full SDK drops `STARTED` items
   in that case.
