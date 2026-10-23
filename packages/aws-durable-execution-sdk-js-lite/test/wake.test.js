@@ -304,3 +304,50 @@ test("runDurable records a throw from the handler as an invocation error", async
   );
   assert.equal(run.invocations, 2);
 });
+
+test("a waitForCondition poll that becomes READY during another branch's step runs in the same invocation", async () => {
+  const service = createInMemoryService();
+  const checks = [];
+  const run = await runDurable({
+    service,
+    workflow: async ({ ctx }) =>
+      Promise.all([
+        ctx.runInChildContext({
+          fn: ({ ctx: c }) =>
+            c.waitForCondition({
+              name: "poll",
+              initialState: 0,
+              fn: ({ state, attempt }) => {
+                checks.push({ state, attempt });
+                return state + 1;
+              },
+              waitStrategy: ({ state }) => ({
+                shouldContinue: state < 2,
+                delaySeconds: 2,
+              }),
+            }),
+        }),
+        ctx.runInChildContext({
+          fn: ({ ctx: c }) =>
+            c.step({
+              fn: async () => {
+                // The first check saved its RETRY. The service makes it READY after 2
+                // seconds, and this step's SUCCEED response reports that.
+                await until(service, "STEP", "PENDING");
+                service.advanceBy(10);
+                return "b";
+              },
+            }),
+        }),
+      ]),
+  });
+  assert.equal(run.status, "SUCCEEDED");
+  assert.deepEqual(run.result, [2, "b"]);
+  // The second check read the state that the first check saved.
+  assert.deepEqual(checks, [
+    { state: 0, attempt: 1 },
+    { state: 1, attempt: 2 },
+  ]);
+  assert.equal(run.invocations, 1);
+  noErrors(run);
+});

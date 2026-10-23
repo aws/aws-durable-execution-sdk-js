@@ -296,6 +296,21 @@ test("without env credentials, the container credentials endpoint is used and ca
   }
 });
 
+test("a failed container credentials request throws, and the API is not called", async () => {
+  delete process.env.AWS_ACCESS_KEY_ID;
+  process.env.AWS_CONTAINER_CREDENTIALS_FULL_URI =
+    "http://127.0.0.1:9001/creds";
+  const fetch = fakeFetch([json(403, { message: "denied" })]);
+  await assert.rejects(
+    client(fetch).getExecutionState({ DurableExecutionArn: ARN }),
+    { message: "Container credentials request failed: HTTP 403" },
+  );
+  // Only the credentials request was made. The SDK classifies this error as retryable
+  // (no status), so Lambda invokes again.
+  assert.equal(fetch.calls.length, 1);
+  assert.equal(fetch.calls[0].url.href, "http://127.0.0.1:9001/creds");
+});
+
 test("container credentials are fetched again when they expire within 5 minutes", async () => {
   delete process.env.AWS_ACCESS_KEY_ID;
   process.env.AWS_CONTAINER_CREDENTIALS_FULL_URI =
