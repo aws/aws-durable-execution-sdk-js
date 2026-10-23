@@ -32,7 +32,11 @@ import {
 } from "../../types/wire";
 import { Serdes } from "../serdes/serdes";
 import { SerdesFailedError } from "../../errors/serdes-errors/serdes-errors";
-import { CHECKPOINT_TERMINATION_COOLDOWN_MS } from "../constants/constants";
+import {
+  CHECKPOINT_SIZE_LIMIT_BYTES,
+  CHECKPOINT_TERMINATION_COOLDOWN_MS,
+} from "../constants/constants";
+import { DurableExecutionConfig } from "../../types/durable-execution";
 import { Context } from "aws-lambda";
 
 // Comfortably longer than the cooldown, so a premature suspension always wins the race.
@@ -115,6 +119,7 @@ const slowSerdes = <T>(): Serdes<T> => ({
 const run = async (
   operationUnderTest: (context: DurableContext) => Promise<unknown>,
   replayedOps: WireOperation[] = [],
+  config?: DurableExecutionConfig,
 ): Promise<{ response: unknown; submitRanBeforeReturn: boolean }> => {
   let submitRan = false;
   const response = await withDurableExecution(
@@ -126,6 +131,7 @@ const run = async (
       });
       return await callbackPromise;
     },
+    config,
   )(
     new DurableExecutionInvocationInputWithClient(
       {
@@ -337,6 +343,102 @@ describe("async deserialization with a pending callback", () => {
         }),
       ],
     );
+
+    expect(submitRanBeforeReturn).toBe(true);
+    expect(response).toEqual({ Status: InvocationStatus.PENDING });
+  });
+
+  it("runInChildContext: runs the next step before suspending, on a large-payload replay", async () => {
+    // ReplayChildren means the checkpoint has no result, so replay re-runs the
+    // child function and round-trips its value through the serdes.
+    const { response, submitRanBeforeReturn } = await run(
+      async (context) => {
+        await context.step("fast", async () => "fast");
+        return await context.runInChildContext("slow", async () => "value", {
+          serdes: slowSerdes(),
+        });
+      },
+      [
+        completedFastStep,
+        completedOp("3", {
+          Type: OperationType.CONTEXT,
+          SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+          Name: "slow",
+          ContextDetails: { Result: "", ReplayChildren: true },
+        }),
+      ],
+    );
+
+    expect(submitRanBeforeReturn).toBe(true);
+    expect(response).toEqual({ Status: InvocationStatus.PENDING });
+  });
+
+  it("runInChildContext: runs the next step before suspending, for a virtual context", async () => {
+    const { response, submitRanBeforeReturn } = await run((context) =>
+      context.runInChildContext(
+        "slow",
+        (child) => child.step("inner", async () => "value"),
+        { serdes: slowSerdes(), virtualContext: true },
+      ),
+    );
+
+    expect(submitRanBeforeReturn).toBe(true);
+    expect(response).toEqual({ Status: InvocationStatus.PENDING });
+  });
+
+  it("runInChildContext: runs the caller's next step before suspending when the context fails and a plugin hook is slow", async () => {
+    // The failure path awaits the plugin's onOperationEnd before the caller
+    // sees the error. The context must count as active meanwhile.
+    const slowEndHook: DurableExecutionConfig = {
+      plugins: [
+        {
+          createPlugin: () => ({
+            onOperationEnd: async (info) => {
+              if (info.name === "failing") {
+                await new Promise((resolve) =>
+                  setTimeout(resolve, DESERIALIZE_DELAY_MS),
+                );
+              }
+            },
+          }),
+        },
+      ],
+    };
+
+    const { response, submitRanBeforeReturn } = await run(
+      async (context) => {
+        await context
+          .runInChildContext("failing", async (child) => {
+            await child.step("inner", async () => "value");
+            throw new Error("expected failure");
+          })
+          .catch(() => undefined);
+      },
+      [],
+      slowEndHook,
+    );
+
+    expect(submitRanBeforeReturn).toBe(true);
+    expect(response).toEqual({ Status: InvocationStatus.PENDING });
+  });
+
+  it("runInChildContext: marks the context completed when the work after its function fails", async () => {
+    // A result over the checkpoint size limit calls summaryGenerator, which
+    // throws here. The failure is handled after the context was marked
+    // EXECUTING, so it must still end COMPLETED and let the invocation suspend.
+    const { response, submitRanBeforeReturn } = await run(async (context) => {
+      await context
+        .runInChildContext(
+          "oversized",
+          async () => "x".repeat(CHECKPOINT_SIZE_LIMIT_BYTES + 1),
+          {
+            summaryGenerator: () => {
+              throw new Error("summary failed");
+            },
+          },
+        )
+        .catch(() => undefined);
+    });
 
     expect(submitRanBeforeReturn).toBe(true);
     expect(response).toEqual({ Status: InvocationStatus.PENDING });
