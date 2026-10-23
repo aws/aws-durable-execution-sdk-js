@@ -110,6 +110,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   function's error type (for example `"PaymentError"`), with the remote stack trace, as the
   callback handlers and replayed operations already do. Before, `cause.name` was always
   `"Error"`. A cause is now also created when the remote error has a type but no message.
+  The top-level `name` is unchanged: the live error is still `InvokeError`, and an operation
+  error rebuilt from a checkpoint is still `StepError` for an unknown remote type. Read
+  `cause.name` to get the remote error type in both cases, including in Durable Execution
+  Telemetry records.
+- **Durable Execution Telemetry**: the bundled Glue table (`cdk/stack.ts`) and the
+  telemetry-core Athena DDL and schema prompt now include the `droppedcauses` column, so a
+  record cut only by dropping causes can be told apart from other truncations.
 
 - **OpenTelemetry**: `FAILED`, `TIMED_OUT`, and `STOPPED` operations remain `ERROR` in both views,
   including later-invocation continuations, even without error details.
