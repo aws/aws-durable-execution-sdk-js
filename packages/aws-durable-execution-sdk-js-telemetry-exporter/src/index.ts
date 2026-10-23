@@ -348,7 +348,9 @@ function toCauseLevel(cause: unknown): CauseLevel | undefined {
  * Builds the record form of an error: `{ name, message, cause? }`, in that key
  * order.
  *
- * `name` and `message` are the error's own values, unchanged. The `cause` chain
+ * `name` and `message` are the error's own values, converted to strings and
+ * capped at {@link MAX_TEXT_LENGTH} code points (a longer value is cut and
+ * followed by `…`); nothing else is rewritten. The `cause` chain
  * follows `Error.cause` (for an operation error rebuilt from a checkpoint, the
  * cause the SDK built from the checkpointed error), writes at most
  * {@link MAX_CAUSE_DEPTH} levels below `error`, and stops at a cause it has

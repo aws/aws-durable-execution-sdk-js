@@ -543,7 +543,7 @@ the hard limits to absorb that overhead.
 
 When truncation occurs, `truncated: true` is set on the record; each operation
 whose result was dropped is itself marked `truncated: true`, and the
-`droppedOperations` count / `droppedInput` / `droppedOutput` flags are set when
+`droppedCauses` flag / `droppedOperations` count / `droppedInput` / `droppedOutput` flags are set when
 those drops happen — so customers know data was cut, not missing.
 
 ---

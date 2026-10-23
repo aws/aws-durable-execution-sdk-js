@@ -490,6 +490,7 @@ below). Columns:
     year=YYYY/month=MM/day=DD/), zero-padded 2-digit strings for month/day. Filter
     on these instead of parsing startTime/emittedAt for partition pruning.
 - truncated: boolean (nullable)
+- droppedCauses: boolean (nullable) — true when every error cause was removed
 - droppedOperations: int (nullable)
 - droppedInput / droppedOutput: boolean (nullable)
 

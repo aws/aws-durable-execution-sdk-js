@@ -209,18 +209,25 @@ describe("Step Handler", () => {
     expect(result).toBe("cached-result");
     expect(stepFn).not.toHaveBeenCalled();
     expect(mockCheckpoint.checkpoint).not.toHaveBeenCalled();
-    expect(mockCheckpoint.markOperationState).toHaveBeenCalledWith(
-      stepId,
-      OperationLifecycleState.COMPLETED,
-      {
-        metadata: {
+    // The step counts as EXECUTING while its cached result is deserialized,
+    // then COMPLETED.
+    expect((mockCheckpoint.markOperationState as jest.Mock).mock.calls).toEqual(
+      [
+        [
           stepId,
-          type: OperationType.STEP,
-          subType: OperationSubType.STEP,
-          name: "test-step",
-          parentId: undefined,
-        },
-      },
+          OperationLifecycleState.EXECUTING,
+          {
+            metadata: {
+              stepId,
+              type: OperationType.STEP,
+              subType: OperationSubType.STEP,
+              name: "test-step",
+              parentId: undefined,
+            },
+          },
+        ],
+        [stepId, OperationLifecycleState.COMPLETED],
+      ],
     );
   });
 
