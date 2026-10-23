@@ -1,12 +1,9 @@
-import { withDurableExecution } from "@aws/durable-execution-sdk-js";
-import { LocalDurableTestRunner } from "@aws/durable-execution-sdk-js-testing";
 import {
-  context,
-  propagation,
-  trace,
-  type SpanContext,
-  type Span,
-} from "@opentelemetry/api";
+  withDurableExecution,
+  DurableExecutionInvocationInputWithClient,
+} from "@aws/durable-execution-sdk-js";
+import { LocalDurableTestRunner } from "@aws/durable-execution-sdk-js-testing";
+import { context, propagation, trace, type Span } from "@opentelemetry/api";
 import {
   InMemorySpanExporter,
   NodeTracerProvider,
@@ -23,36 +20,35 @@ const gate = () => {
   });
   return { open, opened };
 };
-
 beforeAll(() => LocalDurableTestRunner.setupTestEnvironment());
 afterAll(() => LocalDurableTestRunner.teardownTestEnvironment());
-beforeEach(() => {
-  trace.disable();
-  context.disable();
-  propagation.disable();
-});
 
 describe.each([
   ["execution", createExecutionOtelPluginFactory],
   ["invocation", createInvocationOtelPluginFactory],
-] as const)("%s view late-span batch delivery", (view, Plugin) => {
+] as const)("%s view lifecycle admission during flush", (view, Plugin) => {
   it.each([false, true])(
-    "ends and delivers real spans created during flush (completes=%s)",
-    async (completes) => {
-      const flushEntered = gate();
-      const releaseFlush = gate();
-      const childReady = gate();
-      const bodyEntered = gate();
-      const releaseBody = gate();
-      const childFinished = gate();
+    "closes admitted spans and refuses new work after the handler settles (admitted=%s)",
+    async (admitted) => {
+      trace.disable();
+      context.disable();
+      propagation.disable();
+      const flushEntered = gate(),
+        releaseFlush = gate();
+      const childReady = gate(),
+        attemptStep = gate(),
+        attempted = gate();
+      const bodyEntered = gate(),
+        releaseBody = gate(),
+        bodyReturned = gate();
       const exporter = new InMemorySpanExporter();
-      const started: SpanContext[] = [];
-      const startedAttempts: Span[] = [];
+      const attempts: Span[] = [];
       let provider!: NodeTracerProvider;
+      let requests = 0;
+      const stepEnded = jest.fn();
       const flushGate: SpanProcessor = {
         onStart(span) {
-          if (span.name === "late-step") started.push(span.spanContext());
-          if (span.name === "late-step attempt 1") startedAttempts.push(span);
+          if (span.name === "late-step attempt 1") attempts.push(span);
         },
         onEnd() {},
         async forceFlush() {
@@ -76,6 +72,7 @@ describe.each([
       const step = jest.fn(async () => {
         bodyEntered.open();
         await releaseBody.opened;
+        bodyReturned.open();
         return "late result";
       });
       let childWork: PromiseLike<unknown> | undefined;
@@ -83,12 +80,12 @@ describe.each([
         async (_, ctx) => {
           childWork = ctx.runInChildContext("child", async (child) => {
             childReady.open();
-            // Scheduling-only gate. The actual operation begins after the SDK has
-            // entered the real provider's flush, without calling plugin hooks here.
-            await flushEntered.opened;
+            if (!admitted) await attemptStep.opened;
+            attempted.open();
             return child.step("late-step", step);
           });
           await childReady.opened;
+          if (admitted) await bodyEntered.opened;
           return "root result";
         },
         {
@@ -97,76 +94,79 @@ describe.each([
             {
               createPlugin: () => ({
                 async onOperationEnd(info) {
-                  if (info.name === "child") childFinished.open();
+                  if (info.name === "late-step") stepEnded();
                 },
               }),
             },
           ],
         },
       );
-      const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+      const runner = new LocalDurableTestRunner({
+        handlerFunction: async (event, lambdaContext) => {
+          if (!DurableExecutionInvocationInputWithClient.isInstance(event))
+            throw new Error("Expected local transport");
+          const client = event.durableExecutionClient;
+          const checkpoint = client.checkpoint.bind(client);
+          client.checkpoint = async (...args) => {
+            requests++;
+            return checkpoint(...args);
+          };
+          return handler(event, lambdaContext);
+        },
+      });
       const execution = runner.run();
       try {
         await flushEntered.opened;
-        await bodyEntered.opened;
-        expect(started).toHaveLength(view === "invocation" ? 1 : 0);
-        expect(startedAttempts).toHaveLength(1);
-        if (completes) {
-          releaseBody.open();
-          await childFinished.opened;
-        }
+        const requestsAtFlush = requests;
+        attemptStep.open();
+        await attempted.opened;
+        releaseBody.open();
+        if (admitted) await bodyReturned.opened;
+        // Let already-scheduled continuations run. No elapsed-time threshold or
+        // fabricated plugin hook is used to satisfy the admission assertions.
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        expect(step).toHaveBeenCalledTimes(admitted ? 1 : 0);
+        expect(stepEnded).not.toHaveBeenCalled();
+        expect(requests).toBe(requestsAtFlush);
+        expect(attempts).toHaveLength(admitted ? 1 : 0);
+        for (const span of attempts) expect(span.isRecording()).toBe(false);
         releaseFlush.open();
         const result = await execution;
         expect(result.getStatus()).toBe("SUCCEEDED");
         expect(result.getResult()).toBe("root result");
-        expect(step).toHaveBeenCalledTimes(1);
-        // Assert before shutdown or any test-side flush can deliver a buffered span.
-        expect(startedAttempts[0].isRecording()).toBe(false);
         const spans = exporter.getFinishedSpans();
-        const operations = spans.filter((span) => span.name === "late-step");
-        expect(operations).toHaveLength(
-          view === "invocation" || completes ? 1 : 0,
-        );
-        if (operations.length) {
-          expect(operations[0].spanContext()).toEqual(started[0]);
-          expect(operations[0].attributes["durable.operation.status"]).toBe(
-            completes ? "SUCCEEDED" : "STARTED",
-          );
-        }
-        const attempts = spans.filter(
+        const exportedAttempts = spans.filter(
           (span) => span.name === "late-step attempt 1",
         );
-        expect(attempts).toHaveLength(1);
-        if (operations.length) {
-          expect(attempts[0].parentSpanContext?.spanId).toBe(
-            operations[0].spanContext().spanId,
+        expect(exportedAttempts).toHaveLength(admitted ? 1 : 0);
+        if (admitted) {
+          expect(exportedAttempts[0].spanContext()).toEqual(
+            attempts[0].spanContext(),
           );
-        }
-        if (completes && view === "invocation") {
-          // This context was present at the initial unwind, so its later completion
-          // still needs a continuation linked to the actually exported first span.
-          const children = spans.filter((span) => span.name === "child");
-          expect(children).toHaveLength(2);
           expect(
-            children[1].links.some(
-              (link) =>
-                link.context.spanId === children[0].spanContext().spanId,
-            ),
-          ).toBe(true);
+            exportedAttempts[0].attributes["durable.attempt.outcome"],
+          ).toBeUndefined();
         }
+        const operations = spans.filter((span) => span.name === "late-step");
+        expect(operations).toHaveLength(
+          admitted && view === "invocation" ? 1 : 0,
+        );
+        expect(
+          operations.every(
+            (span) => span.attributes["durable.operation.status"] === "STARTED",
+          ),
+        ).toBe(true);
       } finally {
+        attemptStep.open();
         releaseFlush.open();
         releaseBody.open();
-        // A step released only after terminal delivery need not settle its
-        // checkpoint promise: the invocation has stopped accepting updates.
-        // It is intentionally unawaited by the handler, and cleanup must not
-        // turn that detached work into a completion dependency of this test.
-        if (completes) await Promise.resolve(childWork).catch(() => undefined);
-        else void Promise.resolve(childWork).catch(() => undefined);
+        // Admission closure intentionally preserves the detached durable stack.
+        void Promise.resolve(childWork).catch(() => undefined);
         await execution.catch(() => undefined);
         await provider.shutdown();
         trace.disable();
         context.disable();
+        propagation.disable();
       }
     },
     15000,

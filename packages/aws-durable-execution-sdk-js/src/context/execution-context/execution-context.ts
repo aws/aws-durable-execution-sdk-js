@@ -16,6 +16,7 @@ import { DurableExecutionClient } from "../../types/durable-execution";
 import { DurableExecutionInvocationInputWithClient } from "../../utils/durable-execution-invocation-input/durable-execution-invocation-input";
 import { warnOnceIfContextStorageIsDegraded } from "../../utils/context-tracker/context-storage";
 import { normalizeOperations } from "../../utils/operation/normalize-operation";
+import type { InvocationLifecycle } from "../../utils/invocation-lifecycle/invocation-lifecycle";
 
 /**
  * Chooses the transport for this invocation.
@@ -52,6 +53,7 @@ export const initializeExecutionContext = async (
   event: DurableExecutionInvocationInput,
   context: Context,
   config?: DurableExecutionConfig,
+  invocationLifecycle?: InvocationLifecycle,
 ): Promise<{
   executionContext: ExecutionContext;
   durableExecutionMode: DurableExecutionMode;
@@ -63,7 +65,33 @@ export const initializeExecutionContext = async (
   const checkpointToken = event.CheckpointToken;
   const durableExecutionArn = event.DurableExecutionArn;
 
-  const durableExecutionClient = resolveDurableExecutionClient(event, config);
+  const client = resolveDurableExecutionClient(event, config);
+  const request = async <T>(send: () => Promise<T>): Promise<T> => {
+    if (invocationLifecycle && !invocationLifecycle.allowsRequests())
+      return new Promise(() => {});
+    const response = await send();
+    // A custom transport may ignore cancellation. Its late response cannot resume
+    // pagination or handler work in an invocation that has already ended.
+    if (invocationLifecycle && !invocationLifecycle.allowsRequests())
+      return new Promise(() => {});
+    return response;
+  };
+  const durableExecutionClient: DurableExecutionClient = invocationLifecycle
+    ? {
+        getExecutionState: (params, logger) =>
+          request(() =>
+            client.getExecutionState(params, logger, {
+              abortSignal: invocationLifecycle.signal,
+            }),
+          ),
+        checkpoint: (params, logger) =>
+          request(() =>
+            client.checkpoint(params, logger, {
+              abortSignal: invocationLifecycle.signal,
+            }),
+          ),
+      }
+    : client;
 
   // Create logger for initialization errors using existing logger factory
   const initLogger = createDefaultLogger({
@@ -122,6 +150,7 @@ export const initializeExecutionContext = async (
 
   return {
     executionContext: {
+      ...(invocationLifecycle && { invocationLifecycle }),
       durableExecutionClient,
       _stepData: stepData,
       terminationManager: new TerminationManager(),

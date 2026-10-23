@@ -24,6 +24,7 @@ import {
   safeDeserialize,
 } from "../../errors/serdes-errors/serdes-errors";
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
+import { runInvocationCallback } from "../../utils/invocation-lifecycle/invocation-lifecycle";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import {
   DurableOperationError,
@@ -263,7 +264,10 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
           const attemptInfo = toAttemptInfo(stepData, currentAttempt);
           backfillOperationInfo(attemptInfo, opInfo);
           attemptInfo.startTimestamp = new Date();
-          const checkFunc = () => check(currentState, waitForConditionContext);
+          const checkFunc = () =>
+            runInvocationCallback(context, () =>
+              check(currentState, waitForConditionContext),
+            );
 
           await plugin.onOperationAttemptStart?.(attemptInfo);
 

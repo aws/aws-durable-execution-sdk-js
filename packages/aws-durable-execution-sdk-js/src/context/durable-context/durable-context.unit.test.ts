@@ -86,7 +86,13 @@ describe("DurableContext", () => {
     createWaitHandler.mockReturnValue(
       () => new DurablePromise(() => Promise.resolve()),
     );
-    createCallback.mockReturnValue(jest.fn());
+    createCallback.mockReturnValue(
+      () =>
+        new DurablePromise(async () => [
+          new DurablePromise(async () => "callback-result"),
+          "callback-id",
+        ]),
+    );
     createWaitForCallbackHandler.mockReturnValue(jest.fn());
     createWaitForConditionHandler.mockReturnValue(
       () => new DurablePromise(() => Promise.resolve({})),
@@ -476,7 +482,9 @@ describe("DurableContext", () => {
         mockDurableExecution,
       );
 
-      await context.createCallback();
+      const [callback, callbackId] = await context.createCallback();
+      expect(callbackId).toBe("callback-id");
+      expect(await callback).toBe("callback-result");
 
       const { createCallback } = jest.requireMock(
         "../../handlers/callback-handler/callback",

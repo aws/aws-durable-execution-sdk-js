@@ -198,8 +198,16 @@ export interface OperationChangeInfo {
  * or promises rejected by a hook are swallowed by the SDK and never affect
  * the execution outcome.
  *
- * Because hooks are awaited, any time spent in a hook directly increases the
- * wall-clock duration of the current Lambda invocation.
+ * The invocation deadline bounds this await contract. On expiry, the SDK
+ * dispatches `onInvocationEnd` at most once for each admitted plugin still
+ * owned by that invocation, without waiting for its promise. Ordinary expiry
+ * reports `RETRYING`; an already acknowledged result or service-requested
+ * suspension retains its known status. This cleanup is best-effort: asynchronous
+ * export may be interrupted by Lambda freezing. The SDK cannot preempt an
+ * already-entered custom hook or a synchronous hook that blocks the event loop.
+ *
+ * While an invocation is live, time spent awaiting a hook directly increases
+ * its wall-clock duration.
  *
  * **Opting out (fire-and-forget):** to avoid blocking the SDK, start the
  * background work inside the hook but return without awaiting it, so the

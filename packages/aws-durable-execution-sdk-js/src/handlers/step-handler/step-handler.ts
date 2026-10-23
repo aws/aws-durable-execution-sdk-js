@@ -33,6 +33,7 @@ import {
 } from "../../errors/serdes-errors/serdes-errors";
 import { isUnrecoverableError } from "../../errors/unrecoverable-error/unrecoverable-error";
 import { runWithContext } from "../../utils/context-tracker/context-tracker";
+import { runInvocationCallback } from "../../utils/invocation-lifecycle/invocation-lifecycle";
 import { createErrorObjectFromError } from "../../utils/error-object/error-object";
 import { validateReplayConsistency } from "../../utils/replay-validation/replay-validation";
 import { DurableLogger } from "../../types/durable-logger";
@@ -326,7 +327,8 @@ export const createStepHandler = <Logger extends DurableLogger>(
           attemptInfo.startTimestamp = new Date();
           await plugin.onOperationAttemptStart?.(attemptInfo);
           let result: T;
-          const stepFn = (): Promise<T> => fn(stepContext);
+          const stepFn = (): Promise<T> =>
+            runInvocationCallback(context, () => fn(stepContext));
           result = (await runWithContext(
             stepId,
             parentId,

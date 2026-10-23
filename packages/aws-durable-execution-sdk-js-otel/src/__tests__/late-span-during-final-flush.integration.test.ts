@@ -35,8 +35,8 @@ describe.each([
       releaseFinal = gate();
     const firstReady = gate(),
       finalReady = gate();
-    const firstBody = gate(),
-      finalBody = gate(),
+    const firstHook = gate(),
+      finalHook = gate(),
       releaseBodies = gate();
     const exporter = new InMemorySpanExporter();
     const started: Array<{ name: string; span: Span }> = [];
@@ -70,12 +70,40 @@ describe.each([
           ],
         })),
     });
+    // Both operations enter the real SDK before the root returns. Delay only
+    // forwarding the first attempt-start and second operation-start notification,
+    // so snapshot coverage does not admit new business work after return.
+    const createPlugin = factory.createPlugin.bind(factory);
+    jest.spyOn(factory, "createPlugin").mockImplementation((info) => {
+      const plugin = createPlugin(info);
+      const operationStart = plugin.onOperationStart.bind(plugin);
+      plugin.onOperationStart = async (operation) => {
+        if (operation.name === "final-step") {
+          finalReady.open();
+          await finalFlush.opened;
+          await operationStart(operation);
+          finalHook.open();
+        } else {
+          await operationStart(operation);
+        }
+      };
+      const attemptStart = plugin.onOperationAttemptStart.bind(plugin);
+      plugin.onOperationAttemptStart = async (attempt) => {
+        if (attempt.name === "first-step") {
+          firstReady.open();
+          await firstFlush.opened;
+          await attemptStart(attempt);
+          firstHook.open();
+        } else {
+          await attemptStart(attempt);
+        }
+      };
+      return plugin;
+    });
     const firstStep = jest.fn(async () => {
-      firstBody.open();
       await releaseBodies.opened;
     });
     const finalStep = jest.fn(async () => {
-      finalBody.open();
       await releaseBodies.opened;
     });
     const detached: PromiseLike<unknown>[] = [];
@@ -83,15 +111,11 @@ describe.each([
       async (_, ctx) => {
         detached.push(
           ctx.runInChildContext("during-open-flush", async (child) => {
-            firstReady.open();
-            await firstFlush.opened;
             return child.step("first-step", firstStep);
           }),
         );
         detached.push(
           ctx.runInChildContext("during-final-flush", async (child) => {
-            finalReady.open();
-            await finalFlush.opened;
             return child.step("final-step", finalStep);
           }),
         );
@@ -103,7 +127,7 @@ describe.each([
     const runner = new LocalDurableTestRunner({ handlerFunction: handler });
     const execution = runner.run();
     try {
-      await firstBody.opened;
+      await firstHook.opened;
       const firstAttempt = started.find(
         (item) => item.name === "first-step attempt 1",
       )!;
@@ -113,11 +137,11 @@ describe.each([
       await finalFlush.opened;
       expect(firstAttempt.span.isRecording()).toBe(false);
       const finalSnapshot = started.length;
-      await finalBody.opened;
-      // The OTel factory does not cancel detached business work. Its finalized
-      // hooks must nevertheless stay inert throughout the final provider wait.
-      expect(firstStep).toHaveBeenCalledTimes(1);
-      expect(finalStep).toHaveBeenCalledTimes(1);
+      await finalHook.opened;
+      // Core admission is already closed. Neither delayed attempt may start its
+      // business body, and the finalized OTel hooks cannot revise the snapshot.
+      expect(firstStep).not.toHaveBeenCalled();
+      expect(finalStep).not.toHaveBeenCalled();
       expect(started).toHaveLength(finalSnapshot);
       expect(started.some((item) => item.name.startsWith("final-step"))).toBe(
         false,

@@ -30,7 +30,8 @@ const executionArn =
 const started = new Date("2026-01-01T00:00:00Z");
 const lambdaContext: Context = {
   awsRequestId: "request",
-  getRemainingTimeInMillis: () => 0,
+  // A live invocation budget below the polling delay plus its reserved time.
+  getRemainingTimeInMillis: () => 1000,
   callbackWaitsForEmptyEventLoop: false,
   functionName: "parent",
   functionVersion: "1",

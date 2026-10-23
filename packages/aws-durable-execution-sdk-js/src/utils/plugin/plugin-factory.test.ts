@@ -8,6 +8,10 @@ import {
   InvocationStatus,
 } from "../../types/core";
 import { createInvocationPluginRunner } from "./plugin-factory";
+import {
+  InvocationDeadlineError,
+  InvocationLifecycle,
+} from "../invocation-lifecycle/invocation-lifecycle";
 
 const succeededOutput: DurableExecutionInvocationOutput = {
   Status: InvocationStatus.SUCCEEDED,
@@ -24,6 +28,35 @@ const invocationInfo: InvocationInfo = {
 };
 
 describe("createInvocationPluginRunner", () => {
+  it.each(["before", "during"] as const)(
+    "does not construct another plugin when the deadline expires %s factory creation",
+    (expiry) => {
+      let remaining = expiry === "before" ? 0 : 10_000;
+      const lifecycle = new InvocationLifecycle(() => remaining);
+      const start = jest.fn();
+      const first = jest.fn(() => {
+        remaining = 0;
+        return { onInvocationStart: start };
+      });
+      const second = jest.fn(() => ({}));
+      try {
+        expect(() =>
+          createInvocationPluginRunner(
+            [{ createPlugin: first }, { createPlugin: second }],
+            invocationInfo,
+            lifecycle,
+          ),
+        ).toThrow(InvocationDeadlineError);
+        expect(first).toHaveBeenCalledTimes(expiry === "before" ? 0 : 1);
+        expect(second).not.toHaveBeenCalled();
+        expect(start).not.toHaveBeenCalled();
+        expect(lifecycle.signal.aborted).toBe(true);
+      } finally {
+        lifecycle.dispose();
+      }
+    },
+  );
+
   it("returns an empty runner when there are no factories", () => {
     expect(createInvocationPluginRunner([], invocationInfo)).toEqual({});
   });

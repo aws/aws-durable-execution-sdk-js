@@ -3,7 +3,11 @@ import {
   DurableInstrumentationPluginFactory,
   InvocationInfo,
 } from "../../types/plugin";
-import { createPluginRunner } from "./plugin-runner";
+import {
+  createPluginRunner,
+  type InvocationPluginRunner,
+} from "./plugin-runner";
+import type { InvocationLifecycle } from "../invocation-lifecycle/invocation-lifecycle";
 
 /**
  * Builds the composite plugin runner for one invocation.
@@ -31,10 +35,12 @@ import { createPluginRunner } from "./plugin-runner";
 export function createInvocationPluginRunner(
   factories: readonly DurableInstrumentationPluginFactory[],
   info: InvocationInfo,
-): DurableInstrumentationPlugin {
+  lifecycle?: InvocationLifecycle,
+): InvocationPluginRunner {
   const plugins: DurableInstrumentationPlugin[] = [];
 
   for (const factory of factories) {
+    lifecycle?.throwIfExpired();
     let plugin: DurableInstrumentationPlugin | null | undefined;
     try {
       plugin = factory.createPlugin(info);
@@ -58,5 +64,6 @@ export function createInvocationPluginRunner(
     }
   }
 
-  return createPluginRunner(plugins);
+  lifecycle?.throwIfExpired();
+  return createPluginRunner(plugins, lifecycle);
 }
