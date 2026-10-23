@@ -42,20 +42,56 @@ describe("normalizeTimestamp", () => {
     ["2026-10-23T11:42:46-07:00", "2026-10-23T18:42:46.000Z"],
     ["2026-10-23T11:42:46-0700", "2026-10-23T18:42:46.000Z"],
     ["2026-10-24 00:12:46+05:30", "2026-10-23T18:42:46.000Z"],
-    // More precision than the stored format is cut to milliseconds.
-    ["2026-10-23T18:42:46.784119Z", "2026-10-23T18:42:46.784Z"],
     ["2026-10-23T18:42:46.5Z", "2026-10-23T18:42:46.500Z"],
+    // A leap day in a leap year is a real date.
+    ["2028-02-29", "2028-02-29T00:00:00.000Z"],
   ])("rewrites %s as %s", (input, expected) => {
-    expect(normalizeTimestamp("since", input)).toBe(expected);
+    expect(normalizeTimestamp("since", input, "up")).toBe(expected);
+    expect(normalizeTimestamp("until", input, "down")).toBe(expected);
+  });
+
+  it("rounds a finer bound without changing which records it selects", () => {
+    // Stored values have millisecond precision. A record stored at .784 is
+    // before since .784119, so since moves up to .785. It is before until
+    // .784119, so until stays at .784.
+    const finer = "2026-10-23T18:42:46.784119Z";
+    expect(normalizeTimestamp("since", finer, "up")).toBe(
+      "2026-10-23T18:42:46.785Z",
+    );
+    expect(normalizeTimestamp("until", finer, "down")).toBe(
+      "2026-10-23T18:42:46.784Z",
+    );
+    const stored = "2026-10-23T18:42:46.784Z";
+    expect(stored >= normalizeTimestamp("since", finer, "up")).toBe(false);
+    expect(stored <= normalizeTimestamp("until", finer, "down")).toBe(true);
+    // Digits past the millisecond that are all zero change nothing.
+    expect(
+      normalizeTimestamp("since", "2026-10-23T18:42:46.784000Z", "up"),
+    ).toBe(stored);
+    // Rounding up can carry into the next second.
+    expect(normalizeTimestamp("since", "2026-10-23T18:42:46.9991Z", "up")).toBe(
+      "2026-10-23T18:42:47.000Z",
+    );
   });
 
   it.each([
     "2026-13-01",
+    "2026-00-10",
+    "2026-10-00",
+    "2026-02-30",
+    // 2026 is not a leap year.
+    "2026-02-29",
+    "2026-04-31",
     "2026-10-23T25:00:00Z",
+    "2026-10-23T24:00:00Z",
+    "2026-10-23T23:60:00Z",
+    "2026-10-23T23:59:60Z",
     "yesterday",
     "2026-10-23'; DROP TABLE x; --",
   ])("rejects %s", (input) => {
-    expect(() => normalizeTimestamp("since", input)).toThrow(/Invalid since/);
+    expect(() => normalizeTimestamp("since", input, "up")).toThrow(
+      /Invalid since/,
+    );
   });
 
   it("keeps text order equal to time order across input forms", () => {
@@ -64,7 +100,7 @@ describe("normalizeTimestamp", () => {
       "2026-10-23T18:42:46Z",
       "2026-10-23T18:42:46.5Z",
       "2026-10-23T11:42:47-07:00",
-    ].map((b) => normalizeTimestamp("since", b));
+    ].map((b) => normalizeTimestamp("since", b, "up"));
     expect([...bounds].sort()).toEqual(bounds);
   });
 });

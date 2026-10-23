@@ -115,6 +115,13 @@ export function validateTimestamp(label: string, value: string): string {
 }
 
 /**
+ * The parts of an ISO-8601 bound that {@link ISO_TIMESTAMP} accepted. A date
+ * alone has no time parts; a value with no offset has no zone.
+ */
+const ISO_PARTS =
+  /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d+))?(Z|[+-]\d{2}:?\d{2})?)?$/;
+
+/**
  * Validate a `since`/`until` bound, then rewrite it in the one format every SDK
  * writes record timestamps in: UTC, exactly 3 fraction digits, a literal `Z`
  * (`2024-01-31T12:34:56.000Z`, the output of `Date.prototype.toISOString()`).
@@ -125,28 +132,61 @@ export function validateTimestamp(label: string, value: string): string {
  * `2024-01-31T12:34:56Z` or `2024-01-31T05:34:56-07:00` is rewritten to the
  * stored form before it is compared.
  *
- * A bound with no offset is read as UTC, because every record timestamp is UTC.
- * A date alone means midnight UTC. Throws when the value does not match
- * {@link ISO_TIMESTAMP} or does not name a real instant (for example month 13).
+ * Rules, in order:
+ * 1. The value must match {@link ISO_TIMESTAMP} and name a real calendar date
+ *    and time. `Date.parse` rolls an impossible date forward (`2026-02-30`
+ *    becomes `2026-03-02`), so the day, hour, minute and second are checked
+ *    first, and an impossible value throws.
+ * 2. A value with no offset is read as UTC, because every record timestamp is
+ *    UTC. A date alone means midnight UTC.
+ * 3. Stored timestamps have millisecond precision. A bound with finer digits is
+ *    rounded to a millisecond without changing which records it selects. A
+ *    lower bound (`round: "up"`) moves up to the next millisecond, so a record
+ *    stored before the requested instant stays excluded. An upper bound
+ *    (`round: "down"`) is cut to its millisecond, so a record stored at or
+ *    before the requested instant stays included.
+ *
  * The output contains only digits, `-`, `:`, `.`, `T` and `Z`, so it is safe to
  * interpolate.
  */
-export function normalizeTimestamp(label: string, value: string): string {
+export function normalizeTimestamp(
+  label: string,
+  value: string,
+  round: "up" | "down",
+): string {
   const validated = validateTimestamp(label, value);
-  let iso = validated.replace(" ", "T");
-  const hasTime = iso.includes("T");
-  const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(iso);
-  if (hasTime && !hasZone) iso += "Z";
-  // `+0700` is valid ISO-8601 but Date.parse rejects it; insert the colon.
-  iso = iso.replace(/([+-]\d{2})(\d{2})$/, "$1:$2");
-  const ms = Date.parse(iso);
-  if (Number.isNaN(ms)) {
-    throw new Error(
+  const parts = ISO_PARTS.exec(validated);
+  const invalid = (): Error =>
+    new Error(
       `Invalid ${label} "${value}". It matches the ISO-8601 shape but is not ` +
         `a real date or time.`,
     );
+  if (!parts) throw invalid();
+  const [, y, mo, d, h = "00", mi = "00", sec = "00", frac = "", zone] = parts;
+  const year = Number(y);
+  const month = Number(mo);
+  const day = Number(d);
+  // Day 0 of the next month is the last day of this month, leap years included.
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  if (
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > daysInMonth ||
+    Number(h) > 23 ||
+    Number(mi) > 59 ||
+    Number(sec) > 59
+  ) {
+    throw invalid();
   }
-  return new Date(ms).toISOString();
+
+  const millis = (frac + "000").slice(0, 3);
+  const finer = /[1-9]/.test(frac.slice(3));
+  // `+0700` is valid ISO-8601 but Date.parse rejects it; insert the colon.
+  const offset = (zone ?? "Z").replace(/^([+-]\d{2})(\d{2})$/, "$1:$2");
+  const ms = Date.parse(`${y}-${mo}-${d}T${h}:${mi}:${sec}.${millis}${offset}`);
+  if (Number.isNaN(ms)) throw invalid();
+  return new Date(round === "up" && finer ? ms + 1 : ms).toISOString();
 }
 
 /**

@@ -701,12 +701,12 @@ export function buildListExecutionsSql(
   }
   if (params.since !== undefined) {
     where.push(
-      `${d.startTimeColumn} >= ${d.timeLiteral(normalizeTimestamp("since", params.since))}`,
+      `${d.startTimeColumn} >= ${d.timeLiteral(normalizeTimestamp("since", params.since, "up"))}`,
     );
   }
   if (params.until !== undefined) {
     where.push(
-      `${d.startTimeColumn} <= ${d.timeLiteral(normalizeTimestamp("until", params.until))}`,
+      `${d.startTimeColumn} <= ${d.timeLiteral(normalizeTimestamp("until", params.until, "down"))}`,
     );
   }
 
@@ -778,12 +778,12 @@ export function buildListExecutionsLogsQuery(
     }
     if (params.since !== undefined) {
       filters.push(
-        `startTime >= "${escapeQuotedString(normalizeTimestamp("since", params.since))}"`,
+        `startTime >= "${escapeQuotedString(normalizeTimestamp("since", params.since, "up"))}"`,
       );
     }
     if (params.until !== undefined) {
       filters.push(
-        `startTime <= "${escapeQuotedString(normalizeTimestamp("until", params.until))}"`,
+        `startTime <= "${escapeQuotedString(normalizeTimestamp("until", params.until, "down"))}"`,
       );
     }
     stages.push(`filter ${filters.join(" and ")}`);
@@ -819,12 +819,12 @@ export function buildListExecutionsLogsQuery(
   }
   if (params.since !== undefined) {
     postFilters.push(
-      `startTime >= "${escapeQuotedString(normalizeTimestamp("since", params.since))}"`,
+      `startTime >= "${escapeQuotedString(normalizeTimestamp("since", params.since, "up"))}"`,
     );
   }
   if (params.until !== undefined) {
     postFilters.push(
-      `startTime <= "${escapeQuotedString(normalizeTimestamp("until", params.until))}"`,
+      `startTime <= "${escapeQuotedString(normalizeTimestamp("until", params.until, "down"))}"`,
     );
   }
   if (postFilters.length > 0) {
