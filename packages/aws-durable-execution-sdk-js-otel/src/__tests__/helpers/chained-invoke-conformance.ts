@@ -28,7 +28,7 @@ export function testChainedInvokeReplay(
     const previousTarget = process.env.OTEL_INVOKE_TARGET_FUNCTION_NAME;
 
     beforeAll(async () => {
-      LocalDurableTestRunner.setupTestEnvironment();
+      await LocalDurableTestRunner.setupTestEnvironment();
       trace.disable();
       context.disable();
       propagation.disable();
@@ -60,12 +60,31 @@ export function testChainedInvokeReplay(
     });
 
     it("replays the completed invoke without another child or terminal export", async () => {
-      const target = jest.fn(targetHandler);
+      let releaseTarget!: () => void;
+      const targetGate = new Promise<void>((resolve) => {
+        releaseTarget = resolve;
+      });
+      const gatedTarget: DurableLambdaHandler = async (...args) => {
+        await targetGate;
+        return targetHandler(...args);
+      };
+      const target = jest.fn(gatedTarget);
       const runner = new LocalDurableTestRunner({ handlerFunction: handler });
       runner.registerDurableFunction("case11-target:1", target);
       const input = { scenario: "chained-invoke", nested: { value: 42 } };
       const execution = runner.run({ payload: input });
       const invoke = runner.getOperation("otel-invoke");
+      await invoke.waitForData(WaitingOperationStatus.STARTED);
+      // Finish the caller's first invocation before the target can complete,
+      // establishing InvocationCompleted before ChainedInvokeSucceeded.
+      try {
+        await runner.pauseExecution();
+      } finally {
+        releaseTarget();
+      }
+      await invoke.waitForData(WaitingOperationStatus.COMPLETED);
+      await runner.resumeExecution();
+
       const barrier = runner.getOperation("otel-invoke-replay-barrier");
       await barrier.waitForData(WaitingOperationStatus.SUBMITTED);
       await runner.pauseExecution();
