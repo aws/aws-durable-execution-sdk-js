@@ -1,0 +1,1 @@
+{"finding_digest":"812ea3974c2210125a9d0768238aeec2bfc70c8ccd0b5339b543b04b5f4d579f","finding_id":"arf_v1_qexkhf2meiibewu5a5uchcxoyk","identity_key":"telemetry-core/schema.ts::record_schema_athena::advertised-column-missing-on-upgrade","pull_request_number":1063,"repository":{"full_name":"aws/aws-durable-execution-sdk-js","id":1038735190},"reviewer":"codex","schema_version":1}
