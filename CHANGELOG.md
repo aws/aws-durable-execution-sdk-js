@@ -115,6 +115,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Durable Execution Telemetry**: the bundled Athena table (the CDK Glue table and the
+  telemetry-core Athena DDL) now declares `emittedat`, `starttime`, `endtime`, and the operation
+  `starttime`/`endtime` as `timestamp` instead of `string`. Athena compared the strings as text,
+  so a filter such as `starttime >= '2026-10-23T18:42:46Z'` left out every record from that
+  second. Queries now compare these columns with `TIMESTAMP` literals, and the Athena schema
+  prompt says so. A table created earlier keeps its `string` columns: recreate it, or run
+  `ALTER TABLE <table> REPLACE COLUMNS (...)` with the new definition.
+- **Durable Execution Telemetry MCP**: `list_executions` validates `since` and `until`, including
+  the calendar (`2026-02-30` is rejected), and reads a bound with no offset as UTC. Before, a bound
+  was compared as given. On DynamoDB and CloudWatch Logs, which compare text, a bound without a
+  fraction or with an offset such as `-07:00` returned the wrong records. There, a bound is now
+  rewritten to the stored format (UTC, 3 fraction digits, `Z`), with `since` rounded up and `until`
+  rounded down. On Athena, Aurora, Redshift, and OpenSearch, which compare instants, the bound
+  keeps every digit the caller gave. Records from the Python exporter `0.0.1` preview, which wrote
+  microsecond timestamps, can still be ordered incorrectly within one second on the two text
+  destinations.
 - **Durable Execution Telemetry**: `emittedAt` now strictly increases across the records of one
   invocation. With `emitMode: "on-change"`, two records could be built in the same millisecond and
   get the same `emittedAt`. `SQSExporter` derives the FIFO deduplication id from

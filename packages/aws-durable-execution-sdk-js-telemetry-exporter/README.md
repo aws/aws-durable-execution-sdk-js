@@ -35,8 +35,8 @@ interface DurableExecutionTelemetryRecord {
 
   // Execution state
   status: "RUNNING" | "SUCCEEDED" | "FAILED"; // suspends (waits/timers) surface as RUNNING
-  startTime: string; // ISO-8601
-  endTime?: string; // ISO-8601 (absent while running)
+  startTime: string; // UTC, YYYY-MM-DDTHH:MM:SS.sssZ (see Timestamps)
+  endTime?: string; // Same format (absent while running)
   durationMs?: number; // Total duration (absent while running)
 
   // Payload
@@ -62,8 +62,8 @@ interface OperationRecord {
   subType?: string; // Additional categorization
   parentId?: string; // Parent operation ID (for child contexts)
   status: string; // STARTED | SUCCEEDED | FAILED | PENDING | CANCELLED
-  startTime?: string; // ISO-8601
-  endTime?: string; // ISO-8601
+  startTime?: string; // UTC, YYYY-MM-DDTHH:MM:SS.sssZ (see Timestamps)
+  endTime?: string; // Same format
   durationMs?: number; // Operation duration
   attempt?: number; // Retry attempt count
   error?: ErrorRecord; // Per-operation error
@@ -76,6 +76,23 @@ interface ErrorRecord {
   cause?: ErrorRecord; // Present only when the error has a cause
 }
 ```
+
+## Timestamps
+
+Every timestamp in a record (`emittedAt`, `startTime`, `endTime`, and each
+operation's `startTime` and `endTime`) has one format in every SDK:
+`YYYY-MM-DDTHH:MM:SS.sssZ`. It is UTC, it has exactly 3 fraction digits, and it
+ends with a literal `Z`, for example `2026-10-23T18:42:40.243Z`. This is the
+output of `Date.prototype.toISOString()`.
+
+DynamoDB, CloudWatch Logs Insights, and other text columns compare these values
+as text. Text order equals time order only when every value has the same width
+and zone. So the format is fixed, and a value is never shortened to drop a zero
+fraction.
+
+Destinations with a time type store the value in it. Aurora and Redshift write
+`TIMESTAMPTZ` columns, OpenSearch maps the fields as `date`, and the bundled
+Athena table declares them as `timestamp`.
 
 ## Error names and causes
 

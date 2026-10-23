@@ -44,9 +44,9 @@ import {
 import {
   coerceLimit,
   escapeSqlString,
+  normalizeTimestamp,
   validatePartitionComponent,
   validateStatus,
-  validateTimestamp,
 } from "./sqlSafe";
 
 /** Default number of rows `list_executions` returns when no `limit` is given. */
@@ -339,7 +339,32 @@ interface Dialect {
    * plugin forbids ORDER BY on a raw text field.
    */
   orderByAndLimit: boolean;
+  /**
+   * The SQL literal for a `since`/`until` bound, given the bound in the stored
+   * format (`2024-01-31T12:34:56.000Z`). Athena declares the time columns as
+   * `timestamp`, so it needs a typed literal. The other engines compare the
+   * quoted string directly: PostgreSQL and Redshift cast it to `timestamptz`,
+   * OpenSearch parses it for its `date` field, and DynamoDB compares the text,
+   * which is correct because the stored values have the same fixed width.
+   */
+  timeLiteral: (iso: string) => string;
+  /**
+   * How precisely a bound is written (see `normalizeTimestamp`). `"exact"` for
+   * a typed time column, which compares instants. `"millisecond"` for a column
+   * compared as text, which needs the stored fixed width.
+   */
+  timePrecision: "millisecond" | "exact";
 }
+
+/** A quoted string literal. The value is a normalized timestamp, so it holds no quote. */
+const quotedTime = (iso: string): string => `'${iso}'`;
+
+/**
+ * A Trino `TIMESTAMP` literal for an Athena `timestamp` column. The column holds
+ * UTC values without a zone, so the literal is the UTC time without the `T` and `Z`.
+ */
+const trinoTimestamp = (iso: string): string =>
+  `TIMESTAMP '${iso.replace("T", " ").replace("Z", "")}'`;
 
 /** Resolve the {@link Dialect} for the configured destination. */
 function dialectFor(cfg: TelemetryConfig): Dialect {
@@ -356,6 +381,8 @@ function dialectFor(cfg: TelemetryConfig): Dialect {
         startTimeColumn: "starttime",
         recordTypeColumn: "recordtype",
         orderByAndLimit: true,
+        timeLiteral: trinoTimestamp,
+        timePrecision: "exact",
       };
     case "dynamodb":
       return {
@@ -368,6 +395,8 @@ function dialectFor(cfg: TelemetryConfig): Dialect {
         startTimeColumn: "startTime",
         recordTypeColumn: "recordType",
         orderByAndLimit: false,
+        timeLiteral: quotedTime,
+        timePrecision: "millisecond",
       };
     case "aurora":
       return {
@@ -381,6 +410,8 @@ function dialectFor(cfg: TelemetryConfig): Dialect {
         startTimeColumn: "start_time",
         recordTypeColumn: undefined,
         orderByAndLimit: true,
+        timeLiteral: quotedTime,
+        timePrecision: "exact",
       };
     case "redshift":
       return {
@@ -394,6 +425,8 @@ function dialectFor(cfg: TelemetryConfig): Dialect {
         startTimeColumn: "start_time",
         recordTypeColumn: undefined,
         orderByAndLimit: true,
+        timeLiteral: quotedTime,
+        timePrecision: "exact",
       };
     case "opensearch":
       return {
@@ -408,6 +441,8 @@ function dialectFor(cfg: TelemetryConfig): Dialect {
         startTimeColumn: "startTime",
         recordTypeColumn: "recordType",
         orderByAndLimit: true,
+        timeLiteral: quotedTime,
+        timePrecision: "exact",
       };
     default:
       throw new Error(
@@ -595,7 +630,7 @@ export async function runGetExecution(
  *
  * An unparseable `since` falls back to the default rather than throwing, which keeps
  * this helper total. Note that this branch is UNREACHABLE through the tool: the query
- * is built first, and `validateTimestamp` rejects a malformed bound there, so a bad
+ * is built first, and `normalizeTimestamp` rejects a malformed bound there, so a bad
  * value never arrives here. `tools.test.ts` pins that ordering, since it is the
  * difference between a clean rejection and a silent 24-hour window.
  */
@@ -645,9 +680,11 @@ export interface ListExecutionsParams {
  * Build the filtered list SELECT.
  *
  * `status` is validated against the known set (rejected if unknown);
- * `since`/`until` are validated as ISO timestamps (rejected if malformed) —
- * both are then safe to interpolate because their validated shapes cannot
- * contain a quote. `functionName` is free-form text, so it is quote-escaped.
+ * `since`/`until` are validated as ISO timestamps (rejected if malformed) and
+ * rewritten to the stored UTC format, then written as the dialect's time
+ * literal (a `TIMESTAMP` literal for Athena, a quoted string elsewhere) —
+ * both are then safe to interpolate because their shapes cannot contain a
+ * quote. `functionName` is free-form text, so it is quote-escaped.
  * Everything engine-specific — column casing, table quoting, whether a
  * `recordType` guard exists, and whether ORDER BY/LIMIT are appended — comes
  * from {@link dialectFor}, because these idioms are NOT portable across Trino,
@@ -675,12 +712,12 @@ export function buildListExecutionsSql(
   }
   if (params.since !== undefined) {
     where.push(
-      `${d.startTimeColumn} >= '${validateTimestamp("since", params.since)}'`,
+      `${d.startTimeColumn} >= ${d.timeLiteral(normalizeTimestamp("since", params.since, "up", d.timePrecision))}`,
     );
   }
   if (params.until !== undefined) {
     where.push(
-      `${d.startTimeColumn} <= '${validateTimestamp("until", params.until)}'`,
+      `${d.startTimeColumn} <= ${d.timeLiteral(normalizeTimestamp("until", params.until, "down", d.timePrecision))}`,
     );
   }
 
@@ -723,8 +760,10 @@ export function buildListExecutionsSql(
  * DOUBLE-QUOTED Logs Insights literal and escaped with core's
  * `escapeQuotedString` (the correct escaper for this language — NOT the SQL
  * single-quote doubler). `status` is validated against the closed enum and
- * `since`/`until` against the ISO-timestamp shape (rejected if malformed),
- * exactly as the SQL builder does. A `limit` is appended here (bounded by
+ * `since`/`until` against the ISO-timestamp shape (rejected if malformed) and
+ * rewritten to the stored UTC format, exactly as the SQL builder does. Logs
+ * Insights compares `startTime` as text, so the bound must have the stored
+ * width and zone. A `limit` is appended here (bounded by
  * {@link MAX_ROWS}); the choke point's `ensureLimit` then leaves it untouched.
  */
 export function buildListExecutionsLogsQuery(
@@ -750,12 +789,12 @@ export function buildListExecutionsLogsQuery(
     }
     if (params.since !== undefined) {
       filters.push(
-        `startTime >= "${escapeQuotedString(validateTimestamp("since", params.since))}"`,
+        `startTime >= "${escapeQuotedString(normalizeTimestamp("since", params.since, "up", "millisecond"))}"`,
       );
     }
     if (params.until !== undefined) {
       filters.push(
-        `startTime <= "${escapeQuotedString(validateTimestamp("until", params.until))}"`,
+        `startTime <= "${escapeQuotedString(normalizeTimestamp("until", params.until, "down", "millisecond"))}"`,
       );
     }
     stages.push(`filter ${filters.join(" and ")}`);
@@ -791,12 +830,12 @@ export function buildListExecutionsLogsQuery(
   }
   if (params.since !== undefined) {
     postFilters.push(
-      `startTime >= "${escapeQuotedString(validateTimestamp("since", params.since))}"`,
+      `startTime >= "${escapeQuotedString(normalizeTimestamp("since", params.since, "up", "millisecond"))}"`,
     );
   }
   if (params.until !== undefined) {
     postFilters.push(
-      `startTime <= "${escapeQuotedString(validateTimestamp("until", params.until))}"`,
+      `startTime <= "${escapeQuotedString(normalizeTimestamp("until", params.until, "down", "millisecond"))}"`,
     );
   }
   if (postFilters.length > 0) {
