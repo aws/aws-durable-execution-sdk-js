@@ -13,6 +13,7 @@ import {
 import { Serdes } from "../../utils/serdes/serdes";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import { completeAfter } from "../../utils/checkpoint/complete-after";
 import {
   DurableInstrumentationPlugin,
   OperationInfo,
@@ -45,29 +46,30 @@ export const createCallbackPromise = <T>(
       log("✅", "Callback completed:", { stepId });
       checkAndUpdateReplayMode();
 
-      checkpoint.markOperationState(stepId, OperationLifecycleState.COMPLETED);
+      // The callback stays EXECUTING until its result is deserialized.
+      return await completeAfter(checkpoint, stepId, async () => {
+        const operationInfo = toOperationInfo(stepData);
+        backfillOperationInfo(operationInfo, opInfo);
+        await plugin.onOperationEnd?.({ ...operationInfo, isReplay: false });
 
-      const operationInfo = toOperationInfo(stepData);
-      backfillOperationInfo(operationInfo, opInfo);
-      await plugin.onOperationEnd?.({ ...operationInfo, isReplay: false });
+        const callbackData = stepData.CallbackDetails;
+        if (!callbackData) {
+          throw new CallbackError(
+            `No callback data found for completed callback: ${stepId}`,
+          );
+        }
 
-      const callbackData = stepData.CallbackDetails;
-      if (!callbackData) {
-        throw new CallbackError(
-          `No callback data found for completed callback: ${stepId}`,
+        const result = await safeDeserialize(
+          serdes,
+          callbackData.Result,
+          stepId,
+          stepName,
+          context.terminationManager,
+          context.durableExecutionArn,
         );
-      }
 
-      const result = await safeDeserialize(
-        serdes,
-        callbackData.Result,
-        stepId,
-        stepName,
-        context.terminationManager,
-        context.durableExecutionArn,
-      );
-
-      return result as T;
+        return result as T;
+      });
     }
 
     // Handle failure

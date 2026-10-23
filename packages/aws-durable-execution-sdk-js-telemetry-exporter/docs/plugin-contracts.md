@@ -31,16 +31,19 @@ interface TelemetryExporter {
    * Maximum serialized record size in bytes before truncation. Each exporter
    * can set its own limit based on destination constraints.
    *
-   * Truncation is best-effort and drops in this order until the record fits:
-   *   1. operation `result` fields, oldest operation first;
-   *   2. whole operations, oldest first;
-   *   3. last resort — execution `input`, then `output`.
+   * Truncation is best-effort, runs once, and drops in this order until the
+   * record fits:
+   *   1. every error `cause` (execution `error` and every operation error),
+   *      with `droppedCauses: true`;
+   *   2. operation `result` fields, oldest operation first;
+   *   3. whole operations, oldest first;
+   *   4. last resort — execution `input`, then `output`.
    * Identity/timeline fields are never dropped; prefer `content.input`/
    * `content.output` transforms to bound `input`/`output` before it comes to
    * that. When anything is dropped, `truncated: true` is set on the record, each
    * operation whose result was dropped is itself marked `truncated: true`, and
-   * the `droppedOperations` count / `droppedInput` / `droppedOutput` flags are
-   * set as applicable.
+   * the `droppedCauses` flag / `droppedOperations` count / `droppedInput` /
+   * `droppedOutput` flags are set as applicable.
    *
    * The size is measured against the shape the exporter emits (via its optional
    * `render` — e.g. the `operationsByName` expansion), not the canonical record,
@@ -387,6 +390,8 @@ interface DurableExecutionTelemetryRecord {
   error?: {
     name: string;
     message: string;
+    /** Error.cause, same shape; cut after 16 levels or at a repeated cause. */
+    cause?: { name: string; message: string; cause?: ... };
   };
 
   // --- Operations ---
@@ -401,6 +406,8 @@ interface DurableExecutionTelemetryRecord {
 
   /** True when data was dropped to fit the exporter's maxRecordSizeBytes. */
   truncated?: boolean;
+  /** True when every error `cause` was removed (the first thing dropped). */
+  droppedCauses?: boolean;
   /** Number of whole operations dropped. */
   droppedOperations?: number;
   /** True when execution input was dropped as a last resort. */
@@ -444,6 +451,8 @@ interface OperationRecord {
   error?: {
     name: string;
     message: string;
+    /** Error.cause, same shape; cut after 16 levels or at a repeated cause. */
+    cause?: { name: string; message: string; cause?: ... };
   };
 
   /** True when the size limiter dropped this operation's result. */

@@ -112,6 +112,17 @@ export interface MicrovmBaseConfig {
    * It is the second retry tier: the first tier retries inside one step
    * attempt.
    *
+   * A step adds the request ID of a failed AWS call to the message of the
+   * AWS SDK error. For an AWS SDK error, the strategy still receives the
+   * message without the request ID. So a strategy that matches the message,
+   * such as `createRetryStrategy({ retryableErrors: [...] })`, matches the
+   * message of the service. The original message applies only during the
+   * call. Code that reads `error.message` after the strategy returns sees
+   * the request ID. An error that the MicroVM operation creates itself, such
+   * as `MicrovmStateError` or "RunMicrovm returned no microvmId", has the
+   * request ID in its message when the strategy receives it. The handler and
+   * the execution history get the message with the request ID.
+   *
    * Defaults to {@link defaultMicrovmRetryStrategy}.
    */
   retryStrategy?: (error: Error, attemptCount: number) => RetryDecision;
@@ -366,7 +377,9 @@ export interface MicrovmSession {
    * @throws \{MicrovmNotRunningError\} When the session's MicroVM has ended,
    * and the session checks the MicroVM state before each job. It checks with
    * `autoSuspendOnIdle: true` or an `idlePolicy`. Otherwise an ended MicroVM
-   * fails the job with {@link MicrovmDeliveryError} after the retries.
+   * fails the job with {@link MicrovmDeliveryError} after the retries. Every
+   * session also reports it when CreateMicrovmAuthToken reports the MicroVM
+   * removed.
    * @throws \{MicrovmDeliveryError\} When the request fails after all
    * retries, or the route rejects the job.
    * @throws \{TypeError\} When `context` is not a durable context, or

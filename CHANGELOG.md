@@ -87,6 +87,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Durable Execution Telemetry**: every error in a record (the execution `error`,
+  `operations[].error`, and `operationsByName.<name>.error`) now carries its cause chain as
+  `{ name, message, cause? }`, in that key order. `cause` follows `Error.cause`, including the
+  cause the SDK builds when it rebuilds an operation error from a checkpoint. The chain is cut
+  after 16 levels or at a cause already written, and a cause that is not an error object is
+  written as `{ name: "Error", message: String(cause) }`. Reading a cause never throws: a failure
+  ends the chain and the record is kept. The error's own `name` and `message` are converted to
+  strings the same way; if reading them throws, the error is written as
+  `{ name: "Error", message: "" }` and the record is kept. Every `name` and `message`, on errors
+  and on causes, is capped at 8,192 Unicode code points plus `…`, so a cut never splits a
+  surrogate pair.
+  When a record is over an exporter's size limit, every `cause` is removed first and the record
+  gets `droppedCauses: true`. Apart from the cap, `name` is unchanged, and an error without a
+  cause is written as before. Error names are each SDK's own and differ across languages; the exporter README
+  explains how to query them.
+- **Durable Execution Telemetry**: `SQSExporter` replaces a FIFO `MessageGroupId` or
+  `MessageDeduplicationId` longer than 128 characters with its lowercase hex SHA-256 digest. SQS
+  rejected these sends, and most execution ARNs are longer than 128 characters. Ids of 128
+  characters or fewer are unchanged. An empty `messageGroupId` is treated as omitted.
+- A failed `context.invoke` now throws an `InvokeError` whose `cause.name` is the invoked
+  function's error type (for example `"PaymentError"`), with the remote stack trace, as the
+  callback handlers and replayed operations already do. Before, `cause.name` was always
+  `"Error"`. A cause is now also created when the remote error has a type but no message.
+  The top-level `name` is unchanged: the live error is still `InvokeError`, and an operation
+  error rebuilt from a checkpoint is still `StepError` for an unknown remote type. Read
+  `cause.name` to get the remote error type in both cases, including in Durable Execution
+  Telemetry records.
+- **Durable Execution Telemetry**: the bundled Glue table (`cdk/stack.ts`) and the
+  telemetry-core Athena DDL and schema prompt now include the `droppedcauses` column, so a
+  record cut only by dropping causes can be told apart from other truncations.
+
 - **OpenTelemetry**: `FAILED`, `TIMED_OUT`, and `STOPPED` operations remain `ERROR` in both views,
   including later-invocation continuations, even without error details.
   Exception events still require an actual error object.
@@ -256,6 +287,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   starting. So the job failed with `MicrovmDeliveryError` only after both retry tiers. The launch
   checkpoint now records the resume mode as `"resumeBeforeDelivery": true` or
   `"resumeBeforeDelivery": false`, and replay follows it.
+- A `microvmSession` job in `@aws/durable-execution-sdk-js-extras` reported a removed MicroVM
+  without the request ID of the AWS call. GetMicrovm and ResumeMicrovm answer
+  `ResourceNotFoundException` for a removed MicroVM, and the AWS SDK error carries the request ID.
+  The request step dropped that error. So a support case had no request ID to quote. The
+  `MicrovmNotRunningError` message now ends with `GetMicrovm request ID: <id>.` or
+  `ResumeMicrovm request ID: <id>.`. The SDK checkpoints the message. So the handler sees the ID
+  on the first run and on replay, and the execution history keeps it. A message has no ID when the
+  AWS SDK error carries none. `MicrovmStateError` also keeps the AWS SDK error as its `cause`.
+  Only the retry strategy and the plugin hooks of a live step attempt see `cause`. A replayed step
+  rebuilds the error from the checkpoint, without it.
+- A MicroVM job in `@aws/durable-execution-sdk-js-extras` could fail with a plain
+  `MicrovmDeliveryError` for a removed MicroVM. The request step calls CreateMicrovmAuthToken
+  before the first request, and again after a 401 or 403. The API model lists
+  `ResourceNotFoundException` for that call. The step rethrew that error. So a handler that catches
+  `MicrovmNotRunningError` to start a new session did not catch this case. The step now treats
+  this answer as it treats the same answer from GetMicrovm and ResumeMicrovm. The job fails at once
+  with `MicrovmNotRunningError`, and its message ends with
+  `CreateMicrovmAuthToken request ID: <id>.`. This applies to `microvm` jobs over HTTP and to every
+  session job. A custom retry strategy now receives `MicrovmStateError` for this answer, with the
+  AWS SDK error as its `cause`. Before, it received the AWS SDK error. The live service's answer for
+  a removed MicroVM is not verified.
+- Other failed AWS calls of the MicroVM operations in `@aws/durable-execution-sdk-js-extras`
+  reported no request ID. The SDK checkpoints only the message of a step failure, and an AWS SDK
+  message has no request ID. So a support case had no request ID to quote. The message now ends with
+  `<Operation> request ID: <id>.` in these cases:
+  - A GetMicrovm answer of `TERMINATING` or `TERMINATED`. `MicrovmNotRunningError` ends with
+    `GetMicrovm request ID: <id>.`.
+  - A RunMicrovm failure. `MicrovmLaunchError` ends with `RunMicrovm request ID: <id>.`.
+  - Any other error of GetMicrovm, ResumeMicrovm, or CreateMicrovmAuthToken, such as
+    `AccessDeniedException`. `MicrovmDeliveryError` ends with the request ID of that call.
+  - A TerminateMicrovm failure. The terminate step's record in the execution history ends with
+    `TerminateMicrovm request ID: <id>.`. The operation still returns the job's outcome.
+  - A RunMicrovm or CreateMicrovmAuthToken answer without a required field, such as `microvmId`.
+
+  For a rethrown AWS SDK error, each step adds the request ID to the message of the error object
+  itself. It does not wrap the error. So the error keeps its class, `name`, `code`, `$retryable`,
+  and `$metadata`. So the default retry strategy decides as before for such an error.
+  `createRetryStrategy` matches its `retryableErrors` patterns against `error.message`. The request
+  ID sentence would change what a pattern matches. So each step calls a custom retry strategy
+  while the AWS SDK error has the message of the service. After the strategy returns or throws,
+  the error has the message with the request ID again. The SDK checkpoints the message after the
+  strategy returns. So the handler and the execution history still get the request ID. An error
+  that the MicroVM operation creates itself, such as `MicrovmStateError` or "RunMicrovm returned
+  no microvmId", has the request ID in its message when the strategy receives it.
+  A message has no request ID when the AWS SDK error or output carries none, for example after a
+  connection failure. Only an error of the Lambda MicroVMs service gets a request ID. An error of
+  another service keeps its message. For example, a credential provider that assumes a role calls
+  STS inside each call, and its error carries the request ID of STS. When a custom client throws one
+  error object for several calls, the message names only the last call. (#1050, #1058)
 
 - An `InvalidRunHookPayloadError` for a `runHookPayload` that is not JSON now keeps the parser's
   `SyntaxError` as its `cause`. Its message names the position of the error.

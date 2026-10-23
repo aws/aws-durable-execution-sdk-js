@@ -28,6 +28,7 @@ describe("Run In Child Context Handler Two-Phase Execution", () => {
       force: jest.fn().mockResolvedValue(undefined),
       setTerminating: jest.fn(),
       markAncestorFinished: jest.fn(),
+      markOperationState: jest.fn(),
     };
 
     mockParentContext = {

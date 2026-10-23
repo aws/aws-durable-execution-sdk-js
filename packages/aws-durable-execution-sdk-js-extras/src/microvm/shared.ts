@@ -20,6 +20,7 @@ import {
   assertTimeToDeliver,
   sendJob,
 } from "./request";
+import { addRequestId, withOriginalMessage, withRequestId } from "./aws-errors";
 import { ensureRunning } from "./lifecycle";
 import { defaultMicrovmRetryStrategy } from "./retry";
 import { MicrovmOperationSubType } from "./subtypes";
@@ -177,7 +178,41 @@ export function createScope(
     config,
     partition,
     region,
-    retryStrategy: config.retryStrategy ?? defaultMicrovmRetryStrategy,
+    retryStrategy: decideOnOriginalMessage(
+      config.retryStrategy ?? defaultMicrovmRetryStrategy,
+    ),
+  };
+}
+
+/**
+ * Returns a retry strategy that calls `strategy` with the original message of
+ * an AWS SDK error.
+ *
+ * @remarks
+ * Each step adds the request ID to the message of an AWS SDK error. See
+ * {@link addRequestId}. A strategy that matches the message, such as
+ * `createRetryStrategy({ retryableErrors: [...] })`, would then match the
+ * longer message. So it could decide differently. The returned strategy
+ * calls `strategy` through {@link withOriginalMessage}. So `strategy` decides
+ * on the message that the AWS SDK error had. The core SDK checkpoints the
+ * message after the strategy returns. So the handler and the execution
+ * history still get the message with the request ID.
+ *
+ * Every step of the operation gets its strategy from {@link createScope}. So
+ * the launch, request, and terminate steps all use the returned strategy.
+ *
+ * {@link defaultMicrovmRetryStrategy} reads only `name`, `code`, and
+ * `$retryable`. So the wrapper does not change its decisions. It wraps the
+ * default strategy too, so that every step has one code path.
+ *
+ * The returned strategy passes on `this`, the arguments, the return value,
+ * and any exception of `strategy`.
+ */
+function decideOnOriginalMessage(strategy: RetryStrategy): RetryStrategy {
+  return function (this: unknown, error, attemptCount) {
+    return withOriginalMessage(error, () =>
+      strategy.call(this, error, attemptCount),
+    );
   };
 }
 
@@ -323,35 +358,55 @@ export function launch(
   return child.step<LaunchResult>(
     `${scope.name}.launch`,
     async () => {
-      const response = await getClient(config, region).send(
-        new RunMicrovmCommand({
-          imageIdentifier: config.imageIdentifier,
-          imageVersion: config.imageVersion,
-          executionRoleArn: config.executionRoleArn,
-          // A callback ID can be 1024 characters, and the client token
-          // allows 128. The digest is 64 characters.
-          clientToken: sha256Hex(options.tokenSource),
-          ingressNetworkConnectors: config.ingressNetworkConnectors ?? [
-            connectorArn(partition, region, options.defaultIngress),
-          ],
-          egressNetworkConnectors: config.egressNetworkConnectors ?? [
-            connectorArn(partition, region, "INTERNET_EGRESS"),
-          ],
-          maximumDurationInSeconds: Math.min(
-            options.timeoutSeconds + LAUNCH_MARGIN_SECONDS,
-            MAX_MICROVM_DURATION_SECONDS,
-          ),
-          logging: config.logging,
-          runHookPayload: options.runHookPayload,
-          ...options.extra,
-        }),
-      );
+      // The core SDK checkpoints only the message of a step failure. So a
+      // RunMicrovm error of the Lambda MicroVMs service gets the request ID
+      // in its message, and keeps its class and retry fields. See
+      // `addRequestId`.
+      const response = await getClient(config, region)
+        .send(
+          new RunMicrovmCommand({
+            imageIdentifier: config.imageIdentifier,
+            imageVersion: config.imageVersion,
+            executionRoleArn: config.executionRoleArn,
+            // A callback ID can be 1024 characters, and the client token
+            // allows 128. The digest is 64 characters.
+            clientToken: sha256Hex(options.tokenSource),
+            ingressNetworkConnectors: config.ingressNetworkConnectors ?? [
+              connectorArn(partition, region, options.defaultIngress),
+            ],
+            egressNetworkConnectors: config.egressNetworkConnectors ?? [
+              connectorArn(partition, region, "INTERNET_EGRESS"),
+            ],
+            maximumDurationInSeconds: Math.min(
+              options.timeoutSeconds + LAUNCH_MARGIN_SECONDS,
+              MAX_MICROVM_DURATION_SECONDS,
+            ),
+            logging: config.logging,
+            runHookPayload: options.runHookPayload,
+            ...options.extra,
+          }),
+        )
+        .catch((error: unknown) => {
+          throw addRequestId("RunMicrovm", error);
+        });
       if (!response.microvmId) {
-        throw new Error("RunMicrovm returned no microvmId");
+        throw new Error(
+          withRequestId(
+            "RunMicrovm returned no microvmId",
+            "RunMicrovm",
+            response,
+          ),
+        );
       }
       const overHttp = options.delivery === "http";
       if (overHttp && !response.endpoint) {
-        throw new Error("RunMicrovm returned no endpoint");
+        throw new Error(
+          withRequestId(
+            "RunMicrovm returned no endpoint",
+            "RunMicrovm",
+            response,
+          ),
+        );
       }
       return {
         microvmId: response.microvmId,
@@ -515,7 +570,7 @@ export async function terminate(
           // MicroVM whose record the service has already removed returns
           // ResourceNotFoundException. Either way, the MicroVM is gone.
           if ((error as Error).name !== "ResourceNotFoundException") {
-            throw error;
+            throw addRequestId("TerminateMicrovm", error);
           }
         }
       },
