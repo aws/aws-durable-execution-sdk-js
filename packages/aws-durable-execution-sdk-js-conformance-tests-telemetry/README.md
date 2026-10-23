@@ -70,47 +70,18 @@ durable-execution-conformance \
   --parameter-overrides LambdaExecutionRoleArn=<role-arn>
 ```
 
-## CI workflow
+## CI
 
-[`.github/workflows/telemetry-conformance-tests.yml:45–81`](../../.github/workflows/telemetry-conformance-tests.yml#L45-L81) calls the shared `telemetry-suite.yml`
-workflow in `aws/aws-durable-execution-conformance-tests`. It runs on pull requests and on
-pushes to `main` that change the SDK, the exporter, this package, the root dependency
-files, the Node setup scripts, or the workflow. It also runs on manual dispatch, where
-`aws_region` and `conformance_test_ref` can be overridden.
+[`.github/workflows/telemetry-conformance-tests.yml:7–81`](../../.github/workflows/telemetry-conformance-tests.yml#L7-L81)
+runs on pull requests and pushes to `main` that touch the SDK, telemetry
+exporter, this package, or related CI and dependency files. It also supports
+manual dispatch.
 
-The workflow runs these steps in the SDK checkout:
+It calls the conformance repository's reusable telemetry workflow at a pinned
+SHA. `sdk_ref` selects the PR head commit, and `examples_dir` points to this
+package. CI builds the SDK, exporter, and handlers, then deploys the template
+and validates the `telemetry` suite. Reports and telemetry diagnostics are
+uploaded as artifacts.
 
-1. `npm ci` with `ELECTRON_SKIP_BINARY_DOWNLOAD=1`.
-2. Build the SDK and the exporter.
-3. `npm test` and `npm run build` for this package.
-
-The shared workflow then deploys `template.yaml` and runs the `telemetry` suite.
-
-### Prerequisites
-
-- The repository secrets `TEST_ROLE_ARN`, `TEST_ACCOUNT_ID` and
-  `TEST_LAMBDA_EXECUTION_ROLE_ARN` exist. The shared workflow receives them as
-  `CONFORMANCE_TEST_ROLE_ARN`, `CONFORMANCE_TEST_ACCOUNT_ID` and
-  `CONFORMANCE_TEST_LAMBDA_EXECUTION_ROLE_ARN`.
-- The persistent stack is `conformance-tests-js-telemetry`. The test role
-  must be able to create and update it and read telemetry with `logs:FilterLogEvents`. The Lambda execution role must allow
-  `logs:CreateLogStream` and `logs:PutLogEvents`.
-- The shared workflow owns the concurrency group for the stack. The caller declares none,
-  so an active deployment is not cancelled by a newer run.
-- Pull requests from forks and from Dependabot skip the job, because they cannot read secrets.
-
-### Pinning and artifacts
-
-The `uses:` reference is a full 40-character commit SHA of the conformance repository.
-A branch or tag would let a conformance change alter this repository's CI without a pull
-request here. To update it, merge the conformance change, then change the SHA in a pull request.
-
-The shared workflow uploads JSON and JUnit reports, execution histories, and retrieved
-telemetry diagnostics as an artifact on the run page. It also writes a job summary.
-
-### Stacked pull request
-
-The `pull_request` branch filter lists `feat/conformance-tests-telemetry` in addition to
-`main`, because the workflow is first reviewed on a branch stacked on that one. After the
-base pull request merges and this one is retargeted to `main`, remove that entry from the
-workflow and its matching test expectation.
+CI assumes AWS credentials through OIDC using the repository's existing test
+secrets. Fork and Dependabot pull requests skip the cloud job.
