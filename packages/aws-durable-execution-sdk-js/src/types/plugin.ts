@@ -194,14 +194,21 @@ export interface OperationChangeInfo {
  * operation, and cannot hold off the invocation's suspension.
  *
  * - The synchronous part of a hook still runs before the SDK continues. Hooks
- *   are called in lifecycle order, and a plugin can rely on state that a hook
- *   sets synchronously, for example a span that a later `wrap` hook looks up.
- * - The asynchronous parts of consecutive hooks can overlap. A plugin that
- *   needs them in order must queue the work itself.
+ *   are called in lifecycle order. For nested operations that order is
+ *   `parent start → child start → child end → parent end`. A plugin can rely on
+ *   state that a hook sets synchronously, for example a span that a later
+ *   `wrap` hook looks up.
+ * - The order applies to the calls, not to the asynchronous work the hooks
+ *   start. That work can overlap and finish in any order. For example, a slow
+ *   `onOperationEnd` for a child can finish after the parent's. A plugin that
+ *   needs its asynchronous work in order must queue it itself.
  * - `onInvocationStart` is still awaited. It runs before any operation, so
  *   waiting for it delays no operation, and a plugin can finish its setup
  *   there.
- * - The `wrap` hooks run the customer's function and stay inline.
+ * - The `wrap` hooks run the customer's function and stay inline. If a `wrap`
+ *   hook throws or rejects for its own reasons, the SDK uses the customer
+ *   function's own result instead, and calls the function if the hook did
+ *   not. An error from the customer function always reaches the caller.
  *
  * **Drain.** Before it calls `onInvocationEnd`, the SDK waits for the
  * asynchronous work of every earlier hook to settle. It then waits for

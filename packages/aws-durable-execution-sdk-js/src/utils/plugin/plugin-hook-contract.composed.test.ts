@@ -275,4 +275,38 @@ describe("plugin hooks do not block operations", () => {
       expect(events).toEqual(["operation end", "invocation end"]);
     }
   });
+  it("calls hooks for nested operations in lifecycle order, while their async work may finish in any order", async () => {
+    // The guarantee is about when hooks are called, not when their asynchronous work
+    // finishes. A slow child end can finish after the parent end.
+    const called: string[] = [];
+    const finished: string[] = [];
+
+    await invoke(
+      async (_event, context) => {
+        await context.runInChildContext("parent", (child) =>
+          child.step("child", async () => "a"),
+        );
+        return "done";
+      },
+      {
+        onOperationStart: async (info) => {
+          called.push(`${info.name}.start`);
+        },
+        onOperationEnd: async (info) => {
+          called.push(`${info.name}.end`);
+          if (info.name === "child") await sleep(HOOK_DELAY_MS);
+          finished.push(`${info.name}.end`);
+        },
+      },
+    );
+
+    expect(called).toEqual([
+      "parent.start",
+      "child.start",
+      "child.end",
+      "parent.end",
+    ]);
+    // onInvocationEnd's drain waited for both, and the slow child finished last.
+    expect(finished).toEqual(["parent.end", "child.end"]);
+  });
 });

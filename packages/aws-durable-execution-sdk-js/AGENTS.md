@@ -16,7 +16,8 @@ gives the reasons and the measurements.
    execution and the replay path. Use `completeAfter` (`src/utils/checkpoint/complete-after.ts`).
    Never mark an operation `COMPLETED` and then await more work for it.
 2. A child context is `EXECUTING` from the moment its function returns or throws until it
-   settles. It is not `EXECUTING` while its function runs.
+   settles, also while a `wrapChildContextFn` hook still runs after the function settled. It is
+   not `EXECUTING` while its function runs.
 3. The SDK never waits for an operation plugin hook: `onOperationStart`, `onOperationEnd`,
    `onOperationAttemptStart`, `onOperationAttemptEnd`, `onOperationChange`. The plugin runner
    (`src/utils/plugin/plugin-runner.ts`) calls them without waiting. Do not make it wait.

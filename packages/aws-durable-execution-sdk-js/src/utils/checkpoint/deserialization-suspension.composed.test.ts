@@ -449,6 +449,38 @@ describe("async deserialization with a pending callback", () => {
     expect(response).toEqual({ Status: InvocationStatus.PENDING });
   });
 
+  it("runInChildContext: runs the caller's next step before suspending when wrapChildContextFn does async work after fn", async () => {
+    // A wrapper that awaits fn and then waits. While it waits, no operation inside fn is
+    // EXECUTING. So the context itself must already count as EXECUTING.
+    const slowWrapperTail: DurableExecutionConfig = {
+      plugins: [
+        {
+          createPlugin: () => ({
+            wrapChildContextFn: async (_info, fn) => {
+              const value = await fn();
+              await new Promise((resolve) =>
+                setTimeout(resolve, DESERIALIZE_DELAY_MS),
+              );
+              return value;
+            },
+          }),
+        },
+      ],
+    };
+
+    const { response, submitRanBeforeReturn } = await run(
+      (context) =>
+        context.runInChildContext("wrapped", (child) =>
+          child.step("inner", async () => "value"),
+        ),
+      [],
+      slowWrapperTail,
+    );
+
+    expect(submitRanBeforeReturn).toBe(true);
+    expect(response).toEqual({ Status: InvocationStatus.PENDING });
+  });
+
   it("reports a deserializer that fails slowly instead of suspending", async () => {
     // Before, the suspension won the race against a failure slower than the
     // cooldown, so the invocation returned PENDING and the failure was lost.

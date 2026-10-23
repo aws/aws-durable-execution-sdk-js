@@ -824,6 +824,57 @@ describe("createPluginRunner", () => {
       ).rejects.toThrow(originalError);
     });
 
+    it("contains a wrapper that rejects after fn succeeded", async () => {
+      const plugin: DurableInstrumentationPlugin = {
+        wrapInvocation: async (_info, fn) => {
+          await fn();
+          throw new Error("wrapper failed after fn");
+        },
+      };
+
+      const runner = createPluginRunner([plugin]);
+
+      await expect(
+        runner.wrapInvocation!(invocationInfo, () =>
+          Promise.resolve(succeededOutput),
+        ),
+      ).resolves.toEqual(succeededOutput);
+    });
+
+    it("runs fn when a wrapper rejects without calling it", async () => {
+      const fn = jest.fn(() => Promise.resolve("customer-result"));
+      const plugin: DurableInstrumentationPlugin = {
+        wrapOperationAttemptFn: async () => {
+          throw new Error("wrapper failed before fn");
+        },
+      };
+
+      const runner = createPluginRunner([plugin]);
+
+      await expect(
+        runner.wrapOperationAttemptFn!(attemptInfo, fn),
+      ).resolves.toBe("customer-result");
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps fn's error when a wrapper rejects with its own error", async () => {
+      const originalError = new Error("customer fn error");
+      const plugin: DurableInstrumentationPlugin = {
+        wrapChildContextFn: async (_info, fn) => {
+          await (fn() as Promise<unknown>).catch(() => undefined);
+          throw new Error("wrapper error");
+        },
+      };
+
+      const runner = createPluginRunner([plugin]);
+
+      await expect(
+        runner.wrapChildContextFn!(operationInfo, () =>
+          Promise.reject(originalError),
+        ),
+      ).rejects.toThrow(originalError);
+    });
+
     it("re-throws fn error even when multiple plugins try to swallow it", async () => {
       const originalError = new Error("must not be lost");
       const swallowingPlugin: DurableInstrumentationPlugin = {

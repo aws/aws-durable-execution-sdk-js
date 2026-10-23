@@ -208,10 +208,21 @@ export function createPluginRunner(
       result != null &&
       typeof (result as PromiseLike<unknown>).then === "function"
     ) {
-      return (result as PromiseLike<unknown>).then((val: CustomerFnResult) => {
-        if (fnError) throw fnError.error;
-        return val;
-      });
+      return (result as PromiseLike<unknown>).then(
+        (val: CustomerFnResult) => {
+          if (fnError) throw fnError.error;
+          return val;
+        },
+        () => {
+          // The customer fn's own error always wins.
+          if (fnError) throw fnError.error;
+          // Otherwise the wrapper itself rejected, for example after `fn`
+          // succeeded. That is a plugin error. So it is contained like a
+          // synchronous one: the result is the customer fn's own result, and
+          // fn runs now if the wrapper never called it.
+          return fnCalled ? fnResult : (guardedFn as CallbackFn)();
+        },
+      );
     }
 
     // Sync path: if fn threw but the chain swallowed it, re-throw

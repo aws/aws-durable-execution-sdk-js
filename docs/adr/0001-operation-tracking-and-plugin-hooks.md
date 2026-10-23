@@ -52,13 +52,16 @@ execution and the replay path. `completeAfter` in `utils/checkpoint/complete-aft
 implements it for one operation.
 
 Rule 2. A child context is `EXECUTING` from the moment its function returns or throws until it
-settles. It is not `EXECUTING` while its function runs, because the operations inside the
-function track themselves and must be able to suspend the invocation.
+settles. This holds while a `wrapChildContextFn` hook still runs after the function settled. It
+is not `EXECUTING` while its function runs, because the operations inside the function track
+themselves and must be able to suspend the invocation.
 
 Rule 3. The SDK never waits for an operation plugin hook. These are `onOperationStart`,
 `onOperationEnd`, `onOperationAttemptStart`, `onOperationAttemptEnd` and `onOperationChange`.
 The plugin runner calls them, runs their synchronous part, and continues. So a plugin cannot
-delay an operation or the suspension.
+delay an operation or the suspension. The runner guarantees the order of the calls. For nested
+operations that is `parent start → child start → child end → parent end`. It does not guarantee
+the order in which the hooks' asynchronous work finishes.
 
 Rule 4. The plugin runner drains hook work in one place. Before it calls `onInvocationEnd`, it
 waits for the asynchronous work of earlier hooks to settle. Then it waits for `onInvocationEnd`.
