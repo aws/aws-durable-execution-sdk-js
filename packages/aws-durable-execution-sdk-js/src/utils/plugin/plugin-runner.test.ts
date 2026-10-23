@@ -5,7 +5,11 @@
  * change breaks an invariant. Do not edit, skip or delete the case to make the change pass.
  * Change the ADR first.
  */
-import { createPluginRunner, PLUGIN_DRAIN_RESERVE_MS } from "./plugin-runner";
+import {
+  createPluginRunner,
+  PLUGIN_DRAIN_RESERVE_MS,
+  PLUGIN_END_RESERVE_MS,
+} from "./plugin-runner";
 import {
   DurableInstrumentationPlugin,
   AttemptEndInfoOutcome,
@@ -468,16 +472,21 @@ describe("createPluginRunner", () => {
       expect(events).toEqual(["change settled"]);
     });
 
-    it("bounds the drain by the invocation's remaining time", async () => {
-      const onInvocationEnd = jest.fn(() => new Promise<void>(() => {}));
+    it("bounds the drain and onInvocationEnd by two deadlines", async () => {
+      let endCalledAt = 0;
       const plugin: DurableInstrumentationPlugin = {
         onOperationEnd: () => new Promise<void>(() => {}),
-        onInvocationEnd,
+        onInvocationEnd: () => {
+          endCalledAt = Date.now();
+          return new Promise<void>(() => {});
+        },
       };
 
-      // 100 ms of drain budget once the reserve is subtracted.
+      // The drain may run until 100 ms before its reserve. onInvocationEnd may
+      // run until PLUGIN_END_RESERVE_MS before the deadline.
+      const remainingMs = PLUGIN_DRAIN_RESERVE_MS + 100;
       const runner = createPluginRunner([plugin], {
-        getRemainingTimeMs: () => PLUGIN_DRAIN_RESERVE_MS + 100,
+        getRemainingTimeMs: () => remainingMs,
       });
       await runner.onOperationEnd!(operationInfo);
 
@@ -485,14 +494,35 @@ describe("createPluginRunner", () => {
       await runner.onInvocationEnd!(invocationEndInfo);
       const elapsed = Date.now() - started;
 
-      // The never-settling operation hook used the budget; onInvocationEnd is
-      // still called, but not waited for past the budget.
-      expect(onInvocationEnd).toHaveBeenCalledTimes(1);
-      expect(elapsed).toBeGreaterThanOrEqual(90);
-      expect(elapsed).toBeLessThan(400);
+      // The never-settling operation hook used the drain's 100 ms.
+      expect(endCalledAt - started).toBeGreaterThanOrEqual(90);
+      expect(endCalledAt - started).toBeLessThan(300);
+      // The never-settling onInvocationEnd was waited for until its deadline.
+      expect(elapsed).toBeGreaterThanOrEqual(
+        remainingMs - PLUGIN_END_RESERVE_MS - 10,
+      );
+      expect(elapsed).toBeLessThan(remainingMs);
     });
 
-    it("skips waiting when no drain budget is left", async () => {
+    it("lets onInvocationEnd flush when less time is left than the drain reserve", async () => {
+      let flushed = false;
+      const runner = createPluginRunner(
+        [
+          {
+            onInvocationEnd: async () => {
+              await new Promise((resolve) => setTimeout(resolve, 50));
+              flushed = true;
+            },
+          },
+        ],
+        { getRemainingTimeMs: () => 300 },
+      );
+
+      await runner.onInvocationEnd!(invocationEndInfo);
+      expect(flushed).toBe(true);
+    });
+
+    it("skips waiting when less time is left than the end reserve", async () => {
       const onInvocationEnd = jest.fn(() => new Promise<void>(() => {}));
       const runner = createPluginRunner(
         [
@@ -501,12 +531,72 @@ describe("createPluginRunner", () => {
             onInvocationEnd,
           },
         ],
-        { getRemainingTimeMs: () => PLUGIN_DRAIN_RESERVE_MS - 1 },
+        { getRemainingTimeMs: () => PLUGIN_END_RESERVE_MS - 1 },
       );
       await runner.onOperationEnd!(operationInfo);
 
       await runner.onInvocationEnd!(invocationEndInfo);
       expect(onInvocationEnd).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+      [
+        "throws",
+        (): number => {
+          throw new Error("no deadline");
+        },
+      ],
+      ["returns NaN", (): number => Number.NaN],
+      ["returns a non-number", (): number => "soon" as unknown as number],
+    ])(
+      "waits for everything when reading the remaining time %s",
+      async (_case, getRemainingTimeMs) => {
+        const events: string[] = [];
+        const runner = createPluginRunner(
+          [
+            {
+              onOperationEnd: async () => {
+                await new Promise((resolve) => setTimeout(resolve, 30));
+                events.push("operation-end settled");
+              },
+              onInvocationEnd: async () => {
+                await new Promise((resolve) => setTimeout(resolve, 30));
+                events.push("invocation-end settled");
+              },
+            },
+          ],
+          { getRemainingTimeMs },
+        );
+        await runner.onOperationEnd!(operationInfo);
+
+        await expect(
+          runner.onInvocationEnd!(invocationEndInfo),
+        ).resolves.toBeUndefined();
+        expect(events).toEqual([
+          "operation-end settled",
+          "invocation-end settled",
+        ]);
+      },
+    );
+
+    it("caps each drain timer, so a far deadline does not overflow setTimeout", async () => {
+      // Node runs a delay above 2^31 - 1 ms after 1 ms instead.
+      const timerSpy = jest.spyOn(global, "setTimeout");
+      const runner = createPluginRunner(
+        [
+          {
+            onOperationEnd: () =>
+              new Promise<void>((resolve) => setTimeout(resolve, 50)),
+          },
+        ],
+        { getRemainingTimeMs: () => 30 * 24 * 60 * 60 * 1000 },
+      );
+      await runner.onOperationEnd!(operationInfo);
+
+      await runner.onInvocationEnd!(invocationEndInfo);
+      const delays = timerSpy.mock.calls.map((args) => Number(args[1] ?? 0));
+      timerSpy.mockRestore();
+      expect(Math.max(...delays)).toBeLessThanOrEqual(2 ** 31 - 1);
     });
   });
 

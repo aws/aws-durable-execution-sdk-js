@@ -1119,10 +1119,11 @@ class DurableExecutionTelemetryInvocation
    * status branches in `with-durable-execution.ts` plus the config-error path
    * that returns before `wrapInvocation` is ever called. The runner first lets
    * the asynchronous work of earlier hooks settle, then awaits this hook, so a
-   * rejection here cannot become the invocation's error. Both waits are bounded
-   * by the invocation's remaining time, minus a small reserve. That makes this
-   * the right place for the drain, and it is where the Python and Java ports
-   * already do it.
+   * rejection here cannot become the invocation's error. The first wait stops
+   * 500 ms before the invocation's deadline, and the wait for this hook 50 ms
+   * before it. So this hook keeps its time even when earlier hooks are slow.
+   * That makes this the right place for the drain, and it is where the Python
+   * and Java ports already do it.
    */
   async onInvocationEnd(info: InvocationEndInfo): Promise<void> {
     const status = mapStatus(info.status);

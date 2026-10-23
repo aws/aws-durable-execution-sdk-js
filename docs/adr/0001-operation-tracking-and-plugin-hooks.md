@@ -44,24 +44,32 @@ hooks.
 
 ## Decision
 
-Rule 1. An operation stays `EXECUTING` until its result is ready for the caller. This covers
-serializing, checkpointing, plugin hooks and deserializing, on the execution and the replay
-path. `completeAfter` in `utils/checkpoint/complete-after.ts` implements it for one operation.
-A child context is `EXECUTING` from the moment its function returns or throws until it settles.
-It is not `EXECUTING` while its function runs, because the operations inside the function track
-themselves and must be able to suspend the invocation.
+The rules are numbered the same way in `packages/aws-durable-execution-sdk-js/AGENTS.md`.
 
-Rule 2. The SDK never waits for an operation plugin hook. These are `onOperationStart`,
+Rule 1. An operation stays `EXECUTING` until its result is ready for the caller. This covers
+serializing, checkpointing, the synchronous part of plugin hooks, and deserializing, on the
+execution and the replay path. `completeAfter` in `utils/checkpoint/complete-after.ts`
+implements it for one operation.
+
+Rule 2. A child context is `EXECUTING` from the moment its function returns or throws until it
+settles. It is not `EXECUTING` while its function runs, because the operations inside the
+function track themselves and must be able to suspend the invocation.
+
+Rule 3. The SDK never waits for an operation plugin hook. These are `onOperationStart`,
 `onOperationEnd`, `onOperationAttemptStart`, `onOperationAttemptEnd` and `onOperationChange`.
 The plugin runner calls them, runs their synchronous part, and continues. So a plugin cannot
 delay an operation or the suspension.
 
-Rule 3. The plugin runner drains hook work in one place. Before it calls `onInvocationEnd`, it
+Rule 4. The plugin runner drains hook work in one place. Before it calls `onInvocationEnd`, it
 waits for the asynchronous work of earlier hooks to settle. Then it waits for `onInvocationEnd`.
-Both waits share one budget: the invocation's remaining time minus `PLUGIN_DRAIN_RESERVE_MS`.
-So a plugin that never settles cannot hold the invocation to the Lambda timeout.
+Two deadlines bound the waits. The drain stops `PLUGIN_DRAIN_RESERVE_MS` (500 ms) before the
+invocation's deadline. The wait for `onInvocationEnd` stops `PLUGIN_END_RESERVE_MS` (50 ms)
+before it. So a plugin that never settles cannot hold the invocation to the Lambda timeout. So
+also slow operation-hook work cannot take the time of the flush in `onInvocationEnd`. A context
+that reports no usable deadline counts as having none, and the waits then last until
+everything settles.
 
-Rule 4. `onInvocationStart` and the `wrap` hooks stay inline. `onInvocationStart` runs before
+Rule 5. `onInvocationStart` and the `wrap` hooks stay inline. `onInvocationStart` runs before
 any operation, so waiting for it delays no operation. The `wrap` hooks run the customer's
 function, so they cannot be detached.
 
@@ -73,14 +81,19 @@ function, so they cannot be detached.
   that never settles keeps the invocation open until the Lambda timeout.
 - An `await` in customer code between two operations is still invisible to the checkpoint
   manager. No SDK rule can cover it.
-- Each child context adds one entry to the checkpoint manager's operation map. A `map` of 5000
-  items whose items run a step measured about 9 % slower.
+- Each child context adds one entry to the checkpoint manager's operation map. Measured on a
+  `map` whose items each run one step, with no plugin and no pending callback, median of 5 runs
+  in two rounds: 3000 items took 97 ms before and 102 ms after, and 5000 items took 200 to
+  206 ms before and 219 ms after. That is 5 to 9 % slower. A `map` whose items only return a
+  value showed no difference beyond run-to-run variation.
+- An invocation's last plugin flush may be cut off. The flush in `onInvocationEnd` gets until
+  50 ms before the deadline, and earlier hook work until 500 ms before it.
 
 ## Enforcement
 
-- Tests. `src/utils/checkpoint/deserialization-suspension.composed.test.ts` guards Rule 1.
-  `src/utils/plugin/plugin-hook-contract.composed.test.ts` and
-  `src/utils/plugin/plugin-runner.test.ts` guard Rules 2, 3 and 4. A failing case in these
+- Tests. `src/utils/checkpoint/deserialization-suspension.composed.test.ts` guards Rules 1
+  and 2. `src/utils/plugin/plugin-hook-contract.composed.test.ts` guards Rules 3 and 4.
+  `src/utils/plugin/plugin-runner.test.ts` guards Rules 3, 4 and 5. A failing case in these
   files means the change breaks a rule. Do not edit or delete such a case to make a change
   pass. Change this ADR first.
 - Review. `.github/CODEOWNERS` requires a maintainer review for the files that implement these

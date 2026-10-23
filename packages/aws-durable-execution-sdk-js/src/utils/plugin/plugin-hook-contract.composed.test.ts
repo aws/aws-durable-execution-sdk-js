@@ -78,6 +78,7 @@ const invoke = (
   handler: (event: unknown, context: DurableContext) => Promise<unknown>,
   plugin: DurableInstrumentationPlugin,
   operations: WireOperation[] = [executionOp],
+  context: Context = lambdaContext,
 ): Promise<unknown> =>
   withDurableExecution(handler, { plugins: [{ createPlugin: () => plugin }] })(
     new DurableExecutionInvocationInputWithClient(
@@ -89,7 +90,7 @@ const invoke = (
       },
       client,
     ),
-    lambdaContext,
+    context,
   );
 
 describe("plugin hooks do not block operations", () => {
@@ -200,5 +201,78 @@ describe("plugin hooks do not block operations", () => {
 
     expect(submitRan).toBe(true);
     expect(response).toEqual({ Status: InvocationStatus.PENDING });
+  });
+  it("bounds the drain by the context's remaining time", async () => {
+    // A hook that never settles must not hold the invocation. The engine passes the
+    // context's remaining time to the plugin runner, which stops waiting before it.
+    const remainingMs = 700;
+    const started = Date.now();
+    const context = {
+      awsRequestId: "request-1",
+      getRemainingTimeInMillis: () => remainingMs - (Date.now() - started),
+    } as unknown as Context;
+    let endCalled = false;
+
+    const response = await Promise.race([
+      invoke(
+        async (_event, ctx) => {
+          await ctx.step("only", async () => "a");
+          return "done";
+        },
+        {
+          onOperationEnd: () => new Promise<void>(() => {}),
+          onInvocationEnd: async () => {
+            endCalled = true;
+          },
+        },
+        [executionOp],
+        context,
+      ),
+      // Fails the test fast if the engine does not bound the drain.
+      sleep(remainingMs * 3).then(() => "not bounded"),
+    ]);
+
+    expect(response).toMatchObject({ Status: InvocationStatus.SUCCEEDED });
+    expect(endCalled).toBe(true);
+    expect(Date.now() - started).toBeLessThan(remainingMs);
+  });
+
+  it("answers when the context cannot report its remaining time", async () => {
+    // A stub context in a unit test, or one from another compute, may lack the method or
+    // throw from it. That states no deadline, so the invocation must still answer and
+    // every plugin hook must still run.
+    const contexts = [
+      { awsRequestId: "request-1" },
+      {
+        awsRequestId: "request-1",
+        getRemainingTimeInMillis: () => {
+          throw new Error("no deadline");
+        },
+      },
+    ] as unknown as Context[];
+
+    for (const context of contexts) {
+      const events: string[] = [];
+      const response = await invoke(
+        async (_event, ctx) => {
+          await ctx.step("only", async () => "a");
+          return "done";
+        },
+        {
+          onOperationEnd: async () => {
+            await sleep(10);
+            events.push("operation end");
+          },
+          onInvocationEnd: async () => {
+            events.push("invocation end");
+          },
+        },
+        [executionOp],
+        context,
+      );
+
+      expect(response).toMatchObject({ Status: InvocationStatus.SUCCEEDED });
+      expect(events).toEqual(["operation end", "invocation end"]);
+    }
   });
 });

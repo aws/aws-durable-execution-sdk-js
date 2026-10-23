@@ -205,11 +205,19 @@ export interface OperationChangeInfo {
  *
  * **Drain.** Before it calls `onInvocationEnd`, the SDK waits for the
  * asynchronous work of every earlier hook to settle. It then waits for
- * `onInvocationEnd` itself. The drain and `onInvocationEnd` share one time
- * budget: the invocation's remaining time minus a small reserve for returning
- * the Lambda response. Work that has not settled when the budget runs out is
- * abandoned, and the invocation returns. In Lambda the execution environment
- * is then frozen, so abandoned work may never complete.
+ * `onInvocationEnd` itself. Two deadlines bound these waits:
+ *
+ * 1. The drain of earlier hook work stops 500 ms before the invocation's
+ *    deadline.
+ * 2. The wait for `onInvocationEnd` stops 50 ms before the deadline, so the SDK
+ *    can still return the Lambda response.
+ *
+ * So `onInvocationEnd` keeps its time even when earlier hook work is slow, and
+ * an invocation that ends close to its timeout still flushes. Work that has not
+ * settled by its deadline is abandoned, and the invocation returns. In Lambda
+ * the execution environment is then frozen, so abandoned work may never
+ * complete. If the context reports no deadline, both waits last until
+ * everything settles.
  *
  * Errors thrown or promises rejected by any hook are swallowed by the SDK and
  * never affect the execution outcome.
@@ -239,10 +247,10 @@ export interface DurableInstrumentationPlugin {
    * status and outcome details.
    *
    * The SDK calls this hook after the asynchronous work of every earlier hook
-   * has settled, and **awaits** it before returning the Lambda response. Both
-   * waits share one budget: the invocation's remaining time minus a small
-   * reserve. If the budget runs out, the SDK returns the response without
-   * waiting further.
+   * has settled, or after that wait reached its own deadline, 500 ms before the
+   * invocation's deadline. The SDK then **awaits** this hook until 50 ms before
+   * the invocation's deadline. If the hook has not settled by then, the SDK
+   * returns the response without waiting further.
    *
    * @remarks
    * Time spent here increases the wall-clock duration of the current Lambda

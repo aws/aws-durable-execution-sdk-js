@@ -163,6 +163,34 @@ describe("initializeExecutionContext", () => {
     expect(executionContext.getRemainingTimeMs()).toBe(90_000);
   });
 
+  it.each([
+    ["lacks the method", undefined],
+    [
+      "throws",
+      (): number => {
+        throw new Error("no deadline");
+      },
+    ],
+    ["returns NaN", (): number => Number.NaN],
+    ["returns a non-number", (): number => "soon" as unknown as number],
+  ])(
+    "reports the remaining time as Infinity when the context %s",
+    async (_case, getRemainingTimeInMillis) => {
+      const lambdaContext = {
+        ...mockLambdaContext,
+        getRemainingTimeInMillis,
+      } as unknown as Context;
+
+      const { executionContext } = await initializeExecutionContext(
+        mockEvent,
+        lambdaContext,
+        undefined,
+      );
+
+      expect(executionContext.getRemainingTimeMs()).toBe(Infinity);
+    },
+  );
+
   it("should initialize execution context in verbose mode", async () => {
     // Setup
     process.env.DURABLE_VERBOSE_MODE = "true";

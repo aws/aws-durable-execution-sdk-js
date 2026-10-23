@@ -16,3 +16,4 @@
 /packages/aws-durable-execution-sdk-js/src/utils/constants/constants.ts @aws/aws-lambda-durable-functions-js-maintain
 /.github/CODEOWNERS @aws/aws-lambda-durable-functions-js-maintain
 /.github/prompts/ @aws/aws-lambda-durable-functions-js-maintain
+/packages/aws-durable-execution-sdk-js/src/context/execution-context/execution-context.ts @aws/aws-lambda-durable-functions-js-maintain

@@ -12,6 +12,7 @@ import {
   CustomerFn,
 } from "../../types/plugin";
 import { DurableExecutionInvocationOutput } from "../../types/core";
+import { MAX_TIMER_DELAY_MS } from "../constants/constants";
 import { collectPropagationMetadata } from "./propagation-metadata";
 
 type CallbackResult = unknown;
@@ -33,10 +34,17 @@ type PluginWrapperHookFn = (
 type PluginHookFn = (info: PluginInfo) => CallbackResult;
 
 /**
- * Time kept free at the end of an invocation when the plugin drain runs, so
- * the SDK can still return the Lambda response after the drain gives up.
+ * Time kept free at the end of an invocation when the drain of earlier hook
+ * work runs. Work still pending this close to the deadline is abandoned, so
+ * `onInvocationEnd` keeps its time.
  */
 export const PLUGIN_DRAIN_RESERVE_MS = 500;
+
+/**
+ * Time kept free at the end of an invocation when `onInvocationEnd` runs, so
+ * the SDK can still return the Lambda response after it stops waiting.
+ */
+export const PLUGIN_END_RESERVE_MS = 50;
 
 /**
  * @internal
@@ -50,29 +58,54 @@ export interface PluginRunnerOptions {
 }
 
 /**
+ * Reads the remaining time without letting the read fail the invocation.
+ *
+ * The plugin runner reads it on every invocation that has a plugin. A context
+ * from another compute, or a stub context in a customer's unit test, may lack
+ * the method, throw from it, or return a value that is not a finite number.
+ * None of those states a deadline. So each of them counts as no deadline, and
+ * the runner waits for every hook to settle, as it would with `Infinity`.
+ */
+function readRemainingMs(read: (() => number) | undefined): number {
+  try {
+    const value = read?.();
+    return typeof value === "number" && Number.isFinite(value)
+      ? value
+      : Infinity;
+  } catch {
+    return Infinity;
+  }
+}
+
+/**
  * Waits for `promises` to settle, but not past the epoch time `endBy`.
  * The promises must not reject.
+ *
+ * A single timer is capped at {@link MAX_TIMER_DELAY_MS}. Node runs a longer
+ * delay after 1 ms instead. So for a later `endBy` this waits in steps of at
+ * most that length.
  */
 async function settleBy(
   promises: Promise<void>[],
   endBy: number,
 ): Promise<void> {
   if (promises.length === 0) return;
-  const all = Promise.all(promises).then(() => undefined);
+  const all = Promise.all(promises).then(() => true);
   if (endBy === Infinity) {
     await all;
     return;
   }
-  const budgetMs = endBy - Date.now();
-  if (budgetMs <= 0) return;
-  let timer: NodeJS.Timeout | undefined;
-  const timeout = new Promise<void>((resolve) => {
-    timer = setTimeout(resolve, budgetMs);
-  });
-  try {
-    await Promise.race([all, timeout]);
-  } finally {
-    clearTimeout(timer);
+  while (Date.now() < endBy) {
+    const delayMs = Math.min(endBy - Date.now(), MAX_TIMER_DELAY_MS);
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<false>((resolve) => {
+      timer = setTimeout(() => resolve(false), delayMs);
+    });
+    try {
+      if (await Promise.race([all, timeout])) return;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }
 
@@ -229,23 +262,33 @@ export function createPluginRunner(
 
   /**
    * Waits for the hook work still pending, then calls `onInvocationEnd` on
-   * every plugin and waits for it, all within one time budget. The budget is
-   * the invocation's remaining time minus {@link PLUGIN_DRAIN_RESERVE_MS}, so a
-   * plugin that never settles cannot hold the invocation to the Lambda timeout.
-   * Work that has not settled when the budget runs out is abandoned. Without a
-   * known deadline, the drain waits for everything.
+   * every plugin and waits for it.
+   *
+   * Two deadlines bound the waits, so a plugin that never settles cannot hold
+   * the invocation to the Lambda timeout:
+   * 1. The drain of earlier hook work ends {@link PLUGIN_DRAIN_RESERVE_MS}
+   *    before the invocation's deadline.
+   * 2. The wait for `onInvocationEnd` ends {@link PLUGIN_END_RESERVE_MS}
+   *    before the deadline. That reserve is smaller, because `onInvocationEnd`
+   *    is where a plugin flushes. So a slow operation hook cannot take the
+   *    flush's time, and an invocation that ends close to its timeout still
+   *    flushes.
+   *
+   * Work that has not settled by its deadline is abandoned. Without a known
+   * deadline, both waits last until everything settles.
    */
   const drainAndEnd = async (info: InvocationEndInfo): Promise<void> => {
-    const endBy =
-      (options.getRemainingTimeMs?.() ?? Infinity) -
-      PLUGIN_DRAIN_RESERVE_MS +
-      Date.now();
+    const deadline = readRemainingMs(options.getRemainingTimeMs) + Date.now();
+    const drainEndBy = deadline - PLUGIN_DRAIN_RESERVE_MS;
     // A hook that settles can start more hook work, so drain until nothing is
-    // left or the budget is spent.
-    while (pending.size > 0 && Date.now() < endBy) {
-      await settleBy([...pending], endBy);
+    // left or the drain deadline is reached.
+    while (pending.size > 0 && Date.now() < drainEndBy) {
+      await settleBy([...pending], drainEndBy);
     }
-    await settleBy(invokeAll("onInvocationEnd", info), endBy);
+    await settleBy(
+      invokeAll("onInvocationEnd", info),
+      deadline - PLUGIN_END_RESERVE_MS,
+    );
   };
 
   return {
