@@ -42,12 +42,12 @@ async function runCondition(
   if (status === "FAILED") {
     throw fromErrorObject(details?.Error, "WaitForConditionError");
   }
-  if (status === "PENDING") return execution.block();
+  if (status === "PENDING") return ctx._block();
 
   // A later check reads the state that the previous check saved.
   const state =
     details?.Result != null ? JSON.parse(details.Result) : initialState;
-  if (status !== "STARTED") execution.checkpoint(update({ Action: "START" }));
+  if (status !== "STARTED") ctx._checkpoint(update({ Action: "START" }));
   const attempt = (details?.Attempt ?? 0) + 1;
 
   let newState;
@@ -69,21 +69,21 @@ async function runCondition(
 
   if (failed) {
     const errorObject = toErrorObject(error);
-    await execution.checkpoint(update({ Action: "FAIL", Error: errorObject }));
+    await ctx._checkpoint(update({ Action: "FAIL", Error: errorObject }));
     throw fromErrorObject(errorObject, "WaitForConditionError");
   }
   const payload = JSON.stringify(newState);
   if (!decision.shouldContinue) {
-    await execution.checkpoint(update({ Action: "SUCCEED", Payload: payload }));
+    await ctx._checkpoint(update({ Action: "SUCCEED", Payload: payload }));
     // The first run returns fn's own value. Only a replay parses the stored JSON.
     return newState;
   }
-  await execution.checkpoint(
+  await ctx._checkpoint(
     update({
       Action: "RETRY",
       Payload: payload,
       StepOptions: { NextAttemptDelaySeconds: decision.delaySeconds ?? 1 },
     }),
   );
-  return execution.block();
+  return ctx._block();
 }

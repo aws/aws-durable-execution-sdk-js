@@ -65,11 +65,12 @@ from the package owner.
 - Plugins, OpenTelemetry hooks, and external or custom loggers.
 - Custom serdes. Every value is stored as JSON.
 - In-invocation timers and polling. Section 2.5 explains the effect.
-- Early completion in `map` and `parallel` (`minSuccessful`, tolerated failures, fail-fast).
+- The custom `shouldComplete` predicate of `map` and `parallel`. Early completion with
+  `minSuccessful` and the failure tolerances is in scope (section 2.9).
 - `ctx.promise.all/allSettled/any/race`. The README documents the replacement pattern.
 - Linear retry, retry presets, `withRetry`, `createWaitStrategy`.
 - The `Duration` object. All times are plain seconds.
-- `NestingType.FLAT` / virtual contexts, summary generators, file-system serdes.
+- `NestingType.FLAT` / virtual contexts, custom summary generators, file-system serdes.
 - Error subclasses. One error class exists (section 2.7).
 
 ### 1.7 API shape
@@ -202,12 +203,15 @@ Suspension:
 1. An operation is blocked when its result needs the service to act first: a wait that has not
    ended, a callback that has not completed, an invoke that has not finished, or a step retry
    that is scheduled.
-2. A blocked operation returns a promise that never resolves. It increments the execution's
-   blocked count.
+2. A blocked operation returns a promise that never resolves. It adds a liveness check to the
+   execution's blocked list. The check turns false when a batch abandons the operation
+   (section 2.9).
 3. While a step function or a `waitForCondition` check runs, the execution's running count is
    above zero.
 4. The execution suspends when all of these hold: the running count is 0, no checkpoint is
-   pending or in flight, and the blocked count is above 0.
+   pending or in flight, and at least one blocked operation is live. An abandoned operation
+   must not count. Otherwise the invocation could suspend while the workflow awaits
+   something else, and nothing that the workflow awaits would wake it.
 5. The SDK checks the condition again after one `setImmediate`. This lets already-resolved
    promises start the next operation first. If it still holds, the invocation returns PENDING.
 6. After the SDK decides to return PENDING, every later `checkpoint` call returns a promise that
@@ -303,6 +307,36 @@ Child contexts (`runInChildContext`, `waitForCallback`, `map`, `parallel`):
    replay-only `ctx` such an operation does nothing and returns a promise that never
    resolves. It does not count as blocked, because nothing that the result depends on
    awaits it. `ctx._mayRun` holds this check, and every operation calls it.
+
+Map and parallel (`batch.js`):
+
+1. A batch is a child context. Each item is a child context of the batch. Items start in
+   index order, so item i always has the raw id `` `${batchId}-${i + 1}` ``.
+2. `completionConfig` follows the full SDK. After each item settles, the batch checks it.
+   With no threshold set, one failure completes the batch (fail fast). The README lists the
+   rules.
+3. When the batch completes, it calls `ctx._abandonChildren()` on the batch ctx. Every item
+   ctx and every descendant is then abandoned. `ctx._abandoned` reads the ancestors' flags
+   at each call, because the flag is set after the item ctxs exist.
+4. In an abandoned ctx, `_mayRun` returns false, and `_checkpoint` sends nothing and returns
+   a promise that never resolves. Every operation sends its updates through `_checkpoint`.
+   A child context sends its own START, SUCCEED and FAIL through its child ctx. So an
+   abandoned item's own SUCCEED is not sent either. A step whose `fn` already runs finishes
+   `fn`, and its outcome is not sent.
+5. An update queued before the batch completed is still sent. The batch's SUCCEED is queued
+   after it, and the queue keeps the order. So the service never receives an update for an
+   operation inside a completed batch.
+6. An item that settles after the decision keeps `STARTED` in the result.
+7. A batch result larger than 256 KiB is not stored. The batch then saves
+   `{completionReason, itemStatuses}` as the Payload. `itemStatuses` has one character per
+   started item, in index order: `S` succeeded, `F` failed, `-` still running. This is the
+   full SDK's format.
+8. A ReplayChildren re-run must not run the scheduler again. Cached items settle in index
+   order, not in the live order. So the scheduler could decide at a different item. Instead
+   the re-run re-drives the items marked `S` or `F` in index order. They replay from their
+   records. It takes the id of an item marked `-` with `ctx._nextId()` and does not run it.
+   It never starts an item after the marks. So the result equals the live result, including
+   the `STARTED` items. The full SDK drops `STARTED` items here.
 
 ### 2.10 Logging
 

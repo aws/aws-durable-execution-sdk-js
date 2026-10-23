@@ -25,7 +25,6 @@ async function runCallback(
   rawId,
   { name, timeoutSeconds, heartbeatTimeoutSeconds },
 ) {
-  const execution = ctx._execution;
   const meta = { type: "CALLBACK", subType: "Callback", name };
   let record = ctx._lookup(rawId);
   if (!ctx._mayRun(record, meta)) return new Promise(() => {});
@@ -34,7 +33,7 @@ async function runCallback(
       TimeoutSeconds: timeoutSeconds,
       HeartbeatTimeoutSeconds: heartbeatTimeoutSeconds,
     });
-    await execution.checkpoint({
+    await ctx._checkpoint({
       ...ctx._base(rawId, meta),
       Action: "START",
       ...(Object.keys(options).length > 0 && { CallbackOptions: options }),
@@ -42,7 +41,7 @@ async function runCallback(
     record = ctx._lookup(rawId);
   }
   const details = record?.CallbackDetails;
-  const result = outcome(execution, record?.Status, details);
+  const result = outcome(ctx, record?.Status, details);
   // A result that the user never awaits must not crash the process when it rejects.
   // The user's own await still sees the rejection.
   result.catch(() => {});
@@ -50,7 +49,7 @@ async function runCallback(
 }
 
 // A native promise, created eagerly. A blocked one counts at once (AGENTS.md 2.5).
-function outcome(execution, status, details) {
+function outcome(ctx, status, details) {
   if (status === "SUCCEEDED") return Promise.resolve(details?.Result);
   if (status === "FAILED") {
     return Promise.reject(fromErrorObject(details?.Error, "CallbackError"));
@@ -61,5 +60,5 @@ function outcome(execution, status, details) {
       new DurableOperationError({ errorType: "CallbackTimeoutError", message }),
     );
   }
-  return execution.block();
+  return ctx._block();
 }

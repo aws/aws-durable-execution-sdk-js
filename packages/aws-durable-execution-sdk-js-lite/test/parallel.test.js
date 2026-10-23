@@ -67,6 +67,8 @@ test("a failed branch is recorded and throwIfError throws it on replay too", asy
           },
         ],
         maxConcurrency: 1,
+        // The default stops at the first failure. Tolerate one so branch 2 runs.
+        completionConfig: { toleratedFailureCount: 1 },
       });
       try {
         r.throwIfError();

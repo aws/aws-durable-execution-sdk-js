@@ -28,8 +28,7 @@ export function runInChildContext(ctx, { name, fn }) {
   return childContext(ctx, { name, fn, subType: "RunInChildContext" });
 }
 
-async function runChild(ctx, rawId, { name, fn, subType }) {
-  const execution = ctx._execution;
+async function runChild(ctx, rawId, { name, fn, subType, summary }) {
   const meta = { type: "CONTEXT", subType, name };
   const record = ctx._lookup(rawId);
   if (!ctx._mayRun(record, meta)) return new Promise(() => {});
@@ -39,19 +38,20 @@ async function runChild(ctx, rawId, { name, fn, subType }) {
   if (record?.Status === "FAILED") {
     throw fromErrorObject(details?.Error, "ChildContextError");
   }
+  const child = ctx._child(rawId, replayChildren);
   const update = (fields) => ({ ...ctx._base(rawId, meta), ...fields });
+  // The context's own updates go through the child ctx. A batch abandons an item by its
+  // ctx, so an abandoned item's SUCCEED or FAIL is not sent either.
   // START can travel with the first child update. Nothing needs it saved first.
-  if (!record) execution.checkpoint(update({ Action: "START" }));
+  if (!record) child._checkpoint(update({ Action: "START" }));
 
   let result;
   try {
-    result = await fn({ ctx: ctx._child(rawId, replayChildren) });
+    result = await fn({ ctx: child });
   } catch (err) {
     const errorObject = toErrorObject(err);
     if (!replayChildren) {
-      await execution.checkpoint(
-        update({ Action: "FAIL", Error: errorObject }),
-      );
+      await child._checkpoint(update({ Action: "FAIL", Error: errorObject }));
     }
     throw fromErrorObject(errorObject, "ChildContextError");
   }
@@ -60,12 +60,13 @@ async function runChild(ctx, rawId, { name, fn, subType }) {
   const payload = JSON.stringify(result);
   const large =
     payload !== undefined && Buffer.byteLength(payload) > MAX_PAYLOAD_BYTES;
-  await execution.checkpoint(
+  // summary: map and parallel save what a re-run needs to rebuild the same result.
+  await child._checkpoint(
     update(
       large
         ? {
             Action: "SUCCEED",
-            Payload: "",
+            Payload: summary?.(result) ?? "",
             ContextOptions: { ReplayChildren: true },
           }
         : { Action: "SUCCEED", Payload: payload },

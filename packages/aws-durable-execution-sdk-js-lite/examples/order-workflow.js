@@ -40,7 +40,8 @@ export const workflow = async ({ event, ctx }) => {
     fn: ({ ctx: itemCtx, item }) =>
       itemCtx.step({ name: "reserve", fn: () => reserveStock(item) }),
   });
-  // map runs every item. throwIfError fails the workflow if any item failed.
+  // By default map stops at the first failed item. throwIfError then fails the workflow
+  // with that item's error.
   reservations.throwIfError();
 
   await ctx.wait({ name: "cooling-off", seconds: 60 * 60 });

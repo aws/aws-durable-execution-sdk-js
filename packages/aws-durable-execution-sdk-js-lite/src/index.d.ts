@@ -156,6 +156,8 @@ export interface MapOptions<I, O> {
   maxConcurrency?: number;
   /** The Name of each item's child context. Default: no Name. */
   itemName?: (args: { item: I; index: number }) => string;
+  /** When the map completes early. Default: at the first failed item. */
+  completionConfig?: CompletionConfig;
 }
 
 export interface ParallelBranch<T> {
@@ -169,22 +171,44 @@ export interface ParallelOptions<T> {
   branches: readonly ParallelBranch<T>[];
   /** At most this many branches run at once. Default: no limit. */
   maxConcurrency?: number;
+  /** When the parallel completes early. Default: at the first failed branch. */
+  completionConfig?: CompletionConfig;
 }
+
+/**
+ * The batch checks these after each item settles. It completes when every item settled,
+ * when minSuccessful items succeeded, or when the failures exceed a tolerance. Then no
+ * new item starts, and the items that still run are abandoned. With no threshold set
+ * (no config, or `{}`), one failure exceeds the tolerance.
+ */
+export interface CompletionConfig {
+  /** Complete when this many items succeeded. */
+  minSuccessful?: number;
+  /** Complete when more than this many items failed. */
+  toleratedFailureCount?: number;
+  /** Complete when failures / all items * 100 is more than this. */
+  toleratedFailurePercentage?: number;
+}
+
+export type CompletionReason =
+  | "ALL_COMPLETED"
+  | "MIN_SUCCESSFUL_REACHED"
+  | "FAILURE_TOLERANCE_EXCEEDED";
 
 export interface BatchItem<T> {
   index: number;
-  status: "SUCCEEDED" | "FAILED";
+  /** STARTED: the item still ran when the batch completed early. */
+  status: "SUCCEEDED" | "FAILED" | "STARTED";
   /** Set when status is SUCCEEDED. */
   result?: T;
   /** Set when status is FAILED. */
   error?: DurableOperationError;
 }
 
-/** Every item runs to completion, so completionReason is always "ALL_COMPLETED". */
 export interface BatchResult<T> {
-  /** In index order. */
+  /** The items that started, in index order. Items that never started are absent. */
   all: BatchItem<T>[];
-  completionReason: "ALL_COMPLETED";
+  completionReason: CompletionReason;
   /** The results of the items that succeeded, in index order. */
   getResults(): T[];
   /** The errors of the items that failed, in index order. */

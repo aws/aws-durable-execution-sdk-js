@@ -46,7 +46,7 @@ async function runStep(
   // ends before the request succeeds, the step runs again, which at-least-once allows.
   // At-most-once waits, so its outcome is saved before later code runs.
   const saved = (u) => {
-    const p = execution.checkpoint(u);
+    const p = ctx._checkpoint(u);
     return semantics === AT_MOST_ONCE ? p : undefined;
   };
   const status = record?.Status;
@@ -55,7 +55,7 @@ async function runStep(
   if (status === "FAILED") {
     throw fromErrorObject(record.StepDetails?.Error, "StepError");
   }
-  if (status === "PENDING") return execution.block();
+  if (status === "PENDING") return ctx._block();
 
   // The service counts finished attempts in StepDetails.Attempt (0-based). The full SDK
   // passes Attempt + 1 to fn and to the retry strategy.
@@ -69,15 +69,16 @@ async function runStep(
     error.name = "StepInterruptedError";
   } else {
     if (status !== "STARTED") {
-      const started = execution.checkpoint(update({ Action: "START" }));
+      const started = ctx._checkpoint(update({ Action: "START" }));
       // At-most-once must know the service recorded START before fn has side effects.
       // At-least-once lets START travel with later updates.
       if (semantics === AT_MOST_ONCE) await started;
     }
     // A step that did not wait for its outcome checkpoint lets later code run after the
     // invocation ended, for example in a warm sandbox's next invocation. Its fn must not
-    // run then: nothing would save its result.
-    if (execution.done) return new Promise(() => {});
+    // run then: nothing would save its result. An at-most-once step can also be abandoned
+    // by its batch while it waits for START. Its fn must not run then either.
+    if (execution.done || ctx._abandoned) return new Promise(() => {});
     let result;
     let failed = false;
     execution.runningStart();
@@ -106,12 +107,12 @@ async function runStep(
     await saved(update({ Action: "FAIL", Error: errorObject }));
     throw fromErrorObject(errorObject, "StepError");
   }
-  await execution.checkpoint(
+  await ctx._checkpoint(
     update({
       Action: "RETRY",
       Error: errorObject,
       StepOptions: { NextAttemptDelaySeconds: decision.delaySeconds ?? 1 },
     }),
   );
-  return execution.block();
+  return ctx._block();
 }

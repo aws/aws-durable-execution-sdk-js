@@ -23,18 +23,17 @@ export function wait(ctx, opts) {
 }
 
 async function runWait(ctx, rawId, { name, seconds }) {
-  const execution = ctx._execution;
   const meta = { type: "WAIT", subType: "Wait", name };
   const record = ctx._lookup(rawId);
   if (!ctx._mayRun(record, meta)) return new Promise(() => {});
   if (TERMINAL.has(record?.Status)) return;
   if (!record) {
-    await execution.checkpoint({
+    await ctx._checkpoint({
       ...ctx._base(rawId, meta),
       Action: "START",
       WaitOptions: { WaitSeconds: seconds },
     });
   }
   // Without timers the SDK cannot end the wait itself (AGENTS.md 2.5).
-  return execution.block();
+  return ctx._block();
 }

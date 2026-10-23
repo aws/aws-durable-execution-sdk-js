@@ -20,12 +20,11 @@ export function invoke(ctx, opts) {
 }
 
 async function runInvoke(ctx, rawId, { name, functionName, input, tenantId }) {
-  const execution = ctx._execution;
   const meta = { type: "CHAINED_INVOKE", subType: "ChainedInvoke", name };
   let record = ctx._lookup(rawId);
   if (!ctx._mayRun(record, meta)) return new Promise(() => {});
   if (!record) {
-    await execution.checkpoint({
+    await ctx._checkpoint({
       ...ctx._base(rawId, meta),
       Action: "START",
       // JSON.stringify(undefined) is undefined, so no input means no Payload.
@@ -44,5 +43,5 @@ async function runInvoke(ctx, rawId, { name, functionName, input, tenantId }) {
   if (FAILED.has(record?.Status)) {
     throw fromErrorObject(details?.Error, "InvokeError");
   }
-  return execution.block();
+  return ctx._block();
 }

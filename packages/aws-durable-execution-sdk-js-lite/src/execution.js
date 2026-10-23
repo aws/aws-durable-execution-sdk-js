@@ -14,7 +14,7 @@ export function createExecution({ client, arn, token, operations }) {
   let scheduled = false;
   let inFlight = false;
   let running = 0;
-  let blocked = 0;
+  const blocked = []; // one liveness check per blocked operation
   let done = false;
   let settle;
   const terminated = new Promise((resolve) => {
@@ -105,7 +105,7 @@ export function createExecution({ client, arn, token, operations }) {
   const idle = () =>
     !done &&
     running === 0 &&
-    blocked > 0 &&
+    blocked.some((isLive) => isLive()) &&
     pending.length === 0 &&
     !scheduled &&
     !inFlight;
@@ -138,8 +138,10 @@ export function createExecution({ client, arn, token, operations }) {
       checkIdle();
     },
     // The operation needs the service to act first. Its promise never resolves.
-    block() {
-      blocked++;
+    // isLive turns false when a batch abandons the operation (AGENTS.md 2.9). Then the
+    // operation no longer counts as blocked.
+    block(isLive = () => true) {
+      blocked.push(isLive);
       checkIdle();
       return never();
     },

@@ -242,26 +242,49 @@ const profile = await ctx.runInChildContext({
 });
 ```
 
-### ctx.map({ name, items, fn, maxConcurrency, itemName })
+### ctx.map({ name, items, fn, maxConcurrency, itemName, completionConfig })
 
-Runs `fn` for every item. Each item runs in its own child context.
+Runs `fn` for every item. Each item runs in its own child context. Items start in index order.
 
 - `items`: an array.
 - `fn({ ctx, item, index })`: the work for one item. Use the item `ctx` inside `fn`.
 - `maxConcurrency` (default: no limit): at most this many items run at once.
 - `itemName({ item, index })` (optional): the name of each item's child context.
+- `completionConfig` (optional): when the map completes early. See below.
 
-Returns a promise for a `BatchResult`. A failed item does not stop the other items. The
-promise does not reject when an item fails.
+Returns a promise for a `BatchResult`. The promise does not reject when an item fails.
 
 A `BatchResult` has these members:
 
-- `all`: one entry per item, in index order: `{ index, status, result, error }`. `status` is
-  `"SUCCEEDED"` or `"FAILED"`. `error` is a `DurableOperationError`.
-- `completionReason`: always `"ALL_COMPLETED"`.
+- `all`: one entry per started item, in index order: `{ index, status, result, error }`.
+  `status` is `"SUCCEEDED"`, `"FAILED"` or `"STARTED"`. `error` is a `DurableOperationError`.
+- `completionReason`: `"ALL_COMPLETED"`, `"MIN_SUCCESSFUL_REACHED"` or
+  `"FAILURE_TOLERANCE_EXCEEDED"`.
 - `getResults()`: the results of the items that succeeded, in index order.
 - `getErrors()`: the errors of the items that failed, in index order.
 - `throwIfError()`: throws the first item error, if any.
+
+`completionConfig` has three optional keys:
+
+- `minSuccessful`: complete when this many items succeeded.
+- `toleratedFailureCount`: complete when more than this many items failed.
+- `toleratedFailurePercentage`: complete when `failures / items.length * 100` is more than this.
+
+The rules match the full SDK:
+
+1. The map checks the keys after each item settles.
+2. With no `completionConfig`, or with `{}`, one failure completes the map (fail fast).
+3. With any key set, only the keys that are set apply. So `{ minSuccessful: 2 }` alone
+   tolerates any number of failures.
+4. When the map completes early, no new item starts. Items that never started are absent
+   from `all`.
+5. An item that still runs is abandoned. Its entry is `{ index, status: "STARTED" }`. Its
+   operations send no more checkpoints and do not run. A step whose `fn` already runs
+   finishes `fn`, but its result is not saved.
+6. `completionReason` is `"FAILURE_TOLERANCE_EXCEEDED"` if the failures exceed a tolerance.
+   Else it is `"ALL_COMPLETED"` if every item settled. Else it is `"MIN_SUCCESSFUL_REACHED"`.
+
+To run every item whatever fails, set `completionConfig: { toleratedFailurePercentage: 100 }`.
 
 ```js
 const shipped = await ctx.map({
@@ -274,15 +297,29 @@ const shipped = await ctx.map({
 });
 shipped.throwIfError();
 const labels = shipped.getResults();
+
+// Done when any 2 of the 5 replicas confirmed. Writes that still run are abandoned.
+const quorum = await ctx.map({
+  name: "replicate",
+  items: replicas,
+  completionConfig: { minSuccessful: 2 },
+  fn: ({ ctx: itemCtx, item }) =>
+    itemCtx.step({ name: "write", fn: () => writeTo(item, record) }),
+});
+// The reason is "ALL_COMPLETED" when the last replica settles the quorum. So count results.
+if (quorum.getResults().length < 2) {
+  throw new Error("fewer than 2 replicas confirmed");
+}
 ```
 
-### ctx.parallel({ name, branches, maxConcurrency })
+### ctx.parallel({ name, branches, maxConcurrency, completionConfig })
 
 Runs every branch. Each branch runs in its own child context.
 
 - `branches`: an array of `{ name, fn }`. `fn({ ctx })` is the branch. Use the branch `ctx`
   inside `fn`.
 - `maxConcurrency` (default: no limit): at most this many branches run at once.
+- `completionConfig` (optional): as in `map`. The default is fail fast.
 
 Returns a promise for a `BatchResult`, as in `map`.
 
@@ -540,9 +577,22 @@ sent JSON. Handle `undefined`: the sender can send no result.
 
 ### Check BatchResult for errors
 
-`map` and `parallel` run every item, even after an item fails. They record a failed item in
-the result. They do not throw. Call `throwIfError()` to fail on any item error, or inspect
-`getErrors()`.
+`map` and `parallel` record a failed item in the result. They do not throw. By default they
+stop at the first failure. Call `throwIfError()` to fail on any item error, or inspect
+`getErrors()` and `completionReason`. With `minSuccessful`, count `getResults()`. Do not check
+`completionReason` alone: when every item settled, it is `"ALL_COMPLETED"`, whether or not
+`minSuccessful` items succeeded.
+
+### Do not rely on abandoned items
+
+An item that still runs when its batch completes early is abandoned (see `ctx.map`).
+
+1. Its later operations do not run, and the SDK saves no checkpoint for them.
+2. A step whose `fn` already runs when the batch completes finishes `fn`. Its side effects
+   happen. Its result is not saved.
+3. No later invocation runs the item again. The batch's saved result lists it as `STARTED`.
+4. So an abandoned item's last step can have an effect that nothing records. Make that step
+   idempotent, or make its effect safe to leave unfinished.
 
 ### Race operations inside a child context
 
@@ -635,8 +685,14 @@ try {
 - No timers and no polling inside an invocation. So a branch whose wait ends while another
   branch runs a step continues only in the next invocation. The same holds for retries and
   callbacks.
-- `map` and `parallel` have no early completion: no `minSuccessful`, no tolerated failures and
-  no fail-fast. The default is to run every item, not to fail fast.
+- `map` and `parallel` support `minSuccessful`, `toleratedFailureCount` and
+  `toleratedFailurePercentage`, and fail fast by default, like the full SDK. They have no
+  custom `shouldComplete` predicate. The result has `all`, `completionReason`,
+  `getResults()`, `getErrors()` and `throwIfError()`. It has no counts, no `status` and no
+  `succeeded()`, `failed()` or `started()`.
+- After a `map` or `parallel` result larger than 256 KiB, a later invocation rebuilds the same
+  result as the live run, including the `STARTED` items. The full SDK drops `STARTED` items
+  in that case.
 - No `ctx.promise.all`, `allSettled`, `any` or `race`. Use `Promise.*` inside
   `runInChildContext` (see [Race operations inside a child context](#race-operations-inside-a-child-context)).
 - No linear retry, no retry presets, no `withRetry` and no `createWaitStrategy`.

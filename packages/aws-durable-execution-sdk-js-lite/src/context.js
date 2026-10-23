@@ -10,17 +10,51 @@ import { wait } from "./operations/wait.js";
 import { waitForCallback } from "./operations/wait-for-callback.js";
 import { waitForCondition } from "./operations/wait-for-condition.js";
 
+const never = () => new Promise(() => {});
+
 // Members that start with "_" are for operations, not for user code.
 // replayOnly: no operation may act that has no record (see _mayRun).
+// parent: the enclosing ctx. Abandonment (see _abandoned) is read through it.
 export function createContext({
   execution,
   prefix,
   parentId,
   replayOnly = false,
+  parent,
 }) {
   let counter = 0;
+  let childrenAbandoned = false;
   const ctx = {
     _execution: execution,
+    _replayOnly: replayOnly,
+    // The record of this child context. Only child contexts call it.
+    _record: () => execution.get(hashId(prefix)),
+
+    // A batch that completes early abandons its items that are still running
+    // (AGENTS.md 2.9). The batch sets the flag after the item ctxs exist. So the getter
+    // reads the flag of every ancestor at each call.
+    get _abandoned() {
+      return (
+        parent !== undefined && (parent._childrenAbandoned || parent._abandoned)
+      );
+    },
+    get _childrenAbandoned() {
+      return childrenAbandoned;
+    },
+    _abandonChildren() {
+      childrenAbandoned = true;
+    },
+
+    // Every operation sends its updates through this method. An abandoned operation's
+    // update would reach the service after its batch context completed. So the update is
+    // not sent, and the promise never resolves.
+    _checkpoint: (update) =>
+      ctx._abandoned ? never() : execution.checkpoint(update),
+
+    // The liveness check is read at each suspension check. So an operation that was
+    // blocked before its batch abandoned it stops counting as blocked.
+    _block: () => execution.block(() => !ctx._abandoned),
+
     // The EXECUTION record is always present. More records mean an earlier invocation ran.
     // A child starts replaying if its own record exists.
     replaying:
@@ -29,7 +63,7 @@ export function createContext({
         : execution.get(hashId(prefix)) !== undefined,
 
     // Ids are allocated at call time, before any await, so concurrent calls stay
-    // deterministic.
+    // deterministic. A batch re-run also calls it alone to skip an item it does not run.
     _nextId() {
       counter++;
       const rawId =
@@ -49,11 +83,14 @@ export function createContext({
         prefix: rawId,
         parentId: rawId,
         replayOnly: replayOnly || childReplayOnly,
+        parent: ctx,
       }),
 
     // Every operation calls this after its lookup. False means the operation must stop:
     // it then returns a promise that never resolves.
     _mayRun(record, meta) {
+      // Nothing awaits an abandoned operation, so it does not count as blocked.
+      if (ctx._abandoned) return false;
       // A replay-only ctx re-runs a context that already succeeded (AGENTS.md 2.9).
       // Its fn awaited only operations that ended. So an operation without a record, or
       // a step or context that did not end, belongs to a branch that lost a race.

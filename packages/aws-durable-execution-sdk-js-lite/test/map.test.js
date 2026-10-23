@@ -138,13 +138,15 @@ test("maxConcurrency limits running items and starts them in index order", async
   }
 });
 
-test("a failing item does not stop the others and keeps its errorType", async () => {
+test("a tolerated failing item does not stop the others and keeps its errorType", async () => {
   const seen = [];
   let calls = 0;
   const run = await runDurable({
     workflow: async ({ ctx }) => {
       const r = await ctx.map({
         items: [1, 2, 3],
+        // The default stops at the first failure. 100 % tolerates every failure.
+        completionConfig: { toleratedFailurePercentage: 100 },
         fn: ({ ctx: c, item }) =>
           c.step({
             retryStrategy: noRetry,
@@ -269,7 +271,11 @@ test("a large map result uses ReplayChildren and steps do not run again", async 
   assert.equal(stepCalls, 3);
   assert.deepEqual(lengths, [300 * 1024, 300 * 1024]);
   const batch = byId(run, "1");
-  assert.equal(batch.ContextDetails.Result, "");
+  // The Payload holds what a re-run needs, not the result.
+  assert.deepEqual(JSON.parse(batch.ContextDetails.Result), {
+    completionReason: "ALL_COMPLETED",
+    itemStatuses: "SSS",
+  });
   assert.equal(batch.ContextDetails.ReplayChildren, true);
 });
 
