@@ -698,7 +698,14 @@ export function createMicrovmWorkerListener<
    *    idle time after the call and every job end.
    * 7. A refusal for now otherwise: the next idle time lasts at least 30
    *    seconds, unless a job or a resume hook starts the idle time again.
-   * 8. An unknown outcome otherwise: the refusal continues until the resume
+   * 8. An unknown outcome after the refusal of jobs ended during the call:
+   *    a resume hook ended it, or the 30-second limit of a suspend hook's
+   *    refusal. The worker starts no new refusal after an unknown outcome
+   *    when `suspending` is false. So it accepts jobs. The idle time starts
+   *    again when the call and every job have ended.
+   * 9. The same after close() during the call: the worker accepts jobs.
+   *    startIdleTime starts no idle time. So the worker never calls again.
+   * 10. An unknown outcome otherwise: the refusal continues until the resume
    *    hook, or for 30 seconds.
    */
   function failedCallWarning(
@@ -706,9 +713,15 @@ export function createMicrovmWorkerListener<
     suspendHookArrived: boolean,
   ): string {
     if (outcome === "unknown") {
-      return terminating
-        ? "the suspend call for the idle MicroVM had an unknown outcome. The MicroVM is terminating, so the worker refuses jobs and does not try the call again."
-        : "the suspend call for the idle MicroVM had an unknown outcome. The worker refuses jobs until the MicroVM resumes, or for 30 seconds.";
+      if (terminating) {
+        return "the suspend call for the idle MicroVM had an unknown outcome. The MicroVM is terminating, so the worker refuses jobs and does not try the call again.";
+      }
+      if (!suspending) {
+        return closed
+          ? "the suspend call for the idle MicroVM had an unknown outcome. The refusal of jobs already ended during the call, on a resume hook or after 30 seconds. So the worker accepts jobs. The worker is closed, so it does not try the call again."
+          : "the suspend call for the idle MicroVM had an unknown outcome. The refusal of jobs already ended during the call, on a resume hook or after 30 seconds. So the worker accepts jobs, and the idle time starts again.";
+      }
+      return "the suspend call for the idle MicroVM had an unknown outcome. The worker refuses jobs until the MicroVM resumes, or for 30 seconds.";
     }
     if (outcome === "rejected") {
       if (terminating) {
