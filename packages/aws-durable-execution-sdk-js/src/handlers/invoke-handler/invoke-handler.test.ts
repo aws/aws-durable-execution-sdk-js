@@ -1,5 +1,9 @@
 import { createInvokeHandler } from "./invoke-handler";
-import { ExecutionContext, OperationSubType } from "../../types";
+import {
+  ExecutionContext,
+  OperationLifecycleState,
+  OperationSubType,
+} from "../../types";
 import {
   OperationStatus,
   OperationType,
@@ -322,6 +326,43 @@ describe("InvokeHandler", () => {
       expect(mockCheckpoint.waitForStatusChange).toHaveBeenCalledWith(
         "test-step-1",
       );
+    });
+
+    it("keeps the invoke EXECUTING until a result that arrived during the invocation is deserialized", async () => {
+      (mockContext.getStepData as jest.Mock)
+        .mockReturnValueOnce(null)
+        .mockReturnValueOnce({
+          Status: OperationStatus.STARTED,
+          ChainedInvokeDetails: {},
+        })
+        .mockReturnValueOnce({
+          Status: OperationStatus.SUCCEEDED,
+          ChainedInvokeDetails: { Result: '{"result":"success"}' },
+        });
+
+      // Record the last lifecycle state set before deserialization finishes.
+      let stateDuringDeserialize: unknown;
+      mockSafeDeserialize.mockImplementation(async () => {
+        const calls = (mockCheckpoint.markOperationState as jest.Mock).mock
+          .calls;
+        stateDuringDeserialize = calls[calls.length - 1][1];
+        return { result: "success" };
+      });
+
+      const invokeHandler = createInvokeHandler(
+        mockContext,
+        mockCheckpoint,
+        mockCreateStepId,
+      );
+
+      await invokeHandler("test-function", { test: "data" });
+
+      expect(stateDuringDeserialize).toBe(OperationLifecycleState.EXECUTING);
+      const calls = (mockCheckpoint.markOperationState as jest.Mock).mock.calls;
+      expect(calls[calls.length - 1]).toEqual([
+        "test-step-1",
+        OperationLifecycleState.COMPLETED,
+      ]);
     });
 
     it("should create checkpoint for new invoke without name and without input", async () => {

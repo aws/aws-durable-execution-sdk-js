@@ -17,6 +17,7 @@ import {
 } from "../../types/wire";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import { completeAfter } from "../../utils/checkpoint/complete-after";
 import { defaultSerdes, AnySerdes } from "../../utils/serdes/serdes";
 import {
   safeSerialize,
@@ -97,27 +98,26 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
         log("⏭️", "WaitForCondition already completed:", { stepId });
 
-        checkpoint.markOperationState(
+        const result = stepData.StepDetails?.Result;
+        return await completeAfter(
+          checkpoint,
           stepId,
-          OperationLifecycleState.COMPLETED,
-          {
-            metadata: {
+          () =>
+            safeDeserialize(
+              serdes,
+              result,
               stepId,
               name,
-              type: OperationType.STEP,
-              subType: OperationSubType.WAIT_FOR_CONDITION,
-              parentId,
-            },
+              context.terminationManager,
+              context.durableExecutionArn,
+            ),
+          {
+            stepId,
+            name,
+            type: OperationType.STEP,
+            subType: OperationSubType.WAIT_FOR_CONDITION,
+            parentId,
           },
-        );
-
-        return await safeDeserialize(
-          serdes,
-          stepData.StepDetails?.Result,
-          stepId,
-          name,
-          context.terminationManager,
-          context.durableExecutionArn,
         );
       }
 
@@ -172,6 +172,23 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
 
       async function executeCheckLogic(): Promise<T> {
         stepData = context.getStepData(stepId);
+
+        // Mark the operation EXECUTING before deserializing the current state.
+        // Otherwise the invocation could suspend while an async deserializer
+        // runs, before the check starts.
+        checkpoint.markOperationState(
+          stepId,
+          OperationLifecycleState.EXECUTING,
+          {
+            metadata: {
+              stepId,
+              name,
+              type: OperationType.STEP,
+              subType: OperationSubType.WAIT_FOR_CONDITION,
+              parentId,
+            },
+          },
+        );
 
         // Get current state
         const checkpointData =
@@ -243,21 +260,6 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
             attempt: currentAttempt,
           };
 
-          // Mark operation as EXECUTING
-          checkpoint.markOperationState(
-            stepId,
-            OperationLifecycleState.EXECUTING,
-            {
-              metadata: {
-                stepId,
-                name,
-                type: OperationType.STEP,
-                subType: OperationSubType.WAIT_FOR_CONDITION,
-                parentId,
-              },
-            },
-          );
-
           const attemptInfo = toAttemptInfo(stepData, currentAttempt);
           backfillOperationInfo(attemptInfo, opInfo);
           attemptInfo.startTimestamp = new Date();
@@ -325,19 +327,18 @@ export const createWaitForConditionHandler = <Logger extends DurableLogger>(
               ...attemptEndInfo,
               isReplay: false,
             });
-            checkpoint.markOperationState(
-              stepId,
-              OperationLifecycleState.COMPLETED,
-            );
             // waitStrategy is user code and may have mutated deserializedState.
-            // Return the value that was checkpointed, as a replay would.
-            return await safeDeserialize(
-              serdes,
-              serializedState,
-              stepId,
-              name,
-              context.terminationManager,
-              context.durableExecutionArn,
+            // Return the value that was checkpointed, as a replay would. The
+            // operation stays EXECUTING until that value is deserialized.
+            return await completeAfter(checkpoint, stepId, () =>
+              safeDeserialize(
+                serdes,
+                serializedState,
+                stepId,
+                name,
+                context.terminationManager,
+                context.durableExecutionArn,
+              ),
             );
           }
 
