@@ -1,7 +1,8 @@
 # Migrating from 2.x to 3.0
 
-`3.0` is a major release. Its breaking change is the
-[per-invocation plugin factory contract](#register-plugin-factories).
+`3.0` is a major release. Its breaking changes for plugin authors include the
+[per-invocation plugin factory contract](#register-plugin-factories) and
+[non-blocking operation hooks](#adapt-operation-hook-scheduling).
 Upgrade the OTel package to `2.x` together with Core `3.x`, including packages
 delivered through Lambda layers.
 
@@ -25,7 +26,7 @@ covers migration from Core `2.x`; the
 ## Porting to 3.0
 
 The changes most likely to touch your code are the `plugins` argument,
-environment-loaded providers, and OTel registrations. Use
+environment-loaded providers, OTel registrations, and custom operation hooks. Use
 [Finding affected code](#finding-affected-code) to locate them before upgrading.
 
 | Core 2.x / OTel 1.x | Core 3.x / OTel 2.x |
@@ -35,6 +36,7 @@ environment-loaded providers, and OTel registrations. Use
 | `new InvocationOtelPlugin(config)` registration | `createInvocationOtelPluginFactory(config)` |
 | `new ExecutionOtelPlugin(config)` registration | `createExecutionOtelPluginFactory(config)` |
 | Registration metadata on the plugin instance or constructor | Metadata on the registered factory |
+| SDK awaits operation-hook promises before continuing | Synchronous state setup; explicitly queued asynchronous work when order matters |
 
 ### Upgrade dependencies together
 
@@ -131,6 +133,51 @@ configuration is resolved. A valid factory that throws or returns `null` or
 `undefined` instead skips instrumentation for that invocation. Async factories
 are unsupported: Promise-like results are skipped. Keep shared resource setup
 outside `createPlugin`, and verify telemetry independently of handler success.
+
+### Adapt operation hook scheduling
+
+Core 3 no longer awaits the promises returned by `onOperationStart`,
+`onOperationEnd`, `onOperationAttemptStart`, `onOperationAttemptEnd`, or
+`onOperationChange` before continuing an operation. Their asynchronous work
+cannot delay the next operation or prevent invocation suspension. Migrating to
+a factory alone does not adapt a plugin that relied on those waits.
+
+Hook calls still follow lifecycle order, including
+`parent start → child start → child end → parent end` for nested operations.
+Each hook's synchronous part runs before the SDK continues, but asynchronous
+work from consecutive hooks can overlap and finish out of order. For example,
+a child's asynchronous `onOperationEnd` work can finish after its parent's.
+
+Update custom plugins as follows:
+
+- Initialize state needed by later hooks or wrappers synchronously, before the
+  first `await` or queued callback. For example, create and store an operation's
+  span in `onOperationStart` before awaiting export or enrichment. If the span
+  is stored after an `await`, a wrapper can run before that span exists.
+- If asynchronous work must preserve hook call order, serialize it explicitly
+  in an invocation-local queue or promise chain. Return the queued work's
+  promise from each hook so the SDK can track it for draining. Handle rejected
+  work so one failure does not prevent later queued work from running.
+- Flush exporters and other buffered work in `onInvocationEnd`, and await that
+  work inside the hook. Do not assume all earlier hook work completed: the
+  drain can reach its deadline with work still pending.
+
+Before calling `onInvocationEnd`, the SDK drains promises returned by earlier
+operation hooks across all plugins until they settle or until 500 ms before
+the invocation's deadline. It then calls `onInvocationEnd` and waits until it
+settles or until 50 ms before the deadline. These bounds reserve time for
+flushing and returning the Lambda response. Reaching a bound stops the wait;
+it does not cancel the
+underlying work or guarantee telemetry delivery. Pending work may never
+complete after the runtime freezes. If the context reports no usable deadline,
+both waits continue until the work settles.
+
+`onInvocationStart` remains awaited before any operation, so invocation-wide
+asynchronous setup can finish there. `wrapInvocation`, `wrapChildContextFn`,
+and `wrapOperationAttemptFn` remain inline around the customer function. They
+do not wait for asynchronous work started by an earlier operation hook. See
+[the hook scheduling contract](../packages/aws-durable-execution-sdk-js/src/types/plugin.ts)
+for the full lifecycle guarantees.
 
 ### Replace the v1 provider contract
 
@@ -241,6 +288,7 @@ rg -n 'plugins:|DURABLE_EXECUTION_PLUGINS|durableExecutionPluginProvider' .
 rg -n 'pluginApiVersion|pluginType|DURABLE_INSTRUMENTATION_PLUGIN_API_VERSION' .
 rg -n 'DurableInstrumentationPluginProvider|RegisteredDurableInstrumentationPlugin|DurableInstrumentationPluginType' .
 rg -n 'new (InvocationOtelPlugin|ExecutionOtelPlugin)|createPlugin' .
+rg -n 'onOperation(Start|End|AttemptStart|AttemptEnd|Change)|onInvocation(Start|End)|wrap(Invocation|ChildContextFn|OperationAttemptFn)' .
 rg -n '@aws/durable-execution-sdk-js|Layers:|layerVersionArn' .
 ```
 
@@ -280,3 +328,8 @@ See the [logging guide](../packages/aws-durable-execution-sdk-js/README.md).
    concurrency. With the Testing SDK, review assertions about invocation counts
    and history ordering against its corrected clock and notification behavior
    in the [release notes](../release-notes/sdk-3.0.0.md).
+7. Delay custom operation-hook work and verify that wrappers see synchronously
+   initialized state while operations continue. Check any explicit queue's
+   ordering and recovery after a rejection. Test near-deadline invocation end
+   with a hook that never settles: `onInvocationEnd` should still run, tolerate
+   incomplete hook work, and allow the response to return within its time budget.
