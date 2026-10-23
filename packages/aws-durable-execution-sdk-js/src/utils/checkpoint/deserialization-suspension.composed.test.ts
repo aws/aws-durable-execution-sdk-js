@@ -12,6 +12,11 @@
  * Every test here holds a callback pending, runs one operation whose deserializer takes
  * longer than the cooldown, and then runs a "submit" step. The step must run before the
  * invocation returns.
+ *
+ * CONTRACT TEST. These cases guard invariants listed in
+ * packages/aws-durable-execution-sdk-js/AGENTS.md and docs/adr/0001-operation-tracking-and-plugin-hooks.md.
+ * If a change makes a case fail, the change breaks an invariant. Do not edit, skip or delete
+ * the case to make the change pass. Change the ADR first.
  */
 
 import { withDurableExecution } from "../../with-durable-execution";

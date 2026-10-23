@@ -6,6 +6,11 @@
  * a hook awaited while no operation was EXECUTING let the invocation suspend before the
  * caller's next line ran, when another operation was waiting. These tests run the real engine
  * with a plugin whose hooks are slower than the termination cooldown.
+ *
+ * CONTRACT TEST. These cases guard invariants listed in
+ * packages/aws-durable-execution-sdk-js/AGENTS.md and docs/adr/0001-operation-tracking-and-plugin-hooks.md.
+ * If a change makes a case fail, the change breaks an invariant. Do not edit, skip or delete
+ * the case to make the change pass. Change the ADR first.
  */
 
 import { withDurableExecution } from "../../with-durable-execution";

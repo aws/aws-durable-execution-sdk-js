@@ -1,3 +1,10 @@
+/**
+ * CONTRACT TEST, in part. The cases about waiting, ordering and the drain guard invariants
+ * listed in packages/aws-durable-execution-sdk-js/AGENTS.md and
+ * docs/adr/0001-operation-tracking-and-plugin-hooks.md. If a change makes one of them fail, the
+ * change breaks an invariant. Do not edit, skip or delete the case to make the change pass.
+ * Change the ADR first.
+ */
 import { createPluginRunner, PLUGIN_DRAIN_RESERVE_MS } from "./plugin-runner";
 import {
   DurableInstrumentationPlugin,
