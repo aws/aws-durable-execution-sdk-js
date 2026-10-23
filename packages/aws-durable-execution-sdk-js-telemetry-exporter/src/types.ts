@@ -333,6 +333,13 @@ export interface DurableExecutionTelemetryRecord {
    * removed, or changes meaning/type) so consumers can detect and adapt.
    */
   schemaVersion: "1.0";
+  /**
+   * When the record was built. Strictly increases across the records of one
+   * invocation: if two records are built in the same millisecond, the later one
+   * is 1 ms after the earlier one. Exporters key on `executionArn` + `emittedAt`
+   * (the SQS FIFO deduplication id, the default DynamoDB sort key), so equal
+   * values would drop or overwrite a record.
+   */
   emittedAt: string;
   executionArn: string;
   executionName?: string;

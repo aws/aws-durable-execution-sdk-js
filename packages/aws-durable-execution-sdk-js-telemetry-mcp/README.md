@@ -160,7 +160,10 @@ The server registers five tools. Call them roughly in this order.
   query language required. **Prefer this over a hand-written `query`:** it cannot
   be got wrong and costs fewer tokens. Reach for `query` only when a question
   cannot be expressed through these filters. On log destinations the scanned window
-  follows `since`, so filtering to last week scans last week.
+  follows `since`, so filtering to last week scans last week. `since` and `until`
+  accept an ISO-8601 date or date-time. A value with no offset is read as UTC.
+  Each bound is rewritten to the stored format (UTC, 3 fraction digits, `Z`)
+  before it is compared.
 - **`get_execution`** — Fetch a single execution record by its execution ARN. A
   record that does not exist is a success with `found: false`, not an error. For
   the Athena/`s3` destination you may also pass `year`/`month`/`day` to prune to

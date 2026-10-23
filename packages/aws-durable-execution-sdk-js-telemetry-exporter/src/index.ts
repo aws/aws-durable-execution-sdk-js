@@ -1021,6 +1021,11 @@ class DurableExecutionTelemetryInvocation
    * {@link buildAndSchedule}.
    */
   private buildRevision = 0;
+  /**
+   * The `emittedAt` of the last record this instance built, in epoch
+   * milliseconds. See {@link nextEmittedAt}.
+   */
+  private lastEmittedMs = Number.NEGATIVE_INFINITY;
 
   // --- ExportSlot; owned by ExportScheduler ---
   pending: DurableExecutionTelemetryRecord | undefined = undefined;
@@ -1056,7 +1061,7 @@ class DurableExecutionTelemetryInvocation
     return {
       recordType: "DurableExecutionTelemetry" as const,
       schemaVersion: "1.0",
-      emittedAt: new Date().toISOString(),
+      emittedAt: this.nextEmittedAt(),
       executionArn: this.executionArn,
       executionName: arn.executionName || undefined,
       functionName: arn.functionName,
@@ -1072,6 +1077,25 @@ class DurableExecutionTelemetryInvocation
       error: args.error ? toErrorRecord(args.error) : undefined,
       operations: args.operations,
     };
+  }
+
+  /**
+   * The `emittedAt` for the next record: the current time, unless that is not
+   * later than the previous record's, in which case 1 ms after the previous one.
+   *
+   * `emittedAt` has millisecond precision. With `emitMode: "on-change"`, two
+   * records of one execution can be built within the same millisecond, for
+   * example a RUNNING record and the final record. Exporters key on
+   * `executionArn` + `emittedAt`: the SQS FIFO deduplication id, and the default
+   * DynamoDB sort key. Equal values would make SQS drop the second message and
+   * DynamoDB overwrite the first item. So `emittedAt` strictly increases within
+   * this instance, which serves one invocation.
+   */
+  private nextEmittedAt(): string {
+    const now = Date.now();
+    const ms = now > this.lastEmittedMs ? now : this.lastEmittedMs + 1;
+    this.lastEmittedMs = ms;
+    return new Date(ms).toISOString();
   }
 
   /**
