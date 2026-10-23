@@ -214,16 +214,32 @@ export interface MapOptions<I, O> {
   fn: (args: { ctx: DurableContext; item: I; index: number }) => O | Promise<O>;
   /** At most this many items run at once. Default: no limit. */
   maxConcurrency?: number;
-  /** The Name of each item's child context. Default: no Name. */
+  /** The Name of each item's child context. Default: no Name. FLAT sends no Name. */
   itemName?: (args: { item: I; index: number }) => string;
   /** When the map completes early. Default: at the first failed item. */
   completionConfig?: CompletionConfig;
   /**
    * The serdes of each item's result. Default: JSON. With itemSerdes, the map saves
-   * only a summary, and a replay reads each item's own record.
+   * only a summary, and a replay reads each item's own record. FLAT items have no
+   * record, so they never call itemSerdes: a replay runs each item's fn again.
    */
   itemSerdes?: Serdes<O>;
+  /** Default "NESTED". See {@link Nesting}. */
+  nesting?: Nesting;
 }
+
+/**
+ * How map and parallel record their items.
+ * - "NESTED": each item is a child context with its own CONTEXT operation. A replay
+ *   returns a finished item's saved result without running its fn.
+ * - "FLAT": an item has no CONTEXT operation. Its operations have the batch as their
+ *   parent. This saves one operation and two checkpoint updates per item. The cost:
+ *   until the batch completes, every replay runs each started item's fn again. A
+ *   replay of a batch result larger than 256 KiB runs it again too. The item's
+ *   operations replay from their records, but its code outside them runs again.
+ *   The history has no entry per item.
+ */
+export type Nesting = "NESTED" | "FLAT";
 
 export interface ParallelBranch<T> {
   name?: string;
@@ -240,6 +256,8 @@ export interface ParallelOptions<T> {
   completionConfig?: CompletionConfig;
   /** The serdes of each branch's result, as in MapOptions.itemSerdes. */
   itemSerdes?: Serdes<T>;
+  /** Default "NESTED". As in MapOptions.nesting. */
+  nesting?: Nesting;
 }
 
 /**
@@ -368,9 +386,9 @@ export interface DurableContext {
   ): Promise<T>;
   /** Runs fn, then waits, until waitStrategy stops. Resolves to the last state. */
   waitForCondition<S>(opts: WaitForConditionOptions<S>): Promise<S>;
-  /** Runs fn for every item in its own child context. A failed item does not stop the others. */
+  /** Runs fn for every item, in its own child context unless nesting is "FLAT". A failed item does not stop the others. */
   map<I, O>(opts: MapOptions<I, O>): Promise<BatchResult<O>>;
-  /** Runs every branch in its own child context. A failed branch does not stop the others. */
+  /** Runs every branch, in its own child context unless nesting is "FLAT". A failed branch does not stop the others. */
   parallel<T>(opts: ParallelOptions<T>): Promise<BatchResult<T>>;
 }
 

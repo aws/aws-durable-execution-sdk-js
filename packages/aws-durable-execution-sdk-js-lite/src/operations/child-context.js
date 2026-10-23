@@ -12,6 +12,9 @@
 // The service prunes the children of a completed context. So fn must not run again
 // unless ReplayChildren kept them: its steps would run a second time.
 //
+// A FLAT map or parallel item does not use this table. It has no record, sends no
+// update of its own, and runs its fn on every replay (batch.js).
+//
 // A custom serdes makes the SUCCEED Payload. The 256 KiB check applies to that string.
 // A ReplayChildren re-run returns fn's value and calls no serdes. The full SDK sends
 // that value through serialize and deserialize again.
@@ -60,7 +63,7 @@ export async function runChild(
   if (record?.Status === "FAILED") {
     throw fromErrorObject(details?.Error, "ChildContextError");
   }
-  const child = ctx._child(rawId, replayChildren);
+  const child = ctx._child(rawId, { replayOnly: replayChildren });
   const update = (fields) => ({ ...ctx._base(rawId, meta), ...fields });
   // The context's own updates go through the child ctx. A batch abandons an item by its
   // ctx, so an abandoned item's SUCCEED or FAIL is not sent either.

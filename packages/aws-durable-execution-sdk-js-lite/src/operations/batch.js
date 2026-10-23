@@ -1,14 +1,24 @@
 // Replay table for map and parallel (Type CONTEXT, SubType Map or Parallel):
 //
-// The batch is a child context whose children are one child context per item
-// (SubType MapIteration or ParallelBranch). The child context replay table applies
-// (child-context.js) at both levels:
+// The batch is a child context. With nesting "NESTED" (the default), its children are
+// one child context per item (SubType MapIteration or ParallelBranch). The child
+// context replay table (child-context.js) then applies at both levels:
 //
 // | Batch record                   | Behavior                                          |
 // |--------------------------------|---------------------------------------------------|
 // | none or STARTED                | run the scheduler; finished items replay          |
 // | SUCCEEDED                      | rebuild the BatchResult from the stored JSON      |
 // | SUCCEEDED with ReplayChildren  | re-drive the items the saved statuses mark S or F |
+//
+// With nesting "FLAT", an item has no record. Its operations have the batch as their
+// ParentId. So the item rows of the child context table do not apply. Instead, every
+// run that reaches the item runs its fn again:
+//
+// | Batch record                   | FLAT item behavior                                |
+// |--------------------------------|---------------------------------------------------|
+// | none or STARTED                | run fn; its operations replay from their records  |
+// | SUCCEEDED                      | fn does not run; the stored JSON holds the item   |
+// | SUCCEEDED with ReplayChildren  | S or F: run fn in a replay-only ctx; "-": no run  |
 //
 // The batch can complete before every item finished (completionConfig). It then
 // abandons the items that still run: they send no more updates (AGENTS.md 2.9).
@@ -21,6 +31,12 @@
 // itemSerdes, the batch always saves the summary with ReplayChildren. A replay then re-drives the items, and each item's record
 // goes through itemSerdes.deserialize. The full SDK stores the item values in the batch
 // record and replays them with JSON.parse.
+//
+// A FLAT item has no record, so no record can hold its serialized result. So a FLAT
+// item never calls itemSerdes. The batch still saves the summary with ReplayChildren
+// when itemSerdes is set. So the item values never pass through JSON: a replay runs
+// each item's fn again and returns fn's value. The full SDK calls serialize and
+// deserialize on a FLAT item's value without storing the string.
 
 import {
   DurableOperationError,
@@ -31,7 +47,16 @@ import { childContext } from "./child-context.js";
 
 export function map(
   ctx,
-  { name, items, fn, maxConcurrency, itemName, completionConfig, itemSerdes },
+  {
+    name,
+    items,
+    fn,
+    maxConcurrency,
+    itemName,
+    completionConfig,
+    itemSerdes,
+    nesting,
+  },
 ) {
   const tasks = items.map((item, index) => ({
     name: itemName?.({ item, index }),
@@ -44,12 +69,13 @@ export function map(
     maxConcurrency,
     completionConfig,
     itemSerdes,
+    nesting,
   });
 }
 
 export function parallel(
   ctx,
-  { name, branches, maxConcurrency, completionConfig, itemSerdes },
+  { name, branches, maxConcurrency, completionConfig, itemSerdes, nesting },
 ) {
   return batch(ctx, {
     name,
@@ -58,6 +84,7 @@ export function parallel(
     maxConcurrency,
     completionConfig,
     itemSerdes,
+    nesting,
   });
 }
 
@@ -74,7 +101,7 @@ async function batch(ctx, { name, subType, tasks, ...config }) {
     // Every other record either returns before fn runs or makes the ctx not replay-only.
     fn: ({ ctx: b }) =>
       b._replayOnly
-        ? replayAll(b, tasks, itemSubType, config.itemSerdes)
+        ? replayAll(b, tasks, itemSubType, config)
         : runAll(b, tasks, itemSubType, config),
     // One character per started item, in index order, like the full SDK's itemStatuses.
     summary: ({ all, completionReason }) =>
@@ -165,15 +192,29 @@ const settle = (promise, index) =>
     (err) => ({ index, status: "FAILED", error: toErrorObject(err) }),
   );
 
-// Items start strictly in index order, and childContext takes its id at call time. So
+// Starts one item and returns its promise. Both kinds of item take the next id of the
+// batch ctx synchronously, at call time (AGENTS.md 2.4).
+// 1. NESTED: the item is a child context with its own record.
+// 2. FLAT: the item has no record. The full SDK's virtual context does the same
+//    (run-in-child-context-handler.ts: no START, SUCCEED or FAIL; its children get
+//    the parent's parentId). So no record can say that the item ended, and fn runs on
+//    every replay that reaches the item. The item's operations replay from their own
+//    records. A failed item fails again, because its failed operation throws again.
+function runItem(ctx, { name, fn }, subType, { nesting, itemSerdes }) {
+  if (nesting !== "FLAT") {
+    return childContext(ctx, { name, subType, fn, serdes: itemSerdes });
+  }
+  return flatItem(ctx._child(ctx._nextId(), { flat: true }), fn);
+}
+
+// async turns a synchronous throw of fn into a rejection, like childContext does.
+const flatItem = async (child, fn) => fn({ ctx: child });
+
+// Items start strictly in index order, and runItem takes its id at call time. So
 // item i always gets the raw id `${batchId}-${i + 1}`, and the started items are always
 // the first `all.length` items.
-function runAll(
-  ctx,
-  tasks,
-  subType,
-  { maxConcurrency = Infinity, completionConfig, itemSerdes },
-) {
+function runAll(ctx, tasks, subType, config) {
+  const { maxConcurrency = Infinity, completionConfig } = config;
   const policy = completionPolicy(completionConfig, tasks);
   const all = [];
   let succeeded = 0;
@@ -194,13 +235,7 @@ function runAll(
       ) {
         const index = all.length;
         all.push({ index, status: "STARTED" });
-        const { name, fn } = tasks[index];
-        const run = childContext(ctx, {
-          name,
-          subType,
-          fn,
-          serdes: itemSerdes,
-        });
+        const run = runItem(ctx, tasks[index], subType, config);
         void settle(run, index).then((item) => {
           // An item that settles after the decision keeps STARTED, like the full SDK.
           if (decided) return;
@@ -230,7 +265,9 @@ function runAll(
 // 2. An item marked "-" was still running. It is not run. Its id is still taken, so
 //    later items keep their ids. It stays STARTED in the result.
 // 3. An item after the marks never started. It is not run and not in the result.
-async function replayAll(ctx, tasks, subType, serdes) {
+// A FLAT item has no record, so step 1 runs its fn again. The batch ctx is replay-only,
+// so the item ctx is replay-only too. Its operations then return their records.
+async function replayAll(ctx, tasks, subType, config) {
   const { completionReason, itemStatuses } = JSON.parse(
     ctx._record().ContextDetails.Result,
   );
@@ -240,8 +277,7 @@ async function replayAll(ctx, tasks, subType, serdes) {
       ctx._nextId();
       all.push({ index, status: "STARTED" });
     } else {
-      const { name, fn } = tasks[index];
-      const run = childContext(ctx, { name, subType, fn, serdes });
+      const run = runItem(ctx, tasks[index], subType, config);
       all.push(await settle(run, index));
     }
   }

@@ -71,7 +71,10 @@ from the package owner.
 - `ctx.promise.all/allSettled/any/race`. The README documents the replacement pattern.
 - Linear retry, retry presets, `withRetry`, `createWaitStrategy`.
 - The `Duration` object. All times are plain seconds.
-- `NestingType.FLAT` / virtual contexts, custom summary generators, file-system serdes.
+- The `NestingType` enum and `virtualContext` on `runInChildContext`. The package owner
+  decided to add `nesting: "NESTED" | "FLAT"` on `map` and `parallel` only, as a plain
+  string (section 2.9).
+- Custom summary generators, file-system serdes.
 - Error subclasses. One error class exists (section 2.7).
 - The `completeBatch()` and `continueBatch()` helpers and the `CompletionOutcome` enum.
   The `shouldComplete` predicate of `map` and `parallel` is in scope (section 2.9). It
@@ -185,7 +188,8 @@ Rules for the client:
    `` `${childRawId}-${n}` ``.
 4. The id sent to the service is the first 16 hex characters of the MD5 hash of the raw id.
    `ParentId` is the hashed raw id of the enclosing child context. Root operations have no
-   `ParentId`.
+   `ParentId`. A FLAT batch item is not a child context. So its operations have the
+   batch's hashed id as `ParentId` (section 2.9, step 14).
 5. These ids must match the full SDK exactly. The service and saved executions depend on them.
 6. MD5 is the main CPU cost of an operation. So each ctx hashes each raw id once and keeps the
    hash in a map. It hashes its parent id once, when the ctx is created.
@@ -298,8 +302,8 @@ Suspension:
 | `invoke` | `CHAINED_INVOKE` / `ChainedInvoke` | `START` with `Payload` and `ChainedInvokeOptions` |
 | `waitForCondition` | `STEP` / `WaitForCondition` | `START`, then `RETRY` with `Payload`, `SUCCEED` or `FAIL` |
 | `runInChildContext` | `CONTEXT` / `RunInChildContext` | `START`, then `SUCCEED` or `FAIL` |
-| `map` | `CONTEXT` / `Map`, items `MapIteration` | child contexts |
-| `parallel` | `CONTEXT` / `Parallel`, branches `ParallelBranch` | child contexts |
+| `map` | `CONTEXT` / `Map`, items `MapIteration` | child contexts; FLAT items send none |
+| `parallel` | `CONTEXT` / `Parallel`, branches `ParallelBranch` | child contexts; FLAT branches send none |
 
 The SubType column shows the defaults. `step`, `createCallback` and `runInChildContext`
 accept a `subType` option that replaces the default, as in the full SDK. An empty string
@@ -342,8 +346,9 @@ Child contexts (`runInChildContext`, `waitForCallback`, `map`, `parallel`):
 
 Map and parallel (`batch.js`):
 
-1. A batch is a child context. Each item is a child context of the batch. Items start in
-   index order, so item i always has the raw id `` `${batchId}-${i + 1}` ``.
+1. A batch is a child context. With `nesting: "NESTED"` (the default), each item is a
+   child context of the batch. A FLAT item has no context (steps 13 to 18). Items start
+   in index order, so item i always has the raw id `` `${batchId}-${i + 1}` ``.
 2. `completionConfig` follows the full SDK. It holds thresholds or a `shouldComplete`
    predicate. After each item settles, the batch checks it. With no threshold set, one
    failure completes the batch (fail fast). The README lists the rules.
@@ -389,6 +394,34 @@ Map and parallel (`batch.js`):
    replay of that record would not call `itemSerdes.deserialize`. So the lite SDK
    re-drives the items as in step 11, and each item replays its own record through
    `itemSerdes`. The cost: the service keeps the children of the batch.
+
+FLAT items (`nesting: "FLAT"`):
+
+13. A FLAT item has no `CONTEXT` operation. It sends no START, SUCCEED or FAIL. The full
+   SDK's virtual context does the same (`run-in-child-context-handler.ts`: `isVirtual`
+   skips the three checkpoints).
+14. A FLAT item still takes the next id of the batch ctx, in index order. Its operations
+   use that raw id as prefix, as in a NESTED item. Their `ParentId` is the batch's hashed
+   id, because the item has no record. The full SDK passes the parent's `parentId` to a
+   virtual child (`isVirtual ? parentId : entityId`). So the ids and ParentIds are the
+   full SDK's. The default `"NESTED"` sends the same updates as before.
+15. `ctx._child(rawId, { flat: true })` creates the item ctx. Its `parent` is the batch
+   ctx, so abandonment (step 6) reaches it. A replay-only batch ctx makes it
+   replay-only.
+16. No record says that a FLAT item ended. So the scheduler and the re-run of step 11
+   call the item's `fn` again in every run that reaches the item. The item does not call
+   `_mayRun`, because it has no record to validate. Its operations call `_mayRun` and
+   replay from their own records. A failed item fails again, because its failed
+   operation throws its stored error again. A batch with a stored JSON result does not
+   run its items (child contexts, step 1).
+17. A FLAT item never calls `itemSerdes`. No record exists to hold the serialized value,
+   and deserializing a value that was not stored changes nothing (section 2.6, step 5). With
+   `itemSerdes` set, the batch still saves the summary with ReplayChildren (step 12). So
+   the item values never pass through JSON: a replay runs each item's `fn` again and
+   returns its value. The full SDK calls `serialize` and `deserialize` on the value and
+   stores nothing.
+18. The batch does not validate the `nesting` value. Any value except `"FLAT"` selects
+   NESTED (rule 1.2).
 
 ### 2.10 Logging
 

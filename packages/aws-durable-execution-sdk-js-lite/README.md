@@ -266,9 +266,10 @@ const profile = await ctx.runInChildContext({
 });
 ```
 
-### ctx.map({ name, items, fn, maxConcurrency, itemName, completionConfig, itemSerdes })
+### ctx.map({ name, items, fn, maxConcurrency, itemName, completionConfig, itemSerdes, nesting })
 
-Runs `fn` for every item. Each item runs in its own child context. Items start in index order.
+Runs `fn` for every item. By default, each item runs in its own child context. Items start
+in index order.
 
 - `items`: an array.
 - `fn({ ctx, item, index })`: the work for one item. Use the item `ctx` inside `fn`.
@@ -278,6 +279,7 @@ Runs `fn` for every item. Each item runs in its own child context. Items start i
 - `itemSerdes` (default: JSON): stores each item's result in the item's own checkpoint.
   With `itemSerdes`, the map's checkpoint holds only the status of each item. A replay
   then reads each item's checkpoint with `itemSerdes.deserialize`. See [Serdes](#serdes).
+- `nesting` (default `"NESTED"`): `"NESTED"` or `"FLAT"`. See below.
 
 Returns a promise for a `BatchResult`. The promise does not reject when an item fails.
 
@@ -396,9 +398,36 @@ const spread = await ctx.map({
 spread.throwIfError();
 ```
 
-### ctx.parallel({ name, branches, maxConcurrency, completionConfig, itemSerdes })
+`nesting` selects how the map records its items:
 
-Runs every branch. Each branch runs in its own child context.
+1. With `"NESTED"`, each item is a child context. It has its own `CONTEXT` operation, with a
+   `START` and a `SUCCEED` or `FAIL` update. A replay returns a finished item's saved result
+   and does not run its `fn`.
+2. With `"FLAT"`, an item has no operation of its own. Its operations are children of the
+   map's operation. So each item saves one operation and two checkpoint updates. The item
+   still takes an operation id, so its operations have the same ids as with `"NESTED"`.
+   The full SDK uses the same ids.
+3. A FLAT item has no record that says it finished. So until the map completes, every
+   invocation that reaches the map runs each started item's `fn` again. Its operations
+   return their saved results, so no step runs again. Its code outside the operations runs
+   again. A failed item fails again with the same error, because its failed step throws its
+   saved error again.
+4. After the map completes, a replay returns the map's saved result. No item runs. The
+   exception is a result larger than 256 KiB, or a map with `itemSerdes`: a replay then
+   runs `fn` again for each item that had finished. Its steps return their saved results.
+   A NESTED item then returns its own saved result instead.
+5. The execution history shows no entry per item. `itemName` is still passed to
+   `shouldComplete`, but it is not sent.
+6. A FLAT item has no checkpoint to hold its result. So it never calls `itemSerdes`. With
+   `itemSerdes` set, the map still saves only the statuses. A replay then returns the
+   values that `fn` returns again.
+7. Early completion abandons FLAT items like NESTED items.
+
+See [Use FLAT for large maps of small items](#use-flat-for-large-maps-of-small-items).
+
+### ctx.parallel({ name, branches, maxConcurrency, completionConfig, itemSerdes, nesting })
+
+Runs every branch. By default, each branch runs in its own child context.
 
 - `branches`: an array of `{ name, fn }`. `fn({ ctx })` is the branch. Use the branch `ctx`
   inside `fn`.
@@ -406,6 +435,8 @@ Runs every branch. Each branch runs in its own child context.
 - `completionConfig` (optional): as in `map`. The default is fail fast. In the predicate's
   `items`, `name` is the branch name.
 - `itemSerdes` (default: JSON): stores each branch's result, as in `map`.
+- `nesting` (default `"NESTED"`): as in `map`. With `"FLAT"`, a branch has no operation of
+  its own.
 
 Returns a promise for a `BatchResult`, as in `map`.
 
@@ -779,6 +810,22 @@ predicate returned `outcome: "FAILED"`.
    array. Return the same answer for the same `status`. Do not call `ctx`, do no I/O, and
    do not use `Date.now()` or `Math.random()`.
 
+### Use FLAT for large maps of small items
+
+A NESTED item costs one `CONTEXT` operation and two checkpoint updates more than a FLAT
+item. A map of 100 one-step items creates 201 operations with `"NESTED"` and 101 with
+`"FLAT"`.
+
+1. A FLAT item runs its `fn` again in every invocation that reaches the map before the map
+   completes. Its steps return their saved results. Its code outside steps runs again.
+   A NESTED item that finished returns its saved result instead.
+2. So use `nesting: "FLAT"` when each item is one step or a few steps, and its code outside
+   steps is cheap.
+3. Keep `"NESTED"` when an item has much code outside steps, or when you need one entry per
+   item in the execution history.
+4. The code outside steps must be deterministic in both modes (see
+   [Keep code outside steps deterministic](#keep-code-outside-steps-deterministic)).
+
 ### Do not rely on abandoned items
 
 An item that still runs when its batch completes early is abandoned (see `ctx.map`).
@@ -948,6 +995,8 @@ export const handler = withDurableExecution(workflow, {
   together with a predicate do not fail the execution: the predicate applies. The result has
   `all`, `completionReason`, `getResults()`, `getErrors()` and `throwIfError()`. It has no
   counts, no `status` and no `succeeded()`, `failed()` or `started()`.
+- With `nesting: "FLAT"`, an item never calls `itemSerdes`. The full SDK calls `serialize`
+  and `deserialize` on the item's value, and stores nothing.
 - After a `map` or `parallel` result larger than 256 KiB, a later invocation rebuilds the same
   result as the live run, including the `STARTED` items. The full SDK drops `STARTED` items
   in that case.

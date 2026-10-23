@@ -37,7 +37,9 @@ export function createContext({
     return h;
   };
   // A child ctx gets the same raw id as prefix and parentId. So this is also the hash of
-  // the child's own record id.
+  // the child's own record id. A FLAT item ctx is the exception: its parentId is the
+  // batch's raw id. So its _record and its first `replaying` value read the batch's
+  // record. The item has no record of its own.
   const hashedParentId = parentId === undefined ? undefined : hashId(parentId);
   const ctx = {
     _execution: execution,
@@ -92,11 +94,17 @@ export function createContext({
     // The ctx for the child context with this raw id. It lives here because
     // child-context.js is imported by this file: importing createContext back would
     // make an import cycle. A replay-only parent makes every descendant replay-only.
-    _child: (rawId, childReplayOnly = false) =>
+    // flat: the child is a FLAT batch item, which has no record (AGENTS.md 2.9). So
+    // its operations take this ctx's parentId, like the full SDK's virtual context.
+    // Their raw ids still start with the item's raw id.
+    _child: (
+      rawId,
+      { replayOnly: childReplayOnly = false, flat = false } = {},
+    ) =>
       createContext({
         execution,
         prefix: rawId,
-        parentId: rawId,
+        parentId: flat ? parentId : rawId,
         replayOnly: replayOnly || childReplayOnly,
         parent: ctx,
       }),
