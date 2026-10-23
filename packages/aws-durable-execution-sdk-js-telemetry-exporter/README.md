@@ -23,7 +23,7 @@ Every emitted record has this shape:
 interface DurableExecutionTelemetryRecord {
   recordType: "DurableExecutionTelemetry"; // Fixed discriminator — use to filter telemetry records
   schemaVersion: "1.0";
-  emittedAt: string; // ISO-8601 timestamp of emission
+  emittedAt: string; // ISO-8601 timestamp of emission; strictly increases within one invocation
 
   // Execution identity
   executionArn: string; // Full ARN including execution/invocation IDs

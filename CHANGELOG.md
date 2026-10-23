@@ -87,6 +87,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Durable Execution Telemetry**: `emittedAt` now strictly increases across the records of one
+  invocation. With `emitMode: "on-change"`, two records could be built in the same millisecond and
+  get the same `emittedAt`. `SQSExporter` derives the FIFO deduplication id from
+  `executionArn:emittedAt`, so SQS dropped the second message, and `DynamoDBExporter` uses
+  `emittedAt` as its default sort key, so the second item overwrote the first. A record built in
+  the same millisecond as the previous one now gets the previous value plus 1 ms.
 - **Durable Execution Telemetry**: every error in a record (the execution `error`,
   `operations[].error`, and `operationsByName.<name>.error`) now carries its cause chain as
   `{ name, message, cause? }`, in that key order. `cause` follows `Error.cause`, including the
