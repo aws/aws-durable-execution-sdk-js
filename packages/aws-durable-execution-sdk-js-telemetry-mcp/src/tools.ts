@@ -348,6 +348,12 @@ interface Dialect {
    * which is correct because the stored values have the same fixed width.
    */
   timeLiteral: (iso: string) => string;
+  /**
+   * How precisely a bound is written (see `normalizeTimestamp`). `"exact"` for
+   * a typed time column, which compares instants. `"millisecond"` for a column
+   * compared as text, which needs the stored fixed width.
+   */
+  timePrecision: "millisecond" | "exact";
 }
 
 /** A quoted string literal. The value is a normalized timestamp, so it holds no quote. */
@@ -376,6 +382,7 @@ function dialectFor(cfg: TelemetryConfig): Dialect {
         recordTypeColumn: "recordtype",
         orderByAndLimit: true,
         timeLiteral: trinoTimestamp,
+        timePrecision: "exact",
       };
     case "dynamodb":
       return {
@@ -389,6 +396,7 @@ function dialectFor(cfg: TelemetryConfig): Dialect {
         recordTypeColumn: "recordType",
         orderByAndLimit: false,
         timeLiteral: quotedTime,
+        timePrecision: "millisecond",
       };
     case "aurora":
       return {
@@ -403,6 +411,7 @@ function dialectFor(cfg: TelemetryConfig): Dialect {
         recordTypeColumn: undefined,
         orderByAndLimit: true,
         timeLiteral: quotedTime,
+        timePrecision: "exact",
       };
     case "redshift":
       return {
@@ -417,6 +426,7 @@ function dialectFor(cfg: TelemetryConfig): Dialect {
         recordTypeColumn: undefined,
         orderByAndLimit: true,
         timeLiteral: quotedTime,
+        timePrecision: "exact",
       };
     case "opensearch":
       return {
@@ -432,6 +442,7 @@ function dialectFor(cfg: TelemetryConfig): Dialect {
         recordTypeColumn: "recordType",
         orderByAndLimit: true,
         timeLiteral: quotedTime,
+        timePrecision: "exact",
       };
     default:
       throw new Error(
@@ -701,12 +712,12 @@ export function buildListExecutionsSql(
   }
   if (params.since !== undefined) {
     where.push(
-      `${d.startTimeColumn} >= ${d.timeLiteral(normalizeTimestamp("since", params.since, "up"))}`,
+      `${d.startTimeColumn} >= ${d.timeLiteral(normalizeTimestamp("since", params.since, "up", d.timePrecision))}`,
     );
   }
   if (params.until !== undefined) {
     where.push(
-      `${d.startTimeColumn} <= ${d.timeLiteral(normalizeTimestamp("until", params.until, "down"))}`,
+      `${d.startTimeColumn} <= ${d.timeLiteral(normalizeTimestamp("until", params.until, "down", d.timePrecision))}`,
     );
   }
 
@@ -778,12 +789,12 @@ export function buildListExecutionsLogsQuery(
     }
     if (params.since !== undefined) {
       filters.push(
-        `startTime >= "${escapeQuotedString(normalizeTimestamp("since", params.since, "up"))}"`,
+        `startTime >= "${escapeQuotedString(normalizeTimestamp("since", params.since, "up", "millisecond"))}"`,
       );
     }
     if (params.until !== undefined) {
       filters.push(
-        `startTime <= "${escapeQuotedString(normalizeTimestamp("until", params.until, "down"))}"`,
+        `startTime <= "${escapeQuotedString(normalizeTimestamp("until", params.until, "down", "millisecond"))}"`,
       );
     }
     stages.push(`filter ${filters.join(" and ")}`);
@@ -819,12 +830,12 @@ export function buildListExecutionsLogsQuery(
   }
   if (params.since !== undefined) {
     postFilters.push(
-      `startTime >= "${escapeQuotedString(normalizeTimestamp("since", params.since, "up"))}"`,
+      `startTime >= "${escapeQuotedString(normalizeTimestamp("since", params.since, "up", "millisecond"))}"`,
     );
   }
   if (params.until !== undefined) {
     postFilters.push(
-      `startTime <= "${escapeQuotedString(normalizeTimestamp("until", params.until, "down"))}"`,
+      `startTime <= "${escapeQuotedString(normalizeTimestamp("until", params.until, "down", "millisecond"))}"`,
     );
   }
   if (postFilters.length > 0) {

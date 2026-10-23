@@ -139,10 +139,17 @@ const ISO_PARTS =
  *    first, and an impossible value throws.
  * 2. A value with no offset is read as UTC, because every record timestamp is
  *    UTC. A date alone means midnight UTC.
- * 3. Stored timestamps have millisecond precision. A bound with finer digits is
- *    rounded to a millisecond without changing which records it selects. A
- *    lower bound (`round: "up"`) moves up to the next millisecond, so a record
- *    stored before the requested instant stays excluded. An upper bound
+ * 3. `precision: "exact"` keeps every fraction digit the caller gave (at least
+ *    3). Use it for typed time columns (Athena `timestamp`, PostgreSQL and
+ *    Redshift `timestamptz`, OpenSearch `date`). They compare instants, not
+ *    text, and an existing table can hold values finer than a millisecond, so
+ *    the bound must not move.
+ * 4. `precision: "millisecond"` gives exactly 3 fraction digits. Use it where
+ *    the comparison is on text (DynamoDB, Logs Insights), because text order
+ *    equals time order only at one fixed width. A bound with finer digits is
+ *    rounded without changing which millisecond-precision records it selects.
+ *    A lower bound (`round: "up"`) moves up to the next millisecond, so a
+ *    record stored before the requested instant stays excluded. An upper bound
  *    (`round: "down"`) is cut to its millisecond, so a record stored at or
  *    before the requested instant stays included.
  *
@@ -153,6 +160,7 @@ export function normalizeTimestamp(
   label: string,
   value: string,
   round: "up" | "down",
+  precision: "millisecond" | "exact",
 ): string {
   const validated = validateTimestamp(label, value);
   const parts = ISO_PARTS.exec(validated);
@@ -186,6 +194,12 @@ export function normalizeTimestamp(
   const offset = (zone ?? "Z").replace(/^([+-]\d{2})(\d{2})$/, "$1:$2");
   const ms = Date.parse(`${y}-${mo}-${d}T${h}:${mi}:${sec}.${millis}${offset}`);
   if (Number.isNaN(ms)) throw invalid();
+  if (precision === "exact") {
+    // An offset moves whole minutes, so the digits past the millisecond are
+    // the same in UTC. Trailing zeros carry no information and are dropped.
+    const extra = frac.slice(3).replace(/0+$/, "");
+    return new Date(ms).toISOString().replace("Z", `${extra}Z`);
+  }
   return new Date(round === "up" && finer ? ms + 1 : ms).toISOString();
 }
 
