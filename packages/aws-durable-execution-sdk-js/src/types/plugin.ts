@@ -187,39 +187,48 @@ export interface OperationChangeInfo {
  * Plugin interface for instrumenting durable execution lifecycle events.
  *
  * @remarks
- * **Await contract:** every non-`wrap` lifecycle hook in this interface
- * (`onInvocationStart`, `onInvocationEnd`, and the `onOperation*` hooks)
- * returns `Promise<void>` and is **awaited** by the SDK before execution
- * proceeds past the corresponding lifecycle point. A hook that performs
- * asynchronous work can therefore rely on that work completing before the
- * SDK moves on — for example, before the next operation runs, or before the
- * Lambda response is returned. Hooks across multiple plugins are invoked
- * concurrently, and the SDK waits for all of them to settle. Errors thrown
- * or promises rejected by a hook are swallowed by the SDK and never affect
- * the execution outcome.
+ * **Hooks do not block operations.** The SDK calls each operation hook
+ * (`onOperationStart`, `onOperationEnd`, `onOperationAttemptStart`,
+ * `onOperationAttemptEnd` and `onOperationChange`) and continues without
+ * waiting for the promise it returns. A slow hook therefore cannot delay an
+ * operation, and cannot hold off the invocation's suspension.
  *
- * Because hooks are awaited, any time spent in a hook directly increases the
- * wall-clock duration of the current Lambda invocation.
+ * - The synchronous part of a hook still runs before the SDK continues. Hooks
+ *   are called in lifecycle order. For nested operations that order is
+ *   `parent start → child start → child end → parent end`. A plugin can rely on
+ *   state that a hook sets synchronously, for example a span that a later
+ *   `wrap` hook looks up.
+ * - The order applies to the calls, not to the asynchronous work the hooks
+ *   start. That work can overlap and finish in any order. For example, a slow
+ *   `onOperationEnd` for a child can finish after the parent's. A plugin that
+ *   needs its asynchronous work in order must queue it itself.
+ * - `onInvocationStart` is still awaited. It runs before any operation, so
+ *   waiting for it delays no operation, and a plugin can finish its setup
+ *   there.
+ * - The `wrap` hooks run the customer's function and stay inline. If a `wrap`
+ *   hook throws or rejects for its own reasons, the SDK continues with the
+ *   wrappers inside it and the customer function, and uses their result. So
+ *   one failing wrapper does not skip another plugin's wrapper. An error from
+ *   the customer function always reaches the caller.
  *
- * **Opting out (fire-and-forget):** to avoid blocking the SDK, start the
- * background work inside the hook but return without awaiting it, so the
- * returned promise resolves immediately:
+ * **Drain.** Before it calls `onInvocationEnd`, the SDK waits for the
+ * asynchronous work of every earlier hook to settle. It then waits for
+ * `onInvocationEnd` itself. Two deadlines bound these waits:
  *
- * ```typescript
- * onOperationEnd(info) {
- *   // Start background work without awaiting it, then return.
- *   void this.exporter.export(info).catch(() => {});
- * }
- * ```
+ * 1. The drain of earlier hook work stops 500 ms before the invocation's
+ *    deadline.
+ * 2. The wait for `onInvocationEnd` stops 50 ms before the deadline, so the SDK
+ *    can still return the Lambda response.
  *
- * Such detached work is **best-effort**: in Lambda the execution environment
- * is frozen once the invocation returns, so any unfinished background work may
- * be suspended and is not guaranteed to resume or complete. Do **not** use
- * this pattern in `onInvocationEnd` — it runs immediately before the Lambda
- * response is returned, so detached work started there will almost never
- * complete. Instead, treat `onInvocationEnd` as the place to flush: await any
- * outstanding fire-and-forget work started by earlier hooks before resolving
- * its promise.
+ * So `onInvocationEnd` keeps its time even when earlier hook work is slow, and
+ * an invocation that ends close to its timeout still flushes. Work that has not
+ * settled by its deadline is abandoned, and the invocation returns. In Lambda
+ * the execution environment is then frozen, so abandoned work may never
+ * complete. If the context reports no deadline, both waits last until
+ * everything settles.
+ *
+ * Errors thrown or promises rejected by any hook are swallowed by the SDK and
+ * never affect the execution outcome.
  */
 export interface DurableInstrumentationPlugin {
   /**
@@ -245,21 +254,21 @@ export interface DurableInstrumentationPlugin {
    * Called once when a durable execution invocation ends, with the final
    * status and outcome details.
    *
-   * The SDK **awaits** this hook before returning the Lambda response, which
-   * guarantees the hook runs to completion before the Lambda environment is
-   * frozen or torn down.
+   * The SDK calls this hook after the asynchronous work of every earlier hook
+   * has settled, or after that wait reached its own deadline, 500 ms before the
+   * invocation's deadline. The SDK then **awaits** this hook until 50 ms before
+   * the invocation's deadline. If the hook has not settled by then, the SDK
+   * returns the response without waiting further.
    *
    * @remarks
-   * Because the SDK awaits this hook, any time spent here directly increases
-   * the wall-clock duration of the current Lambda invocation. Errors thrown
-   * (or rejected promises) are swallowed by the SDK and never affect the
-   * execution outcome.
+   * Time spent here increases the wall-clock duration of the current Lambda
+   * invocation. Errors thrown (or rejected promises) are swallowed by the SDK
+   * and never affect the execution outcome.
    *
    * Do not start fire-and-forget work here and leave it un-awaited: this hook
    * runs right before the Lambda response is returned, so the environment is
    * frozen immediately afterward and such work will not complete. This is the
-   * correct place to await any background work started by earlier hooks before
-   * resolving.
+   * place to flush exporters and other buffered work.
    *
    * @param info - Details about the completed invocation, including status,
    * result or error, input, and operations.

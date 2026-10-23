@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking for plugin authors (experimental interface).** The SDK no longer waits for the
+  operation plugin hooks: `onOperationStart`, `onOperationEnd`, `onOperationAttemptStart`,
+  `onOperationAttemptEnd` and `onOperationChange`. Before, a slow hook delayed the next
+  operation. A hook awaited while no operation was running could also let the invocation
+  suspend before the caller's next line ran, when another operation such as a callback was
+  waiting. The changes:
+  - The synchronous part of each hook still runs before the SDK continues, in call order. The
+    asynchronous parts of consecutive hooks can overlap. A plugin that needs them in order must
+    queue the work itself.
+  - Before `onInvocationEnd`, the SDK waits for the asynchronous work of earlier hooks, until
+    500 ms before the invocation's deadline. It then waits for `onInvocationEnd`, until 50 ms
+    before the deadline. Work still pending is abandoned. Before, a hook that never settled held
+    the invocation until the Lambda timeout.
+  - `onInvocationEnd` is now called after that drain, not at the moment the invocation ends.
+  - `onInvocationStart` and the `wrap` hooks are unchanged.
+- A Lambda context whose `getRemainingTimeInMillis` is missing, throws, or returns a value that
+  is not a finite number now counts as reporting no deadline. Before, with a missing or throwing
+  method, `ctx.wait` and step retries failed the invocation, even without a plugin. Now they
+  suspend, as they do with a normal context.
+- A `wrap` plugin hook (`wrapInvocation`, `wrapChildContextFn`, `wrapOperationAttemptFn`) that
+  rejects for its own reasons, for example after the customer function succeeded, no longer
+  fails the invocation. The SDK continues with the wrappers inside it and the customer
+  function, and uses their result. An error from the customer function still reaches the
+  caller.
+- A `wrapChildContextFn` hook that does asynchronous work after the child function settles no
+  longer lets the invocation suspend during that work. Before, with another operation such as a
+  callback waiting, the caller's next line did not run in that invocation.
+
 - Checkpoint-derived `OperationInfo.error` can be absent when a failed callback
   or invoke has missing wire error data or no defined diagnostic values.
   Instrumentation should use
@@ -87,6 +115,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Durable Execution Telemetry**: the bundled Athena table (the CDK Glue table and the
+  telemetry-core Athena DDL) now declares `emittedat`, `starttime`, `endtime`, and the operation
+  `starttime`/`endtime` as `timestamp` instead of `string`. Athena compared the strings as text,
+  so a filter such as `starttime >= '2026-10-23T18:42:46Z'` left out every record from that
+  second. Queries now compare these columns with `TIMESTAMP` literals, and the Athena schema
+  prompt says so. A table created earlier keeps its `string` columns: recreate it, or run
+  `ALTER TABLE <table> REPLACE COLUMNS (...)` with the new definition.
+- **Durable Execution Telemetry MCP**: `list_executions` validates `since` and `until`, including
+  the calendar (`2026-02-30` is rejected), and reads a bound with no offset as UTC. Before, a bound
+  was compared as given. On DynamoDB and CloudWatch Logs, which compare text, a bound without a
+  fraction or with an offset such as `-07:00` returned the wrong records. There, a bound is now
+  rewritten to the stored format (UTC, 3 fraction digits, `Z`), with `since` rounded up and `until`
+  rounded down. On Athena, Aurora, Redshift, and OpenSearch, which compare instants, the bound
+  keeps every digit the caller gave. Records from the Python exporter `0.0.1` preview, which wrote
+  microsecond timestamps, can still be ordered incorrectly within one second on the two text
+  destinations.
+- **Durable Execution Telemetry**: `emittedAt` now strictly increases across the records of one
+  invocation. With `emitMode: "on-change"`, two records could be built in the same millisecond and
+  get the same `emittedAt`. `SQSExporter` derives the FIFO deduplication id from
+  `executionArn:emittedAt`, so SQS dropped the second message, and `DynamoDBExporter` uses
+  `emittedAt` as its default sort key, so the second item overwrote the first. A record built in
+  the same millisecond as the previous one now gets the previous value plus 1 ms.
 - **Durable Execution Telemetry**: every error in a record (the execution `error`,
   `operations[].error`, and `operationsByName.<name>.error`) now carries its cause chain as
   `{ name, message, cause? }`, in that key order. `cause` follows `Error.cause`, including the

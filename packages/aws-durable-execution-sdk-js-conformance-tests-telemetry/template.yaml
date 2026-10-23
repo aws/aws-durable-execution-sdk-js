@@ -1,0 +1,46 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: JavaScript SDK examples for the Durable Execution Telemetry conformance suite
+
+Parameters:
+  LambdaExecutionRoleArn:
+    Type: String
+    Description: Pre-created execution role for the test functions
+  TelemetryLogGroupName:
+    Type: String
+    Description: CloudWatch Logs group that receives Durable Execution Telemetry records
+
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Architectures:
+      - x86_64
+    Timeout: 60
+    MemorySize: 512
+    DurableConfig:
+      ExecutionTimeout: 300
+      RetentionPeriodInDays: 1
+    Environment:
+      Variables:
+        TELEMETRY_LOG_GROUP_NAME: !Ref TelemetryLogGroupName
+
+Resources:
+  # Extensions have no pre-deploy hook, so CloudFormation creates the group
+  # before the runner invokes any function.
+  TelemetryLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Ref TelemetryLogGroupName
+      RetentionInDays: 1
+
+  Telemetry1Success:
+    Type: AWS::Serverless::Function
+    DependsOn: TelemetryLogGroup
+    TestingMetadata:
+      TestDescription:
+        - telemetry-1
+    Properties:
+      CodeUri: dist/
+      Handler: telemetry_1_success.handler
+      FunctionName: !Sub "${AWS::StackName}-telemetry-1"
+      Role: !Ref LambdaExecutionRoleArn

@@ -37,6 +37,14 @@ To send us a pull request, please:
 7. Send us a pull request with the title matching conventional commits, answering any default questions in the pull request interface. If the PR type has a scope, it must match `sdk`, `sdk-testing`, `examples`, `eslint-plugin`, or `ci`. For example: `feat(sdk): add map handler functionality` or `fix(sdk-testing): fix race condition in checkpoint server`.
 8. Pay attention to any automated CI failures reported in the pull request, and stay involved in the conversation.
 
+### SDK invariants
+
+The SDK keeps rules about when an invocation may suspend and how plugin hooks run. Read
+[packages/aws-durable-execution-sdk-js/AGENTS.md](./packages/aws-durable-execution-sdk-js/AGENTS.md)
+before you change the SDK. [ADR 0001](./docs/adr/0001-operation-tracking-and-plugin-hooks.md)
+gives the reasons. A change that breaks a rule fails a contract test. Do not edit or delete a
+contract test to make a change pass. To change a rule, propose a new ADR first.
+
 ### Formatting and linting
 
 [Biome](https://biomejs.dev) handles both, for JavaScript, TypeScript and JSON:
