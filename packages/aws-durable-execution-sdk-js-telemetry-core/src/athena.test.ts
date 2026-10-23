@@ -11,7 +11,11 @@ jest.mock("@aws-sdk/client-glue", () => ({
   GetTableCommand: jest.fn(),
 }));
 
-import { runAthenaQuery } from "./athena";
+import {
+  buildCreateTableDdl,
+  RECORD_CAMEL_CASE_KEYS,
+  runAthenaQuery,
+} from "./athena";
 
 /** Build a GetQueryResults page. The first page carries the header row. */
 function page(
@@ -113,5 +117,59 @@ describe("runAthenaQuery: numeric column detection", () => {
     wireClient([page([["2026-01-01"]], true, undefined, "timestamp")]);
     const res = await runAthenaQuery(base);
     expect(res.numericColumns).toEqual([false]);
+  });
+});
+
+describe("buildCreateTableDdl: key case", () => {
+  const ddl = buildCreateTableDdl({
+    database: "db",
+    table: "t",
+    s3Location: "s3://bucket/prefix",
+  });
+
+  it("keeps key case inside input/output", () => {
+    // Without this the SerDe lowercases payload keys, so $.claimId is NULL.
+    expect(ddl).toContain("'case.insensitive' = 'false'");
+  });
+
+  it.each([...RECORD_CAMEL_CASE_KEYS])(
+    "maps the camelCase key %s to its lowercase column",
+    (key) => {
+      expect(ddl).toContain(`'mapping.${key.toLowerCase()}' = '${key}'`);
+    },
+  );
+
+  it("covers every lowercase column that has a camelCase record key", () => {
+    // Every column or struct field whose record key has an uppercase letter
+    // must be in the list, or that field would load as NULL.
+    const columns = new Set(
+      ddl
+        .split("\n")
+        .map((line) => /^([a-z]+)[ :]/.exec(line.trim())?.[1])
+        .filter((c): c is string => c !== undefined),
+    );
+    const mapped = new Set(RECORD_CAMEL_CASE_KEYS.map((k) => k.toLowerCase()));
+    const singleWord = new Set([
+      "id",
+      "name",
+      "type",
+      "status",
+      "attempt",
+      "error",
+      "result",
+      "message",
+      "truncated",
+      "region",
+      "input",
+      "output",
+      "operations",
+      "year",
+      "month",
+      "day",
+    ]);
+    const unmapped = [...columns].filter(
+      (c) => !mapped.has(c) && !singleWord.has(c),
+    );
+    expect(unmapped).toEqual([]);
   });
 });

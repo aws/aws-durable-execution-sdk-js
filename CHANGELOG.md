@@ -116,6 +116,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Durable Execution Telemetry**: the bundled Athena table (the CDK Glue table and the
+  telemetry-core Athena DDL) keeps the case of keys inside `input` and `output`. The JSON SerDe
+  lowercased them, so `json_extract_scalar(input, '$.claimId')` returned NULL and only
+  `'$.claimid'` worked. The table now sets `case.insensitive` to `false` and maps each camelCase
+  record key to its lowercase column. The Athena schema prompt now says to use the payload's exact
+  key case. A table created earlier keeps lowercasing keys until it is recreated.
+- **Durable Execution Telemetry MCP**: `test_destination` no longer requires
+  `DURABLE_TELEMETRY_ATHENA_S3_LOCATION` for the `s3` destination. Only a host that creates the
+  Athena table needs it, and this server only queries an existing table. A missing table is now a
+  failed check instead of "will be created on Save".
+- **Durable Execution Telemetry CDK stack**: the Aurora PostgreSQL engine version comes from
+  `destinations.aurora.engineVersion` in `cdk/config.json` (default `17.9`). The stack pinned
+  16.4, which RDS no longer offers, so a fresh deploy failed. The stack's Aurora table now uses
+  `execution_arn VARCHAR(512)` and `execution_name VARCHAR(256)`, the sizes the README already
+  documents. An execution ARN with a long function name or alias could exceed the old 256.
+- **Durable Execution Telemetry**: the bundled Athena table (the CDK Glue table and the
   telemetry-core Athena DDL) now declares `emittedat`, `starttime`, `endtime`, and the operation
   `starttime`/`endtime` as `timestamp` instead of `string`. Athena compared the strings as text,
   so a filter such as `starttime >= '2026-10-23T18:42:46Z'` left out every record from that

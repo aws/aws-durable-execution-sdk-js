@@ -122,7 +122,11 @@ function registerTools(server: McpServer, config: TelemetryConfig): void {
 
       // 2. Config is complete — run the real read-only probes.
       try {
-        const report = await testDestination(config);
+        // This server only queries an existing table, so it does not create the
+        // Athena table and does not need its source S3 location.
+        const report = await testDestination(config, {
+          createsAthenaTable: false,
+        });
         const payload = {
           ok: report.ok,
           summary: report.summary,

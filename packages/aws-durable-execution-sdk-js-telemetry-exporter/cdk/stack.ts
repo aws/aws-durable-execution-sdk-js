@@ -19,6 +19,33 @@ import * as path from "path";
 import * as config from "./config.json";
 
 /**
+ * Every record key with an uppercase letter, at the top level and inside
+ * `operations[]`. The Glue table maps each to its lowercase column, so the JSON
+ * SerDe can keep key case inside `input`/`output`. The same list is
+ * `RECORD_CAMEL_CASE_KEYS` in telemetry-core's athena.ts; this package does not
+ * depend on telemetry-core, so the list is repeated here.
+ */
+const RECORD_CAMEL_CASE_KEYS = [
+  "recordType",
+  "schemaVersion",
+  "emittedAt",
+  "executionArn",
+  "executionName",
+  "functionName",
+  "functionQualifier",
+  "accountId",
+  "startTime",
+  "endTime",
+  "durationMs",
+  "droppedCauses",
+  "droppedOperations",
+  "droppedInput",
+  "droppedOutput",
+  "subType",
+  "parentId",
+];
+
+/**
  * Props for the Telemetry destinations stack.
  */
 export interface TelemetryDestinationsStackProps extends cdk.StackProps {
@@ -120,7 +147,12 @@ export class TelemetryDestinationsStack extends cdk.Stack {
 
       auroraCluster = new rds.DatabaseCluster(this, "TelemetryAuroraCluster", {
         engine: rds.DatabaseClusterEngine.auroraPostgres({
-          version: rds.AuroraPostgresEngineVersion.VER_16_4,
+          // RDS retires minor versions, so the version comes from config
+          // instead of a constant pinned here.
+          version: rds.AuroraPostgresEngineVersion.of(
+            config.destinations.aurora.engineVersion,
+            config.destinations.aurora.engineVersion.split(".")[0],
+          ),
         }),
         serverlessV2MinCapacity: config.destinations.aurora.minCapacity,
         serverlessV2MaxCapacity: config.destinations.aurora.maxCapacity,
@@ -136,8 +168,8 @@ export class TelemetryDestinationsStack extends cdk.Stack {
       // Table name is interpolated from operator-controlled config (not user input).
       const createTableSql = `
         CREATE TABLE IF NOT EXISTS ${config.destinations.aurora.tableName} (
-          execution_arn VARCHAR(256) PRIMARY KEY,
-          execution_name VARCHAR(128),
+          execution_arn VARCHAR(512) PRIMARY KEY,
+          execution_name VARCHAR(256),
           function_name VARCHAR(128),
           status VARCHAR(20),
           start_time TIMESTAMPTZ,
@@ -303,7 +335,20 @@ export class TelemetryDestinationsStack extends cdk.Stack {
               "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat",
             serdeInfo: {
               serializationLibrary: "org.openx.data.jsonserde.JsonSerDe",
-              parameters: { "ignore.malformed.json": "true" },
+              // Keep the key case inside `input`/`output` (the SerDe
+              // lowercases them by default, so `$.claimId` returned NULL), and
+              // map each camelCase record key to its lowercase Glue column.
+              // telemetry-core's buildCreateTableDdl carries the same list.
+              parameters: {
+                "ignore.malformed.json": "true",
+                "case.insensitive": "false",
+                ...Object.fromEntries(
+                  RECORD_CAMEL_CASE_KEYS.map((k) => [
+                    `mapping.${k.toLowerCase()}`,
+                    k,
+                  ]),
+                ),
+              },
             },
             columns: [
               { name: "recordtype", type: "string" },

@@ -121,6 +121,45 @@ describe("testDestination — S3/Athena", () => {
     expect(tbl?.detail).toMatch(/created automatically when you Save/);
   });
 
+  describe("for a host that does not create the table (the MCP server)", () => {
+    const queryOnly = { createsAthenaTable: false };
+    const { athenaS3Location: _unused, ...withoutS3Location } = complete;
+
+    it("does not require the S3 location", async () => {
+      (tableExists as jest.Mock).mockResolvedValue(true);
+      (runAthenaQuery as jest.Mock).mockResolvedValue({
+        columns: [],
+        rows: [],
+      });
+      const r = await testDestination(baseCfg(withoutS3Location), queryOnly);
+      expect(r.ok).toBe(true);
+      const required = r.checks.find((c) => c.label === "Required fields");
+      expect(required?.ok).toBe(true);
+    });
+
+    it("fails when the table does not exist, because nothing will create it", async () => {
+      (tableExists as jest.Mock).mockResolvedValue(false);
+      (runAthenaQuery as jest.Mock).mockResolvedValue({
+        columns: [],
+        rows: [],
+      });
+      const r = await testDestination(baseCfg(withoutS3Location), queryOnly);
+      expect(r.ok).toBe(false);
+      const tbl = r.checks.find((c) => c.label === "Glue table exists");
+      expect(tbl?.ok).toBe(false);
+      expect(tbl?.detail).toMatch(/does not exist/);
+    });
+  });
+
+  it("still requires the S3 location by default, for the explorer that creates the table", async () => {
+    const { athenaS3Location: _unused, ...withoutS3Location } = complete;
+    const r = await testDestination(baseCfg(withoutS3Location));
+    expect(r.ok).toBe(false);
+    expect(r.checks.find((c) => c.label === "Required fields")?.detail).toMatch(
+      /S3 Location/,
+    );
+  });
+
   it("fails when the Athena test query errors (e.g. no result location)", async () => {
     (tableExists as jest.Mock).mockResolvedValue(true);
     (runAthenaQuery as jest.Mock).mockRejectedValue(
