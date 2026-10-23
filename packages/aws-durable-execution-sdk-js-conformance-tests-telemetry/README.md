@@ -31,7 +31,6 @@ handlers/
 template.yaml                    # telemetry suite; declares TelemetryLogGroupName and creates the group
 rollup.config.mjs                # bundles handlers/telemetry_*.ts -> dist/<name>.js (CJS)
 __tests__/templates.test.ts      # guards template -> handler wiring and the parameter contract
-__tests__/workflow.test.ts       # guards the caller workflow: inputs, secrets, triggers, permissions, paths
 ```
 
 The handler uses the real SDK API only. It constructs no record and calls no exporter method.
