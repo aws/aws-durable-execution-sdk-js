@@ -286,6 +286,57 @@ test("cloud fixture executes the SDK and records real transport boundaries", asy
     }
     assert.deepEqual(JSON.parse((await diagnostics()).Result).requests, []);
     await delay(1200);
+    for (const view of ["invocation", "execution"]) {
+      const input = invocation("success", { marker: "otel-" + view });
+      input.InitialExecutionState.Operations[0].ExecutionDetails.InputPayload =
+        JSON.stringify({
+          scenario: "success",
+          marker: "otel-" + view,
+          otelView: view,
+        });
+      const output = await handler(input, {
+        awsRequestId: "otel-" + view,
+        getRemainingTimeInMillis: () => 60000,
+        xRayTraceId:
+          "Root=1-6955b900-123456789012345678901234;Parent=1234567890123456;Sampled=1",
+      });
+      assert.equal(output.Status, "SUCCEEDED");
+      const observed = records.filter(
+        (record) => record.request === "otel-" + view,
+      );
+      for (const phase of [
+        "OTEL_ENTER",
+        "OTEL_FACTORY",
+        "OTEL_EXPORT",
+        "OTEL_EXIT",
+      ])
+        assert(
+          observed.some((record) => record.phase === phase),
+          phase,
+        );
+      const exported = observed.filter(
+        (record) => record.phase === "OTEL_EXPORT",
+      );
+      assert(
+        exported.every(
+          (record) =>
+            record.span.trace_id === "6955b900123456789012345678901234",
+        ),
+      );
+      assert(
+        exported.every(
+          (record) =>
+            record.span.attributes["durable.execution.arn"] ===
+            input.DurableExecutionArn,
+        ),
+      );
+      assert.equal(
+        observed.find((record) => record.phase === "OTEL_EXIT")
+          .context_restored,
+        true,
+      );
+    }
+    await delay(1200);
   } finally {
     server.closeAllConnections();
     server.close();

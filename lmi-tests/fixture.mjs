@@ -16,6 +16,7 @@ import {
 } from "@aws/durable-execution-sdk-js";
 import { workflow } from "./scenarios.mjs";
 import { observer } from "./observer.mjs";
+import { createTelemetry } from "./telemetry.mjs";
 
 // /tmp is shared by Node workers in one environment; worker UUID distinguishes
 // reused thread IDs. Exclusive creation also handles simultaneous cold workers.
@@ -250,23 +251,34 @@ function snapshot(exclude) {
   };
 }
 
-// One decorated handler and one AWS client are shared by every concurrent root.
-const durable = withDurableExecution(
-  async (event, ctx) => {
-    const state = current();
-    const io = {
-      record: (phase, fields) => trace(state, phase, fields),
-      hold: (gate, entered) => hold(state, gate, entered),
-      snapshot: () => snapshot(state.request),
-    };
-    try {
-      return await workflow(event, ctx, io);
-    } finally {
-      await trace(state, "ROOT_FINALLY");
-    }
-  },
-  { durableExecutionClient: client },
-);
+const telemetry = createTelemetry({
+  current,
+  record: trace,
+  hold,
+  outside: tracker.outside,
+});
+
+// Each variant is shared by concurrent roots; the original remains plugin-free.
+const executeWorkflow = async (event, ctx) => {
+  const state = current();
+  const io = {
+    record: (phase, fields) => trace(state, phase, fields),
+    hold: (gate, entered) => hold(state, gate, entered),
+    snapshot: () => snapshot(state.request),
+  };
+  try {
+    return await workflow(event, ctx, io);
+  } finally {
+    await trace(state, "ROOT_FINALLY");
+  }
+};
+const durable = withDurableExecution(executeWorkflow, {
+  durableExecutionClient: client,
+});
+const observedDurable = withDurableExecution(executeWorkflow, {
+  durableExecutionClient: client,
+  plugins: [telemetry.factory],
+});
 
 export async function observeInvocation(event, context, invoke, metadata) {
   const input =
@@ -293,7 +305,9 @@ export async function observeInvocation(event, context, invoke, metadata) {
       throw new Error("Invocation belongs to an earlier test run");
     await trace(state, "ENTER");
     const response = await tracker.scope.run(state, () =>
-      invoke(event, context),
+      input.otelView
+        ? telemetry.invoke(state, context, () => invoke(event, context))
+        : invoke(event, context),
     );
     state.closed = true;
     await trace(state, "RETURN", {
@@ -328,5 +342,12 @@ export async function observeInvocation(event, context, invoke, metadata) {
 }
 
 export function handler(event, context) {
-  return observeInvocation(event, context, durable);
+  const input = JSON.parse(
+    event.InitialExecutionState.Operations[0].ExecutionDetails.InputPayload,
+  );
+  return observeInvocation(
+    event,
+    context,
+    input.otelView ? observedDurable : durable,
+  );
 }

@@ -60,7 +60,15 @@ class Cloud:
         finally:
             temporary.unlink(missing_ok=True)
 
-    def prepare(self, scenario, fixture="shared"):
+    def prepare(
+        self,
+        scenario,
+        fixture="shared",
+        *,
+        otel_view=None,
+        trace_header=None,
+        otel_export="success",
+    ):
         marker = scenario + "-" + uuid.uuid4().hex[:12]
         gates = (
             {}
@@ -74,6 +82,14 @@ class Cloud:
             "gates": gates,
             "timing": {"prepareBegin": self.timestamp(), "controls": [], "releases": []},
         }
+        if otel_view is not None:
+            if otel_view not in {"invocation", "execution"}:
+                raise ValueError("Unknown OTel view")
+            if otel_export not in {"success", "failure", "held"}:
+                raise ValueError("Unknown exporter fault")
+            item.update(otelView=otel_view, otelExport=otel_export, traceHeader=trace_header)
+            if otel_export == "held":
+                gates["export"] = marker + "-export"
         for gate in gates.values():
             begin = self.timestamp()
             self.control(gate, "hold")
@@ -92,6 +108,17 @@ class Cloud:
         payload = {key: item[key] for key in ("marker", "gates")}
         payload["scenario"] = item["scenario"]
         payload["run"] = self.manifest["run"]
+        if item.get("otelView"):
+            payload.update(otelView=item["otelView"], otelExport=item["otelExport"])
+        invoker = self.invoker
+        isolated = item.get("traceHeader") is not None
+        if isolated:
+            invoker = client("lambda", total_max_attempts=1)
+
+            def add_carrier(params, **_kwargs):
+                params["headers"]["X-Amzn-Trace-Id"] = item["traceHeader"]
+
+            invoker.meta.events.register("before-call.lambda.Invoke", add_carrier)
         # Persist ambiguous invocation ownership before submission. Disk latency
         # belongs to preparation, never to the recorded Lambda Invoke timestamp.
         item["invoked"] = True
@@ -100,7 +127,7 @@ class Cloud:
         # No control PUTs or evidence collection between this timestamp and Invoke.
         item["timing"]["invokeBegin"] = self.timestamp()
         try:
-            result = self.invoker.invoke(
+            result = invoker.invoke(
                 FunctionName=self.manifest["functions"][item["fixture"]],
                 InvocationType="Event",
                 DurableExecutionName=item["marker"],
@@ -113,7 +140,11 @@ class Cloud:
             return item
         finally:
             item["timing"]["invokeEnd"] = self.timestamp()
-            self.save_item(item)
+            try:
+                if isolated:
+                    invoker.close()
+            finally:
+                self.save_item(item)
 
     @staticmethod
     def wait_until(target):
@@ -125,8 +156,8 @@ class Cloud:
         self.wait_until(target)
         return self.invoke(item)
 
-    def start(self, scenario, fixture="shared"):
-        return self.invoke(self.prepare(scenario, fixture))
+    def start(self, scenario, fixture="shared", **options):
+        return self.invoke(self.prepare(scenario, fixture, **options))
 
     def release(self, item, gate):
         begin = self.timestamp()

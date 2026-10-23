@@ -35,7 +35,7 @@ jobs:
       - run: npm run test:lmi:harness
       - run: pip install -r lmi-tests/requirements.txt
       - run: ruff check lmi-tests && ruff format --check lmi-tests
-      - run: python -m pytest lmi-tests/tests --ignore=lmi-tests/tests/test_cloud.py --junitxml=lmi-tests/artifacts/harness.xml
+      - run: python -m pytest lmi-tests/tests --ignore=lmi-tests/tests/test_cloud.py --ignore=lmi-tests/tests/test_observability_cloud.py --junitxml=lmi-tests/artifacts/harness.xml
       - run: python lmi-tests/deploy.py build
       - uses: actions/upload-artifact@v7
         if: always()
@@ -82,18 +82,24 @@ jobs:
           path: lmi-tests/artifacts/
 
   cloud:
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        concurrency: [1, 2]
     # All branches share one persistent function. Never overlap code updates,
     # examples, lifecycle cases or settlement across workflow runs.
     concurrency:
       group: js-lmi-e2e
       cancel-in-progress: false
+      queue: max
     needs: harness
     if: >-
       github.actor != 'dependabot[bot]' &&
       (github.event_name != 'pull_request' ||
        github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
-    timeout-minutes: 85
+    timeout-minutes: 120
     permissions:
       contents: read
       id-token: write
@@ -128,12 +134,38 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
       - name: Create or update the persistent shared function
         id: deploy
-        run: python lmi-tests/deploy.py deploy --stack-name "$LMI_STACK_NAME" --run-id "${{ github.run_id }}-${{ github.run_attempt }}" --concurrency 2
+        run: python lmi-tests/deploy.py deploy --stack-name "$LMI_STACK_NAME" --run-id "${{ github.run_id }}-${{ github.run_attempt }}-c${{ matrix.concurrency }}" --concurrency ${{ matrix.concurrency }}
       - name: Run 15 existing example suites through the shared function
+        if: matrix.concurrency == 2
         run: node lmi-tests/run-examples.mjs
       - name: Run real-service lifecycle regressions
-        if: ${{ !cancelled() && steps.deploy.outcome == 'success' && !hashFiles('lmi-tests/artifacts/quarantine.json') && hashFiles('lmi-tests/artifacts/manifest.json') }}
+        if: ${{ matrix.concurrency == 2 && !cancelled() && steps.deploy.outcome == 'success' && !hashFiles('lmi-tests/artifacts/quarantine.json') && hashFiles('lmi-tests/artifacts/manifest.json') }}
         run: python -m pytest lmi-tests/tests/test_cloud.py --cloud -v --junitxml=lmi-tests/artifacts/cloud.xml
+      - name: Refresh credentials for observability
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' && !hashFiles('lmi-tests/artifacts/quarantine.json') && hashFiles('lmi-tests/artifacts/manifest.json') }}
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.TEST_ROLE_ARN }}
+          role-session-name: jsLmiObservability
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Run native LMI observability acceptance
+        if: ${{ !cancelled() && steps.deploy.outcome == 'success' && !hashFiles('lmi-tests/artifacts/quarantine.json') && hashFiles('lmi-tests/artifacts/manifest.json') }}
+        timeout-minutes: 50
+        env:
+          NATIVE_CONCURRENCY: ${{ matrix.concurrency }}
+        run: |
+          if [ "$NATIVE_CONCURRENCY" = "1" ]; then
+            python -m pytest lmi-tests/tests/test_observability_cloud.py --cloud -v -k 'not plugin_lifecycle_boundaries' --junitxml=lmi-tests/artifacts/observability.xml
+          else
+            python -m pytest lmi-tests/tests/test_observability_cloud.py --cloud -v --junitxml=lmi-tests/artifacts/observability.xml
+          fi
+      - name: Refresh credentials for evidence and settlement
+        if: always() && hashFiles('lmi-tests/artifacts/manifest.json') != ''
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.TEST_ROLE_ARN }}
+          role-session-name: jsLmiSettlement
+          aws-region: ${{ env.AWS_REGION }}
       - name: Retain histories, worker evidence, and platform logs
         if: always()
         run: |
@@ -150,6 +182,6 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: lmi-cloud-${{ github.run_id }}-${{ github.run_attempt }}
+          name: lmi-cloud-${{ github.run_id }}-${{ github.run_attempt }}-c${{ matrix.concurrency }}
           retention-days: 7
           path: lmi-tests/artifacts/

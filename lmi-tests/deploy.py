@@ -85,6 +85,13 @@ def build():
                 ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
             ).strip(),
             "sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+            "packageLockSha256": hashlib.sha256(
+                (ROOT / "package-lock.json").read_bytes()
+            ).hexdigest(),
+            "packages": {
+                name: json.loads((ROOT / "packages" / name / "package.json").read_text())["version"]
+                for name in ("aws-durable-execution-sdk-js", "aws-durable-execution-sdk-js-otel")
+            },
         },
     )
 
@@ -447,7 +454,7 @@ def main():
     parser.add_argument("--run-id")
     parser.add_argument("--stack-name", default=DEFAULT_STACK)
     parser.add_argument("--runtime", choices=["nodejs24.x"], default="nodejs24.x")
-    parser.add_argument("--concurrency", type=int, choices=[2], default=2)
+    parser.add_argument("--concurrency", type=int, choices=[1, 2], default=2)
     parser.add_argument("--markers", default="")
     args = parser.parse_args()
     manifest = None

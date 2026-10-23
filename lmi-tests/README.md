@@ -193,3 +193,42 @@ Drafts), main pushes and manual dispatch, and retains fork/Dependabot restrictio
 It keeps histories, S3 events, logs, deployment identity, quiescence samples and
 JUnit reports. The local-regression log and summary distinguish assertion failures
 from harness execution errors; known assertions remain red until the SDK is fixed.
+
+## OpenTelemetry acceptance
+
+The suite now covers the observability scope in #1017 with the real Core 3 / OTel 2
+factory registration, a worker-owned provider, and an exporter that writes raw
+span identities, attributes, timing and status into the existing private ledger.
+Expected ownership comes from the invocation observer, independently of each
+span's reported execution ARN.
+
+CI runs native concurrency 1 and 2 sequentially against the same persistent
+function. Each configuration has its own run ID and retained artifacts. The
+concurrency-1 job runs the 12 single-invocation/worker observability cases. The
+concurrency-2 job runs all 30 observability cases, including the original peer
+and deadline contracts with both OTel views enabled, plus the existing example
+and plugin-free lifecycle suites. Deployment/readback and full settlement occur
+between configurations; provider capacity is not increased.
+
+The test caller sends its X-Ray header through the real Invoke HTTP request.
+The fixture observes `context.xRayTraceId` without substituting a payload or
+global environment header. Both sampled and unsampled native requests must retain
+the required trace relationships. Empty, null, undefined, unreadable and unavailable
+carrier controls run separately through the local public wrapper.
+
+The exporter can fail or retain exports beyond the plugin's one-second flush
+budget. Those outstanding exports remain visible to the existing worker/ledger
+settlement checks. Releasing a held export after return cannot satisfy the earlier
+flush-budget assertion. Tests retain the healthy peer and shared provider while
+checking that A's finalization does not end B's spans.
+
+Local checks include real overlapping wrappers, carrier precedence, provider
+reuse, exporter failures, bounded flush waits, and negative evidence controls.
+The full fixture is also exercised through real AWS SDK clients against a
+loopback HTTP service. The build records core/OTel package versions, the lockfile
+hash and the deployed ZIP hash.
+
+A new deployed acceptance run is required before closing #1017. Existing #927
+lifecycle defects remain ordinary assertion failures until the intended #1014
+implementation is composed with this branch; passing local OTel tests alone
+does not establish the deadline/disposal contract.
