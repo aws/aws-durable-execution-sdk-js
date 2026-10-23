@@ -58,7 +58,7 @@ on:
         description: Optional conformance test commit SHA or branch name
         required: false
         type: string
-        default: "c32b40f5548f4776b7d533a76838e02358bc66d3"
+        default: "3e7fd1a05e8f45d37e4ec223a6c5a0e379dfa9e8"
 
 # One run at a time for the whole repository, queued rather than cancelled. The
 # orchestrator's stacks are named per (language, backend, suite) and are persistent, so two
