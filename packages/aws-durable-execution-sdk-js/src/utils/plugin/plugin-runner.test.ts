@@ -504,6 +504,28 @@ describe("createPluginRunner", () => {
       expect(elapsed).toBeLessThan(remainingMs);
     });
 
+    it("keeps time for onInvocationEnd's flush when operation-hook work never settles", async () => {
+      // The drain must stop well before the end deadline. If the two reserves
+      // were equal, the never-settling hook would use the time the flush needs.
+      let flushed = false;
+      const runner = createPluginRunner(
+        [
+          {
+            onOperationEnd: () => new Promise<void>(() => {}),
+            onInvocationEnd: async () => {
+              await new Promise((resolve) => setTimeout(resolve, 100));
+              flushed = true;
+            },
+          },
+        ],
+        { getRemainingTimeMs: () => 700 },
+      );
+      await runner.onOperationEnd!(operationInfo);
+
+      await runner.onInvocationEnd!(invocationEndInfo);
+      expect(flushed).toBe(true);
+    });
+
     it("lets onInvocationEnd flush when less time is left than the drain reserve", async () => {
       let flushed = false;
       const runner = createPluginRunner(

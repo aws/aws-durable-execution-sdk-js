@@ -84,18 +84,25 @@ function, so they cannot be detached.
 - Each child context adds one entry to the checkpoint manager's operation map. Measured on a
   `map` whose items each run one step, with no plugin and no pending callback, median of 5 runs
   in two rounds: 3000 items took 97 ms before and 102 ms after, and 5000 items took 200 to
-  206 ms before and 219 ms after. That is 5 to 9 % slower. A `map` whose items only return a
+  206 ms before and 219 ms after. That is 5 to 10 % slower. A `map` whose items only return a
   value showed no difference beyond run-to-run variation.
 - An invocation's last plugin flush may be cut off. The flush in `onInvocationEnd` gets until
   50 ms before the deadline, and earlier hook work until 500 ms before it.
+- All plugins share the drain. The runner calls `onInvocationEnd` on every plugin only after
+  the pending work of all plugins has settled, or the drain deadline has passed. So when one
+  plugin's operation hooks are slow, another plugin's flush gets at most 450 ms, although it
+  does not depend on that work. A per-plugin drain would remove this coupling. It is not part
+  of this decision.
 
 ## Enforcement
 
 - Tests. `src/utils/checkpoint/deserialization-suspension.composed.test.ts` guards Rules 1
   and 2. `src/utils/plugin/plugin-hook-contract.composed.test.ts` guards Rules 3 and 4.
-  `src/utils/plugin/plugin-runner.test.ts` guards Rules 3, 4 and 5. A failing case in these
-  files means the change breaks a rule. Do not edit or delete such a case to make a change
-  pass. Change this ADR first.
+  `src/utils/plugin/plugin-runner.test.ts` guards Rules 3, 4 and 5. In
+  `src/context/execution-context/execution-context.test.ts`, the cases named
+  "reports the remaining time as Infinity" guard the deadline reading in Rule 4. A failing case
+  in these files means the change breaks a rule. Do not edit or delete such a case to make a
+  change pass. Change this ADR first.
 - Review. `.github/CODEOWNERS` requires a maintainer review for the files that implement these
   rules. The AI PR review reads `packages/aws-durable-execution-sdk-js/AGENTS.md`, which lists
   the rules.

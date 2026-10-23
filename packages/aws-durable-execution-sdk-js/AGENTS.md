@@ -31,7 +31,9 @@ gives the reasons and the measurements.
 - `src/utils/checkpoint/deserialization-suspension.composed.test.ts`: rules 1 and 2.
 - `src/utils/plugin/plugin-hook-contract.composed.test.ts`: rules 3 and 4.
 - `src/utils/plugin/plugin-runner.test.ts`: rules 3, 4 and 5.
-- `src/context/execution-context/execution-context.test.ts`: the deadline reading in rule 4.
+- `src/context/execution-context/execution-context.test.ts`: the cases named "reports the
+  remaining time as Infinity" guard the deadline reading in rule 4. The rest of that file is
+  ordinary unit tests.
 
 If a change makes one of these cases fail, the change breaks an invariant. Do not edit, skip or
 delete the case to make the change pass. To change an invariant, write a new ADR that supersedes

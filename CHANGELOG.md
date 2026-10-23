@@ -25,7 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `onInvocationEnd` is now called after that drain, not at the moment the invocation ends.
   - `onInvocationStart` and the `wrap` hooks are unchanged.
 - A Lambda context whose `getRemainingTimeInMillis` is missing, throws, or returns a value that
-  is not a finite number now counts as reporting no deadline.
+  is not a finite number now counts as reporting no deadline. Before, with a missing or throwing
+  method, `ctx.wait` and step retries failed the invocation, even without a plugin. Now they
+  suspend, as they do with a normal context.
 
 - Checkpoint-derived `OperationInfo.error` can be absent when a failed callback
   or invoke has missing wire error data or no defined diagnostic values.
