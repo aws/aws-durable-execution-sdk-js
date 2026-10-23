@@ -61,10 +61,10 @@ describe("normalizeTimestamp", () => {
     // before since .784119, so since moves up to .785. It is before until
     // .784119, so until stays at .784.
     const finer = "2026-10-23T18:42:46.784119Z";
-    expect(normalizeTimestamp("since", finer, "up")).toBe(
+    expect(normalizeTimestamp("since", finer, "up", "millisecond")).toBe(
       "2026-10-23T18:42:46.785Z",
     );
-    expect(normalizeTimestamp("until", finer, "down")).toBe(
+    expect(normalizeTimestamp("until", finer, "down", "millisecond")).toBe(
       "2026-10-23T18:42:46.784Z",
     );
     const stored = "2026-10-23T18:42:46.784Z";
