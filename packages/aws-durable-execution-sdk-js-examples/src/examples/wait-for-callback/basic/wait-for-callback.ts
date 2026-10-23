@@ -6,6 +6,7 @@ import { ExampleConfig } from "../../../types";
 import { log } from "../../../utils/logger";
 
 export const config: ExampleConfig = {
+  capacityProviderConfig: {},
   name: "Wait for Callback",
   description: "Basic callback waiting",
 };

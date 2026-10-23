@@ -7,6 +7,7 @@ import {
 import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
+  capacityProviderConfig: {},
   name: "Step Error Determinism",
   description:
     "Tests that error handling behavior is deterministic between initial execution and replay",

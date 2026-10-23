@@ -5,6 +5,7 @@ import {
 import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
+  capacityProviderConfig: {},
   name: "Step attempt-based fallback",
   description:
     "Uses stepContext.attempt (1-based) to try suppliers in preference order: " +

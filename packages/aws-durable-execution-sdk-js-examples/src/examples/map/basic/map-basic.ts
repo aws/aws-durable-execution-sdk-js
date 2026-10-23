@@ -5,6 +5,7 @@ import {
 import { ExampleConfig } from "../../../types";
 
 export const config: ExampleConfig = {
+  capacityProviderConfig: {},
   name: "Basic Map",
   description: "Processing arrays with concurrent operations",
 };
