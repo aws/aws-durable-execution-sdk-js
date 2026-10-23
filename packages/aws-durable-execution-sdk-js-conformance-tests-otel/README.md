@@ -49,6 +49,14 @@ than guessed timer delays.
 The direct target is traversed again on replay, exposing duplicate terminal
 exports that a completed wait-for-callback container can otherwise hide.
 
+Case 11 pauses at `otel-invoke-replay-barrier` after the child invocation returns.
+The shared driver completes that callback after the second caller invocation
+ends. The third invocation replays the saved invoke result and returns it,
+without starting another child or exporting another terminal invoke span.
+The workflow pins the matching requirements from shared conformance PR #131.
+The shared cloud run checks the service trace carrier and full X-Ray ancestry;
+local replay tests do not establish those service-side properties.
+
 ## Layout
 
 ```

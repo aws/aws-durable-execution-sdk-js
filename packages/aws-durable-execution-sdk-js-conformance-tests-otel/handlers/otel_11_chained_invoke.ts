@@ -11,12 +11,18 @@ import {
 
 export const handler = createScenarioHandler(
   "chained-invoke",
-  async (event, context) =>
-    context.invoke<ScenarioEvent, ScenarioEvent>(
+  async (event, context) => {
+    const result = await context.invoke<ScenarioEvent, ScenarioEvent>(
       "otel-invoke",
       requiredTargetFunction(),
       event,
-    ),
+    );
+    await context.waitForCallback(
+      "otel-invoke-replay-barrier",
+      async () => undefined,
+    );
+    return result;
+  },
 );
 
 export const targetHandler = createTargetHandler(
