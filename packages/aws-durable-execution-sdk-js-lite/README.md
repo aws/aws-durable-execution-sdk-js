@@ -96,7 +96,7 @@ This happens when durable execution is not enabled on the function.
 export const handler = withDurableExecution(workflow);
 ```
 
-### ctx.step({ name, fn, retryStrategy, semantics })
+### ctx.step({ name, fn, retryStrategy, semantics, subType })
 
 Runs `fn` once and saves its result.
 
@@ -105,6 +105,8 @@ Runs `fn` once and saves its result.
   again, and after how many seconds.
 - `semantics` (default `"AT_LEAST_ONCE_PER_RETRY"`): see
   [Make steps idempotent](#make-steps-idempotent).
+- `subType` (default `"Step"`): the `SubType` of the operation on the wire. See
+  [Custom subtypes](#keep-custom-subtypes-valid-and-stable).
 
 Returns a promise for the result of `fn`. A retry runs in a later invocation. After the last
 attempt fails, the promise rejects with a `DurableOperationError`. Its `errorType` is the
@@ -130,13 +132,15 @@ to `undefined`.
 await ctx.wait({ name: "cooling-off", seconds: 60 * 60 });
 ```
 
-### ctx.createCallback({ name, timeoutSeconds, heartbeatTimeoutSeconds })
+### ctx.createCallback({ name, timeoutSeconds, heartbeatTimeoutSeconds, subType })
 
 Creates a callback that an outside system completes. The argument is optional.
 
 - `timeoutSeconds` (default: no timeout): the callback times out after this many seconds.
 - `heartbeatTimeoutSeconds` (default: no heartbeat timeout): the callback times out if no
   heartbeat arrives for this many seconds.
+- `subType` (default `"Callback"`): the `SubType` of the operation on the wire. See
+  [Custom subtypes](#keep-custom-subtypes-valid-and-stable).
 
 Returns a promise for `{ callbackId, result }`.
 
@@ -223,11 +227,13 @@ const job = await ctx.waitForCondition({
 });
 ```
 
-### ctx.runInChildContext({ name, fn })
+### ctx.runInChildContext({ name, fn, subType })
 
 Groups operations in a child context.
 
 - `fn({ ctx })`: the group. Use the child `ctx` inside `fn`.
+- `subType` (default `"RunInChildContext"`): the `SubType` of the operation on the wire. See
+  [Custom subtypes](#keep-custom-subtypes-valid-and-stable).
 
 Returns a promise for the result of `fn`. A completed child context returns its saved result.
 It does not run `fn` again. If `fn` throws, the promise rejects with a `DurableOperationError`
@@ -571,6 +577,16 @@ the subtype and the name of each record with the call. A mismatch fails the exec
    operation's saved result.
 3. Invoke the function through a numbered version or an alias. Publish incompatible code as a
    new version, so running executions keep their code.
+
+### Keep custom subtypes valid and stable
+
+`step`, `createCallback` and `runInChildContext` accept a `subType`. It replaces the default
+`SubType` of the operation on the wire. An empty string selects the default.
+
+1. The service accepts 1 to 32 characters of letters, digits, `-` and `_`. The SDK does not
+   check the value. So the service rejects an invalid `subType`, and the execution fails.
+2. The SDK compares the subtype of each record with the call. So changing the `subType` of
+   an operation fails running executions, like a rename.
 
 ### Parse callback results
 

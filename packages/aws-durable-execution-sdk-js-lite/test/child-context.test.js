@@ -364,3 +364,63 @@ test("the first run returns fn's own value; a replay returns the parsed JSON", a
   assert.deepEqual(seen[2], { at: value.at.toJSON() });
   assert.deepEqual(seen[3], { at: value.at.toJSON() });
 });
+
+test("subType replaces the SubType RunInChildContext on the wire; omitted keeps the default", async () => {
+  const { updates } = await invoke(async ({ ctx }) => {
+    await ctx.runInChildContext({ name: "a", fn: () => 1, subType: "group" });
+    await ctx.runInChildContext({ name: "b", fn: () => 2 });
+  });
+  assert.deepEqual(
+    updates.map((u) => [u.Name, u.Action, u.SubType]),
+    [
+      ["a", "START", "group"],
+      ["a", "SUCCEED", "group"],
+      ["b", "START", "RunInChildContext"],
+      ["b", "SUCCEED", "RunInChildContext"],
+    ],
+  );
+});
+
+test("a child context with a custom subType replays its record; another SubType fails", async () => {
+  const record = {
+    Id: hashId("1"),
+    Type: "CONTEXT",
+    SubType: "group",
+    Status: "SUCCEEDED",
+    StartTimestamp: 1,
+    ContextDetails: { Result: "5" },
+  };
+  const replayed = await invoke(
+    ({ ctx }) =>
+      ctx.runInChildContext({
+        fn: () => assert.fail("must not run"),
+        subType: "group",
+      }),
+    { operations: [record] },
+  );
+  assert.deepEqual(replayed.output, { Status: "SUCCEEDED", Result: "5" });
+  assert.equal(replayed.client.checkpoints.length, 0);
+
+  for (const subType of ["other", undefined]) {
+    const { output, client } = await invoke(
+      ({ ctx }) => ctx.runInChildContext({ fn: () => 1, subType }),
+      { operations: [record] },
+    );
+    assert.equal(output.Status, "FAILED");
+    assert.equal(output.Error.ErrorType, "NonDeterministicExecutionError");
+    assert.equal(client.checkpoints.length, 0);
+  }
+});
+
+test("the in-memory service stores a custom child context SubType as given", async () => {
+  const run = await runDurable({
+    workflow: ({ ctx }) =>
+      ctx.runInChildContext({
+        subType: "group",
+        fn: ({ ctx: c }) => c.step({ fn: () => 1, subType: "inner" }),
+      }),
+  });
+  assert.equal(run.status, "SUCCEEDED");
+  assert.equal(byId(run, "1").SubType, "group");
+  assert.equal(byId(run, "1-1").SubType, "inner");
+});

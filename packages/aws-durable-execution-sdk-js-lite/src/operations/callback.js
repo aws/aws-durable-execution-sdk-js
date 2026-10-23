@@ -1,4 +1,5 @@
-// Replay table for createCallback (Type CALLBACK, SubType Callback):
+// Replay table for createCallback (Type CALLBACK, SubType Callback or the caller's
+// subType):
 //
 // | Record status   | result promise                                               |
 // |-----------------|--------------------------------------------------------------|
@@ -23,9 +24,10 @@ export function createCallback(ctx, opts = {}) {
 async function runCallback(
   ctx,
   rawId,
-  { name, timeoutSeconds, heartbeatTimeoutSeconds },
+  { name, timeoutSeconds, heartbeatTimeoutSeconds, subType },
 ) {
-  const meta = { type: "CALLBACK", subType: "Callback", name };
+  // Like the full SDK, an empty subType selects the default.
+  const meta = { type: "CALLBACK", subType: subType || "Callback", name };
   let record = ctx._lookup(rawId);
   if (!ctx._mayRun(record, meta)) return new Promise(() => {});
   if (!record) {

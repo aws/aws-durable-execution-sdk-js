@@ -262,3 +262,70 @@ test("runDurable: a callback without timeout stays open and the run is PENDING",
   assert.equal(run.status, "PENDING");
   assert.equal(run.getOperation("open").Status, "STARTED");
 });
+
+test("subType replaces the SubType Callback on the wire; omitted keeps the default", async () => {
+  for (const [subType, expected] of [
+    ["approval-cb", "approval-cb"],
+    ["", "Callback"],
+    [undefined, "Callback"],
+  ]) {
+    const { output, updates } = await invoke(
+      async ({ ctx }) => {
+        await ctx.createCallback({ name: "c", subType });
+      },
+      { client: startingClient() },
+    );
+    assert.deepEqual(output, { Status: "SUCCEEDED" });
+    assert.deepEqual(updates, [
+      {
+        Id: hashId("1"),
+        Name: "c",
+        Type: "CALLBACK",
+        SubType: expected,
+        Action: "START",
+      },
+    ]);
+  }
+});
+
+test("a callback with a custom subType replays its record; another SubType fails", async () => {
+  const record = {
+    ...callbackRecord("SUCCEEDED", { Result: "yes" }),
+    SubType: "custom",
+  };
+  const replayed = await invoke(
+    async ({ ctx }) => {
+      const { result } = await ctx.createCallback({ subType: "custom" });
+      return result;
+    },
+    { operations: [record] },
+  );
+  assert.deepEqual(replayed.output, { Status: "SUCCEEDED", Result: '"yes"' });
+  assert.equal(replayed.client.checkpoints.length, 0);
+
+  for (const subType of ["other", undefined]) {
+    const { output, client } = await invoke(
+      ({ ctx }) => ctx.createCallback({ subType }),
+      { operations: [record] },
+    );
+    assert.equal(output.Status, "FAILED");
+    assert.equal(output.Error.ErrorType, "NonDeterministicExecutionError");
+    assert.equal(client.checkpoints.length, 0);
+  }
+});
+
+test("the in-memory service stores a custom callback SubType as given", async () => {
+  const run = await runDurable({
+    workflow: async ({ ctx }) => {
+      const { result } = await ctx.createCallback({
+        name: "c",
+        subType: "custom",
+      });
+      return result;
+    },
+    onCallback: () => ({ result: "ok" }),
+  });
+  assert.equal(run.status, "SUCCEEDED");
+  assert.equal(run.result, "ok");
+  assert.equal(run.getOperation("c").SubType, "custom");
+});

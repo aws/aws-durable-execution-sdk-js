@@ -71,6 +71,12 @@ export interface StepOptions<T> {
   retryStrategy?: RetryStrategy;
   /** Default "AT_LEAST_ONCE_PER_RETRY". */
   semantics?: StepSemantics;
+  /**
+   * Replaces the default SubType "Step" on the wire. An empty string selects the
+   * default. The service accepts 1 to 32 characters of letters, digits, "-" and "_".
+   * Replay compares it, so changing it fails running executions like a rename.
+   */
+  subType?: string;
 }
 
 export interface WaitOptions {
@@ -85,6 +91,12 @@ export interface CreateCallbackOptions {
   timeoutSeconds?: number;
   /** The callback times out if no heartbeat arrives for this many seconds. */
   heartbeatTimeoutSeconds?: number;
+  /**
+   * Replaces the default SubType "Callback" on the wire. An empty string selects the
+   * default. The service accepts 1 to 32 characters of letters, digits, "-" and "_".
+   * Replay compares it, so changing it fails running executions like a rename.
+   */
+  subType?: string;
 }
 
 export interface Callback {
@@ -111,6 +123,12 @@ export interface RunInChildContextOptions<T> {
   name?: string;
   /** Use the child ctx inside fn, not the parent ctx. */
   fn: (args: { ctx: DurableContext }) => T | Promise<T>;
+  /**
+   * Replaces the default SubType "RunInChildContext" on the wire. An empty string
+   * selects the default. The service accepts 1 to 32 characters of letters, digits, "-" and "_".
+   * Replay compares it, so changing it fails running executions like a rename.
+   */
+  subType?: string;
 }
 
 export interface WaitForCallbackOptions {

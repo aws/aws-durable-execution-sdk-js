@@ -1,4 +1,4 @@
-// Replay table for step (Type STEP, SubType Step):
+// Replay table for step (Type STEP, SubType Step or the caller's subType):
 //
 // | Record status               | Behavior                                              |
 // |-----------------------------|-------------------------------------------------------|
@@ -34,10 +34,12 @@ async function runStep(
     fn,
     retryStrategy = defaultRetryStrategy,
     semantics = "AT_LEAST_ONCE_PER_RETRY",
+    subType,
   },
 ) {
   const execution = ctx._execution;
-  const meta = { type: "STEP", subType: "Step", name };
+  // Like the full SDK, an empty subType selects the default.
+  const meta = { type: "STEP", subType: subType || "Step", name };
   const record = ctx._lookup(rawId);
   if (!ctx._mayRun(record, meta)) return new Promise(() => {});
   const update = (fields) => ({ ...ctx._base(rawId, meta), ...fields });

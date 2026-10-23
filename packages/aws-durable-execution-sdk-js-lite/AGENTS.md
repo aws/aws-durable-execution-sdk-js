@@ -286,6 +286,11 @@ Suspension:
 | `map` | `CONTEXT` / `Map`, items `MapIteration` | child contexts |
 | `parallel` | `CONTEXT` / `Parallel`, branches `ParallelBranch` | child contexts |
 
+The SubType column shows the defaults. `step`, `createCallback` and `runInChildContext`
+accept a `subType` option that replaces the default, as in the full SDK. An empty string
+selects the default. The SDK does not validate the value (rule 1.2). The README documents
+the service's limit. The other operations always send their default.
+
 Each operation's file states its replay table in a comment at the top.
 
 Steps:

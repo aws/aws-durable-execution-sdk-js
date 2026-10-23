@@ -1,5 +1,5 @@
-// Replay table for child contexts (Type CONTEXT, SubType RunInChildContext, or the
-// caller's SubType for waitForCallback, map and parallel):
+// Replay table for child contexts (Type CONTEXT, SubType RunInChildContext or the
+// caller's subType, or the fixed SubType of waitForCallback, map and parallel):
 //
 // | Record status                  | Behavior                                          |
 // |--------------------------------|---------------------------------------------------|
@@ -24,8 +24,13 @@ export function childContext(ctx, opts) {
   return runChild(ctx, ctx._nextId(), opts);
 }
 
-export function runInChildContext(ctx, { name, fn }) {
-  return childContext(ctx, { name, fn, subType: "RunInChildContext" });
+// Like the full SDK, an empty subType selects the default.
+export function runInChildContext(ctx, { name, fn, subType }) {
+  return childContext(ctx, {
+    name,
+    fn,
+    subType: subType || "RunInChildContext",
+  });
 }
 
 async function runChild(ctx, rawId, { name, fn, subType, summary }) {

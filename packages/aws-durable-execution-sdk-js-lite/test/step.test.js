@@ -411,3 +411,45 @@ test("ctx.logger is silent while replaying; the step logger never is", async (t)
     ["in step", "new"],
   );
 });
+
+test("subType replaces the SubType Step on the wire; empty selects the default", async () => {
+  const { updates } = await invoke(async ({ ctx }) => {
+    await ctx.step({ name: "a", fn: () => 1, subType: "my-step_1" });
+    await ctx.step({ name: "b", fn: () => 2, subType: "" });
+    await ctx.step({ name: "c", fn: () => 3 });
+  });
+  assert.deepEqual(
+    updates.map((u) => [u.Name, u.Action, u.SubType]),
+    [
+      ["a", "START", "my-step_1"],
+      ["a", "SUCCEED", "my-step_1"],
+      ["b", "START", "Step"],
+      ["b", "SUCCEED", "Step"],
+      ["c", "START", "Step"],
+      ["c", "SUCCEED", "Step"],
+    ],
+  );
+});
+
+test("a step with a custom subType replays its record; another SubType fails", async () => {
+  const record = {
+    ...stepRecord("1", "SUCCEEDED", { Result: "7" }),
+    SubType: "custom",
+  };
+  const replayed = await invoke(
+    ({ ctx }) => ctx.step({ fn: () => 1, subType: "custom" }),
+    { operations: [record] },
+  );
+  assert.deepEqual(replayed.output, { Status: "SUCCEEDED", Result: "7" });
+  assert.equal(replayed.client.checkpoints.length, 0);
+
+  for (const subType of ["other", undefined]) {
+    const { output, client } = await invoke(
+      ({ ctx }) => ctx.step({ fn: () => 1, subType }),
+      { operations: [record] },
+    );
+    assert.equal(output.Status, "FAILED");
+    assert.equal(output.Error.ErrorType, "NonDeterministicExecutionError");
+    assert.equal(client.checkpoints.length, 0);
+  }
+});
