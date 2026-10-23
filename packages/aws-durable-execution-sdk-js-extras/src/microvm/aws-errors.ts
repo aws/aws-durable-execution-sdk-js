@@ -107,9 +107,16 @@ const changedMessages = new WeakMap<
  * 4. A wrapper error would need a copy of each of these fields. It would
  *    also fail the `instanceof` test.
  * 5. This function changes only `message`. So the error keeps its class,
- *    `name`, `code`, `$retryable`, `$fault`, and `$metadata`, and every retry
- *    decision stays the same.
- * 6. The AWS SDK creates a new error object for each failed call. No AWS SDK
+ *    `name`, `code`, `$retryable`, `$fault`, and `$metadata`.
+ * 6. A custom strategy can also match the message, for example with
+ *    `createRetryStrategy({ retryableErrors: [...] })`. The longer message
+ *    could change its decision. So each step calls the strategy through
+ *    {@link withOriginalMessage}. For an AWS SDK error, the strategy then
+ *    decides on the original message, and every retry decision stays the
+ *    same. An error that the MicroVM operation creates itself, such as
+ *    `MicrovmStateError` or "RunMicrovm returned no microvmId", has the
+ *    request ID in its message when the strategy receives it.
+ * 7. The AWS SDK creates a new error object for each failed call. No AWS SDK
  *    code reads the error after it throws. So the change affects only the
  *    code that receives the error from the step.
  *
@@ -157,6 +164,70 @@ export function addRequestId<T>(operation: MicrovmApiOperation, error: T): T {
     // The step then fails as it did before this function existed.
   }
   return error;
+}
+
+/**
+ * Calls `fn` while `error` has the message that it had before
+ * {@link addRequestId} changed it. Returns what `fn` returns, and throws
+ * what `fn` throws.
+ *
+ * @remarks
+ * The step retry strategy receives the error that {@link addRequestId}
+ * changed. A strategy that matches the message would then match the request
+ * ID sentence too. The core SDK checkpoints the message after the strategy
+ * returns. So the function sets the original message only while `fn` runs.
+ * Then it sets the message with the request ID again, also when `fn` throws.
+ *
+ * The function calls `fn` with the current message in these cases:
+ *
+ * - {@link addRequestId} did not change the message of `error`.
+ * - Code outside {@link addRequestId} set another message after it. The
+ *   function keeps that message.
+ * - The message cannot be set, for example on an error that was frozen
+ *   after the change.
+ *
+ * `fn` can set its own message on the error. The function then keeps that
+ * message, as it would be without this function.
+ *
+ * V8 builds the `stack` text when code first reads `stack`, and then keeps
+ * it. A strategy, a logger, or `util.inspect` inside `fn` can read `stack`.
+ * Without a read before the change, that first line would lack the request
+ * ID, and the plugin hooks would then see a message with the request ID and
+ * a stack without it. So the function reads `stack` before it sets the
+ * original message. The `stack` then shows the message with the request ID,
+ * as {@link addRequestId} describes.
+ */
+export function withOriginalMessage<R>(error: unknown, fn: () => R): R {
+  const changed =
+    error instanceof Error ? changedMessages.get(error) : undefined;
+  if (changed === undefined || (error as Error).message !== changed.written) {
+    return fn();
+  }
+  const target = error as Error;
+  try {
+    // Builds and keeps the stack text with the request ID. See above.
+    void target.stack;
+  } catch {
+    // A `stack` getter that throws changes nothing here.
+  }
+  try {
+    target.message = changed.original;
+  } catch {
+    return fn();
+  }
+  try {
+    return fn();
+  } finally {
+    // Only a message that `fn` left unchanged gets the request ID again.
+    if (target.message === changed.original) {
+      try {
+        target.message = changed.written;
+      } catch {
+        // `fn` froze the error, or made its message read-only. The error
+        // keeps the original message.
+      }
+    }
+  }
 }
 
 /**

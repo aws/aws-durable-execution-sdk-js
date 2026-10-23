@@ -280,6 +280,7 @@ export function buildCreateTableDdl(opts: {
     truncated:boolean
   >>,
   truncated boolean,
+  droppedcauses boolean,
   droppedoperations int,
   droppedinput boolean,
   droppedoutput boolean

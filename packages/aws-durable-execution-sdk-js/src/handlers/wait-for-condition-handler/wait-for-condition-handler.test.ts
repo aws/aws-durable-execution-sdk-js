@@ -193,11 +193,14 @@ describe("WaitForCondition Handler", () => {
       expect(result).toBe("cached-result");
       expect(checkFunc).not.toHaveBeenCalled();
       expect(mockCheckpoint.checkpoint).not.toHaveBeenCalled();
-      expect(mockCheckpoint.markOperationState).toHaveBeenCalledWith(
-        stepId,
-        OperationLifecycleState.COMPLETED,
-        expect.any(Object),
-      );
+      // The operation counts as EXECUTING while its cached result is
+      // deserialized, then COMPLETED.
+      expect(
+        (mockCheckpoint.markOperationState as jest.Mock).mock.calls,
+      ).toEqual([
+        [stepId, OperationLifecycleState.EXECUTING, expect.any(Object)],
+        [stepId, OperationLifecycleState.COMPLETED],
+      ]);
     });
 
     it("should throw error for failed operation", async () => {

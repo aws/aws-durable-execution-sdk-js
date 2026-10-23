@@ -94,10 +94,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Durable Execution Telemetry**: every error in a record (the execution `error`,
+  `operations[].error`, and `operationsByName.<name>.error`) now carries its cause chain as
+  `{ name, message, cause? }`, in that key order. `cause` follows `Error.cause`, including the
+  cause the SDK builds when it rebuilds an operation error from a checkpoint. The chain is cut
+  after 16 levels or at a cause already written, and a cause that is not an error object is
+  written as `{ name: "Error", message: String(cause) }`. Reading a cause never throws: a failure
+  ends the chain and the record is kept. The error's own `name` and `message` are converted to
+  strings the same way; if reading them throws, the error is written as
+  `{ name: "Error", message: "" }` and the record is kept. Every `name` and `message`, on errors
+  and on causes, is capped at 8,192 Unicode code points plus `…`, so a cut never splits a
+  surrogate pair.
+  When a record is over an exporter's size limit, every `cause` is removed first and the record
+  gets `droppedCauses: true`. Apart from the cap, `name` is unchanged, and an error without a
+  cause is written as before. Error names are each SDK's own and differ across languages; the exporter README
+  explains how to query them.
+- **Durable Execution Telemetry**: `SQSExporter` replaces a FIFO `MessageGroupId` or
+  `MessageDeduplicationId` longer than 128 characters with its lowercase hex SHA-256 digest. SQS
+  rejected these sends, and most execution ARNs are longer than 128 characters. Ids of 128
+  characters or fewer are unchanged. An empty `messageGroupId` is treated as omitted.
 - A failed `context.invoke` now throws an `InvokeError` whose `cause.name` is the invoked
   function's error type (for example `"PaymentError"`), with the remote stack trace, as the
   callback handlers and replayed operations already do. Before, `cause.name` was always
   `"Error"`. A cause is now also created when the remote error has a type but no message.
+  The top-level `name` is unchanged: the live error is still `InvokeError`, and an operation
+  error rebuilt from a checkpoint is still `StepError` for an unknown remote type. Read
+  `cause.name` to get the remote error type in both cases, including in Durable Execution
+  Telemetry records.
+- **Durable Execution Telemetry**: the bundled Glue table (`cdk/stack.ts`) and the
+  telemetry-core Athena DDL and schema prompt now include the `droppedcauses` column, so a
+  record cut only by dropping causes can be told apart from other truncations.
 
 - **OpenTelemetry**: `FAILED`, `TIMED_OUT`, and `STOPPED` operations remain `ERROR` in both views,
   including later-invocation continuations, even without error details.
@@ -304,12 +330,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   For a rethrown AWS SDK error, each step adds the request ID to the message of the error object
   itself. It does not wrap the error. So the error keeps its class, `name`, `code`, `$retryable`,
-  and `$metadata`. So the default and custom retry strategies decide as before for such an error.
+  and `$metadata`. So the default retry strategy decides as before for such an error.
+  `createRetryStrategy` matches its `retryableErrors` patterns against `error.message`. The request
+  ID sentence would change what a pattern matches. So each step calls a custom retry strategy
+  while the AWS SDK error has the message of the service. After the strategy returns or throws,
+  the error has the message with the request ID again. The SDK checkpoints the message after the
+  strategy returns. So the handler and the execution history still get the request ID. An error
+  that the MicroVM operation creates itself, such as `MicrovmStateError` or "RunMicrovm returned
+  no microvmId", has the request ID in its message when the strategy receives it.
   A message has no request ID when the AWS SDK error or output carries none, for example after a
   connection failure. Only an error of the Lambda MicroVMs service gets a request ID. An error of
   another service keeps its message. For example, a credential provider that assumes a role calls
   STS inside each call, and its error carries the request ID of STS. When a custom client throws one
-  error object for several calls, the message names only the last call. (#1050)
+  error object for several calls, the message names only the last call. (#1050, #1058)
 
 - An `InvalidRunHookPayloadError` for a `runHookPayload` that is not JSON now keeps the parser's
   `SyntaxError` as its `cause`. Its message names the position of the error.

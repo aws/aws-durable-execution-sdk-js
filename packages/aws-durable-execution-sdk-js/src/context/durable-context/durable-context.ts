@@ -666,6 +666,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
     return this.withDurableModeManagement(() => {
       const waitForCallbackHandler = createWaitForCallbackHandler(
         this._executionContext,
+        this.checkpoint,
         this.peekStepId.bind(this),
         this.runInChildContext.bind(this),
         // Only pass the getter when the user has explicitly configured a custom

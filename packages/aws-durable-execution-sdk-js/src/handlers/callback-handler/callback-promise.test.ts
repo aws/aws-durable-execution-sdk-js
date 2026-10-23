@@ -88,6 +88,45 @@ describe("createCallbackPromise", () => {
     expect(mockCheckAndUpdateReplayMode).toHaveBeenCalled();
   });
 
+  it("keeps the callback EXECUTING until its result is deserialized", async () => {
+    (mockContext.getStepData as jest.Mock).mockReturnValue({
+      Id: "test-id",
+      Status: OperationStatus.SUCCEEDED,
+      CallbackDetails: {
+        CallbackId: "callback-123",
+        Result: "serialized-result",
+      },
+    });
+
+    // Record the lifecycle calls made before deserialization finishes.
+    let callsDuringDeserialize: unknown[][] = [];
+    mockSafeDeserialize.mockImplementation(async () => {
+      callsDuringDeserialize = [
+        ...(mockCheckpoint.markOperationState as jest.Mock).mock.calls,
+      ];
+      return "deserialized-result";
+    });
+
+    await createCallbackPromise(
+      mockContext,
+      mockCheckpoint,
+      "test-step-id",
+      "test-step",
+      { deserialize: jest.fn() },
+      mockCheckAndUpdateReplayMode,
+    );
+
+    expect(callsDuringDeserialize).toEqual([
+      ["test-step-id", OperationLifecycleState.EXECUTING, undefined],
+    ]);
+    expect((mockCheckpoint.markOperationState as jest.Mock).mock.calls).toEqual(
+      [
+        ["test-step-id", OperationLifecycleState.EXECUTING, undefined],
+        ["test-step-id", OperationLifecycleState.COMPLETED],
+      ],
+    );
+  });
+
   it("should throw error when callback data is missing", async () => {
     (mockContext.getStepData as jest.Mock).mockReturnValue({
       Id: "test-id",

@@ -1,6 +1,15 @@
-import type { OperationRecord, DurableExecutionTelemetryRecord } from "./types";
+import type {
+  ErrorRecord,
+  OperationRecord,
+  DurableExecutionTelemetryRecord,
+} from "./types";
 
 const encoder = new TextEncoder();
+
+/** An error with its `cause` chain removed: `{ name, message }`, same key order. */
+function withoutCause(error: ErrorRecord): ErrorRecord {
+  return { name: error.name, message: error.message };
+}
 
 /** UTF-8 byte length of a value's JSON, or `undefined` if it can't be serialized. */
 function jsonByteSize(value: unknown): number | undefined {
@@ -33,17 +42,21 @@ function oldestFirstOrder(operations: OperationRecord[]): number[] {
  * original record when it already fits or `maxBytes` is not set.
  *
  * Drop order (see `docs/plugin-contracts.md`):
- *   1. operation `result` fields, oldest operation first;
- *   2. whole operations, oldest first;
- *   3. last resort — execution `input`, then `output`.
+ *   1. every error `cause` (the execution `error` and every `operations[].error`;
+ *      `operationsByName` is derived from `operations` by `render`), marked
+ *      `droppedCauses: true`;
+ *   2. operation `result` fields, oldest operation first;
+ *   3. whole operations, oldest first;
+ *   4. last resort — execution `input`, then `output`.
  *
- * Identity/timeline fields (arn, status, timestamps, etc.) are never dropped.
+ * Identity/timeline fields (arn, status, timestamps, etc.) and each error's own
+ * `name`/`message` are never dropped.
  * `input`/`output` are dropped only after every operation is gone, so prefer
  * `content.input`/`content.output` transforms to bound them earlier. When
  * anything is dropped, the returned record has `truncated: true`; each operation
  * whose result was dropped is itself marked `truncated: true`, and
- * `droppedOperations` / `droppedInput` / `droppedOutput` markers are set as
- * applicable.
+ * `droppedCauses` / `droppedOperations` / `droppedInput` / `droppedOutput`
+ * markers are set as applicable.
  *
  * The input record is never mutated (the same instance is shared across
  * exporters, which may have different limits).
@@ -67,7 +80,19 @@ export function truncateRecord(
   if (initialSize === undefined || initialSize <= maxBytes) return record;
 
   // Clone operations (and each op we may edit) so we never touch the shared input.
-  const ops: OperationRecord[] = record.operations.map((op) => ({ ...op }));
+  // Step 1 runs unconditionally once the record is over the limit: every
+  // `cause` is removed in one go (no step cuts individual levels).
+  let droppedCauses = false;
+  const ops: OperationRecord[] = record.operations.map((op) => {
+    if (op.error?.cause === undefined) return { ...op };
+    droppedCauses = true;
+    return { ...op, error: withoutCause(op.error) };
+  });
+  const executionError =
+    record.error?.cause === undefined
+      ? record.error
+      : withoutCause(record.error);
+  if (executionError !== record.error) droppedCauses = true;
   const kept = new Array<boolean>(ops.length).fill(true);
   const order = oldestFirstOrder(ops);
 
@@ -82,6 +107,10 @@ export function truncateRecord(
       operations: ops.filter((_, i) => kept[i]),
       truncated: true,
     };
+    if (droppedCauses) {
+      out.error = executionError;
+      out.droppedCauses = true;
+    }
     if (droppedOperations > 0) out.droppedOperations = droppedOperations;
     if (droppedInput) {
       out.input = undefined;
@@ -99,7 +128,7 @@ export function truncateRecord(
     return size !== undefined && size <= maxBytes;
   };
 
-  // Phase 1: drop operation results, oldest first. The operation is kept and
+  // Phase 2: drop operation results, oldest first. The operation is kept and
   // marked `truncated` so consumers can tell its result was cut, not absent.
   for (const idx of order) {
     if (fits()) break;
@@ -109,7 +138,7 @@ export function truncateRecord(
     }
   }
 
-  // Phase 2: drop whole operations, oldest first.
+  // Phase 3: drop whole operations, oldest first.
   for (const idx of order) {
     if (fits()) break;
     if (kept[idx]) {
@@ -118,13 +147,14 @@ export function truncateRecord(
     }
   }
 
-  // Phase 3 (last resort): drop execution input, then output. Only reached once
+  // Phase 4 (last resort): drop execution input, then output. Only reached once
   // every operation is gone and the record is still over the limit.
   if (!fits() && record.input !== undefined) droppedInput = true;
   if (!fits() && record.output !== undefined) droppedOutput = true;
 
   // If nothing was actually dropped, return the original untouched — not cut.
   if (
+    !droppedCauses &&
     !anyResultDropped &&
     droppedOperations === 0 &&
     !droppedInput &&

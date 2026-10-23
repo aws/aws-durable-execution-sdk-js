@@ -14,8 +14,9 @@ import {
  *
  * - {@link MicrovmLaunchError}: `RunMicrovm` failed after all retries.
  * - {@link MicrovmDeliveryError}: the job could not be delivered over HTTP.
- *   Its subclass {@link MicrovmNotRunningError} means the session's MicroVM
- *   no longer runs.
+ *   Its subclass {@link MicrovmNotRunningError} means that the MicroVM no
+ *   longer runs. A session reports it. A {@link microvm} job over HTTP also
+ *   reports it, when CreateMicrovmAuthToken reports the MicroVM removed.
  * - {@link MicrovmJobFailedError}: the job handler in the MicroVM failed.
  * - {@link MicrovmTimeoutError}: no result or no heartbeat arrived in time.
  *

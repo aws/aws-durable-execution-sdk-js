@@ -8,6 +8,7 @@ import {
   MicrovmStateError,
   microvmNotFound,
   requestIdSentence,
+  withOriginalMessage,
   withRequestId,
 } from "../aws-errors";
 import { defaultMicrovmRetryStrategy } from "../retry";
@@ -228,6 +229,156 @@ describe("addRequestId", () => {
 
     expect(addRequestId("GetMicrovm", error)).toBe(error);
     expect(error.message).toBe("denied");
+  });
+});
+
+describe("withOriginalMessage", () => {
+  const changed = (): ThrottlingException =>
+    addRequestId(
+      "RunMicrovm",
+      new ThrottlingException({
+        message: "Rate exceeded",
+        $metadata: { requestId: "req-1" },
+      }),
+    );
+  const written = "Rate exceeded. RunMicrovm request ID: req-1.";
+
+  it("calls fn with the original message, returns its value, and sets the message with the request ID again", () => {
+    const error = changed();
+    const result = { shouldRetry: true };
+    const seen: string[] = [];
+
+    expect(
+      withOriginalMessage(error, () => {
+        seen.push(error.message);
+        return result;
+      }),
+    ).toBe(result);
+
+    expect(seen).toEqual(["Rate exceeded"]);
+    expect(error.message).toBe(written);
+  });
+
+  it("rethrows the exception of fn, and sets the message with the request ID again", () => {
+    const error = changed();
+    const failure = new Error("strategy failed");
+    const seen: string[] = [];
+
+    let thrown: unknown;
+    try {
+      withOriginalMessage(error, () => {
+        seen.push(error.message);
+        throw failure;
+      });
+    } catch (e) {
+      thrown = e;
+    }
+
+    expect(thrown).toBe(failure);
+    expect(seen).toEqual(["Rate exceeded"]);
+    expect(error.message).toBe(written);
+  });
+
+  it("restores the message with the request ID after each of several calls", () => {
+    const error = changed();
+    const seen: string[] = [];
+
+    for (let i = 0; i < 3; i++) {
+      withOriginalMessage(error, () => seen.push(error.message));
+      expect(error.message).toBe(written);
+    }
+
+    expect(seen).toEqual(["Rate exceeded", "Rate exceeded", "Rate exceeded"]);
+  });
+
+  it("keeps the request ID in the stack when fn reads the stack first", () => {
+    const error = changed();
+    let stackInFn: string | undefined;
+
+    withOriginalMessage(error, () => {
+      stackInFn = error.stack;
+    });
+
+    // V8 keeps the stack text from the first read. So the read inside fn
+    // must not be the first one.
+    expect(stackInFn?.split("\n")[0]).toBe(`ThrottlingException: ${written}`);
+    expect(error.stack?.split("\n")[0]).toBe(`ThrottlingException: ${written}`);
+    expect(error.message).toBe(written);
+  });
+
+  it.each<[string, () => unknown]>([
+    [
+      "an AWS SDK error without a request ID",
+      () =>
+        addRequestId(
+          "RunMicrovm",
+          new ThrottlingException({ message: "Rate exceeded", $metadata: {} }),
+        ),
+    ],
+    [
+      "an error of another AWS service",
+      () =>
+        addRequestId(
+          "RunMicrovm",
+          new FakeStsServiceException("not authorized to assume role"),
+        ),
+    ],
+    ["an Error that addRequestId never saw", () => new Error("boom")],
+    ["a string", () => "boom"],
+    ["undefined", () => undefined],
+  ])("calls fn with %s unchanged", (_label, make) => {
+    const value = make();
+    const message = (value as { message?: unknown } | undefined)?.message;
+    const seen: unknown[] = [];
+
+    expect(
+      withOriginalMessage(value, () => {
+        seen.push((value as { message?: unknown } | undefined)?.message);
+        return 1;
+      }),
+    ).toBe(1);
+
+    expect(seen).toEqual([message]);
+    expect((value as { message?: unknown } | undefined)?.message).toBe(message);
+  });
+
+  it("keeps a message that other code set after addRequestId", () => {
+    const error = changed();
+    error.message = "Slow down";
+    const seen: string[] = [];
+
+    withOriginalMessage(error, () => seen.push(error.message));
+
+    expect(seen).toEqual(["Slow down"]);
+    expect(error.message).toBe("Slow down");
+  });
+
+  it("keeps a message that fn sets", () => {
+    const error = changed();
+
+    withOriginalMessage(error, () => {
+      error.message = "set by the strategy";
+    });
+
+    expect(error.message).toBe("set by the strategy");
+  });
+
+  it("calls fn with the message with the request ID when the error was frozen after addRequestId", () => {
+    const error = Object.freeze(changed());
+    const seen: string[] = [];
+
+    withOriginalMessage(error, () => seen.push(error.message));
+
+    expect(seen).toEqual([written]);
+    expect(error.message).toBe(written);
+  });
+
+  it("keeps the original message, without throwing, when fn freezes the error", () => {
+    const error = changed();
+
+    expect(withOriginalMessage(error, () => Object.freeze(error))).toBe(error);
+
+    expect(error.message).toBe("Rate exceeded");
   });
 });
 
