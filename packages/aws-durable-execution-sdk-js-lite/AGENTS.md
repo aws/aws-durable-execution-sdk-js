@@ -131,7 +131,10 @@ signing for service `lambda`.
 Rules for the client:
 
 1. Credentials come from `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`.
-   Region comes from `AWS_REGION`.
+   If `AWS_ACCESS_KEY_ID` is not set, they come from `AWS_CONTAINER_CREDENTIALS_FULL_URI`,
+   with `AWS_CONTAINER_AUTHORIZATION_TOKEN` as the `authorization` header. Lambda uses that
+   endpoint for SnapStart functions. The client caches those credentials and fetches them
+   again 5 minutes before they expire. Region comes from `AWS_REGION`.
 2. The endpoint is `AWS_ENDPOINT_URL_LAMBDA`, else `AWS_ENDPOINT_URL`, else
    `https://lambda.{region}.amazonaws.com`.
 3. Each checkpoint call generates one `ClientToken` with `crypto.randomUUID()`. HTTP retries

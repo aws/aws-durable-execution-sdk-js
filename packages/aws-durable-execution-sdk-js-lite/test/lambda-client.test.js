@@ -14,6 +14,8 @@ const ENV_KEYS = [
   "AWS_SESSION_TOKEN",
   "AWS_ENDPOINT_URL",
   "AWS_ENDPOINT_URL_LAMBDA",
+  "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+  "AWS_CONTAINER_AUTHORIZATION_TOKEN",
 ];
 let saved;
 beforeEach(() => {
@@ -262,4 +264,58 @@ test("session token header is sent when set", async () => {
   await client(fetch).getExecutionState({ DurableExecutionArn: ARN });
   assert.equal(fetch.calls[0].headers["x-amz-security-token"], "SESSION");
   assert.match(fetch.calls[0].headers.authorization, /x-amz-security-token/);
+});
+
+test("without env credentials, the container credentials endpoint is used and cached", async () => {
+  delete process.env.AWS_ACCESS_KEY_ID;
+  delete process.env.AWS_SECRET_ACCESS_KEY;
+  process.env.AWS_CONTAINER_CREDENTIALS_FULL_URI =
+    "http://127.0.0.1:9001/creds";
+  process.env.AWS_CONTAINER_AUTHORIZATION_TOKEN = "AUTH";
+  const expiration = new Date(Date.now() + 60 * 60_000).toISOString();
+  const fetch = fakeFetch([
+    json(200, {
+      AccessKeyId: "CKID",
+      SecretAccessKey: "CSECRET",
+      Token: "CTOKEN",
+      Expiration: expiration,
+    }),
+    json(200, {}),
+    json(200, {}),
+  ]);
+  const c = client(fetch);
+  await c.getExecutionState({ DurableExecutionArn: ARN });
+  await c.getExecutionState({ DurableExecutionArn: ARN });
+  // One credentials request, then two API requests.
+  assert.equal(fetch.calls.length, 3);
+  assert.equal(fetch.calls[0].url.href, "http://127.0.0.1:9001/creds");
+  assert.equal(fetch.calls[0].headers.authorization, "AUTH");
+  for (const call of fetch.calls.slice(1)) {
+    assert.match(call.headers.authorization, /Credential=CKID\//);
+    assert.equal(call.headers["x-amz-security-token"], "CTOKEN");
+  }
+});
+
+test("container credentials are fetched again when they expire within 5 minutes", async () => {
+  delete process.env.AWS_ACCESS_KEY_ID;
+  process.env.AWS_CONTAINER_CREDENTIALS_FULL_URI =
+    "http://127.0.0.1:9001/creds";
+  const soon = new Date(Date.now() + 60_000).toISOString();
+  const creds = (id) =>
+    json(200, {
+      AccessKeyId: id,
+      SecretAccessKey: "S",
+      Token: "T",
+      Expiration: soon,
+    });
+  const fetch = fakeFetch([
+    creds("K1"),
+    json(200, {}),
+    creds("K2"),
+    json(200, {}),
+  ]);
+  const c = client(fetch);
+  await c.getExecutionState({ DurableExecutionArn: ARN });
+  await c.getExecutionState({ DurableExecutionArn: ARN });
+  assert.match(fetch.calls[3].headers.authorization, /Credential=K2\//);
 });

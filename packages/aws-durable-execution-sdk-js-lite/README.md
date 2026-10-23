@@ -13,7 +13,8 @@ This package is an alpha. It is private and not published to npm. Its API can ch
 
 ## Requirements
 
-- Node.js 22.12 or later.
+- Node.js 22.12 or later. The SDK also runs on [LLRT](https://github.com/awslabs/llrt) in a
+  container image, because it uses only `node:crypto`, `fetch` and timers.
 - A Lambda function with durable execution enabled (`DurableConfig` in the function
   configuration).
 - The function's execution role allows `lambda:CheckpointDurableExecution` and
@@ -79,8 +80,9 @@ Wraps a workflow as a Lambda handler.
 - `workflow({ event, ctx, lambdaContext })`: `event` is the execution input, parsed from JSON.
   It is `{}` when the input is empty. `ctx` is the root durable context.
 - `config.client` (optional): the client for the two durable execution APIs. The default
-  client signs requests with the credentials and region from the Lambda environment. Tests
-  replace it.
+  client signs requests with the region and the credentials from the Lambda environment:
+  the `AWS_ACCESS_KEY_ID` environment variables, or the container credentials endpoint
+  that Lambda uses for SnapStart functions. Tests replace it.
 
 The workflow's return value is the execution result. It is stored as JSON. A thrown error
 fails the execution. The execution error has `ErrorType` set to the error's `name`, and

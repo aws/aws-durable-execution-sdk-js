@@ -1,24 +1,63 @@
 import { randomUUID } from "node:crypto";
-import { setTimeout as sleep } from "node:timers/promises";
 import { VERSION } from "../version.js";
 import { encodeRfc3986, signRequest } from "./sigv4.js";
 
 const API = "/2025-12-01/durable-executions";
 const MAX_ATTEMPTS = 3;
+// The global timer, not node:timers/promises, which LLRT does not provide.
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Lambda puts credentials in environment variables. With SnapStart, it serves them from a
+// container credentials endpoint instead, because a snapshot would keep stale ones.
+function credentialSource(fetch) {
+  const env = process.env;
+  if (env.AWS_ACCESS_KEY_ID) {
+    const creds = {
+      accessKeyId: env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+      sessionToken: env.AWS_SESSION_TOKEN,
+    };
+    return async () => creds;
+  }
+  const uri = env.AWS_CONTAINER_CREDENTIALS_FULL_URI;
+  if (!uri) return async () => ({});
+  let cached;
+  return async () => {
+    // Refresh 5 minutes before expiry, like the AWS SDK.
+    if (cached && cached.expiresAt - Date.now() > 5 * 60_000) return cached;
+    const res = await fetch(uri, {
+      headers: { authorization: env.AWS_CONTAINER_AUTHORIZATION_TOKEN ?? "" },
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!res.ok) {
+      throw new Error(
+        `Container credentials request failed: HTTP ${res.status}`,
+      );
+    }
+    const c = await res.json();
+    cached = {
+      accessKeyId: c.AccessKeyId,
+      secretAccessKey: c.SecretAccessKey,
+      sessionToken: c.Token,
+      expiresAt: Date.parse(c.Expiration),
+    };
+    return cached;
+  };
+}
 
 export function createLambdaClient({
   region = process.env.AWS_REGION,
-  credentials = {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    sessionToken: process.env.AWS_SESSION_TOKEN,
-  },
+  credentials,
   endpoint = process.env.AWS_ENDPOINT_URL_LAMBDA ||
     process.env.AWS_ENDPOINT_URL ||
     `https://lambda.${region}.amazonaws.com`,
   fetch = globalThis.fetch,
   retryBaseMs = 100,
 } = {}) {
+  const getCredentials = credentials
+    ? async () => credentials
+    : credentialSource(fetch);
+
   async function send(method, path, query, body) {
     const url = new URL(path, endpoint);
     for (const [k, v] of Object.entries(query)) {
@@ -36,7 +75,7 @@ export function createLambdaClient({
         url,
         headers,
         body,
-        credentials,
+        credentials: await getCredentials(),
         region,
         service: "lambda",
       });
