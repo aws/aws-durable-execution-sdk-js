@@ -177,18 +177,47 @@ export function createPluginRunner(
       }
     };
 
+    // Each link contains its own wrapper's failure. A wrapper that throws, or
+    // whose promise rejects, is a plugin error unless the customer fn failed.
+    // The link then falls through to the rest of the chain: it reuses that
+    // result if the wrapper already called `next`, and calls `next` if it did
+    // not. So a failing wrapper never skips the wrappers inside it, for
+    // example the span context another plugin sets up.
     const chain: CallbackFn = plugins.reduceRight<CallbackFn>(
       (next, plugin) => () => {
         const hookFn = plugin[method] as PluginWrapperHookFn;
-        if (hookFn) {
-          try {
-            return hookFn.call(plugin, info, next);
-          } catch {
-            // Plugin errors are swallowed — fall through to the inner fn
-            return next();
-          }
+        if (!hookFn) return next();
+
+        let nextCalled = false;
+        let nextResult: CallbackResult;
+        const guardedNext: CallbackFn = () => {
+          if (nextCalled) return nextResult;
+          nextCalled = true;
+          nextResult = next();
+          return nextResult;
+        };
+        const recover = (): CallbackResult => {
+          // The customer fn's own error always wins.
+          if (fnError) throw fnError.error;
+          return guardedNext();
+        };
+
+        let out: CallbackResult;
+        try {
+          out = hookFn.call(plugin, info, guardedNext);
+        } catch {
+          return recover();
         }
-        return next();
+        if (
+          out != null &&
+          typeof (out as PromiseLike<unknown>).then === "function"
+        ) {
+          return (out as PromiseLike<unknown>).then(
+            (val: unknown) => val,
+            recover,
+          );
+        }
+        return out;
       },
       guardedFn as CallbackFn,
     );
@@ -208,21 +237,10 @@ export function createPluginRunner(
       result != null &&
       typeof (result as PromiseLike<unknown>).then === "function"
     ) {
-      return (result as PromiseLike<unknown>).then(
-        (val: CustomerFnResult) => {
-          if (fnError) throw fnError.error;
-          return val;
-        },
-        () => {
-          // The customer fn's own error always wins.
-          if (fnError) throw fnError.error;
-          // Otherwise the wrapper itself rejected, for example after `fn`
-          // succeeded. That is a plugin error. So it is contained like a
-          // synchronous one: the result is the customer fn's own result, and
-          // fn runs now if the wrapper never called it.
-          return fnCalled ? fnResult : (guardedFn as CallbackFn)();
-        },
-      );
+      return (result as PromiseLike<unknown>).then((val: CustomerFnResult) => {
+        if (fnError) throw fnError.error;
+        return val;
+      });
     }
 
     // Sync path: if fn threw but the chain swallowed it, re-throw

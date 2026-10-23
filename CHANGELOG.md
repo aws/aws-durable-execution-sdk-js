@@ -30,8 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   suspend, as they do with a normal context.
 - A `wrap` plugin hook (`wrapInvocation`, `wrapChildContextFn`, `wrapOperationAttemptFn`) that
   rejects for its own reasons, for example after the customer function succeeded, no longer
-  fails the invocation. The SDK uses the customer function's own result, and calls the function
-  if the hook did not. An error from the customer function still reaches the caller.
+  fails the invocation. The SDK continues with the wrappers inside it and the customer
+  function, and uses their result. An error from the customer function still reaches the
+  caller.
 - A `wrapChildContextFn` hook that does asynchronous work after the child function settles no
   longer lets the invocation suspend during that work. Before, with another operation such as a
   callback waiting, the caller's next line did not run in that invocation.

@@ -875,6 +875,55 @@ describe("createPluginRunner", () => {
       ).rejects.toThrow(originalError);
     });
 
+    it("still runs the inner wrapper when an outer wrapper rejects before calling it", async () => {
+      const innerRan = jest.fn();
+      const fn = jest.fn(() => Promise.resolve("customer-result"));
+      const outer: DurableInstrumentationPlugin = {
+        wrapOperationAttemptFn: async () => {
+          throw new Error("outer wrapper failed before next");
+        },
+      };
+      const inner: DurableInstrumentationPlugin = {
+        wrapOperationAttemptFn: (_info, next) => {
+          innerRan();
+          return next();
+        },
+      };
+
+      const runner = createPluginRunner([outer, inner]);
+
+      await expect(
+        runner.wrapOperationAttemptFn!(attemptInfo, fn),
+      ).resolves.toBe("customer-result");
+      expect(innerRan).toHaveBeenCalledTimes(1);
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not run the inner wrapper twice when an outer wrapper rejects after calling it", async () => {
+      const innerRan = jest.fn();
+      const fn = jest.fn(() => Promise.resolve("customer-result"));
+      const outer: DurableInstrumentationPlugin = {
+        wrapOperationAttemptFn: async (_info, next) => {
+          await next();
+          throw new Error("outer wrapper failed after next");
+        },
+      };
+      const inner: DurableInstrumentationPlugin = {
+        wrapOperationAttemptFn: (_info, next) => {
+          innerRan();
+          return next();
+        },
+      };
+
+      const runner = createPluginRunner([outer, inner]);
+
+      await expect(
+        runner.wrapOperationAttemptFn!(attemptInfo, fn),
+      ).resolves.toBe("customer-result");
+      expect(innerRan).toHaveBeenCalledTimes(1);
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+
     it("re-throws fn error even when multiple plugins try to swallow it", async () => {
       const originalError = new Error("must not be lost");
       const swallowingPlugin: DurableInstrumentationPlugin = {

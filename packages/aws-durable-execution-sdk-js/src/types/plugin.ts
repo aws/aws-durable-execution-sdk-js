@@ -206,9 +206,10 @@ export interface OperationChangeInfo {
  *   waiting for it delays no operation, and a plugin can finish its setup
  *   there.
  * - The `wrap` hooks run the customer's function and stay inline. If a `wrap`
- *   hook throws or rejects for its own reasons, the SDK uses the customer
- *   function's own result instead, and calls the function if the hook did
- *   not. An error from the customer function always reaches the caller.
+ *   hook throws or rejects for its own reasons, the SDK continues with the
+ *   wrappers inside it and the customer function, and uses their result. So
+ *   one failing wrapper does not skip another plugin's wrapper. An error from
+ *   the customer function always reaches the caller.
  *
  * **Drain.** Before it calls `onInvocationEnd`, the SDK waits for the
  * asynchronous work of every earlier hook to settle. It then waits for
