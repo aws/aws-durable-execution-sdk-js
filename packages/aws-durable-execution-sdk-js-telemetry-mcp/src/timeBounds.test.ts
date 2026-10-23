@@ -127,6 +127,9 @@ describe("normalizeTimestamp", () => {
     "2026-10-23T24:00:00Z",
     "2026-10-23T23:60:00Z",
     "2026-10-23T23:59:60Z",
+    // A fraction needs explicit seconds. ISO-8601 reads 18:42.5 as a
+    // fractional minute (18:42:30), not as 18:42:00.5.
+    "2026-10-23T18:42.5Z",
     "yesterday",
     "2026-10-23'; DROP TABLE x; --",
   ])("rejects %s", (input) => {
