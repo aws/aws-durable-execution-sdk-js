@@ -26,7 +26,7 @@ const serialize = (span) => ({
 });
 
 /** A real exporter and shared provider; only the evidence sink is injected. */
-export function createTelemetry({ current, record, hold, outside }) {
+export function createTelemetry({ current, record, hold, outside, snapshot }) {
   const runtimes = new Map();
   const instances = new WeakMap();
   const runtime = (view) => {
@@ -124,9 +124,15 @@ export function createTelemetry({ current, record, hold, outside }) {
         carrier_error: carrierError,
         carrier_source: "runtime_context",
       });
+      const complete = (outcome) => {
+        state.sdkCompletedAt = Date.now() / 1000;
+        state.closed = true;
+        state.sdkResourceSnapshot = snapshot?.(state);
+        return outcome;
+      };
       const outcome = await invoke().then(
-        (response) => ({ response }),
-        (error) => ({ error }),
+        (response) => complete({ response }),
+        (error) => complete({ error }),
       );
       let evidenceError;
       try {

@@ -22,7 +22,9 @@ test("cloud fixture executes the SDK and records real transport boundaries", asy
     const body = Buffer.concat(chunks).toString();
     requests.push({ method: request.method, url: request.url });
     if (request.method === "PUT") {
-      records.push(JSON.parse(body));
+      const record = JSON.parse(body);
+      records.push(record);
+      if (record.phase === "OTEL_EXIT") await delay(20);
       response.writeHead(200, { ETag: '"test"' });
       response.end();
     } else if (request.method === "GET") {
@@ -334,6 +336,11 @@ test("cloud fixture executes the SDK and records real transport boundaries", asy
         observed.find((record) => record.phase === "OTEL_EXIT")
           .context_restored,
         true,
+      );
+      assert(
+        observed.find((record) => record.phase === "RETURN").time <=
+          observed.find((record) => record.phase === "OTEL_EXIT").time,
+        "Evidence I/O must not move the SDK-return boundary",
       );
     }
     await delay(1200);

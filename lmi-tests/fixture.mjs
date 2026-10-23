@@ -256,6 +256,7 @@ const telemetry = createTelemetry({
   record: trace,
   hold,
   outside: tracker.outside,
+  snapshot: (state) => tracker.snapshot(state),
 });
 
 // Each variant is shared by concurrent roots; the original remains plugin-free.
@@ -312,14 +313,20 @@ export async function observeInvocation(event, context, invoke, metadata) {
     state.closed = true;
     await trace(state, "RETURN", {
       status: response.Status,
-      resources: tracker.snapshot(state),
+      resources: state.sdkResourceSnapshot ?? tracker.snapshot(state),
+      ...(state.sdkCompletedAt === undefined
+        ? {}
+        : { time: state.sdkCompletedAt }),
     });
     return response;
   } catch (error) {
     state.closed = true;
     await trace(state, "RAISE", {
       error: error.name,
-      resources: tracker.snapshot(state),
+      resources: state.sdkResourceSnapshot ?? tracker.snapshot(state),
+      ...(state.sdkCompletedAt === undefined
+        ? {}
+        : { time: state.sdkCompletedAt }),
     });
     throw error;
   } finally {
