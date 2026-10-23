@@ -5,6 +5,7 @@ import {
   OperationSubType,
   DurableExecutionMode,
   DurableContext,
+  OperationLifecycleState,
 } from "../../types";
 import { Context } from "aws-lambda";
 import {
@@ -14,6 +15,7 @@ import {
 } from "../../types/wire";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import { completeAfter } from "../../utils/checkpoint/complete-after";
 import { defaultSerdes, AnySerdes } from "../../utils/serdes/serdes";
 import {
   safeSerialize,
@@ -149,6 +151,8 @@ export const createRunInChildContextHandler = <Logger extends DurableLogger>(
           getParentLogger,
           createChildContext,
           getDefaultSerdes,
+          checkpoint,
+          parentId,
         );
       }
 
@@ -209,12 +213,29 @@ export const handleCompletedChildContext = async <
   ) => DurableContext<Logger>,
 
   getDefaultSerdes?: () => AnySerdes,
+  checkpoint?: Checkpoint,
+  parentId?: string,
 ): Promise<T> => {
   const serdes =
     options?.serdes || (getDefaultSerdes ? getDefaultSerdes() : defaultSerdes);
   const errorMapper = options?.errorMapper;
   const stepData = context.getStepData(entityId);
   const result = stepData?.ContextDetails?.Result;
+
+  // Keeps this context EXECUTING while the result goes through the serdes, so
+  // the invocation cannot suspend before the caller's next line runs.
+  const whileExecuting = <R>(work: () => Promise<R>): Promise<R> =>
+    checkpoint
+      ? completeAfter(checkpoint, entityId, work, {
+          stepId: entityId,
+          name: stepName,
+          type: OperationType.CONTEXT,
+          subType:
+            (options?.subType as OperationSubType) ||
+            OperationSubType.RUN_IN_CHILD_CONTEXT,
+          parentId,
+        })
+      : work();
 
   // Handle failed child context
   if (stepData?.Status === OperationStatus.FAILED) {
@@ -265,22 +286,24 @@ export const handleCompletedChildContext = async <
     // Large payloads re-execute the child function on replay, so apply the
     // same serdes round-trip first-run uses, keeping the returned value
     // consistent across first-run and replay.
-    const reserialized = await safeSerialize(
-      serdes,
-      replayedResult,
-      entityId,
-      stepName,
-      context.terminationManager,
-      context.durableExecutionArn,
-    );
-    return await safeDeserialize(
-      serdes,
-      reserialized,
-      entityId,
-      stepName,
-      context.terminationManager,
-      context.durableExecutionArn,
-    );
+    return await whileExecuting(async () => {
+      const reserialized = await safeSerialize(
+        serdes,
+        replayedResult,
+        entityId,
+        stepName,
+        context.terminationManager,
+        context.durableExecutionArn,
+      );
+      return await safeDeserialize(
+        serdes,
+        reserialized,
+        entityId,
+        stepName,
+        context.terminationManager,
+        context.durableExecutionArn,
+      );
+    });
   }
 
   log("⏭️", "Child context already finished, returning cached result:", {
@@ -288,13 +311,15 @@ export const handleCompletedChildContext = async <
   });
 
   // Small payloads: replay deserializes the checkpoint, so match that here.
-  return await safeDeserialize(
-    serdes,
-    result,
-    entityId,
-    stepName,
-    context.terminationManager,
-    context.durableExecutionArn,
+  return await whileExecuting(() =>
+    safeDeserialize(
+      serdes,
+      result,
+      entityId,
+      stepName,
+      context.terminationManager,
+      context.durableExecutionArn,
+    ),
   );
 };
 
@@ -371,6 +396,14 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     isVirtual ? parentId : entityId,
   );
 
+  // From the moment `fn` returns until the result is deserialized, this
+  // context does SDK work that no other operation tracks: serializing,
+  // checkpointing, plugin hooks and deserializing. It counts as EXECUTING for
+  // that time, so the invocation cannot suspend before the caller's next line
+  // runs. It is not marked during `fn`, because operations inside `fn` track
+  // themselves and must be able to suspend the invocation.
+  let markedExecuting = false;
+
   try {
     // Execute the child context function with context tracking
     const childContextFn = () => fn(durableChildContext);
@@ -388,6 +421,17 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
       childReplayMode,
       name,
     )) as T;
+
+    checkpoint.markOperationState(entityId, OperationLifecycleState.EXECUTING, {
+      metadata: {
+        stepId: entityId,
+        name,
+        type: OperationType.CONTEXT,
+        subType: opInfo.subType as OperationSubType,
+        parentId,
+      },
+    });
+    markedExecuting = true;
 
     // Close the descendant-checkpoint gate NOW — synchronously, before the
     // safeSerialize await below yields the event loop. `fn` has returned, so
@@ -572,5 +616,12 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
     }
 
     throw new ChildContextError(reconstructedError.message, reconstructedError);
+  } finally {
+    if (markedExecuting) {
+      checkpoint.markOperationState(
+        entityId,
+        OperationLifecycleState.COMPLETED,
+      );
+    }
   }
 };

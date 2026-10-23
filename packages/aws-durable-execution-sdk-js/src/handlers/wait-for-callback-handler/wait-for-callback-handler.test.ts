@@ -1,6 +1,6 @@
 import { createWaitForCallbackHandler } from "./wait-for-callback-handler";
 import { ExecutionContext, WaitForCallbackConfig } from "../../types";
-import { CheckpointFunction } from "../../testing/mock-checkpoint";
+import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
 import * as serdesErrors from "../../errors/serdes-errors/serdes-errors";
 import * as callbackHandler from "../callback-handler/callback";
 
@@ -65,7 +65,7 @@ function makeMockChildCtx(opts: {
 
 describe("waitForCallback handler", () => {
   let mockExecutionContext: ExecutionContext;
-  let mockCheckpoint: CheckpointFunction;
+  let mockCheckpoint: Checkpoint;
   let mockRunInChildContext: jest.Mock;
   let mockGetNextStepId: jest.Mock;
 
@@ -81,8 +81,7 @@ describe("waitForCallback handler", () => {
       durableExecutionArn: "test-arn",
     } as any;
 
-    mockCheckpoint = jest.fn() as unknown as CheckpointFunction;
-    (mockCheckpoint as any).force = jest.fn().mockResolvedValue(undefined);
+    mockCheckpoint = { markOperationState: jest.fn() } as unknown as Checkpoint;
     mockRunInChildContext = jest.fn();
     mockGetNextStepId = jest.fn().mockReturnValue("test-step-id");
 
@@ -115,6 +114,7 @@ describe("waitForCallback handler", () => {
 
     const handler = createWaitForCallbackHandler(
       mockExecutionContext,
+      mockCheckpoint,
       mockGetNextStepId,
       mockRunInChildContext,
     );
@@ -161,6 +161,7 @@ describe("waitForCallback handler", () => {
 
     const handler = createWaitForCallbackHandler(
       mockExecutionContext,
+      mockCheckpoint,
       mockGetNextStepId,
       mockRunInChildContext,
     );
@@ -188,6 +189,7 @@ describe("waitForCallback handler", () => {
   it("should throw error when called without submitter", async () => {
     const handler = createWaitForCallbackHandler(
       mockExecutionContext,
+      mockCheckpoint,
       mockGetNextStepId,
       mockRunInChildContext,
     );
@@ -202,6 +204,7 @@ describe("waitForCallback handler", () => {
   it("should throw error when name is provided but submitter is not a function", async () => {
     const handler = createWaitForCallbackHandler(
       mockExecutionContext,
+      mockCheckpoint,
       mockGetNextStepId,
       mockRunInChildContext,
     );
@@ -242,6 +245,7 @@ describe("waitForCallback handler", () => {
 
     const handler = createWaitForCallbackHandler(
       mockExecutionContext,
+      mockCheckpoint,
       mockGetNextStepId,
       mockRunInChildContext,
     );
@@ -283,6 +287,7 @@ describe("waitForCallback handler", () => {
 
     const handler = createWaitForCallbackHandler(
       mockExecutionContext,
+      mockCheckpoint,
       mockGetNextStepId,
       mockRunInChildContext,
     );
@@ -306,6 +311,7 @@ describe("waitForCallback handler", () => {
   it("should throw error when invalid parameter type is provided", async () => {
     const handler = createWaitForCallbackHandler(
       mockExecutionContext,
+      mockCheckpoint,
       mockGetNextStepId,
       mockRunInChildContext,
     );
@@ -345,6 +351,7 @@ describe("waitForCallback handler", () => {
 
     const handler = createWaitForCallbackHandler(
       mockExecutionContext,
+      mockCheckpoint,
       mockGetNextStepId,
       mockRunInChildContext,
     );
@@ -390,6 +397,7 @@ describe("waitForCallback handler", () => {
 
     const handler = createWaitForCallbackHandler(
       mockExecutionContext,
+      mockCheckpoint,
       mockGetNextStepId,
       mockRunInChildContext,
     );
@@ -454,6 +462,7 @@ describe("waitForCallback handler", () => {
 
         const handler = createWaitForCallbackHandler(
           mockExecutionContext,
+          mockCheckpoint,
           mockGetNextStepId,
           mockRunInChildContext,
         );

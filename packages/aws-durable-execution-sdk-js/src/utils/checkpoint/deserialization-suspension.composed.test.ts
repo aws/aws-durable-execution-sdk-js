@@ -31,6 +31,7 @@ import {
   WireOperation,
 } from "../../types/wire";
 import { Serdes } from "../serdes/serdes";
+import { SerdesFailedError } from "../../errors/serdes-errors/serdes-errors";
 import { CHECKPOINT_TERMINATION_COOLDOWN_MS } from "../constants/constants";
 import { Context } from "aws-lambda";
 
@@ -65,12 +66,28 @@ const pendingCallbackOp = {
 
 /** A completed record for the second root operation, so it is replayed. */
 const completedSecondOp = (op: Partial<WireOperation>): WireOperation =>
+  completedOp("2", op);
+
+/** A completed record for the root operation with the given counter id. */
+const completedOp = (id: string, op: Partial<WireOperation>): WireOperation =>
   ({
-    Id: hashId("2"),
+    Id: hashId(id),
     Status: OperationStatus.SUCCEEDED,
     StartTimestamp: now(),
     ...op,
   }) as unknown as WireOperation;
+
+/**
+ * A fast step that completes first. Its COMPLETED transition arms the cooldown
+ * timer just before the operation under test runs, which is what exposes an
+ * untracked deserialization on a replay path.
+ */
+const completedFastStep = completedOp("2", {
+  Type: OperationType.STEP,
+  SubType: OperationSubType.STEP,
+  Name: "fast",
+  StepDetails: { Result: JSON.stringify("fast") },
+});
 
 const client: DurableExecutionClient = {
   getExecutionState: async (): Promise<GetDurableExecutionStateResponse> => ({
@@ -236,5 +253,112 @@ describe("async deserialization with a pending callback", () => {
 
     expect(submitRanBeforeReturn).toBe(true);
     expect(response).toEqual({ Status: InvocationStatus.PENDING });
+  });
+
+  it("runInChildContext: runs the next step before suspending, on the execution path", async () => {
+    const { response, submitRanBeforeReturn } = await run((context) =>
+      context.runInChildContext(
+        "slow",
+        (child) => child.step("inner", async () => "value"),
+        { serdes: slowSerdes() },
+      ),
+    );
+
+    expect(submitRanBeforeReturn).toBe(true);
+    expect(response).toEqual({ Status: InvocationStatus.PENDING });
+  });
+
+  it("runInChildContext: runs the next step before suspending, on replay", async () => {
+    const { response, submitRanBeforeReturn } = await run(
+      async (context) => {
+        await context.step("fast", async () => "fast");
+        return await context.runInChildContext(
+          "slow",
+          (child) => child.step("inner", async () => "value"),
+          { serdes: slowSerdes() },
+        );
+      },
+      [
+        completedFastStep,
+        completedOp("3", {
+          Type: OperationType.CONTEXT,
+          SubType: OperationSubType.RUN_IN_CHILD_CONTEXT,
+          Name: "slow",
+          ContextDetails: { Result: JSON.stringify("value") },
+        }),
+      ],
+    );
+
+    expect(submitRanBeforeReturn).toBe(true);
+    expect(response).toEqual({ Status: InvocationStatus.PENDING });
+  });
+
+  it("map: runs the next step before suspending, on the execution path", async () => {
+    const { response, submitRanBeforeReturn } = await run((context) =>
+      context.map("slow", [1, 2], async (_child, item: number) => item, {
+        itemSerdes: slowSerdes(),
+      }),
+    );
+
+    expect(submitRanBeforeReturn).toBe(true);
+    expect(response).toEqual({ Status: InvocationStatus.PENDING });
+  });
+
+  it("parallel: runs the next step before suspending, on the execution path", async () => {
+    const { response, submitRanBeforeReturn } = await run((context) =>
+      context.parallel("slow", [async () => "a", async () => "b"], {
+        itemSerdes: slowSerdes(),
+      }),
+    );
+
+    expect(submitRanBeforeReturn).toBe(true);
+    expect(response).toEqual({ Status: InvocationStatus.PENDING });
+  });
+
+  it("waitForCallback: runs the next step before suspending, on replay", async () => {
+    const { response, submitRanBeforeReturn } = await run(
+      async (context) => {
+        await context.step("fast", async () => "fast");
+        return await context.waitForCallback("slow", async () => {}, {
+          serdes: slowSerdes(),
+        });
+      },
+      [
+        completedFastStep,
+        // The child context stores the raw callback string through the default
+        // JSON serdes. waitForCallback then deserializes that string itself.
+        completedOp("3", {
+          Type: OperationType.CONTEXT,
+          SubType: OperationSubType.WAIT_FOR_CALLBACK,
+          Name: "slow",
+          ContextDetails: {
+            Result: JSON.stringify(JSON.stringify("value")),
+          },
+        }),
+      ],
+    );
+
+    expect(submitRanBeforeReturn).toBe(true);
+    expect(response).toEqual({ Status: InvocationStatus.PENDING });
+  });
+
+  it("reports a deserializer that fails slowly instead of suspending", async () => {
+    // Before, the suspension won the race against a failure slower than the
+    // cooldown, so the invocation returned PENDING and the failure was lost.
+    const failingSerdes: Serdes<string> = {
+      serialize: async (value) => JSON.stringify(value),
+      deserialize: async () => {
+        await new Promise((resolve) =>
+          setTimeout(resolve, DESERIALIZE_DELAY_MS),
+        );
+        throw new Error("storage unavailable");
+      },
+    };
+
+    await expect(
+      run((context) =>
+        context.step("slow", async () => "value", { serdes: failingSerdes }),
+      ),
+    ).rejects.toThrow(SerdesFailedError);
   });
 });

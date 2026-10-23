@@ -13,6 +13,10 @@ import { Checkpoint } from "./checkpoint-helper";
  * invocation could suspend before the code after the operation runs. The
  * code that would unblock the waiting operation would then never run.
  *
+ * While `work` runs, the invocation cannot suspend, even if nothing awaits
+ * the operation. So `work` that never settles keeps the invocation open until
+ * the Lambda timeout.
+ *
  * @param metadata - Required when the operation is not tracked yet, for
  * example when a completed result is replayed.
  */
