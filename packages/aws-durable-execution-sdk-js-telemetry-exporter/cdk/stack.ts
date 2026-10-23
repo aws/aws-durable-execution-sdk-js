@@ -340,6 +340,7 @@ export class TelemetryDestinationsStack extends cdk.Stack {
                 type: "array<struct<id:string,name:string,type:string,subtype:string,parentid:string,status:string,starttime:string,endtime:string,durationms:bigint,attempt:int,error:struct<name:string,message:string>,result:string,truncated:boolean>>",
               },
               { name: "truncated", type: "boolean" },
+              { name: "droppedcauses", type: "boolean" },
               { name: "droppedoperations", type: "int" },
               { name: "droppedinput", type: "boolean" },
               { name: "droppedoutput", type: "boolean" },

@@ -232,8 +232,9 @@ export interface DurableExecutionTelemetryConfig {
  * An error as written in a record: the execution-level `error`, every
  * `operations[].error`, and every `operationsByName.<name>.error`.
  *
- * Keys are written in the order `name`, `message`, `cause`. `name` is the
- * error's own `name`, unchanged; error names are not aligned across SDK
+ * Keys are written in the order `name`, `message`, `cause`. `name` and
+ * `message` are the error's own values, capped at 8,192 code points (a longer
+ * value is cut and followed by `…`); error names are not aligned across SDK
  * languages. `cause` is present only when the error has one (`Error.cause`, or
  * the cause the SDK built when it rebuilt the error from a checkpoint), has the
  * same shape, and is cut after 16 levels or at a cause already written.
