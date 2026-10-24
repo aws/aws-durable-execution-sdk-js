@@ -23,8 +23,11 @@ const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 const slowItemSerdes = {
-  serialize: async (value: unknown): Promise<string> => JSON.stringify(value),
-  deserialize: async (data: string | undefined): Promise<number> => {
+  serialize: async (value: number | undefined): Promise<string | undefined> =>
+    JSON.stringify(value),
+  deserialize: async (
+    data: string | undefined,
+  ): Promise<number | undefined> => {
     await sleep(5);
     return data === undefined ? undefined : JSON.parse(data);
   },

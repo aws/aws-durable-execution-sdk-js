@@ -926,12 +926,62 @@ Resources:
           AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
     Metadata:
       SkipBuild: "True"
+  MapConcurrencySlotHeldUntilSettled:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: MapConcurrencySlotHeldUntilSettled-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: map-concurrency-slot-held-until-settled.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      Environment:
+        Variables:
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+    Metadata:
+      SkipBuild: "True"
   MapCustomSummaryGeneratorReplay:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: MapCustomSummaryGeneratorReplay-22x-NodeJS-Local
       CodeUri: ./dist
       Handler: map-custom-summary-generator-replay.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      Environment:
+        Variables:
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+    Metadata:
+      SkipBuild: "True"
+  MapEarlyCompletionSuspends:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: MapEarlyCompletionSuspends-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: map-early-completion-suspends.handler
       Runtime: nodejs22.x
       Architectures:
         - x86_64
@@ -1007,6 +1057,31 @@ Resources:
       FunctionName: MapErrorTypePreservationAcrossReplay-22x-NodeJS-Local
       CodeUri: ./dist
       Handler: map-error-type-preservation-replay.handler
+      Runtime: nodejs22.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 60
+      DurableConfig:
+        ExecutionTimeout: 60
+        RetentionPeriodInDays: 7
+      Role:
+        Fn::GetAtt:
+          - DurableFunctionRole
+          - Arn
+      Environment:
+        Variables:
+          DURABLE_VERBOSE_MODE: "false"
+          DURABLE_EXAMPLES_VERBOSE: "true"
+          AWS_ENDPOINT_URL_LAMBDA: http://host.docker.internal:5000
+    Metadata:
+      SkipBuild: "True"
+  MapFailFastHistoryAgreement:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: MapFail-FastHistoryAgreement-22x-NodeJS-Local
+      CodeUri: ./dist
+      Handler: map-fail-fast-history-agreement.handler
       Runtime: nodejs22.x
       Architectures:
         - x86_64

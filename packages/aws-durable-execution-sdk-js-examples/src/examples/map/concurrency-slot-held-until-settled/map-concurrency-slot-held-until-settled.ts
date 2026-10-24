@@ -36,9 +36,12 @@ export const handler = withDurableExecution(
       {
         maxConcurrency: 1,
         itemSerdes: {
-          serialize: async (value: number): Promise<string> =>
-            JSON.stringify(value),
-          deserialize: async (data: string | undefined): Promise<number> => {
+          serialize: async (
+            value: number | undefined,
+          ): Promise<string | undefined> => JSON.stringify(value),
+          deserialize: async (
+            data: string | undefined,
+          ): Promise<number | undefined> => {
             await sleep(20);
             running--;
             return data === undefined ? undefined : JSON.parse(data);
