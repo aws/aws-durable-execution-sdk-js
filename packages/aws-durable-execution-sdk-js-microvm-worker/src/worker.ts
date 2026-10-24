@@ -341,8 +341,9 @@ export interface MicrovmWorkerListener {
  *
  * A second delivery of a callback ID is answered like the first and ignored,
  * while that job runs and after it ended. The listener remembers the last
- * 1,000 finished callback IDs. So a retried delivery runs a job once, unless
- * more than 1,000 other jobs ended in between, or the worker process
+ * 1,000 finished callback IDs. When a job ends and the listener already holds
+ * 1,000 IDs, it removes the oldest one. So a retried delivery runs a job once,
+ * unless at least 1,000 other jobs ended in between, or the worker process
  * restarted.
  *
  * A document that does not match the contract gets HTTP 400. If the document
