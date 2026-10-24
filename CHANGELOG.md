@@ -126,6 +126,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `map` and `parallel` now decide to complete at the moment an item records its terminal
+  outcome, not when the item's promise settles. Before, an item that recorded `SUCCEEDED` in the
+  same turn as a failing sibling could still be reported `STARTED`. Its child context showed
+  `SUCCEEDED` in the execution history, so the history and the `BatchResult` disagreed
+  ([#967](https://github.com/aws/aws-durable-execution-sdk-js/issues/967)). The cause: an item
+  settles only after plugin hooks and deserialization, and that work is longer on the success
+  path. Now, when the batch decides to complete, it stops later item checkpoints in the same
+  turn. An item that finishes after the decision stays `STARTED` in the history and in the
+  result. The same holds for `minSuccessful` and `shouldComplete`. The outcome no longer depends
+  on how long deserialization or plugin hooks take. A slow serializer still delays an item's
+  outcome, because the result is serialized before it is recorded. For `NestingType.FLAT`
+  items the agreement covers their step records, because a FLAT item writes no context record.
+  One visible change: items that finish after the decision no longer write `ContextSucceeded` or
+  later step events. An item still holds its `maxConcurrency` slot until its promise settles. The
+  decision can now come before an earlier item settles and frees its slot. So a batch with
+  `maxConcurrency` can complete before it starts one more item that it used to start and report
+  as `STARTED`. The `map-completion-config-issue` example now reports 3 items instead of 4.
+- After a `map` or `parallel` completed early, a `wait` or callback later in the handler could
+  fail to suspend the invocation. A step still running in an abandoned item tries to checkpoint
+  its result. The SDK drops that checkpoint, because the batch has completed. Before, the step
+  then stayed `EXECUTING` for the rest of the invocation, and an `EXECUTING` operation blocks
+  suspension. So the invocation ran until the Lambda timeout. Now, when the SDK drops a step's
+  awaited result checkpoint, it marks that step completed. A child context is not affected,
+  because it does not wait for its checkpoint and stays running until it settles.
+
 - **Durable Execution Telemetry CDK stack**: `cdk synth` and `cdk deploy` check
   `destinations.aurora.engineVersion` against the Aurora PostgreSQL versions RDS offers in the
   target region, and fail before anything is created. Before, an unsupported version failed only

@@ -40,6 +40,7 @@ import {
   toOperationInfo,
 } from "../../utils/operation/operation";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
+import { notifyChildTerminal } from "./child-terminal-listener";
 
 import { CHECKPOINT_SIZE_LIMIT_BYTES } from "../../utils/constants/constants";
 
@@ -222,6 +223,22 @@ export const handleCompletedChildContext = async <
   const stepData = context.getStepData(entityId);
   const result = stepData?.ContextDetails?.Result;
 
+  // The terminal outcome is already recorded by an earlier invocation. A
+  // FAILED context and a small SUCCEEDED payload return that outcome as is, so
+  // they report it before any await. A ReplayChildren context re-runs its
+  // function to rebuild the result, and the re-run can still throw. So it
+  // reports only after the re-run returns, and a batch never decides on an
+  // outcome that can still change.
+  if (
+    stepData?.Status === OperationStatus.FAILED ||
+    !stepData?.ContextDetails?.ReplayChildren
+  ) {
+    notifyChildTerminal(
+      options,
+      stepData?.Status === OperationStatus.FAILED ? "FAILED" : "SUCCEEDED",
+    );
+  }
+
   // Keeps this context EXECUTING while the result goes through the serdes, so
   // the invocation cannot suspend before the caller's next line runs.
   const whileExecuting = <R>(work: () => Promise<R>): Promise<R> =>
@@ -280,6 +297,7 @@ export const handleCompletedChildContext = async <
       undefined,
       stepName,
     );
+    notifyChildTerminal(options, "SUCCEEDED");
 
     // Large payloads re-execute the child function on replay, so apply the
     // same serdes round-trip first-run uses, keeping the returned value
@@ -533,6 +551,11 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         ContextOptions: replayChildren ? { ReplayChildren: true } : undefined,
         Name: name,
       });
+      // Report the outcome in the same synchronous turn that queued the
+      // checkpoint. A batch that decides to complete in this turn closes its
+      // descendant-checkpoint gate, so the checkpoint and the batch result
+      // agree on which items finished.
+      notifyChildTerminal(options, "SUCCEEDED");
       const currentStepData = context.getStepData(entityId);
       const onOperationEndInfo = toOperationInfo(currentStepData);
       backfillOperationInfo(onOperationEndInfo, opInfo);
@@ -547,6 +570,8 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         name,
       });
     } else {
+      // A virtual context queues no checkpoint. Report at the same point.
+      notifyChildTerminal(options, "SUCCEEDED");
       log("✅", "Virtual child context completed successfully:", {
         entityId,
         name,
@@ -615,6 +640,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
           preserveChildDepth >= 1 ? { ReplayChildren: true } : undefined,
         Name: name,
       });
+      notifyChildTerminal(options, "FAILED");
       const currentStepData = context.getStepData(entityId);
       const onOperationEndInfo = toOperationInfo(currentStepData);
       backfillOperationInfo(onOperationEndInfo, opInfo);
@@ -625,6 +651,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         error: reconstructedError,
       });
     } else {
+      notifyChildTerminal(options, "FAILED");
       await plugin.onOperationEnd?.({
         ...opInfo,
         status: PluginOperationStatus.FAILED,

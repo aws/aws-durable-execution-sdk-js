@@ -28,6 +28,8 @@ import { AnySerdes } from "../../utils/serdes/serdes";
 import { ChildContextError } from "../../errors/durable-error/durable-error";
 import { TerminationManager } from "../../termination-manager/termination-manager";
 import { TerminationReason } from "../../termination-manager/types";
+import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import { withChildTerminalListener } from "../run-in-child-context-handler/child-terminal-listener";
 
 /**
  * Valid {@link CompletionReason} values, used to validate a reason read back
@@ -112,10 +114,16 @@ function validateMaxConcurrency(
 }
 
 export class ConcurrencyController<Logger extends DurableLogger> {
+  /**
+   * @param closeItemCheckpoints - Stops every later checkpoint of a descendant
+   * of the batch context. The controller calls it when it decides to complete
+   * the batch. See executeItemsConcurrently.
+   */
   constructor(
     private readonly operationName: string,
 
     private readonly getDefaultSerdes?: () => AnySerdes,
+    private readonly closeItemCheckpoints?: (batchEntityId: string) => void,
   ) {}
 
   /**
@@ -279,6 +287,8 @@ export class ConcurrencyController<Logger extends DurableLogger> {
       executor,
       parentContext,
       config,
+      entityId,
+      executionContext,
     );
   }
 
@@ -672,17 +682,65 @@ export class ConcurrencyController<Logger extends DurableLogger> {
     return new BatchResultImpl(resultItems, completionReason);
   }
 
+  /**
+   * Runs the items and decides when the batch completes.
+   *
+   * An item counts as finished when its child context records its terminal
+   * outcome, not when its promise settles. The two moments differ:
+   *
+   * 1. A child context queues its terminal checkpoint.
+   * 2. It then runs plugin hooks and deserializes its result.
+   * 3. Only then does its promise settle.
+   *
+   * Step 2 is longer on the success path than on the failure path. So when
+   * several items finish in the same turn, a failure settles first. If the
+   * batch decided on settlement, items that had already checkpointed SUCCEEDED
+   * would be reported STARTED, while history showed them SUCCEEDED (issue
+   * #967).
+   *
+   * A child context serializes its result before step 1. So a slow
+   * serializer delays the report, and can move an item after the decision.
+   *
+   * So the controller decides on the terminal report from
+   * withChildTerminalListener. At the decision it does two things in the same
+   * synchronous turn:
+   *
+   * - It closes the checkpoint gate of the batch context. After that, no item
+   *   can queue a terminal checkpoint. An item that finishes later stays
+   *   STARTED in history and in the result.
+   * - It keeps every item that already reported. It waits for those items'
+   *   promises to settle, to get their results, and then resolves.
+   *
+   * So history and the result agree on which items finished. The outcome does
+   * not depend on how long deserialization or plugin hooks take.
+   *
+   * An item keeps its concurrency slot until its promise settles, because it
+   * still runs code until then. So the decision uses the report, and slot
+   * release uses settlement.
+   *
+   * An item whose promise settles without a report (an unexpected path) is
+   * treated as reporting at settlement.
+   *
+   * A batch can resume after an earlier invocation ended between the item
+   * checkpoints and the batch checkpoint. Then several items already have a
+   * terminal record. Those items reported before that invocation's decision,
+   * because the gate drops every later item checkpoint. But they report again
+   * here in index order, not in their original order. So the controller does
+   * not decide until every item with a terminal record has reported. It still
+   * starts items in index order and within maxConcurrency.
+   */
   private async executeItemsConcurrently<T, R>(
     items: ConcurrentExecutionItem<T>[],
     executor: ConcurrentExecutor<T, R, Logger>,
     parentContext: DurableContext<Logger>,
     config: ConcurrencyConfig<R>,
+    batchEntityId?: string,
+    executionContext?: ExecutionContext,
   ): Promise<BatchResult<R>> {
     const maxConcurrency = config.maxConcurrency || Infinity;
     const resultItems: Array<BatchItem<R> | undefined> = new Array(
       items.length,
     );
-    const startedItems = new Set<number>();
 
     let activeCount = 0;
     let currentIndex = 0;
@@ -781,22 +839,209 @@ export class ConcurrencyController<Logger extends DurableLogger> {
         );
       };
 
+      // Per-item outcome, set at the item's terminal report. Undefined means
+      // the item has not reported.
+      const reportedStatus: Array<BatchItemStatus | undefined> = new Array(
+        items.length,
+      );
+      // Per-item settled result or error, set when the item's promise settles.
+      const settledItems: Array<BatchItem<R> | undefined> = new Array(
+        items.length,
+      );
+      let decided = false;
+      let resolved = false;
+
+      // Items whose child context already has a terminal record from an
+      // earlier invocation. Items start in index order, so item i is the
+      // child entity `${batchEntityId}-${i + 1}`, as in replayItems. A FLAT
+      // item has no context record, so it is not in this set.
+      const recordedTerminal = new Set<number>();
+      if (
+        batchEntityId !== undefined &&
+        executionContext !== undefined &&
+        config.nesting !== NestingType.FLAT
+      ) {
+        for (let i = 0; i < items.length; i++) {
+          const status = executionContext.getStepData(
+            `${batchEntityId}-${i + 1}`,
+          )?.Status;
+          if (
+            status === OperationStatus.SUCCEEDED ||
+            status === OperationStatus.FAILED
+          ) {
+            recordedTerminal.add(i);
+          }
+        }
+      }
+      // The recorded items that have not reported yet.
+      let unreportedRecorded = recordedTerminal.size;
+      const reconciling = (): boolean => unreportedRecorded > 0;
+      // The items that reported before the decision. Only these are reported
+      // as finished.
+      let finishedAtDecision: number[] = [];
+
+      const resolveBatch = (): void => {
+        // An item can settle with a different outcome than it reported. The
+        // child context reports only outcomes that can no longer change, so
+        // this is a defensive path. The settled outcome is what the caller
+        // receives. So the counts and the completion reason are recomputed
+        // from it.
+        successCount = 0;
+        failureCount = 0;
+        for (const i of finishedAtDecision) {
+          resultItems[i] = settledItems[i];
+          if (settledItems[i]!.status === BatchItemStatus.SUCCEEDED) {
+            successCount++;
+          } else {
+            failureCount++;
+          }
+        }
+
+        // Convert sparse array to dense array - items are already in correct order by index
+        // Include all items that were started (have a value in resultItems)
+        // Create shallow copy to prevent mutations from affecting the returned result
+        const finalBatchItems: BatchItem<R>[] = [];
+        for (let i = 0; i < resultItems.length; i++) {
+          if (resultItems[i] === undefined) {
+            continue;
+          }
+          finalBatchItems.push(
+            reportedStatus[i] !== undefined
+              ? { ...settledItems[i]! }
+              : { index: i, status: BatchItemStatus.STARTED },
+          );
+        }
+
+        log("🎉", `${this.operationName} completed:`, {
+          successCount,
+          failureCount,
+          startedCount: finalBatchItems.filter(
+            (item) => item.status === BatchItemStatus.STARTED,
+          ).length,
+          totalCount: finalBatchItems.length,
+        });
+
+        resolve(
+          new BatchResultImpl(
+            finalBatchItems,
+            getCompletionReason(failureCount),
+          ),
+        );
+      };
+
+      const resolveWhenSettled = (): void => {
+        if (!decided || resolved) {
+          return;
+        }
+        if (finishedAtDecision.some((i) => settledItems[i] === undefined)) {
+          return;
+        }
+        resolved = true;
+        resolveBatch();
+      };
+
+      const decide = (): void => {
+        decided = true;
+        // Same synchronous turn as the report that triggered the decision, so
+        // no other item can queue a terminal checkpoint in between.
+        if (batchEntityId !== undefined) {
+          this.closeItemCheckpoints?.(batchEntityId);
+        }
+        finishedAtDecision = [];
+        for (let i = 0; i < reportedStatus.length; i++) {
+          if (reportedStatus[i] !== undefined) {
+            finishedAtDecision.push(i);
+          }
+        }
+        resolveWhenSettled();
+      };
+
+      const onTerminal = (index: number, status: BatchItemStatus): void => {
+        if (decided || reportedStatus[index] !== undefined) {
+          // A report after the decision: the item stays STARTED.
+          return;
+        }
+        reportedStatus[index] = status;
+        // Holds only the status until the item settles, so a custom
+        // shouldComplete predicate sees which items finished.
+        resultItems[index] = { index, status };
+        completedCount++;
+        if (status === BatchItemStatus.SUCCEEDED) {
+          successCount++;
+        } else {
+          failureCount++;
+        }
+        if (recordedTerminal.has(index)) {
+          unreportedRecorded--;
+        }
+
+        if (!reconciling() && (isComplete() || !shouldContinue())) {
+          decide();
+        }
+      };
+
+      // A listener runs inside the child context's own code. Moving an
+      // exception from a custom shouldComplete predicate there would turn it
+      // into that item's failure. So it surfaces as an unhandled rejection,
+      // as it does when the predicate runs in a promise callback.
+      const reportTerminal = (index: number, status: BatchItemStatus): void => {
+        try {
+          onTerminal(index, status);
+        } catch (error) {
+          void Promise.reject(error);
+        }
+      };
+
+      const onSettled = (index: number, item: BatchItem<R>): void => {
+        settledItems[index] = item;
+        activeCount--;
+        if (reportedStatus[index] === undefined) {
+          onTerminal(index, item.status);
+        } else if (!decided && reportedStatus[index] !== item.status) {
+          // The item settled with a different outcome than it reported.
+          // Correct the counts before deciding whether to start the next item.
+          // After a decision the gate is closed, so resolveBatch recounts.
+          reportedStatus[index] = item.status;
+          resultItems[index] = { index, status: item.status };
+          if (item.status === BatchItemStatus.SUCCEEDED) {
+            successCount++;
+            failureCount--;
+          } else {
+            failureCount++;
+            successCount--;
+          }
+        }
+        // Re-check completion on every settlement, as main does. The other
+        // items' statuses can have changed since this item reported: an item
+        // that finished in an earlier invocation reports before the next item
+        // starts, and a custom shouldComplete predicate can depend on that
+        // next item being STARTED.
+        if (!decided && !reconciling() && (isComplete() || !shouldContinue())) {
+          decide();
+        }
+        if (decided) {
+          resolveWhenSettled();
+        } else {
+          tryStartNext();
+        }
+      };
+
       const tryStartNext = (): void => {
         while (
+          !decided &&
           activeCount < maxConcurrency &&
           currentIndex < items.length &&
-          shouldContinue()
+          (reconciling() || shouldContinue())
         ) {
           const index = currentIndex++;
           const item = items[index];
 
-          startedItems.add(index);
           activeCount++;
 
           // Set STARTED status immediately in result array
           resultItems[index] = { index, status: BatchItemStatus.STARTED };
 
-          log("▶️", `Starting ${this.operationName} item:`, {
+          log("▶", `Starting ${this.operationName} item:`, {
             index,
             itemId: item.id,
             itemName: item.name,
@@ -806,26 +1051,33 @@ export class ConcurrencyController<Logger extends DurableLogger> {
             .runInChildContext(
               item.name || item.id,
               (childContext) => executor(item, childContext),
-              {
-                subType: config.iterationSubType,
-                serdes: config.itemSerdes,
-                virtualContext: config.nesting === NestingType.FLAT,
-              },
+              withChildTerminalListener<R>(
+                {
+                  subType: config.iterationSubType,
+                  serdes: config.itemSerdes,
+                  virtualContext: config.nesting === NestingType.FLAT,
+                },
+                (outcome) =>
+                  reportTerminal(
+                    index,
+                    outcome === "SUCCEEDED"
+                      ? BatchItemStatus.SUCCEEDED
+                      : BatchItemStatus.FAILED,
+                  ),
+              ),
             )
             .then(
               (result) => {
-                resultItems[index] = {
-                  result,
-                  index,
-                  status: BatchItemStatus.SUCCEEDED,
-                };
-                successCount++;
                 log("✅", `${this.operationName} item completed:`, {
                   index,
                   itemId: item.id,
                   itemName: item.name,
                 });
-                onComplete();
+                onSettled(index, {
+                  result,
+                  index,
+                  status: BatchItemStatus.SUCCEEDED,
+                });
               },
               (error) => {
                 const err =
@@ -835,55 +1087,19 @@ export class ConcurrencyController<Logger extends DurableLogger> {
                         error instanceof Error ? error.message : String(error),
                         error instanceof Error ? error : undefined,
                       );
-                resultItems[index] = {
-                  error: err,
-                  index,
-                  status: BatchItemStatus.FAILED,
-                };
-                failureCount++;
                 log("❌", `${this.operationName} item failed:`, {
                   index,
                   itemId: item.id,
                   itemName: item.name,
                   error: err.message,
                 });
-                onComplete();
+                onSettled(index, {
+                  error: err,
+                  index,
+                  status: BatchItemStatus.FAILED,
+                });
               },
             );
-        }
-      };
-
-      const onComplete = (): void => {
-        activeCount--;
-        completedCount++;
-
-        if (isComplete() || !shouldContinue()) {
-          // Convert sparse array to dense array - items are already in correct order by index
-          // Include all items that were started (have a value in resultItems)
-          // Create shallow copy to prevent mutations from affecting the returned result
-          const finalBatchItems: BatchItem<R>[] = [];
-          for (let i = 0; i < resultItems.length; i++) {
-            if (resultItems[i] !== undefined) {
-              finalBatchItems.push({ ...resultItems[i]! });
-            }
-          }
-
-          log("🎉", `${this.operationName} completed:`, {
-            successCount,
-            failureCount,
-            startedCount: finalBatchItems.filter(
-              (item) => item.status === BatchItemStatus.STARTED,
-            ).length,
-            totalCount: finalBatchItems.length,
-          });
-
-          const result = new BatchResultImpl(
-            finalBatchItems,
-            getCompletionReason(failureCount),
-          );
-          resolve(result);
-        } else {
-          tryStartNext();
         }
       };
 
@@ -894,7 +1110,7 @@ export class ConcurrencyController<Logger extends DurableLogger> {
         tryStartNext();
         // A custom shouldComplete predicate can signal completion before any
         // item is started (e.g. it returns true at zero progress). In that
-        // case no item will ever call onComplete, so resolve here to avoid
+        // case no item will ever report or settle, so resolve here to avoid
         // hanging forever.
         if (activeCount === 0 && completedCount === 0) {
           resolve(new BatchResultImpl([], getCompletionReason(0)));
@@ -909,6 +1125,7 @@ export const createConcurrentExecutionHandler = <Logger extends DurableLogger>(
   runInChildContext: DurableContext<Logger>["runInChildContext"],
 
   getDefaultSerdes?: () => AnySerdes,
+  checkpoint?: Pick<Checkpoint, "markAncestorFinished">,
 ) => {
   return <TItem, TResult>(
     nameOrItems: string | undefined | ConcurrentExecutionItem<TItem>[],
@@ -991,6 +1208,10 @@ export const createConcurrentExecutionHandler = <Logger extends DurableLogger>(
         const concurrencyController = new ConcurrencyController<Logger>(
           "concurrent-execution",
           getDefaultSerdes,
+          checkpoint
+            ? (batchEntityId): void =>
+                checkpoint.markAncestorFinished(batchEntityId)
+            : undefined,
         );
 
         // Access durableExecutionMode from the context - it's set by runInChildContext

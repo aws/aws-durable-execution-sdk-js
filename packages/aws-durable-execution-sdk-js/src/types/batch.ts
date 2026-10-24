@@ -40,9 +40,11 @@ export enum BatchItemStatus {
   SUCCEEDED = "SUCCEEDED",
   FAILED = "FAILED",
   /**
-   * Item was still in flight when the batch completed early. Observability
-   * only and not guaranteed to survive suspend/resume reconstruction — see
-   * {@link BatchResult.started}.
+   * Item was still in flight when the batch completed early. An item counts
+   * as finished only if it recorded its outcome before the batch decided to
+   * complete. An item that finishes after the decision stays STARTED, here
+   * and in the execution history. Observability only and not guaranteed to
+   * survive suspend/resume reconstruction — see {@link BatchResult.started}.
    */
   STARTED = "STARTED",
 }

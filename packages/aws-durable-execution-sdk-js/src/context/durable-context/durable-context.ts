@@ -792,6 +792,7 @@ export class DurableContextImpl<Logger extends DurableLogger>
         this._executionContext,
         this.runInChildContext.bind(this),
         () => this._defaultSerdes,
+        this.checkpoint,
       );
       const promise = concurrentExecutionHandler(
         nameOrItems,
