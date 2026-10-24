@@ -526,7 +526,6 @@ function buildOperationRecords(
  * Exports durable execution telemetry records to CloudWatch Logs via console.log.
  * Since Lambda sends stdout to the function's CloudWatch log group,
  * this requires no additional IAM permissions or configuration.
- * @experimental This class is experimental and may change in future releases.
  */
 export class LambdaLogExporter implements TelemetryExporter {
   /** CloudWatch Logs caps a single log event at 256 KB. */
@@ -1249,8 +1248,6 @@ class DurableExecutionTelemetryInvocation
  * the instance it returns, so config resolution, the exporters and the export
  * scheduler are shared by the whole execution environment while every
  * execution's own state is confined to an object that dies with its invocation.
- *
- * @experimental This function is experimental and may change in future releases.
  */
 export function durableExecutionTelemetry(
   config: DurableExecutionTelemetryConfig,
