@@ -4,6 +4,7 @@ import {
   Operation,
   OperationStatus,
   OperationType,
+  OperationAction,
 } from "../../types/wire";
 import { DurableExecutionClient } from "../../types/durable-execution";
 import { log } from "../logger/logger";
@@ -343,7 +344,7 @@ export class CheckpointManager implements Checkpoint {
     // Check if any ancestor is finished - if so, don't queue and don't resolve
     if (this.hasFinishedAncestor(stepId)) {
       log("⚠️", "Checkpoint skipped - ancestor already finished:", { stepId });
-      this.releaseAbandonedOperation(stepId);
+      this.releaseAbandonedOperation(stepId, data);
       return new Promise(() => {}); // Never resolves when ancestor is finished
     }
 
@@ -915,23 +916,49 @@ export class CheckpointManager implements Checkpoint {
 
   /**
    * Stops counting an operation as EXECUTING after its checkpoint was dropped
-   * because an ancestor finished.
+   * because an ancestor finished, when the operation is parked on that
+   * checkpoint.
    *
    * 1. The dropped checkpoint returns a promise that never settles.
-   * 2. A step awaits that promise while it is EXECUTING. So it would stay
-   *    EXECUTING for the rest of the invocation.
+   * 2. A step or waitForCondition awaits its SUCCEED, FAIL or RETRY checkpoint
+   *    while it is EXECUTING. So it would stay EXECUTING for the rest of the
+   *    invocation.
    * 3. Rule 4 of shouldTerminate blocks suspension while any operation is
    *    EXECUTING. Rule 5 cleans up only waiting and idle operations.
    * 4. So a later wait or callback could not suspend the invocation, and the
    *    invocation would run until the Lambda timeout.
    *
-   * The finished ancestor never reads this operation's outcome. So the
+   * The finished ancestor never reads this operation's outcome. So the parked
    * operation is marked COMPLETED. It stays in the map, so a later
    * markOperationState call for it still finds its metadata.
+   *
+   * Two kinds of caller do not wait for the checkpoint. They keep running, so
+   * they must stay EXECUTING until they settle (AGENTS.md invariants 1 and 2):
+   *
+   * - A child context queues every checkpoint without waiting, then runs
+   *   plugin hooks and deserializes its result. Its own code marks it
+   *   COMPLETED when it settles.
+   * - A START checkpoint is queued without waiting by a step or
+   *   waitForCondition that then runs its function.
+   *
+   * So only the awaited actions of non-context operations are released.
    */
-  private releaseAbandonedOperation(stepId: string): void {
+  private releaseAbandonedOperation(
+    stepId: string,
+    data: Partial<OperationUpdate>,
+  ): void {
     const op = this.operations.get(stepId);
     if (op?.state !== OperationLifecycleState.EXECUTING) {
+      return;
+    }
+    if (op.metadata.type === OperationType.CONTEXT) {
+      return;
+    }
+    if (
+      data.Action !== OperationAction.SUCCEED &&
+      data.Action !== OperationAction.FAIL &&
+      data.Action !== OperationAction.RETRY
+    ) {
       return;
     }
     this.markOperationState(stepId, OperationLifecycleState.COMPLETED);

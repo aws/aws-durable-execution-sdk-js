@@ -210,11 +210,31 @@ describe("ConcurrencyController decides on terminal reports (issue #967)", () =>
     expect(result.completionReason).toBe("MIN_SUCCESSFUL_REACHED");
   });
 
-  it("counts the settled outcome when an item settles differently than it reported", async () => {
+  it("does not start the next item when an item settles as a failure after reporting SUCCEEDED", async () => {
     const controller = new ConcurrencyController<DurableLogger>("test");
-    // Item 0 reports SUCCEEDED and then rejects. This happens when an item
-    // finished in an earlier invocation with ReplayChildren: it reports at
-    // once, then its function is re-run and throws.
+    // Defensive path: child contexts report only final outcomes.
+    const { parent, started } = createScriptedParent(["FAILED", "SUCCEEDED"]);
+
+    const promise = controller.executeItems(itemsOf(2), jest.fn(), parent, {
+      maxConcurrency: 1,
+    });
+    started[0].report("SUCCEEDED");
+    started[0].settle();
+
+    const result = await promise;
+    // The settled failure makes the default fail-fast batch complete before
+    // item 1 starts.
+    expect(started).toHaveLength(1);
+    expect(result.all.map((item) => item.status)).toEqual([
+      BatchItemStatus.FAILED,
+    ]);
+    expect(result.completionReason).toBe("FAILURE_TOLERANCE_EXCEEDED");
+  });
+
+  it("counts the settled outcome when an item settles differently than it reported after the decision", async () => {
+    const controller = new ConcurrencyController<DurableLogger>("test");
+    // Defensive path: child contexts report only final outcomes. Item 0
+    // reports SUCCEEDED and then rejects, after item 1's report decided.
     const { parent, started } = createScriptedParent(["FAILED", "SUCCEEDED"]);
 
     const promise = controller.executeItems(itemsOf(2), jest.fn(), parent, {});

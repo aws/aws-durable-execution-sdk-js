@@ -845,11 +845,11 @@ export class ConcurrencyController<Logger extends DurableLogger> {
       let finishedAtDecision: number[] = [];
 
       const resolveBatch = (): void => {
-        // An item can settle with a different outcome than it reported. One
-        // case: an item that finished in an earlier invocation with
-        // ReplayChildren reports SUCCEEDED, then its function is re-run and
-        // throws. The settled outcome is what the caller receives. So the
-        // counts and the completion reason are recomputed from it.
+        // An item can settle with a different outcome than it reported. The
+        // child context reports only outcomes that can no longer change, so
+        // this is a defensive path. The settled outcome is what the caller
+        // receives. So the counts and the completion reason are recomputed
+        // from it.
         successCount = 0;
         failureCount = 0;
         for (const i of finishedAtDecision) {
@@ -958,6 +958,22 @@ export class ConcurrencyController<Logger extends DurableLogger> {
         activeCount--;
         if (reportedStatus[index] === undefined) {
           onTerminal(index, item.status);
+        } else if (!decided && reportedStatus[index] !== item.status) {
+          // The item settled with a different outcome than it reported.
+          // Correct the counts before deciding whether to start the next item.
+          // After a decision the gate is closed, so resolveBatch recounts.
+          reportedStatus[index] = item.status;
+          resultItems[index] = { index, status: item.status };
+          if (item.status === BatchItemStatus.SUCCEEDED) {
+            successCount++;
+            failureCount--;
+          } else {
+            failureCount++;
+            successCount--;
+          }
+          if (isComplete() || !shouldContinue()) {
+            decide();
+          }
         }
         if (decided) {
           resolveWhenSettled();

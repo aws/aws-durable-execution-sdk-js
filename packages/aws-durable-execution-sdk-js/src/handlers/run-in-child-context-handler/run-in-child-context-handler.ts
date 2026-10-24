@@ -223,12 +223,21 @@ export const handleCompletedChildContext = async <
   const stepData = context.getStepData(entityId);
   const result = stepData?.ContextDetails?.Result;
 
-  // The terminal outcome is already recorded by an earlier invocation, so
-  // report it before any await.
-  notifyChildTerminal(
-    options,
-    stepData?.Status === OperationStatus.FAILED ? "FAILED" : "SUCCEEDED",
-  );
+  // The terminal outcome is already recorded by an earlier invocation. A
+  // FAILED context and a small SUCCEEDED payload return that outcome as is, so
+  // they report it before any await. A ReplayChildren context re-runs its
+  // function to rebuild the result, and the re-run can still throw. So it
+  // reports only after the re-run returns, and a batch never decides on an
+  // outcome that can still change.
+  if (
+    stepData?.Status === OperationStatus.FAILED ||
+    !stepData?.ContextDetails?.ReplayChildren
+  ) {
+    notifyChildTerminal(
+      options,
+      stepData?.Status === OperationStatus.FAILED ? "FAILED" : "SUCCEEDED",
+    );
+  }
 
   // Keeps this context EXECUTING while the result goes through the serdes, so
   // the invocation cannot suspend before the caller's next line runs.
@@ -288,6 +297,7 @@ export const handleCompletedChildContext = async <
       undefined,
       stepName,
     );
+    notifyChildTerminal(options, "SUCCEEDED");
 
     // Large payloads re-execute the child function on replay, so apply the
     // same serdes round-trip first-run uses, keeping the returned value

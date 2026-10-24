@@ -175,4 +175,48 @@ describe("runInChildContext reports its terminal outcome", () => {
       await promise.catch(() => undefined);
     },
   );
+
+  const replayChildrenStepData = (): void => {
+    mockExecutionContext._stepData = {
+      [hashId(TEST_CONSTANTS.CHILD_CONTEXT_ID)]: {
+        Id: hashId(TEST_CONSTANTS.CHILD_CONTEXT_ID),
+        Type: "CONTEXT",
+        Name: TEST_CONSTANTS.CHILD_CONTEXT_NAME,
+        Status: OperationStatus.SUCCEEDED,
+        ContextDetails: { Result: "", ReplayChildren: true },
+      },
+    } as never;
+  };
+
+  it("reports a ReplayChildren context only after its function is re-run", async () => {
+    replayChildrenStepData();
+
+    await runInChildContextHandler(
+      TEST_CONSTANTS.CHILD_CONTEXT_NAME,
+      async () => {
+        events.push("re-run");
+        return "rebuilt";
+      },
+      listenerOptions() as never,
+    );
+
+    expect(events).toEqual(["re-run", "listener:SUCCEEDED"]);
+  });
+
+  it("does not report a ReplayChildren context whose re-run throws", async () => {
+    replayChildrenStepData();
+
+    await expect(
+      runInChildContextHandler(
+        TEST_CONSTANTS.CHILD_CONTEXT_NAME,
+        async () => {
+          throw new Error("re-run failed");
+        },
+        listenerOptions() as never,
+      ),
+    ).rejects.toThrow("re-run failed");
+
+    // The batch counts the item from its settlement instead.
+    expect(events).toEqual([]);
+  });
 });

@@ -248,6 +248,39 @@ describe("CheckpointManager - Ancestor Functionality", () => {
         ),
       ).not.toThrow();
     });
+
+    it.each([
+      // A child context queues its checkpoints without waiting, then keeps
+      // running its plugin hooks and deserialization.
+      ["a child context SUCCEED", "CONTEXT", OperationAction.SUCCEED],
+      ["a child context FAIL", "CONTEXT", OperationAction.FAIL],
+      // A waitForCondition queues START without waiting, then runs its check.
+      ["a step START", "STEP", OperationAction.START],
+    ])(
+      "keeps an operation EXECUTING when %s is dropped, because its caller keeps running",
+      (_name, type, action) => {
+        checkpointManager.markOperationState(
+          "1-2-3",
+          OperationLifecycleState.EXECUTING,
+          {
+            metadata: {
+              stepId: "1-2-3",
+              name: "still-running",
+              type: type as never,
+              subType: OperationSubType.STEP,
+              parentId: "1-2",
+            },
+          },
+        );
+        checkpointManager.markAncestorFinished("1-2");
+
+        void checkpointManager.checkpoint("1-2-3", { Action: action });
+
+        expect(checkpointManager.getOperationState("1-2-3")).toBe(
+          OperationLifecycleState.EXECUTING,
+        );
+      },
+    );
   });
 
   describe("checkpoint with finished ancestors", () => {
