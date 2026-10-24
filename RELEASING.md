@@ -34,26 +34,40 @@ Each package maintains its own version in the `version` field of its `package.js
 
 Bump the version in the appropriate `package.json` file(s) and merge to `main` before creating a release.
 
-### Released minor versions and the next major release
+### Prepared Core 3 / OTel 2 release
 
-The published `sdk-2.7.0` release contains core **2.7.0**, OTel **1.2.0**, and
-testing **1.3.1**. The `sdk-2.7.1` patch releases core **2.7.1** and OTel
-**1.2.1** with the operation telemetry corrections from #960. The major factory
-migration retains those fixes and the current conformance handlers.
+The next coordinated release uses the versions already merged in #924:
 
-Those released core/OTel pairs include registration exclusivity from #956,
-but do not include invocation-local LMI carrier forwarding or extraction from
-#955. That carrier capability is planned for core **3.0.0** / OTel **2.0.0** in
-#924, together with per-invocation plugin factories. Until that release, it is
-available only in matched development builds containing the change; existing
-package version labels do not identify those builds.
+| Package | Version | Existing release behavior |
+| --- | --- | --- |
+| SDK | `3.0.0` | New stable version, `latest` |
+| OTel | `2.0.0` | New stable version, `latest` |
+| Testing SDK | `1.3.2` | Compatible patch with the widened Core 3 peer range, `latest` |
+| ESLint plugin | `1.1.1` | Already published, skip |
+| Telemetry Exporter | `0.1.0-alpha.0` | Renamed preview package, `beta` if not yet published |
+| Telemetry MCP | `0.1.0-alpha.0` | Renamed preview package, `beta` if not yet published |
 
-The released OTel 1.2 packages preserve their optional `>=2.4.0 <3.0.0` core
-peer, provider API version 1, and separate OTel-only layers. Core 3 uses the new
-factory contract and requires matching plugin packages/layers. Installed-package
-tests retain released-version controls and verify both the declared major-pair
-compatibility and explicit rejection of legacy providers. Version edits do not
-publish packages.
+Use the [release draft and migration guide](release-notes/sdk-3.0.0.md) for
+separate package timelines, factory migration examples, registry preflight
+results and work that is still outside the prepared source snapshot. The exact
+SDK tag is `sdk-3.0.0`; a suitable title is
+`sdk-3.0.0 / otel-2.0.0 / test-1.3.2`. Refresh the notes against the selected
+release commit before publishing the GitHub Release.
+
+The published minor pairs remain Core 2.7.0 / OTel 1.2.0 and Core 2.7.1 /
+OTel 1.2.1, with Testing SDK 1.3.1. They include registration exclusivity and the
+patch telemetry corrections, but not the invocation-local LMI carrier and
+factory migration now on `main`. Released OTel 1.x retains its optional
+`>=2.4.0 <3.0.0` Core peer and provider API v1. Core 3 requires compatible
+factory packages/layers; installed-package tests keep the released-pair controls
+and verify rejection of legacy providers.
+
+The public registry lookups made for this preparation return E404 for the two
+renamed Telemetry package names, although their old Insight names have published
+alpha versions. Their first-publication setup must be checked separately; E404
+does not establish npm publishing permissions. The existing automatic package
+list and Extras/MicroVM deferrals are unchanged. No package needs another
+version bump merely because the coordinated release is major.
 
 ## Cutting a Release
 

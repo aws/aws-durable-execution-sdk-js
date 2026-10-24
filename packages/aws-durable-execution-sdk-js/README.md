@@ -682,6 +682,9 @@ This project is licensed under the Apache-2.0 License.
 
 ## SDK 3.x plugin migration
 
+See the [2.x to 3.0 migration guide](../../docs/migration-2.x-to-3.0.md) for
+package versions, before/after examples, provider packaging, and validation.
+
 SDK 3.x requires an explicit migration from the legacy v1 provider contract.
 Providers declaring `pluginApiVersion` are rejected with `PluginLoadError` in
 both `plugins` and `DURABLE_EXECUTION_PLUGINS` registration. They are not silently

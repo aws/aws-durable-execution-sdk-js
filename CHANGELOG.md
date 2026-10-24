@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Coordinated major release preparation
+
+- Core 3.0.0, OTel 2.0.0 and Testing SDK 1.3.2 use the version metadata already
+  merged in #924. The [package-specific release draft and migration guide](release-notes/sdk-3.0.0.md)
+  distinguish included changes, preview publication behavior and open LMI work.
+
+
 ### Changed
 
 - **Breaking for plugin authors (experimental interface).** The SDK no longer waits for the
