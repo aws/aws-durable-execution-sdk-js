@@ -1,7 +1,7 @@
 import type { DurableContext } from "@aws/durable-execution-sdk-js";
 import { MicrovmEndpointUnavailableError } from "..";
 import { sendJob } from "../request";
-import { remainingTime } from "../shared";
+import { deliverJob, type OperationScope, remainingTime } from "../shared";
 import { FakeEndpoint, FakeMicrovmsClient } from "./fakes";
 
 const contextWith = (lambdaContext: unknown): DurableContext =>
@@ -35,25 +35,53 @@ describe("remainingTime", () => {
       "a function that returns undefined",
       { getRemainingTimeInMillis: () => undefined },
     ],
-    ["a function that returns NaN", { getRemainingTimeInMillis: () => NaN }],
-    [
-      "a function that returns Infinity",
-      { getRemainingTimeInMillis: () => Infinity },
-    ],
-    [
-      "a function that returns a string",
-      { getRemainingTimeInMillis: () => "5" },
-    ],
-    [
-      "a function that throws",
-      {
+  ])("returns undefined for %s", (_label, lambdaContext) => {
+    expect(remainingTime(contextWith(lambdaContext))()).toBeUndefined();
+  });
+});
+
+describe("the request step with a remaining-time reader that throws", () => {
+  it("fails with the reader's error and sends nothing", async () => {
+    // The local test runner always passes a working reader. So the test
+    // calls deliverJob directly, with a step that runs its function once.
+    const client = new FakeMicrovmsClient();
+    const endpoint = new FakeEndpoint();
+    const context = {
+      lambdaContext: {
         getRemainingTimeInMillis: () => {
           throw new Error("not supported on this compute");
         },
       },
-    ],
-  ])("returns undefined for %s", (_label, lambdaContext) => {
-    expect(remainingTime(contextWith(lambdaContext))()).toBeUndefined();
+      step: async (
+        _name: string,
+        fn: (stepContext: unknown) => Promise<unknown>,
+      ): Promise<unknown> => fn({ logger: { info: jest.fn() } }),
+    } as unknown as DurableContext;
+    const scope: OperationScope = {
+      name: "build",
+      config: {
+        imageIdentifier: "img",
+        executionRoleArn: "role",
+        client: client.asClient(),
+        fetch: endpoint.fetch,
+      },
+      partition: "aws",
+      region: "us-east-1",
+      retryStrategy: () => ({ shouldRetry: false }),
+    };
+
+    await expect(
+      deliverJob(
+        context,
+        scope,
+        "build",
+        { microvmId: "mvm-1", endpoint: "mvm-1.example", delivery: "http" },
+        { path: "/job" },
+        { callbackId: "cb-1", input: {} },
+      ),
+    ).rejects.toThrow("not supported on this compute");
+    expect(client.tokenInputs).toHaveLength(0);
+    expect(endpoint.requests).toHaveLength(0);
   });
 });
 

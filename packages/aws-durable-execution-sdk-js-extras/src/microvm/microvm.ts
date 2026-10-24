@@ -73,11 +73,12 @@ import type { MicrovmConfig, MicrovmRunHookPayload } from "./types";
  * @param config - The MicroVM, delivery, and callback configuration.
  * @returns The value that the MicroVM passed to
  * `SendDurableExecutionCallbackSuccess`, parsed as JSON.
- * @throws \{TypeError\} When `name`, `imageIdentifier`, `executionRoleArn`, or
- * `request` is invalid.
+ * @throws \{TypeError\} When `name` or `request` is invalid.
  * @throws \{RangeError\} When `timeout` is not between 1 second and 8 hours,
  * or `request.retryWindow` is not between 1 second and 10 minutes.
  * @throws \{MicrovmLaunchError\} When `RunMicrovm` fails after all retries.
+ * An empty `imageIdentifier` or `executionRoleArn` fails this way, because
+ * `RunMicrovm` rejects it with `ValidationException`.
  * @throws \{MicrovmDeliveryError\} When HTTP delivery fails after all retries,
  * or the route rejects the job. Its subclass `MicrovmNotRunningError` means
  * that CreateMicrovmAuthToken reported the MicroVM removed.

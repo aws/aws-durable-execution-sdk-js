@@ -275,26 +275,45 @@ describe("microvmSession", () => {
     expect(client.runInputs).toHaveLength(1);
   });
 
-  it("rejects an invoke without a durable context as its first argument", async () => {
-    const client = new FakeMicrovmsClient();
-    const endpoint = new FakeEndpoint();
-    const runner = runnerFor(client, endpoint, async (vm) => {
-      // The shape before the context came first: vm.invoke(name, input, options).
-      const invoke = vm.invoke as unknown as (
-        ...args: unknown[]
-      ) => Promise<unknown>;
-      return invoke("build", null, job("/job")).catch(
-        (error: Error) => `${error.name}: ${error.message}`,
-      );
-    });
+  it.each<[string, (client: FakeMicrovmsClient) => Runner, string]>([
+    [
+      "a handler that is not a function",
+      (client) =>
+        new LocalDurableTestRunner({
+          handlerFunction: withDurableExecution(
+            async (_event: unknown, context: DurableContext) =>
+              microvmSession(
+                context,
+                "pipeline",
+                sessionConfig(client, new FakeEndpoint()),
+                "not a function" as unknown as MicrovmSessionHandler<unknown>,
+              ),
+          ),
+        }) as Runner,
+      "handler is not a function",
+    ],
+    [
+      "an invoke whose first argument is not a durable context",
+      (client) =>
+        runnerFor(client, new FakeEndpoint(), async (vm) =>
+          vm.invoke({} as DurableContext, "build", null, job("/job")),
+        ),
+      "runInChildContext is not a function",
+    ],
+  ])(
+    "fails with a TypeError after the launch for %s, and terminates the MicroVM",
+    async (_label, runnerOf, message) => {
+      const client = new FakeMicrovmsClient();
 
-    const execution = await runner.run({ payload: {} });
+      const execution = await runnerOf(client).run({ payload: {} });
 
-    expect(execution.getResult()).toBe(
-      'TypeError: MicroVM session "pipeline": invoke requires the durable context to create the job in, as its first argument',
-    );
-    expect(endpoint.requests).toHaveLength(0);
-  });
+      expect(execution.getStatus()).toBe("FAILED");
+      expect(execution.getError()?.errorMessage).toContain(message);
+      expect(client.runInputs).toHaveLength(1);
+      expect(client.terminateInputs).toEqual([{ microvmIdentifier: "mvm-1" }]);
+      expect(client.tokenInputs).toHaveLength(0);
+    },
+  );
 
   it("lets the handler catch a failed job and continue on the same MicroVM", async () => {
     const client = new FakeMicrovmsClient();
@@ -429,7 +448,6 @@ describe("microvmSession", () => {
 
   it.each<[string, Partial<MicrovmSessionConfig>, string]>([
     ["a timeout above 8 hours", { timeout: { hours: 9 } }, "timeout must be"],
-    ["an empty image", { imageIdentifier: "" }, "imageIdentifier is required"],
   ])(
     "rejects %s before any durable operation",
     async (_label, overrides, message) => {
