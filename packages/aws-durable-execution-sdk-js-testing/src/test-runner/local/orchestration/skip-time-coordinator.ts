@@ -1,6 +1,6 @@
 import { Clock } from "@sinonjs/fake-timers";
 import { defaultLogger } from "../../../logger";
-import { realSetTimeout } from "../real-timers/real-timers";
+import { realSetImmediate, realSetTimeout } from "../real-timers/real-timers";
 
 /**
  * How long, in real time, the clock waits for a running non-durable invoked function.
@@ -107,6 +107,8 @@ export class SkipTimeCoordinator {
   private startingInvoke: InvokeHandoff | undefined;
   /** Whether an invoke from a caller that no one waits for is being started. */
   private startingDetachedInvoke = false;
+  /** Whether {@link scheduleAdvance} has a pass pending. */
+  private advanceScheduled = false;
   /**
    * Every invoked function's runner that is still a participant. Each one stops the clock
    * only for {@link DURABLE_INVOKE_HOLD_MS} of real time per invocation.
@@ -426,6 +428,27 @@ export class SkipTimeCoordinator {
     for (const participant of timed) {
       participant.onClockAdvanced();
     }
+
+    // Applying an end usually makes its owner busy, and the owner calls advance() again
+    // once its invocation has run. But an invoked or detached owner whose running
+    // invocation has expired its hold does not stop the clock, and the invocation that the
+    // end queued may never run, behind a step that never settles. Then no participant
+    // would call advance() again, and every later end would take real time. So schedule
+    // one more pass. It is harmless when the owner does stop the clock: the pass returns
+    // at the busy check. Each pass applies one end, so the passes stop when no end is left.
+    this.scheduleAdvance();
+  }
+
+  /** Runs {@link advance} once, after the current turn of the event loop. */
+  private scheduleAdvance(): void {
+    if (this.advanceScheduled) {
+      return;
+    }
+    this.advanceScheduled = true;
+    realSetImmediate(() => {
+      this.advanceScheduled = false;
+      this.advance();
+    });
   }
 }
 
