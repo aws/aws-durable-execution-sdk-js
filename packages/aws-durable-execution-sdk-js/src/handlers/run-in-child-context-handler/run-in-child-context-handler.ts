@@ -40,6 +40,7 @@ import {
   toOperationInfo,
 } from "../../utils/operation/operation";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
+import { notifyChildTerminal } from "./child-terminal-listener";
 
 import { CHECKPOINT_SIZE_LIMIT_BYTES } from "../../utils/constants/constants";
 
@@ -221,6 +222,13 @@ export const handleCompletedChildContext = async <
   const errorMapper = options?.errorMapper;
   const stepData = context.getStepData(entityId);
   const result = stepData?.ContextDetails?.Result;
+
+  // The terminal outcome is already recorded by an earlier invocation, so
+  // report it before any await.
+  notifyChildTerminal(
+    options,
+    stepData?.Status === OperationStatus.FAILED ? "FAILED" : "SUCCEEDED",
+  );
 
   // Keeps this context EXECUTING while the result goes through the serdes, so
   // the invocation cannot suspend before the caller's next line runs.
@@ -533,6 +541,11 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         ContextOptions: replayChildren ? { ReplayChildren: true } : undefined,
         Name: name,
       });
+      // Report the outcome in the same synchronous turn that queued the
+      // checkpoint. A batch that decides to complete in this turn closes its
+      // descendant-checkpoint gate, so the checkpoint and the batch result
+      // agree on which items finished.
+      notifyChildTerminal(options, "SUCCEEDED");
       const currentStepData = context.getStepData(entityId);
       const onOperationEndInfo = toOperationInfo(currentStepData);
       backfillOperationInfo(onOperationEndInfo, opInfo);
@@ -547,6 +560,8 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         name,
       });
     } else {
+      // A virtual context queues no checkpoint. Report at the same point.
+      notifyChildTerminal(options, "SUCCEEDED");
       log("✅", "Virtual child context completed successfully:", {
         entityId,
         name,
@@ -615,6 +630,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
           preserveChildDepth >= 1 ? { ReplayChildren: true } : undefined,
         Name: name,
       });
+      notifyChildTerminal(options, "FAILED");
       const currentStepData = context.getStepData(entityId);
       const onOperationEndInfo = toOperationInfo(currentStepData);
       backfillOperationInfo(onOperationEndInfo, opInfo);
@@ -625,6 +641,7 @@ export const executeChildContext = async <T, Logger extends DurableLogger>(
         error: reconstructedError,
       });
     } else {
+      notifyChildTerminal(options, "FAILED");
       await plugin.onOperationEnd?.({
         ...opInfo,
         status: PluginOperationStatus.FAILED,

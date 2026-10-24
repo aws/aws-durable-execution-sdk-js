@@ -26,13 +26,14 @@ createTests({
       const branch4 = runner.getOperation("branch-4");
       const branch5 = runner.getOperation("branch-5");
 
-      // First two branches should succeed (branch-1 and branch-2 complete fastest)
+      // branch-1 and branch-2 record their outcome first and complete the
+      // batch. branch-3 and branch-4 finish in the same turn as branch-2,
+      // but after the decision, so history keeps them STARTED, as the result
+      // does (issue #967).
       expect(branch1?.getStatus()).toBe(OperationStatus.SUCCEEDED);
       expect(branch2?.getStatus()).toBe(OperationStatus.SUCCEEDED);
-      expect(branch3?.getStatus()).toBe(OperationStatus.SUCCEEDED);
-      expect(branch4?.getStatus()).toBe(OperationStatus.SUCCEEDED);
-
-      // Remaining branches should be in STARTED state (not completed)
+      expect(branch3?.getStatus()).toBe(OperationStatus.STARTED);
+      expect(branch4?.getStatus()).toBe(OperationStatus.STARTED);
       expect(branch5?.getStatus()).toBe(OperationStatus.STARTED);
 
       // Verify the results array matches

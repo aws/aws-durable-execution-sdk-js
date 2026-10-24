@@ -126,6 +126,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `map` and `parallel` now decide to complete at the moment an item records its terminal
+  outcome, not when the item's promise settles. Before, an item that recorded `SUCCEEDED` in the
+  same turn as a failing sibling could still be reported `STARTED`. Its child context showed
+  `SUCCEEDED` in the execution history, so the history and the `BatchResult` disagreed
+  ([#967](https://github.com/aws/aws-durable-execution-sdk-js/issues/967)). The cause: an item
+  settles only after plugin hooks and deserialization, and that work is longer on the success
+  path. Now, when the batch decides to complete, it stops later item checkpoints in the same
+  turn. An item that finishes after the decision stays `STARTED` in the history and in the
+  result. The same holds for `minSuccessful` and `shouldComplete`. One visible change: items that
+  finish after the decision no longer write `ContextSucceeded` or later step events.
+
 - **Durable Execution Telemetry CDK stack**: `cdk synth` and `cdk deploy` check
   `destinations.aurora.engineVersion` against the Aurora PostgreSQL versions RDS offers in the
   target region, and fail before anything is created. Before, an unsupported version failed only
