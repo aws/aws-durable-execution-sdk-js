@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 import * as cdk from "aws-cdk-lib";
 import { LambdaClient, paginateListFunctions } from "@aws-sdk/client-lambda";
+import {
+  assertAuroraEngineVersionAvailable,
+  SKIP_CONTEXT_KEY,
+} from "./engine-version";
 import { TelemetryDestinationsStack } from "./stack";
 import * as config from "./config.json";
 
@@ -39,6 +43,21 @@ async function main(): Promise<void> {
   // Account and region are resolved from the AWS credentials/profile in use
   // when running `cdk synth`/`cdk deploy` (CDK CLI populates CDK_DEFAULT_*).
   // Override with `cdk deploy --region <region>` or AWS_REGION / AWS_PROFILE.
+  // An unsupported Aurora version otherwise fails only when CloudFormation
+  // creates the cluster, after the other resources exist. Check it first.
+  // Every CDK command runs this app, including `cdk destroy`, so
+  // `-c skipEngineVersionCheck=true` skips the check: a version RDS retired
+  // after the deploy must not block the teardown.
+  const skipCheck = [true, "true"].includes(
+    app.node.tryGetContext(SKIP_CONTEXT_KEY),
+  );
+  if (config.destinations.aurora.enabled && !skipCheck) {
+    await assertAuroraEngineVersionAvailable(
+      config.destinations.aurora,
+      region,
+    );
+  }
+
   let discoveredRoleArns: string[] = [];
   if (config.lambda.discoverDurableFunctions) {
     discoveredRoleArns = await discoverDurableFunctionRoles(region);
