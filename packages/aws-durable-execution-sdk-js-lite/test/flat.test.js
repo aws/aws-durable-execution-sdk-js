@@ -1,5 +1,5 @@
 // nesting: "FLAT" on map and parallel. A FLAT item has no CONTEXT operation. Its
-// operations have the batch as their ParentId (AGENTS.md 2.9).
+// operations have the batch as their ParentId (README 2.9).
 
 import assert from "node:assert/strict";
 import { test } from "node:test";

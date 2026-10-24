@@ -11,9 +11,9 @@
 //
 // After fn: success sends SUCCEED. Failure asks retryStrategy, then sends FAIL and
 // throws, or sends RETRY and blocks. A blocked step wakes when a checkpoint response
-// changes its record (AGENTS.md 2.5), normally to READY. It then applies this table to
+// changes its record (README 2.5), normally to READY. It then applies this table to
 // the new record. So the next attempt can run in the same invocation. A custom serdes
-// makes the SUCCEED Payload. The first run does not call deserialize (AGENTS.md 2.6).
+// makes the SUCCEED Payload. The first run does not call deserialize (README 2.6).
 
 import { fromErrorObject, toErrorObject } from "../errors.js";
 import { CUSTOM_PAYLOAD } from "../execution.js";
@@ -27,7 +27,7 @@ const parse = (s) => (s == null ? undefined : JSON.parse(s));
 const stepLogger = createLogger();
 
 export function step(ctx, opts) {
-  // The id is taken now, before any await (AGENTS.md 2.4).
+  // The id is taken now, before any await (README 2.4).
   return runStep(ctx, ctx._nextId(), opts);
 }
 
@@ -126,7 +126,7 @@ async function runStep(
           ),
         );
         // The first run returns fn's own value. Only a replay parses the stored JSON or
-        // calls deserialize (AGENTS.md 2.6).
+        // calls deserialize (README 2.6).
         return result;
       }
     }

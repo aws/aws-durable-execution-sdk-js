@@ -1,4 +1,4 @@
-// Checks the AGENTS.md rules that a machine can check.
+// Checks the README rules that a machine can check.
 
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
@@ -25,7 +25,7 @@ const SPECIFIER_PATTERNS = [
 const specifiers = (text) =>
   SPECIFIER_PATTERNS.flatMap((re) => [...text.matchAll(re)].map((m) => m[1]));
 
-test("package.json declares no dependencies (AGENTS.md 1.3)", () => {
+test("package.json declares no dependencies (README 1.3)", () => {
   for (const key of [
     "dependencies",
     "devDependencies",
@@ -40,7 +40,7 @@ test("the published files are src/ and README.md only", () => {
   assert.deepEqual(pkg.files, ["src/", "README.md"]);
 });
 
-test("src imports only relative paths and node: built-ins (AGENTS.md 1.3)", () => {
+test("src imports only relative paths and node: built-ins (README 1.3)", () => {
   const all = srcFiles.flatMap((file) =>
     specifiers(read(file)).map((spec) => ({ file, spec })),
   );
@@ -81,7 +81,7 @@ test("the import patterns find every import form", () => {
   ]);
 });
 
-test("src uses no async context (AGENTS.md 1.5)", () => {
+test("src uses no async context (README 1.5)", () => {
   const bad = [];
   for (const file of srcFiles) {
     const text = read(file);
@@ -92,7 +92,7 @@ test("src uses no async context (AGENTS.md 1.5)", () => {
   assert.deepEqual(bad, []);
 });
 
-test("src has no TypeScript sources except the .d.ts files (AGENTS.md 1.4)", () => {
+test("src has no TypeScript sources except the .d.ts files (README 1.4)", () => {
   const bad = srcFiles
     .filter((f) => /\.[cm]?tsx?$/.test(f) && !f.endsWith(".d.ts"))
     .map((f) => relative(root, f));
@@ -100,7 +100,7 @@ test("src has no TypeScript sources except the .d.ts files (AGENTS.md 1.4)", () 
 });
 
 // require(esm) fails for a module graph that uses top-level await. So a successful
-// require() shows that src has none (AGENTS.md 1.4).
+// require() shows that src has none (README 1.4).
 test("CommonJS code can require() both entry points", () => {
   const require = createRequire(import.meta.url);
   const main = require("../src/index.js");
@@ -109,7 +109,7 @@ test("CommonJS code can require() both entry points", () => {
   assert.equal(typeof testing.runDurable, "function");
 });
 
-test("every public export has a type declaration (AGENTS.md 1.4)", async () => {
+test("every public export has a type declaration (README 1.4)", async () => {
   for (const [js, dts] of [
     ["../src/index.js", "src/index.d.ts"],
     ["../src/testing/index.js", "src/testing/index.d.ts"],

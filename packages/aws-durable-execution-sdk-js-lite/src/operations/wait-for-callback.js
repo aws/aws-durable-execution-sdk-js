@@ -26,7 +26,7 @@ export function waitForCallback(
     serdes,
   },
 ) {
-  // The id is taken now, before any await (AGENTS.md 2.4).
+  // The id is taken now, before any await (README 2.4).
   const rawId = ctx._nextId();
   const raw = runChild(ctx, rawId, {
     name,

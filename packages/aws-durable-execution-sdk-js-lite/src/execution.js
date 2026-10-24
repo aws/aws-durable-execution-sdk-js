@@ -153,7 +153,7 @@ export function createExecution({ client, arn, token, operations }) {
     for (const b of blocked) {
       if (state.get(b.id)?.Status === b.status) continue;
       blocked.delete(b);
-      // An abandoned operation must not run again (AGENTS.md 2.9). It stays unresolved.
+      // An abandoned operation must not run again (README 2.9). It stays unresolved.
       if (b.isLive()) {
         refreshed = false;
         b.wake();
@@ -219,7 +219,7 @@ export function createExecution({ client, arn, token, operations }) {
     // The operation needs the service to act first. id is its hashed id. The promise
     // resolves when a checkpoint response changes the Status of that record. The
     // operation then reads its record again. isLive turns false when a batch abandons
-    // the operation (AGENTS.md 2.9). Then the operation no longer counts as blocked,
+    // the operation (README 2.9). Then the operation no longer counts as blocked,
     // and its promise never resolves.
     block(id, isLive = () => true) {
       const status = state.get(id)?.Status;

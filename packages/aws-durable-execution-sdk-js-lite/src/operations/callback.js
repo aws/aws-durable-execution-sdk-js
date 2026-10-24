@@ -11,7 +11,7 @@
 // | anything else   | block until an outside system completes the callback         |
 //
 // A blocked result wakes when a checkpoint response changes the callback's record
-// (AGENTS.md 2.5). It then applies this table to the new record.
+// (README 2.5). It then applies this table to the new record.
 // callbackId always comes from CallbackDetails.CallbackId, which the service assigns.
 
 import { DurableOperationError, fromErrorObject } from "../errors.js";
@@ -21,7 +21,7 @@ const clean = (obj) =>
   Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
 
 export function createCallback(ctx, opts = {}) {
-  // The id is taken now, before any await (AGENTS.md 2.4).
+  // The id is taken now, before any await (README 2.4).
   return runCallback(ctx, ctx._nextId(), opts);
 }
 
@@ -55,7 +55,7 @@ async function runCallback(
 }
 
 // A native promise, created eagerly. The async function runs up to its first await at
-// once. So a blocked one counts as blocked at once (AGENTS.md 2.5). The block resolves
+// once. So a blocked one counts as blocked at once (README 2.5). The block resolves
 // when a checkpoint response changes the record. The loop then reads it again.
 // An outside system sent the result. So even the first run calls deserialize.
 async function outcome(ctx, rawId, serdes) {

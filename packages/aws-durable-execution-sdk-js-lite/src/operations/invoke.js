@@ -8,7 +8,7 @@
 // | FAILED, TIMED_OUT, STOPPED   | throw fromErrorObject(ChainedInvokeDetails.Error)   |
 // | STARTED or anything else     | block until the service finishes the invoke         |
 //
-// A blocked invoke wakes when a checkpoint response changes its record (AGENTS.md 2.5).
+// A blocked invoke wakes when a checkpoint response changes its record (README 2.5).
 // It then applies this table to the new record.
 // The thrown error keeps the callee's ErrorType. The full SDK loses it.
 // payloadSerdes makes the START Payload from input. resultSerdes reads the callee's
@@ -21,7 +21,7 @@ import { deserialize, serialize } from "../serdes.js";
 const FAILED = new Set(["FAILED", "TIMED_OUT", "STOPPED"]);
 
 export function invoke(ctx, opts) {
-  // The id is taken now, before any await (AGENTS.md 2.4).
+  // The id is taken now, before any await (README 2.4).
   return runInvoke(ctx, ctx._nextId(), opts);
 }
 

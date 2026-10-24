@@ -1,4 +1,4 @@
-// A blocked operation wakes when a checkpoint response changes its record (AGENTS.md
+// A blocked operation wakes when a checkpoint response changes its record (README
 // 2.5). These tests let the in-memory service change a record while another branch's
 // step runs. That branch's SUCCEED response then reports the change, like the service.
 import assert from "node:assert/strict";

@@ -14,7 +14,7 @@ const waitRecord = (rawId, Status, Name) => ({
   Status,
   StartTimestamp: 1,
   // In the future. A wait whose end has passed makes the SDK refresh the state once
-  // before it suspends (AGENTS.md 2.5).
+  // before it suspends (README 2.5).
   WaitDetails: { ScheduledEndTimestamp: Date.now() / 1000 + 3600 },
 });
 

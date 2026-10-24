@@ -48,7 +48,7 @@ export function createContext({
     _record: () => execution.get(hashedParentId),
 
     // A batch that completes early abandons its items that are still running
-    // (AGENTS.md 2.9). The batch sets the flag after the item ctxs exist. So the getter
+    // (README 2.9). The batch sets the flag after the item ctxs exist. So the getter
     // reads the flag of every ancestor at each call.
     get _abandoned() {
       return (
@@ -100,7 +100,7 @@ export function createContext({
     // The ctx for the child context with this raw id. It lives here because
     // child-context.js is imported by this file: importing createContext back would
     // make an import cycle. A replay-only parent makes every descendant replay-only.
-    // flat: the child is a FLAT batch item, which has no record (AGENTS.md 2.9). So
+    // flat: the child is a FLAT batch item, which has no record (README 2.9). So
     // its operations take this ctx's parentId, like the full SDK's virtual context.
     // Their raw ids still start with the item's raw id.
     _child: (
@@ -120,7 +120,7 @@ export function createContext({
     _mayRun(record, meta) {
       // Nothing awaits an abandoned operation, so it does not count as blocked.
       if (ctx._abandoned) return false;
-      // A replay-only ctx re-runs a context that already succeeded (AGENTS.md 2.9).
+      // A replay-only ctx re-runs a context that already succeeded (README 2.9).
       // Its fn awaited only operations that ended. So an operation without a record, or
       // a step or context that did not end, belongs to a branch that lost a race.
       // Running it would repeat or add side effects. Not counting it as blocked is safe,

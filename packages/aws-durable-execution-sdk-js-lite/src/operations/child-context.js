@@ -29,7 +29,7 @@ const parse = (s) => (s == null || s === "" ? undefined : JSON.parse(s));
 
 // Internal: map and parallel use it with their own subType.
 export function childContext(ctx, opts) {
-  // The id is taken now, before any await (AGENTS.md 2.4).
+  // The id is taken now, before any await (README 2.4).
   return runChild(ctx, ctx._nextId(), opts);
 }
 
@@ -106,6 +106,6 @@ export async function runChild(
     ),
   );
   // The first run returns fn's own value. Only a replay parses the stored JSON or
-  // calls deserialize (AGENTS.md 2.6).
+  // calls deserialize (README 2.6).
   return result;
 }

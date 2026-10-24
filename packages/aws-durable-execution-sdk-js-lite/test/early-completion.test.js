@@ -678,7 +678,7 @@ test("shouldComplete: throwIfError throws the first item error before BatchCompl
 
 test("shouldComplete with thresholds: the predicate wins, like the full SDK's check order", async () => {
   // The types forbid this. The full SDK fails the execution with a validation error.
-  // The lite SDK does not check misuse (AGENTS.md 1.2). The thresholds are ignored.
+  // The lite SDK does not check misuse (README 1.2). The thresholds are ignored.
   const r = await runMap(["S", "F", "S"], {
     minSuccessful: 1,
     toleratedFailureCount: 0,

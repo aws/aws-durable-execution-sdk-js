@@ -214,7 +214,7 @@ test("no token after an EXECUTION update is success", async () => {
   await ex.checkpoint({ Id: "x", Type: "EXECUTION", Action: "SUCCEED" });
 });
 
-test("checkpoint errors are classified per AGENTS.md 2.8", () => {
+test("checkpoint errors are classified per README 2.8", () => {
   const token = httpError(
     400,
     "InvalidParameterValueException",

@@ -21,7 +21,7 @@
 // | SUCCEEDED with ReplayChildren  | S or F: run fn in a replay-only ctx; "-": no run  |
 //
 // The batch can complete before every item finished (completionConfig). It then
-// abandons the items that still run: they send no more updates (AGENTS.md 2.9).
+// abandons the items that still run: they send no more updates (README 2.9).
 // Neither replay path calls a shouldComplete predicate. A SUCCEEDED record returns the
 // stored result, and a re-run reads the saved completionReason. So a replay cannot
 // reach a different decision than the live run.
@@ -193,7 +193,7 @@ const settle = (promise, index) =>
   );
 
 // Starts one item and returns its promise. Both kinds of item take the next id of the
-// batch ctx synchronously, at call time (AGENTS.md 2.4).
+// batch ctx synchronously, at call time (README 2.4).
 // 1. NESTED: the item is a child context with its own record.
 // 2. FLAT: the item has no record. The full SDK's virtual context does the same
 //    (run-in-child-context-handler.ts: no START, SUCCEED or FAIL; its children get

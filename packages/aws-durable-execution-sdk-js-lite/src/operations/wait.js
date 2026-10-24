@@ -8,7 +8,7 @@
 // | STARTED or anything else         | block until the service ends the wait            |
 //
 // The service completes the wait at its scheduled time. The SDK never sends SUCCEED.
-// A blocked wait wakes when a checkpoint response changes its record (AGENTS.md 2.5).
+// A blocked wait wakes when a checkpoint response changes its record (README 2.5).
 // It then applies this table to the new record.
 
 const TERMINAL = new Set([
@@ -20,7 +20,7 @@ const TERMINAL = new Set([
 ]);
 
 export function wait(ctx, opts) {
-  // The id is taken now, before any await (AGENTS.md 2.4).
+  // The id is taken now, before any await (README 2.4).
   return runWait(ctx, ctx._nextId(), opts);
 }
 

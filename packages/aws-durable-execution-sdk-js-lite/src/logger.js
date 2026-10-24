@@ -4,7 +4,7 @@ export function createLogger(isSilent = () => false) {
   const forward =
     (level) =>
     (...args) => {
-      // biome-ignore lint/suspicious/noConsole: deliberate -- console is the only log sink (AGENTS.md 2.10). Lambda sends it to CloudWatch.
+      // biome-ignore lint/suspicious/noConsole: deliberate -- console is the only log sink (README 2.10). Lambda sends it to CloudWatch.
       if (!isSilent()) console[level](...args);
     };
   return {

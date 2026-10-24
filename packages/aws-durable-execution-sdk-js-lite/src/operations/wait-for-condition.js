@@ -11,13 +11,13 @@
 // A check runs fn on the saved state (StepDetails.Result, else initialState), then asks
 // waitStrategy. Stop sends SUCCEED. Continue sends RETRY with the new state as Payload,
 // so the service keeps the state between attempts, then blocks. A blocked check wakes
-// when a checkpoint response changes its record (AGENTS.md 2.5), normally to READY. It
+// when a checkpoint response changes its record (README 2.5), normally to READY. It
 // then applies this table to the new record. A throw sends FAIL with no retry. Unlike
 // the full SDK, replay is validated.
 //
 // A custom serdes makes every state Payload, and reads the saved state back. The first
 // check gets initialState itself, and the first run returns fn's own state. The full SDK
-// sends both through serialize and deserialize first (AGENTS.md 2.6).
+// sends both through serialize and deserialize first (README 2.6).
 
 import { fromErrorObject, toErrorObject } from "../errors.js";
 import { CUSTOM_PAYLOAD } from "../execution.js";
@@ -29,7 +29,7 @@ const parse = (s) => (s == null ? undefined : JSON.parse(s));
 const checkLogger = createLogger();
 
 export function waitForCondition(ctx, opts) {
-  // The id is taken now, before any await (AGENTS.md 2.4).
+  // The id is taken now, before any await (README 2.4).
   return runCondition(ctx, ctx._nextId(), opts);
 }
 
