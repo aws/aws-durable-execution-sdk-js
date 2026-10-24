@@ -1,0 +1,200 @@
+[
+  {
+    "EventType": "ExecutionStarted",
+    "EventId": 1,
+    "Id": "5b7b43f7-b649-4b79-8e32-e136609a7e56",
+    "EventTimestamp": "2026-10-24T22:34:20.703Z",
+    "ExecutionStartedDetails": {
+      "Input": {
+        "Payload": "{}"
+      }
+    }
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "Map",
+    "EventId": 2,
+    "Id": "c4ca4238a0b92382",
+    "Name": "m",
+    "EventTimestamp": "2026-10-24T22:34:20.774Z",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MapIteration",
+    "EventId": 3,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "map-item-0",
+    "EventTimestamp": "2026-10-24T22:34:20.774Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MapIteration",
+    "EventId": 4,
+    "Id": "98c6f2c2287f4c73",
+    "Name": "map-item-1",
+    "EventTimestamp": "2026-10-24T22:34:20.774Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MapIteration",
+    "EventId": 5,
+    "Id": "13cee27a2bd93915",
+    "Name": "map-item-2",
+    "EventTimestamp": "2026-10-24T22:34:20.774Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "ContextStarted",
+    "SubType": "MapIteration",
+    "EventId": 6,
+    "Id": "3a170a9fe4f47efa",
+    "Name": "map-item-3",
+    "EventTimestamp": "2026-10-24T22:34:20.774Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 7,
+    "Id": "2f221a18eb863803",
+    "Name": "s",
+    "EventTimestamp": "2026-10-24T22:34:20.774Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 8,
+    "Id": "6151f5ab282d90e4",
+    "Name": "s",
+    "EventTimestamp": "2026-10-24T22:34:20.774Z",
+    "ParentId": "98c6f2c2287f4c73",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 9,
+    "Id": "b425e0c75591aa8f",
+    "Name": "s",
+    "EventTimestamp": "2026-10-24T22:34:20.774Z",
+    "ParentId": "13cee27a2bd93915",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepStarted",
+    "SubType": "Step",
+    "EventId": 10,
+    "Id": "a4e1cd317d54f087",
+    "Name": "s",
+    "EventTimestamp": "2026-10-24T22:34:20.774Z",
+    "ParentId": "3a170a9fe4f47efa",
+    "StepStartedDetails": {}
+  },
+  {
+    "EventType": "StepSucceeded",
+    "SubType": "Step",
+    "EventId": 11,
+    "Id": "2f221a18eb863803",
+    "Name": "s",
+    "EventTimestamp": "2026-10-24T22:34:20.774Z",
+    "ParentId": "ea66c06c1e1c05fa",
+    "StepSucceededDetails": {
+      "Result": {
+        "Payload": "0"
+      },
+      "RetryDetails": {}
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "MapIteration",
+    "EventId": 12,
+    "Id": "ea66c06c1e1c05fa",
+    "Name": "map-item-0",
+    "EventTimestamp": "2026-10-24T22:34:20.777Z",
+    "ParentId": "c4ca4238a0b92382",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "0"
+      }
+    }
+  },
+  {
+    "EventType": "ContextSucceeded",
+    "SubType": "Map",
+    "EventId": 13,
+    "Id": "c4ca4238a0b92382",
+    "Name": "m",
+    "EventTimestamp": "2026-10-24T22:34:20.777Z",
+    "ContextSucceededDetails": {
+      "Result": {
+        "Payload": "{\"all\":[{\"result\":0,\"index\":0,\"status\":\"SUCCEEDED\"},{\"index\":1,\"status\":\"STARTED\"},{\"index\":2,\"status\":\"STARTED\"},{\"index\":3,\"status\":\"STARTED\"}],\"completionReason\":\"MIN_SUCCESSFUL_REACHED\"}"
+      }
+    }
+  },
+  {
+    "EventType": "WaitStarted",
+    "SubType": "Wait",
+    "EventId": 14,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "after-map",
+    "EventTimestamp": "2026-10-24T22:34:20.778Z",
+    "WaitStartedDetails": {
+      "Duration": 1,
+      "ScheduledEndTimestamp": "2026-10-24T22:34:21.777Z"
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 15,
+    "EventTimestamp": "2026-10-24T22:34:20.976Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-10-24T22:34:20.703Z",
+      "EndTimestamp": "2026-10-24T22:34:20.976Z",
+      "Error": {},
+      "RequestId": "494ccbfb-b743-4096-b6ea-fc41d4cb9b55"
+    }
+  },
+  {
+    "EventType": "WaitSucceeded",
+    "SubType": "Wait",
+    "EventId": 16,
+    "Id": "c81e728d9d4c2f63",
+    "Name": "after-map",
+    "EventTimestamp": "2026-10-24T22:34:21.779Z",
+    "WaitSucceededDetails": {
+      "Duration": 1
+    }
+  },
+  {
+    "EventType": "InvocationCompleted",
+    "EventId": 17,
+    "EventTimestamp": "2026-10-24T22:34:21.780Z",
+    "InvocationCompletedDetails": {
+      "StartTimestamp": "2026-10-24T22:34:21.779Z",
+      "EndTimestamp": "2026-10-24T22:34:21.780Z",
+      "Error": {},
+      "RequestId": "0c103508-bc0d-439b-bc6e-40baee68b63e"
+    }
+  },
+  {
+    "EventType": "ExecutionSucceeded",
+    "EventId": 18,
+    "Id": "5b7b43f7-b649-4b79-8e32-e136609a7e56",
+    "EventTimestamp": "2026-10-24T22:34:21.780Z",
+    "ExecutionSucceededDetails": {
+      "Result": {
+        "Payload": "[0]"
+      }
+    }
+  }
+]

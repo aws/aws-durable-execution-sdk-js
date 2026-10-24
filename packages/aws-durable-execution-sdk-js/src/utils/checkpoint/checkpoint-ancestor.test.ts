@@ -193,6 +193,94 @@ describe("CheckpointManager - Ancestor Functionality", () => {
         OperationLifecycleState.EXECUTING,
       );
     });
+
+    it("marks an EXECUTING operation COMPLETED when its checkpoint is dropped for a finished ancestor", () => {
+      // A step under a batch is running when the batch completes. The step
+      // then tries to checkpoint its result.
+      checkpointManager.markOperationState(
+        "1-2-3",
+        OperationLifecycleState.EXECUTING,
+        {
+          metadata: {
+            stepId: "1-2-3",
+            name: "abandoned-step",
+            type: "STEP",
+            subType: OperationSubType.STEP,
+            parentId: "1-2",
+          },
+        },
+      );
+      // An unrelated EXECUTING step outside the finished ancestor.
+      checkpointManager.markOperationState(
+        "1-3-1",
+        OperationLifecycleState.EXECUTING,
+        {
+          metadata: {
+            stepId: "1-3-1",
+            name: "live-step",
+            type: "STEP",
+            subType: OperationSubType.STEP,
+            parentId: "1-3",
+          },
+        },
+      );
+      checkpointManager.markAncestorFinished("1-2");
+
+      void checkpointManager.checkpoint("1-2-3", {
+        Action: OperationAction.SUCCEED,
+      });
+
+      // The dropped checkpoint never settles, so the step can never mark
+      // itself COMPLETED. The manager does it, so it no longer blocks a
+      // suspension (Rule 4).
+      expect(checkpointManager.getOperationState("1-2-3")).toBe(
+        OperationLifecycleState.COMPLETED,
+      );
+      expect(checkpointManager.getOperationState("1-3-1")).toBe(
+        OperationLifecycleState.EXECUTING,
+      );
+
+      // A later state change for the operation still finds its metadata.
+      expect(() =>
+        checkpointManager.markOperationState(
+          "1-2-3",
+          OperationLifecycleState.COMPLETED,
+        ),
+      ).not.toThrow();
+    });
+
+    it.each([
+      // A child context queues its checkpoints without waiting, then keeps
+      // running its plugin hooks and deserialization.
+      ["a child context SUCCEED", "CONTEXT", OperationAction.SUCCEED],
+      ["a child context FAIL", "CONTEXT", OperationAction.FAIL],
+      // A waitForCondition queues START without waiting, then runs its check.
+      ["a step START", "STEP", OperationAction.START],
+    ])(
+      "keeps an operation EXECUTING when %s is dropped, because its caller keeps running",
+      (_name, type, action) => {
+        checkpointManager.markOperationState(
+          "1-2-3",
+          OperationLifecycleState.EXECUTING,
+          {
+            metadata: {
+              stepId: "1-2-3",
+              name: "still-running",
+              type: type as never,
+              subType: OperationSubType.STEP,
+              parentId: "1-2",
+            },
+          },
+        );
+        checkpointManager.markAncestorFinished("1-2");
+
+        void checkpointManager.checkpoint("1-2-3", { Action: action });
+
+        expect(checkpointManager.getOperationState("1-2-3")).toBe(
+          OperationLifecycleState.EXECUTING,
+        );
+      },
+    );
   });
 
   describe("checkpoint with finished ancestors", () => {
