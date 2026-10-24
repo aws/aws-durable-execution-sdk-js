@@ -1,5 +1,5 @@
 import { createTestDurableContext } from "../../testing/create-test-durable-context";
-import { BatchItemStatus } from "../../types";
+import { BatchItemStatus, completeBatch, continueBatch } from "../../types";
 import { OperationStatus, OperationType } from "../../types/wire";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
@@ -78,4 +78,40 @@ describe("map resumed with several terminal item records", () => {
       expect(executed).toEqual([]);
     },
   );
+
+  it("completes a resumed batch when a custom predicate turns true at a settlement", async () => {
+    // Only item 0 has a terminal record. Item 1 starts fresh and never
+    // finishes in this invocation.
+    const { context } = createTestDurableContext({
+      existingOperations: resumedOperations().slice(0, 2) as never,
+    });
+
+    const result = await context.map(
+      "m",
+      [0, 1],
+      async (_child, item) => {
+        if (item === 1) {
+          await new Promise(() => {});
+        }
+        return item * 10;
+      },
+      {
+        completionConfig: {
+          // At item 0's report, item 1 has not started, so this returns
+          // false. It returns true once item 1 is STARTED.
+          shouldComplete: (status) =>
+            status.items[0].status === BatchItemStatus.SUCCEEDED &&
+            status.items[1].status === BatchItemStatus.STARTED
+              ? completeBatch()
+              : continueBatch(),
+        },
+      },
+    );
+
+    expect(result.all.map((item) => item.status)).toEqual([
+      BatchItemStatus.SUCCEEDED,
+      BatchItemStatus.STARTED,
+    ]);
+    expect(result.completionReason).toBe("CUSTOM_COMPLETION_SUCCEEDED");
+  });
 });

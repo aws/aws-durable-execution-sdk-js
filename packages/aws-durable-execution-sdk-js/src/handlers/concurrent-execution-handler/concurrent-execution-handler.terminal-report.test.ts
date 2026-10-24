@@ -2,9 +2,12 @@ import { ConcurrencyController } from "./concurrent-execution-handler";
 import {
   BatchItemStatus,
   BatchResult,
+  CompletionStatus,
   DurableContext,
   DurableExecutionMode,
   DurableLogger,
+  completeBatch,
+  continueBatch,
 } from "../../types";
 import {
   ChildTerminalOutcome,
@@ -188,6 +191,45 @@ describe("ConcurrencyController decides on terminal reports (issue #967)", () =>
     const result = await promise;
     expect(result.successCount).toBe(3);
     expect(result.completionReason).toBe("ALL_COMPLETED");
+  });
+
+  it("re-checks completion when an item settles with the status it reported", async () => {
+    const controller = new ConcurrencyController<DurableLogger>("test");
+    // Item 0 reports synchronously, like an item that finished in an earlier
+    // invocation. Item 1 never finishes.
+    const { parent, started } = createScriptedParent(
+      ["SUCCEEDED", "SUCCEEDED"],
+      (index, item) => {
+        if (index === 0) item.report("SUCCEEDED");
+      },
+    );
+    // Completes once item 0 SUCCEEDED and item 1 STARTED. At item 0's report,
+    // item 1 has not started yet, so the predicate returns false.
+    const shouldComplete = jest.fn((status: CompletionStatus) =>
+      status.items[0].status === BatchItemStatus.SUCCEEDED &&
+      status.items[1].status === BatchItemStatus.STARTED
+        ? completeBatch()
+        : continueBatch(),
+    );
+
+    let result: BatchResult<unknown> | undefined;
+    void controller
+      .executeItems(itemsOf(2), jest.fn(), parent, {
+        completionConfig: { shouldComplete },
+      })
+      .then((r) => {
+        result = r;
+      });
+    expect(started).toHaveLength(2);
+
+    started[0].settle();
+    await flush();
+
+    expect(result!.all.map((item) => item.status)).toEqual([
+      BatchItemStatus.SUCCEEDED,
+      BatchItemStatus.STARTED,
+    ]);
+    expect(result!.completionReason).toBe("CUSTOM_COMPLETION_SUCCEEDED");
   });
 
   it("starts no item after a decision made while the start loop runs", async () => {

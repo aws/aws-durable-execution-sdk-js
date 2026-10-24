@@ -1010,9 +1010,14 @@ export class ConcurrencyController<Logger extends DurableLogger> {
             failureCount++;
             successCount--;
           }
-          if (!reconciling() && (isComplete() || !shouldContinue())) {
-            decide();
-          }
+        }
+        // Re-check completion on every settlement, as main does. The other
+        // items' statuses can have changed since this item reported: an item
+        // that finished in an earlier invocation reports before the next item
+        // starts, and a custom shouldComplete predicate can depend on that
+        // next item being STARTED.
+        if (!decided && !reconciling() && (isComplete() || !shouldContinue())) {
+          decide();
         }
         if (decided) {
           resolveWhenSettled();
