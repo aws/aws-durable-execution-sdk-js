@@ -3,13 +3,15 @@ import { BatchItemStatus } from "../../types";
 import { OperationStatus, OperationType } from "../../types/wire";
 import { hashId } from "../../utils/step-id-utils/step-id-utils";
 
+type Recorded = "SUCCEEDED" | "FAILED";
+
 /**
  * A map resumes after an earlier invocation ended between the item
- * checkpoints and the map checkpoint. In that invocation, item 1 failed
- * first and item 0 then succeeded, which reached minSuccessful: 1. So both
- * items have a terminal record, and the map context is still STARTED.
+ * checkpoints and the map checkpoint. So the map context is still STARTED,
+ * and the given items have a terminal record. Item i is the child context
+ * `1-${i + 1}`.
  */
-const resumedOperations = () => [
+const resumedOperations = (recorded: Recorded[]) => [
   {
     Id: hashId("1"),
     Type: OperationType.CONTEXT,
@@ -18,81 +20,164 @@ const resumedOperations = () => [
     StartTimestamp: new Date(),
     Status: OperationStatus.STARTED,
   },
-  {
-    Id: hashId("1-1"),
+  ...recorded.map((outcome, index) => ({
+    Id: hashId(`1-${index + 1}`),
     ParentId: hashId("1"),
     Type: OperationType.CONTEXT,
     SubType: "MapIteration",
-    Name: "map-item-0",
+    Name: `map-item-${index}`,
     StartTimestamp: new Date(),
-    Status: OperationStatus.SUCCEEDED,
-    ContextDetails: { Result: JSON.stringify(0) },
-  },
-  {
-    Id: hashId("1-2"),
-    ParentId: hashId("1"),
-    Type: OperationType.CONTEXT,
-    SubType: "MapIteration",
-    Name: "map-item-1",
-    StartTimestamp: new Date(),
-    Status: OperationStatus.FAILED,
-    ContextDetails: {
-      Error: { ErrorType: "Error", ErrorMessage: "boom" },
-    },
-  },
+    Status:
+      outcome === "SUCCEEDED"
+        ? OperationStatus.SUCCEEDED
+        : OperationStatus.FAILED,
+    ContextDetails:
+      outcome === "SUCCEEDED"
+        ? { Result: JSON.stringify(index * 10) }
+        : { Error: { ErrorType: "Error", ErrorMessage: `boom-${index}` } },
+  })),
 ];
 
+const statusesOf = (result: { all: { status: BatchItemStatus }[] }) =>
+  result.all.map((item) => item.status);
+
 describe("map resumed with several terminal item records", () => {
-  it.each([
-    // Every item starts at once, so item 2 starts too. It is still running
-    // when the batch completes, so it is reported STARTED.
-    [
-      "unlimited concurrency",
-      undefined,
-      [
-        BatchItemStatus.SUCCEEDED,
-        BatchItemStatus.FAILED,
-        BatchItemStatus.STARTED,
-      ],
-      [2],
-    ],
-    // Item 2 would start only after item 1 settles, and the batch completes
-    // then. So item 2 never starts.
-    [
-      "maxConcurrency 1",
-      1,
-      [BatchItemStatus.SUCCEEDED, BatchItemStatus.FAILED],
-      [],
-    ],
-  ])(
-    "keeps every recorded outcome before applying minSuccessful (%s)",
-    async (_name, maxConcurrency, statuses, executedItems) => {
-      const { context } = createTestDurableContext({
-        existingOperations: resumedOperations() as never,
-      });
-      const executed: number[] = [];
+  it("keeps a recorded failure that settles after a recorded success reaches minSuccessful", async () => {
+    // In the earlier invocation, item 1 failed first and item 0 then
+    // succeeded, which reached minSuccessful: 1.
+    const { context } = createTestDurableContext({
+      existingOperations: resumedOperations(["SUCCEEDED", "FAILED"]) as never,
+    });
+    const executed: number[] = [];
 
-      const result = await context.map(
-        "m",
-        [0, 1, 2],
-        async (_child, item) => {
-          executed.push(item);
-          // Never settles in this invocation.
-          await new Promise(() => {});
-          return item * 10;
-        },
-        { maxConcurrency, completionConfig: { minSuccessful: 1 } },
-      );
+    const result = await context.map(
+      "m",
+      [0, 1, 2],
+      async (_child, item) => {
+        executed.push(item);
+        return item * 10;
+      },
+      { maxConcurrency: 1, completionConfig: { minSuccessful: 1 } },
+    );
 
-      // Item 1's recorded failure is kept, even though item 0's recorded
-      // success alone reaches minSuccessful.
-      expect(result.all.map((item) => item.status)).toEqual(statuses);
-      expect(result.failureCount).toBe(1);
-      expect(result.hasFailure).toBe(true);
-      expect(result.failed()[0].error?.message).toContain("boom");
-      expect(result.completionReason).toBe("MIN_SUCCESSFUL_REACHED");
-      // Recorded items return their cached outcome. Only item 2 can run.
-      expect(executed).toEqual(executedItems);
-    },
-  );
+    expect(statusesOf(result)).toEqual([
+      BatchItemStatus.SUCCEEDED,
+      BatchItemStatus.FAILED,
+    ]);
+    expect(result.hasFailure).toBe(true);
+    expect(result.failed()[0].error?.message).toContain("boom-1");
+    expect(result.completionReason).toBe("MIN_SUCCESSFUL_REACHED");
+    expect(executed).toEqual([]);
+  });
+
+  it("keeps two recorded successes with unlimited concurrency", async () => {
+    // Without the fix, item 0's cached success completes the batch before
+    // item 1's cached success settles, and item 1 is reported STARTED.
+    const { context } = createTestDurableContext({
+      existingOperations: resumedOperations([
+        "SUCCEEDED",
+        "SUCCEEDED",
+      ]) as never,
+    });
+    const executed: number[] = [];
+
+    const result = await context.map(
+      "m",
+      [0, 1, 2],
+      async (_child, item) => {
+        executed.push(item);
+        return item * 10;
+      },
+      { completionConfig: { minSuccessful: 1 } },
+    );
+
+    expect(statusesOf(result)).toEqual([
+      BatchItemStatus.SUCCEEDED,
+      BatchItemStatus.SUCCEEDED,
+    ]);
+    expect(result.getResults()).toEqual([0, 10]);
+    // Item 2 is after the last recorded item, so it starts only if the
+    // completion rule allows it. minSuccessful is already reached.
+    expect(executed).toEqual([]);
+  });
+
+  it("starts no item after the last recorded item once fail-fast has stopped the batch", async () => {
+    // In the earlier invocation, item 0 failed, which stopped the batch.
+    // Item 1 recorded its success before the batch context finished.
+    const { context } = createTestDurableContext({
+      existingOperations: resumedOperations(["FAILED", "SUCCEEDED"]) as never,
+    });
+    const executed: number[] = [];
+
+    const result = await context.map(
+      "m",
+      [0, 1, 2, 3],
+      async (_child, item) => {
+        executed.push(item);
+        return item * 10;
+      },
+      { maxConcurrency: 2 },
+    );
+
+    expect(statusesOf(result)).toEqual([
+      BatchItemStatus.FAILED,
+      BatchItemStatus.SUCCEEDED,
+    ]);
+    expect(result.completionReason).toBe("FAILURE_TOLERANCE_EXCEEDED");
+    expect(executed).toEqual([]);
+  });
+
+  it("does not start a later item while a recorded item still deserializes", async () => {
+    // Item 1's cached result takes longer to deserialize than item 0's. The
+    // batch must not start item 2 while it waits, because minSuccessful: 1
+    // is already reached once the recorded items have settled.
+    let releaseItem1!: () => void;
+    const item1Held = new Promise<void>((resolve) => {
+      releaseItem1 = resolve;
+    });
+    const itemSerdes = {
+      serialize: async (value: number | undefined) =>
+        value === undefined ? undefined : JSON.stringify(value),
+      deserialize: async (data: string | undefined) => {
+        const value = data === undefined ? undefined : JSON.parse(data);
+        if (value === 10) {
+          await item1Held;
+        }
+        return value as number | undefined;
+      },
+    };
+    const { context } = createTestDurableContext({
+      existingOperations: resumedOperations([
+        "SUCCEEDED",
+        "SUCCEEDED",
+      ]) as never,
+    });
+    const executed: number[] = [];
+
+    const pending = context.map(
+      "m",
+      [0, 1, 2],
+      async (_child, item) => {
+        executed.push(item);
+        // Item 2 would fail, so starting it would set hasFailure.
+        throw new Error(`item-${item}`);
+      },
+      {
+        maxConcurrency: 2,
+        itemSerdes,
+        completionConfig: { minSuccessful: 1 },
+      },
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(executed).toEqual([]);
+    releaseItem1();
+
+    const result = await pending;
+    expect(statusesOf(result)).toEqual([
+      BatchItemStatus.SUCCEEDED,
+      BatchItemStatus.SUCCEEDED,
+    ]);
+    expect(result.hasFailure).toBe(false);
+    expect(executed).toEqual([]);
+  });
 });

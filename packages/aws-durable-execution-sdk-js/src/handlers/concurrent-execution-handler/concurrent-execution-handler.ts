@@ -679,14 +679,22 @@ export class ConcurrencyController<Logger extends DurableLogger> {
    *
    * A batch can resume after an earlier invocation ended between the item
    * checkpoints and the batch checkpoint. Then several items already have a
-   * terminal record. Those items finished before that invocation's
-   * completion decision, because the checkpoint gate drops every item
-   * checkpoint after the batch context finishes. But they settle again here
-   * in index order, not in their original order. So an early recorded success
-   * could reach minSuccessful before a recorded failure settles, and the
-   * failure would be reported STARTED. So the controller does not decide
-   * until every item with a terminal record has settled. It still starts
-   * items in index order and within maxConcurrency.
+   * terminal record. This includes items that finished before that
+   * invocation's completion decision. It can also include an item that
+   * recorded its outcome after the decision but before the batch context
+   * finished, which the live result reported STARTED (issue #967). On resume,
+   * the recorded items settle again in index order, not in their original
+   * order. So an early recorded success could reach minSuccessful before a
+   * recorded failure settles, and the failure would be reported STARTED.
+   *
+   * So while any recorded item has not settled, the controller does not
+   * decide. During that time it starts items only up to the last recorded
+   * index, because each recorded item needs its own start to get its id. It
+   * starts no later item, because the original invocation may have stopped
+   * before it. Once every recorded item has settled, the controller evaluates
+   * completion first, and only then starts later items under the normal rules.
+   * So every recorded outcome is kept, and no item runs that the completion
+   * rule would not start.
    */
   private async executeItemsConcurrently<T, R>(
     items: ConcurrentExecutionItem<T>[],
@@ -733,6 +741,7 @@ export class ConcurrencyController<Logger extends DurableLogger> {
     // The recorded items that have not settled yet.
     let unsettledRecorded = recordedTerminal.size;
     const reconciling = (): boolean => unsettledRecorded > 0;
+    const lastRecorded = Math.max(-1, ...recordedTerminal);
 
     log("🚀", `Starting ${this.operationName} with concurrency control:`, {
       itemCount: items.length,
@@ -829,7 +838,7 @@ export class ConcurrencyController<Logger extends DurableLogger> {
         while (
           activeCount < maxConcurrency &&
           currentIndex < items.length &&
-          (reconciling() || shouldContinue())
+          (reconciling() ? currentIndex <= lastRecorded : shouldContinue())
         ) {
           const index = currentIndex++;
           const item = items[index];

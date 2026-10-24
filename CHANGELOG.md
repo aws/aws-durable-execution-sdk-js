@@ -139,10 +139,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A `map` or `parallel` that resumed after an earlier invocation ended between the item
   checkpoints and the batch checkpoint could drop a recorded outcome. The items with a recorded
   outcome settle again in index order, not in their original order. With `minSuccessful`, an
-  early recorded success could complete the batch before a recorded failure settled. The
-  failure was then reported `STARTED`, or with `maxConcurrency` not reported at all, and
-  `hasFailure` was `false`. Now the batch does not decide until every item with a recorded
-  outcome has settled. `NestingType.FLAT` items have no context record, so they are not covered.
+  early recorded success could complete the batch before another recorded item settled. That
+  item was then reported `STARTED`, or with `maxConcurrency` not reported at all. A dropped
+  failure also left `hasFailure` `false`. Now the batch does not decide until every item with a
+  recorded outcome has settled. Until then it starts items only up to the last recorded item.
+  So it keeps every recorded outcome and starts no item that its completion rule would not
+  start. `NestingType.FLAT` items have no context record, so they are not covered.
 
 - **Durable Execution Telemetry CDK stack**: `cdk synth` and `cdk deploy` check
   `destinations.aurora.engineVersion` against the Aurora PostgreSQL versions RDS offers in the
