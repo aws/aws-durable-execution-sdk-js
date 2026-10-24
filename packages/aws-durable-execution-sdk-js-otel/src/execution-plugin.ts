@@ -280,12 +280,13 @@ export class ExecutionOtelPlugin implements DurableInstrumentationPlugin {
         }
       }
 
-      // Set faas.max_memory if available
+      // Set faas.max_memory if available. Lambda gives the memory setting in
+      // MiB, and the semantic conventions define the attribute in bytes.
       const memorySize = process.env.AWS_LAMBDA_FUNCTION_MEMORY_SIZE;
       if (memorySize) {
         const parsed = parseInt(memorySize, 10);
         if (!isNaN(parsed)) {
-          invocationAttributes["faas.max_memory"] = parsed;
+          invocationAttributes["faas.max_memory"] = parsed * 1024 * 1024;
         }
       }
     }
