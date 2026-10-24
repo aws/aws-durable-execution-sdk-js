@@ -203,6 +203,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserve an already-exported context's identity for delayed child completion,
   and use the known backend end as a zero-duration start fallback when no start
   was recorded. Existing supplied timestamps and caller outcomes are preserved.
+- **OpenTelemetry**: `ExecutionOtelPlugin` with an application-owned provider now sets
+  `faas.max_memory` on the Invocation span in bytes, as the semantic conventions define it.
+  Before, it reported the `AWS_LAMBDA_FUNCTION_MEMORY_SIZE` value unchanged, in MiB, so a
+  1024 MiB function reported `1024` instead of `1073741824`. Update any query or alarm that
+  reads this attribute.
 
 - With `skipTime` enabled, the testing SDK's local runner now advances its fake clock by the full
   duration of every wait and retry delay. The checkpoint server recorded times on its own real
