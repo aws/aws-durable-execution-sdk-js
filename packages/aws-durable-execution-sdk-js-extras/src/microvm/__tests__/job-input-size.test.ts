@@ -111,20 +111,72 @@ describe("microvm job input size", () => {
   );
 
   it("rejects an input that JSON.stringify cannot encode, before any durable operation", async () => {
+    let encodeError: unknown;
+    try {
+      JSON.stringify({ count: 1n });
+    } catch (error) {
+      encodeError = error;
+    }
     const client = new FakeMicrovmsClient();
     const runner = new LocalDurableTestRunner({
       handlerFunction: withDurableExecution(
         async (_event: unknown, context: DurableContext) =>
-          microvm(context, "build", { count: 1n }, baseConfig(client)),
+          // The handler returns the error's fields, so the test can read
+          // the cause.
+          microvm(context, "build", { count: 1n }, baseConfig(client)).then(
+            () => "no error",
+            (error: Error) => ({
+              name: error.name,
+              message: error.message,
+              causeName: (error.cause as Error).name,
+              causeMessage: (error.cause as Error).message,
+            }),
+          ),
       ),
     });
 
     const execution = await runner.run({ payload: {} });
 
-    expect(execution.getStatus()).toBe("FAILED");
-    expect(execution.getError()?.errorType).toBe("TypeError");
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    expect(execution.getResult()).toEqual({
+      name: "TypeError",
+      message: `MicroVM "build": the job input must be JSON-serializable: ${(encodeError as Error).message}`,
+      causeName: "TypeError",
+      causeMessage: (encodeError as Error).message,
+    });
     expect(execution.getOperations()).toHaveLength(0);
     expect(client.runInputs).toHaveLength(0);
+  });
+
+  it("accepts an undefined input, and sends a body without an input field", async () => {
+    const client = new FakeMicrovmsClient();
+    const endpoint = new FakeEndpoint();
+    const runner = new LocalDurableTestRunner({
+      handlerFunction: withDurableExecution(
+        async (_event: unknown, context: DurableContext) =>
+          // `request.path` selects HTTP delivery. So the job goes in a body
+          // that the test can read.
+          microvm(context, "build", undefined, {
+            ...baseConfig(client),
+            heartbeatTimeout: { hours: 1 },
+            request: { path: "/job" },
+            fetch: endpoint.fetch,
+          }),
+      ),
+    });
+
+    const executionPromise = runner.run({ payload: {} });
+    const callback = runner.getOperation("build.callback");
+    await callback.waitForData(WaitingOperationStatus.STARTED);
+    await runner
+      .getOperation("build.request")
+      .waitForData(WaitingOperationStatus.COMPLETED);
+    await callback.sendCallbackSuccess(JSON.stringify("done"));
+    const execution = await executionPromise;
+
+    expect(execution.getStatus()).toBe("SUCCEEDED");
+    expect(endpoint.requests).toHaveLength(1);
+    expect("input" in endpoint.requests[0].body).toBe(false);
   });
 });
 

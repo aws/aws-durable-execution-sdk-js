@@ -128,14 +128,25 @@ export const MAX_JOB_INPUT_BYTES = 6 * 1024 * 1024 - 8 * 1024;
  *
  * The check encodes the input with `JSON.stringify`, as the job body does.
  * So a value that `JSON.stringify` cannot encode, such as a `BigInt`, also
- * fails here, with the `TypeError` of `JSON.stringify`.
+ * fails here. The error of `JSON.stringify` does not name the operation. So
+ * the check throws a `TypeError` that names the operation, with the error of
+ * `JSON.stringify` as its `cause`.
  *
+ * @throws \{TypeError\} When `JSON.stringify` cannot encode the input.
  * @throws \{RangeError\} When the input is too large.
  */
 export function validateJobInput(name: string, input: unknown): void {
-  // JSON.stringify returns undefined for an undefined input. The body then
-  // has no `input` field.
-  const json = JSON.stringify(input);
+  let json: string | undefined;
+  try {
+    // JSON.stringify returns undefined for an undefined input. The body then
+    // has no `input` field.
+    json = JSON.stringify(input);
+  } catch (error) {
+    throw new TypeError(
+      `MicroVM "${name}": the job input must be JSON-serializable: ${(error as Error).message}`,
+      { cause: error },
+    );
+  }
   const bytes = json === undefined ? 0 : Buffer.byteLength(json, "utf8");
   if (bytes > MAX_JOB_INPUT_BYTES) {
     throw new RangeError(

@@ -361,7 +361,7 @@ The operations retry network and service failures. They launch and terminate the
 1. Pass an input whose JSON form is the value that the job needs.
    - The operation sends `JSON.stringify(input)`. The worker passes the parsed JSON to the handler.
    - So `NaN` and `Infinity` arrive as `null`, a `Date` arrives as a string, and a property whose value is `undefined` is missing.
-   - A value that `JSON.stringify` cannot serialize, such as a `BigInt`, fails the call with a `TypeError` before any durable operation starts.
+   - A value that `JSON.stringify` cannot serialize, such as a `BigInt`, fails the call before any durable operation starts. The call throws a `TypeError` whose message names the operation. Its `cause` is the error of `JSON.stringify`.
 2. Keep the input's JSON form within `MAX_JOB_INPUT_BYTES` (6,283,264 bytes, 6 MiB minus 8 KiB). Pass larger data by reference, for example as an S3 key.
    - The job body is the input as UTF-8 JSON, plus the callback ID and a few other fields.
    - The worker refuses a job body over 6 MiB (6,291,456 bytes), and does not run the job.
