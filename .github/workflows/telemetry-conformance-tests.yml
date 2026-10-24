@@ -1,14 +1,10 @@
 name: Telemetry Conformance Tests
 
 # SDK handlers and builds live here. The shared workflow deploys and validates them.
-# Include the parent PR branch while this change is stacked on PR #1046.
-# Remove that branch filter when retargeting this PR to main.
 
 on:
   pull_request:
-    branches:
-      - main
-      - feat/conformance-tests-telemetry
+    branches: [main]
     paths:
       - "packages/aws-durable-execution-sdk-js/**"
       - "packages/aws-durable-execution-sdk-js-telemetry-exporter/**"
@@ -50,7 +46,10 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    uses: aws/aws-durable-execution-conformance-tests/.github/workflows/telemetry-suite.yml@21fd4c244d9260d34b10cd6ee52c877846e9a458
+    # The pinned SHA also selects the runner and telemetry-extension revision the shared
+    # workflow installs, so it must be reachable from a branch. It is the head of
+    # aws-durable-execution-conformance-tests PR #150; re-pin to that PR's merge commit once it lands.
+    uses: aws/aws-durable-execution-conformance-tests/.github/workflows/telemetry-suite.yml@3e4fdaf0dda35ed8f64fb0d18365ef05a6a447fe
     with:
       language: js
       resource_prefix: js
