@@ -409,14 +409,17 @@ export interface MicrovmWorkerListener {
  *    the end of a `suspend` hook's 30 seconds during the call, has already
  *    ended the refusal. The worker then accepts jobs at once, and tries the
  *    call again one idle time after the call and every job end.
- * 9. The listener logs one warning for each failed call. The message and
- *    the field `outcome` name the outcome: `rejected`, `refusedForNow`, or
- *    `unknown`. The field `suspendHookArrived` shows whether a `suspend`
- *    hook arrived during the call. The fields `terminating` and `closed`
- *    show whether the MicroVM is terminating and whether the listener is
- *    closed. The listener logs the warning after it has acted on the
- *    outcome. So the field `refusingJobs` is true when the listener answers
- *    jobs with HTTP 503 after it has acted on the outcome.
+ * 9. The listener logs one warning for each failed call. The message names
+ *    the outcome. The fields are, in order, `microvmId`, `error`,
+ *    `outcome`, `suspendHookArrived`, `terminating`, `closed`, and
+ *    `refusingJobs`. `microvmId` is the MicroVM ID of the call. `error`
+ *    holds the name and the message of the error. `outcome` is `rejected`,
+ *    `refusedForNow`, or `unknown`. `suspendHookArrived` states whether a
+ *    `suspend` hook arrived since the idle time ended. `terminating` states
+ *    whether a `terminate` hook came before the listener acted on the
+ *    outcome. `closed` states whether `close()` came before the listener
+ *    acted on the outcome. `refusingJobs` states whether the listener
+ *    answers jobs with HTTP 503 after it has acted on the outcome.
  *
  * The listener counts only jobs. It cannot see background processes, or
  * inbound traffic that is not a job. A MicroVM that must keep such work
@@ -719,6 +722,10 @@ export function createMicrovmWorkerListener<
       idleMs,
       waitedMs,
     });
+    // The idle timer callback set `suspending` and called this function. No
+    // await runs between that line and this one. A suspend hook counts in
+    // its own HTTP request event. So this count covers the time since the
+    // idle time ended, as in the Python worker.
     const hooksBefore = suspendHooks;
     try {
       await client.send(
