@@ -220,6 +220,11 @@ function decideOnOriginalMessage(strategy: RetryStrategy): RetryStrategy {
 /**
  * Validates the fields that both operations share.
  *
+ * `imageIdentifier` and `executionRoleArn` are not checked here. RunMicrovm
+ * rejects an empty value with `ValidationException`. The default retry
+ * strategy does not retry it. So the operation fails with
+ * `MicrovmLaunchError` after one launch attempt.
+ *
  * @returns The timeout in seconds.
  */
 export function validateBaseConfig(
@@ -228,12 +233,6 @@ export function validateBaseConfig(
 ): number {
   if (typeof name !== "string" || name.length === 0) {
     throw new TypeError("a MicroVM operation requires a non-empty name");
-  }
-  if (!config?.imageIdentifier) {
-    throw new TypeError(`MicroVM "${name}": imageIdentifier is required`);
-  }
-  if (!config.executionRoleArn) {
-    throw new TypeError(`MicroVM "${name}": executionRoleArn is required`);
   }
   return validateTimeout(name, "timeout", config.timeout);
 }
@@ -627,10 +626,17 @@ export function sha256Hex(value: string): string {
  * milliseconds. The first retry tier uses it to stop before the invocation
  * times out.
  *
- * AWS Lambda's context has `getRemainingTimeInMillis()`. The context of
- * another compute may lack it, or its implementation may throw or return no
- * finite number. The function returns `undefined` in each of these cases. So
- * the caller falls back to its own time limit, and nothing fails.
+ * AWS Lambda's context has `getRemainingTimeInMillis()`. A local or test
+ * runner can pass no Lambda context, or one without that function. The
+ * returned function then returns `undefined`, and the caller applies only its
+ * own time limit.
+ *
+ * Otherwise the returned function passes on the value of
+ * `getRemainingTimeInMillis()` unchanged. `reserveStartsAt` and
+ * `assertTimeToDeliver` read it, and both treat a value that is not a finite
+ * number as no deadline. A `getRemainingTimeInMillis()` that throws fails the
+ * step that reads it. So a broken reader never turns off the invocation
+ * reserve without a sign.
  */
 export function remainingTime(
   context: DurableContext,
@@ -642,17 +648,7 @@ export function remainingTime(
   if (typeof read !== "function") {
     return (): undefined => undefined;
   }
-  return (): number | undefined => {
-    let value: unknown;
-    try {
-      value = read.call(lambdaContext);
-    } catch {
-      return undefined;
-    }
-    return typeof value === "number" && Number.isFinite(value)
-      ? value
-      : undefined;
-  };
+  return () => read.call(lambdaContext) as number | undefined;
 }
 
 /**

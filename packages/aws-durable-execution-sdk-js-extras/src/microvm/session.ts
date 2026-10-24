@@ -93,16 +93,20 @@ import type {
  * @param config - The MicroVM configuration. `timeout` bounds the whole
  * session.
  * @param handler - Sends the jobs. It receives the session handle and the
- * session's child context.
+ * session's child context. It must be a function. The session calls it after
+ * the launch, inside the child context. So a value that is not a function
+ * fails the session with a `TypeError`, wrapped in `ChildContextError`, and
+ * the terminate step still ends the MicroVM.
  * @returns The handler's return value.
- * @throws \{TypeError\} When `name`, `imageIdentifier`, `executionRoleArn`, or
- * `handler` is invalid.
+ * @throws \{TypeError\} When `name` is invalid.
  * @throws \{RangeError\} When `timeout` is not between 1 second and 8 hours,
  * or `autoSuspendIdleTime` is shorter than 10 seconds or longer than
  * `timeout`.
  * @throws \{TypeError\} When `autoSuspendIdleTime` is set while
  * `autoSuspendOnIdle` is not `true`.
  * @throws \{MicrovmLaunchError\} When the launch fails after all retries.
+ * An empty `imageIdentifier` or `executionRoleArn` fails this way, because
+ * `RunMicrovm` rejects it with `ValidationException`.
  *
  * @public
  *
@@ -121,11 +125,6 @@ export function microvmSession<TOutput = unknown>(
     timeoutSeconds = validateBaseConfig(name, config);
     autoSuspendIdleSeconds = validateAutoSuspend(name, config, timeoutSeconds);
     scope = createScope(context, name, config);
-    if (typeof handler !== "function") {
-      throw new TypeError(
-        `MicroVM session "${name}": handler must be a function`,
-      );
-    }
   } catch (error) {
     return new DurablePromise<TOutput>(() => Promise.reject(error));
   }
@@ -307,16 +306,6 @@ function invokeJob<TOutput, TInput>(
   options: MicrovmInvokeOptions,
 ): DurablePromise<TOutput> {
   try {
-    // A call in the shape vm.invoke(name, input, options) passes a string
-    // here. This check reports that, instead of a TypeError from inside.
-    if (
-      typeof (context as { runInChildContext?: unknown } | undefined)
-        ?.runInChildContext !== "function"
-    ) {
-      throw new TypeError(
-        `MicroVM session "${scope.name}": invoke requires the durable context to create the job in, as its first argument`,
-      );
-    }
     if (typeof jobName !== "string" || jobName.length === 0) {
       throw new TypeError(
         `MicroVM session "${scope.name}": invoke requires a non-empty job name`,

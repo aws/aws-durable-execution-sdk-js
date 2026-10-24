@@ -22,6 +22,7 @@ import {
   durationToSeconds,
   MAX_RUN_HOOK_PAYLOAD_LENGTH,
   type MicrovmConfig,
+  MicrovmLaunchError,
   microvm,
 } from "..";
 import {
@@ -428,26 +429,43 @@ describe("microvm", () => {
     ).not.toContain("build.request");
   });
 
-  it.each<[string, Partial<MicrovmConfig>, string]>([
-    ["imageIdentifier", { imageIdentifier: "" }, "imageIdentifier is required"],
-    [
-      "executionRoleArn",
-      { executionRoleArn: "" },
-      "executionRoleArn is required",
-    ],
-  ])("rejects an empty %s", async (_field, overrides, message) => {
-    const client = new FakeMicrovmsClient();
-    const handler = withDurableExecution(
-      async (event: unknown, context: DurableContext) =>
-        microvm(context, "build", event, baseConfig(client, overrides)),
-    );
-    const runner = new LocalDurableTestRunner({ handlerFunction: handler });
+  it.each<[string, Partial<MicrovmConfig>]>([
+    ["imageIdentifier", { imageIdentifier: "" }],
+    ["executionRoleArn", { executionRoleArn: "" }],
+  ])(
+    "sends an empty %s to RunMicrovm, and fails with MicrovmLaunchError when RunMicrovm rejects it",
+    async (field, overrides) => {
+      const client = new FakeMicrovmsClient();
+      client.runResponses = [
+        throwing(
+          new ValidationException({
+            message: `${field} must not be empty`,
+            ...metadata,
+          }),
+        ),
+      ];
+      const handler = withDurableExecution(
+        async (event: unknown, context: DurableContext) =>
+          microvm(context, "build", event, baseConfig(client, overrides)).catch(
+            (error: unknown) => ({
+              launchError: error instanceof MicrovmLaunchError,
+              message: (error as Error).message,
+            }),
+          ),
+      );
+      const runner = new LocalDurableTestRunner({ handlerFunction: handler });
 
-    const execution = await runner.run({ payload: {} });
+      const execution = await runner.run({ payload: {} });
 
-    expect(execution.getStatus()).toBe("FAILED");
-    expect(execution.getError()?.errorMessage).toContain(message);
-  });
+      expect(execution.getResult()).toEqual({
+        launchError: true,
+        message: expect.stringContaining(`${field} must not be empty`),
+      });
+      expect(client.runInputs).toHaveLength(1);
+      expect(client.runInputs[0]).toMatchObject(overrides);
+      expect(client.terminateInputs).toHaveLength(0);
+    },
+  );
 });
 
 describe("defaultMicrovmRetryStrategy", () => {

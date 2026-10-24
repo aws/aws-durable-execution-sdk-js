@@ -369,7 +369,10 @@ export interface MicrovmSession {
    * context that the call runs in, as for {@link microvm}: the session's
    * child context, or a nested one, such as a `map` item's context. A durable
    * operation created in a parent context from inside a child context fails
-   * the execution.
+   * the execution. `invoke` checks `name` and `options` first, and then calls
+   * `context.runInChildContext`. So a `context` without that function makes
+   * `invoke` throw a `TypeError` itself, instead of returning a rejected
+   * promise. No job operation is created then.
    *
    * @throws \{MicrovmJobFailedError\} When the job handler in the MicroVM
    * throws.
@@ -382,8 +385,7 @@ export interface MicrovmSession {
    * removed.
    * @throws \{MicrovmDeliveryError\} When the request fails after all
    * retries, or the route rejects the job.
-   * @throws \{TypeError\} When `context` is not a durable context, or
-   * `name`, `path`, or `port` is invalid.
+   * @throws \{TypeError\} When `name`, `path`, or `port` is invalid.
    * @throws \{RangeError\} When `timeout` or `retryWindow` is out of range.
    */
   invoke<TOutput = unknown, TInput = unknown>(
