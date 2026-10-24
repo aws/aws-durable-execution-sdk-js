@@ -169,14 +169,9 @@ export function microvmSession<TOutput = unknown>(
       //    502. The request step retries a 502 until both retry tiers end.
       // 5. So each job follows the resume mode that the launch recorded, not
       //    the current config.
-      // A launch checkpoint written before this change has no
-      // `resumeBeforeDelivery` field. The code before this change computed
-      // the mode from the current config on every replay. So the session does
-      // the same for such a checkpoint.
-      const resumeBeforeDelivery =
-        typeof launched.resumeBeforeDelivery === "boolean"
-          ? launched.resumeBeforeDelivery
-          : resumeFromConfig;
+      // The launch step records the field for every session. So a checkpoint
+      // without it reads as false.
+      const resumeBeforeDelivery = launched.resumeBeforeDelivery === true;
 
       try {
         return await handler(

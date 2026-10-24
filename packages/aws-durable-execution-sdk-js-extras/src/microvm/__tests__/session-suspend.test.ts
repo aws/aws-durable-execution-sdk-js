@@ -710,33 +710,20 @@ describe("microvmSession resume mode", () => {
     ]);
   });
 
-  it.each<[string, Partial<MicrovmSessionConfig>, string[]]>([
-    [
-      "checks the state when the current config can suspend",
-      { autoSuspendOnIdle: true },
-      [
-        "get:RUNNING",
-        "request:/first",
-        "get:RUNNING",
-        "request:/second",
-        "terminate",
-      ],
-    ],
-    [
-      "makes no state check when the current config cannot suspend",
-      { autoSuspendOnIdle: false },
-      ["request:/first", "request:/second", "terminate"],
-    ],
+  it.each<[string, Record<string, unknown>]>([
+    ["no resume mode", {}],
+    ["a resume mode that is not a boolean", { resumeBeforeDelivery: "true" }],
   ])(
-    "for a launch checkpoint without a resume mode, %s",
-    async (_label, overrides, events) => {
-      // The code before this change checkpointed the launch without
-      // `resumeBeforeDelivery`. The replacement step writes that shape, so
-      // every replay reads it.
-      checkpointLaunchAs({});
+    "makes no state check for a launch checkpoint with %s",
+    async (_label, fields) => {
+      // The current config can suspend. The checkpoint decides the resume
+      // mode. Only `true` turns the state check on.
+      checkpointLaunchAs(fields);
       const client = new FakeMicrovmsClient();
       const endpoint = recordingEndpoint(client);
-      const runner = runnerFor(client, endpoint, twoJobsWithWait, overrides);
+      const runner = runnerFor(client, endpoint, twoJobsWithWait, {
+        autoSuspendOnIdle: true,
+      });
 
       const executionPromise = runner.run({ payload: {} });
       await complete(runner, "first", "one");
@@ -744,55 +731,11 @@ describe("microvmSession resume mode", () => {
       const execution = await executionPromise;
 
       expect(execution.getStatus()).toBe("SUCCEEDED");
-      expect(
-        runner.getOperation("pipeline.launch").getStepDetails()?.result,
-      ).not.toHaveProperty("resumeBeforeDelivery");
-      expect(client.events).toEqual(events);
-    },
-  );
-
-  it.each<[unknown, Partial<MicrovmSessionConfig>, string[]]>([
-    [
-      "false",
-      { autoSuspendOnIdle: false },
-      ["request:/first", "request:/second", "terminate"],
-    ],
-    [
-      1,
-      { autoSuspendOnIdle: false },
-      ["request:/first", "request:/second", "terminate"],
-    ],
-    [
-      0,
-      { autoSuspendOnIdle: true },
-      [
-        "get:RUNNING",
+      expect(client.events).toEqual([
         "request:/first",
-        "get:RUNNING",
         "request:/second",
         "terminate",
-      ],
-    ],
-  ])(
-    "follows the current config for a checkpointed resume mode of %p",
-    async (recorded, overrides, events) => {
-      // Only a boolean is a resume mode. A truthy or falsy value of another
-      // type must not decide whether a job checks the MicroVM state.
-      checkpointLaunchAs({ resumeBeforeDelivery: recorded });
-      const client = new FakeMicrovmsClient();
-      const endpoint = recordingEndpoint(client);
-      const runner = runnerFor(client, endpoint, twoJobsWithWait, overrides);
-
-      const executionPromise = runner.run({ payload: {} });
-      await complete(runner, "first", "one");
-      await complete(runner, "second", "two");
-      const execution = await executionPromise;
-
-      expect(execution.getStatus()).toBe("SUCCEEDED");
-      expect(
-        runner.getOperation("pipeline.launch").getStepDetails()?.result,
-      ).toHaveProperty("resumeBeforeDelivery", recorded);
-      expect(client.events).toEqual(events);
+      ]);
     },
   );
 });
