@@ -343,6 +343,7 @@ export class CheckpointManager implements Checkpoint {
     // Check if any ancestor is finished - if so, don't queue and don't resolve
     if (this.hasFinishedAncestor(stepId)) {
       log("⚠️", "Checkpoint skipped - ancestor already finished:", { stepId });
+      this.releaseAbandonedOperation(stepId);
       return new Promise(() => {}); // Never resolves when ancestor is finished
     }
 
@@ -911,6 +912,30 @@ export class CheckpointManager implements Checkpoint {
   }
 
   // ===== Private Helper Methods =====
+
+  /**
+   * Stops counting an operation as EXECUTING after its checkpoint was dropped
+   * because an ancestor finished.
+   *
+   * 1. The dropped checkpoint returns a promise that never settles.
+   * 2. A step awaits that promise while it is EXECUTING. So it would stay
+   *    EXECUTING for the rest of the invocation.
+   * 3. Rule 4 of shouldTerminate blocks suspension while any operation is
+   *    EXECUTING. Rule 5 cleans up only waiting and idle operations.
+   * 4. So a later wait or callback could not suspend the invocation, and the
+   *    invocation would run until the Lambda timeout.
+   *
+   * The finished ancestor never reads this operation's outcome. So the
+   * operation is marked COMPLETED. It stays in the map, so a later
+   * markOperationState call for it still finds its metadata.
+   */
+  private releaseAbandonedOperation(stepId: string): void {
+    const op = this.operations.get(stepId);
+    if (op?.state !== OperationLifecycleState.EXECUTING) {
+      return;
+    }
+    this.markOperationState(stepId, OperationLifecycleState.COMPLETED);
+  }
 
   private cleanupOperation(stepId: string): void {
     const op = this.operations.get(stepId);

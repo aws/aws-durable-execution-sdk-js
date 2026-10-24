@@ -164,7 +164,7 @@ describe("ConcurrencyController decides on terminal reports (issue #967)", () =>
     expect(close).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps starting items when an item reports while the start loop runs", async () => {
+  it("holds an item's concurrency slot until the item settles", async () => {
     const controller = new ConcurrencyController<DurableLogger>("test");
     // Every item reports synchronously inside runInChildContext, like an item
     // that finished in an earlier invocation.
@@ -176,9 +176,13 @@ describe("ConcurrencyController decides on terminal reports (issue #967)", () =>
     const promise = controller.executeItems(itemsOf(3), jest.fn(), parent, {
       maxConcurrency: 1,
     });
-    expect(started).toHaveLength(3);
-    for (const item of started) {
-      item.settle();
+    // Item 0 has reported but still runs until it settles.
+    expect(started).toHaveLength(1);
+
+    for (let i = 0; i < 3; i++) {
+      started[i].settle();
+      await flush();
+      expect(started).toHaveLength(Math.min(i + 2, 3));
     }
 
     const result = await promise;
@@ -206,17 +210,28 @@ describe("ConcurrencyController decides on terminal reports (issue #967)", () =>
     expect(result.completionReason).toBe("MIN_SUCCESSFUL_REACHED");
   });
 
-  it("reports the settled outcome when an item fails after reporting SUCCEEDED", async () => {
+  it("counts the settled outcome when an item settles differently than it reported", async () => {
     const controller = new ConcurrencyController<DurableLogger>("test");
-    // Item 0 reports SUCCEEDED, then its deserialization fails.
-    const { parent, started } = createScriptedParent(["FAILED"]);
+    // Item 0 reports SUCCEEDED and then rejects. This happens when an item
+    // finished in an earlier invocation with ReplayChildren: it reports at
+    // once, then its function is re-run and throws.
+    const { parent, started } = createScriptedParent(["FAILED", "SUCCEEDED"]);
 
-    const promise = controller.executeItems(itemsOf(1), jest.fn(), parent, {});
+    const promise = controller.executeItems(itemsOf(2), jest.fn(), parent, {});
     started[0].report("SUCCEEDED");
+    started[1].report("SUCCEEDED");
     started[0].settle();
+    started[1].settle();
 
     const result = await promise;
-    expect(result.all[0].status).toBe(BatchItemStatus.FAILED);
+    expect(result.all.map((item) => item.status)).toEqual([
+      BatchItemStatus.FAILED,
+      BatchItemStatus.SUCCEEDED,
+    ]);
     expect(result.all[0].error?.message).toBe("error-0");
+    expect(result.successCount).toBe(1);
+    expect(result.failureCount).toBe(1);
+    // The default fail-fast reason follows the settled failure.
+    expect(result.completionReason).toBe("FAILURE_TOLERANCE_EXCEEDED");
   });
 });

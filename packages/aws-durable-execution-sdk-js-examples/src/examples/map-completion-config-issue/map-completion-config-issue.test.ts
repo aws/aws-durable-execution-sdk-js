@@ -29,8 +29,10 @@ createTests({
       };
 
       // Verify the correct behavior after the fix
+      // Items 0 and 2 record their success before item 0 settles and frees
+      // its concurrency slot. So the batch completes before item 3 starts.
       expect(result).toMatchObject({
-        totalItems: 4,
+        totalItems: 3,
         successfulCount: 2,
         failedCount: 0, // Fixed: failures are now properly handled when minSuccessful is reached
         hasFailures: false,
