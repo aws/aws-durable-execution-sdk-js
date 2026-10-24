@@ -43,6 +43,12 @@ export enum BatchItemStatus {
    * Item was still in flight when the batch completed early. Observability
    * only and not guaranteed to survive suspend/resume reconstruction — see
    * {@link BatchResult.started}.
+   *
+   * The batch decides when an item's result reaches it. An item whose result
+   * had not reached the batch at that moment is STARTED, even if it finished
+   * in the same moment. Its child context can still show SUCCEEDED or FAILED
+   * in the execution history, because it can finish before the batch's own
+   * checkpoint is written. The BatchResult is the authoritative outcome.
    */
   STARTED = "STARTED",
 }

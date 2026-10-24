@@ -232,6 +232,19 @@ const results = await context.parallel(
 
 **Note**: `parallel()` executes durable operations within the same Lambda invocation. Each branch runs in its own child context with isolated state tracking.
 
+### Early completion
+
+A `map()` or `parallel()` completes early when its completion rule is met before every item has finished. The default rule is fail-fast, which completes the batch at the first failure. `minSuccessful`, `toleratedFailureCount`, `toleratedFailurePercentage` and `shouldComplete` set other rules.
+
+The batch decides when an item's result reaches it. Items still running at that moment are abandoned:
+
+- The batch reports them as `STARTED` and does not count them in `successCount` or `failureCount`.
+- The batch does not wait for them. Once the batch's context finishes, their checkpoints are no longer recorded.
+
+An abandoned item can still finish just before the batch's own checkpoint is written. Its child context can then show `SUCCEEDED` or `FAILED` in the execution history while the `BatchResult` reports it as `STARTED`. This can happen even when the item finished in the same moment as the item that completed the batch. The `BatchResult` is the authoritative outcome. Replay returns the same completed items and the same `completionReason`.
+
+So do not rely on an abandoned item's result. If you need the result of every item that finishes, do not configure an early-completion rule: set `toleratedFailurePercentage: 100` to run every item and inspect `failed()` afterwards.
+
 ### Promise Combinators
 
 For fast, in-memory operations (use `map()` or `parallel()` for durable operations):
