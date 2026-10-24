@@ -327,8 +327,8 @@ The operations retry network and service failures. They launch and terminate the
    - Lambda pins an execution that starts through a version or an alias to that version. So every replay and every step retry runs the same code and the same environment variables. See [Invoking Lambda durable functions](https://docs.aws.amazon.com/lambda/latest/dg/durable-invoking.html).
    - Lambda does not pin an execution that starts through `$LATEST`. After a deploy, the execution resumes on the new code.
    - So a launch step can retry on the new code, with new launch settings. The retry sends the client token of the first attempt.
-   - The service can then reject the launch, and the operation fails with `MicrovmLaunchError`. The MicroVM of the first attempt then runs until its maximum duration.
-   - Or a session can record a resume mode that does not match its MicroVM. Its jobs can then fail with `MicrovmDeliveryError`, after both retry tiers.
+   - When the first attempt created a MicroVM, `RunMicrovm` rejects the retry with `ValidationException`, because the token is the same and the parameters differ. The default retry strategy does not retry that error. So the operation fails with `MicrovmLaunchError`.
+   - The launch step did not checkpoint the ID of the first attempt's MicroVM. The terminate step runs only after a launch that succeeded. So the operation does not terminate that MicroVM, and it runs until its maximum duration: the `timeout` plus 5 minutes, at most 8 hours.
 2. Read a launch setting inside a step when it comes from a source that can change during an execution. Examples are SSM Parameter Store, AppConfig, and S3 objects.
    - Version pinning does not cover such a source. So a value read outside a step can differ between two attempts of the launch step.
    - The result is the same as after a deploy under `$LATEST`.
@@ -373,9 +373,12 @@ The operations retry network and service failures. They launch and terminate the
 
 ### Sessions and auto-suspend
 
-1. Set `autoSuspendIdleTime` to at least 10 seconds, and to at most the session `timeout`. `microvmSession` rejects any other value with a `RangeError`, before any durable operation starts. See [Suspending the MicroVM between jobs](#suspending-the-microvm-between-jobs).
+1. Set `autoSuspendOnIdle: true` whenever you set `autoSuspendIdleTime`. Set `autoSuspendIdleTime` to at least 10 seconds, and to at most the session `timeout`.
+   - Without `autoSuspendOnIdle: true`, `microvmSession` rejects any `autoSuspendIdleTime` with a `TypeError`.
+   - With it, `microvmSession` rejects an `autoSuspendIdleTime` under 10 seconds, or longer than the session `timeout`, with a `RangeError`.
+   - Both errors occur before any durable operation starts. See [Suspending the MicroVM between jobs](#suspending-the-microvm-between-jobs).
 2. Change `autoSuspendOnIdle` or `idlePolicy` only in a new published version.
-   - Under `$LATEST`, a launch step that retries after the change sends the new settings with the old client token. The session's jobs can then fail, as [Deploys and versions](#deploys-and-versions) describes.
+   - Under `$LATEST`, a launch step that retries after the change sends the new settings with the old client token. The launch can then fail with `MicrovmLaunchError`, as [Deploys and versions](#deploys-and-versions) describes.
    - A session that launched before the change keeps the resume mode that it recorded. See [Suspending the MicroVM between jobs](#suspending-the-microvm-between-jobs).
 3. Pass `vm.invoke` the context that the call runs in: the session handler's `ctx`, or a nested context such as a `map` item's context. Do not pass the outer `context` of the durable function. A durable operation that is created in a parent context from inside a child context fails the execution. See [`microvmSession`](#microvmsession-send-several-jobs-to-one-microvm).
 
