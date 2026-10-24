@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import * as cdk from "aws-cdk-lib";
 import { LambdaClient, paginateListFunctions } from "@aws-sdk/client-lambda";
+import { assertAuroraEngineVersionAvailable } from "./engine-version";
 import { TelemetryDestinationsStack } from "./stack";
 import * as config from "./config.json";
 
@@ -39,6 +40,15 @@ async function main(): Promise<void> {
   // Account and region are resolved from the AWS credentials/profile in use
   // when running `cdk synth`/`cdk deploy` (CDK CLI populates CDK_DEFAULT_*).
   // Override with `cdk deploy --region <region>` or AWS_REGION / AWS_PROFILE.
+  // An unsupported Aurora version otherwise fails only when CloudFormation
+  // creates the cluster, after the other resources exist. Check it first.
+  if (config.destinations.aurora.enabled) {
+    await assertAuroraEngineVersionAvailable(
+      config.destinations.aurora.engineVersion,
+      region,
+    );
+  }
+
   let discoveredRoleArns: string[] = [];
   if (config.lambda.discoverDurableFunctions) {
     discoveredRoleArns = await discoverDurableFunctionRoles(region);
