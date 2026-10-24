@@ -642,8 +642,8 @@ All plugin-created spans use `SpanKind.INTERNAL`.
   `durable.operation.status`.
 
 For `ExecutionOtelPlugin` with an application-owned provider, Invocation also
-adds `cloud.resource_id` and `faas.max_memory` when the corresponding Lambda
-environment values are available.
+adds `cloud.resource_id` and `faas.max_memory` (in bytes) when the
+corresponding Lambda environment values are available.
 
 OpenTelemetry status mapping is:
 
