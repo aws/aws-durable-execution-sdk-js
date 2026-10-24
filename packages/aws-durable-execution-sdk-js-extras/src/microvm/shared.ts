@@ -102,6 +102,49 @@ export function fitsRunHook(payload: string): boolean {
 }
 
 /**
+ * The largest job input that {@link microvm} and {@link MicrovmSession.invoke}
+ * accept, in UTF-8 bytes of its JSON form: 6 MiB minus 8 KiB.
+ *
+ * 1. The worker refuses a job request body over 6 MiB.
+ * 2. The body holds the input's JSON and fixed fields: the version, the
+ *    Region, the MicroVM ID, the callback ID, and the heartbeat timeout.
+ * 3. The callback ID has at most 1,024 base64 characters. The MicroVM ID has
+ *    at most 256 characters, so at most 1,536 bytes as JSON. The other
+ *    fields take less than 200 bytes.
+ * 4. So the fixed fields take less than 3 KiB. So 8 KiB covers them.
+ *
+ * @experimental This constant is experimental and may be changed or removed in future releases.
+ */
+export const MAX_JOB_INPUT_BYTES = 6 * 1024 * 1024 - 8 * 1024;
+
+/**
+ * Rejects a job input whose JSON form has more than
+ * {@link MAX_JOB_INPUT_BYTES} UTF-8 bytes.
+ *
+ * Without this check, an oversized job launches a MicroVM first. The worker
+ * then refuses the body, with a 400 or a connection reset. The request step
+ * retries a reset in both retry tiers, for minutes, while the MicroVM is
+ * billed. So the caller checks the size before any durable operation starts.
+ *
+ * The check encodes the input with `JSON.stringify`, as the job body does.
+ * So a value that `JSON.stringify` cannot encode, such as a `BigInt`, also
+ * fails here, with the `TypeError` of `JSON.stringify`.
+ *
+ * @throws \{RangeError\} When the input is too large.
+ */
+export function validateJobInput(name: string, input: unknown): void {
+  // JSON.stringify returns undefined for an undefined input. The body then
+  // has no `input` field.
+  const json = JSON.stringify(input);
+  const bytes = json === undefined ? 0 : Buffer.byteLength(json, "utf8");
+  if (bytes > MAX_JOB_INPUT_BYTES) {
+    throw new RangeError(
+      `MicroVM "${name}": the job input is ${bytes} bytes as JSON. The limit is ${MAX_JOB_INPUT_BYTES} bytes, because the worker accepts a job body of at most 6 MiB. Pass larger data by reference, for example as an S3 key.`,
+    );
+  }
+}
+
+/**
  * The time added to the operation timeout to get the MicroVM's maximum
  * duration. The margin covers the launch. The MicroVM must outlive every job
  * callback, or the platform terminates it before the job can report.

@@ -384,7 +384,9 @@ export interface MicrovmSession {
    * retries, or the route rejects the job.
    * @throws \{TypeError\} When `context` is not a durable context, or
    * `name`, `path`, or `port` is invalid.
-   * @throws \{RangeError\} When `timeout` or `retryWindow` is out of range.
+   * @throws \{RangeError\} When `timeout` or `retryWindow` is out of range,
+   * or the JSON form of `input` has more than {@link MAX_JOB_INPUT_BYTES}
+   * UTF-8 bytes.
    */
   invoke<TOutput = unknown, TInput = unknown>(
     context: DurableContext,

@@ -14,6 +14,7 @@ import {
   type OperationScope,
   terminate,
   validateBaseConfig,
+  validateJobInput,
   validateRequest,
   validateTimeout,
 } from "./shared";
@@ -324,6 +325,7 @@ function invokeJob<TOutput, TInput>(
     }
     validateRequest(jobName, options);
     validateTimeout(jobName, "timeout", options.timeout);
+    validateJobInput(jobName, input);
   } catch (error) {
     return new DurablePromise<TOutput>(() => Promise.reject(error));
   }
