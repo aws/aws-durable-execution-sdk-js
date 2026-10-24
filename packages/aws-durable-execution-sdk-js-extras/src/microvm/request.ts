@@ -44,7 +44,6 @@ const INITIAL_DELAY_MS = 250;
 const MAX_DELAY_MS = 4_000;
 const REQUEST_TIMEOUT_MS = 10_000;
 const AUTH_TOKEN_MINUTES = 5;
-const MAX_REDIRECT_TARGET_LENGTH = 200;
 
 /**
  * Returns the time by which every call of the first tier must end: the
@@ -260,12 +259,15 @@ export interface SendJobOptions {
  * - CreateMicrovmAuthToken answers `ResourceNotFoundException`, for the first
  *   token or for the new one: throw `MicrovmStateError` at once. The MicroVM
  *   no longer exists.
- * - A redirect, 3xx: throw {@link MicrovmRequestRejectedError} at once, with
- *   the `Location` in the message, without its query and cut to 200
- *   characters. A followed 301, 302, or 303 would turn the
- *   POST into a GET without the job, and a followed redirect to another host
- *   would receive the auth token. A custom `fetch` that follows the redirect
- *   anyway fails the same way.
+ * - A redirect, 3xx: throw {@link MicrovmRequestRejectedError} at once. A
+ *   followed 301, 302, or 303 would turn the POST into a GET without the job,
+ *   and a followed redirect to another host would receive the auth token. A
+ *   custom `fetch` that follows the redirect anyway fails the same way. The
+ *   server sets the `Location` header. A query in the `Location` can hold a
+ *   secret, for example a presigned signature. The step failure is
+ *   checkpointed. So the message names the path, and the status of a 3xx
+ *   answer. It omits the `Location`, and the URL that a followed redirect
+ *   reached.
  *
  * The backoff starts at 250 milliseconds and doubles up to 4 seconds. The
  * tier ends at the retry window, or 10 seconds before the invocation times
@@ -336,8 +338,8 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
       unavailable,
     );
     let status: number | undefined;
-    let location: string | null = null;
-    let followedTo: string | undefined;
+    let hasLocation = false;
+    let followed = false;
     try {
       const response = await options.fetch(url, {
         method: "POST",
@@ -353,24 +355,21 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
         signal: AbortSignal.timeout(timeoutMs),
       });
       status = response.status;
-      location = response.headers.get("location");
-      if (response.redirected) {
-        followedTo = response.url;
-      }
+      hasLocation = Boolean(response.headers.get("location"));
+      followed = response.redirected;
       // The body is not used. Reading it releases the connection.
       await response.arrayBuffer().catch(() => undefined);
     } catch (error) {
       lastFailure = `${(error as Error).name}: ${(error as Error).message}`;
     }
 
-    if (status !== undefined && followedTo !== undefined) {
+    if (status !== undefined && followed) {
       // A custom fetch that does not pass `redirect` on followed a redirect.
       // A followed 301, 302, or 303 drops the job, and a followed 307 or 308
       // sent it to a route that the caller did not set. So the step fails
       // either way.
-      const target = redirectTarget(followedTo);
       throw new MicrovmRequestRejectedError(
-        `The MicroVM answered the job at ${options.path} with a redirect${target === undefined ? "" : ` to ${target}`}, and the fetch function followed it. The operation does not follow redirects, so set the path that the route serves, and make the fetch function honor init.redirect.`,
+        `The MicroVM answered the job at ${options.path} with a redirect, and the fetch function followed it. The operation does not follow redirects, so set the path that the route serves, and make the fetch function honor init.redirect.`,
         status,
       );
     }
@@ -397,10 +396,9 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
       if (status >= 300 && status < 400) {
         // A 3xx without a Location, such as a 304, is not a redirect, but it
         // does not accept the job either.
-        const target = redirectTarget(location);
         throw new MicrovmRequestRejectedError(
-          location
-            ? `The MicroVM answered the job at ${options.path} with HTTP ${status}, a redirect${target === undefined ? "" : ` to ${target}`}. The operation does not follow redirects, so set the path that the route serves.`
+          hasLocation
+            ? `The MicroVM answered the job at ${options.path} with HTTP ${status}, a redirect. The operation does not follow redirects, so set the path that the route serves.`
             : `The MicroVM answered the job at ${options.path} with HTTP ${status}`,
           status,
         );
@@ -440,22 +438,6 @@ export async function sendJob(options: SendJobOptions): Promise<number> {
       url = endpointUrl(endpoint, options.path);
     }
   }
-}
-
-/**
- * Returns a redirect target for an error message, or `undefined` when there
- * is none. The server sets the target, and the step failure is checkpointed.
- * So the query, which can hold a signature, and the fragment are dropped,
- * and the rest is cut to 200 characters.
- */
-function redirectTarget(url: string | null): string | undefined {
-  const target = url?.split(/[?#]/, 1)[0];
-  if (!target) {
-    return undefined;
-  }
-  return target.length > MAX_REDIRECT_TARGET_LENGTH
-    ? `${target.slice(0, MAX_REDIRECT_TARGET_LENGTH)}...`
-    : target;
 }
 
 /**
