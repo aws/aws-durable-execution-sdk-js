@@ -16,7 +16,8 @@ export type Scenario =
   | "same-turn"
   // As same-turn, but deserializing an item's result takes 5 ms.
   | "slow-item-deserialize"
-  // Item 1 fails 20 ms after the others succeed.
+  // Item 1 fails 1 s after the others succeed. The gap is long enough for
+  // the other items' checkpoints to complete against the real service.
   | "failure-later";
 
 const sleep = (ms: number): Promise<void> =>
@@ -44,7 +45,7 @@ export const handler = withDurableExecution(
           async () => {
             if (item === 1) {
               if (event.scenario === "failure-later") {
-                await sleep(20);
+                await sleep(1000);
               }
               throw new Error("boom");
             }
