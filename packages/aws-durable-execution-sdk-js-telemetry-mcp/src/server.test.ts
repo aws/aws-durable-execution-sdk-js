@@ -9,6 +9,7 @@
  * and NO AWS credentials, exercising the path that returns before any AWS call.
  */
 import { existsSync } from "node:fs";
+import os from "node:os";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -210,6 +211,60 @@ describeIfBuilt("durable-telemetry MCP server (spawned binary)", () => {
       // Supplied arguments are woven into the rendered guidance.
       expect(text).toContain("checkout-fn");
       expect(text).toContain("12");
+    },
+    TIMEOUT_MS,
+  );
+});
+
+// This server only queries an existing Athena table. The source S3 location is
+// needed only to create the table. So `test_destination` must not require
+// DURABLE_TELEMETRY_ATHENA_S3_LOCATION. The process gets no AWS credentials and
+// an empty HOME, so the AWS calls fail fast; the required-fields check runs
+// before them and is what this test reads.
+describeIfBuilt("test_destination on s3 without the S3 location", () => {
+  let client: Client;
+
+  beforeAll(async () => {
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [SERVER_PATH],
+      env: {
+        PATH: process.env.PATH ?? "",
+        HOME: os.tmpdir(),
+        AWS_EC2_METADATA_DISABLED: "true",
+        AWS_REGION: "us-east-1",
+        DURABLE_TELEMETRY_DESTINATION_TYPE: "s3",
+        DURABLE_TELEMETRY_ATHENA_DATABASE: "db",
+        DURABLE_TELEMETRY_ATHENA_OUTPUT_LOCATION: "s3://bucket/athena-results/",
+      },
+      stderr: "pipe",
+    });
+    client = new Client(
+      { name: "durable-telemetry-test-client", version: "0.0.0" },
+      { capabilities: {} },
+    );
+    await client.connect(transport);
+  }, TIMEOUT_MS);
+
+  afterAll(async () => {
+    await client?.close();
+  });
+
+  it(
+    "passes the required-fields check",
+    async () => {
+      const result = await client.callTool({
+        name: "test_destination",
+        arguments: {},
+      });
+      const content = result.content as Array<{ type: string; text?: string }>;
+      const payload = JSON.parse(content.find((c) => c.type === "text")!.text!);
+      expect(payload.missingEnvVars).toEqual([]);
+      const required = (
+        payload.checks as Array<{ label: string; ok: boolean; detail?: string }>
+      ).find((c) => c.label === "Required fields");
+      expect(required).toEqual(expect.objectContaining({ ok: true }));
+      expect(required?.detail).not.toMatch(/S3 Location/);
     },
     TIMEOUT_MS,
   );
