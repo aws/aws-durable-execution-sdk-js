@@ -44,10 +44,15 @@ The first argument is the context that the call runs in. Inside a child context 
 
 ### How the job reaches the MicroVM
 
-The operation picks the delivery from the input size, so the caller does not choose:
+The operation picks the delivery from the input size and the config:
 
-1. A job goes in the `RunMicrovm` request when its `run` hook payload fits in 4,096 Unicode code points. The payload holds the input, the callback ID, and a few other fields. The service counts code points, not bytes. So each code point counts once, whether it is ASCII, CJK, or an emoji. Lambda passes the payload to the `run` lifecycle hook. The MicroVM gets the `NO_INGRESS` connector, so nothing can reach it.
-2. A larger job goes over HTTP. The launch request carries no job, and a request step POSTs the job to the MicroVM after it starts. The input is limited only by the HTTP body. The MicroVM gets an ingress connector, and every request uses a short-lived auth token that the operation creates.
+1. A `microvm` job goes in the `RunMicrovm` request when its `run` hook payload fits in 4,096 Unicode code points and its config sets no `request.path`. The payload holds the input, the callback ID, and a few other fields. The service counts code points, not bytes. So a CJK character counts once, like an ASCII character. An emoji counts once for each of its code points. Lambda passes the payload to the `run` lifecycle hook. The MicroVM gets the `NO_INGRESS` connector, so nothing can reach it.
+2. Every other job goes over HTTP:
+   - A `microvm` job whose `run` hook payload is over 4,096 code points.
+   - A `microvm` job whose config sets `request.path`, whatever its size.
+   - Every `microvmSession` job.
+
+   The launch request carries no job, and a request step POSTs the job to the MicroVM after it starts. The worker package accepts a job body of at most 6 MiB. The MicroVM gets an ingress connector, and every request uses a short-lived auth token that the operation creates.
 
 The worker package runs its `handler` for both deliveries. So the code in the MicroVM does not change with the input size.
 
@@ -82,7 +87,7 @@ The terminate step runs only when the operation sees the job's outcome. In these
 
 - A `map` or `parallel` completes early, for example with `minSuccessful`, while an item still waits for its MicroVM. The SDK never runs that item again.
 - The execution fails, times out, or is stopped while the operation waits.
-- A launch attempt created a MicroVM, but the launch step failed, so the operation never learned the MicroVM's ID.
+- A launch attempt that timed out or lost its connection can still have created a MicroVM. When the launch step still fails, the operation never learns that MicroVM's ID. So it cannot terminate that MicroVM.
 
 ### Subtypes
 

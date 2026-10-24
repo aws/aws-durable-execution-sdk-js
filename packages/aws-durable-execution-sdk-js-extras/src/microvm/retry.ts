@@ -9,8 +9,8 @@ import type { RetryDecision } from "@aws/durable-execution-sdk-js";
  * Under `$LATEST`, a deploy between two attempts of the launch step can
  * change the parameters. The next attempt then sends the same client token
  * with different parameters. RunMicrovm rejects such a reuse with
- * `ValidationException`. That answer is what this comment states, not a
- * measured result of the service. A later attempt sends the same parameters
+ * `ValidationException`. No test or probe of the service confirms this
+ * error code. A later attempt sends the same parameters
  * again. So the later attempt fails the same way. So `ValidationException`
  * is not in this set.
  *
