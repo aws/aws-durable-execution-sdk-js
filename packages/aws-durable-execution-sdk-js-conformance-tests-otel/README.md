@@ -49,6 +49,14 @@ than guessed timer delays.
 The direct target is traversed again on replay, exposing duplicate terminal
 exports that a completed wait-for-callback container can otherwise hide.
 
+Case 11 pauses at `otel-invoke-replay-barrier` after the child invocation returns.
+The shared driver completes that callback after the second caller invocation
+ends. The third invocation replays the saved invoke result and returns it,
+without starting another child or exporting another terminal invoke span.
+The workflow pins the matching requirements from shared conformance PR #131.
+The shared cloud run checks the service trace carrier and full X-Ray ancestry;
+local replay tests do not establish those service-side properties.
+
 ## Layout
 
 ```
@@ -145,3 +153,9 @@ Two things to know when reading a run. Backends whose credentials are absent are
 rather than failed, so a green run does not necessarily mean every backend was exercised.
 And the suite jobs skip entirely for pull requests from forks, because they need AWS
 credentials.
+
+Case 27 (`chained-invoke-suspend`) invokes a child that performs a one-second
+durable wait and returns the original payload after resuming. Both views
+check two caller invocations, two child invocations and the child wait's
+parentage and continuation links. It replaces the suspended-child scenario
+formerly exercised by the short mode of `otel-long-running-4`.

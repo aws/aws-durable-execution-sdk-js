@@ -865,3 +865,55 @@ Resources:
       Environment:
         Variables:
           OTEL_PLUGIN_MODE: execution
+
+  Otel27ChainedInvokeSuspend:
+    Type: AWS::Serverless::Function
+    Condition: DeployInvocationView
+    TestingMetadata:
+      TestDescription:
+        - otel-invocation-27
+    Properties:
+      CodeUri: dist/
+      Handler: otel_27_chained_invoke_suspend.handler
+      FunctionName: !Sub "${AWS::StackName}-otel-invocation-27"
+      Role: !Ref LambdaExecutionRoleArn
+      Environment:
+        Variables:
+          OTEL_INVOKE_TARGET_FUNCTION_NAME: !Sub "${Otel27InvokeTarget.Arn}:$LATEST"
+
+  Otel27InvokeTarget:
+    Type: AWS::Serverless::Function
+    Condition: DeployInvocationView
+    Properties:
+      CodeUri: dist/
+      Handler: otel_27_chained_invoke_suspend.targetHandler
+      FunctionName: !Sub "${AWS::StackName}-otel-invocation-27-target"
+      Role: !Ref LambdaExecutionRoleArn
+
+  OtelExecution27ChainedInvokeSuspend:
+    Type: AWS::Serverless::Function
+    Condition: DeployExecutionView
+    TestingMetadata:
+      TestDescription:
+        - otel-execution-27
+    Properties:
+      CodeUri: dist/
+      Handler: otel_27_chained_invoke_suspend.handler
+      FunctionName: !Sub "${AWS::StackName}-otel-execution-27"
+      Role: !Ref LambdaExecutionRoleArn
+      Environment:
+        Variables:
+          OTEL_PLUGIN_MODE: execution
+          OTEL_INVOKE_TARGET_FUNCTION_NAME: !Sub "${OtelExecution27InvokeTarget.Arn}:$LATEST"
+
+  OtelExecution27InvokeTarget:
+    Type: AWS::Serverless::Function
+    Condition: DeployExecutionView
+    Properties:
+      CodeUri: dist/
+      Handler: otel_27_chained_invoke_suspend.targetHandler
+      FunctionName: !Sub "${AWS::StackName}-otel-execution-27-target"
+      Role: !Ref LambdaExecutionRoleArn
+      Environment:
+        Variables:
+          OTEL_PLUGIN_MODE: execution
