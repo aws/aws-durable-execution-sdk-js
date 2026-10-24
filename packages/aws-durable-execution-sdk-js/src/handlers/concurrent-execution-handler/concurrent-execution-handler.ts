@@ -279,6 +279,8 @@ export class ConcurrencyController<Logger extends DurableLogger> {
       executor,
       parentContext,
       config,
+      entityId,
+      executionContext,
     );
   }
 
@@ -672,11 +674,27 @@ export class ConcurrencyController<Logger extends DurableLogger> {
     return new BatchResultImpl(resultItems, completionReason);
   }
 
+  /**
+   * Runs the items and decides when the batch completes.
+   *
+   * A batch can resume after an earlier invocation ended between the item
+   * checkpoints and the batch checkpoint. Then several items already have a
+   * terminal record. Those items finished before that invocation's
+   * completion decision, because the checkpoint gate drops every item
+   * checkpoint after the batch context finishes. But they settle again here
+   * in index order, not in their original order. So an early recorded success
+   * could reach minSuccessful before a recorded failure settles, and the
+   * failure would be reported STARTED. So the controller does not decide
+   * until every item with a terminal record has settled. It still starts
+   * items in index order and within maxConcurrency.
+   */
   private async executeItemsConcurrently<T, R>(
     items: ConcurrentExecutionItem<T>[],
     executor: ConcurrentExecutor<T, R, Logger>,
     parentContext: DurableContext<Logger>,
     config: ConcurrencyConfig<R>,
+    batchEntityId?: string,
+    executionContext?: ExecutionContext,
   ): Promise<BatchResult<R>> {
     const maxConcurrency = config.maxConcurrency || Infinity;
     const resultItems: Array<BatchItem<R> | undefined> = new Array(
@@ -689,6 +707,32 @@ export class ConcurrencyController<Logger extends DurableLogger> {
     let completedCount = 0;
     let successCount = 0;
     let failureCount = 0;
+
+    // Items whose child context already has a terminal record from an
+    // earlier invocation. Items start in index order, so item i is the child
+    // entity `${batchEntityId}-${i + 1}`, as in replayItems. A FLAT item has
+    // no context record, so it is not in this set.
+    const recordedTerminal = new Set<number>();
+    if (
+      batchEntityId !== undefined &&
+      executionContext !== undefined &&
+      config.nesting !== NestingType.FLAT
+    ) {
+      for (let i = 0; i < items.length; i++) {
+        const status = executionContext.getStepData(
+          `${batchEntityId}-${i + 1}`,
+        )?.Status;
+        if (
+          status === OperationStatus.SUCCEEDED ||
+          status === OperationStatus.FAILED
+        ) {
+          recordedTerminal.add(i);
+        }
+      }
+    }
+    // The recorded items that have not settled yet.
+    let unsettledRecorded = recordedTerminal.size;
+    const reconciling = (): boolean => unsettledRecorded > 0;
 
     log("🚀", `Starting ${this.operationName} with concurrency control:`, {
       itemCount: items.length,
@@ -785,7 +829,7 @@ export class ConcurrencyController<Logger extends DurableLogger> {
         while (
           activeCount < maxConcurrency &&
           currentIndex < items.length &&
-          shouldContinue()
+          (reconciling() || shouldContinue())
         ) {
           const index = currentIndex++;
           const item = items[index];
@@ -825,7 +869,7 @@ export class ConcurrencyController<Logger extends DurableLogger> {
                   itemId: item.id,
                   itemName: item.name,
                 });
-                onComplete();
+                onComplete(index);
               },
               (error) => {
                 const err =
@@ -847,17 +891,20 @@ export class ConcurrencyController<Logger extends DurableLogger> {
                   itemName: item.name,
                   error: err.message,
                 });
-                onComplete();
+                onComplete(index);
               },
             );
         }
       };
 
-      const onComplete = (): void => {
+      const onComplete = (index: number): void => {
         activeCount--;
         completedCount++;
+        if (recordedTerminal.has(index)) {
+          unsettledRecorded--;
+        }
 
-        if (isComplete() || !shouldContinue()) {
+        if (!reconciling() && (isComplete() || !shouldContinue())) {
           // Convert sparse array to dense array - items are already in correct order by index
           // Include all items that were started (have a value in resultItems)
           // Create shallow copy to prevent mutations from affecting the returned result
