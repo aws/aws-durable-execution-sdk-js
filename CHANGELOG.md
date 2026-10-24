@@ -118,9 +118,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Durable Execution Telemetry CDK stack**: `cdk synth` and `cdk deploy` check
   `destinations.aurora.engineVersion` against the Aurora PostgreSQL versions RDS offers in the
   target region, and fail before anything is created. Before, an unsupported version failed only
-  when CloudFormation created the cluster, after the VPC and other resources existed. The error
-  lists the available versions of the same major version. When AWS cannot be reached, synth warns
-  and continues.
+  when CloudFormation created the cluster, after the VPC and other resources existed. The check
+  also rejects a version without Serverless v2 support, and a `minCapacity` or `maxCapacity`
+  outside the version's range. The error lists the available versions of the same major version.
+  When AWS cannot be reached, or the `rds:DescribeDBEngineVersions` permission is missing, the app
+  warns and continues. Pass `-c skipEngineVersionCheck=true` to skip the check, for example for
+  `cdk destroy` after RDS retired the version.
 - **Durable Execution Telemetry**: the bundled Athena table (the CDK Glue table and the
   telemetry-core Athena DDL) keeps the case of keys inside `input` and `output`. The JSON SerDe
   lowercased them, so `json_extract_scalar(input, '$.claimId')` returned NULL and only
