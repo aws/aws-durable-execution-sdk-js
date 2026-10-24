@@ -125,6 +125,25 @@ Lambda called the hook after `TerminateMicrovm` on a running MicroVM, and at the
 
 The MicroVM endpoint forwards a request to a hook path from any caller that holds an auth token for the MicroVM. Lambda's own hook calls carried `Host: localhost:8080` and no `x-amzn-requestid` header. A forwarded request carried the endpoint's host name and an `x-amzn-requestid` header. So the worker acts on `suspend`, `terminate`, and `resume` only when the request has a `localhost`, `127.0.0.1`, or `[::1]` host, with any port, and no `x-amzn-requestid`. It answers any other request to these hooks with 200, and logs a warning. The Lambda documentation does not state these headers. If Lambda changed them, the worker would ignore `suspend` and `terminate`, as it did before it acted on them. A refusal after a suspend would then end after 30 seconds instead of at the `resume` hook. Without the check on `resume`, a forwarded `resume` between a `suspend` hook and the freeze could end the refusal early, and a job accepted then would freeze with the MicroVM. The `run` hook does not use the check, because a false rejection there would lose every job.
 
+## Best practices for job handlers
+
+Each rule states what happens if a handler breaks it. The rules for the durable function and its deploy are in the extras package's [best practices for MicroVM operations](../aws-durable-execution-sdk-js-extras/README.md#best-practices-for-microvm-operations).
+
+1. Return a JSON-serializable value of at most 256 KB (262,144 bytes) as UTF-8 JSON. Store a larger result elsewhere, for example in S3, and return a reference.
+   - The worker reports a larger result, or one that `JSON.stringify` cannot serialize, as a failure. See [What the worker does](#what-the-worker-does).
+   - So the job fails with `MicrovmJobFailedError`, although its work succeeded.
+2. Throw `Error` instances.
+   - The worker reports the error's `name` as the error type.
+   - A thrown value that is not an `Error` gets the type `Error`, and its string form as the message.
+   - So the `MicrovmJobFailedError` in the durable function names no error type, and code there cannot tell such failures apart.
+3. Pass a `logger` that does not throw.
+   - The worker drops a log line whose logger throws, or whose promise rejects.
+   - So the worker's warnings and errors, such as a failed `SuspendMicrovm` call, are lost, and no other record of them exists.
+4. Make side effects safe to repeat.
+   - The worker runs a job once per callback ID in one MicroVM. A second delivery is ignored, unless more than 1,000 other jobs ended in between or the process restarted. See [What the worker does](#what-the-worker-does).
+   - Code in the durable function can send the same work again, for example in a new session after a failed one. That job has a new callback ID, and it can reach another MicroVM.
+   - So the worker runs the work again.
+
 ## Permissions
 
 The MicroVM execution role needs `lambda:SendDurableExecutionCallbackSuccess`, `lambda:SendDurableExecutionCallbackFailure`, and `lambda:SendDurableExecutionCallbackHeartbeat` on the durable function's ARN (`arn:aws:lambda:<region>:<account>:function:<name>:*`). The worker uses the default credential chain, which resolves that role inside the MicroVM.
