@@ -233,6 +233,7 @@ async function paginateResults(
  * dependency in either direction isn't warranted just for one integer).
  */
 const PROJECTION_YEAR_START = 2024;
+const PROJECTION_YEAR_END = 2030;
 
 /**
  * Every record key with an uppercase letter, at the top level and inside
@@ -270,7 +271,6 @@ const SERDE_PROPERTIES = [
   "'case.insensitive' = 'false'",
   ...RECORD_CAMEL_CASE_KEYS.map((k) => `'mapping.${k.toLowerCase()}' = '${k}'`),
 ].join(",\n  ");
-const PROJECTION_YEAR_END = 2030;
 
 export function buildCreateTableDdl(opts: {
   database: string;

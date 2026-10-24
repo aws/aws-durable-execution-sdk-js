@@ -159,9 +159,10 @@ is written as:
 
 "connection reset by peer" is not in the record. The handler's own `catch` sees
 the same chain, because it receives the rebuilt `StepError`. If the root cause
-matters, put it in the message of the error the step throws. Java keeps the
-thrown exception's cause, because it checkpoints the whole exception. Python
-records have no `cause`.
+matters, put it in the message of the error the step throws. Java checkpoints
+the whole exception, so its execution `error` keeps the cause's message, with
+the name `Throwable`; its operation errors have no `cause`. Python records have
+no `cause`.
 
 **Causes may repeat the wrapper.** The chain is written exactly as the SDK
 provides it; levels that repeat the level above are not skipped. SDK wrapper

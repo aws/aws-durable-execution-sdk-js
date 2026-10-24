@@ -11,6 +11,8 @@ jest.mock("@aws-sdk/client-glue", () => ({
   GetTableCommand: jest.fn(),
 }));
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   buildCreateTableDdl,
   RECORD_CAMEL_CASE_KEYS,
@@ -171,5 +173,30 @@ describe("buildCreateTableDdl: key case", () => {
       (c) => !mapped.has(c) && !singleWord.has(c),
     );
     expect(unmapped).toEqual([]);
+  });
+});
+
+describe("RECORD_CAMEL_CASE_KEYS: the CDK stack carries the same list", () => {
+  // The exporter's CDK stack defines the same Glue table but does not depend on
+  // this package, so it repeats the list. A key added to one copy only would
+  // load as NULL in the other table. So this reads the stack source and
+  // compares the two lists.
+  it("matches cdk/stack.ts", () => {
+    const stack = readFileSync(
+      join(
+        __dirname,
+        "..",
+        "..",
+        "aws-durable-execution-sdk-js-telemetry-exporter",
+        "cdk",
+        "stack.ts",
+      ),
+      "utf8",
+    );
+    const start = stack.indexOf("const RECORD_CAMEL_CASE_KEYS = [");
+    expect(start).toBeGreaterThan(-1);
+    const body = stack.slice(start, stack.indexOf("];", start));
+    const stackKeys = [...body.matchAll(/"([A-Za-z]+)"/g)].map((m) => m[1]);
+    expect(stackKeys).toEqual([...RECORD_CAMEL_CASE_KEYS]);
   });
 });

@@ -1466,10 +1466,9 @@ export class ExplorerSession {
     if (cfg.destinationType === "s3") {
       if (!cfg.athenaDatabase) throw new Error("Athena not configured.");
       assertReadOnly(generated.query, "Trino/Presto SQL");
-      // The openx JSON SerDe lowercases all keys, so the identifier column
-      // the LLM's SQL would reference is "executionarn", not "executionArn" —
-      // match that here too (see schema.ts's Athena dialect notes on key
-      // casing). Also carry the year/month/day partition columns through so
+      // Glue column names are lowercase, so the identifier column the LLM's
+      // SQL would reference is "executionarn", not "executionArn" — match
+      // that here too. Also carry the year/month/day partition columns through so
       // the row-detail fetch can prune to one partition instead of scanning
       // the whole table (see fetchAthenaRecord's doc comment).
       const { query, idColumn, injectedColumns } = inject

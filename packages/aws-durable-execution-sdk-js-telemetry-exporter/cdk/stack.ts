@@ -232,6 +232,52 @@ export class TelemetryDestinationsStack extends cdk.Stack {
       const writerInstance = auroraCluster.node.findChild("writer");
       auroraCreateTable.node.addDependency(writerInstance);
 
+      // CREATE TABLE IF NOT EXISTS leaves an existing table unchanged. A table
+      // created by an earlier version of this stack has execution_arn
+      // VARCHAR(256) and execution_name VARCHAR(128), and a long execution ARN
+      // can exceed 256 characters. So this statement widens both columns on
+      // every create and update. Widening a VARCHAR does not rewrite the table
+      // in PostgreSQL, and it is a no-op when the columns already have these
+      // sizes. It is a separate resource because the Data API runs one
+      // statement per call.
+      const widenColumnsSql = `
+        ALTER TABLE ${config.destinations.aurora.tableName}
+          ALTER COLUMN execution_arn TYPE VARCHAR(512),
+          ALTER COLUMN execution_name TYPE VARCHAR(256);
+      `;
+      const widenColumnsCall: cr.AwsSdkCall = {
+        service: "RDSDataService",
+        action: "executeStatement",
+        parameters: {
+          resourceArn: auroraCluster.clusterArn,
+          secretArn: auroraCluster.secret!.secretArn,
+          database: config.destinations.aurora.databaseName,
+          sql: widenColumnsSql,
+        },
+        physicalResourceId: cr.PhysicalResourceId.of(
+          `aurora-widen-columns-${config.destinations.aurora.tableName}`,
+        ),
+      };
+      const auroraWidenColumns = new cr.AwsCustomResource(
+        this,
+        "AuroraWidenColumns",
+        {
+          onCreate: widenColumnsCall,
+          onUpdate: widenColumnsCall,
+          policy: cr.AwsCustomResourcePolicy.fromStatements([
+            new iam.PolicyStatement({
+              actions: ["rds-data:ExecuteStatement"],
+              resources: [auroraCluster.clusterArn],
+            }),
+            new iam.PolicyStatement({
+              actions: ["secretsmanager:GetSecretValue"],
+              resources: [auroraCluster.secret!.secretArn],
+            }),
+          ]),
+        },
+      );
+      auroraWidenColumns.node.addDependency(auroraCreateTable);
+
       policyStatements.push(
         new iam.PolicyStatement({
           actions: [
