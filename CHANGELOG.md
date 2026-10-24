@@ -113,6 +113,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   New internal termination reason `EXECUTION_SUSPENDED_BY_SERVICE`, classified as a suspend. The
   SDK's set of invocation responses is unchanged.
 
+- The failed-suspend warning of the MicroVM worker in
+  `@aws/durable-execution-sdk-js-microvm-worker` now has one message per outcome:
+  - "could not suspend the idle MicroVM, because the service rejected the call. A missing
+    permission needs lambda:SuspendMicrovm on the MicroVM image in its execution role."
+  - "could not suspend the idle MicroVM, because the service refused the call for now."
+  - "the suspend call for the idle MicroVM had an unknown outcome."
+
+  Before, the text also described the worker state. The state is now in the fields `outcome`,
+  `suspendHookArrived`, `terminating`, `closed`, and `refusingJobs`. A log query that matched an
+  old text must match the new message or the `outcome` field.
+
 ### Fixed
 
 - **Durable Execution Telemetry CDK stack**: `cdk synth` and `cdk deploy` check
