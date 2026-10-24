@@ -3,8 +3,11 @@
 // as accepted, so the job never started. A followed redirect to another host
 // also received the auth token. So a redirect fails the delivery at once.
 //
-// The server sets the Location header, and the step failure is checkpointed.
-// So the message names only the path and the status.
+// The server sets the Location header. A query in the Location can hold a
+// secret, for example a presigned signature. The step failure is
+// checkpointed. So the message names the path, and the status of a 3xx
+// answer. It omits the Location, and the URL that a followed redirect
+// reached.
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { MicrovmRequestRejectedError, sendJob } from "../request";
@@ -67,6 +70,25 @@ describe("sendJob and redirects", () => {
       expect(endpoint.requests).toHaveLength(1);
     },
   );
+
+  it("names only the status for HTTP 302 with an empty Location", async () => {
+    // An empty Location names no target. So it counts as no Location.
+    const endpoint = new FakeEndpoint();
+    endpoint.responses = [
+      new Response(null, { status: 302, headers: { location: "" } }),
+    ];
+
+    const error = await send(endpoint.fetch, "mvm-1.example", "/job").catch(
+      (e: unknown) => e,
+    );
+
+    expect(error).toBeInstanceOf(MicrovmRequestRejectedError);
+    expect(error).toMatchObject({
+      status: 302,
+      message: "The MicroVM answered the job at /job with HTTP 302",
+    });
+    expect(endpoint.requests).toHaveLength(1);
+  });
 
   it.each([
     ["a path with a query", "/elsewhere/?token=secret#top"],

@@ -263,8 +263,11 @@ export interface SendJobOptions {
  *   followed 301, 302, or 303 would turn the POST into a GET without the job,
  *   and a followed redirect to another host would receive the auth token. A
  *   custom `fetch` that follows the redirect anyway fails the same way. The
- *   server sets the `Location` header, and the step failure is checkpointed.
- *   So the message names only the path and the status.
+ *   server sets the `Location` header. A query in the `Location` can hold a
+ *   secret, for example a presigned signature. The step failure is
+ *   checkpointed. So the message names the path, and the status of a 3xx
+ *   answer. It omits the `Location`, and the URL that a followed redirect
+ *   reached.
  *
  * The backoff starts at 250 milliseconds and doubles up to 4 seconds. The
  * tier ends at the retry window, or 10 seconds before the invocation times
