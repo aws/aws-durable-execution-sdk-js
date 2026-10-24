@@ -731,6 +731,14 @@ describe("microvmSession resume mode", () => {
       const execution = await executionPromise;
 
       expect(execution.getStatus()).toBe("SUCCEEDED");
+      expect(
+        runner.getOperation("pipeline.launch").getStepDetails()?.result,
+      ).toEqual({
+        microvmId: "mvm-1",
+        endpoint: "mvm-1.lambda-microvm.us-east-1.on.aws",
+        delivery: "http",
+        ...fields,
+      });
       expect(client.events).toEqual([
         "request:/first",
         "request:/second",

@@ -169,8 +169,8 @@ export function microvmSession<TOutput = unknown>(
       //    502. The request step retries a 502 until both retry tiers end.
       // 5. So each job follows the resume mode that the launch recorded, not
       //    the current config.
-      // The launch step records the field for every session. So a checkpoint
-      // without it reads as false.
+      // Every session launch records a boolean. So only `true` turns the
+      // state check on. A missing field, or any other value, reads as false.
       const resumeBeforeDelivery = launched.resumeBeforeDelivery === true;
 
       try {
