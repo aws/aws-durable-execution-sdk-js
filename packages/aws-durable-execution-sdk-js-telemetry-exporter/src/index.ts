@@ -1021,6 +1021,11 @@ class DurableExecutionTelemetryInvocation
    * {@link buildAndSchedule}.
    */
   private buildRevision = 0;
+  /**
+   * The `emittedAt` of the last record this instance built, in epoch
+   * milliseconds. See {@link nextEmittedAt}.
+   */
+  private lastEmittedMs = Number.NEGATIVE_INFINITY;
 
   // --- ExportSlot; owned by ExportScheduler ---
   pending: DurableExecutionTelemetryRecord | undefined = undefined;
@@ -1056,7 +1061,7 @@ class DurableExecutionTelemetryInvocation
     return {
       recordType: "DurableExecutionTelemetry" as const,
       schemaVersion: "1.0",
-      emittedAt: new Date().toISOString(),
+      emittedAt: this.nextEmittedAt(),
       executionArn: this.executionArn,
       executionName: arn.executionName || undefined,
       functionName: arn.functionName,
@@ -1072,6 +1077,25 @@ class DurableExecutionTelemetryInvocation
       error: args.error ? toErrorRecord(args.error) : undefined,
       operations: args.operations,
     };
+  }
+
+  /**
+   * The `emittedAt` for the next record: the current time, unless that is not
+   * later than the previous record's, in which case 1 ms after the previous one.
+   *
+   * `emittedAt` has millisecond precision. With `emitMode: "on-change"`, two
+   * records of one execution can be built within the same millisecond, for
+   * example a RUNNING record and the final record. Exporters key on
+   * `executionArn` + `emittedAt`: the SQS FIFO deduplication id, and the default
+   * DynamoDB sort key. Equal values would make SQS drop the second message and
+   * DynamoDB overwrite the first item. So `emittedAt` strictly increases within
+   * this instance, which serves one invocation.
+   */
+  private nextEmittedAt(): string {
+    const now = Date.now();
+    const ms = now > this.lastEmittedMs ? now : this.lastEmittedMs + 1;
+    this.lastEmittedMs = ms;
+    return new Date(ms).toISOString();
   }
 
   /**
@@ -1117,11 +1141,13 @@ class DurableExecutionTelemetryInvocation
    *
    * The SDK awaits this hook on every path out of an invocation — the six
    * status branches in `with-durable-execution.ts` plus the config-error path
-   * that returns before `wrapInvocation` is ever called — and the runner awaits
-   * it through `Promise.allSettled`, so the wait is guaranteed to complete
-   * before the Lambda response is returned and a rejection here cannot become
-   * the invocation's error. That makes this the right place for the drain, and
-   * it is where the Python and Java ports already do it.
+   * that returns before `wrapInvocation` is ever called. The runner first lets
+   * the asynchronous work of earlier hooks settle, then awaits this hook, so a
+   * rejection here cannot become the invocation's error. The first wait stops
+   * 500 ms before the invocation's deadline, and the wait for this hook 50 ms
+   * before it. So this hook keeps its time even when earlier hooks are slow.
+   * That makes this the right place for the drain, and it is where the Python
+   * and Java ports already do it.
    */
   async onInvocationEnd(info: InvocationEndInfo): Promise<void> {
     const status = mapStatus(info.status);

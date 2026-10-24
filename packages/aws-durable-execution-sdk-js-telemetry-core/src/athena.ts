@@ -190,9 +190,8 @@ async function paginateResults(
  * keeping both DDL definitions written in the same (lowercase, effectively
  * canonical) casing avoids the two drifting into visually different
  * text that describes an identical schema, which is confusing to compare
- * side by side. The openx JSON SerDe separately lowercases the *data*
- * values' object keys when parsing input/output (a different, unrelated
- * mechanism — see schema.ts's Athena dialect notes on that).
+ * side by side. Matching JSON keys to these lowercase columns is a separate
+ * mechanism: the SerDe properties below (see {@link RECORD_CAMEL_CASE_KEYS}).
  *
  * Uses partition projection (year/month/day as `integer` type, with a
  * `storage.location.template` reconstructing S3Exporter's exact key
@@ -236,6 +235,43 @@ async function paginateResults(
 const PROJECTION_YEAR_START = 2024;
 const PROJECTION_YEAR_END = 2030;
 
+/**
+ * Every record key with an uppercase letter, at the top level and inside
+ * `operations[]`.
+ *
+ * Glue folds column names to lowercase. By default the JSON SerDe then matches
+ * JSON keys case-insensitively, and it also lowercases every key inside the
+ * `input` and `output` strings, so `$.claimId` returns NULL there. With
+ * `case.insensitive` = `false`, the SerDe keeps the payload keys as written,
+ * but it then needs one `mapping.<column>` entry per camelCase key to find the
+ * record fields. The CDK stack in the exporter package carries the same list.
+ */
+export const RECORD_CAMEL_CASE_KEYS: readonly string[] = [
+  "recordType",
+  "schemaVersion",
+  "emittedAt",
+  "executionArn",
+  "executionName",
+  "functionName",
+  "functionQualifier",
+  "accountId",
+  "startTime",
+  "endTime",
+  "durationMs",
+  "droppedCauses",
+  "droppedOperations",
+  "droppedInput",
+  "droppedOutput",
+  "subType",
+  "parentId",
+];
+
+const SERDE_PROPERTIES = [
+  "'ignore.malformed.json' = 'true'",
+  "'case.insensitive' = 'false'",
+  ...RECORD_CAMEL_CASE_KEYS.map((k) => `'mapping.${k.toLowerCase()}' = '${k}'`),
+].join(",\n  ");
+
 export function buildCreateTableDdl(opts: {
   database: string;
   table: string;
@@ -250,7 +286,7 @@ export function buildCreateTableDdl(opts: {
   return `CREATE EXTERNAL TABLE IF NOT EXISTS \`${opts.database}\`.\`${opts.table}\` (
   recordtype string,
   schemaversion string,
-  emittedat string,
+  emittedat timestamp,
   executionarn string,
   executionname string,
   functionname string,
@@ -258,8 +294,8 @@ export function buildCreateTableDdl(opts: {
   region string,
   accountid string,
   status string,
-  starttime string,
-  endtime string,
+  starttime timestamp,
+  endtime timestamp,
   durationms bigint,
   input string,
   output string,
@@ -271,8 +307,8 @@ export function buildCreateTableDdl(opts: {
     subtype:string,
     parentid:string,
     status:string,
-    starttime:string,
-    endtime:string,
+    starttime:timestamp,
+    endtime:timestamp,
     durationms:bigint,
     attempt:int,
     error:struct<name:string,message:string>,
@@ -287,7 +323,9 @@ export function buildCreateTableDdl(opts: {
 )
 PARTITIONED BY (year string, month string, day string)
 ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe'
-WITH SERDEPROPERTIES ('ignore.malformed.json' = 'true')
+WITH SERDEPROPERTIES (
+  ${SERDE_PROPERTIES}
+)
 LOCATION '${loc}'
 TBLPROPERTIES (
   'has_encrypted_data'='false',

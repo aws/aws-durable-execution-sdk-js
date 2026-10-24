@@ -572,6 +572,77 @@ describe("ExecutionOtelPlugin - Invocation lifecycle in default-provider mode", 
     });
   });
 
+  describe("Invocation_Span faas.max_memory", () => {
+    let originalMemorySize: string | undefined;
+
+    beforeAll(() => {
+      originalMemorySize = process.env.AWS_LAMBDA_FUNCTION_MEMORY_SIZE;
+    });
+
+    function setMemorySize(memorySize: string | undefined): void {
+      if (memorySize === undefined) {
+        delete process.env.AWS_LAMBDA_FUNCTION_MEMORY_SIZE;
+      } else {
+        process.env.AWS_LAMBDA_FUNCTION_MEMORY_SIZE = memorySize;
+      }
+    }
+
+    afterEach(() => {
+      setMemorySize(originalMemorySize);
+    });
+
+    async function exportInvocationSpan(
+      config?: OtelPluginConfig,
+    ): Promise<ReadableSpan> {
+      const plugin = newPlugin(config);
+      await plugin.onInvocationStart(makeInvocationInfo());
+      await plugin.onInvocationEnd(makeInvocationEndInfo());
+      // One application-owned provider, or none for the global provider.
+      expect(explicitProviders).toHaveLength(config ? 1 : 0);
+      const invocationSpan = findSpan(exporter, "Invocation");
+      expect(invocationSpan).toBeDefined();
+      return invocationSpan!;
+    }
+
+    // Lambda gives the memory setting in MiB. The semantic conventions define
+    // faas.max_memory in bytes.
+    it.each([
+      ["128", 134217728],
+      ["1024", 1073741824],
+      ["10240", 10737418240],
+    ])(
+      "reports %s MiB as %d bytes with an application-owned provider",
+      async (memorySize, bytes) => {
+        setMemorySize(memorySize);
+        const invocationSpan = await exportInvocationSpan({
+          tracerProviderFactory,
+        });
+        expect(invocationSpan.attributes["faas.max_memory"]).toBe(bytes);
+      },
+    );
+
+    it.each([undefined, "", "not-a-number"])(
+      "omits faas.max_memory with an application-owned provider when the setting is %p",
+      async (memorySize) => {
+        setMemorySize(memorySize);
+        const invocationSpan = await exportInvocationSpan({
+          tracerProviderFactory,
+        });
+        expect(Object.keys(invocationSpan.attributes)).not.toContain(
+          "faas.max_memory",
+        );
+      },
+    );
+
+    it("does not add faas.max_memory to the global provider's Invocation span", async () => {
+      setMemorySize("1024");
+      const invocationSpan = await exportInvocationSpan();
+      expect(Object.keys(invocationSpan.attributes)).not.toContain(
+        "faas.max_memory",
+      );
+    });
+  });
+
   describe("Workflow_Span has no span links to saved invocation context", () => {
     it("Workflow_Span has no links when an ambient invocation span exists", async () => {
       const plugin = newPlugin({});

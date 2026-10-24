@@ -469,7 +469,7 @@ a Glue table "TABLE_NAME" and Hive-partitioned by year/month/day (partition colu
 below). Columns:
 - recordType: string ("DurableExecutionTelemetry")
 - schemaVersion: string
-- emittedAt: string (ISO-8601)
+- emittedAt: timestamp (UTC)
 - executionArn: string
 - executionName: string (nullable)
 - functionName: string
@@ -477,15 +477,16 @@ below). Columns:
 - region: string
 - accountId: string
 - status: string — RUNNING | SUCCEEDED | FAILED
-- startTime: string (ISO-8601)
-- endTime: string (ISO-8601, nullable)
+- startTime: timestamp (UTC)
+- endTime: timestamp (UTC, nullable)
 - durationMs: bigint (nullable)
-- input: string (JSON-serialized; use json_extract_scalar/json_extract to read fields — see lowercasing note below)
-- output: string (JSON-serialized; use json_extract_scalar/json_extract to read fields — see lowercasing note below)
+- input: string (JSON-serialized; use json_extract_scalar/json_extract to read fields — see key casing note below)
+- output: string (JSON-serialized; use json_extract_scalar/json_extract to read fields — see key casing note below)
 - error: struct<name:string,message:string> (nullable)
 - operations: array<struct<id,name,type,subType,parentId,status,startTime,endTime,durationMs,attempt,error,result,truncated>>
     This is the canonical per-operation array (NOT operationsByName — S3Exporter
     keeps the raw array). To filter/aggregate by operation name or fields, UNNEST it.
+    The operation startTime/endTime are timestamp (UTC) too.
 - year, month, day: string — Hive partition columns (from the S3 key
     year=YYYY/month=MM/day=DD/), zero-padded 2-digit strings for month/day. Filter
     on these instead of parsing startTime/emittedAt for partition pruning.
@@ -499,24 +500,22 @@ user-defined) — use json_extract_scalar(input, '$.fieldname') for scalars or
 json_extract(input, '$.fieldname') for nested values. The user will specify which
 fields they want — do not assume the structure.
 
-IMPORTANT — key casing: the table's JSON SerDe lowercases ALL object keys when
-parsing input/output (this does NOT affect top-level columns like executionArn,
-functionName, etc. — only keys inside the input/output JSON blobs). A field named
-"claimType" or "customerName" in the original payload must be looked up as
-json_extract_scalar(output, '$.claimtype') / '$.customername' — camelCase or
-mixed-case JSON path segments will silently return NULL. Always lowercase every
-path segment when building a json_extract_scalar/json_extract path into input or
-output.`;
+Key casing: keys inside input, output, and op.result keep the case the function
+wrote them in.
+JSON paths are case-sensitive, so a field named "claimType" in the payload is read
+with json_extract_scalar(input, '$.claimType'); '$.claimtype' returns NULL. If you
+are unsure of a key's exact case, list the keys first (see map_keys below).`;
 
 const DIALECT_ATHENA = `Target query language: Trino/Presto SQL (Amazon Athena) — NOT standard ANSI SQL in all respects.
 Rules:
 - Table name is TABLE_NAME (already database-qualified by the connection — do not prefix it).
 - To inspect operations, UNNEST the array and give the element its own alias, then reference THAT alias directly — NOT prefixed by the table alias. Correct: FROM TABLE_NAME t CROSS JOIN UNNEST(t.operations) AS u(op) ... then use op.name, op.type, op.status, op.durationMs, op.error, etc. WRONG: t.op.name (the unnested element op is its own alias, not a column of the table alias t; writing t.op.name fails with COLUMN_NOT_FOUND). Use a distinct alias for the unnest table (e.g. u) so it does not collide with the table alias.
+- emittedAt, startTime, endTime (and op.startTime/op.endTime) are native timestamp columns holding UTC. Compare them with TIMESTAMP literals or timestamp expressions, never with strings: WHERE starttime >= TIMESTAMP '2026-10-23 18:00:00' or WHERE starttime >= current_timestamp - INTERVAL '1' HOUR. A string such as '2026-10-23T18:00:00Z' fails with a type mismatch. Use date_diff('millisecond', starttime, endtime) for elapsed time and date_trunc('hour', starttime) for bucketing. Keep the year/month/day partition filter as well, so the query scans only the matching partitions.
 - json_extract_scalar(col, '$.path') returns a scalar string; json_extract(col, '$.path') returns JSON — cast as needed, e.g. CAST(json_extract_scalar(...) AS double).
-- Every path segment passed to json_extract_scalar/json_extract on input or output MUST be lowercase (the SerDe lowercases JSON keys on read) — e.g. '$.claimtype' not '$.claimType'.
+- JSON path segments into input, output, or op.result are case-sensitive and must match the payload's key exactly — e.g. '$.claimType' for a key written as claimType.
 - A field that lives inside input/output (e.g. claimType, decision, amount) is NEVER a bare column — it does not exist as a plain identifier anywhere in this table, including in GROUP BY, ORDER BY, and WHERE. Referencing it bare (e.g. "GROUP BY claimType" or "GROUP BY claim_type") fails with COLUMN_NOT_FOUND. Always wrap it in json_extract_scalar(input, '$.path') / json_extract_scalar(output, '$.path') — and repeat that full expression everywhere it's used (SELECT, GROUP BY, ORDER BY, WHERE), not just an alias, since GROUP BY/ORDER BY must reference the actual computed expression.
 - COST — Athena bills by BYTES SCANNED and this table is partitioned by year/month/day. Do NOT let exploration scans hit the whole bucket: constrain EXPLORATION / sampling queries (shape discovery, key enumeration, quick LIMIT peeks) to a recent partition — add WHERE year = '<latest>' AND month = '<latest>' [AND day = '<latest>'] — so they scan one small slice. If you don't know the latest partition, find it first with a cheap query on the partition columns only (e.g. SELECT year, month, day FROM TABLE_NAME GROUP BY year, month, day ORDER BY year DESC, month DESC, day DESC LIMIT 1 — partition columns are metadata, so this scans almost nothing), then filter subsequent exploration to it. A shape sample does not need all-time data. Reserve an unpartitioned / all-time scan for the FINAL answer query, and only when the question genuinely needs full coverage. When the question implies a specific time range, filter year/month/day to match it.
-- There is NO json_keys function in Athena/Trino. To list/enumerate the top-level KEYS of an input or output JSON object, parse it to a map and take its keys: map_keys(CAST(json_parse(input) AS MAP(VARCHAR, JSON))). This returns an array<varchar>; UNNEST it to get one key per row. Enumerated keys come back lowercased (same SerDe behavior as values).
+- There is NO json_keys function in Athena/Trino. To list/enumerate the top-level KEYS of an input or output JSON object, parse it to a map and take its keys: map_keys(CAST(json_parse(input) AS MAP(VARCHAR, JSON))). This returns an array<varchar>; UNNEST it to get one key per row. Keys come back with their original case.
 - SELECT DISTINCT has a Trino constraint: every ORDER BY expression MUST also appear in the SELECT list (otherwise EXPRESSION_NOT_IN_DISTINCT). For a "distinct values" question, either drop the ORDER BY, or order by a column you're already selecting. To apply a row limit BEFORE de-duplicating (e.g. "distinct keys across the last 10 executions"), put the LIMIT/ORDER BY in a subquery and de-duplicate in the outer query.
 - String comparisons use single quotes: WHERE status = 'SUCCEEDED'
 - Always include LIMIT (default 100) unless aggregating (GROUP BY / COUNT / AVG etc).
@@ -534,11 +533,11 @@ Q: count executions by status
 A: SELECT status, COUNT(*) AS ct FROM TABLE_NAME GROUP BY status ORDER BY ct DESC
 
 Q: count executions grouped by claimType in the input
-A: SELECT json_extract_scalar(input, '$.claimtype') AS claim_type, COUNT(*) AS ct FROM TABLE_NAME GROUP BY json_extract_scalar(input, '$.claimtype') ORDER BY ct DESC
+A: SELECT json_extract_scalar(input, '$.claimType') AS claim_type, COUNT(*) AS ct FROM TABLE_NAME GROUP BY json_extract_scalar(input, '$.claimType') ORDER BY ct DESC
 -- NOTE: claimType is a field INSIDE the input JSON, not a table column — it
 -- does not exist as a bare identifier. Never write "GROUP BY claimType" or
 -- "GROUP BY claim_type" directly; always wrap it in
--- json_extract_scalar(input, '$.claimtype') (lowercased path), in BOTH the
+-- json_extract_scalar(input, '$.claimType') (exact key case), in BOTH the
 -- SELECT list and the GROUP BY clause (repeat the full expression, not an
 -- alias, since GROUP BY must match what was actually computed per row).
 -- The same applies to output fields and to ORDER BY/WHERE on such a field.
@@ -562,7 +561,7 @@ Q: average duration per operation name
 A: SELECT op.name, AVG(op.durationMs) AS avg_ms, COUNT(*) AS ct FROM TABLE_NAME t CROSS JOIN UNNEST(t.operations) AS u(op) WHERE op.durationMs IS NOT NULL GROUP BY op.name ORDER BY avg_ms DESC
 
 Q: executions where the output field "approvedAmount" was over 1000
-A: SELECT executionArn, CAST(json_extract_scalar(output, '$.approvedamount') AS double) AS approved_amount FROM TABLE_NAME WHERE CAST(json_extract_scalar(output, '$.approvedamount') AS double) > 1000 LIMIT 50
+A: SELECT executionArn, CAST(json_extract_scalar(output, '$.approvedAmount') AS double) AS approved_amount FROM TABLE_NAME WHERE CAST(json_extract_scalar(output, '$.approvedAmount') AS double) > 1000 LIMIT 50
 
 Q: list all the keys present in the execution input for the last 10 executions
 A: SELECT DISTINCT k FROM (SELECT input FROM TABLE_NAME ORDER BY emittedAt DESC LIMIT 10) t CROSS JOIN UNNEST(map_keys(CAST(json_parse(t.input) AS MAP(VARCHAR, JSON)))) AS u(k)

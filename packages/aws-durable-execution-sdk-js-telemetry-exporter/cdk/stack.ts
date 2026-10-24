@@ -19,6 +19,33 @@ import * as path from "path";
 import * as config from "./config.json";
 
 /**
+ * Every record key with an uppercase letter, at the top level and inside
+ * `operations[]`. The Glue table maps each to its lowercase column, so the JSON
+ * SerDe can keep key case inside `input`/`output`. The same list is
+ * `RECORD_CAMEL_CASE_KEYS` in telemetry-core's athena.ts; this package does not
+ * depend on telemetry-core, so the list is repeated here.
+ */
+const RECORD_CAMEL_CASE_KEYS = [
+  "recordType",
+  "schemaVersion",
+  "emittedAt",
+  "executionArn",
+  "executionName",
+  "functionName",
+  "functionQualifier",
+  "accountId",
+  "startTime",
+  "endTime",
+  "durationMs",
+  "droppedCauses",
+  "droppedOperations",
+  "droppedInput",
+  "droppedOutput",
+  "subType",
+  "parentId",
+];
+
+/**
  * Props for the Telemetry destinations stack.
  */
 export interface TelemetryDestinationsStackProps extends cdk.StackProps {
@@ -120,7 +147,12 @@ export class TelemetryDestinationsStack extends cdk.Stack {
 
       auroraCluster = new rds.DatabaseCluster(this, "TelemetryAuroraCluster", {
         engine: rds.DatabaseClusterEngine.auroraPostgres({
-          version: rds.AuroraPostgresEngineVersion.VER_16_4,
+          // RDS retires minor versions, so the version comes from config
+          // instead of a constant pinned here.
+          version: rds.AuroraPostgresEngineVersion.of(
+            config.destinations.aurora.engineVersion,
+            config.destinations.aurora.engineVersion.split(".")[0],
+          ),
         }),
         serverlessV2MinCapacity: config.destinations.aurora.minCapacity,
         serverlessV2MaxCapacity: config.destinations.aurora.maxCapacity,
@@ -136,8 +168,8 @@ export class TelemetryDestinationsStack extends cdk.Stack {
       // Table name is interpolated from operator-controlled config (not user input).
       const createTableSql = `
         CREATE TABLE IF NOT EXISTS ${config.destinations.aurora.tableName} (
-          execution_arn VARCHAR(256) PRIMARY KEY,
-          execution_name VARCHAR(128),
+          execution_arn VARCHAR(512) PRIMARY KEY,
+          execution_name VARCHAR(256),
           function_name VARCHAR(128),
           status VARCHAR(20),
           start_time TIMESTAMPTZ,
@@ -199,6 +231,52 @@ export class TelemetryDestinationsStack extends cdk.Stack {
       // writer instance construct). Depend on the writer explicitly.
       const writerInstance = auroraCluster.node.findChild("writer");
       auroraCreateTable.node.addDependency(writerInstance);
+
+      // CREATE TABLE IF NOT EXISTS leaves an existing table unchanged. A table
+      // created by an earlier version of this stack has execution_arn
+      // VARCHAR(256) and execution_name VARCHAR(128), and a long execution ARN
+      // can exceed 256 characters. So this statement widens both columns on
+      // every create and update. Widening a VARCHAR does not rewrite the table
+      // in PostgreSQL, and it is a no-op when the columns already have these
+      // sizes. It is a separate resource because the Data API runs one
+      // statement per call.
+      const widenColumnsSql = `
+        ALTER TABLE ${config.destinations.aurora.tableName}
+          ALTER COLUMN execution_arn TYPE VARCHAR(512),
+          ALTER COLUMN execution_name TYPE VARCHAR(256);
+      `;
+      const widenColumnsCall: cr.AwsSdkCall = {
+        service: "RDSDataService",
+        action: "executeStatement",
+        parameters: {
+          resourceArn: auroraCluster.clusterArn,
+          secretArn: auroraCluster.secret!.secretArn,
+          database: config.destinations.aurora.databaseName,
+          sql: widenColumnsSql,
+        },
+        physicalResourceId: cr.PhysicalResourceId.of(
+          `aurora-widen-columns-${config.destinations.aurora.tableName}`,
+        ),
+      };
+      const auroraWidenColumns = new cr.AwsCustomResource(
+        this,
+        "AuroraWidenColumns",
+        {
+          onCreate: widenColumnsCall,
+          onUpdate: widenColumnsCall,
+          policy: cr.AwsCustomResourcePolicy.fromStatements([
+            new iam.PolicyStatement({
+              actions: ["rds-data:ExecuteStatement"],
+              resources: [auroraCluster.clusterArn],
+            }),
+            new iam.PolicyStatement({
+              actions: ["secretsmanager:GetSecretValue"],
+              resources: [auroraCluster.secret!.secretArn],
+            }),
+          ]),
+        },
+      );
+      auroraWidenColumns.node.addDependency(auroraCreateTable);
 
       policyStatements.push(
         new iam.PolicyStatement({
@@ -303,12 +381,25 @@ export class TelemetryDestinationsStack extends cdk.Stack {
               "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat",
             serdeInfo: {
               serializationLibrary: "org.openx.data.jsonserde.JsonSerDe",
-              parameters: { "ignore.malformed.json": "true" },
+              // Keep the key case inside `input`/`output` (the SerDe
+              // lowercases them by default, so `$.claimId` returned NULL), and
+              // map each camelCase record key to its lowercase Glue column.
+              // telemetry-core's buildCreateTableDdl carries the same list.
+              parameters: {
+                "ignore.malformed.json": "true",
+                "case.insensitive": "false",
+                ...Object.fromEntries(
+                  RECORD_CAMEL_CASE_KEYS.map((k) => [
+                    `mapping.${k.toLowerCase()}`,
+                    k,
+                  ]),
+                ),
+              },
             },
             columns: [
               { name: "recordtype", type: "string" },
               { name: "schemaversion", type: "string" },
-              { name: "emittedat", type: "string" },
+              { name: "emittedat", type: "timestamp" },
               { name: "executionarn", type: "string" },
               { name: "executionname", type: "string" },
               { name: "functionname", type: "string" },
@@ -316,8 +407,8 @@ export class TelemetryDestinationsStack extends cdk.Stack {
               { name: "region", type: "string" },
               { name: "accountid", type: "string" },
               { name: "status", type: "string" },
-              { name: "starttime", type: "string" },
-              { name: "endtime", type: "string" },
+              { name: "starttime", type: "timestamp" },
+              { name: "endtime", type: "timestamp" },
               { name: "durationms", type: "bigint" },
               { name: "input", type: "string" },
               { name: "output", type: "string" },
@@ -337,7 +428,7 @@ export class TelemetryDestinationsStack extends cdk.Stack {
                 // field names, but keeping both DDL definitions in the same
                 // casing avoids them drifting into visually different text
                 // describing an identical schema.
-                type: "array<struct<id:string,name:string,type:string,subtype:string,parentid:string,status:string,starttime:string,endtime:string,durationms:bigint,attempt:int,error:struct<name:string,message:string>,result:string,truncated:boolean>>",
+                type: "array<struct<id:string,name:string,type:string,subtype:string,parentid:string,status:string,starttime:timestamp,endtime:timestamp,durationms:bigint,attempt:int,error:struct<name:string,message:string>,result:string,truncated:boolean>>",
               },
               { name: "truncated", type: "boolean" },
               { name: "droppedcauses", type: "boolean" },

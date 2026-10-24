@@ -23,7 +23,7 @@ Every emitted record has this shape:
 interface DurableExecutionTelemetryRecord {
   recordType: "DurableExecutionTelemetry"; // Fixed discriminator — use to filter telemetry records
   schemaVersion: "1.0";
-  emittedAt: string; // ISO-8601 timestamp of emission
+  emittedAt: string; // ISO-8601 timestamp of emission; strictly increases within one invocation
 
   // Execution identity
   executionArn: string; // Full ARN including execution/invocation IDs
@@ -35,8 +35,8 @@ interface DurableExecutionTelemetryRecord {
 
   // Execution state
   status: "RUNNING" | "SUCCEEDED" | "FAILED"; // suspends (waits/timers) surface as RUNNING
-  startTime: string; // ISO-8601
-  endTime?: string; // ISO-8601 (absent while running)
+  startTime: string; // UTC, YYYY-MM-DDTHH:MM:SS.sssZ (see Timestamps)
+  endTime?: string; // Same format (absent while running)
   durationMs?: number; // Total duration (absent while running)
 
   // Payload
@@ -62,8 +62,8 @@ interface OperationRecord {
   subType?: string; // Additional categorization
   parentId?: string; // Parent operation ID (for child contexts)
   status: string; // STARTED | SUCCEEDED | FAILED | PENDING | CANCELLED
-  startTime?: string; // ISO-8601
-  endTime?: string; // ISO-8601
+  startTime?: string; // UTC, YYYY-MM-DDTHH:MM:SS.sssZ (see Timestamps)
+  endTime?: string; // Same format
   durationMs?: number; // Operation duration
   attempt?: number; // Retry attempt count
   error?: ErrorRecord; // Per-operation error
@@ -76,6 +76,23 @@ interface ErrorRecord {
   cause?: ErrorRecord; // Present only when the error has a cause
 }
 ```
+
+## Timestamps
+
+Every timestamp in a record (`emittedAt`, `startTime`, `endTime`, and each
+operation's `startTime` and `endTime`) has one format in every SDK:
+`YYYY-MM-DDTHH:MM:SS.sssZ`. It is UTC, it has exactly 3 fraction digits, and it
+ends with a literal `Z`, for example `2026-10-23T18:42:40.243Z`. This is the
+output of `Date.prototype.toISOString()`.
+
+DynamoDB, CloudWatch Logs Insights, and other text columns compare these values
+as text. Text order equals time order only when every value has the same width
+and zone. So the format is fixed, and a value is never shortened to drop a zero
+fraction.
+
+Destinations with a time type store the value in it. Aurora and Redshift write
+`TIMESTAMPTZ` columns, OpenSearch maps the fields as `date`, and the bundled
+Athena table declares them as `timestamp`.
 
 ## Error names and causes
 
@@ -121,8 +138,31 @@ order:
 - Operation errors (`operations[].error` and `operationsByName.<name>.error`)
   are the errors the SDK rebuilds from the checkpoint. Their `cause` is the
   cause the SDK built from the checkpointed error.
-- The execution `error` is the live error the handler threw (or the SDK error
-  that wraps it). Its `cause` follows `Error.cause`.
+- The execution `error` is the error the handler threw. Its `cause` follows
+  `Error.cause`. When the handler lets a step failure propagate, that error is
+  the SDK's `StepError`, which the SDK also rebuilds from the checkpoint.
+
+**A step error keeps one level of cause.** The SDK checkpoints a failed step as
+the thrown error's type, message, and data, and rebuilds the `StepError` from
+that checkpoint. So the rebuilt `StepError`'s `cause` is the thrown error
+without the thrown error's own `cause`. For example, a step that throws
+`new Error("fraud service unavailable", { cause: new Error("connection reset by peer") })`
+is written as:
+
+```json
+"error": {
+  "name": "StepError",
+  "message": "fraud service unavailable",
+  "cause": { "name": "Error", "message": "fraud service unavailable" }
+}
+```
+
+"connection reset by peer" is not in the record. The handler's own `catch` sees
+the same chain, because it receives the rebuilt `StepError`. If the root cause
+matters, put it in the message of the error the step throws. Java checkpoints
+the whole exception, so its execution `error` keeps the cause's message, with
+the name `Throwable`; its operation errors have no `cause`. Python records have
+no `cause`.
 
 **Causes may repeat the wrapper.** The chain is written exactly as the SDK
 provides it; levels that repeat the level above are not skipped. SDK wrapper
@@ -148,7 +188,9 @@ types `error` as
 `struct<name:string,message:string>`. The JSON SerDe ignores unknown keys, so
 records with `cause` still load, but `cause` cannot be queried through that
 table (Hive structs cannot be recursive). Query `cause` from the raw JSON, or
-add the levels you need to the table definition.
+add the levels you need to the table definition. The table keeps the case of
+keys inside `input` and `output`, so read a payload field with its exact key:
+`json_extract_scalar(input, '$.claimId')`.
 
 **Error names differ across SDKs.** The Python and Java exporters write the same
 shape; whether a cause is present differs by SDK. Each SDK reports its own type
@@ -165,10 +207,11 @@ filter recordType = "DurableExecutionTelemetry" and status = "FAILED"
 | fields @timestamp, executionArn, error.name, error.message, error.cause.name, error.cause.message
 ```
 
-For a failed durable invoke, the JS SDK currently writes the cause name as
-`Error`. A separate core SDK fix makes it carry the invoked function's error
-type, as the Python and Java SDKs already do; the release notes will say when
-it ships.
+For a failed durable invoke, the cause `name` is the invoked function's error
+type (for example `PaymentError`), as in the Python and Java SDKs. The
+top-level `name` stays `InvokeError` for the error `context.invoke` throws, and
+`StepError` for an operation error rebuilt from a checkpoint with an unknown
+remote type.
 
 ### Example Record
 
@@ -967,6 +1010,20 @@ When `createExampleFunction` and `autoInvoke` are both enabled, the stack create
 
 After deployment, data starts flowing automatically to all enabled destinations.
 
+#### Aurora Engine Version Check
+
+When Aurora is enabled, every CDK command first asks RDS (`DescribeDBEngineVersions`) whether
+`destinations.aurora.engineVersion` can run this stack's Serverless v2 cluster in the target
+region. An unsupported version then fails in seconds, before CloudFormation creates anything.
+The error lists the versions RDS offers. For a stack that is already deployed, set the cluster's
+current version: a different version upgrades the cluster in place.
+
+- The check needs AWS credentials and the `rds:DescribeDBEngineVersions` permission at synth time.
+  If the call fails (no credentials, no network, permission denied), the app prints a warning and
+  continues, and an unsupported version fails at deploy time instead.
+- To skip the check, pass `-c skipEngineVersionCheck=true`. Use it with `cdk destroy` when RDS
+  has retired the version the stack was deployed with.
+
 #### Aurora Table Auto-Creation
 
 When Aurora is enabled, the stack deploys a custom resource that creates the `durable_execution_telemetry` table automatically via the RDS Data API. No manual SQL needed.
@@ -976,6 +1033,9 @@ When Aurora is enabled, the stack deploys a custom resource that creates the `du
 ```bash
 npx cdk destroy
 ```
+
+If RDS has retired the configured Aurora `engineVersion` since the deploy, the engine version
+check stops the command. Skip it with `npx cdk destroy -c skipEngineVersionCheck=true`.
 
 This removes all created resources (tables, clusters, functions, rules). Resources use `RemovalPolicy.DESTROY` by default for clean teardown.
 

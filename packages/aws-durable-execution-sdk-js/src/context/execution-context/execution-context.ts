@@ -138,8 +138,20 @@ export const initializeExecutionContext = async (
       requestId: context.awsRequestId,
       // The one reduction here that is a function rather than a value, because the answer
       // changes over the life of the invocation. Where no deadline is known, a caller
-      // supplies `() => Infinity`.
-      getRemainingTimeMs: () => context.getRemainingTimeInMillis(),
+      // supplies `() => Infinity`. A context that lacks the method, throws from it, or
+      // returns something other than a finite number states no deadline either, so it
+      // reads as `Infinity` too. Otherwise a stub context in a unit test, or a context
+      // from another compute, would fail the invocation when the SDK reads the deadline.
+      getRemainingTimeMs: () => {
+        try {
+          const remaining = context.getRemainingTimeInMillis();
+          return typeof remaining === "number" && Number.isFinite(remaining)
+            ? remaining
+            : Infinity;
+        } catch {
+          return Infinity;
+        }
+      },
     },
     durableExecutionMode,
     checkpointToken,
