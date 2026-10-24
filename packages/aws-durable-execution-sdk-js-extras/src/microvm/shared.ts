@@ -635,8 +635,8 @@ export function sha256Hex(value: string): string {
  * `getRemainingTimeInMillis()` unchanged. `reserveStartsAt` and
  * `assertTimeToDeliver` read it, and both treat a value that is not a finite
  * number as no deadline. A `getRemainingTimeInMillis()` that throws fails the
- * step that reads it. So a broken reader never turns off the invocation
- * reserve without a sign.
+ * step that reads it. One that returns a value that is not a finite number
+ * turns the reserve off.
  */
 export function remainingTime(
   context: DurableContext,

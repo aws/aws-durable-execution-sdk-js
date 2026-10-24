@@ -357,7 +357,7 @@ The operations retry network and service failures. They launch and terminate the
 2. To give the first retry tier its whole window, set the function timeout to `request.retryWindow` plus 11 seconds, 71 seconds with the default window. Add the time of the launch step, which can run in the same invocation. With a shorter timeout, the first tier ends early, and the step retry strategy makes more attempts, each in another invocation.
 3. On a compute other than Lambda, give the durable function a Lambda context whose `getRemainingTimeInMillis()` returns the time left in milliseconds, or give it no Lambda context. The operations read the function from `context.lambdaContext`.
    - Without the function, or with a result that is not a finite number, the request step assumes no deadline. Only the retry window then limits the first tier.
-   - A `getRemainingTimeInMillis()` that throws fails the request step with its error. The default retry strategy does not retry a plain `Error`. So the job fails with `MicrovmDeliveryError`.
+   - A `getRemainingTimeInMillis()` that throws fails the request step with its error. The default retry strategy does not retry a plain `Error`. So the job fails with `MicrovmDeliveryError`. The core SDK reads such a reader as no deadline. The MicroVM operations fail instead.
 
 ### Job inputs
 

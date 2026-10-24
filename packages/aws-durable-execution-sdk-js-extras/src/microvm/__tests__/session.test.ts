@@ -315,6 +315,29 @@ describe("microvmSession", () => {
     },
   );
 
+  it("rejects an invoke in the old shape with the job name TypeError", async () => {
+    const client = new FakeMicrovmsClient();
+    const endpoint = new FakeEndpoint();
+    const runner = runnerFor(client, endpoint, async (vm) => {
+      // The shape before the context came first: vm.invoke(name, input, options).
+      // So the job name argument receives null.
+      const invoke = vm.invoke as unknown as (
+        ...args: unknown[]
+      ) => Promise<unknown>;
+      return invoke("build", null, job("/job")).catch(
+        (error: Error) => `${error.name}: ${error.message}`,
+      );
+    });
+
+    const execution = await runner.run({ payload: {} });
+
+    expect(execution.getResult()).toBe(
+      'TypeError: MicroVM session "pipeline": invoke requires a non-empty job name',
+    );
+    expect(endpoint.requests).toHaveLength(0);
+    expect(client.terminateInputs).toEqual([{ microvmIdentifier: "mvm-1" }]);
+  });
+
   it("lets the handler catch a failed job and continue on the same MicroVM", async () => {
     const client = new FakeMicrovmsClient();
     const endpoint = new FakeEndpoint();
