@@ -116,6 +116,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Durable Execution Telemetry**: the bundled Athena table (the CDK Glue table and the
+  telemetry-core Athena DDL) keeps the case of keys inside `input` and `output`. The JSON SerDe
+  lowercased them, so `json_extract_scalar(input, '$.claimId')` returned NULL and only
+  `'$.claimid'` worked. The table now sets `case.insensitive` to `false` and maps each camelCase
+  record key to its lowercase column. The Athena schema prompt now says to use the payload's exact
+  key case. A table created earlier keeps lowercasing keys, and Athena cannot change the SerDe
+  properties in place, so on that table a camelCase path returns NULL. To update it: if the
+  explorer created the table, run `DROP TABLE <database>.<table>` (the table is external, so the
+  S3 data is kept) and save the destination in the explorer again; if the CDK stack created it,
+  redeploy the stack.
+- **Durable Execution Telemetry MCP**: `test_destination` no longer requires
+  `DURABLE_TELEMETRY_ATHENA_S3_LOCATION` for the `s3` destination. Only a host that creates the
+  Athena table needs it, and this server only queries an existing table. A missing table is now a
+  failed check instead of "will be created on Save".
+- **Durable Execution Telemetry CDK stack**: the Aurora PostgreSQL engine version comes from
+  `destinations.aurora.engineVersion` in `cdk/config.json` (default `17.9`). The stack pinned
+  16.4, which RDS no longer offers, so a fresh deploy failed. If you already deployed the stack,
+  set `engineVersion` to your cluster's current version before you redeploy: the stack does not
+  allow a major version upgrade, so a change from 16 to 17 is rejected and rolled back.
+- **Durable Execution Telemetry CDK stack**: the Aurora table's `execution_arn` is now
+  `VARCHAR(512)` and `execution_name` is `VARCHAR(256)`, the sizes the README already documents.
+  An execution ARN with a long function name and execution name could exceed the old 256. A
+  redeploy also widens these columns on a table an earlier version created.
+- **Durable Execution Telemetry**: the bundled Athena table (the CDK Glue table and the
   telemetry-core Athena DDL) now declares `emittedat`, `starttime`, `endtime`, and the operation
   `starttime`/`endtime` as `timestamp` instead of `string`. Athena compared the strings as text,
   so a filter such as `starttime >= '2026-10-23T18:42:46Z'` left out every record from that
