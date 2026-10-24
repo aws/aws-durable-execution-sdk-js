@@ -288,6 +288,7 @@ export class ConcurrencyController<Logger extends DurableLogger> {
       parentContext,
       config,
       entityId,
+      executionContext,
     );
   }
 
@@ -719,6 +720,14 @@ export class ConcurrencyController<Logger extends DurableLogger> {
    *
    * An item whose promise settles without a report (an unexpected path) is
    * treated as reporting at settlement.
+   *
+   * A batch can resume after an earlier invocation ended between the item
+   * checkpoints and the batch checkpoint. Then several items already have a
+   * terminal record. Those items reported before that invocation's decision,
+   * because the gate drops every later item checkpoint. But they report again
+   * here in index order, not in their original order. So the controller does
+   * not decide until every item with a terminal record has reported. It still
+   * starts items in index order and within maxConcurrency.
    */
   private async executeItemsConcurrently<T, R>(
     items: ConcurrentExecutionItem<T>[],
@@ -726,6 +735,7 @@ export class ConcurrencyController<Logger extends DurableLogger> {
     parentContext: DurableContext<Logger>,
     config: ConcurrencyConfig<R>,
     batchEntityId?: string,
+    executionContext?: ExecutionContext,
   ): Promise<BatchResult<R>> {
     const maxConcurrency = config.maxConcurrency || Infinity;
     const resultItems: Array<BatchItem<R> | undefined> = new Array(
@@ -840,6 +850,32 @@ export class ConcurrencyController<Logger extends DurableLogger> {
       );
       let decided = false;
       let resolved = false;
+
+      // Items whose child context already has a terminal record from an
+      // earlier invocation. Items start in index order, so item i is the
+      // child entity `${batchEntityId}-${i + 1}`, as in replayItems. A FLAT
+      // item has no context record, so it is not in this set.
+      const recordedTerminal = new Set<number>();
+      if (
+        batchEntityId !== undefined &&
+        executionContext !== undefined &&
+        config.nesting !== NestingType.FLAT
+      ) {
+        for (let i = 0; i < items.length; i++) {
+          const status = executionContext.getStepData(
+            `${batchEntityId}-${i + 1}`,
+          )?.Status;
+          if (
+            status === OperationStatus.SUCCEEDED ||
+            status === OperationStatus.FAILED
+          ) {
+            recordedTerminal.add(i);
+          }
+        }
+      }
+      // The recorded items that have not reported yet.
+      let unreportedRecorded = recordedTerminal.size;
+      const reconciling = (): boolean => unreportedRecorded > 0;
       // The items that reported before the decision. Only these are reported
       // as finished.
       let finishedAtDecision: number[] = [];
@@ -935,8 +971,11 @@ export class ConcurrencyController<Logger extends DurableLogger> {
         } else {
           failureCount++;
         }
+        if (recordedTerminal.has(index)) {
+          unreportedRecorded--;
+        }
 
-        if (isComplete() || !shouldContinue()) {
+        if (!reconciling() && (isComplete() || !shouldContinue())) {
           decide();
         }
       };
@@ -971,7 +1010,7 @@ export class ConcurrencyController<Logger extends DurableLogger> {
             failureCount++;
             successCount--;
           }
-          if (isComplete() || !shouldContinue()) {
+          if (!reconciling() && (isComplete() || !shouldContinue())) {
             decide();
           }
         }
@@ -987,7 +1026,7 @@ export class ConcurrencyController<Logger extends DurableLogger> {
           !decided &&
           activeCount < maxConcurrency &&
           currentIndex < items.length &&
-          shouldContinue()
+          (reconciling() || shouldContinue())
         ) {
           const index = currentIndex++;
           const item = items[index];
