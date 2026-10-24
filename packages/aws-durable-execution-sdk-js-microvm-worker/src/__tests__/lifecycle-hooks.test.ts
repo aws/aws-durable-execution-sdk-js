@@ -769,6 +769,19 @@ describe("suspend and terminate hooks", () => {
     });
   });
 
+  it("answers a hook that it does not know with 200, and does not act on it", async () => {
+    const info = jest.fn();
+    const worker = start(undefined, info);
+    await runHook(worker, 10);
+    await advance(5_000);
+
+    expect(await hook(worker, "checkpoint")).toBe(200);
+    expect(info).toHaveBeenCalledWith("lifecycle hook", { hook: "checkpoint" });
+    // The hook neither refuses jobs nor restarts the idle time.
+    await advance(5_000);
+    expect(microvms.suspended).toEqual(["mvm-1"]);
+  });
+
   describe("suspend", () => {
     it("refuses jobs with 503 until the resume hook", async () => {
       const worker = start();
@@ -848,7 +861,8 @@ describe("suspend and terminate hooks", () => {
       microvms.failure = Object.assign(new Error("not authorized"), {
         name: "AccessDeniedException",
       });
-      const worker = start();
+      const warn = jest.fn();
+      const worker = start(warn);
       await runHook(worker, 10);
       await advance(10_000);
       expect(microvms.suspended).toEqual(["mvm-1"]);
@@ -857,6 +871,15 @@ describe("suspend and terminate hooks", () => {
       microvms.finish();
       await advance(0);
 
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("the service rejected the call"),
+        expect.objectContaining({
+          outcome: "rejected",
+          suspendHookArrived: true,
+          refusingJobs: true,
+        }),
+      );
       expect(await job(worker, "cb-1")).toBe(503);
       await hook(worker, "resume");
       expect(await job(worker, "cb-1")).toBe(202);
@@ -866,10 +889,20 @@ describe("suspend and terminate hooks", () => {
       microvms.failure = Object.assign(new Error("not authorized"), {
         name: "AccessDeniedException",
       });
-      const worker = start();
+      const warn = jest.fn();
+      const worker = start(warn);
       await runHook(worker, 10);
       await advance(10_000);
 
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("the service rejected the call"),
+        expect.objectContaining({
+          outcome: "rejected",
+          suspendHookArrived: false,
+          refusingJobs: false,
+        }),
+      );
       expect(await job(worker, "cb-1")).toBe(202);
     });
 
