@@ -9,6 +9,7 @@ import {
 import { OperationStatus, OperationType } from "../../types/wire";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import { completeAfter } from "../../utils/checkpoint/complete-after";
 import { Serdes, AnySerdesDeserializer } from "../../utils/serdes/serdes";
 import { safeDeserialize } from "../../errors/serdes-errors/serdes-errors";
 import {
@@ -228,13 +229,20 @@ export const createCallback = (
         }
 
         if (stepData?.Status === OperationStatus.SUCCEEDED) {
-          const deserializedResult = await safeDeserialize(
-            serdes,
-            callbackData.Result,
+          // Phase 1 marked the callback COMPLETED. Count it as active again
+          // while the replayed result is deserialized.
+          const deserializedResult = await completeAfter(
+            checkpoint,
             stepId,
-            name,
-            context.terminationManager,
-            context.durableExecutionArn,
+            () =>
+              safeDeserialize(
+                serdes,
+                callbackData.Result,
+                stepId,
+                name,
+                context.terminationManager,
+                context.durableExecutionArn,
+              ),
           );
 
           const resolvedPromise = new DurablePromise(

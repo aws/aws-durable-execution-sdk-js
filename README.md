@@ -70,7 +70,7 @@ These packages are in alpha. Their APIs may change without a major version bump.
 These packages support development and are not for installation:
 
 - [examples](./packages/aws-durable-execution-sdk-js-examples) – working example functions, also used as integration tests against deployed Lambda functions
-- [conformance-tests](./packages/aws-durable-execution-sdk-js-conformance-tests) and [conformance-tests-otel](./packages/aws-durable-execution-sdk-js-conformance-tests-otel) – handlers that the shared cross-SDK conformance suites run
+- [conformance-tests](./packages/aws-durable-execution-sdk-js-conformance-tests), [conformance-tests-otel](./packages/aws-durable-execution-sdk-js-conformance-tests-otel) and [conformance-tests-telemetry](./packages/aws-durable-execution-sdk-js-conformance-tests-telemetry) – handlers that the shared cross-SDK conformance suites run
 - [cjs-integration-test](./packages/cjs-integration-test), [esm-integration-test](./packages/esm-integration-test), [cdk-bundling-integration-test](./packages/cdk-bundling-integration-test), and [lambda-runtime-detection-integration-test](./packages/lambda-runtime-detection-integration-test) – check that the SDK works in CommonJS, ESM, a CDK-bundled function, and the Lambda runtime
 - [otel-compatibility-fixtures](./packages/otel-compatibility-fixtures) – pinned published packages for OpenTelemetry backward-compatibility tests
 

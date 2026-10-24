@@ -287,8 +287,10 @@ describe("list_executions — validated filters build the expected per-dialect S
     expect(sql).toContain("recordtype = 'DurableExecutionTelemetry'");
     expect(sql).toContain("status = 'FAILED'");
     expect(sql).toContain("functionname = 'my-fn'");
-    expect(sql).toContain("starttime >= '2024-01-01'");
-    expect(sql).toContain("starttime <= '2024-02-01T00:00:00Z'");
+    // Athena's time columns are `timestamp`, so bounds are TIMESTAMP literals
+    // in UTC, rewritten to the stored millisecond precision.
+    expect(sql).toContain("starttime >= TIMESTAMP '2024-01-01 00:00:00.000'");
+    expect(sql).toContain("starttime <= TIMESTAMP '2024-02-01 00:00:00.000'");
     expect(sql).toMatch(/ORDER BY starttime DESC LIMIT 100$/);
   });
 
@@ -315,7 +317,7 @@ describe("list_executions — validated filters build the expected per-dialect S
     expect(sql).toContain("FROM durable_execution_telemetry");
     expect(sql).toContain("status = 'FAILED'");
     expect(sql).toContain("function_name = 'my-fn'");
-    expect(sql).toContain("start_time >= '2024-01-01'");
+    expect(sql).toContain("start_time >= '2024-01-01T00:00:00.000Z'");
     expect(sql).toMatch(/ORDER BY start_time DESC LIMIT 100$/);
   });
 

@@ -19,6 +19,7 @@ import {
 } from "../../types/wire";
 import { log } from "../../utils/logger/logger";
 import { Checkpoint } from "../../utils/checkpoint/checkpoint-helper";
+import { completeAfter } from "../../utils/checkpoint/complete-after";
 import { retryPresets } from "../../utils/retry/retry-presets/retry-presets";
 import { StepInterruptedError } from "../../errors/step-errors/step-errors";
 import {
@@ -111,27 +112,20 @@ export const createStepHandler = <Logger extends DurableLogger>(
       // Check if already completed
       if (stepData?.Status === OperationStatus.SUCCEEDED) {
         log("⏭️", "Step already completed:", { stepId });
-        checkpoint.markOperationState(
+        const result = stepData.StepDetails?.Result;
+        return await completeAfter(
+          checkpoint,
           stepId,
-          OperationLifecycleState.COMPLETED,
-          {
-            metadata: {
+          () =>
+            safeDeserialize(
+              serdes,
+              result,
               stepId,
               name,
-              type: OperationType.STEP,
-              subType,
-              parentId,
-            },
-          },
-        );
-
-        return await safeDeserialize(
-          serdes,
-          stepData.StepDetails?.Result,
-          stepId,
-          name,
-          context.terminationManager,
-          context.durableExecutionArn,
+              context.terminationManager,
+              context.durableExecutionArn,
+            ),
+          { stepId, name, type: OperationType.STEP, subType, parentId },
         );
       }
 
@@ -374,18 +368,17 @@ export const createStepHandler = <Logger extends DurableLogger>(
           backfillOperationInfo(attemptEndInfo, opInfo);
           await plugin.onOperationAttemptEnd?.(attemptEndInfo);
           await plugin.onOperationEnd?.({ ...attemptEndInfo, isReplay: false });
-          checkpoint.markOperationState(
-            stepId,
-            OperationLifecycleState.COMPLETED,
-          );
 
-          return await safeDeserialize(
-            serdes,
-            serializedResult,
-            stepId,
-            name,
-            context.terminationManager,
-            context.durableExecutionArn,
+          // The step stays EXECUTING (marked above) until the result is deserialized.
+          return await completeAfter(checkpoint, stepId, () =>
+            safeDeserialize(
+              serdes,
+              serializedResult,
+              stepId,
+              name,
+              context.terminationManager,
+              context.durableExecutionArn,
+            ),
           );
         } catch (error) {
           if (isUnrecoverableError(error)) {

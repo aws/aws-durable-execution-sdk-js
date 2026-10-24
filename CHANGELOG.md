@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking for plugin authors (experimental interface).** The SDK no longer waits for the
+  operation plugin hooks: `onOperationStart`, `onOperationEnd`, `onOperationAttemptStart`,
+  `onOperationAttemptEnd` and `onOperationChange`. Before, a slow hook delayed the next
+  operation. A hook awaited while no operation was running could also let the invocation
+  suspend before the caller's next line ran, when another operation such as a callback was
+  waiting. The changes:
+  - The synchronous part of each hook still runs before the SDK continues, in call order. The
+    asynchronous parts of consecutive hooks can overlap. A plugin that needs them in order must
+    queue the work itself.
+  - Before `onInvocationEnd`, the SDK waits for the asynchronous work of earlier hooks, until
+    500 ms before the invocation's deadline. It then waits for `onInvocationEnd`, until 50 ms
+    before the deadline. Work still pending is abandoned. Before, a hook that never settled held
+    the invocation until the Lambda timeout.
+  - `onInvocationEnd` is now called after that drain, not at the moment the invocation ends.
+  - `onInvocationStart` and the `wrap` hooks are unchanged.
+- A Lambda context whose `getRemainingTimeInMillis` is missing, throws, or returns a value that
+  is not a finite number now counts as reporting no deadline. Before, with a missing or throwing
+  method, `ctx.wait` and step retries failed the invocation, even without a plugin. Now they
+  suspend, as they do with a normal context.
+- A `wrap` plugin hook (`wrapInvocation`, `wrapChildContextFn`, `wrapOperationAttemptFn`) that
+  rejects for its own reasons, for example after the customer function succeeded, no longer
+  fails the invocation. The SDK continues with the wrappers inside it and the customer
+  function, and uses their result. An error from the customer function still reaches the
+  caller.
+- A `wrapChildContextFn` hook that does asynchronous work after the child function settles no
+  longer lets the invocation suspend during that work. Before, with another operation such as a
+  callback waiting, the caller's next line did not run in that invocation.
+
 - Checkpoint-derived `OperationInfo.error` can be absent when a failed callback
   or invoke has missing wire error data or no defined diagnostic values.
   Instrumentation should use
@@ -87,6 +115,91 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Durable Execution Telemetry CDK stack**: `cdk synth` and `cdk deploy` check
+  `destinations.aurora.engineVersion` against the Aurora PostgreSQL versions RDS offers in the
+  target region, and fail before anything is created. Before, an unsupported version failed only
+  when CloudFormation created the cluster, after the VPC and other resources existed. The check
+  also rejects a version without Serverless v2 support, and a `minCapacity` or `maxCapacity`
+  outside the version's range. The error lists the available versions of the same major version.
+  When AWS cannot be reached, or the `rds:DescribeDBEngineVersions` permission is missing, the app
+  warns and continues. Pass `-c skipEngineVersionCheck=true` to skip the check, for example for
+  `cdk destroy` after RDS retired the version.
+- **Durable Execution Telemetry**: the bundled Athena table (the CDK Glue table and the
+  telemetry-core Athena DDL) keeps the case of keys inside `input` and `output`. The JSON SerDe
+  lowercased them, so `json_extract_scalar(input, '$.claimId')` returned NULL and only
+  `'$.claimid'` worked. The table now sets `case.insensitive` to `false` and maps each camelCase
+  record key to its lowercase column. The Athena schema prompt now says to use the payload's exact
+  key case. A table created earlier keeps lowercasing keys, and Athena cannot change the SerDe
+  properties in place, so on that table a camelCase path returns NULL. To update it: if the
+  explorer created the table, run `DROP TABLE <database>.<table>` (the table is external, so the
+  S3 data is kept) and save the destination in the explorer again; if the CDK stack created it,
+  redeploy the stack.
+- **Durable Execution Telemetry MCP**: `test_destination` no longer requires
+  `DURABLE_TELEMETRY_ATHENA_S3_LOCATION` for the `s3` destination. Only a host that creates the
+  Athena table needs it, and this server only queries an existing table. A missing table is now a
+  failed check instead of "will be created on Save".
+- **Durable Execution Telemetry CDK stack**: the Aurora PostgreSQL engine version comes from
+  `destinations.aurora.engineVersion` in `cdk/config.json` (default `17.9`). The stack pinned
+  16.4, which RDS no longer offers, so a fresh deploy failed. If you already deployed the stack,
+  set `engineVersion` to your cluster's current version before you redeploy: the stack does not
+  allow a major version upgrade, so a change from 16 to 17 is rejected and rolled back.
+- **Durable Execution Telemetry CDK stack**: the Aurora table's `execution_arn` is now
+  `VARCHAR(512)` and `execution_name` is `VARCHAR(256)`, the sizes the README already documents.
+  An execution ARN with a long function name and execution name could exceed the old 256. A
+  redeploy also widens these columns on a table an earlier version created.
+- **Durable Execution Telemetry**: the bundled Athena table (the CDK Glue table and the
+  telemetry-core Athena DDL) now declares `emittedat`, `starttime`, `endtime`, and the operation
+  `starttime`/`endtime` as `timestamp` instead of `string`. Athena compared the strings as text,
+  so a filter such as `starttime >= '2026-10-23T18:42:46Z'` left out every record from that
+  second. Queries now compare these columns with `TIMESTAMP` literals, and the Athena schema
+  prompt says so. A table created earlier keeps its `string` columns: recreate it, or run
+  `ALTER TABLE <table> REPLACE COLUMNS (...)` with the new definition.
+- **Durable Execution Telemetry MCP**: `list_executions` validates `since` and `until`, including
+  the calendar (`2026-02-30` is rejected), and reads a bound with no offset as UTC. Before, a bound
+  was compared as given. On DynamoDB and CloudWatch Logs, which compare text, a bound without a
+  fraction or with an offset such as `-07:00` returned the wrong records. There, a bound is now
+  rewritten to the stored format (UTC, 3 fraction digits, `Z`), with `since` rounded up and `until`
+  rounded down. On Athena, Aurora, Redshift, and OpenSearch, which compare instants, the bound
+  keeps every digit the caller gave. Records from the Python exporter `0.0.1` preview, which wrote
+  microsecond timestamps, can still be ordered incorrectly within one second on the two text
+  destinations.
+- **Durable Execution Telemetry**: `emittedAt` now strictly increases across the records of one
+  invocation. With `emitMode: "on-change"`, two records could be built in the same millisecond and
+  get the same `emittedAt`. `SQSExporter` derives the FIFO deduplication id from
+  `executionArn:emittedAt`, so SQS dropped the second message, and `DynamoDBExporter` uses
+  `emittedAt` as its default sort key, so the second item overwrote the first. A record built in
+  the same millisecond as the previous one now gets the previous value plus 1 ms.
+- **Durable Execution Telemetry**: every error in a record (the execution `error`,
+  `operations[].error`, and `operationsByName.<name>.error`) now carries its cause chain as
+  `{ name, message, cause? }`, in that key order. `cause` follows `Error.cause`, including the
+  cause the SDK builds when it rebuilds an operation error from a checkpoint. The chain is cut
+  after 16 levels or at a cause already written, and a cause that is not an error object is
+  written as `{ name: "Error", message: String(cause) }`. Reading a cause never throws: a failure
+  ends the chain and the record is kept. The error's own `name` and `message` are converted to
+  strings the same way; if reading them throws, the error is written as
+  `{ name: "Error", message: "" }` and the record is kept. Every `name` and `message`, on errors
+  and on causes, is capped at 8,192 Unicode code points plus `…`, so a cut never splits a
+  surrogate pair.
+  When a record is over an exporter's size limit, every `cause` is removed first and the record
+  gets `droppedCauses: true`. Apart from the cap, `name` is unchanged, and an error without a
+  cause is written as before. Error names are each SDK's own and differ across languages; the exporter README
+  explains how to query them.
+- **Durable Execution Telemetry**: `SQSExporter` replaces a FIFO `MessageGroupId` or
+  `MessageDeduplicationId` longer than 128 characters with its lowercase hex SHA-256 digest. SQS
+  rejected these sends, and most execution ARNs are longer than 128 characters. Ids of 128
+  characters or fewer are unchanged. An empty `messageGroupId` is treated as omitted.
+- A failed `context.invoke` now throws an `InvokeError` whose `cause.name` is the invoked
+  function's error type (for example `"PaymentError"`), with the remote stack trace, as the
+  callback handlers and replayed operations already do. Before, `cause.name` was always
+  `"Error"`. A cause is now also created when the remote error has a type but no message.
+  The top-level `name` is unchanged: the live error is still `InvokeError`, and an operation
+  error rebuilt from a checkpoint is still `StepError` for an unknown remote type. Read
+  `cause.name` to get the remote error type in both cases, including in Durable Execution
+  Telemetry records.
+- **Durable Execution Telemetry**: the bundled Glue table (`cdk/stack.ts`) and the
+  telemetry-core Athena DDL and schema prompt now include the `droppedcauses` column, so a
+  record cut only by dropping causes can be told apart from other truncations.
+
 - **OpenTelemetry**: `FAILED`, `TIMED_OUT`, and `STOPPED` operations remain `ERROR` in both views,
   including later-invocation continuations, even without error details.
   Exception events still require an actual error object.
@@ -99,6 +212,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserve an already-exported context's identity for delayed child completion,
   and use the known backend end as a zero-duration start fallback when no start
   was recorded. Existing supplied timestamps and caller outcomes are preserved.
+- **OpenTelemetry**: `ExecutionOtelPlugin` with an application-owned provider now sets
+  `faas.max_memory` on the Invocation span in bytes, as the semantic conventions define it.
+  Before, it reported the `AWS_LAMBDA_FUNCTION_MEMORY_SIZE` value unchanged, in MiB, so a
+  1024 MiB function reported `1024` instead of `1073741824`. Update any query or alarm that
+  reads this attribute.
 
 - With `skipTime` enabled, the testing SDK's local runner now advances its fake clock by the full
   duration of every wait and retry delay. The checkpoint server recorded times on its own real
@@ -292,12 +410,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   For a rethrown AWS SDK error, each step adds the request ID to the message of the error object
   itself. It does not wrap the error. So the error keeps its class, `name`, `code`, `$retryable`,
-  and `$metadata`. So the default and custom retry strategies decide as before for such an error.
+  and `$metadata`. So the default retry strategy decides as before for such an error.
+  `createRetryStrategy` matches its `retryableErrors` patterns against `error.message`. The request
+  ID sentence would change what a pattern matches. So each step calls a custom retry strategy
+  while the AWS SDK error has the message of the service. After the strategy returns or throws,
+  the error has the message with the request ID again. The SDK checkpoints the message after the
+  strategy returns. So the handler and the execution history still get the request ID. An error
+  that the MicroVM operation creates itself, such as `MicrovmStateError` or "RunMicrovm returned
+  no microvmId", has the request ID in its message when the strategy receives it.
   A message has no request ID when the AWS SDK error or output carries none, for example after a
   connection failure. Only an error of the Lambda MicroVMs service gets a request ID. An error of
   another service keeps its message. For example, a credential provider that assumes a role calls
   STS inside each call, and its error carries the request ID of STS. When a custom client throws one
-  error object for several calls, the message names only the last call. (#1050)
+  error object for several calls, the message names only the last call. (#1050, #1058)
 
 - An `InvalidRunHookPayloadError` for a `runHookPayload` that is not JSON now keeps the parser's
   `SyntaxError` as its `cause`. Its message names the position of the error.

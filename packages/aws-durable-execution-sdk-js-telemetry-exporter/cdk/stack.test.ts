@@ -65,8 +65,33 @@ describe("TelemetryDestinationsStack", () => {
     });
   });
 
-  it("creates the Aurora table via custom resource", () => {
-    template.resourceCountIs("Custom::AWS", 1);
+  it("creates the Aurora table and widens its columns via custom resources", () => {
+    // AuroraCreateTable runs CREATE TABLE IF NOT EXISTS. AuroraWidenColumns
+    // widens execution_arn and execution_name on a table an earlier version of
+    // this stack created, which CREATE TABLE IF NOT EXISTS leaves unchanged.
+    template.resourceCountIs("Custom::AWS", 2);
+  });
+
+  it("widens the Aurora columns on create and on update, after the table exists", () => {
+    const widen = Object.entries(template.findResources("Custom::AWS")).filter(
+      ([id]) => id.startsWith("AuroraWidenColumns"),
+    );
+    expect(widen).toHaveLength(1);
+    const [, resource] = widen[0];
+    // Create and Update are CloudFormation-intrinsic JSON strings; flatten them
+    // to text to read the SQL they carry.
+    const handlers = JSON.stringify([
+      resource.Properties.Create,
+      resource.Properties.Update,
+    ]);
+    expect(handlers).toContain("ALTER COLUMN execution_arn TYPE VARCHAR(512)");
+    expect(handlers).toContain("ALTER COLUMN execution_name TYPE VARCHAR(256)");
+    expect(resource.Properties.Create).toBeDefined();
+    expect(resource.Properties.Update).toBeDefined();
+    const createTable = Object.keys(template.findResources("Custom::AWS")).find(
+      (id) => id.startsWith("AuroraCreateTable"),
+    );
+    expect(resource.DependsOn).toEqual(expect.arrayContaining([createTable]));
   });
 
   it("creates an S3 bucket for the S3Exporter destination", () => {

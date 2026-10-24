@@ -14,8 +14,9 @@ import {
  *
  * - {@link MicrovmLaunchError}: `RunMicrovm` failed after all retries.
  * - {@link MicrovmDeliveryError}: the job could not be delivered over HTTP.
- *   Its subclass {@link MicrovmNotRunningError} means the session's MicroVM
- *   no longer runs.
+ *   Its subclass {@link MicrovmNotRunningError} means that the MicroVM no
+ *   longer runs. A session reports it. A {@link microvm} job over HTTP also
+ *   reports it, when CreateMicrovmAuthToken reports the MicroVM removed.
  * - {@link MicrovmJobFailedError}: the job handler in the MicroVM failed.
  * - {@link MicrovmTimeoutError}: no result or no heartbeat arrived in time.
  *
@@ -44,12 +45,17 @@ export class MicrovmError extends DurableOperationError {
 /**
  * `RunMicrovm` failed after all retries.
  *
- * When the last attempt got an answer, such as a `ValidationException`, no
- * MicroVM runs the job. When the last attempt timed out or lost its
- * connection, the service may have created the MicroVM anyway. That MicroVM
- * then runs the job, and the operation cannot terminate it, because it never
- * learned the MicroVM's ID. The MicroVM ends at its maximum duration. So a
- * caller that runs the job again after this error can run it twice.
+ * A launch attempt that timed out or lost its connection can still have
+ * created a MicroVM. When the launch step still fails, the operation never
+ * learns that MicroVM's ID. So the operation cannot terminate that MicroVM.
+ * That MicroVM ends at its maximum duration.
+ *
+ * 1. With `run` hook delivery, the launch request holds the job. So that
+ *    MicroVM runs the job. So a caller that runs the job again after this
+ *    error can run it twice.
+ * 2. With HTTP delivery, the launch request holds no job. The request step
+ *    starts only after a launch succeeds. So when you invoke through a
+ *    version or an alias, no MicroVM runs the job.
  *
  * When the last RunMicrovm call failed with an error of the Lambda MicroVMs
  * service, the message ends with the request ID of that call, in the form

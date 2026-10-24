@@ -112,6 +112,17 @@ export interface MicrovmBaseConfig {
    * It is the second retry tier: the first tier retries inside one step
    * attempt.
    *
+   * A step adds the request ID of a failed AWS call to the message of the
+   * AWS SDK error. For an AWS SDK error, the strategy still receives the
+   * message without the request ID. So a strategy that matches the message,
+   * such as `createRetryStrategy({ retryableErrors: [...] })`, matches the
+   * message of the service. The original message applies only during the
+   * call. Code that reads `error.message` after the strategy returns sees
+   * the request ID. An error that the MicroVM operation creates itself, such
+   * as `MicrovmStateError` or "RunMicrovm returned no microvmId", has the
+   * request ID in its message when the strategy receives it. The handler and
+   * the execution history get the message with the request ID.
+   *
    * Defaults to {@link defaultMicrovmRetryStrategy}.
    */
   retryStrategy?: (error: Error, attemptCount: number) => RetryDecision;

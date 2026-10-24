@@ -341,8 +341,9 @@ export interface MicrovmWorkerListener {
  *
  * A second delivery of a callback ID is answered like the first and ignored,
  * while that job runs and after it ended. The listener remembers the last
- * 1,000 finished callback IDs. So a retried delivery runs a job once, unless
- * more than 1,000 other jobs ended in between, or the worker process
+ * 1,000 finished callback IDs. When a job ends and the listener already holds
+ * 1,000 IDs, it removes the oldest one. So a retried delivery runs a job once,
+ * unless at least 1,000 other jobs ended in between, or the worker process
  * restarted.
  *
  * A document that does not match the contract gets HTTP 400. If the document
@@ -404,7 +405,10 @@ export interface MicrovmWorkerListener {
  *    have suspended the MicroVM. The default client retries a throttle and a
  *    clock-skew error itself. So with the default client, these errors
  *    usually end here. When the refusal ends, the idle time starts again, so
- *    the worker tries the call again.
+ *    the worker tries the call again. A `resume` hook during the call, or
+ *    the end of a `suspend` hook's 30 seconds during the call, has already
+ *    ended the refusal. The worker then accepts jobs at once, and tries the
+ *    call again one idle time after the call and every job end.
  *
  * The listener counts only jobs. It cannot see background processes, or
  * inbound traffic that is not a job. A MicroVM that must keep such work
@@ -698,17 +702,30 @@ export function createMicrovmWorkerListener<
    *    idle time after the call and every job end.
    * 7. A refusal for now otherwise: the next idle time lasts at least 30
    *    seconds, unless a job or a resume hook starts the idle time again.
-   * 8. An unknown outcome otherwise: the refusal continues until the resume
-   *    hook, or for 30 seconds.
+   * 8. An unknown outcome after the refusal of jobs ended during the call:
+   *    a resume hook ended it, or the 30-second limit of a suspend hook's
+   *    refusal. The worker starts no new refusal after an unknown outcome
+   *    when `suspending` is false. So it accepts jobs. It tries the call
+   *    again one idle time after the call and every job end.
+   * 9. The same after close() during the call: the worker accepts jobs.
+   *    startIdleTime starts no idle time. So the worker never calls again.
+   * 10. An unknown outcome otherwise: the refusal continues until the resume
+   *     hook, or for 30 seconds.
    */
   function failedCallWarning(
     outcome: SuspendOutcome,
     suspendHookArrived: boolean,
   ): string {
     if (outcome === "unknown") {
-      return terminating
-        ? "the suspend call for the idle MicroVM had an unknown outcome. The MicroVM is terminating, so the worker refuses jobs and does not try the call again."
-        : "the suspend call for the idle MicroVM had an unknown outcome. The worker refuses jobs until the MicroVM resumes, or for 30 seconds.";
+      if (terminating) {
+        return "the suspend call for the idle MicroVM had an unknown outcome. The MicroVM is terminating, so the worker refuses jobs and does not try the call again.";
+      }
+      if (!suspending) {
+        return closed
+          ? "the suspend call for the idle MicroVM had an unknown outcome. The refusal of jobs already ended during the call, on a resume hook or after 30 seconds. So the worker accepts jobs. The worker is closed, so it does not try the call again."
+          : "the suspend call for the idle MicroVM had an unknown outcome. The refusal of jobs already ended during the call, on a resume hook or after 30 seconds. So the worker accepts jobs. It tries the call again one idle time after the call and every job end.";
+      }
+      return "the suspend call for the idle MicroVM had an unknown outcome. The worker refuses jobs until the MicroVM resumes, or for 30 seconds.";
     }
     if (outcome === "rejected") {
       if (terminating) {
