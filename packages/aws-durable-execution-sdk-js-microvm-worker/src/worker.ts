@@ -415,9 +415,8 @@ export interface MicrovmWorkerListener {
  *    hook arrived during the call. The fields `terminating` and `closed`
  *    show whether the MicroVM is terminating and whether the listener is
  *    closed. The listener logs the warning after it has acted on the
- *    outcome. So the field `refusingJobs` shows whether the refusal of jobs
- *    for a suspend is in effect at that moment. A terminating MicroVM
- *    refuses jobs, whatever `refusingJobs` shows.
+ *    outcome. So the field `refusingJobs` is true when the listener answers
+ *    jobs with HTTP 503 after it has acted on the outcome.
  *
  * The listener counts only jobs. It cannot see background processes, or
  * inbound traffic that is not a job. A MicroVM that must keep such work
@@ -764,7 +763,8 @@ export function createMicrovmWorkerListener<
         suspendHookArrived,
         terminating,
         closed,
-        refusingJobs: suspending,
+        // The job path refuses a job with HTTP 503 in both states.
+        refusingJobs: terminating || suspending,
       });
       return;
     } finally {

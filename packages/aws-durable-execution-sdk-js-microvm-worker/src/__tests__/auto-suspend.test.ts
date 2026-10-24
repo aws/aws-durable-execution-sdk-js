@@ -1347,9 +1347,8 @@ describe("auto-suspend when idle", () => {
   describe("warning after a refused call when the worker stops", () => {
     const refusal = firstAttempt("InvalidSignatureException", 403);
 
-    // A terminating MicroVM refuses jobs whatever `refusingJobs` shows. A
-    // refused call without a suspend hook ends the suspend refusal. A
-    // suspend hook's refusal stays.
+    // A terminating MicroVM answers jobs with HTTP 503. So `refusingJobs` is
+    // true, whether or not a suspend hook arrived during the call.
     it.each<[string, string[], boolean]>([
       ["a terminate hook", ["terminate"], false],
       [
@@ -1387,7 +1386,7 @@ describe("auto-suspend when idle", () => {
           suspendHookArrived: suspendHook,
           terminating: true,
           closed: false,
-          refusingJobs: suspendHook,
+          refusingJobs: true,
         });
         expect(await resumeHook(worker)).toBe(200);
         expect(await job(worker, "cb-1")).toBe(503);
@@ -1463,7 +1462,7 @@ describe("auto-suspend when idle", () => {
           suspendHookArrived: suspendHook,
           terminating: true,
           closed: false,
-          refusingJobs: suspendHook,
+          refusingJobs: true,
         });
         expect(await resumeHook(worker)).toBe(200);
         expect(await job(worker, "cb-1")).toBe(503);
@@ -1615,7 +1614,8 @@ describe("auto-suspend when idle", () => {
     // A resume hook during the call ends the refusal of jobs. So does the
     // 30-second limit of a suspend hook's refusal, when the call runs that
     // long. An unknown outcome then starts no new refusal. So the warning
-    // must show that the worker does not refuse jobs.
+    // must show that the worker does not refuse jobs. A terminating MicroVM
+    // is the exception, because it answers jobs with HTTP 503.
     /** The state after an unknown outcome, with the given changes. */
     const unknownState = (
       changes: Partial<FailedSuspendState>,
@@ -1894,8 +1894,11 @@ describe("auto-suspend when idle", () => {
 
       expect(warn).toHaveBeenCalledTimes(1);
       // The resume hook ended the suspend refusal. The terminating MicroVM
-      // still refuses jobs.
-      expectFailedSuspendWarning(warn, unknownState({ terminating: true }));
+      // still answers jobs with HTTP 503. So `refusingJobs` is true.
+      expectFailedSuspendWarning(
+        warn,
+        unknownState({ terminating: true, refusingJobs: true }),
+      );
       expect(await job(worker, "cb-1")).toBe(503);
       await advance(IDLE_MS + GRACE_MS * 4);
       expect(microvms.suspended).toEqual(["mvm-1"]);
